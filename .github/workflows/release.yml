@@ -78,7 +78,7 @@ jobs:
       samples: 2
       push_results: true
       post_summary_pr: false
-      post_summary_slack: true
+      post_summary_slack: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
       comparison_patch: true
       comparison_native: true
       results_dataset: cedana

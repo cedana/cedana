@@ -52,15 +52,10 @@ on:
         required: false
         default: false
       post_summary_slack:
-        type: boolean
-        description: "Post benchmark summary to Slack"
+        type: string
+        description: "Webhook URL for posting summary to Slack"
         required: false
-        default: false
-      post_summary_slack_nightly:
-        type: boolean
-        description: "Post benchmark summary to Slack (nightly)"
-        required: false
-        default: false
+        default: ""
       runner:
         type: string
         description: "Runner machine for benchmark"
@@ -677,11 +672,11 @@ jobs:
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
       - name: Post summary to Slack (comparison w/ native)
-        if: inputs.post_summary_slack && inputs.comparison_native
+        if: ${{ inputs.post_summary_slack != '' && inputs.comparison_native }}
         id: slack-native
         uses: slackapi/slack-github-action@v1.26.0
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
@@ -735,57 +730,15 @@ jobs:
           comment_tag: comparison_patch
 
       - name: Post summary to Slack (comparison w/ last patch)
-        if: inputs.post_summary_slack && inputs.comparison_patch
+        if: ${{ inputs.post_summary_slack != '' && inputs.comparison_patch }}
         id: slack-patch
         uses: slackapi/slack-github-action@v1.26.0
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
             ${{ steps.summary-patch.outputs.slack_summary }}
-
-      - name: Plot (nightly)
-        if: inputs.post_summary_slack_nightly
-        env:
-          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
-          FLAGS: ${{ vars.BENCH_PLOT_FLAGS_BRANDED }}
-        run: |
-          rm -rf results/*.png
-          ./bench plot --runtime native --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
-
-      - name: Upload plots (nightly)
-        if: inputs.post_summary_slack_nightly
-        id: upload-plots-nightly
-        uses: google-github-actions/upload-cloud-storage@v2
-        with:
-          predefinedAcl: publicRead
-          project_id: ${{ steps.auth.outputs.project_id }}
-          path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/nightly
-          glob: "**/*.png"
-
-      - name: Generate summary (nightly)
-        if: inputs.post_summary_slack_nightly
-        id: summary-nightly
-        env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/nightly/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "Nightly performance results (comparison w/ native)"
-        run: |
-          utils/results-summary > $GITHUB_STEP_SUMMARY
-          echo ::set-output name=slack_summary::$(utils/results-summary-slack)
-
-      - name: Post summary (nightly)
-        if: inputs.post_summary_slack_nightly
-        id: slack-nightly
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        with:
-          payload: |
-            ${{ steps.summary-nightly.outputs.slack_summary }}
 
       - name: Plot (native)
         if: inputs.native
