@@ -14,17 +14,12 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 source "$DIR"/utils.sh
 
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
-CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 
-# NOTE: If native plugins like k8s, runc, containerd, are already installed in the image, they will get skipped
+# NOTE: Native plugins like k8s, runc, containerd, are already installed in the image
 PLUGINS="\
-    k8s@$CEDANA_PLUGINS_NATIVE_VERSION \
-    runc@$CEDANA_PLUGINS_NATIVE_VERSION \
-    containerd@$CEDANA_PLUGINS_NATIVE_VERSION \
-    storage/cedana@$CEDANA_PLUGINS_NATIVE_VERSION \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
     k8s-runtime-shim@$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION"
 
@@ -52,7 +47,7 @@ fi
 
 # Install all plugins
 if [[ -n $PLUGINS ]]; then
-    "$APP_PATH" plugin install $PLUGINS
+    "$APP_PATH" plugin install "$PLUGINS"
 fi
 
 # install the shim configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
