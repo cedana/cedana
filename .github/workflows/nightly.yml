@@ -1,8 +1,14 @@
 name: Nightly
-permissions:
-  contents: write
 
 # This workflow runs all the large tests and benchmarks nightly.
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
 on:
   schedule:
     - cron: "0 0 * * *" # Every day at midnight
@@ -33,6 +39,7 @@ jobs:
       runner_gpu_arm: 32cpu-64g-1xT4G # use larger runner
       parallelism: 8
       parallelism_gpu: 4
+      summary_slack_webhook: ${{ secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY }}
 
   bench:
     name: Bench

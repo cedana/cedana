@@ -60,6 +60,11 @@ on:
         description: "Runner machine for GPU tests (arm64)"
         required: false
         default: 8cpu-16g-1xT4G
+      summary_slack_webhook:
+        type: string
+        description: "Webhook URL for posting summary to Slack"
+        required: false
+        default: ""
 
 jobs:
   unit:
@@ -407,3 +412,10 @@ jobs:
           always-group-by: true
           upload-artifact: true
           artifact-name: ctrf-report-${{ matrix.arch }}
+
+      - name: Post report to Slack
+        if: ${{ inputs.summary_slack_webhook != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ inputs.summary_slack_webhook }}
+          TITLE: "Test results (${{ matrix.arch }})"
+        run: npx slack-ctrf results "ctrf/*.json" --title "$TITLE"
