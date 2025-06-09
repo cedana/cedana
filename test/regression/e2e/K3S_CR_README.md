@@ -28,7 +28,7 @@ export CEDANA_URL="https://ci.cedana.ai"
 export CEDANA_AUTH_TOKEN="your_token_here"
 
 # Run the k3s C/R test using existing infrastructure
-./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh
 ```
 
 ### **Alternative Methods**
@@ -53,7 +53,7 @@ export CEDANA_URL="https://ci.cedana.ai"
 export CEDANA_AUTH_TOKEN="***"
 ```
 
-**Note**: The `test/run-e2e-docker.sh` script includes default values, so environment variables are optional for testing.
+**Note**: The `test/run-k3s-e2e-baremetal.sh` script includes default values, so environment variables are optional for testing.
 
 ## 📖 Using the Official Test Runner
 
@@ -61,32 +61,29 @@ export CEDANA_AUTH_TOKEN="***"
 
 ```bash
 # Run k3s C/R test with defaults
-./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh
 
 # Run with custom token
-./test/run-e2e-docker.sh --token="your_token" test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh --token="your_token"
 
 # Run with custom URL
-./test/run-e2e-docker.sh --url="https://custom.cedana.ai" test/regression/e2e/k3s_pod_cr.bats
-
-# Force rebuild Docker image
-./test/run-e2e-docker.sh --build test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh --url="https://custom.cedana.ai"
 
 # Debug mode with container preserved
-./test/run-e2e-docker.sh --debug --no-cleanup test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh --debug --no-cleanup
 ```
 
 ### Advanced Options
 
 ```bash
 # Set custom environment variables
-./test/run-e2e-docker.sh -e "CUSTOM_VAR=value" test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh -e "CUSTOM_VAR=value"
 
 # Use specific Docker image tag
-./test/run-e2e-docker.sh --tag=v1.0.0 test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh --tag=v1.0.0
 
 # Run in privileged mode (default for k3s)
-./test/run-e2e-docker.sh --privileged test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh --privileged
 ```
 
 ## 🏗️ CI Integration
@@ -114,7 +111,7 @@ test-k3s-cr: ## Run k3s pod checkpoint/restore test specifically
 		chmod 755 /run/containerd/runc/k8s.io ;\
 		bats --filter-tags "k3s,checkpoint,restore" -v test/regression/e2e/k3s_pod_cr.bats ;\
 	else \
-		./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats ;\
+		./test/run-k3s-e2e-baremetal.sh ;\
 	fi
 ```
 
@@ -187,13 +184,7 @@ The test uses these BATS tags for filtering:
    docker info
    ```
 
-2. **Image Build Issues**
-   ```bash
-   # Force rebuild the test image
-   ./test/run-e2e-docker.sh --build test/regression/e2e/k3s_pod_cr.bats
-   ```
-
-3. **Authentication Issues**
+2. **Authentication Issues**
    ```bash
    # Test API connectivity manually
    curl -I https://ci.cedana.ai/user -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
@@ -203,10 +194,7 @@ The test uses these BATS tags for filtering:
 
 ```bash
 # Run in debug mode with verbose output
-./test/run-e2e-docker.sh --debug --no-cleanup test/regression/e2e/k3s_pod_cr.bats
-
-# Then inspect the container (it won't be cleaned up)
-docker ps -a | grep cedana-e2e-test
+./test/run-k3s-e2e-baremetal.sh --debug --no-cleanup
 ```
 
 ## 🎯 Example Workflows
@@ -214,25 +202,25 @@ docker ps -a | grep cedana-e2e-test
 ### Development Testing
 ```bash
 # Quick test during development
-./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh
 ```
 
 ### CI/CD Integration
 ```bash
 # Full test with cleanup (CI mode)
-./test/run-e2e-docker.sh --build --cleanup test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh --build --cleanup 
 ```
 
 ### Debugging
 ```bash
 # Debug mode for investigation
-./test/run-e2e-docker.sh --debug --no-cleanup test/regression/e2e/k3s_pod_cr.bats
+./test/run-k3s-e2e-baremetal.sh --debug --no-cleanup
 ```
 
 ---
 
 ## 📞 Support
 
-**Primary Command**: `./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats`
+**Primary Command**: `./test/run-k3s-e2e-baremetal.sh`
 
 This uses the official Cedana test infrastructure and handles all Docker setup, environment configuration, and cleanup automatically.
