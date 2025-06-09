@@ -174,21 +174,30 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		echo "Parallelism: $(PARALLELISM)" ;\
 		echo "Using unique instance of daemon per test..." ;\
 		if [ "$(TAGS)" = "" ]; then \
-			$(BATS_CMD) -r test/regression ;\
+			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
 		else \
-			$(BATS_CMD_TAGS) -r test/regression ;\
+			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-isolated.xml ;\
 		fi ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
 		if [ "$(TAGS)" = "" ]; then \
-			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
+			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persisted=$$? ;\
 		else \
-			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ;\
+			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persisted=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-persisted.xml ;\
+		fi ;\
+		if [ $$status_isolated -ne 0 ]; then \
+			echo "Isolated tests failed" ;\
+			exit $$status_isolated ;\
+		elif [ $$status_persisted -ne 0 ]; then \
+			echo "Persisted tests failed" ;\
+			exit $$status_persisted ;\
+		else \
+			echo "All tests passed!" ;\
 		fi ;\
 	else \
 		if [ "$(GPU)" = "1" ]; then \
