@@ -37,6 +37,7 @@ const (
 	DEFAULT_ADDRESS     = "0.0.0.0:8080"
 	MAX_RETRIES         = 5
 	CLIENT_RETRY_PERIOD = time.Second
+	FULL_HEALTH_CHECK   = true
 )
 
 //go:embed scripts/setup-host.sh
@@ -470,7 +471,7 @@ func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error
 	}
 	defer client.Close()
 	// Wait for the daemon to be ready, and do health check
-	resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: false}, grpc.WaitForReady(true))
+	resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: FULL_HEALTH_CHECK}, grpc.WaitForReady(true))
 	if err != nil {
 		return false, fmt.Errorf("cedana health check failed: %w", err)
 	}
