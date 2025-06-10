@@ -145,7 +145,7 @@ jobs:
           STREAMER: ${{ inputs.streamer }}
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
-          RETRIES: 0
+          RETRIES: 1
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then

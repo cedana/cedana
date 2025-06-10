@@ -151,7 +151,7 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
-          RETRIES: 0
+          RETRIES: 1
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
