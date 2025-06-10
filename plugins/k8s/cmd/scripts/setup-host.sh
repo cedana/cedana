@@ -19,6 +19,8 @@ cp /usr/local/bin/buildah /host/cedana/bin/buildah
 cp /usr/local/bin/netavark /host/cedana/bin/netavark
 cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin/netavark-dhcp-proxy-client
 
+CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-"info"}
+CEDANA_LOG_LEVEL_NO_SERVER=${CEDANA_LOG_LEVEL_NO_SERVER:-"info"}
 CEDANA_REMOTE=${CEDANA_REMOTE:-"true"}
 CEDANA_WAIT_FOR_READY=${CEDANA_WAIT_FOR_READY:-"true"}
 CEDANA_ADDRESS=${CEDANA_ADDRESS:-"0.0.0.0:8080"}
@@ -30,12 +32,17 @@ CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSIO
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 
-rm -rf /host/root/.cedana/
+if [ "$CEDANA_RESET_CONFIG" = "true" ]; then
+    echo "Resetting Cedana configuration"
+    rm -rf /host/root/.cedana/
+fi
 
 # Enter chroot environment on the host
 env \
     CEDANA_URL="$CEDANA_URL" \
     CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN" \
+    CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL" \
+    CEDANA_LOG_LEVEL_NO_SERVER="$CEDANA_LOG_LEVEL_NO_SERVER" \
     CEDANA_METRICS_ASR="$CEDANA_METRICS_ASR" \
     CEDANA_METRICS_OTEL="$CEDANA_METRICS_OTEL" \
     CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL" \
