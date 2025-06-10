@@ -156,7 +156,7 @@ var runCmd = &cobra.Command{
 			}
 			cedana.Shutdown()
 
-			os.Exit(<-code())
+			os.Exit(<-code)
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
