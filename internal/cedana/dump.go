@@ -72,6 +72,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 	_, err := criu(dump)(ctx, opts, resp, req)
 	if err != nil {
+		log.Error().Err(err).Str("type", req.Type).Msg("dump failed")
 		return nil, err
 	}
 

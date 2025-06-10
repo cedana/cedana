@@ -92,9 +92,9 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, code())
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 	} else {
-		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
+		outFile, ok := ctx.Value(keys.OUT_FILE_CONTEXT_KEY).(*os.File)
 		if ok {
-			stdout, stderr = logFile, logFile
+			stdout, stderr = outFile, outFile
 		}
 	}
 

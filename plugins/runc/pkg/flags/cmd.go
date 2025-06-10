@@ -10,6 +10,8 @@ var (
 	DetachFlag        = flags.Flag{Full: "detach", Short: "d"}
 	BundleFlag        = flags.Flag{Full: "bundle", Short: "b"}
 	NoPivotFlag       = flags.Flag{Full: "no-pivot", Short: ""}
-	NoNewKeyringFlag  = flags.Flag{Full: "no-new-keyring", Short: ""}
-	ConsoleSocketFlag = flags.Flag{Full: "console-socket", Short: ""}
+	NoNewKeyringFlag  = flags.Flag{Full: "no-new-keyring"}
+	ConsoleSocketFlag = flags.Flag{Full: "console-socket"}
+	LogFlag           = flags.Flag{Full: "log"}
+	LogFormatFlag     = flags.Flag{Full: "log-format"}
 )

@@ -23,6 +23,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/cedana/plugins/runc/internal/defaults"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
+	"github.com/cedana/cedana/plugins/runc/pkg/logging"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/mattn/go-isatty"
 	"github.com/opencontainers/runc/libcontainer"
@@ -34,32 +35,27 @@ import (
 )
 
 const (
-	RUNC_BINARY    = "runc"
-	RUNC_LOG_FILE  = "runc.log"
-	RUNC_LOG_DEBUG = false
+	RUNC_BINARY   = "runc"
+	RUNC_LOG_FILE = "runc.log"
 
 	waitForRunErrTimeout         = 2 * time.Second
 	waitForManageUpcomingTimeout = 2 * time.Minute
 )
+
+var RUNC_LOG_DEBUG = log.Logger.GetLevel() <= zerolog.DebugLevel
 
 type RuncState struct {
 	ID  string `json:"id"`
 	PID int    `json:"pid"`
 }
 
-type RuncLogMsg struct {
-	Msg   string `json:"msg"`
-	Level string `json:"level"`
-	Time  string `json:"time"`
-}
-
 func RuncLogMsgToString(b []byte) (string, error) {
-	var msg RuncLogMsg
-	err := json.Unmarshal(b, &msg)
+	var line logging.Line
+	err := json.Unmarshal(b, &line)
 	if err != nil {
 		return "", err
 	}
-	return msg.Msg, nil
+	return line.Msg, nil
 }
 
 var (
@@ -149,13 +145,13 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		cmd.Stdout = stdOut
 		cmd.Stderr = stdErr
 	} else {
-		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
+		outFile, ok := ctx.Value(keys.OUT_FILE_CONTEXT_KEY).(*os.File)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get log file from context")
 		}
 		cmd.Stdin = nil // /dev/null
-		cmd.Stdout = logFile
-		cmd.Stderr = logFile
+		cmd.Stdout = outFile
+		cmd.Stderr = outFile
 	}
 
 	err = cmd.Start()

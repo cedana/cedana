@@ -51,7 +51,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringSliceP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, nil, "resources from external namespaces (can be multiple)")
 	restoreCmd.PersistentFlags().
-		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
+		StringP(flags.OutFlag.Full, flags.OutFlag.Short, "", "log path to forward stdout/err")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	restoreCmd.PersistentFlags().
@@ -62,7 +62,7 @@ func init() {
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
-		flags.LogFlag.Full,
+		flags.OutFlag.Full,
 	) // only one of these can be set
 
 	///////////////////////////////////////////
@@ -101,7 +101,7 @@ var restoreCmd = &cobra.Command{
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
-		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
+		log, _ := cmd.Flags().GetString(flags.OutFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
@@ -113,7 +113,7 @@ var restoreCmd = &cobra.Command{
 				style.WarningColors.Sprintf(
 					"When using `--%s`, flags `--%s`, `--%s`, and `--%s` are ignored as the standard output is copied to the caller.",
 					flags.NoServerFlag.Full,
-					flags.LogFlag.Full,
+					flags.OutFlag.Full,
 					flags.AttachFlag.Full,
 					flags.AttachableFlag.Full,
 				))
@@ -200,7 +200,7 @@ var restoreCmd = &cobra.Command{
 			}
 			cedana.Shutdown()
 
-			os.Exit(<-code())
+			os.Exit(<-code)
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {

@@ -87,7 +87,7 @@ teardown_file() {
     jid=$(unix_nano)
     log_file="/tmp/$jid.log"
 
-    run cedana run process echo hello --jid "$jid" --log "$log_file"
+    run cedana run process echo hello --jid "$jid" --out "$log_file"
 
     assert_success
     assert_exists "$log_file"

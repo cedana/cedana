@@ -15,8 +15,8 @@ import (
 
 const (
 	DEFAULT_LOG_PATH_FORMATTER string      = "/var/log/cedana-output-%s.log"
-	LOG_FILE_PERMS             os.FileMode = 0o644
-	LOG_FILE_FLAGS             int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
+	OUT_FILE_PERMS             os.FileMode = 0o644
+	OUT_FILE_FLAGS             int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
 )
 
 // Adapter that manages the job state.
@@ -38,16 +38,16 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 				if req.Log == "" {
 					req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, job.JID)
 				}
-				logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
+				outFile, err := os.OpenFile(req.Log, OUT_FILE_FLAGS, OUT_FILE_PERMS)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 				}
-				defer logFile.Close()
+				defer outFile.Close()
 				err = os.Chown(req.Log, int(req.UID), int(req.GID))
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to change log file owner: %v", err)
 				}
-				ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
+				ctx = context.WithValue(ctx, keys.OUT_FILE_CONTEXT_KEY, outFile)
 			}
 
 			job.SetLog(req.Log)

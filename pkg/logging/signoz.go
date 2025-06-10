@@ -21,7 +21,6 @@ const (
 	DEFAULT_SERVICE_NAME           = "cedana"
 	DEFAULT_MAX_BATCH_SIZE_JSON    = 100
 	DEFAULT_FLUSH_INTERVAL_MS_JSON = 5000             // 5 seconds
-	ZEROLOG_TIMESTAMP_FIELD_FORMAT = time.RFC3339Nano // zerolog's default format for With().Timestamp()
 )
 
 type SigNozLogEntry struct {
@@ -121,7 +120,7 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 	// Timestamp
 	var tsNano int64 = time.Now().UnixNano() // Default to now
 	if tsStr, ok := zerologEntry[zerolog.TimestampFieldName].(string); ok {
-		parsedTime, err := time.Parse(ZEROLOG_TIMESTAMP_FIELD_FORMAT, tsStr)
+		parsedTime, err := time.Parse(ZEROLOG_TIME_FORMAT_DEFAULT, tsStr)
 		if err == nil {
 			tsNano = parsedTime.UnixNano()
 		} else {
