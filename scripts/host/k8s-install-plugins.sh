@@ -13,12 +13,21 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 
 source "$DIR"/utils.sh
 
-# NOTE: Assuming Go plugins like k8s, runc, containerd, etc are already built with the image
-PLUGINS="criu k8s/runtime-shim" # bare minimum plugins required for k8s
+CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
+CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
+CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION:-"latest"}
+CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
+CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
+
+# NOTE: Native plugins like k8s, runc, containerd, are already installed in the image
+PLUGINS="
+    criu@$CEDANA_PLUGINS_CRIU_VERSION \
+    k8s/runtime-shim@$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION \
+    streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
 
 # if gpu driver present then add gpu plugin
 if [ -d /proc/driver/nvidia/gpus/ ]; then
-    PLUGINS="$PLUGINS gpu"
+    PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
     echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
     if [ ! -d /run/driver/nvidia ]; then
         echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
@@ -59,7 +68,7 @@ else
     PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
     if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
         echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
-        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+        cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"

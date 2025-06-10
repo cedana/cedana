@@ -21,5 +21,25 @@ cp /usr/local/bin/buildah /host/cedana/bin/buildah
 cp /usr/local/bin/netavark /host/cedana/bin/netavark
 cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin/netavark-dhcp-proxy-client
 
-chroot /host /bin/bash /cedana/scripts/k8s-install-plugins.sh # updates to latest
+CEDANA_RESET_CONFIG=${CEDANA_RESET_CONFIG:-false}
+CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
+CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
+CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
+CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION:-"latest"}
+CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
+CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
+
+if [ "$CEDANA_RESET_CONFIG" = "true" ]; then
+    echo "Resetting Cedana configuration"
+    rm -rf /host/root/.cedana/
+fi
+
+env \
+    CEDANA_PLUGINS_BUILDS="$CEDANA_PLUGINS_BUILDS" \
+    CEDANA_PLUGINS_NATIVE_VERSION="$CEDANA_PLUGINS_NATIVE_VERSION" \
+    CEDANA_PLUGINS_CRIU_VERSION="$CEDANA_PLUGINS_CRIU_VERSION" \
+    CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION="$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION" \
+    CEDANA_PLUGINS_GPU_VERSION="$CEDANA_PLUGINS_GPU_VERSION" \
+    CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
+    chroot /host /bin/bash /cedana/scripts/k8s-install-plugins.sh # updates to latest
 chroot /host /bin/bash /cedana/scripts/systemd-install.sh
