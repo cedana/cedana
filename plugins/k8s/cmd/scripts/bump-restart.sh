@@ -9,11 +9,12 @@ mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts /host/cedana/lib
 cp -r /scripts/host/* /host/cedana/scripts
 chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
 
-# updates the cedana daemon to the latest version
-# and restarts with the same arguments
+# Updates the cedana daemon to the latest version
+# and restarts using the existing configuration
 
 # We load the binary from docker image for the container
 # Copy Cedana binaries and scripts to the host
+
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /Makefile /host/cedana/Makefile
 
@@ -21,9 +22,9 @@ cp /usr/local/bin/buildah /host/cedana/bin/buildah
 cp /usr/local/bin/netavark /host/cedana/bin/netavark
 cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin/netavark-dhcp-proxy-client
 
-CEDANA_RESET_CONFIG=${CEDANA_RESET_CONFIG:-false}
-CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-"info"}
-CEDANA_LOG_LEVEL_NO_SERVER=${CEDANA_LOG_LEVEL_NO_SERVER:-"info"}
+# Allow temporary overrides from environment variables to set specific plugin versions. If not set,
+# defaults to latest release versions.
+
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
@@ -31,19 +32,12 @@ CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSIO
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 
-if [ "$CEDANA_RESET_CONFIG" = "true" ]; then
-    echo "Resetting Cedana configuration"
-    rm -rf /host/root/.cedana/
-fi
-
 env \
-    CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL" \
-    CEDANA_LOG_LEVEL_NO_SERVER="$CEDANA_LOG_LEVEL_NO_SERVER" \
     CEDANA_PLUGINS_BUILDS="$CEDANA_PLUGINS_BUILDS" \
     CEDANA_PLUGINS_NATIVE_VERSION="$CEDANA_PLUGINS_NATIVE_VERSION" \
     CEDANA_PLUGINS_CRIU_VERSION="$CEDANA_PLUGINS_CRIU_VERSION" \
     CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION="$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION" \
     CEDANA_PLUGINS_GPU_VERSION="$CEDANA_PLUGINS_GPU_VERSION" \
     CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
-    chroot /host /bin/bash /cedana/scripts/k8s-install-plugins.sh # updates to latest
+    chroot /host /bin/bash /cedana/scripts/k8s-install-plugins.sh
 chroot /host /bin/bash /cedana/scripts/systemd-install.sh
