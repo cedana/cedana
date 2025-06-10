@@ -124,7 +124,7 @@ teardown_file() {
     log_file="/tmp/$jid.log"
     bundle="$(create_cmd_bundle "echo hello")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --log "$log_file"
+    run cedana run runc --bundle "$bundle" --jid "$jid" --out "$log_file"
 
     assert_success
     assert_exists "$log_file"

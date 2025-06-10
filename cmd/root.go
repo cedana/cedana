@@ -88,7 +88,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("Failed to initialize config: %w", err)
 		}
 
-		logging.SetLevel(config.Global.LogLevel)
+		logging.InitLogger(config.Global.LogLevel)
 
 		return nil
 	},

@@ -14,11 +14,15 @@ import (
 )
 
 const (
-	LOG_TIME_FORMAT = time.TimeOnly
-	LOG_CALLER_SKIP = 3 // stack frame depth
+	ZEROLOG_TIME_FORMAT_DEFAULT = time.RFC3339Nano // zerolog's default format for With().Timestamp()
+	LOG_TIME_FORMAT         = time.TimeOnly
+	LOG_CALLER_SKIP         = 3 // stack frame depth
 )
 
-var globalSigNozWriter *SigNozJsonWriter
+var (
+	Level              = zerolog.Disabled
+	globalSigNozWriter *SigNozJsonWriter
+)
 
 type LineInfoHook struct{}
 
@@ -29,16 +33,16 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 }
 
 func init() {
-	SetLevel(config.Global.LogLevel)
+	InitLogger(config.Global.LogLevel)
 }
 
-func SetLevel(level string) {
+func InitLogger(level string) {
 	var err error
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
-	logLevel, err := zerolog.ParseLevel(level)
+	Level, err := zerolog.ParseLevel(level)
 	if err != nil || level == "" { // allow turning off logging
-		logLevel = zerolog.Disabled
+		Level = zerolog.Disabled
 	}
 
 	var consoleWriter io.Writer = zerolog.ConsoleWriter{
@@ -81,8 +85,20 @@ func SetLevel(level string) {
 	multiWriter := io.MultiWriter(writers...)
 
 	log.Logger = zerolog.New(multiWriter).
-		Level(logLevel).
+		Level(Level).
 		With().
 		Timestamp().
 		Logger().Hook(LineInfoHook{})
+}
+
+func SetLogger(logger zerolog.Logger) {
+	log.Logger = logger
+}
+
+func SetLevel(level string) {
+	Level, err := zerolog.ParseLevel(level)
+	if err != nil || level == "" { // allow turning off logging
+		Level = zerolog.Disabled
+	}
+	log.Logger = log.Logger.Level(Level)
 }

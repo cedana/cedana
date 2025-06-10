@@ -27,7 +27,7 @@ var (
 	AttachFlag        = Flag{Full: "attach", Short: "a"}
 	AttachableFlag    = Flag{Full: "attachable"}
 	AllFlag           = Flag{Full: "all", Short: "a"}
-	LogFlag           = Flag{Full: "log"}
+	OutFlag           = Flag{Full: "out", Short: "o"}
 	ExternalFlag      = Flag{Full: "external"}
 	FileLocksFlag     = Flag{Full: "file-locks"}
 	TypeFlag          = Flag{Full: "type", Short: "t"}
