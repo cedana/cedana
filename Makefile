@@ -227,6 +227,16 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 	$(DOCKER_TEST_EXEC) /bin/bash ;\
 	$(DOCKER_TEST_REMOVE) >/dev/null
 
+test-k3s-cr: ## Run k3s pod checkpoint/restore test specifically
+	@echo "Running k3s pod checkpoint/restore test..."
+	if [ -f /.dockerenv ]; then \
+		mkdir -p /run/containerd/runc/k8s.io ;\
+		chmod 755 /run/containerd/runc/k8s.io ;\
+		bats --filter-tags "k3s,checkpoint,restore" -v test/regression/e2e/k3s_pod_cr.bats ;\
+	else \
+		./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats ;\
+	fi
+
 ##########
 ##@ Docker
 ##########

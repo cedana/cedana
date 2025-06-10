@@ -41,7 +41,7 @@ install_yum_packages() {
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     case "$ID" in
-    debian | ubuntu)
+    debian | ubuntu | pop)
         install_apt_packages
         ;;
     rhel | centos | fedora | amzn)
