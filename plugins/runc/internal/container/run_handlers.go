@@ -34,13 +34,14 @@ import (
 )
 
 const (
-	RUNC_BINARY    = "runc"
-	RUNC_LOG_FILE  = "runc.log"
-	RUNC_LOG_DEBUG = false
+	RUNC_BINARY   = "runc"
+	RUNC_LOG_FILE = "log.json"
 
 	waitForRunErrTimeout         = 2 * time.Second
 	waitForManageUpcomingTimeout = 2 * time.Minute
 )
+
+var RUNC_LOG_DEBUG = log.Logger.GetLevel() <= zerolog.DebugLevel
 
 type RuncState struct {
 	ID  string `json:"id"`
