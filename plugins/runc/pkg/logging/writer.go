@@ -50,6 +50,10 @@ func (lw *LogWriter) Write(p []byte) (int, error) {
 	levelStr, _ := zerologEntry[zerolog.LevelFieldName].(string)
 	parsedLevel, _ := zerolog.ParseLevel(levelStr) // Handles error by defaulting to NoLevel
 	body, _ := zerologEntry[zerolog.MessageFieldName].(string)
+	error, _ := zerologEntry[zerolog.ErrorFieldName].(string)
+	if error != "" {
+		body = fmt.Sprintf("%s: %s", body, error)
+	}
 
 	var written int
 	switch strings.ToUpper(lw.format) {
