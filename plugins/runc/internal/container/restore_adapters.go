@@ -13,6 +13,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
@@ -173,6 +174,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create new init process: %v", err)
 		}
+		process.LogLevel = strconv.Itoa(int(logging.Level))
 		process.Init = true
 		process.SubCgroupPaths = make(map[string]string)
 		if len(listenFDs) > 0 {
@@ -211,6 +213,13 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return nil, err
 		}
 
+		if err = tty.WaitConsole(); err != nil {
+			container.Signal(unix.SIGKILL)
+			container.Destroy()
+			return nil, err
+		}
+		tty.ClosePostStart()
+
 		if !daemonless {
 			opts.WG.Add(1)
 			go func() {
@@ -226,13 +235,6 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 
 			return code, nil
 		}
-
-		if err = tty.WaitConsole(); err != nil {
-			process.Signal(unix.SIGKILL)
-			process.Wait()
-			return nil, err
-		}
-		tty.ClosePostStart()
 
 		opts.WG.Add(1)
 		go func() {
