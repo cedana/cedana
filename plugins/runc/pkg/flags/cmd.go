@@ -14,4 +14,8 @@ var (
 	ConsoleSocketFlag = flags.Flag{Full: "console-socket"}
 	LogFlag           = flags.Flag{Full: "log"}
 	LogFormatFlag     = flags.Flag{Full: "log-format"}
+	RootlessFlag      = flags.Flag{Full: "rootless"}
+	SystemdCgroupFlag = flags.Flag{Full: "systemd-cgroup"}
+	NoSubreaperFlag   = flags.Flag{Full: "no-subreaper"}
+	PreserveFdsFlag   = flags.Flag{Full: "preserve-fds"}
 )

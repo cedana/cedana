@@ -24,6 +24,9 @@ func FillMissingRunDefaults(next types.Run) types.Run {
 		if req.GetDetails().GetRunc().GetID() == "" {
 			req.Details.Runc.ID = req.JID
 		}
+		if req.GetDetails().GetRunc().GetRootless() == "" {
+			req.Details.Runc.Rootless = "auto"
+		}
 		return next(ctx, opts, resp, req)
 	}
 }

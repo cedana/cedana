@@ -27,6 +27,9 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		if req.GetDetails().GetRunc().GetID() == "" {
 			req.Details.Runc.ID = req.GetDetails().GetJID()
 		}
+		if req.GetDetails().GetRunc().GetRootless() == "" {
+			req.Details.Runc.Rootless = "auto"
+		}
 		req.Criu.OrphanPtsMaster = proto.Bool(true)
 
 		return next(ctx, opts, resp, req)

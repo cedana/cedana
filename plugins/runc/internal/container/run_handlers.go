@@ -71,8 +71,12 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	bundle := details.GetBundle()
 	noPivot := details.GetNoPivot()
 	noNewKeyring := details.GetNoNewKeyring()
-	consoleSocket := details.GetConsoleSocketPath()
+	consoleSocket := details.GetConsoleSocket()
 	detach := details.GetDetach()
+	rootless := details.GetRootless()
+	systemdCgroup := details.GetSystemdCgroup()
+	noSubreaper := details.GetNoSubreaper()
+	preserveFds := details.GetPreserveFDs()
 
 	spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 	if !ok {
@@ -107,12 +111,16 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		fmt.Sprintf("--log=%s", logFile),
 		fmt.Sprintf("--log-format=%s", "json"),
 		fmt.Sprintf("--debug=%t", RUNC_LOG_DEBUG),
+		fmt.Sprintf("--systemd-cgroup=%t", systemdCgroup),
+		fmt.Sprintf("--rootless=%s", rootless),
 		"run",
 		fmt.Sprintf("--detach=%t", detach),
 		fmt.Sprintf("--no-pivot=%t", noPivot),
 		fmt.Sprintf("--no-new-keyring=%t", noNewKeyring),
-		fmt.Sprintf("--pid-file=%s", pidFile), // this isonly used for synchronization, we have our own PID file flag
+		fmt.Sprintf("--pid-file=%s", pidFile), // only used for synchronization, we have our own PID file flag
 		fmt.Sprintf("--console-socket=%s", consoleSocket),
+		fmt.Sprintf("--no-subreaper=%t", noSubreaper),
+		fmt.Sprintf("--preserve-fds=%d", preserveFds),
 		id,
 	)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
