@@ -18,7 +18,7 @@ import (
 
 const (
 	CRIU_DUMP_LOG_FILE  = "criu-dump.log"
-	GHOST_FILE_MAX_SIZE = 10000000 // 10MB
+	GHOST_FILE_MAX_SIZE = 200000000 // 200MB
 )
 
 var CRIU_LOG_VERBOSITY_LEVEL int32 = 1 // errors only
