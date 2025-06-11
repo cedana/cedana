@@ -341,6 +341,11 @@ EOF
 
     echo "✅ Checkpoint completed with ID: $CHECKPOINT_ID"
 
+    # IMPORTANT: Add 15-second delay to let controller finish uploading checkpoint data
+    echo "⏳ Waiting 15 seconds for controller to finish uploading checkpoint data..."
+    sleep 15
+    echo "✅ Controller upload delay completed"
+
     # Save checkpoint ID for cleanup
     echo "$CHECKPOINT_ID" > "$TEST_STATE_DIR/checkpoint_id"
 }
@@ -392,22 +397,74 @@ EOF
         return 0
     fi
 
-    # Restore the pod from checkpoint
+    # Add a small delay before restore to ensure backend is ready
+    echo "⏳ Waiting 5 seconds before restore to ensure backend readiness..."
+    sleep 5
+
+    # Check propagator connectivity before restore
+    echo "🔍 Checking propagator service connectivity..."
+    if ! validate_propagator_connectivity; then
+        echo "⚠️  Propagator service not responding, waiting 10 seconds and trying again..."
+        sleep 10
+        if ! validate_propagator_connectivity; then
+            echo "❌ Propagator service still not responding, failing test"
+            return 1
+        fi
+    fi
+    echo "✅ Propagator service is responding"
+
+    # Restore the pod from checkpoint with retry logic for transient errors
     echo "Restoring pod from checkpoint..."
-    response=$(restore_pod_via_api "$ACTION_ID" "$CLUSTER_ID")
-    exit_code=$?
+    
+    local max_retries=3
+    local retry_count=0
+    local response
+    local exit_code
+    
+    while [ $retry_count -lt $max_retries ]; do
+        # Capture both stdout and stderr
+        response=$(restore_pod_via_api "$ACTION_ID" "$CLUSTER_ID" 2>&1)
+        exit_code=$?
+        
+        if [ $exit_code -eq 0 ]; then
+            break
+        fi
+        
+        # Check if it's a transient error (503, 502, 504)
+        if echo "$response" | grep -q "503\|502\|504\|upstream connect error\|remote reset"; then
+            retry_count=$((retry_count + 1))
+            if [ $retry_count -lt $max_retries ]; then
+                echo "⚠️  Transient error (attempt $retry_count/$max_retries), retrying in 10 seconds..."
+                echo "Error details: $response"
+                sleep 10
+                continue
+            else
+                echo "❌ Max retries reached for restore operation"
+                echo "Final error: $response"
+                return 1
+            fi
+        else
+            # Non-transient error, fail immediately
+            echo "❌ Non-transient error in restore operation"
+            echo "Error: $response"
+            return 1
+        fi
+    done
 
-    [ $exit_code -eq 0 ]
+    # Extract restore action ID (only if we got a successful response)
+    if [ $exit_code -eq 0 ]; then
+        RESTORE_ACTION_ID=$(echo "$response" | jq -r '.action_id' 2>/dev/null)
+        [ -n "$RESTORE_ACTION_ID" ]
+        [ "$RESTORE_ACTION_ID" != "null" ]
 
-    # Extract restore action ID
-    RESTORE_ACTION_ID=$(echo "$response" | jq -r '.action_id' 2>/dev/null)
-    [ -n "$RESTORE_ACTION_ID" ]
-    [ "$RESTORE_ACTION_ID" != "null" ]
+        echo "✅ Restore initiated with action ID: $RESTORE_ACTION_ID"
 
-    echo "✅ Restore initiated with action ID: $RESTORE_ACTION_ID"
-
-    # Save restore action ID for polling
-    echo "$RESTORE_ACTION_ID" > "$TEST_STATE_DIR/restore_action_id"
+        # Save restore action ID for polling
+        echo "$RESTORE_ACTION_ID" > "$TEST_STATE_DIR/restore_action_id"
+    else
+        echo "❌ Failed to initiate restore after all retries"
+        return 1
+    fi
 }
 
 @test "E2E: Wait for restore to complete and verify pod is running" {
