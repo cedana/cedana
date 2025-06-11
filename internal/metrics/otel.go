@@ -117,7 +117,7 @@ func newTracerProvider(ctx context.Context, version, endpoint, headers string) (
 		ctx,
 		otlptracegrpc.NewClient(
 			secureOption,
-			otlptracegrpc.WithEndpoint(endpoint),
+			otlptracegrpc.WithEndpoint("https://"+endpoint),
 		))
 	if err != nil {
 		return nil, err

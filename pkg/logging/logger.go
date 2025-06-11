@@ -15,8 +15,8 @@ import (
 
 const (
 	ZEROLOG_TIME_FORMAT_DEFAULT = time.RFC3339Nano // zerolog's default format for With().Timestamp()
-	LOG_TIME_FORMAT         = time.TimeOnly
-	LOG_CALLER_SKIP         = 3 // stack frame depth
+	LOG_TIME_FORMAT             = time.TimeOnly
+	LOG_CALLER_SKIP             = 3 // stack frame depth
 )
 
 var (
@@ -72,7 +72,7 @@ func InitLogger(level string) {
 
 		// Add SigNoz writer
 		globalSigNozWriter = NewSigNozJsonWriter(
-			"https://"+endpoint+"/logs/json",
+			"https://"+endpoint+":443/logs/json",
 			headers,
 			"cedana",
 			resourceAttrs,
