@@ -213,13 +213,6 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return nil, err
 		}
 
-		if err = tty.WaitConsole(); err != nil {
-			container.Signal(unix.SIGKILL)
-			container.Destroy()
-			return nil, err
-		}
-		tty.ClosePostStart()
-
 		if !daemonless {
 			opts.WG.Add(1)
 			go func() {
@@ -235,6 +228,13 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 
 			return code, nil
 		}
+
+		if err = tty.WaitConsole(); err != nil {
+			container.Signal(unix.SIGKILL)
+			container.Destroy()
+			return nil, err
+		}
+		tty.ClosePostStart()
 
 		opts.WG.Add(1)
 		go func() {
