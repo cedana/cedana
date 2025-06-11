@@ -6,6 +6,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/protobuf/proto"
 )
@@ -31,6 +32,11 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 			req.Details.Runc.Rootless = "auto"
 		}
 		req.Criu.OrphanPtsMaster = proto.Bool(true)
+
+		daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+		if !daemonless {
+			req.Details.Runc.NoSubreaper = false // we always reap when we are the daemon is managing
+		}
 
 		return next(ctx, opts, resp, req)
 	}

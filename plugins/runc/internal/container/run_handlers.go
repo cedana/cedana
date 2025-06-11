@@ -75,7 +75,6 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	detach := details.GetDetach()
 	rootless := details.GetRootless()
 	systemdCgroup := details.GetSystemdCgroup()
-	noSubreaper := details.GetNoSubreaper()
 	preserveFds := details.GetPreserveFDs()
 
 	spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
@@ -119,7 +118,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		fmt.Sprintf("--no-new-keyring=%t", noNewKeyring),
 		fmt.Sprintf("--pid-file=%s", pidFile), // only used for synchronization, we have our own PID file flag
 		fmt.Sprintf("--console-socket=%s", consoleSocket),
-		fmt.Sprintf("--no-subreaper=%t", noSubreaper),
+		fmt.Sprintf("--no-subreaper=%t", true), // we handle reaping ourselves
 		fmt.Sprintf("--preserve-fds=%d", preserveFds),
 		id,
 	)
