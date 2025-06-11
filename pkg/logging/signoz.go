@@ -20,7 +20,7 @@ import (
 const (
 	DEFAULT_SERVICE_NAME           = "cedana"
 	DEFAULT_MAX_BATCH_SIZE_JSON    = 100
-	DEFAULT_FLUSH_INTERVAL_MS_JSON = 5000             // 5 seconds
+	DEFAULT_FLUSH_INTERVAL_MS_JSON = 5000 // 5 seconds
 )
 
 type SigNozLogEntry struct {
@@ -208,7 +208,7 @@ func (sw *SigNozJsonWriter) flushBuffer() {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("signoz-access-token", sw.accessToken)
+	req.Header.Set("signoz-ingestion-key", sw.accessToken)
 
 	resp, err := sw.httpClient.Do(req)
 	if err != nil {
