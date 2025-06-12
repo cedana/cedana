@@ -50,7 +50,7 @@ type (
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 		// Streams specifies the number of parallel streams to use when checkpointing.
-		Streams int32 `json:"stream" key:"stream" yaml:"stream" mapstructure:"stream"`
+		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
 	}
 
 	DB struct {
