@@ -48,7 +48,7 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1
+    run cedana dump job "$jid" --streams 1
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -69,7 +69,7 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4
+    run cedana dump job "$jid" --streams 4
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -95,14 +95,14 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1
+    run cedana dump job "$jid" --streams 1
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
 
-    run cedana restore job "$jid" --stream 1
+    run cedana restore job "$jid"
     assert_success
 
     run cedana ps
@@ -121,7 +121,7 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4
+    run cedana dump job "$jid" --streams 4
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -131,7 +131,7 @@ teardown_file() {
     assert_exists "$dump_file/img-2.gz"
     assert_exists "$dump_file/img-3.gz"
 
-    run cedana restore job "$jid" --stream 4
+    run cedana restore job "$jid"
     assert_success
 
     run cedana ps
@@ -152,7 +152,7 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4
+    run cedana dump job "$jid" --streams 4
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -162,7 +162,7 @@ teardown_file() {
     assert_exists "$dump_file/img-2.gz"
     assert_exists "$dump_file/img-3.gz"
 
-    cedana restore process --path "$dump_file" --stream 4 --no-server &
+    cedana restore process --path "$dump_file" --no-server &
 
     run wait_for_pid "$pid"
     kill -KILL "$pid"

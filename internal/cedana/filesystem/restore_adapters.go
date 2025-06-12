@@ -21,7 +21,7 @@ import (
 
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
-func SetupRestoreFS(next types.Restore) types.Restore {
+func RestoreFilesystem(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
 		path := req.GetPath()

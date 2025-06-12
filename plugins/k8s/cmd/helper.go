@@ -183,9 +183,8 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 	defer client.Close()
 	leaveRunning := true
 	resp, _, err := client.Dump(ctx, &daemon.DumpReq{
-		Dir:    fmt.Sprintf("cedana://%s", checkpointId),
-		Stream: 0,
-		Type:   "runc",
+		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
+		Type: "runc",
 		Criu: &criu.CriuOpts{
 			LeaveRunning: &leaveRunning,
 		},
