@@ -19,7 +19,7 @@ var (
 	PathFlag          = Flag{Full: "path", Short: "p"}
 	PidFileFlag       = Flag{Full: "pid-file"}
 	NoServerFlag      = Flag{Full: "no-server"}
-	StreamFlag        = Flag{Full: "stream"}
+	StreamsFlag       = Flag{Full: "streams"}
 	WorkingDirFlag    = Flag{Full: "working-dir", Short: "w"}
 	JidFlag           = Flag{Full: "jid", Short: "j"}
 	GpuEnabledFlag    = Flag{Full: "gpu-enabled", Short: "g"}

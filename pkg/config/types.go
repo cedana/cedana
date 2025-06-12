@@ -49,9 +49,8 @@ type (
 		Dir string `json:"dir" key:"dir" yaml:"dir" mapstructure:"dir"`
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
-		// Stream (for streaming checkpoints) specifies the number of parallel streams to use.
-		// 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.
-		Stream int32 `json:"stream" key:"stream" yaml:"stream" mapstructure:"stream"`
+		// Streams specifies the number of parallel streams to use when checkpointing.
+		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
 	}
 
 	DB struct {

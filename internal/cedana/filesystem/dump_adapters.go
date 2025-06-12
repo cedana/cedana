@@ -27,7 +27,7 @@ const DUMP_DIR_PERMS = 0o755
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
-func SetupDumpFS(next types.Dump) types.Dump {
+func DumpFilesystem(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
 		dir := req.Dir

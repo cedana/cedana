@@ -30,8 +30,9 @@ const (
 	DEFAULT_LOG_LEVEL           = "info"
 	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
-	DEFAULT_COMPRESSION = "none"
-	DEFAULT_DUMP_DIR    = "/tmp"
+	DEFAULT_CHECKPOINT_COMPRESSION = "none"
+	DEFAULT_CHECKPOINT_DIR         = "/tmp"
+	DEFAULT_CHECKPOINT_STREAMS     = 0
 
 	DEFAULT_GPU_POOL_SIZE   = 0
 	DEFAULT_GPU_LOG_DIR     = "/tmp"
@@ -53,8 +54,9 @@ var Global Config = Config{
 	LogLevel:         DEFAULT_LOG_LEVEL,
 	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Checkpoint: Checkpoint{
-		Dir:         DEFAULT_DUMP_DIR,
-		Compression: DEFAULT_COMPRESSION,
+		Dir:         DEFAULT_CHECKPOINT_DIR,
+		Compression: DEFAULT_CHECKPOINT_COMPRESSION,
+		Streams:     DEFAULT_CHECKPOINT_STREAMS,
 	},
 	DB: DB{
 		Remote: false,

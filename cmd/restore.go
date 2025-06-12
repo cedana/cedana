@@ -39,8 +39,6 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
-		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the restore (using <n> parallel streams)")
-	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "allow listening TCP sockets to exist on restore")
@@ -94,7 +92,6 @@ var restoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
-		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
 		leaveStopped, _ := cmd.Flags().GetBool(flags.LeaveStoppedFlag.Full)
@@ -129,7 +126,6 @@ var restoreCmd = &cobra.Command{
 		req := &daemon.RestoreReq{
 			Path:       path,
 			PidFile:    pidFile,
-			Stream:     stream,
 			Log:        log,
 			Attachable: attach || attachable,
 			Criu: &criu.CriuOpts{

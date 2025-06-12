@@ -41,7 +41,7 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump runc "$id" --stream 1 --compression none
+    run cedana dump runc "$id" --streams 1 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -59,7 +59,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$jid" --detach
 
-    run cedana dump runc "$jid" --stream 2 --compression none
+    run cedana dump runc "$jid" --streams 2 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -79,7 +79,7 @@ teardown_file() {
     run cedana run runc --bundle "$bundle" --jid "$jid"
     assert_success
 
-    run cedana dump job "$jid" --stream 2 --compression none
+    run cedana dump job "$jid" --streams 2 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -98,7 +98,7 @@ teardown_file() {
     cedana run runc --bundle "$bundle" --jid "$jid" --attach &
     sleep 1
 
-    run cedana dump job "$jid" --stream 2 --compression none
+    run cedana dump job "$jid" --streams 2 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -122,14 +122,14 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump runc "$id" --stream 1 --compression none
+    run cedana dump runc "$id" --streams 1 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
 
-    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --stream 1
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
     assert_success
 
     run runc kill "$id" KILL
@@ -144,7 +144,7 @@ teardown_file() {
     run cedana run runc --bundle "$bundle" --jid "$jid"
     assert_success
 
-    run cedana dump job "$jid" --stream 2 --compression none
+    run cedana dump job "$jid" --streams 2 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -152,7 +152,7 @@ teardown_file() {
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
 
-    run cedana restore job "$jid" --stream 2
+    run cedana restore job "$jid"
     assert_success
 
     run cedana kill "$jid"
@@ -166,7 +166,7 @@ teardown_file() {
     cedana run runc --bundle "$bundle" --jid "$jid" --attach &
     sleep 1
 
-    run cedana dump job "$jid" --stream 2 --compression none
+    run cedana dump job "$jid" --streams 2 --compression none
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
@@ -174,7 +174,7 @@ teardown_file() {
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
 
-    run cedana restore job "$jid" --stream 2
+    run cedana restore job "$jid"
     assert_success
 
     run cedana kill "$jid"

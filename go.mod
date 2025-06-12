@@ -5,12 +5,12 @@ go 1.24.1
 toolchain go1.24.3
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250602032941-29d930949cf0.2
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250602032941-29d930949cf0.1
-	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250529123335-ad1b822e8c7f.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250611092403-45fe2d9a2a30.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250611092403-45fe2d9a2a30.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250611092403-3c43d75cf832.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250612023004-7040e8a5d3a9.2
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250612023004-7040e8a5d3a9.1
+	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250612023004-babcadcb96ee.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250612023004-0b2cbc4f2943.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250612023004-0b2cbc4f2943.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250612023004-eed0e118f94d.1
 	github.com/cedana/cedana-go-sdk v0.3.1
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.5

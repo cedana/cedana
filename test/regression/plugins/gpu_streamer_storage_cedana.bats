@@ -48,7 +48,7 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1 --dir cedana://ci
+    run cedana dump job "$jid" --streams 1 --dir cedana://ci
     assert_success
 
     run cedana job kill "$jid"
@@ -65,7 +65,7 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4 --dir cedana://ci
+    run cedana dump job "$jid" --streams 4 --dir cedana://ci
     assert_success
 
     run cedana job kill "$jid"
@@ -84,10 +84,10 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 1 --dir cedana://ci
+    run cedana dump job "$jid" --streams 1 --dir cedana://ci
     assert_success
 
-    run cedana restore job "$jid" --stream 1
+    run cedana restore job "$jid"
     assert_success
 
     run cedana ps
@@ -106,10 +106,10 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4 --dir cedana://ci
+    run cedana dump job "$jid" --streams 4 --dir cedana://ci
     assert_success
 
-    run cedana restore job "$jid" --stream 4
+    run cedana restore job "$jid"
     assert_success
 
     run cedana ps
@@ -130,12 +130,12 @@ teardown_file() {
 
     sleep 2
 
-    run cedana dump job "$jid" --stream 4 --dir cedana://ci
+    run cedana dump job "$jid" --streams 4 --dir cedana://ci
     assert_success
 
     dump_file=$(echo "$output" | awk '{print $NF}')
 
-    cedana restore process --path "$dump_file" --stream 4 --no-server &
+    cedana restore process --path "$dump_file" --no-server &
 
     run wait_for_pid "$pid"
     kill -KILL "$pid"
