@@ -3,7 +3,6 @@ package main
 import (
 	"syscall"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
@@ -54,7 +53,7 @@ var (
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
 		container.LoadSpecFromBundle,
-		process.SetUsChildSubReaper[daemon.RunReq, daemon.RunResp],
+		process.SetUsChildSubReaper,
 	}
 	RunDaemonlessSupport bool = true
 	KillSignal                = syscall.SIGKILL
@@ -104,8 +103,8 @@ var (
 		cgroup.ManageCgroupsForRestore(criu.CriuCgMode_SOFT),
 		cgroup.ApplyCgroupsOnRestore,
 		container.RunHooksOnRestore,
-    container.RestoreConsole,
+		container.RestoreConsole,
 		container.UpdateStateOnRestore,
-		process.SetUsChildSubReaper[daemon.RestoreReq, daemon.RestoreResp],
+		process.SetUsChildSubReaperForRestore,
 	}
 )

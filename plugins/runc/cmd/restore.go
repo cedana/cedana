@@ -26,6 +26,9 @@ func init() {
 	RestoreCmd.Flags().StringP(runc_flags.ConsoleSocketFlag.Full, runc_flags.ConsoleSocketFlag.Short, "", "path to an AF_UNIX socket which will receive a file descriptor referencing the master end of the console's pseudoterminal")
 	RestoreCmd.Flags().StringP(runc_flags.LogFlag.Full, runc_flags.LogFlag.Short, "", "log file to write logs to if --no-server")
 	RestoreCmd.Flags().StringP(runc_flags.LogFormatFlag.Full, runc_flags.LogFormatFlag.Short, "text", "log format to use if --no-server (json, text)")
+	RestoreCmd.Flags().StringP(runc_flags.RootlessFlag.Full, runc_flags.RootlessFlag.Short, "auto", "ignore cgroup permission errors (true, false, auto)")
+	RestoreCmd.Flags().BoolP(runc_flags.SystemdCgroupFlag.Full, runc_flags.SystemdCgroupFlag.Short, false, "enable systemd cgroup support, expects cgroupsPath to be of form 'slice:prefix:name' for e.g. 'system.slice:runc:434234'")
+	RestoreCmd.Flags().BoolP(runc_flags.NoSubreaperFlag.Full, runc_flags.NoSubreaperFlag.Short, false, "disable the use of the subreaper used to reap reparented processes")
 }
 
 var RestoreCmd = &cobra.Command{
@@ -47,6 +50,9 @@ var RestoreCmd = &cobra.Command{
 		consoleSocket, _ := cmd.Flags().GetString(runc_flags.ConsoleSocketFlag.Full)
 		logFile, _ := cmd.Flags().GetString(runc_flags.LogFlag.Full)
 		logFormat, _ := cmd.Flags().GetString(runc_flags.LogFormatFlag.Full)
+		rootless, _ := cmd.Flags().GetString(runc_flags.RootlessFlag.Full)
+		systemdCgroup, _ := cmd.Flags().GetBool(runc_flags.SystemdCgroupFlag.Full)
+		noSubreaper, _ := cmd.Flags().GetBool(runc_flags.NoSubreaperFlag.Full)
 		wd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("Error getting working directory: %v", err)
@@ -59,25 +65,37 @@ var RestoreCmd = &cobra.Command{
 				return fmt.Errorf("failed to open log file %s: %v", logFile, err)
 			}
 			logging.SetLogger(zerolog.New(runc_logging.Writer(file, logFormat)).Level(logging.Level))
-		} else if !daemonless && detach {
-			fmt.Println(
-				style.WarningColors.Sprintf(
-					"Flag `%s` is ignored when restoring with daemon, as it always detaches.",
-					runc_flags.DetachFlag.Full,
-				))
+		} else if !daemonless {
+			if detach {
+				fmt.Println(
+					style.WarningColors.Sprintf(
+						"Flag `%s` is ignored when restoring with daemon, as it always detaches.",
+						runc_flags.DetachFlag.Full,
+					))
+			}
+			if noSubreaper {
+				fmt.Println(
+					style.WarningColors.Sprintf(
+						"Flag `%s` is ignored when restoring with daemon, as it always detaches and reaps.",
+						runc_flags.NoSubreaperFlag.Full,
+					))
+			}
 		}
 
 		req.Type = "runc"
 		req.Details = &daemon.Details{
 			Runc: &runc.Runc{
-				ID:                id,
-				Root:              root,
-				Bundle:            bundle,
-				WorkingDir:        wd,
-				Detach:            detach,
-				NoPivot:           noPivot,
-				NoNewKeyring:      noNewKeyring,
-				ConsoleSocketPath: consoleSocket,
+				ID:            id,
+				Root:          root,
+				Bundle:        bundle,
+				WorkingDir:    wd,
+				Detach:        detach,
+				NoPivot:       noPivot,
+				NoNewKeyring:  noNewKeyring,
+				ConsoleSocket: consoleSocket,
+				Rootless:      rootless,
+				SystemdCgroup: systemdCgroup,
+				NoSubreaper:   noSubreaper,
 			},
 		}
 
