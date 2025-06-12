@@ -115,7 +115,11 @@ func (p *pool) List() (free []*controller, busy []*controller, remaining []*cont
 					busy = append(busy, c)
 					return true
 				}
-				free = append(free, c)
+				if c.ShmSize == config.Global.GPU.ShmSize { // Only consider if the shared memory size is what we expect
+					free = append(free, c)
+					return true
+				}
+				remaining = append(remaining, c)
 				return true
 			}
 			if utils.PidRunning(c.AttachedPID) {
