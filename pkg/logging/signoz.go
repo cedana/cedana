@@ -111,7 +111,7 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 		return len(p), nil
 	}
 
-	var zerologEntry map[string]interface{}
+	var zerologEntry map[string]any
 	if err := json.Unmarshal(p, &zerologEntry); err != nil {
 		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error unmarshalling zerolog entry: %v\nOriginal log: %s\n", err, string(p))
 		return len(p), nil // Consume and drop
@@ -133,6 +133,10 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 	severityText, severityNumber := mapZerologLevelToSigNoz(parsedLevel)
 
 	body, _ := zerologEntry[zerolog.MessageFieldName].(string)
+	error, _ := zerologEntry[zerolog.ErrorFieldName].(string)
+	if error != "" {
+		body = fmt.Sprintf("%s: %s", body, error) // Append error if present
+	}
 
 	attributes := make(map[string]string)
 	attributes["version"] = version.GetVersion()
