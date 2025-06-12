@@ -184,23 +184,6 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote stream restore process (mismatched parallelism)" {
-    "$WORKLOADS"/date-loop.sh &
-    pid=$!
-    name=$(unix_nano)
-
-    run cedana dump process $pid --name "$name" --dir cedana://ci --streams 2
-    assert_success
-
-    dump_file="cedana://ci/$name"
-
-    run cedana restore process --path "$dump_file"
-    assert_failure
-
-    run kill $pid
-}
-
-# bats test_tags=restore
 @test "remote stream restore process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!

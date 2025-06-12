@@ -470,6 +470,15 @@ func IsStreamable(storage cedana_io.Storage, dir string) (streams int32, err err
 		return 0, fmt.Errorf("storage is nil")
 	}
 
+	isDir, err := storage.IsDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check if path is a directory: %w", err)
+	}
+
+	if !isDir {
+		return 0, nil
+	}
+
 	list, err := storage.ReadDir(dir)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read dir: %w", err)

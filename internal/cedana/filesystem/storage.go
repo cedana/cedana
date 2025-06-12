@@ -33,6 +33,14 @@ func (s *Storage) Delete(path string) error {
 	return nil
 }
 
+func (s *Storage) IsDir(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false, fmt.Errorf("failed to stat path: %w", err)
+	}
+	return info.IsDir(), nil
+}
+
 func (s *Storage) ReadDir(path string) ([]string, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
