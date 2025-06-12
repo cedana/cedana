@@ -136,6 +136,7 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 
 	attributes := make(map[string]string)
 	attributes["version"] = version.GetVersion()
+	attributes["cedana.service.url"] = config.Global.Connection.URL
 
 	for k, v := range zerologEntry {
 		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName {
