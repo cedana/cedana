@@ -337,13 +337,13 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze complete")
 
+		// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
+		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
+		controller.Termination.RLock()
+
 		// Begin GPU dump in parallel to CRIU dump
 
 		go func() {
-			// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
-			// 'ghost files' as the GPU controller deletes the shared memory file on termination.
-			controller.Termination.RLock()
-
 			defer close(dumpErr)
 
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
