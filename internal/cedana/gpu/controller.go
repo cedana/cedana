@@ -67,7 +67,7 @@ type controller struct {
 
 	ErrBuf      *bytes.Buffer
 	Booking     *flock.Flock // To book the controller for use
-	Termination sync.RWMutex // To protect termination
+	Termination sync.Mutex   // To protect termination
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
 }
@@ -329,7 +329,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
 		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
-		controller.Termination.RLock()
+		controller.Termination.Lock()
 
 		freezeType = append(freezeType, gpu.FreezeType_FREEZE_TYPE_IPC) // Default to IPC freeze type if not provided
 
@@ -398,7 +398,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			return
 		}
 
-		controller.Termination.TryRLock() // Might be already locked, so ensure we don't deadlock
+		controller.Termination.TryLock() // Might be already locked, so ensure we don't deadlock
 		defer controller.Termination.Unlock()
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
@@ -425,7 +425,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 				return
 			}
 
-			controller.Termination.RLock() // Required to ensure the controller does not get terminated while restoring
+			controller.Termination.Lock() // Required to ensure the controller does not get terminated while restoring
 			defer controller.Termination.Unlock()
 
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
