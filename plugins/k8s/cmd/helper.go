@@ -95,13 +95,9 @@ var HelperCmd = &cobra.Command{
 var destroyCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Destroy cedana from host of kubernetes worker node",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
-		if err := destroyDaemon(ctx); err != nil {
-			return fmt.Errorf("error destroying cedana on host: %w", err)
-		}
-
-		return nil
+		destroyDaemon(context.WithoutCancel(ctx))
 	},
 }
 
