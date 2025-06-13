@@ -26,14 +26,11 @@ func init() {
 
 	// Add flags
 	startDaemonCmd.PersistentFlags().
-		BoolP(flags.MetricsASRFlag.Full, flags.MetricsASRFlag.Short, false, "enable metrics for ASR")
-	startDaemonCmd.PersistentFlags().
 		StringP(flags.DBFlag.Full, flags.DBFlag.Short, "", "path to local database")
 	checkDaemonCmd.PersistentFlags().
 		BoolP(flags.FullFlag.Full, flags.FullFlag.Short, false, "perform a full check (including plugins)")
 
 	// Bind to config
-	viper.BindPFlag("metrics.asr", startDaemonCmd.PersistentFlags().Lookup(flags.MetricsASRFlag.Full))
 	viper.BindPFlag("db.path", startDaemonCmd.PersistentFlags().Lookup(flags.DBFlag.Full))
 }
 

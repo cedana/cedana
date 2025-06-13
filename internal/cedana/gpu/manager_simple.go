@@ -52,7 +52,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 
 	var spawnedNew bool
 
-	controller := m.controllers.GetFree()
+	controller := m.controllers.Book()
 
 	if controller == nil {
 		log.Debug().Msg("spawning a new GPU controller")
@@ -62,13 +62,13 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 		spawnedNew = true
 	} else {
-		log.Debug().Str("ID", controller.ID).Msg("using free GPU controller")
+		log.Debug().Str("ID", controller.ID).Msg("booking free GPU controller")
 	}
 
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		defer controller.Busy.Store(false)
+		defer controller.Booking.Unlock()
 		ok := false
 		select {
 		case <-ctx.Done():

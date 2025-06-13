@@ -2,11 +2,11 @@
 
 Cedana configuration lives in your home directory, specifically in `~/.cedana/config.json`. This file is automatically created the first time you use a Cedana command. You can also create it manually.
 
-You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
+You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Metrics.Otel` can be set with `CEDANA_METRICS_OTEL`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
 
 ## [Config](../../pkg/config/types.go#L10-L36)
 
-Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. The `env_aliases` tag below specifies alternative (alias) environment variable names (comma-separated).
+Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. `Metrics.Otel` can be set with `CEDANA_METRICS_OTEL`. The `env_aliases` tag below specifies alternative (alias) environment variable names (comma-separated).
 
 ```go
 type Config struct {
@@ -117,8 +117,6 @@ type GPU struct {
 
 ```go
 type Metrics struct {
-    // ASR sets whether to enable ASR metrics
-    ASR bool `json:"asr" key:"asr" yaml:"asr" mapstructure:"asr"`
     // Otel sets whether to enable OpenTelemetry metrics
     Otel bool `json:"otel" key:"otel" yaml:"otel" mapstructure:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
 }

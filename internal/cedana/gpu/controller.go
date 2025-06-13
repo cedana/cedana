@@ -11,7 +11,6 @@ import (
 	"os/exec"
 	"regexp"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -23,6 +22,7 @@ import (
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/gofrs/flock"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -31,14 +31,15 @@ import (
 )
 
 const (
-	CONTROLLER_ADDRESS_FORMATTER  = "unix://%s/cedana-gpu-controller-%s.sock"
-	CONTROLLER_SOCKET_FORMATTER   = "%s/cedana-gpu-controller-%s.sock"
-	CONTROLLER_SOCKET_PATTERN     = "cedana-gpu-controller-(.*).sock"
-	CONTROLLER_SHM_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s"
-	CONTROLLER_SHM_FILE_PATTERN   = "/dev/shm/cedana-gpu.(.*)"
-	CONTROLLER_PROCESS_NAME       = "cedana-gpu-controller"
-	CONTROLLER_TERMINATE_SIGNAL   = syscall.SIGTERM
-	RESTORE_NEW_PID_SIGNAL        = syscall.SIGUSR1 // Signal to the restored process to notify it has a new PID
+	CONTROLLER_PROCESS_NAME                = "cedana-gpu-controller"
+	CONTROLLER_ADDRESS_FORMATTER           = "unix://%s/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_FORMATTER            = "%s/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_PATTERN              = "cedana-gpu-controller-(.*).sock"
+	CONTROLLER_SHM_FILE_FORMATTER          = "/dev/shm/cedana-gpu.%s"
+	CONTROLLER_SHM_FILE_PATTERN            = "/dev/shm/cedana-gpu.(.*)"
+	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
+	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
+	RESTORE_NEW_PID_SIGNAL                 = syscall.SIGUSR1 // Signal to the restored process to notify it has a new PID
 
 	FREEZE_TIMEOUT   = 1 * time.Minute
 	UNFREEZE_TIMEOUT = 1 * time.Minute
@@ -55,17 +56,18 @@ const (
 type controller struct {
 	ID          string
 	PID         uint32
+	ParentPID   uint32
 	Address     string
 	AttachedPID uint32
 	ShmSize     uint64
 	ShmName     string
+	UID         uint32
+	GID         uint32
 	Version     string
 
-	External bool // If it wasn't spawned by us
-	Busy     atomic.Bool
-	ErrBuf   *bytes.Buffer
-
-	Termination sync.Mutex // To protect termination
+	ErrBuf       *bytes.Buffer
+	Booking      *flock.Flock // To book the controller for use
+	sync.RWMutex              // To protect the internal state
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
 }
@@ -92,6 +94,8 @@ func (p *pool) Find(attachedPID uint32) *controller {
 	var found *controller
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
+		c.RLock()
+		defer c.RUnlock()
 		if c.AttachedPID == attachedPID {
 			found = c
 			return false
@@ -105,24 +109,21 @@ func (p *pool) Find(attachedPID uint32) *controller {
 func (p *pool) List() (free []*controller, busy []*controller, remaining []*controller) {
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
+		c.RLock()
+		defer c.RUnlock()
 		if utils.PidRunning(c.PID) {
-			if c.Busy.Load() {
+			if c.Booking.Locked() {
 				busy = append(busy, c)
 				return true
 			}
 			if c.AttachedPID == 0 {
-				if c.External { // Conservative with external controllers, as they might be busy (e.g. just spawned for restore)
-					busy = append(busy, c)
-					return true
-				}
-				if c.ShmSize == config.Global.GPU.ShmSize { // Only consider if the shared memory size is what we expect
+				shmSizeMatches := c.ShmSize == config.Global.GPU.ShmSize
+				credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
+				if shmSizeMatches && credentialsMatch {
 					free = append(free, c)
 					return true
 				}
-				remaining = append(remaining, c)
-				return true
-			}
-			if utils.PidRunning(c.AttachedPID) {
+			} else if utils.PidRunning(c.AttachedPID) {
 				busy = append(busy, c)
 				return true
 			}
@@ -131,20 +132,6 @@ func (p *pool) List() (free []*controller, busy []*controller, remaining []*cont
 		return true
 	})
 	return
-}
-
-// Gets a free GPU controller, and marks it as busy.
-func (p *pool) GetFree() *controller {
-	free, _, _ := p.List()
-	if len(free) == 0 {
-		return nil
-	}
-	for _, c := range free {
-		if c.Busy.CompareAndSwap(false, true) { // Set busy until whoever asked for us sets us free
-			return c
-		}
-	}
-	return nil
 }
 
 // Sync with all existing GPU controllers in the system
@@ -170,19 +157,27 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 		c := p.Get(id)
 
 		if c == nil {
-			c = &controller{
-				ID:       id,
-				Address:  fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id),
-				External: true, // If we are here, we didn't spawn this controller, so it is external
+			fileInfo, err := os.Stat(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
+			if err != nil {
+				continue
 			}
-		} else if c.Busy.Load() {
+			c = &controller{
+				ID:      id,
+				Address: fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id),
+				Booking: flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_RDWR)),
+				UID:     fileInfo.Sys().(*syscall.Stat_t).Uid,
+				GID:     fileInfo.Sys().(*syscall.Stat_t).Gid,
+			}
+		} else if c.Booking.Locked() {
 			continue
 		}
 
 		wg.Add(1)
 		go func() {
-			c.Connect(ctx, false)
-			p.Store(id, c)
+			err := c.Connect(ctx, false)
+			if err == nil {
+				p.Store(id, c)
+			}
 			wg.Done()
 		}()
 	}
@@ -192,9 +187,22 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 	return nil
 }
 
-// Spawns a GPU controller
+// Books a free GPU controller, and marks it as booked.
+func (p *pool) Book() *controller {
+	free, _, _ := p.List()
+	if len(free) == 0 {
+		return nil
+	}
+	for _, c := range free {
+		if acquired, _ := c.Booking.TryLock(); acquired {
+			return c
+		}
+	}
+	return nil
+}
+
+// Spawns a GPU controller, and marks it as booked.
 func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err error) {
-	// Generate a unique ID for the GPU controller
 	id := uuid.NewString()
 
 	observability := ""
@@ -205,6 +213,8 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 	c = &controller{
 		ID:     id,
 		ErrBuf: &bytes.Buffer{},
+		UID:    uint32(os.Getuid()),
+		GID:    uint32(os.Getgid()),
 	}
 
 	cmd := exec.Command(
@@ -235,7 +245,11 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 	)
 
 	c.Address = fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id)
-	c.Busy.Store(true) // Busy until whoever spawned us sets us free
+	c.Booking = flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR))
+	err = c.Booking.Lock() // Locked until whoever spawned us sets us free
+	if err != nil {
+		return nil, fmt.Errorf("failed to lock GPU controller: %w", err)
+	}
 
 	p.Store(id, c)
 
@@ -254,6 +268,7 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 	}
 
 	c.PID = uint32(cmd.Process.Pid)
+	c.ParentPID = uint32(os.Getpid())
 
 	err = c.Connect(ctx, true)
 	if err != nil {
@@ -264,14 +279,16 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 }
 
 func (p *pool) Terminate(id string) {
-	defer os.RemoveAll(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
-
 	c := p.Get(id)
 	if c == nil {
 		return
 	}
-	c.Termination.Lock()
-	defer c.Termination.Unlock()
+
+	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
+	defer os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
+
+	c.Lock()
+	defer c.Unlock()
 
 	p.Delete(id) // Remove from the pool
 
@@ -284,8 +301,7 @@ func (p *pool) Terminate(id string) {
 		c.ClientConn = nil
 		c.ControllerClient = nil
 	}
-	if !c.External {
-		// If we are the parent process of the GPU controller, we should clean it up properly
+	if int(c.ParentPID) == os.Getpid() {
 		process, err := os.FindProcess(int(c.PID))
 		if err != nil {
 			return
@@ -330,7 +346,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		go func() {
 			// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
 			// 'ghost files' as the GPU controller deletes the shared memory file on termination.
-			controller.Termination.Lock()
+			controller.RLock()
 
 			defer close(dumpErr)
 
@@ -362,7 +378,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
-		controller.Termination.Unlock()
+		controller.Unlock()
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
@@ -385,8 +401,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			return
 		}
 
-		controller.Termination.TryLock() // Might be already locked, so ensure we don't deadlock
-		controller.Termination.Unlock()
+		controller.TryRLock() // Might be already locked, so ensure we don't deadlock
+		controller.Unlock()
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
@@ -412,8 +428,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 				return
 			}
 
-			controller.Termination.Lock() // Required to ensure the controller does not get terminated while restoring
-			defer controller.Termination.Unlock()
+			controller.RLock() // Required to ensure the controller does not get terminated while restoring
+			defer controller.Unlock()
 
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
@@ -489,6 +505,9 @@ func (p *pool) Check(binary string) types.Check {
 
 // Connect connects to the GPU controller. If already connected, it will refresh the controller info.
 func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
+	c.Lock()
+	defer c.Unlock()
+
 	if c.Address == "" {
 		return fmt.Errorf("controller address is not set")
 	}

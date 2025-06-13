@@ -71,7 +71,6 @@ var Global Config = Config{
 		AuthToken: "",
 	},
 	Metrics: Metrics{
-		ASR:  false,
 		Otel: false,
 	},
 	Client: Client{
