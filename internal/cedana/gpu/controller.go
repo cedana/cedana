@@ -65,9 +65,9 @@ type controller struct {
 	GID         uint32
 	Version     string
 
-	ErrBuf       *bytes.Buffer
-	Booking      *flock.Flock // To book the controller for use
-	sync.RWMutex              // To protect the internal state
+	ErrBuf      *bytes.Buffer
+	Booking     *flock.Flock // To book the controller for use
+	Termination sync.RWMutex // To protect termination
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
 }
@@ -94,8 +94,6 @@ func (p *pool) Find(attachedPID uint32) *controller {
 	var found *controller
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
-		c.RLock()
-		defer c.RUnlock()
 		if c.AttachedPID == attachedPID {
 			found = c
 			return false
@@ -109,8 +107,6 @@ func (p *pool) Find(attachedPID uint32) *controller {
 func (p *pool) List() (free []*controller, busy []*controller, remaining []*controller) {
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
-		c.RLock()
-		defer c.RUnlock()
 		if utils.PidRunning(c.PID) {
 			if c.Booking.Locked() {
 				busy = append(busy, c)
@@ -287,8 +283,8 @@ func (p *pool) Terminate(id string) {
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
 
-	c.Lock()
-	defer c.Unlock()
+	c.Termination.Lock()
+	defer c.Termination.Unlock()
 
 	p.Delete(id) // Remove from the pool
 
@@ -346,7 +342,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		go func() {
 			// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
 			// 'ghost files' as the GPU controller deletes the shared memory file on termination.
-			controller.RLock()
+			controller.Termination.RLock()
 
 			defer close(dumpErr)
 
@@ -378,7 +374,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
-		controller.Unlock()
+		controller.Termination.Unlock()
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
@@ -401,8 +397,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			return
 		}
 
-		controller.TryRLock() // Might be already locked, so ensure we don't deadlock
-		controller.Unlock()
+		controller.Termination.TryRLock() // Might be already locked, so ensure we don't deadlock
+		controller.Termination.Unlock()
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
@@ -428,8 +424,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 				return
 			}
 
-			controller.RLock() // Required to ensure the controller does not get terminated while restoring
-			defer controller.Unlock()
+			controller.Termination.RLock() // Required to ensure the controller does not get terminated while restoring
+			defer controller.Termination.Unlock()
 
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
@@ -505,9 +501,6 @@ func (p *pool) Check(binary string) types.Check {
 
 // Connect connects to the GPU controller. If already connected, it will refresh the controller info.
 func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
-	c.Lock()
-	defer c.Unlock()
-
 	if c.Address == "" {
 		return fmt.Errorf("controller address is not set")
 	}
