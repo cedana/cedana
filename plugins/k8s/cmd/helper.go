@@ -150,7 +150,7 @@ func startHelper(ctx context.Context, address string, protocol string) error {
 
 			case <-signalChannel:
 				fmt.Println("Received kill signal. Exiting...")
-				err := stopDaemon(ctx)
+				err := stopDaemon(context.WithoutCancel(ctx))
 				if err != nil {
 					fmt.Printf("Error stopping Cedana daemon: %v\n", err)
 				}
