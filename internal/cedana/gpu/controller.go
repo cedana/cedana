@@ -327,6 +327,10 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
 
+		// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
+		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
+		controller.Termination.RLock()
+
 		freezeType = append(freezeType, gpu.FreezeType_FREEZE_TYPE_IPC) // Default to IPC freeze type if not provided
 
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{Type: freezeType[0]})
@@ -336,10 +340,6 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		}
 
 		log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze complete")
-
-		// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
-		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
-		controller.Termination.RLock()
 
 		// Begin GPU dump in parallel to CRIU dump
 
@@ -374,7 +374,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
-		controller.Termination.Unlock()
+
+		defer controller.Termination.Unlock()
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
@@ -398,7 +399,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		}
 
 		controller.Termination.TryRLock() // Might be already locked, so ensure we don't deadlock
-		controller.Termination.Unlock()
+		defer controller.Termination.Unlock()
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
