@@ -79,7 +79,6 @@ reset-tmp: ## Reset temporary files
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."
-	$(SUDO) rm -rf /tmp/cedana*.log
 	$(SUDO) rm -rf /var/log/cedana*
 
 ###########
