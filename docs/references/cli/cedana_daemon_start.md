@@ -11,7 +11,6 @@ cedana daemon start [flags]
 ```
       --db string     path to local database
   -h, --help          help for start
-      --metrics-asr   enable metrics for ASR
 ```
 
 ### Options inherited from parent commands

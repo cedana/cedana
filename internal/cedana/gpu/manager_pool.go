@@ -3,15 +3,10 @@ package gpu
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
-	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
-	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 )
 
@@ -69,13 +64,13 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 }
 
 func (m *ManagerPool) Sync(ctx context.Context) error {
-	err := m.ManagerSimple.Sync(ctx) // Call the sync method of the embedded simple manager
+	m.sync.Lock()
+	defer m.sync.Unlock()
+
+	err := m.controllers.Sync(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to sync GPU controllers: %w", err)
 	}
-
-	m.sync.Lock()
-	defer m.sync.Unlock()
 
 	free, busy, remaining := m.controllers.List()
 
@@ -91,7 +86,7 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 	// Maintain the pool size
 
 	if len(free) < m.poolSize {
-		log.Debug().Int("target", m.poolSize).Int("current", len(free)).Msg("maintaining GPU pool size")
+		log.Debug().Int("target", m.poolSize).Int("free", len(free)).Msg("maintaining GPU pool size")
 		for i := len(free); i < m.poolSize; i++ {
 			wg := &sync.WaitGroup{}
 			wg.Add(1)
@@ -103,50 +98,19 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 					return
 				}
 				log.Debug().Str("ID", controller.ID).Msg("spawned GPU controller to maintain pool size")
-				controller.Busy.Store(false)
+				controller.Booking.Unlock()
 			}()
 			wg.Wait()
 		}
 	} else if len(free) > m.poolSize {
-		log.Debug().Int("target", m.poolSize).Int("current", len(free)).Msg("reducing GPU pool size")
+		log.Debug().Int("target", m.poolSize).Int("free", len(free)).Msg("reducing GPU pool size")
 		for _, controller := range free[m.poolSize:] {
 			// Ensure we only terminate controllers that are still free
-			if controller.Busy.CompareAndSwap(false, true) {
+			if acquired, _ := controller.Booking.TryLock(); acquired {
 				log.Debug().Str("ID", controller.ID).Msg("terminating GPU controller to reduce pool size")
 				m.controllers.Terminate(controller.ID)
 			}
 		}
 	}
 	return nil
-}
-
-func (m *ManagerPool) Checks() types.Checks {
-	check := func(ctx context.Context) []*daemon.HealthCheckComponent {
-		statusComponent := &daemon.HealthCheckComponent{Name: "status"}
-
-		// Check if GPU plugin is installed
-		var gpuPlugin *plugins.Plugin
-		if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
-			statusComponent.Data = "missing"
-			statusComponent.Errors = append(statusComponent.Errors, "Please install the GPU plugin to use GPU support.")
-			return []*daemon.HealthCheckComponent{statusComponent}
-		}
-		binary := gpuPlugin.BinaryPaths()[0]
-		if _, err := os.Stat(binary); err != nil {
-			statusComponent.Data = "invalid"
-			statusComponent.Errors = append(statusComponent.Errors, fmt.Sprintf("Invalid binary: %v. Try reinstalling plugin.", err))
-			return []*daemon.HealthCheckComponent{statusComponent}
-		}
-
-		return m.controllers.Check(binary)(ctx)
-	}
-
-	return types.Checks{
-		Name: "gpu",
-		List: []types.Check{check},
-	}
-}
-
-func (m *ManagerPool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
-	return m.controllers.CRIUCallback(id, freezeType...)
 }

@@ -5,9 +5,9 @@ set -e
 
 # NOTE: The scripts are executed before the binaries, ensure they are copied to the host
 # first
-mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts /host/cedana/lib
-cp -r /scripts/host/* /host/cedana/scripts
-chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
+mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
+cp -r /scripts/host/* /host/cedana/scripts/host
+chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
 
 # We load the binary from docker image for the container
 # Copy Cedana binaries and scripts to the host
@@ -23,14 +23,20 @@ cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin/netavark-dhcp-prox
 CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-"info"}
 CEDANA_LOG_LEVEL_NO_SERVER=${CEDANA_LOG_LEVEL_NO_SERVER:-"info"}
 
-CEDANA_ADDRESS=${CEDANA_ADDRESS:-"0.0.0.0:8080"}
-CEDANA_PROTOCOL=${CEDANA_PROTOCOL:-"tcp"}
+CEDANA_ADDRESS=${CEDANA_ADDRESS:-"/run/cedana.sock"}
+CEDANA_PROTOCOL=${CEDANA_PROTOCOL:-"unix"}
 CEDANA_DB_REMOTE=${CEDANA_DB_REMOTE:-true}
 CEDANA_CLIENT_WAIT_FOR_READY=${CEDANA_CLIENT_WAIT_FOR_READY:-true}
+
 CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-false}
+CEDANA_METRICS_OTEL=${CEDANA_METRICS_OTEL:-false}
 
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-"none"}
+
+CEDANA_GPU_POOL_SIZE=${CEDANA_GPU_POOL_SIZE:-1}
+CEDANA_GPU_FREEZE_TYPE=${CEDANA_GPU_FREEZE_TYPE:-"IPC"}
+CEDANA_GPU_SHM_SIZE=${CEDANA_GPU_SHM_SIZE:-8589934592} # 8GB
 
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
@@ -52,8 +58,12 @@ env \
     CEDANA_DB_REMOTE="$CEDANA_DB_REMOTE" \
     CEDANA_CLIENT_WAIT_FOR_READY="$CEDANA_CLIENT_WAIT_FOR_READY" \
     CEDANA_PROFILING_ENABLED="$CEDANA_PROFILING_ENABLED" \
+    CEDANA_METRICS_OTEL="$CEDANA_METRICS_OTEL" \
     CEDANA_CHECKPOINT_STREAMS="$CEDANA_CHECKPOINT_STREAMS" \
     CEDANA_CHECKPOINT_COMPRESSION="$CEDANA_CHECKPOINT_COMPRESSION" \
+    CEDANA_GPU_POOL_SIZE="$CEDANA_GPU_POOL_SIZE" \
+    CEDANA_GPU_FREEZE_TYPE="$CEDANA_GPU_FREEZE_TYPE" \
+    CEDANA_GPU_SHM_SIZE="$CEDANA_GPU_SHM_SIZE" \
     CEDANA_PLUGINS_BUILDS="$CEDANA_PLUGINS_BUILDS" \
     CEDANA_PLUGINS_NATIVE_VERSION="$CEDANA_PLUGINS_NATIVE_VERSION" \
     CEDANA_PLUGINS_CRIU_VERSION="$CEDANA_PLUGINS_CRIU_VERSION" \
@@ -61,4 +71,4 @@ env \
     CEDANA_PLUGINS_GPU_VERSION="$CEDANA_PLUGINS_GPU_VERSION" \
     CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
     CONTAINERD_CONFIG_PATH="$CONTAINERD_CONFIG_PATH" \
-    chroot /host /bin/bash /cedana/scripts/k8s-setup-host.sh
+    chroot /host /bin/bash /cedana/scripts/host/k8s-setup-host.sh

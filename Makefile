@@ -1,3 +1,4 @@
+PWD=$(shell pwd)
 OUT_DIR=$(PWD)
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go

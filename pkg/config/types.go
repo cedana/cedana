@@ -5,7 +5,7 @@ package config
 type (
 	// Cedana configuration. Each of the below fields can also be set
 	// through an environment variable with the same name, prefixed, and in uppercase. E.g.
-	// `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. The `env_aliases` tag below specifies
+	// `Metrics.Otel` can be set with `CEDANA_METRICS_OTEL`. The `env_aliases` tag below specifies
 	// alternative (alias) environment variable names (comma-separated).
 	Config struct {
 		// Address to use for incoming/outgoing connections
@@ -68,8 +68,6 @@ type (
 	}
 
 	Metrics struct {
-		// ASR sets whether to enable ASR metrics
-		ASR bool `json:"asr" key:"asr" yaml:"asr" mapstructure:"asr"`
 		// Otel sets whether to enable OpenTelemetry metrics
 		Otel bool `json:"otel" key:"otel" yaml:"otel" mapstructure:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
 	}

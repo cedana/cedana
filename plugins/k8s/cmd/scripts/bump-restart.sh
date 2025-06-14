@@ -5,9 +5,9 @@ set -e
 
 # NOTE: The scripts are executed before the binaries, ensure they are copied to the host
 # first
-mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts /host/cedana/lib
-cp -r /scripts/host/* /host/cedana/scripts
-chroot /host /bin/bash /cedana/scripts/systemd-reset.sh
+mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
+cp -r /scripts/host/* /host/cedana/scripts/host
+chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
 
 # Updates the cedana daemon to the latest version
 # and restarts using the existing configuration
@@ -32,5 +32,5 @@ env \
     CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION="$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION" \
     CEDANA_PLUGINS_GPU_VERSION="$CEDANA_PLUGINS_GPU_VERSION" \
     CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
-    chroot /host /bin/bash /cedana/scripts/k8s-install-plugins.sh
-chroot /host /bin/bash /cedana/scripts/systemd-install.sh
+    chroot /host /bin/bash /cedana/scripts/host/k8s-install-plugins.sh
+chroot /host /bin/bash /cedana/scripts/host/systemd-install.sh
