@@ -50,3 +50,10 @@ jobs:
       comparison_native: true
       post_summary_slack_nightly: true
       runner: 16cpu-64g-1xL4 # use larger runner (bench will automatically run larger metrics)
+
+  k3s:
+    name: K3s E2E
+    uses: ./.github/workflows/k3s-cr-e2e.yml
+    secrets: inherit
+    with:
+      test_level: comprehensive
