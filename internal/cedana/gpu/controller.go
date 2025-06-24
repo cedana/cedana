@@ -234,7 +234,7 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 	cmd.Stderr = c.ErrBuf
 
 	existingLD := os.Getenv("LD_LIBRARY_PATH")
-	ldPath := config.Global.GPU.LdLibDir
+	ldPath := config.Global.GPU.LdLibPath
 	if existingLD != "" {
 		ldPath = existingLD + ":" + ldPath
 	}
