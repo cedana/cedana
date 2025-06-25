@@ -58,9 +58,28 @@ else
 fi
 
 # FIXME HACK - permanently increase SHM size to ~10GB
-echo "increasing SHM size to 10GB..."
-mount -o remount,size=10G /host/dev/shm
-echo "tmpfs /dev/shm tmpfs defaults,size=10G 0 0" >>/host/etc/fstab
+# assumes we're chrooted into host
+SHM_PATH="/dev/shm"
+FSTAB="/etc/fstab"
+SIZE_G="10G"
+MIN_BYTES=$((10 * 1024 * 1024 * 1024))
+
+# 1. Remount if current size is too small
+if [ "$(df --output=size -B 1 "$SHM_PATH" | tail -n 1)" -lt "$MIN_BYTES" ]; then
+    echo "Remounting $SHM_PATH with size $SIZE_G..."
+    mount -o remount,size=$SIZE_G "$SHM_PATH"
+fi
+
+# 2. Ensure fstab is correct for persistence
+FSTAB_ENTRY="tmpfs /dev/shm tmpfs defaults,size=$SIZE_G 0 0"
+if [ -f "$FSTAB" ] && grep -qE "^\s*[^#]\s*tmpfs\s+$SHM_PATH" "$FSTAB"; then
+    sed -i.bak -E "s|^\s*[^#]\s*tmpfs\s+$SHM_PATH.*|$FSTAB_ENTRY|" "$FSTAB"
+elif [ -f "$FSTAB" ]; then
+    # No entry exists, so append it.
+    echo "$FSTAB_ENTRY" >>"$FSTAB"
+fi
+
+echo "/dev/shm configuration complete."
 
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
 
