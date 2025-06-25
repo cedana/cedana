@@ -55,7 +55,7 @@ jobs:
     secrets: inherit
     with:
       criu_version: release
-      gpu_version: main
+      gpu_version: feat/add-force-attach
       streamer_version: main
 
   test:

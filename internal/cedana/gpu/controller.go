@@ -549,6 +549,16 @@ func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
 	return
 }
 
+// Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.
+func (c *controller) Attach(ctx context.Context, pid uint32) (err error) {
+	_, err = c.ControllerClient.Attach(ctx, &gpu.AttachReq{PID: pid})
+	if err != nil {
+		return utils.GRPCErrorShort(err, c.ErrBuf.String())
+	}
+
+	return nil
+}
+
 // WaitForInfo gets info from the GPU controller, blocking on connection until ready.
 // This can be used as a proxy to wait for the controller to be ready.
 func (c *controller) WaitForInfo(ctx context.Context) (*gpu.InfoResp, error) {
