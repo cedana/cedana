@@ -14,6 +14,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Force the PID to be attached to the GPU controller, even if it's a non-GPU process.
+// If false, each GPU controller only appears as busy once the intercepted process makes its first CUDA call.
+// Setting this true will force a GPU controller to remain attached to even for non-GPU processes.
+const FORCE_ATTACH = true
+
 // Implements a simple GPU manager that spawns GPU controllers on-demand
 type ManagerSimple struct {
 	controllers pool
@@ -74,6 +79,15 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		case <-ctx.Done():
 		case controller.AttachedPID, ok = <-pid:
 		}
+
+		if ok && FORCE_ATTACH {
+			err = controller.Attach(context.WithoutCancel(ctx), controller.AttachedPID)
+			if err != nil {
+				log.Debug().Err(err).Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("failed to forcefully attach GPU controller (FORCE_ATTACH is true)")
+				ok = false
+			}
+		}
+
 		if !ok {
 			log.Debug().Err(ctx.Err()).Str("ID", controller.ID).Msg("terminating GPU controller")
 			if spawnedNew {
