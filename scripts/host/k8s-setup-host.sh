@@ -57,6 +57,11 @@ else
     exit 1
 fi
 
+# FIXME HACK - permanently increase SHM size to ~10GB
+echo "increasing SHM size to 10GB..."
+mount -o remount,size=10G /host/dev/shm
+echo "tmpfs /dev/shm tmpfs defaults,size=10G 0 0" >>/host/etc/fstab
+
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
 
 "$DIR"/systemd-reset.sh
