@@ -95,9 +95,9 @@ var HelperCmd = &cobra.Command{
 var destroyCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Destroy cedana from host of kubernetes worker node",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		destroyDaemon(context.WithoutCancel(ctx))
+		return destroyDaemon(context.WithoutCancel(ctx))
 	},
 }
 
@@ -145,9 +145,10 @@ func startHelper(ctx context.Context, address string, protocol string) error {
 				}
 
 			case <-signalChannel:
-				fmt.Println("Received kill signal. Exiting...")
-				err := stopDaemon(context.WithoutCancel(ctx))
+				fmt.Println("Received kill signal. Destroying...")
+				err := destroyDaemon(context.WithoutCancel(ctx))
 				if err != nil {
+					os.Exit(1)
 					fmt.Printf("Error stopping Cedana daemon: %v\n", err)
 				}
 				os.Exit(0)
