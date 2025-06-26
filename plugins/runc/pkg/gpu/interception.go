@@ -34,6 +34,13 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, id string) e
 		Options:     []string{"rbind", "rprivate", "nosuid", "nodev", "rw"},
 	})
 
+	spec.Mounts = append(spec.Mounts, specs.Mount{
+		Destination: "/run/cedana-gpu.container",
+		Source:      "/run/cedana-gpu." + id,
+		Type:        "bind",
+		Options:     []string{"rbind", "rprivate", "nosuid", "nodev", "rw"},
+	})
+
 	// Mount the GPU plugin library
 	spec.Mounts = append(spec.Mounts, specs.Mount{
 		Destination: libraryPath,

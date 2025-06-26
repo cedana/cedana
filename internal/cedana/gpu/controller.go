@@ -37,6 +37,8 @@ const (
 	CONTROLLER_SOCKET_PATTERN              = "cedana-gpu-controller-(.*).sock"
 	CONTROLLER_SHM_FILE_FORMATTER          = "/dev/shm/cedana-gpu.%s"
 	CONTROLLER_SHM_FILE_PATTERN            = "/dev/shm/cedana-gpu.(.*)"
+	CONTROLLER_HOSTMEM_FILE_FORMATTER      = "/run/cedana-gpu.%s/hostmem-%d"
+	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/run/cedana-gpu.(.*)/hostmem-(\\d+)"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	RESTORE_NEW_PID_SIGNAL                 = syscall.SIGUSR1 // Signal to the restored process to notify it has a new PID
