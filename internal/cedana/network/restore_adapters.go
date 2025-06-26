@@ -38,8 +38,8 @@ func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
 		}
 
 		// Only set unless already set
-		req.Criu.TcpEstablished = proto.Bool(hasTCP)
-		req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket)
+		req.Criu.TcpEstablished = proto.Bool(hasTCP || req.GetCriu().GetTcpEstablished())
+		req.Criu.ExtUnixSk = proto.Bool(hasExtUnixSocket || req.GetCriu().GetExtUnixSk())
 
 		return next(ctx, opts, resp, req)
 	}
