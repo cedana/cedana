@@ -309,15 +309,12 @@ var inspectJobCmd = &cobra.Command{
 
 		jid := args[0]
 
-		list, err := client.List(cmd.Context(), &daemon.ListReq{JIDs: []string{jid}})
+		resp, err := client.Get(cmd.Context(), &daemon.GetReq{JID: jid})
 		if err != nil {
 			return err
 		}
-		if len(list.Jobs) == 0 {
-			return fmt.Errorf("Job %s not found", jid)
-		}
 
-		job := list.Jobs[0]
+		job := resp.GetJob()
 
 		bytes, err := yaml.Marshal(job)
 		if err != nil {
