@@ -32,7 +32,7 @@ func Writer(w io.Writer, format string) *LogWriter {
 }
 
 func (lw *LogWriter) Write(p []byte) (int, error) {
-	var zerologEntry map[string]interface{}
+	var zerologEntry map[string]any
 	if err := json.Unmarshal(p, &zerologEntry); err != nil {
 		return len(p), nil // Consume and drop
 	}

@@ -37,6 +37,8 @@ const (
 	CONTROLLER_SOCKET_PATTERN              = "cedana-gpu-controller-(.*).sock"
 	CONTROLLER_SHM_FILE_FORMATTER          = "/dev/shm/cedana-gpu.%s"
 	CONTROLLER_SHM_FILE_PATTERN            = "/dev/shm/cedana-gpu.(.*)"
+	CONTROLLER_HOSTMEM_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
+	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	RESTORE_NEW_PID_SIGNAL                 = syscall.SIGUSR1 // Signal to the restored process to notify it has a new PID
@@ -50,7 +52,7 @@ const (
 
 	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
 	PARALLEL_DUMP    = true
-	PARALLEL_RESTORE = false // XXX: Turned off until GPU hostmem file handling is resolved
+	PARALLEL_RESTORE = true
 )
 
 type controller struct {

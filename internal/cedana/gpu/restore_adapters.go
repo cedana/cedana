@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -96,6 +98,34 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			Key: proto.String(strings.TrimPrefix(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, state.GPUID), "/")),
 			Fd:  proto.Int32(int32(2 + len(extraFiles))),
 		})
+
+		// Inherit hostmem files as well, if any
+		for _, file := range state.OpenFiles {
+			path := file.Path
+			re := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
+			matches := re.FindStringSubmatch(path)
+			if len(matches) != 3 {
+				continue
+			}
+			pid, err := strconv.Atoi(matches[2])
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to parse PID from hostmem file path %s: %v", path, err)
+			}
+
+			newPath := fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
+			newFile, err := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o777)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to open hostmem file %s: %v", newPath, err)
+			}
+			defer newFile.Close()
+
+			extraFiles = append(extraFiles, newFile)
+
+			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
+				Key: proto.String(strings.TrimPrefix(path, "/")),
+				Fd:  proto.Int32(int32(2 + len(extraFiles))),
+			})
+		}
 
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
 
