@@ -45,11 +45,6 @@ $(INSTALL_PATH): $(BINARY) ## Install the binary
 start: $(INSTALL_PATH) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
-stop: ## Stop the daemon
-	@echo "Stopping cedana..."
-	pgrep $(BINARY) | xargs -r $(SUDO) kill -TERM
-	sleep 1
-
 install-systemd: install ## Install the systemd daemon
 	@echo "Installing systemd service..."
 	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
@@ -59,7 +54,7 @@ reset-systemd: ## Reset the systemd daemon
 	$(SUDO) $(SCRIPTS_DIR)/host/systemd-reset.sh ;\
 	sleep 1
 
-reset: reset-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
+reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	rm -f $(OUT_DIR)/$(BINARY)
 	$(SUDO) rm -f $(INSTALL_PATH)
@@ -77,6 +72,7 @@ reset-tmp: ## Reset temporary files
 	$(SUDO) rm -rf /tmp/cedana*
 	$(SUDO) rm -rf /tmp/dump*
 	$(SUDO) rm -rf /dev/shm/cedana*
+	$(SUDO) rm -rf /run/cedana*
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."
@@ -135,14 +131,10 @@ $(PLUGIN_INSTALL_PATHS): $(PLUGIN_BINARIES)
 	done ;\
 
 reset-plugins: ## Reset & uninstall plugins
+	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Uninstalling plugin $$name..."; \
-			$(SUDO) rm -f /usr/local/lib/libcedana-$$name.so ;\
-		fi ;\
-	done ;\
+	$(SUDO) rm -rf /usr/local/lib/*cedana*
+	$(SUDO) rm -rf /usr/local/bin/*cedana*
 
 # All-in-one debug target
 all-debug: debug install plugins-debug plugins-install ## Build and install with debug symbols (all components)
