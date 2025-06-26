@@ -55,7 +55,7 @@ jobs:
     secrets: inherit
     with:
       criu_version: release
-      gpu_version: main
+      gpu_version: feature/ced-1158-fix-gpu-hostmem-shm-file-issues
       streamer_version: main
 
   test:
