@@ -32,9 +32,12 @@ import (
 	"google.golang.org/grpc"
 )
 
+var (
+	PROTOCOL = os.Getenv("CEDANA_PROTOCOL")
+	ADDRESS  = os.Getenv("CEDANA_ADDRESS")
+)
+
 const (
-	DEFAULT_PROTOCOL    = "tcp"
-	DEFAULT_ADDRESS     = "0.0.0.0:8080"
 	MAX_RETRIES         = 5
 	CLIENT_RETRY_PERIOD = time.Second
 )
@@ -50,6 +53,9 @@ var restartScript string
 
 //go:embed scripts/start-chroot.sh
 var startChrootScript string
+
+//go:embed scripts/stop-chroot.sh
+var stopChrootScript string
 
 func init() {
 	HelperCmd.AddCommand(destroyCmd)
@@ -82,7 +88,7 @@ var HelperCmd = &cobra.Command{
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		startChroot = startChroot || setupHost
 
-		return startHelper(ctx, startChroot, DEFAULT_ADDRESS, DEFAULT_PROTOCOL)
+		return startHelper(ctx, ADDRESS, PROTOCOL)
 	},
 }
 
@@ -91,20 +97,201 @@ var destroyCmd = &cobra.Command{
 	Short: "Destroy cedana from host of kubernetes worker node",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
-		if err := destroyCedana(ctx); err != nil {
-			return fmt.Errorf("error destroying cedana on host: %w", err)
-		}
-
-		return nil
+		return destroyDaemon(context.WithoutCancel(ctx))
 	},
 }
 
-func destroyCedana(ctx context.Context) error {
+func startHelper(ctx context.Context, address string, protocol string) error {
+	signalChannel := make(chan os.Signal, 1)
+	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
+	var w sync.WaitGroup
+
+	_, err := createClientWithRetry(address, protocol)
+	if err != nil {
+		return fmt.Errorf("failed to create client after %d attempts: %w", MAX_RETRIES, err)
+	}
+
+	// Goroutine to check if the daemon is running
+	w.Add(1)
+	go func() {
+		defer w.Done()
+		ticker := time.NewTicker(time.Second * 10)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				isRunning, err := isDaemonRunning(ctx, address, protocol)
+				if err != nil {
+					fmt.Printf("Error checking if daemon is running: %v\n", err)
+					continue
+				}
+				if !isRunning {
+					fmt.Printf("Daemon is not running. Restarting...\n")
+
+					err := restartDaemon(ctx)
+					if err != nil {
+						fmt.Printf("Error restarting Cedana: %v\n", err)
+						continue
+					}
+
+					_, err = createClientWithRetry(address, protocol)
+					if err != nil {
+						fmt.Printf("Failed to create client after %d attempts: %v\n", MAX_RETRIES, err)
+						continue
+					}
+
+					fmt.Println("Daemon restarted.")
+				}
+
+			case <-signalChannel:
+				fmt.Println("Received kill signal. Stopping...")
+				err := stopDaemon(context.WithoutCancel(ctx))
+				if err != nil {
+					os.Exit(1)
+					fmt.Printf("Error stopping Cedana daemon: %v\n", err)
+				}
+				os.Exit(0)
+			}
+		}
+	}()
+
+	cedanaUrl := os.Getenv("CEDANA_URL")
+	log.Info().Msgf("cedanaURL: %v", cedanaUrl)
+	client := cedanagosdk.NewCedanaClient(
+		cedanaUrl,
+		os.Getenv("CEDANA_AUTH_TOKEN"),
+	)
+	url, err := client.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
+	if err != nil {
+		return err
+	}
+	stream, err := NewEventStream(*url)
+	if err != nil {
+		return err
+	}
+	go func() {
+		log.Info().Msg("Listening on rabbitmq stream for checkpoint requests")
+		consumer, err := stream.ConsumeCheckpointRequest(address, protocol)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
+		}
+		defer consumer.Close()
+		w.Wait()
+	}()
+
+	// scrape daemon logs for kubectl logs output
+	go func() {
+		defer w.Done()
+		file, err := os.Open("/host/var/log/cedana-daemon.log")
+		if err != nil {
+			fmt.Println("Failed to open cedana-daemon.log")
+			return
+		}
+		defer file.Close()
+
+		reader := bufio.NewReader(file)
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				fmt.Println("Error reading cedana-daemon.log")
+				return
+			}
+			trimmed := strings.TrimSpace(line)
+			if len(trimmed) > 0 {
+				// we don't use the log function as the logs should have their own timing data
+				fmt.Println(trimmed)
+			}
+		}
+	}()
+
+	w.Wait()
+
+	return nil
+}
+
+func destroyDaemon(ctx context.Context) error {
 	if err := runScript(ctx, cleanupHostScript, true); err != nil {
 		return fmt.Errorf("error cleaning up host: %w", err)
 	}
 
 	return nil
+}
+
+func restartDaemon(ctx context.Context) error {
+	return runScript(ctx, startChrootScript, true)
+}
+
+func stopDaemon(ctx context.Context) error {
+	return runScript(ctx, stopChrootScript, true)
+}
+
+func createClientWithRetry(address, protocol string) (*client.Client, error) {
+	var c *client.Client
+	var err error
+
+	for i := range MAX_RETRIES {
+		c, err = client.New(address, protocol)
+		if err == nil {
+			// Successfully created the client, break out of the loop
+			break
+		}
+
+		fmt.Printf("Error creating client: %v. Retrying...\n", err)
+		time.Sleep(CLIENT_RETRY_PERIOD)
+
+		if i == MAX_RETRIES-1 {
+			// If it's the last attempt, return the error
+			return nil, fmt.Errorf("failed to create client after %d attempts", MAX_RETRIES)
+		}
+	}
+
+	return c, nil
+}
+
+func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error) {
+	client, err := client.New(address, protocol)
+	if err != nil {
+		return false, err
+	}
+	defer client.Close()
+	// Wait for the daemon to be ready, and do health check
+	resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: false}, grpc.WaitForReady(true))
+	if err != nil {
+		return false, fmt.Errorf("cedana health check failed: %w", err)
+	}
+	errorsFound := false
+	for _, result := range resp.Results {
+		for _, component := range result.Components {
+			for _, errs := range component.Errors {
+				log.Error().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check error: %v", errs)
+				errorsFound = true
+			}
+			for _, warning := range component.Warnings {
+				log.Warn().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check warning: %v", warning)
+			}
+		}
+	}
+	if errorsFound {
+		return false, fmt.Errorf("cedana health check failed")
+	}
+	return true, nil
+}
+
+func runScript(ctx context.Context, script string, logOutput bool) error {
+	cmd := exec.CommandContext(ctx, "bash")
+	cmd.Stdin = strings.NewReader(script)
+
+	if logOutput {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+
+	return cmd.Run()
 }
 
 type EventStream struct {
@@ -181,13 +368,16 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 		return nil, err
 	}
 	defer client.Close()
+
 	leaveRunning := true
+	tcpEstablished := true
+
 	resp, _, err := client.Dump(ctx, &daemon.DumpReq{
-		Dir:    fmt.Sprintf("cedana://%s", checkpointId),
-		Stream: 0,
-		Type:   "runc",
+		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
+		Type: "runc",
 		Criu: &criu.CriuOpts{
-			LeaveRunning: &leaveRunning,
+			LeaveRunning:   &leaveRunning,
+			TcpEstablished: &tcpEstablished,
 		},
 		Details: &daemon.Details{
 			Runc: &runc.Runc{
@@ -314,202 +504,4 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		return nil, err
 	}
 	return consumer, err
-}
-
-func startHelper(ctx context.Context, startChroot bool, address string, protocol string) error {
-	signalChannel := make(chan os.Signal, 1)
-	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
-	var w sync.WaitGroup
-
-	_, err := createClientWithRetry(address, protocol)
-	if err != nil {
-		return fmt.Errorf("failed to create client after %d attempts: %w", MAX_RETRIES, err)
-	}
-
-	// Goroutine to check if the daemon is running
-	w.Add(1)
-	go func() {
-		defer w.Done()
-		ticker := time.NewTicker(time.Second * 10)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case <-ticker.C:
-				isRunning, err := isDaemonRunning(ctx, address, protocol)
-				if err != nil {
-					fmt.Printf("Error checking if daemon is running: %v\n", err)
-					continue
-				}
-				if !isRunning {
-					fmt.Printf("Daemon is not running. Restarting...\n")
-
-					err := startDaemon(ctx, startChroot, address, protocol)
-					if err != nil {
-						fmt.Printf("Error restarting Cedana: %v\n", err)
-						continue
-					}
-
-					_, err = createClientWithRetry(address, protocol)
-					if err != nil {
-						fmt.Printf("Failed to create client after %d attempts: %v\n", MAX_RETRIES, err)
-						continue
-					}
-
-					fmt.Println("Daemon restarted.")
-				}
-
-			case <-signalChannel:
-				fmt.Println("Received kill signal. Exiting...")
-				os.Exit(0)
-			}
-		}
-	}()
-
-	cedanaUrl := os.Getenv("CEDANA_URL")
-	log.Info().Msgf("cedanaURL: %v", cedanaUrl)
-	client := cedanagosdk.NewCedanaClient(
-		cedanaUrl,
-		os.Getenv("CEDANA_AUTH_TOKEN"),
-	)
-	url, err := client.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
-	if err != nil {
-		return err
-	}
-	stream, err := NewEventStream(*url)
-	if err != nil {
-		return err
-	}
-	go func() {
-		log.Info().Msg("Listening on rabbitmq stream for checkpoint requests")
-		consumer, err := stream.ConsumeCheckpointRequest(address, protocol)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
-		}
-		defer consumer.Close()
-		w.Wait()
-	}()
-
-	// scrape daemon logs for kubectl logs output
-	go func() {
-		defer w.Done()
-		file, err := os.Open("/host/var/log/cedana-daemon.log")
-		if err != nil {
-			fmt.Println("Failed to open cedana-daemon.log")
-			return
-		}
-		defer file.Close()
-
-		reader := bufio.NewReader(file)
-		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF {
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				fmt.Println("Error reading cedana-daemon.log")
-				return
-			}
-			trimmed := strings.TrimSpace(line)
-			if len(trimmed) > 0 {
-				// we don't use the log function as the logs should have their own timing data
-				fmt.Println(trimmed)
-			}
-		}
-	}()
-
-	w.Wait()
-
-	return nil
-}
-
-func startDaemon(ctx context.Context, startChroot bool, address string, protocol string) error {
-	if startChroot {
-		err := runScript(ctx, startChrootScript, true)
-		if err != nil {
-			return err
-		}
-	} else {
-		err := runCommand(ctx, "cedana", "daemon", "start", "--address", address, "--protocol", protocol)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func createClientWithRetry(address, protocol string) (*client.Client, error) {
-	var c *client.Client
-	var err error
-
-	for i := 0; i < MAX_RETRIES; i++ {
-		c, err = client.New(address, protocol)
-		if err == nil {
-			// Successfully created the client, break out of the loop
-			break
-		}
-
-		fmt.Printf("Error creating client: %v. Retrying...\n", err)
-		time.Sleep(CLIENT_RETRY_PERIOD)
-
-		if i == MAX_RETRIES-1 {
-			// If it's the last attempt, return the error
-			return nil, fmt.Errorf("failed to create client after %d attempts", MAX_RETRIES)
-		}
-	}
-
-	return c, nil
-}
-
-func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error) {
-	client, err := client.New(address, protocol)
-	if err != nil {
-		return false, err
-	}
-	defer client.Close()
-	// Wait for the daemon to be ready, and do health check
-	resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: false}, grpc.WaitForReady(true))
-	if err != nil {
-		return false, fmt.Errorf("cedana health check failed: %w", err)
-	}
-	errorsFound := false
-	for _, result := range resp.Results {
-		for _, component := range result.Components {
-			for _, errs := range component.Errors {
-				log.Error().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check error: %v", errs)
-				errorsFound = true
-			}
-			for _, warning := range component.Warnings {
-				log.Warn().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check warning: %v", warning)
-			}
-		}
-	}
-	if errorsFound {
-		return false, fmt.Errorf("cedana health check failed")
-	}
-	return true, nil
-}
-
-func runCommand(ctx context.Context, command string, args ...string) error {
-	cmd := exec.CommandContext(ctx, command, args...)
-	cmd.Cancel = func() error {
-		return cmd.Process.Signal(syscall.SIGTERM)
-	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func runScript(ctx context.Context, script string, logOutput bool) error {
-	cmd := exec.CommandContext(ctx, "bash")
-	cmd.Stdin = strings.NewReader(script)
-
-	if logOutput {
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-	}
-
-	return cmd.Run()
 }

@@ -78,6 +78,14 @@ func (s *Storage) Delete(path string) error {
 	return fmt.Errorf("this operation is currently not supported for cedana storage")
 }
 
+func (s *Storage) IsDir(path string) (bool, error) {
+	if !strings.HasPrefix(path, PATH_PREFIX) {
+		return false, fmt.Errorf("path must start with %s", PATH_PREFIX)
+	}
+
+	return true, nil // Cedana storage does not differentiate between files and directories
+}
+
 func (s *Storage) ReadDir(path string) ([]string, error) {
 	if !strings.HasPrefix(path, PATH_PREFIX) {
 		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)

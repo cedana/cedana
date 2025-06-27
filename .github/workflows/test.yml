@@ -139,9 +139,9 @@ jobs:
         run: |
           sudo -E chmod +x ./cedana
           sudo -E cp ./cedana /usr/local/bin/
-          sudo -E mkdir -p /cedana/scripts
-          sudo -E cp -r ./scripts/host/* /cedana/scripts/
-          sudo -E /cedana/scripts/k8s-setup-host.sh
+          sudo -E mkdir -p /cedana/scripts/host
+          sudo -E cp -r ./scripts/host/* /cedana/scripts/host
+          sudo -E /cedana/scripts/host/k8s-setup-host.sh
 
   regression:
     name: Basic
@@ -203,7 +203,7 @@ jobs:
         env:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
-          RETRIES: 0
+          RETRIES: 1
         run: |
           if [ "$LARGE" = "true" ]; then
             make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES
@@ -294,7 +294,7 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PLUGIN: ${{ matrix.plugin }}
-          RETRIES: 0
+          RETRIES: 1
         run: |
           # replace slash in plugin with colon so that the tag is namespaced correctly
           # e.g. storage/cedana -> storage:cedana

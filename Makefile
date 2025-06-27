@@ -1,3 +1,4 @@
+PWD=$(shell pwd)
 OUT_DIR=$(PWD)
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
@@ -44,11 +45,6 @@ $(INSTALL_PATH): $(BINARY) ## Install the binary
 start: $(INSTALL_PATH) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
-stop: ## Stop the daemon
-	@echo "Stopping cedana..."
-	pgrep $(BINARY) | xargs -r $(SUDO) kill -TERM
-	sleep 1
-
 install-systemd: install ## Install the systemd daemon
 	@echo "Installing systemd service..."
 	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
@@ -58,7 +54,7 @@ reset-systemd: ## Reset the systemd daemon
 	$(SUDO) $(SCRIPTS_DIR)/host/systemd-reset.sh ;\
 	sleep 1
 
-reset: reset-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
+reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	rm -f $(OUT_DIR)/$(BINARY)
 	$(SUDO) rm -f $(INSTALL_PATH)
@@ -76,6 +72,7 @@ reset-tmp: ## Reset temporary files
 	$(SUDO) rm -rf /tmp/cedana*
 	$(SUDO) rm -rf /tmp/dump*
 	$(SUDO) rm -rf /dev/shm/cedana*
+	$(SUDO) rm -rf /run/cedana*
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."
@@ -134,14 +131,10 @@ $(PLUGIN_INSTALL_PATHS): $(PLUGIN_BINARIES)
 	done ;\
 
 reset-plugins: ## Reset & uninstall plugins
+	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Uninstalling plugin $$name..."; \
-			$(SUDO) rm -f /usr/local/lib/libcedana-$$name.so ;\
-		fi ;\
-	done ;\
+	$(SUDO) rm -rf /usr/local/lib/*cedana*
+	$(SUDO) rm -rf /usr/local/bin/*cedana*
 
 # All-in-one debug target
 all-debug: debug install plugins-debug plugins-install ## Build and install with debug symbols (all components)
@@ -174,21 +167,30 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		echo "Parallelism: $(PARALLELISM)" ;\
 		echo "Using unique instance of daemon per test..." ;\
 		if [ "$(TAGS)" = "" ]; then \
-			$(BATS_CMD) -r test/regression ;\
+			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
 		else \
-			$(BATS_CMD_TAGS) -r test/regression ;\
+			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-isolated.xml ;\
 		fi ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
 		if [ "$(TAGS)" = "" ]; then \
-			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
+			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persisted=$$? ;\
 		else \
-			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ;\
+			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persisted=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-persisted.xml ;\
+		fi ;\
+		if [ $$status_isolated -ne 0 ]; then \
+			echo "Isolated tests failed" ;\
+			exit $$status_isolated ;\
+		elif [ $$status_persisted -ne 0 ]; then \
+			echo "Persisted tests failed" ;\
+			exit $$status_persisted ;\
+		else \
+			echo "All tests passed!" ;\
 		fi ;\
 	else \
 		if [ "$(GPU)" = "1" ]; then \

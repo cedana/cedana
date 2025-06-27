@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -48,7 +49,12 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			var freezeType gpu.FreezeType
 
-			switch strings.ToUpper(req.GPUFreezeType) {
+			freezeTypeStr := req.GPUFreezeType
+			if freezeTypeStr == "" {
+				freezeTypeStr = config.Global.GPU.FreezeType
+			}
+
+			switch strings.ToUpper(freezeTypeStr) {
 			case "IPC":
 				freezeType = gpu.FreezeType_FREEZE_TYPE_IPC
 			case "NCCL":

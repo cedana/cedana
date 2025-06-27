@@ -20,8 +20,7 @@ import (
 const (
 	DEFAULT_SERVICE_NAME           = "cedana"
 	DEFAULT_MAX_BATCH_SIZE_JSON    = 100
-	DEFAULT_FLUSH_INTERVAL_MS_JSON = 5000             // 5 seconds
-	ZEROLOG_TIMESTAMP_FIELD_FORMAT = time.RFC3339Nano // zerolog's default format for With().Timestamp()
+	DEFAULT_FLUSH_INTERVAL_MS_JSON = 5000 // 5 seconds
 )
 
 type SigNozLogEntry struct {
@@ -112,7 +111,7 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 		return len(p), nil
 	}
 
-	var zerologEntry map[string]interface{}
+	var zerologEntry map[string]any
 	if err := json.Unmarshal(p, &zerologEntry); err != nil {
 		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error unmarshalling zerolog entry: %v\nOriginal log: %s\n", err, string(p))
 		return len(p), nil // Consume and drop
@@ -121,7 +120,7 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 	// Timestamp
 	var tsNano int64 = time.Now().UnixNano() // Default to now
 	if tsStr, ok := zerologEntry[zerolog.TimestampFieldName].(string); ok {
-		parsedTime, err := time.Parse(ZEROLOG_TIMESTAMP_FIELD_FORMAT, tsStr)
+		parsedTime, err := time.Parse(ZEROLOG_TIME_FORMAT_DEFAULT, tsStr)
 		if err == nil {
 			tsNano = parsedTime.UnixNano()
 		} else {
@@ -134,9 +133,14 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 	severityText, severityNumber := mapZerologLevelToSigNoz(parsedLevel)
 
 	body, _ := zerologEntry[zerolog.MessageFieldName].(string)
+	error, _ := zerologEntry[zerolog.ErrorFieldName].(string)
+	if error != "" {
+		body = fmt.Sprintf("%s: %s", body, error) // Append error if present
+	}
 
 	attributes := make(map[string]string)
 	attributes["version"] = version.GetVersion()
+	attributes["cedana.service.url"] = config.Global.Connection.URL
 
 	for k, v := range zerologEntry {
 		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName {
@@ -209,7 +213,7 @@ func (sw *SigNozJsonWriter) flushBuffer() {
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("signoz-access-token", sw.accessToken)
+	req.Header.Set("signoz-ingestion-key", sw.accessToken)
 
 	resp, err := sw.httpClient.Do(req)
 	if err != nil {

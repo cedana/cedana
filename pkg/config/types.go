@@ -5,7 +5,7 @@ package config
 type (
 	// Cedana configuration. Each of the below fields can also be set
 	// through an environment variable with the same name, prefixed, and in uppercase. E.g.
-	// `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. The `env_aliases` tag below specifies
+	// `Metrics.Otel` can be set with `CEDANA_METRICS_OTEL`. The `env_aliases` tag below specifies
 	// alternative (alias) environment variable names (comma-separated).
 	Config struct {
 		// Address to use for incoming/outgoing connections
@@ -49,9 +49,8 @@ type (
 		Dir string `json:"dir" key:"dir" yaml:"dir" mapstructure:"dir"`
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
-		// Stream (for streaming checkpoints) specifies the number of parallel streams to use.
-		// 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.
-		Stream int32 `json:"stream" key:"stream" yaml:"stream" mapstructure:"stream"`
+		// Streams specifies the number of parallel streams to use when checkpointing.
+		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
 	}
 
 	DB struct {
@@ -69,8 +68,6 @@ type (
 	}
 
 	Metrics struct {
-		// ASR sets whether to enable ASR metrics
-		ASR bool `json:"asr" key:"asr" yaml:"asr" mapstructure:"asr"`
 		// Otel sets whether to enable OpenTelemetry metrics
 		Otel bool `json:"otel" key:"otel" yaml:"otel" mapstructure:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
 	}
@@ -100,6 +97,8 @@ type (
 		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		// LdLibPath holds any additional directories to search for GPU libraries
+		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
 	}
 
 	Plugins struct {

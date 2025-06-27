@@ -10,6 +10,12 @@ var (
 	DetachFlag        = flags.Flag{Full: "detach", Short: "d"}
 	BundleFlag        = flags.Flag{Full: "bundle", Short: "b"}
 	NoPivotFlag       = flags.Flag{Full: "no-pivot", Short: ""}
-	NoNewKeyringFlag  = flags.Flag{Full: "no-new-keyring", Short: ""}
-	ConsoleSocketFlag = flags.Flag{Full: "console-socket", Short: ""}
+	NoNewKeyringFlag  = flags.Flag{Full: "no-new-keyring"}
+	ConsoleSocketFlag = flags.Flag{Full: "console-socket"}
+	LogFlag           = flags.Flag{Full: "log"}
+	LogFormatFlag     = flags.Flag{Full: "log-format"}
+	RootlessFlag      = flags.Flag{Full: "rootless"}
+	SystemdCgroupFlag = flags.Flag{Full: "systemd-cgroup"}
+	NoSubreaperFlag   = flags.Flag{Full: "no-subreaper"}
+	PreserveFdsFlag   = flags.Flag{Full: "preserve-fds"}
 )

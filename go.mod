@@ -5,12 +5,12 @@ go 1.24.1
 toolchain go1.24.3
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250602032941-29d930949cf0.2
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250602032941-29d930949cf0.1
-	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250529123335-ad1b822e8c7f.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250601200946-c06e79380317.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250601202424-9c4c816f4e5c.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250601202424-127ce2c85b14.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250625172019-248562eac338.2
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250625172019-248562eac338.1
+	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250612023004-babcadcb96ee.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250612023004-0b2cbc4f2943.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250612023004-0b2cbc4f2943.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250612023004-eed0e118f94d.1
 	github.com/cedana/cedana-go-sdk v0.3.1
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.5
@@ -19,12 +19,14 @@ require (
 	github.com/containerd/platforms v0.2.1
 	github.com/coreos/go-systemd/v22 v22.5.0
 	github.com/cyphar/filepath-securejoin v0.4.1
+	github.com/gofrs/flock v0.12.1
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.7
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/mdlayher/vsock v1.2.1
 	github.com/moby/sys/mountinfo v0.7.2
+	github.com/moby/sys/userns v0.1.0
 	github.com/opencontainers/cgroups v0.0.2
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
@@ -103,7 +105,6 @@ require (
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
-	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

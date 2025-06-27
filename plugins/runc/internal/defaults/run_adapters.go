@@ -5,6 +5,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 )
 
@@ -24,6 +25,15 @@ func FillMissingRunDefaults(next types.Run) types.Run {
 		if req.GetDetails().GetRunc().GetID() == "" {
 			req.Details.Runc.ID = req.JID
 		}
+		if req.GetDetails().GetRunc().GetRootless() == "" {
+			req.Details.Runc.Rootless = "auto"
+		}
+
+		daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+		if !daemonless {
+			req.Details.Runc.NoSubreaper = false // we always reap when we are the daemon is managing
+		}
+
 		return next(ctx, opts, resp, req)
 	}
 }

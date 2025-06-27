@@ -41,11 +41,11 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		io = cio.WithStreams(stdIn, stdOut, stdErr)
 	} else {
-		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
+		outFile, ok := ctx.Value(keys.OUT_FILE_CONTEXT_KEY).(*os.File)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get log file from context")
 		}
-		io = cio.WithStreams(nil, logFile, logFile)
+		io = cio.WithStreams(nil, outFile, outFile)
 	}
 
 	task, err := container.NewTask(ctx, cio.NewCreator(io))

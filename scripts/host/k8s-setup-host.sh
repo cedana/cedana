@@ -13,10 +13,6 @@ DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
-# Set env vars
-export CEDANA_METRICS_ASR=true
-export CEDANA_METRICS_OTEL=true
-
 # Define packages for YUM and APT
 YUM_PACKAGES=(
     wget git gcc make libnet-devel protobuf protobuf-c protobuf-c-devel protobuf-c-compiler protobuf-compiler protobuf-devel python3-protobuf libnl3-devel

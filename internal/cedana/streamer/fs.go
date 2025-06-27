@@ -33,15 +33,14 @@ const (
 )
 
 const (
-	CAPTURE_SOCK        = "streamer-capture.sock"
-	SERVE_SOCK          = "streamer-serve.sock"
-	INIT_PROGRESS_MSG   = "socket-init"
-	STOP_LISTENER_MSG   = "stop-listener"
-	IMG_FILE_PATTERN    = "^img-*"
-	IMG_FILE_FORMATTER  = "img-%d"
-	CONNECTION_TIMEOUT  = 1 * time.Minute
-	DEFAULT_PARALLELISM = 4
-	PIPE_SIZE           = 4 * utils.MEBIBYTE
+	CAPTURE_SOCK       = "streamer-capture.sock"
+	SERVE_SOCK         = "streamer-serve.sock"
+	INIT_PROGRESS_MSG  = "socket-init"
+	STOP_LISTENER_MSG  = "stop-listener"
+	IMG_FILE_PATTERN   = "^img-*"
+	IMG_FILE_FORMATTER = "img-%d"
+	CONNECTION_TIMEOUT = 1 * time.Minute
+	PIPE_SIZE          = 4 * utils.MEBIBYTE
 )
 
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
@@ -63,12 +62,12 @@ func NewStreamingFs(
 	imagesDir string,
 	storage cedana_io.Storage,
 	storagePath string,
-	parallelism int32,
+	streams int32,
 	mode Mode,
 	compressions ...string,
 ) (fs *Fs, wait func() error, err error) {
-	if parallelism < 1 {
-		parallelism = DEFAULT_PARALLELISM
+	if streams < 1 {
+		return nil, nil, fmt.Errorf("invalid number of streams: %d", streams)
 	}
 	var compression string
 	if len(compressions) > 0 {
@@ -78,7 +77,7 @@ func NewStreamingFs(
 	// Create pipes for reading and writing data to/from the streamer to dir
 	var readFds, writeFds []*os.File
 	var shardFds []string
-	for i := range parallelism {
+	for i := range streams {
 		r, w, err := os.Pipe()
 		unix.FcntlInt(r.Fd(), unix.F_SETPIPE_SZ, PIPE_SIZE) // ignore if fails
 		if err != nil {
@@ -92,12 +91,12 @@ func NewStreamingFs(
 	// Start IO on the pipes from the dir
 	wg := &sync.WaitGroup{}
 	io := &sync.WaitGroup{}
-	ioErr := make(chan error, parallelism)
-	paths, err := imgPaths(storage, storagePath, mode, parallelism)
+	ioErr := make(chan error, streams)
+	paths, err := imgPaths(storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
 	}
-	for i := range parallelism {
+	for i := range streams {
 		switch mode {
 		case READ_ONLY:
 			defer readFds[i].Close()
@@ -433,8 +432,8 @@ func (fs *Fs) stopListener() error {
 }
 
 // Returns a list of image paths found in the image directory.
-// Returns an error if the number of images found is not equal to the parallelism.
-func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int32) ([]string, error) {
+// Returns an error if the number of images found is not equal to the number of streams specified.
+func imgPaths(storage cedana_io.Storage, dir string, mode Mode, streams int32) ([]string, error) {
 	switch mode {
 	case READ_ONLY:
 		list, err := storage.ReadDir(dir)
@@ -450,18 +449,48 @@ func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int3
 			}
 		}
 
-		if len(matches) != int(parallelism) {
-			return nil, fmt.Errorf("expected %d images, got %d. please specify correct parallelism", parallelism, len(matches))
+		if len(matches) != int(streams) {
+			return nil, fmt.Errorf("expected %d images, got %d. please specify correct number of streams", streams, len(matches))
 		}
 
 		return matches, nil
 	case WRITE_ONLY:
-		paths := make([]string, parallelism)
-		for i := range parallelism {
+		paths := make([]string, streams)
+		for i := range streams {
 			paths[i] = dir + "/" + fmt.Sprintf(IMG_FILE_FORMATTER, i)
 		}
 		return paths, nil
 	default:
 		return nil, fmt.Errorf("invalid mode: %d", mode)
 	}
+}
+
+func IsStreamable(storage cedana_io.Storage, dir string) (streams int32, err error) {
+	if storage == nil {
+		return 0, fmt.Errorf("storage is nil")
+	}
+
+	isDir, err := storage.IsDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check if path is a directory: %w", err)
+	}
+
+	if !isDir {
+		return 0, nil
+	}
+
+	list, err := storage.ReadDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read dir: %w", err)
+	}
+
+	matches := 0
+	for _, entry := range list {
+		entry := filepath.Base(entry)
+		if regexp.MustCompile(IMG_FILE_PATTERN).MatchString(entry) {
+			matches++
+		}
+	}
+
+	return int32(matches), nil
 }

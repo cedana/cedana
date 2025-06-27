@@ -6,7 +6,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -15,102 +14,99 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func SetupRestoreFS(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-		storage := opts.Storage
-		path := req.GetPath()
+func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
+	return func(next types.Restore) types.Restore {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+			storage := opts.Storage
+			path := req.GetPath()
 
-		var imagesDirectory string
+			var imagesDirectory string
 
-		if !storage.IsRemote() {
-			stat, err := os.Stat(path)
+			if !storage.IsRemote() {
+				stat, err := os.Stat(path)
+				if err != nil {
+					return nil, status.Errorf(codes.NotFound, "path error: %s", path)
+				}
+				if !stat.IsDir() {
+					return nil, status.Errorf(codes.InvalidArgument, "path must be a directory containing streamed images")
+				}
+				imagesDirectory = path
+			} else {
+				// For remote storage, we create a temporary directory for CRIU
+				imagesDirectory, err = os.MkdirTemp("", "restore-\\*")
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to create temp restore dir: %v", err)
+				}
+				defer os.RemoveAll(imagesDirectory)
+			}
+
+			// Streamer also requires Cedana's CRIU version until the Stream proto option
+			// is merged into CRIU upstream.
+			if !opts.Plugins.IsInstalled("criu") {
+				return nil, status.Errorf(
+					codes.FailedPrecondition,
+					"Streaming C/R requires the CRIU plugin to be installed. Default CRIU is not supported yet.",
+				)
+			}
+
+			dir, err := os.Open(imagesDirectory)
 			if err != nil {
-				return nil, status.Errorf(codes.NotFound, "path error: %s", path)
+				os.RemoveAll(imagesDirectory)
+				return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
 			}
-			if !stat.IsDir() {
-				return nil, status.Errorf(codes.InvalidArgument, "path must be a directory containing streamed images")
+			defer dir.Close()
+
+			if req.GetCriu() == nil {
+				req.Criu = &criu_proto.CriuOpts{}
 			}
-			imagesDirectory = path
-		} else {
-			// For remote storage, we create a temporary directory for CRIU
-			imagesDirectory, err = os.MkdirTemp("", "restore-\\*")
+
+			req.Criu.ImagesDir = proto.String(imagesDirectory)
+			req.Criu.ImagesDirFd = proto.Int32(int32(dir.Fd()))
+			req.Criu.Stream = proto.Bool(true)
+
+			// Setup dump fs that can be used by future adapters to directly read write/extra files
+			// to the dump directory. Here, instead of OsFs we use the streamer's Fs implementation
+			// that handles all read/writes directly through streaming.
+			var imgStreamer *plugins.Plugin
+			if imgStreamer = opts.Plugins.Get("streamer"); !imgStreamer.IsInstalled() {
+				return nil, status.Errorf(
+					codes.FailedPrecondition,
+					"Provided checkpoint path requires streaming. Please install the streamer plugin to use streaming C/R",
+				)
+			}
+
+			// Setup filesystem that can be used by future adapters to directly read files from the checkpoint
+
+			streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
+			var waitForIO func() error
+			opts.DumpFs, waitForIO, err = NewStreamingFs(
+				streamerCtx,
+				imgStreamer.BinaryPaths()[0],
+				imagesDirectory,
+				storage,
+				req.Path,
+				streams,
+				READ_ONLY,
+			)
+			end()
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to create temp restore dir: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
-			defer os.RemoveAll(imagesDirectory)
+
+			code, err = next(ctx, opts, resp, req)
+			if err != nil {
+				return nil, err
+			}
+
+			// Wait for all the streaming to finish
+			_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
+			err = waitForIO()
+			end()
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)
+			}
+
+			return code, nil
 		}
-
-		// Streamer also requires Cedana's CRIU version until the Stream proto option
-		// is merged into CRIU upstream.
-		if !opts.Plugins.IsInstalled("criu") {
-			return nil, status.Errorf(
-				codes.FailedPrecondition,
-				"Streaming C/R requires the CRIU plugin to be installed. Default CRIU is not supported yet.",
-			)
-		}
-
-		dir, err := os.Open(imagesDirectory)
-		if err != nil {
-			os.RemoveAll(imagesDirectory)
-			return nil, status.Errorf(codes.Internal, "failed to open dump dir: %v", err)
-		}
-		defer dir.Close()
-
-		if req.GetCriu() == nil {
-			req.Criu = &criu_proto.CriuOpts{}
-		}
-
-		req.Criu.ImagesDir = proto.String(imagesDirectory)
-		req.Criu.ImagesDirFd = proto.Int32(int32(dir.Fd()))
-		req.Criu.Stream = proto.Bool(true)
-
-		// Setup dump fs that can be used by future adapters to directly read write/extra files
-		// to the dump directory. Here, instead of OsFs we use the streamer's Fs implementation
-		// that handles all read/writes directly through streaming.
-		var imgStreamer *plugins.Plugin
-		if imgStreamer = opts.Plugins.Get("streamer"); !imgStreamer.IsInstalled() {
-			return nil, status.Errorf(
-				codes.FailedPrecondition,
-				"Please install the streamer plugin to use streaming C/R",
-			)
-		}
-
-		// Setup dump fs that can be used by future adapters to directly write extra files
-		// to the dump directory
-		parallelism := req.Stream
-		if parallelism == 0 {
-			parallelism = config.Global.Checkpoint.Stream
-		}
-
-		streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
-		var waitForIO func() error
-		opts.DumpFs, waitForIO, err = NewStreamingFs(
-			streamerCtx,
-			imgStreamer.BinaryPaths()[0],
-			imagesDirectory,
-			storage,
-			req.Path,
-			parallelism,
-			READ_ONLY,
-		)
-		end()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
-		}
-
-		code, err = next(ctx, opts, resp, req)
-		if err != nil {
-			return nil, err
-		}
-
-		// Wait for all the streaming to finish
-		_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
-		err = waitForIO()
-		end()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)
-		}
-
-		return code, nil
 	}
 }

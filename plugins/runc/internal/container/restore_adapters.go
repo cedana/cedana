@@ -13,6 +13,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
@@ -62,6 +63,10 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		root := details.GetRoot()
 		id := details.GetID()
 		bundle := details.GetBundle()
+		rootless := details.GetRootless()
+		systemdCgroup := details.GetSystemdCgroup()
+		noPivot := details.GetNoPivot()
+		noNewKeyring := details.GetNoNewKeyring()
 
 		spec, ok := ctx.Value(runc_keys.SPEC_CONTEXT_KEY).(*specs.Spec)
 		if !ok {
@@ -76,11 +81,19 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			notifySocket.SetupSpec(spec)
 		}
 
+		rootlessCg, err := runc.ShouldUseRootlessCgroupManager(rootless, systemdCgroup)
+		if err != nil {
+			return nil, err
+		}
+
 		config, err := specconv.CreateLibcontainerConfig(&specconv.CreateOpts{
-			CgroupName:      id,
-			Spec:            spec,
-			RootlessEUID:    req.UID != 0,
-			RootlessCgroups: req.UID != 0,
+			CgroupName:       id,
+			UseSystemdCgroup: systemdCgroup,
+			NoPivotRoot:      noPivot,
+			NoNewKeyring:     noNewKeyring,
+			Spec:             spec,
+			RootlessEUID:     req.UID != 0,
+			RootlessCgroups:  rootlessCg,
 		})
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create libcontainer config: %v", err)
@@ -149,10 +162,19 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.FailedPrecondition, "container's cgroup unexpectedly frozen")
 		}
 
+		// Check command-line for sanity.
+		if details.Detach && spec.Process.Terminal && details.ConsoleSocket == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "cannot allocate tty if runc will detach without setting console socket")
+		}
+		if (!details.Detach || !spec.Process.Terminal) && details.ConsoleSocket != "" {
+			return nil, status.Errorf(codes.InvalidArgument, "cannot use console socket if runc will not detach or allocate tty")
+		}
+
 		process, err := runc.NewProcess(*spec.Process)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create new init process: %v", err)
 		}
+		process.LogLevel = strconv.Itoa(int(logging.Level))
 		process.Init = true
 		process.SubCgroupPaths = make(map[string]string)
 		if len(listenFDs) > 0 {
@@ -169,7 +191,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 
 		if daemonless {
 			handlerCh = runc.NewSignalHandler(notifySocket)
-			tty, err = runc.SetupIO(process, container, spec.Process.Terminal, details.Detach, details.ConsoleSocketPath)
+			tty, err = runc.SetupIO(process, container, spec.Process.Terminal, details.Detach, details.ConsoleSocket)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to setup container IO: %v", err)
 			}
@@ -206,6 +228,13 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 
 			return code, nil
 		}
+
+		if err = tty.WaitConsole(); err != nil {
+			container.Signal(unix.SIGKILL)
+			container.Destroy()
+			return nil, err
+		}
+		tty.ClosePostStart()
 
 		opts.WG.Add(1)
 		go func() {

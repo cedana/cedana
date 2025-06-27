@@ -34,10 +34,10 @@ func init() {
 	runCmd.PersistentFlags().
 		BoolP(flags.AttachableFlag.Full, flags.AttachableFlag.Short, false, "make it attachable, but don't attach")
 	runCmd.PersistentFlags().
-		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
+		StringP(flags.OutFlag.Full, flags.OutFlag.Short, "", "file to forward stdout/err")
 	runCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
-		flags.LogFlag.Full,
+		flags.OutFlag.Full,
 	) // only one of these can be set
 
 	processRunCmd.PersistentFlags().
@@ -66,18 +66,18 @@ var runCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
-		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
+		out, _ := cmd.Flags().GetString(flags.OutFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
 		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
-		if noServer && (log != "" || attach || attachable) {
+		if noServer && (out != "" || attach || attachable) {
 			fmt.Println(
 				style.WarningColors.Sprintf(
 					"When using `--%s`, flags `--%s`, `--%s`, and `--%s` are ignored as the standard output is copied to the caller.",
 					flags.NoServerFlag.Full,
-					flags.LogFlag.Full,
+					flags.OutFlag.Full,
 					flags.AttachFlag.Full,
 					flags.AttachableFlag.Full,
 				))
@@ -92,7 +92,7 @@ var runCmd = &cobra.Command{
 		// Create initial request
 		req := &daemon.RunReq{
 			JID:        jid,
-			Log:        log,
+			Log:        out,
 			PidFile:    pidFile,
 			GPUEnabled: gpuEnabled,
 			Attachable: attach || attachable,
@@ -156,7 +156,7 @@ var runCmd = &cobra.Command{
 			}
 			cedana.Shutdown()
 
-			os.Exit(<-code())
+			os.Exit(<-code)
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
