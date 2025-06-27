@@ -10,18 +10,18 @@
 #
 setup_k3s_cluster_with_helm() {
     echo "Setting up k3s cluster with Helm support in containerized environment..."
-    
+
     # Download k3s binary directly instead of using installer
     if [ ! -f /usr/local/bin/k3s ]; then
         echo "Downloading k3s binary..."
         curl -Lo /usr/local/bin/k3s https://github.com/k3s-io/k3s/releases/latest/download/k3s
         chmod +x /usr/local/bin/k3s
     fi
-    
+
     # Create necessary directories
     mkdir -p /etc/rancher/k3s
     mkdir -p /var/lib/rancher/k3s
-    
+
     # Wait for containerd to be ready (started by entrypoint)
     echo "Waiting for containerd to be ready..."
     for i in $(seq 1 30); do
@@ -32,7 +32,7 @@ setup_k3s_cluster_with_helm() {
         echo "Waiting for containerd (attempt $i/30)..."
         sleep 2
     done
-    
+
     # Start k3s server directly in background with container-friendly settings
     echo "Starting k3s server..."
     nohup k3s server \
@@ -44,10 +44,10 @@ setup_k3s_cluster_with_helm() {
         --snapshotter=native \
         --rootless=false \
         > /tmp/k3s.log 2>&1 &
-    
+
     K3S_PID=$!
     echo "k3s server started with PID: $K3S_PID"
-    
+
     # Wait for kubeconfig to be created
     echo "Waiting for kubeconfig..."
     for i in $(seq 1 60); do
@@ -59,20 +59,20 @@ setup_k3s_cluster_with_helm() {
         echo "Waiting for kubeconfig (attempt $i/60)..."
         sleep 2
     done
-    
+
     if [ ! -f /etc/rancher/k3s/k3s.yaml ]; then
         echo "Error: Kubeconfig not created after 120 seconds"
         echo "k3s log output:"
         tail -20 /tmp/k3s.log || echo "No log file found"
         return 1
     fi
-    
+
     # Set up kubeconfig
     export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-    
+
     # Wait for k3s to be ready
     wait_for_k3s_ready
-    
+
     echo "k3s cluster with Helm support is ready."
     return 0
 }
@@ -82,7 +82,7 @@ setup_k3s_cluster_with_helm() {
 #
 wait_for_k3s_ready() {
     echo "Waiting for k3s cluster to become ready..."
-    
+
     for i in $(seq 1 60); do
         if kubectl get nodes 2>/dev/null | grep -q 'Ready'; then
             echo "k3s cluster is ready."
@@ -91,7 +91,7 @@ wait_for_k3s_ready() {
         echo "Waiting for k3s (attempt $i/60)..."
         sleep 5
     done
-    
+
     echo "Error: Timed out waiting for k3s cluster."
     kubectl get nodes 2>/dev/null || echo "kubectl not accessible"
     return 1
@@ -102,13 +102,13 @@ wait_for_k3s_ready() {
 #
 configure_k3s_runc_root() {
     echo "Configuring k3s runc root path..."
-    
+
     # Ensure the runc root directory exists
     mkdir -p /run/containerd/runc/k8s.io
-    
+
     # Set proper permissions
     chmod 755 /run/containerd/runc/k8s.io
-    
+
     echo "k3s runc root configured at /run/containerd/runc/k8s.io"
     return 0
 }
@@ -116,19 +116,18 @@ configure_k3s_runc_root() {
 #
 # Deploy Cedana Helm chart using OCI registry
 # @param $1: Auth token for Cedana
-# @param $2: Cedana URL (default: ci.cedana.ai/v1)
 #
 deploy_cedana_helm_chart() {
     local auth_token="$1"
-    local cedana_url="${2:-ci.cedana.ai/v1}"
-    
+    local cedana_url="${CEDANA_URL:-ci.cedana.ai/v1}"
+
     if [ -z "$auth_token" ]; then
         echo "Error: Auth token required for Cedana Helm chart deployment"
         return 1
     fi
-    
+
     echo "Deploying Cedana Helm chart from OCI registry..."
-    
+
     # Build helm install command
     local helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm"
     helm_cmd="$helm_cmd --create-namespace -n cedana-systems"
@@ -140,17 +139,17 @@ deploy_cedana_helm_chart() {
     helm_cmd="$helm_cmd --set controllerManager.manager.resources.requests.cpu=100m"
     helm_cmd="$helm_cmd --set controllerManager.manager.resources.requests.memory=64Mi"
     helm_cmd="$helm_cmd --wait --timeout=10m"
-    
+
     # Execute the helm install command
     echo "Running: $helm_cmd"
     eval "$helm_cmd"
-    
+
     if [ $? -ne 0 ]; then
         echo "Error: Failed to deploy Cedana Helm chart"
         kubectl get pods -n cedana-systems 2>/dev/null || true
         return 1
     fi
-    
+
     echo "Cedana Helm chart deployed successfully."
     return 0
 }
@@ -160,58 +159,54 @@ deploy_cedana_helm_chart() {
 #
 teardown_k3s_cluster() {
     echo "Tearing down k3s cluster..."
-    
+
     # Check if we're on bare metal or in container
     if [ -f /.dockerenv ]; then
         echo "Container environment detected, using container cleanup..."
-        
+
         # Try graceful shutdown first
         if command -v k3s-uninstall.sh &> /dev/null; then
             echo "Running k3s uninstall script..."
             timeout 60 k3s-uninstall.sh || echo "k3s uninstall script timed out or failed"
         fi
-        
+
         # Force kill any remaining processes
         echo "Stopping k3s processes..."
         pkill -f k3s-server || true
-        pkill -f containerd || true
-        pkill -f runc || true
         sleep 2
-        
+
         # Force kill if still running
         pkill -9 -f k3s-server || true
-        pkill -9 -f containerd || true
-        pkill -9 -f runc || true
-        
+
         # Clean up k3s data
         echo "Cleaning up k3s data..."
         rm -rf /var/lib/rancher/k3s || true
         rm -rf /etc/rancher/k3s || true
     else
         echo "Bare metal environment detected, using systemd cleanup..."
-        
+
         # Stop k3s service first
         echo "Stopping k3s service..."
         sudo systemctl stop k3s || true
         sudo systemctl disable k3s || true
-        
+
         # Run k3s uninstall script if available
         if [ -f /usr/local/bin/k3s-uninstall.sh ]; then
             echo "Running k3s uninstall script..."
             sudo /usr/local/bin/k3s-uninstall.sh || echo "k3s uninstall script failed"
         fi
-        
+
         # Additional cleanup for bare metal
         echo "Cleaning up k3s systemd files..."
         sudo rm -f /etc/systemd/system/k3s.service || true
         sudo rm -f /etc/systemd/system/k3s.service.env || true
         sudo systemctl daemon-reload || true
-        
+
         # Clean up k3s data directories
         echo "Cleaning up k3s data directories..."
         sudo rm -rf /var/lib/rancher/k3s || true
         sudo rm -rf /etc/rancher/k3s || true
-        
+
         # Clean up k3s binaries
         echo "Cleaning up k3s binaries..."
         sudo rm -f /usr/local/bin/k3s || true
@@ -219,14 +214,9 @@ teardown_k3s_cluster() {
         sudo rm -f /usr/local/bin/kubectl || true
         sudo rm -f /usr/local/bin/crictl || true
         sudo rm -f /usr/local/bin/ctr || true
-        
-        # Clean up containerd state
-        echo "Cleaning up containerd state..."
-        sudo pkill -f containerd || true
-        sudo rm -rf /run/containerd || true
-        sudo rm -rf /var/lib/containerd || true
+
     fi
-    
+
     echo "k3s teardown complete"
 }
 
@@ -234,21 +224,20 @@ teardown_k3s_cluster() {
 # Assumes 'curl' and 'helm' are installed.
 #
 # @param $1: Path to the Cedana helm chart (e.g., ./cedana-helm)
-# @param $2: Cedana API URL (e.g., https://sandbox.cedana.ai)
-# @param $3: Cedana Auth Token
-# @param $4: cedana-helper image tag
-# @param $5: cedana-controller image tag
+# @param $2: Cedana Auth Token
+# @param $3: cedana-helper image tag
+# @param $4: cedana-controller image tag
 #
 setup_k3s_and_install_helm_chart() {
     # 1. Parameter validation
     local chart_path="$1"
-    local cedana_url="$2"
-    local auth_token="$3"
-    local helper_tag="$4"
-    local controller_tag="$5"
+    local auth_token="$2"
+    local helper_tag="$3"
+    local controller_tag="$4"
+    local cedana_url="${CEDANA_URL:-https://sandbox.cedana.ai}"
 
-    if [ -z "$chart_path" ] || [ -z "$cedana_url" ] || [ -z "$auth_token" ] || [ -z "$helper_tag" ] || [ -z "$controller_tag" ]; then
-        echo "Usage: setup_k3s_and_install_helm_chart <chart_path> <cedana_url> <auth_token> <helper_tag> <controller_tag>"
+    if [ -z "$chart_path" ] || [ -z "$auth_token" ] || [ -z "$helper_tag" ] || [ -z "$controller_tag" ]; then
+        echo "Usage: setup_k3s_and_install_helm_chart <chart_path> <auth_token> <helper_tag> <controller_tag>"
         return 1
     fi
 
@@ -521,22 +510,102 @@ function wait_for_action_complete() {
     return 1
 }
 
+#
+# Replace k3s embedded musl tar with system glibc tar
+# This fixes issues with runtime classes that rely on tar
+#
+replace_k3s_tar_with_glibc() {
+    echo "🔄 Replacing k3s embedded musl tar with system glibc tar..."
+
+    # Find the k3s data directory
+    local k3s_data_dir="/var/lib/rancher/k3s/data"
+    if [ ! -d "$k3s_data_dir" ]; then
+        echo "❌ K3S data directory not found at $k3s_data_dir"
+        return 1
+    fi
+
+    # Find the current bin directory
+    local bin_dir=$(find "$k3s_data_dir" -name "bin" -type d | head -1)
+    if [ -z "$bin_dir" ]; then
+        echo "❌ K3S bin directory not found. K3s may not have extracted tools yet."
+        return 1
+    fi
+
+    echo "📁 Found k3s bin directory: $bin_dir"
+
+    # Check if tar exists in the bin directory
+    if [ ! -f "$bin_dir/tar" ] && [ ! -L "$bin_dir/tar" ]; then
+        echo "❌ No tar binary or symlink found in k3s bin directory"
+        return 1
+    fi
+
+    # Check if tar is a symlink to busybox (common in k3s)
+    if [ -L "$bin_dir/tar" ]; then
+        local link_target=$(readlink "$bin_dir/tar")
+        echo "📋 Current tar is a symlink pointing to: $link_target"
+
+        # Backup original symlink if not already backed up
+        if [ ! -L "$bin_dir/tar.original" ] && [ ! -f "$bin_dir/tar.original" ]; then
+            echo "💾 Backing up original tar symlink..."
+            sudo cp -P "$bin_dir/tar" "$bin_dir/tar.original"
+        fi
+    else
+        # It's a regular file, backup as before
+        if [ ! -f "$bin_dir/tar.original" ]; then
+            echo "💾 Backing up original tar binary..."
+            sudo cp "$bin_dir/tar" "$bin_dir/tar.original"
+        fi
+    fi
+
+    # Check system tar
+    local system_tar="/usr/bin/tar"
+    if [ ! -f "$system_tar" ]; then
+        echo "❌ System tar not found at $system_tar"
+        return 1
+    fi
+
+    echo "🔍 System tar info:"
+    echo "   Location: $system_tar"
+    echo "   Type: $(file "$system_tar" | cut -d: -f2 | head -1 | xargs)"
+
+    # Check if system tar is linked to glibc
+    if ldd "$system_tar" | grep -q libc; then
+        echo "   Linked to glibc: ✅ Yes"
+    else
+        echo "   Linked to glibc: ❌ No"
+    fi
+
+    # Replace tar with system tar
+    echo "🔄 Replacing embedded tar with symlink to system tar..."
+
+    # Remove the existing tar (whether it's a file or symlink)
+    sudo rm -f "$bin_dir/tar"
+
+    # Create a symlink to the system tar binary
+    sudo ln -sf "$system_tar" "$bin_dir/tar"
+
+    # Verify the replacement
+    echo "✅ Verification:"
+    if [ -f "$bin_dir/tar.original" ]; then
+        echo "   Original tar: $(file "$bin_dir/tar.original" | cut -d: -f2 | head -1 | xargs)"
+    fi
+    echo "   New tar: $(file "$bin_dir/tar" | cut -d: -f2 | head -1 | xargs)"
+
+    echo "✅ Successfully replaced k3s tar with system glibc tar"
+    return 0
+}
+
 # Function to set up k3s cluster on bare metal
 setup_k3s_cluster_bare_metal() {
     echo "Setting up k3s cluster on bare metal..."
-    
-    # Kill any existing k3s processes first
-    sudo pkill -f k3s-server || true
-    sudo pkill -f containerd || true
-    sleep 2
-    
+
     # Clean up any existing k3s installation
     if [ -f /usr/local/bin/k3s-uninstall.sh ]; then
         echo "Cleaning up existing k3s installation..."
         sudo /usr/local/bin/k3s-uninstall.sh || true
         sleep 5
     fi
-    
+
     # Install k3s with bare metal optimized settings
     echo "Installing k3s on bare metal..."
     curl -sfL https://get.k3s.io | sh -s - server \
@@ -544,17 +613,28 @@ setup_k3s_cluster_bare_metal() {
         --disable=traefik \
         --disable=servicelb \
         --disable=metrics-server
-    
+
     if [ $? -ne 0 ]; then
         echo "Failed to install k3s"
         return 1
     fi
-    
+
+    # Replace k3s embedded musl tar with system glibc tar
+    # This fixes issues with runtime classes that need glibc tar
+    if replace_k3s_tar_with_glibc; then
+        echo "✅ K3s tar replacement completed successfully"
+    else
+        echo "❌ K3s tar replacement failed"
+        echo "   Runtime classes will not work properly with embedded musl tar"
+        echo "   Setup cannot continue without glibc tar replacement"
+        return 1
+    fi
+
     # Wait for k3s service to be ready
     echo "Waiting for k3s service to start..."
     sudo systemctl enable k3s || true
     sudo systemctl start k3s || true
-    
+
     # Wait for kubeconfig to be available
     echo "Waiting for kubeconfig to be created..."
     local timeout=120
@@ -568,12 +648,12 @@ setup_k3s_cluster_bare_metal() {
         sleep 1
         count=$((count + 1))
     done
-    
+
     if [ $count -ge $timeout ]; then
         echo "Timeout waiting for kubeconfig"
         return 1
     fi
-    
+
     # Wait for k3s cluster to be ready
     echo "Waiting for k3s cluster to be ready..."
     timeout=180
@@ -586,7 +666,7 @@ setup_k3s_cluster_bare_metal() {
         sleep 2
         count=$((count + 2))
     done
-    
+
     if [ $count -ge $timeout ]; then
         echo "Timeout waiting for k3s cluster to be ready"
         kubectl get nodes --kubeconfig=/etc/rancher/k3s/k3s.yaml || true
@@ -594,7 +674,7 @@ setup_k3s_cluster_bare_metal() {
         sudo journalctl -u k3s --no-pager -l || true
         return 1
     fi
-    
+
     echo "k3s cluster is ready on bare metal"
     return 0
 }
@@ -604,12 +684,7 @@ setup_k3s_cluster() {
     # Check if we're running on bare metal or in a container
     if [ -f /.dockerenv ]; then
         echo "Container environment detected, using container-optimized setup..."
-        
-        # Kill any existing k3s processes first
-        pkill -f k3s-server || true
-        pkill -f containerd || true
-        sleep 2
-        
+
         # Start k3s with specific configuration for containers
         # Use native snapshotter to avoid overlayfs issues in Docker
         # Disable traefik to avoid port conflicts
@@ -618,12 +693,12 @@ setup_k3s_cluster() {
             --disable=traefik \
             --snapshotter=native \
             --container-runtime-endpoint=unix:///run/containerd/containerd.sock" sh -
-        
+
         if [ $? -ne 0 ]; then
             echo "Failed to install k3s within timeout"
             return 1
         fi
-        
+
         # Wait for containerd to be ready with timeout
         echo "Waiting for containerd to be ready..."
         local timeout=120
@@ -636,12 +711,12 @@ setup_k3s_cluster() {
             sleep 1
             count=$((count + 1))
         done
-        
+
         if [ $count -ge $timeout ]; then
             echo "Timeout waiting for containerd socket"
             return 1
         fi
-        
+
         # Wait for k3s to be ready with timeout
         echo "Waiting for k3s to be ready..."
         timeout=120
@@ -654,12 +729,12 @@ setup_k3s_cluster() {
             sleep 1
             count=$((count + 1))
         done
-        
+
         if [ $count -ge $timeout ]; then
             echo "Timeout waiting for k3s to be ready"
             return 1
         fi
-        
+
         echo "k3s cluster is ready in container"
     else
         echo "Bare metal environment detected, using bare metal setup..."
@@ -670,7 +745,7 @@ setup_k3s_cluster() {
 # Function to patch Cedana DaemonSet for Docker environment
 patch_cedana_for_docker() {
     echo "Patching Cedana DaemonSet for Docker environment..."
-    
+
     # Wait for any DaemonSet to exist in cedana-systems namespace
     echo "Waiting for Cedana DaemonSet to be created..."
     local daemonset_name=""
@@ -686,7 +761,7 @@ patch_cedana_for_docker() {
         echo "Waiting for DaemonSet (attempt $i/30)..."
         sleep 2
     done
-    
+
     if [ -z "$daemonset_name" ]; then
         echo "❌ No DaemonSet found in cedana-systems namespace"
         echo "Available pods in cedana-systems:"
@@ -694,15 +769,15 @@ patch_cedana_for_docker() {
         echo "⚠️  Continuing without DaemonSet patch - helper may not work properly"
         return 0  # Don't fail the test, just warn
     fi
-    
+
     # Get the actual container name from the DaemonSet
     echo "Getting container information from DaemonSet..."
     local container_name=$(kubectl get daemonset "$daemonset_name" -n cedana-systems -o jsonpath='{.spec.template.spec.containers[0].name}')
     local container_image=$(kubectl get daemonset "$daemonset_name" -n cedana-systems -o jsonpath='{.spec.template.spec.containers[0].image}')
-    
+
     echo "Container name: $container_name"
     echo "Container image: $container_image"
-    
+
     # Create patch for privileged DaemonSet with host access
     cat > /tmp/cedana-daemonset-patch.yaml << EOF
 spec:
@@ -782,18 +857,18 @@ spec:
         operator: Exists
         effect: NoSchedule
 EOF
-    
+
     # Apply the patch using strategic merge
     echo "Applying DaemonSet patch..."
     kubectl patch daemonset "$daemonset_name" -n cedana-systems --type=strategic --patch-file=/tmp/cedana-daemonset-patch.yaml
-    
+
     if [ $? -eq 0 ]; then
         echo "DaemonSet patched successfully"
-        
+
         # Wait for DaemonSet to restart - this should succeed
         echo "Waiting for DaemonSet to restart..."
         kubectl rollout status daemonset/"$daemonset_name" -n cedana-systems --timeout=300s
-        
+
         if [ $? -eq 0 ]; then
             echo "✅ Cedana DaemonSet configured for Docker environment"
             return 0

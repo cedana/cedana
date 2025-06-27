@@ -24,7 +24,7 @@ PROPAGATOR_BASE_URL=""
 if [ -n "${CEDANA_URL:-}" ]; then
     PROPAGATOR_BASE_URL=$(normalize_url "$CEDANA_URL")
 else
-    PROPAGATOR_BASE_URL="https://ci.cedana.ai"
+    PROPAGATOR_BASE_URL="http://192.168.0.71:1324"
 fi
 
 PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
@@ -87,7 +87,7 @@ get_cluster_id() {
     fi
 
     # Return a placeholder cluster ID if none available
-    echo "test-cluster-placeholder"
+    echo "test-cluster"
     return 0
 }
 
@@ -110,7 +110,7 @@ checkpoint_pod_via_api() {
         return 1
     fi
 
-    echo "Checkpointing pod '$pod_name' in namespace '$namespace'..."
+    echo "Checkpointing pod '$pod_name' in namespace '$namespace'..." >&2
 
     local payload
     payload=$(jq -n \
@@ -159,7 +159,9 @@ restore_pod_via_api() {
         return 1
     fi
 
-    echo "Restoring pod from action '$action_id'..."
+    echo "Restoring pod from action '$action_id'..." >&2
+    echo "DEBUG: Using cluster_id: '$cluster_id'" >&2
+    echo "DEBUG: Propagator base URL: '$PROPAGATOR_BASE_URL'" >&2
 
     local payload
     if [ -n "$cluster_id" ]; then
@@ -178,19 +180,22 @@ restore_pod_via_api() {
             }')
     fi
 
-    echo "DEBUG: Restore payload: $payload"
+    echo "DEBUG: Restore payload: $payload" >&2
 
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/restore/pod" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -d "$payload" \
-        -w "%{http_code}")
+        -w "%{http_code}" 2>&1)
+
+    local curl_exit_code=$?
+    echo "DEBUG: Curl exit code: $curl_exit_code" >&2
 
     local http_code="${response: -3}"
     local body="${response%???}"
 
-    echo "DEBUG: Restore response HTTP $http_code: $body"
+    echo "DEBUG: Restore response HTTP $http_code: $body" >&2
 
     if [ "$http_code" -eq 200 ]; then
         echo "$body"
@@ -202,7 +207,7 @@ restore_pod_via_api() {
 }
 
 #
-# Poll action status until completion
+# Poll action status until completion using the dedicated status endpoint
 # @param $1: Action ID
 # @param $2: Operation type (checkpoint|restore) for logging
 #
@@ -215,46 +220,89 @@ poll_action_status() {
         return 1
     fi
 
-    echo "Polling status for $operation action '$action_id'..."
+    echo "Polling status for $operation action '$action_id'..." >&2
 
     for i in $(seq 1 60); do  # 5 minute timeout
         local response
-        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions?type=${operation}_pod" \
+        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/checkpoint/status/${action_id}" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -w "%{http_code}")
 
         local http_code="${response: -3}"
         local body="${response%???}"
 
+        echo "DEBUG: Status API response (attempt $i): HTTP $http_code, Body: $body" >&2
+
         if [ "$http_code" -eq 200 ]; then
-            local action_info
-            action_info=$(echo "$body" | jq --arg id "$action_id" '.[] | select(.action_id == $id)' 2>/dev/null)
+            local status
+            status=$(echo "$body" | jq -r '.status' 2>/dev/null)
 
-            if [ -n "$action_info" ]; then
-                local status
-                status=$(echo "$action_info" | jq -r '.status' 2>/dev/null)
+            echo "Action status: $status (attempt $i/60)" >&2
 
-                echo "Action status: $status (attempt $i/60)"
+            case "$status" in
+                "ready")
+                    echo "$operation action completed successfully" >&2
+                    return 0
+                    ;;
+                "error")
+                    local details
+                    details=$(echo "$body" | jq -r '.details // "No details available"' 2>/dev/null)
+                    echo "Error: $operation action failed with status '$status'" >&2
+                    echo "Error details: $details" >&2
+                    return 1
+                    ;;
+                "initialized"|"processing"|"checkpoint_created")
+                    # Continue polling for these statuses
+                    ;;
+                *)
+                    echo "Warning: Unknown status '$status', continuing to poll..." >&2
+                    ;;
+            esac
+        elif [ "$http_code" -eq 404 ]; then
+            echo "Warning: Dedicated status endpoint not found, trying general actions endpoint..." >&2
+            # Fallback to general actions endpoint
+            local actions_response
+            actions_response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
+                -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+                -w "%{http_code}")
 
-                case "$status" in
-                    "success"|"completed"|"ready")
-                        echo "$operation action completed successfully"
-                        return 0
-                        ;;
-                    "failed"|"error")
-                        echo "Error: $operation action failed with status '$status'" >&2
-                        echo "Action details: $action_info" >&2
-                        return 1
-                        ;;
-                    *)
-                        # Continue polling for other statuses
-                        ;;
-                esac
+            local actions_http_code="${actions_response: -3}"
+            local actions_body="${actions_response%???}"
+
+            echo "DEBUG: Actions API response (attempt $i): HTTP $actions_http_code" >&2
+
+            if [ "$actions_http_code" -eq 200 ]; then
+                local action_info
+                action_info=$(echo "$actions_body" | jq --arg id "$action_id" '.[] | select(.action_id == $id)' 2>/dev/null)
+
+                if [ -n "$action_info" ]; then
+                    local status
+                    status=$(echo "$action_info" | jq -r '.status' 2>/dev/null)
+
+                    echo "Action status (from actions API): $status (attempt $i/60)" >&2
+
+                    case "$status" in
+                        "success"|"completed"|"ready")
+                            echo "$operation action completed successfully" >&2
+                            return 0
+                            ;;
+                        "failed"|"error")
+                            echo "Error: $operation action failed with status '$status'" >&2
+                            echo "Action details: $action_info" >&2
+                            return 1
+                            ;;
+                        *)
+                            # Continue polling for other statuses
+                            ;;
+                    esac
+                else
+                    echo "Warning: Action '$action_id' not found in actions list (attempt $i/60)" >&2
+                fi
             else
-                echo "Warning: Action '$action_id' not found in response (attempt $i/60)"
+                echo "Warning: Failed to get actions list (HTTP $actions_http_code) (attempt $i/60)" >&2
             fi
         else
-            echo "Warning: Failed to get actions (HTTP $http_code) (attempt $i/60)"
+            echo "Warning: Failed to get action status (HTTP $http_code): $body (attempt $i/60)" >&2
         fi
 
         sleep 5
@@ -262,6 +310,46 @@ poll_action_status() {
 
     echo "Error: Timeout waiting for $operation action '$action_id' to complete" >&2
     return 1
+}
+
+#
+# Get checkpoint ID from action ID using the actions API
+# @param $1: Action ID
+# Returns: Checkpoint ID
+#
+get_checkpoint_id_from_action() {
+    local action_id="$1"
+
+    if [ -z "$action_id" ]; then
+        echo "Error: get_checkpoint_id_from_action requires action_id" >&2
+        return 1
+    fi
+
+    echo "Getting checkpoint ID for action '$action_id'..." >&2
+
+    local response
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -w "%{http_code}")
+
+    local http_code="${response: -3}"
+    local body="${response%???}"
+
+    if [ "$http_code" -eq 200 ]; then
+        local checkpoint_id
+        checkpoint_id=$(echo "$body" | jq -r --arg id "$action_id" '.[] | select(.action_id == $id) | .checkpoint_id' 2>/dev/null)
+
+        if [ -n "$checkpoint_id" ] && [ "$checkpoint_id" != "null" ]; then
+            echo "$checkpoint_id"
+            return 0
+        else
+            echo "Error: Could not find checkpoint_id for action '$action_id'" >&2
+            return 1
+        fi
+    else
+        echo "Error: Failed to get actions (HTTP $http_code): $body" >&2
+        return 1
+    fi
 }
 
 #
@@ -411,4 +499,103 @@ list_checkpoints() {
         echo "Raw response:"
         echo "$checkpoints"
     }
+}
+
+#
+# Get latest action_id belonging to a given pod_id using the dedicated endpoint
+# @param $1: Pod ID
+# Returns: Action ID (plain text)
+#
+get_latest_pod_action_id() {
+    local pod_id="$1"
+
+    if [ -z "$pod_id" ]; then
+        echo "Error: get_latest_pod_action_id requires pod_id" >&2
+        return 1
+    fi
+
+    echo "Getting latest action ID for pod '$pod_id'..." >&2
+
+    local response
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions/from_pod/${pod_id}" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -w "%{http_code}")
+
+    local http_code="${response: -3}"
+    local body="${response%???}"
+
+    if [ "$http_code" -eq 200 ]; then
+        # Response is plain text (action_id)
+        echo "$body"
+        return 0
+    elif [ "$http_code" -eq 404 ]; then
+        echo "Error: No action found for pod '$pod_id'" >&2
+        return 1
+    else
+        echo "Error: Failed to get action for pod (HTTP $http_code): $body" >&2
+        return 1
+    fi
+}
+
+#
+# Poll restore action status until completion using the actions API
+# @param $1: Action ID
+# @param $2: Operation type (checkpoint|restore) for logging
+#
+poll_restore_action_status() {
+    local action_id="$1"
+    local operation="${2:-restore}"
+
+    if [ -z "$action_id" ]; then
+        echo "Error: poll_restore_action_status requires action_id" >&2
+        return 1
+    fi
+
+    echo "Polling status for $operation action '$action_id'..."
+
+    for i in $(seq 1 60); do  # 5 minute timeout
+        local response
+        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -w "%{http_code}")
+
+        local http_code="${response: -3}"
+        local body="${response%???}"
+
+        if [ "$http_code" -eq 200 ]; then
+            local action_info
+            action_info=$(echo "$body" | jq --arg id "$action_id" '.[] | select(.action_id == $id)' 2>/dev/null)
+
+            if [ -n "$action_info" ]; then
+                local status
+                status=$(echo "$action_info" | jq -r '.status' 2>/dev/null)
+
+                echo "Action status: $status (attempt $i/60)"
+
+                case "$status" in
+                    "success"|"completed"|"ready")
+                        echo "$operation action completed successfully"
+                        return 0
+                        ;;
+                    "failed"|"error")
+                        echo "Error: $operation action failed with status '$status'" >&2
+                        echo "Action details: $action_info" >&2
+                        return 1
+                        ;;
+                    *)
+                        # Continue polling for other statuses
+                        ;;
+                esac
+            else
+                echo "Warning: Action '$action_id' not found in response (attempt $i/60)"
+            fi
+        else
+            echo "Warning: Failed to get actions (HTTP $http_code): $body (attempt $i/60)"
+        fi
+
+        sleep 5
+    done
+
+    echo "Error: Timeout waiting for $operation action '$action_id' to complete" >&2
+    return 1
 }
