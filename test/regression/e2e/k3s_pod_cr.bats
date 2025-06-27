@@ -67,7 +67,7 @@ setup_file() {
     helm_cmd="$helm_cmd --set cedanaConfig.cedanaAuthToken=\"$CEDANA_AUTH_TOKEN\""
     helm_cmd="$helm_cmd --set cedanaConfig.cedanaClusterName=\"test-cluster\""
     helm_cmd="$helm_cmd --set cedanaConfig.logLevel=\"trace\""
-    helm_cmd="$helm_cmd --set cedanaConfig.pluginsRuntimeShimVersion=\"v0.6.1\""
+    helm_cmd="$helm_cmd --set cedanaConfig.pluginsRuntimeShimVersion=\"\""
 
     # Set controller/manager image pull policy to Always
     helm_cmd="$helm_cmd --set controllerManager.manager.image.repository=\"docker.io/cedana/cedana-controller-test\""
@@ -188,6 +188,10 @@ teardown_file() {
     # Clean up state directory
     rm -rf "$TEST_STATE_DIR" || true
 
+    sudo rm -rf /run/containerd/runc/k8s.io
+
+    sudo mkdir /run/containerd/runc/k8s.io
+
     echo "E2E test cleanup complete"
 }
 
@@ -233,13 +237,6 @@ spec:
   containers:
   - name: counter
     image: alpine:latest
-    resources:
-      requests:
-        memory: "64Mi"
-        cpu: "50m"
-      limits:
-        memory: "128Mi"
-        cpu: "100m"
     command: ["/bin/sh"]
     args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
 EOF
