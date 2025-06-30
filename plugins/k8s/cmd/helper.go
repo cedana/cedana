@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -334,6 +335,7 @@ type CheckpointPodReq struct {
 	PodName   string `json:"pod_name"`
 	RuncRoot  string `json:"runc_root"`
 	Namespace string `json:"namespace"`
+	Kind      string `json:"kind"`
 
 	ActionId string `json:"action_id"`
 }
@@ -383,6 +385,40 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 			Runc: &runc.Runc{
 				ID:   runcId,
 				Root: runcRoot,
+			},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
+func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namespace, address, protocol string) (*daemon.DumpResp, error) {
+	client, err := client.New(address, protocol)
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	leaveRunning := true
+	tcpEstablished := true
+
+	resp, _, err := client.Dump(ctx, &daemon.DumpReq{
+		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
+		Type: "containerd",
+		Criu: &criu.CriuOpts{
+			LeaveRunning:   &leaveRunning,
+			TcpEstablished: &tcpEstablished,
+		},
+		Details: &daemon.Details{
+			Containerd: &containerd.Containerd{
+				ID:         runcId,
+				Image:      "cedana/cedana-checkpoints:" + checkpointId,
+				Namespace:  namespace,
+				RootfsOnly: false,
+				Username:   "test",
+				Secret:     "dummy",
 			},
 		},
 	})
@@ -457,16 +493,16 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		var req CheckpointPodReq
 		if err := json.Unmarshal(msg.Body, &req); err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal message")
-			return rabbitmq.Manual
+			return rabbitmq.Ack
 		}
 		containers, err := FindContainersForReq(req, address, protocol)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to find pod")
-			return rabbitmq.Manual
+			return rabbitmq.Ack
 		}
 		// if no containers found skip
 		if len(containers) == 0 {
-			return rabbitmq.Manual
+			return rabbitmq.Ack
 		}
 		runcRoot := req.RuncRoot
 		// TODO SA: support multiple container pod checkpoint/restore
@@ -478,21 +514,41 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 				log.Error().Err(err).Str("CedanaUrl", config.Global.Connection.URL).Msg("Failed to populate a remote checkpoint in cedana database")
 				continue
 			}
-			resp, err := CheckpointContainer(
-				context.Background(),
-				*checkpointId,
-				container.Runc.ID,
-				runcRoot,
-				address,
-				protocol,
-			)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to checkpoint pod containers")
-			} else {
-				log.Info().Msg("Publishing checkpoint...")
-				err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, resp)
+			if req.Kind == "rootfs" {
+				resp, err := CheckpointContainerRootfs(
+					context.Background(),
+					*checkpointId,
+					container.Runc.ID,
+					req.Namespace,
+					address,
+					protocol,
+				)
 				if err != nil {
-					log.Error().Err(err).Msg("failed to publish checkpoint success")
+					log.Error().Err(err).Msg("Failed to roofs checkpoint container in pod")
+				} else {
+					log.Info().Msg("Publishing checkpoint...")
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, resp)
+					if err != nil {
+						log.Error().Err(err).Msg("failed to publish checkpoint success")
+					}
+				}
+			} else {
+				resp, err := CheckpointContainer(
+					context.Background(),
+					*checkpointId,
+					container.Runc.ID,
+					runcRoot,
+					address,
+					protocol,
+				)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to checkpoint pod containers")
+				} else {
+					log.Info().Msg("Publishing checkpoint...")
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, resp)
+					if err != nil {
+						log.Error().Err(err).Msg("failed to publish checkpoint success")
+					}
 				}
 			}
 			break
