@@ -401,7 +401,7 @@ type CheckpointInformation struct {
 	Path         string          `json:"path"`
 	Gpu          bool            `json:"gpu"`
 	Platform     string          `json:"platform"`
-	Duration     *profiling.Data `json:"Duration"`
+	Duration     *profiling.Data `json:"duration"`
 }
 
 func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp) error {
