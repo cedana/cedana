@@ -31,6 +31,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr-title-check:
+    name: Enforce PR Title
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        run: |
+          TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $TITLE"
+          if [[ ! "$TITLE" =~ ^CED-[0-9]+:\  ]]; then
+            echo "❌ PR title must start with 'CED-<number>: ' (note the colon and space)"
+            exit 1
+          fi
   check:
     name: Check
     uses: ./.github/workflows/check.yml
@@ -40,6 +52,7 @@ jobs:
 
   build:
     name: Build
+    needs: pr-title-check
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
@@ -51,6 +64,7 @@ jobs:
 
   download:
     name: Download
+    needs: pr-title-check
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
@@ -60,6 +74,7 @@ jobs:
 
   test:
     name: Test
+    needs: pr-title-check
     uses: ./.github/workflows/test.yml
     needs: [build, download]
     secrets: inherit
@@ -68,6 +83,7 @@ jobs:
 
   bench:
     name: Bench
+    needs: pr-title-check
     uses: ./.github/workflows/bench.yml
     needs: [build, download]
     secrets: inherit
@@ -82,6 +98,7 @@ jobs:
 
   publish:
     name: Publish
+    needs: pr-title-check
     uses: ./.github/workflows/publish.yml
     needs: build
     secrets: inherit
