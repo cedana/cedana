@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -336,8 +337,7 @@ type CheckpointPodReq struct {
 	RuncRoot  string `json:"runc_root"`
 	Namespace string `json:"namespace"`
 	Kind      string `json:"kind"`
-
-	ActionId string `json:"action_id"`
+	ActionId  string `json:"action_id"`
 }
 
 func FindContainersForReq(req CheckpointPodReq, address, protocol string) ([]*k8s.Container, error) {
@@ -394,7 +394,37 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 	return resp, nil
 }
 
-func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namespace, address, protocol string) (*daemon.DumpResp, error) {
+type ImageSecret struct {
+	ImageSecret string `json:"image_secret"`
+	ImageSource string `json:"image_source"`
+}
+
+func GetImageSecret() (*ImageSecret, error) {
+	cedanaClient := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
+	url := cedanaClient.RequestAdapter.GetBaseUrl() + "/v2/secrets"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+os.Getenv("CEDANA_AUTH_TOKEN"))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	secret := ImageSecret{}
+	err = json.Unmarshal(data, &secret)
+	if err != nil {
+		return nil, err
+	}
+	return &secret, nil
+}
+
+func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namespace, address, protocol string, rootfsOnly bool) (*daemon.DumpResp, error) {
 	client, err := client.New(address, protocol)
 	if err != nil {
 		return nil, err
@@ -403,6 +433,18 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 
 	leaveRunning := true
 	tcpEstablished := true
+
+	image, err := GetImageSecret()
+	if err != nil {
+		// failed to fetch the image upload information
+		return nil, err
+	}
+	s := strings.Split(image.ImageSecret, ":")
+	if len(s) <= 1 {
+		return nil, fmt.Errorf("failed to fetch valid image secrets; failed to parse secrets from propagator")
+	}
+	username := s[0]
+	secret := s[1]
 
 	resp, _, err := client.Dump(ctx, &daemon.DumpReq{
 		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
@@ -416,9 +458,9 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 				ID:         runcId,
 				Image:      "cedana/cedana-checkpoints:" + checkpointId,
 				Namespace:  namespace,
-				RootfsOnly: false,
-				Username:   "test",
-				Secret:     "dummy",
+				RootfsOnly: rootfsOnly,
+				Username:   username,
+				Secret:     secret,
 			},
 		},
 	})
@@ -514,7 +556,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 				log.Error().Err(err).Str("CedanaUrl", config.Global.Connection.URL).Msg("Failed to populate a remote checkpoint in cedana database")
 				continue
 			}
-			if req.Kind == "rootfs" {
+			if req.Kind == "rootfs" || req.Kind == "rootfsonly" {
 				resp, err := CheckpointContainerRootfs(
 					context.Background(),
 					*checkpointId,
@@ -522,6 +564,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 					req.Namespace,
 					address,
 					protocol,
+					req.Kind == "rootfsonly",
 				)
 				if err != nil {
 					log.Error().Err(err).Msg("Failed to roofs checkpoint container in pod")
