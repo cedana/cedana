@@ -140,7 +140,7 @@ wait_for_cmd() {
 
 debug_log() {
     local message="$1"
-    if [ "$DEBUG" = "1" ]; then
+    if [ "$DEBUG" == "1" ]; then
         echo "[DEBUG] $message" >&3
     else
         echo "[DEBUG] $message"
@@ -148,7 +148,7 @@ debug_log() {
 }
 
 debug() {
-    if [ "$DEBUG" = "1" ]; then
+    if [ "$DEBUG" == "1" ]; then
         echo "[DEBUG] Executing: $*" >&3
         "$@" >&3 2>&1
     else

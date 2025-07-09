@@ -3,17 +3,22 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=k8s,k3s
 
+load ../helpers/utils
+load ../helpers/daemon
 load ../helpers/k3s
 load ../helpers/helm
 load ../helpers/propagator
-load ../helpers/daemon
-load ../helpers/utils
+
+export CLUSTER_NAME="test-cluster"
+export NAMESPACE="default"
+export RUNC_ROOT="/run/containerd/runc/k8s.io"
 
 setup_file() {
     setup_k3s_cluster
-    helm_install_cedana
+    helm_install_cedana $CLUSTER_NAME
     wait_for_k3s_cedana_runtime
     restart_k3s_cluster
+    tail_helm_cedana_logs &
 }
 
 teardown_file() {
@@ -27,150 +32,164 @@ teardown_file() {
     [ "$status" -eq 0 ]
     [[ "$output" == *"Ready"* ]]
 
-#     # Test that Cedana components are running
-#     run kubectl get pods -n cedana-system
-#     [ "$status" -eq 0 ]
+    # Test that Cedana components are running
+    run kubectl get pods -n cedana-system
+    [ "$status" -eq 0 ]
 
-#     # Wait a bit longer for Cedana to fully initialize
-#     echo "Waiting for Cedana components to fully initialize..."
-#     sleep 30
+    # Check if all Cedana pods are actually ready
+    run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n cedana-system --timeout=60s
+    [ "$status" -eq 0 ]
 
-#     # Check if all Cedana pods are actually ready
-#     run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n cedana-system --timeout=60s
-#     [ "$status" -eq 0 ]
-
-#     echo "✅ Cedana components are running"
-
-#     # Test propagator service connectivity
-#     run validate_propagator_connectivity
-#     [ "$status" -eq 0 ]
-
-    echo "✅ k3s cluster and API connectivity verified"
+    run validate_propagator_connectivity
+    [ "$status" -eq 0 ]
 }
 
-# @test "E2E: Deploy test pod and verify it's running" {
-#     # Create test pod manifest
-#     cat > /tmp/test-pod.yaml << EOF
-# apiVersion: v1
-# kind: Pod
-# metadata:
-#   name: $TEST_POD_NAME
-#   namespace: $TEST_NAMESPACE
-#   labels:
-#     app: cedana-test
-# spec:
-#   restartPolicy: Never
-#   containers:
-#   - name: counter
-#     image: alpine:latest
-#     command: ["/bin/sh"]
-#     args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
-# EOF
+@test "Deploy a pod and verify it's running" {
+    name=$(unix_nano)
+    spec=/tmp/test-pod-$name.yaml
 
-#     # Deploy the test pod
-#     run kubectl apply -f /tmp/test-pod.yaml
-#     [ "$status" -eq 0 ]
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: $NAMESPACE
+  labels:
+    app: "$name"
+spec:
+  restartPolicy: Never
+  containers:
+  - name: counter
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
+EOF
 
-#     # Wait for pod to be running
-#     echo "Waiting for test pod to be ready..."
-#     for i in $(seq 1 30); do
-#         status=$(kubectl get pod "$TEST_POD_NAME" -n "$TEST_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
-#         if [ "$status" = "Running" ]; then
-#             echo "Test pod is running"
-#             break
-#         fi
-#         echo "Pod status: $status (attempt $i/30)"
-#         sleep 5
-#     done
+    run kubectl apply -f "$spec"
+    [ "$status" -eq 0 ]
 
-#     run kubectl get pod "$TEST_POD_NAME" -n "$TEST_NAMESPACE" -o jsonpath='{.status.phase}'
-#     [ "$status" -eq 0 ]
-#     [ "$output" = "Running" ]
+    # Check if pod is running
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=60s -n "$NAMESPACE"
+    [ "$status" -eq 0 ]
 
-#     echo "✅ Test pod deployed and running"
-# }
+    run kubectl delete pod "$name" -n "$NAMESPACE"
+    [ "$status" -eq 0 ]
+}
 
-# @test "E2E: Checkpoint pod via propagator API" {
-#     # Ensure cluster ID is available
-#     if [ -z "$CLUSTER_ID" ]; then
-#         CLUSTER_ID=$(get_cluster_id)
-#     fi
+@test "Checkpoint a pod" {
+    name=$(unix_nano)
+    spec=/tmp/test-pod-$name.yaml
 
-#     # Debug: Show what we're about to send
-#     echo "Debug: Cluster ID: $CLUSTER_ID"
-#     echo "Debug: Pod name: $TEST_POD_NAME"
-#     echo "Debug: Namespace: $TEST_NAMESPACE"
-#     echo "Debug: Runc root: /run/containerd/runc/k8s.io"
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: $NAMESPACE
+  labels:
+    app: "$name"
+spec:
+  restartPolicy: Never
+  containers:
+  - name: counter
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
+EOF
 
-#     # Check if the runc root path exists (only in non-containerized environments)
-#     if kubectl exec -n cedana-system $(kubectl get pods -n cedana-system -l app.kubernetes.io/name=cedana-helper -o jsonpath='{.items[0].metadata.name}') -- ls /run/containerd/runc/k8s.io 2>/dev/null; then
-#         echo "Debug: Runc root path exists in cedana-helper"
-#     else
-#         echo "Debug: Runc root path may not exist in cedana-helper"
-#     fi
+    run kubectl apply -f "$spec"
+    [ "$status" -eq 0 ]
 
-#     # Checkpoint the test pod
-#     echo "Checkpointing pod $TEST_POD_NAME..."
-#     response=$(checkpoint_pod_via_api "$TEST_POD_NAME" "/run/containerd/runc/k8s.io" "$TEST_NAMESPACE" "$CLUSTER_ID")
-#     exit_code=$?
+    # Check if pod is running
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=60s -n "$NAMESPACE"
+    [ "$status" -eq 0 ]
 
-#     echo "Debug: Checkpoint API response: $response"
-#     echo "Debug: Exit code: $exit_code"
+    # Checkpoint the test pod
+    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$CLUSTER_NAME"
+    [ "$status" -eq 0 ]
 
-#     if [ $exit_code -eq 0 ]; then
-#         # According to the OpenAPI spec, the checkpoint endpoint returns plain text action_id
-#         # Extract UUID pattern from the response to handle any potential debug text
-#         ACTION_ID=$(echo "$response" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+    if [ $status -eq 0 ]; then
+        # According to the OpenAPI spec, the checkpoint endpoint returns plain text action_id
+        # Extract UUID pattern from the response to handle any potential debug text
+        action_id=$(echo "$output" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
 
-#         # Validate the action ID is a proper UUID
-#         if [[ "$ACTION_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-#             echo "✅ Checkpoint initiated with action ID: $ACTION_ID"
-#         else
-#             echo "Error: Invalid action ID format received from response: $response"
-#             return 1
-#         fi
+        # Validate the action ID is a proper UUID
+        if [[ "$action_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "✅ Checkpoint initiated with action ID: $action_id"
+        else
+            echo "Error: Invalid action ID format received from response: $output"
+            return 1
+        fi
+    fi
 
-#         # Ensure state directory exists and save action ID for other tests
-#         mkdir -p "$TEST_STATE_DIR"
-#         echo "$ACTION_ID" > "$TEST_STATE_DIR/action_id"
-#     else
-#        return 1
-#     fi
-# }
+    kubectl delete -f "$spec"
+    [ "$status" -eq 0 ]
+}
 
-# @test "E2E: Wait for checkpoint to complete" {
-#     # Read action ID from shared state
-#     if [ -f "$TEST_STATE_DIR/action_id" ]; then
-#         ACTION_ID=$(cat "$TEST_STATE_DIR/action_id")
-#     fi
+@test "Checkpoint a pod and wait for completion" {
+    name=$(unix_nano)
+    spec=/tmp/test-pod-$name.yaml
 
-#     if [ -z "$ACTION_ID" ]; then
-#         return 1
-#     fi
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: $NAMESPACE
+  labels:
+    app: "$name"
+spec:
+  restartPolicy: Never
+  containers:
+  - name: counter
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
+EOF
 
-#     echo "Polling checkpoint action status using dedicated endpoint..."
-#     run poll_action_status "$ACTION_ID" "checkpoint"
-#     [ "$status" -eq 0 ]
+    run kubectl apply -f "$spec"
+    [ "$status" -eq 0 ]
 
-#     # Get the checkpoint ID using the action ID
-#     echo "Retrieving checkpoint ID from action..."
-#     CHECKPOINT_ID=$(get_checkpoint_id_from_action "$ACTION_ID")
+    # Check if pod is running
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=60s -n "$NAMESPACE"
+    [ "$status" -eq 0 ]
 
-#     if [ $? -eq 0 ] && [ -n "$CHECKPOINT_ID" ] && [ "$CHECKPOINT_ID" != "null" ]; then
-#         echo "✅ Checkpoint completed with ID: $CHECKPOINT_ID"
-#     else
-#         echo "Error: Failed to get checkpoint ID for action $ACTION_ID"
-#         return 1
-#     fi
+    # Checkpoint the test pod
+    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$CLUSTER_NAME"
+    [ "$status" -eq 0 ]
 
-#     # IMPORTANT: Add 15-second delay to let controller finish uploading checkpoint data
-#     echo "⏳ Waiting 15 seconds for controller to finish uploading checkpoint data..."
-#     sleep 15
-#     echo "✅ Controller upload delay completed"
+    if [ $status -eq 0 ]; then
+        # According to the OpenAPI spec, the checkpoint endpoint returns plain text action_id
+        # Extract UUID pattern from the response to handle any potential debug text
+        action_id=$(echo "$output" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
 
-#     # Save checkpoint ID for cleanup
-#     echo "$CHECKPOINT_ID" > "$TEST_STATE_DIR/checkpoint_id"
-# }
+        # Validate the action ID is a proper UUID
+        if [[ "$action_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "✅ Checkpoint initiated with action ID: $action_id"
+        else
+            echo "Error: Invalid action ID format received from response: $output"
+            return 1
+        fi
+
+        echo "Polling checkpoint action status using dedicated endpoint..."
+        run poll_action_status "$action_id" "checkpoint"
+        [ "$status" -eq 0 ]
+
+        # Get the checkpoint ID using the action ID
+        echo "Retrieving checkpoint ID from action..."
+        checkpoint_id=$(get_checkpoint_id_from_action "$action_id")
+
+        if [ $? -eq 0 ] && [ -n "$checkpoint_id" ] && [ "$checkpoint_id" != "null" ]; then
+            echo "✅ Checkpoint completed with ID: $checkpoint_id"
+        else
+            echo "Error: Failed to get checkpoint ID for action $action_id"
+            return 1
+        fi
+    fi
+
+    kubectl delete -f "$spec"
+    [ "$status" -eq 0 ]
+}
 
 # @test "E2E: Delete original pod after checkpoint" {
 #     # Delete the original pod so we can test restore

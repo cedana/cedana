@@ -82,14 +82,14 @@ get_cluster_id() {
 # @param $4: Cluster ID
 # Returns: Action ID for polling
 #
-checkpoint_pod_via_api() {
+checkpoint_pod() {
     local pod_name="$1"
     local runc_root="$2"
     local namespace="$3"
     local cluster_id="$4"
 
     if [ -z "$pod_name" ] || [ -z "$runc_root" ] || [ -z "$namespace" ] || [ -z "$cluster_id" ]; then
-        echo "Error: checkpoint_pod_via_api requires pod_name, runc_root, namespace, cluster_id" >&2
+        echo "Error: checkpoint_pod requires pod_name, runc_root, namespace, cluster_id" >&2
         return 1
     fi
 
@@ -133,12 +133,12 @@ checkpoint_pod_via_api() {
 # @param $2: Cluster ID (optional, uses same cluster if not provided)
 # Returns: Action ID for polling
 #
-restore_pod_via_api() {
+restore_pod() {
     local action_id="$1"
     local cluster_id="$2"
 
     if [ -z "$action_id" ]; then
-        echo "Error: restore_pod_via_api requires action_id" >&2
+        echo "Error: restore_pod requires action_id" >&2
         return 1
     fi
 
