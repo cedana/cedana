@@ -359,8 +359,7 @@ jobs:
       ref: ${{ inputs.ref }}
       controller_version: "release"
       debug: ${{ inputs.debug }}
-      k3s: true
-      eks: ${{ inputs.large }}
+      large: ${{ inputs.large }}
       gpu: ${{ inputs.gpu }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}

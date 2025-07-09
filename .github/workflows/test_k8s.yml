@@ -1,5 +1,12 @@
 name: Test / Kubernetes
 
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
 on:
   workflow_call:
     inputs:
