@@ -8,7 +8,7 @@ set -e
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
 cp -r /scripts/host/* /host/cedana/scripts/host
 
-if [ -f /.dockerenv ]; then # for tests
+if [ -f /host/.dockerenv ]; then # for tests
     chroot /host pkill -f 'cedana daemon' || true
 else
     chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh

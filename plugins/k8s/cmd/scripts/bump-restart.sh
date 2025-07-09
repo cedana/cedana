@@ -8,7 +8,7 @@ set -e
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
 cp -r /scripts/host/* /host/cedana/scripts/host
 
-if [ -f /.dockerenv ]; then # for tests
+if [ -f /host/.dockerenv ]; then # for tests
     chroot /host pkill -f 'cedana daemon' || true
 else
     chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
@@ -39,7 +39,7 @@ env \
     CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
     chroot /host /bin/bash /cedana/scripts/host/k8s-install-plugins.sh
 
-if [ -f /.dockerenv ]; then # for tests
+if [ -f /host/.dockerenv ]; then # for tests
     chroot /host /usr/local/bin/cedana daemon start &> /var/log/cedana-daemon.log &
 else
     chroot /host /bin/bash /cedana/scripts/host/systemd-install.sh
