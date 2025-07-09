@@ -59,10 +59,10 @@ fi
 
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
 
-if [ "$HAS_SYSTEMD" == "true" ]; then
-    "$DIR"/systemd-reset.sh
-    "$DIR"/systemd-install.sh
-else
+if [ -f /.dockerenv ]; then # for tests
     pkill -f 'cedana daemon' || true
     $APP_PATH daemon start &> /var/log/cedana-daemon.log &
+else
+    "$DIR"/systemd-reset.sh
+    "$DIR"/systemd-install.sh
 fi

@@ -3,20 +3,15 @@
 
 set -e
 
-if [ -x /bin/systemctl ] || type systemctl > /dev/null 2>&1; then
-    HAS_SYSTEMD=true
-    return
-fi
-
 # NOTE: The scripts are executed before the binaries, ensure they are copied to the host
 # first
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
 cp -r /scripts/host/* /host/cedana/scripts/host
 
-if [ "$HAS_SYSTEMD" == "true" ]; then
-    chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
-else
+if [ -f /.dockerenv ]; then # for tests
     chroot /host pkill -f 'cedana daemon' || true
+else
+    chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
 fi
 
 # Updates the cedana daemon to the latest version
@@ -44,8 +39,8 @@ env \
     CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
     chroot /host /bin/bash /cedana/scripts/host/k8s-install-plugins.sh
 
-if [ "$HAS_SYSTEMD" == "true" ]; then
-    chroot /host /bin/bash /cedana/scripts/host/systemd-install.sh
-else
+if [ -f /.dockerenv ]; then # for tests
     chroot /host /usr/local/bin/cedana daemon start &> /var/log/cedana-daemon.log &
+else
+    chroot /host /bin/bash /cedana/scripts/host/systemd-install.sh
 fi

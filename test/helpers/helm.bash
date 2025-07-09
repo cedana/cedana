@@ -26,6 +26,11 @@ helm_install_cedana() {
         helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CEDANA_CONTROLLER_TAG"
         helm_cmd="$helm_cmd --set controllerManager.manager.image.pullPolicy=Always"
     fi
+
+    helm_cmd="$helm_cmd --set agent.image.repository=cedana/cedana-helper-test"
+    helm_cmd="$helm_cmd --set agent.image.tag=feat-ced-1201"
+    helm_cmd="$helm_cmd --set agent.image.pullPolicy=Always"
+
     helm_cmd="$helm_cmd --wait --timeout=10m"
     debug $helm_cmd
     if [ $? -ne 0 ]; then

@@ -2,13 +2,8 @@
 
 set -e
 
-if [ -x /bin/systemctl ] || type systemctl > /dev/null 2>&1; then
-    HAS_SYSTEMD=true
-    return
-fi
-
-if [ "$HAS_SYSTEMD" == "true" ]; then
-    chroot /host /bin/bash /cedana/scripts/host/systemd-install.sh
-else
+if [ -f /.dockerenv ]; then # for tests
     chroot /host /usr/local/bin/cedana daemon start &> /var/log/cedana-daemon.log &
+else
+    chroot /host /bin/bash /cedana/scripts/host/systemd-install.sh
 fi
