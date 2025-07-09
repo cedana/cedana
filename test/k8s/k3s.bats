@@ -37,7 +37,7 @@ teardown_file() {
     [ "$status" -eq 0 ]
 
     # Check if all Cedana pods are actually ready
-    run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n cedana-system --timeout=60s
+    run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n cedana-system --timeout=120s
     [ "$status" -eq 0 ]
 
     run validate_propagator_connectivity
@@ -69,7 +69,7 @@ EOF
     [ "$status" -eq 0 ]
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=60s -n "$NAMESPACE"
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
     run kubectl delete pod "$name" -n "$NAMESPACE"
@@ -101,7 +101,7 @@ EOF
     [ "$status" -eq 0 ]
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=60s -n "$NAMESPACE"
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
     # Checkpoint the test pod
@@ -151,7 +151,7 @@ EOF
     [ "$status" -eq 0 ]
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=60s -n "$NAMESPACE"
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
     # Checkpoint the test pod

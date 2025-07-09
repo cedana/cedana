@@ -182,15 +182,15 @@ jobs:
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
             else
-              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
             else
-              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
             fi
           fi
 
