@@ -52,7 +52,7 @@ END_CHROOT
 fi
 
 # Install all plugins
-if [[ $CEDANA_PLUGINS_BUILDS != "local" && $PLUGINS != "" ]]; then
+if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
     "$APP_PATH" plugin install $PLUGINS
 fi
 
