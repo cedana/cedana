@@ -148,6 +148,7 @@ TAGS?=
 ARGS?=
 TIMEOUT?=300
 RETRIES?=0
+DEBUG?=0
 BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter junit
@@ -155,13 +156,13 @@ BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter junit
 
-test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
+test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>)
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -172,7 +173,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-isolated.xml ;\
+			mv /tmp/report.xml /tmp/report-$(date +%s%N).xml ;\
 		fi ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -181,7 +182,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persisted=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-persisted.xml ;\
+			mv /tmp/report.xml /tmp/report-$(date +%s%N)-persisted.xml ;\
 		fi ;\
 		if [ $$status_isolated -ne 0 ]; then \
 			echo "Isolated tests failed" ;\
@@ -197,13 +198,47 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
 			$(DOCKER_TEST_CREATE_CUDA) ;\
 			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) ;\
+			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
 			$(DOCKER_TEST_CREATE) ;\
 			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) ;\
+			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) ;\
+			$(DOCKER_TEST_REMOVE) >/dev/null ;\
+		fi ;\
+	fi
+
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+	if [ -f /.dockerenv ]; then \
+		echo "Running kubernetes e2e tests..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		if [ "$(TAGS)" = "" ]; then \
+			$(BATS_CMD) -r test/k8s ; status=$$? ;\
+		else \
+			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
+		fi ;\
+		if [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/report-$(date +%s%N).xml ;\
+		fi ;\
+		if [ $$status -ne 0 ]; then \
+			echo "Kubernetes e2e tests failed" ;\
+			exit $$status ;\
+		else \
+			echo "All kubernetes e2e tests passed!" ;\
+		fi ;\
+	else \
+		if [ "$(GPU)" = "1" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_CREATE_CUDA) ;\
+			$(DOCKER_TEST_START) >/dev/null ;\
+			$(DOCKER_TEST_EXEC) make test-k8s ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) ;\
+			$(DOCKER_TEST_REMOVE) >/dev/null ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_CREATE) ;\
+			$(DOCKER_TEST_START) >/dev/null ;\
+			$(DOCKER_TEST_EXEC) make test-k8s ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		fi ;\
 	fi
@@ -219,16 +254,6 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 	$(DOCKER_TEST_START) >/dev/null ;\
 	$(DOCKER_TEST_EXEC) /bin/bash ;\
 	$(DOCKER_TEST_REMOVE) >/dev/null
-
-test-k3s-cr: ## Run k3s pod checkpoint/restore test specifically
-	@echo "Running k3s pod checkpoint/restore test..."
-	if [ -f /.dockerenv ]; then \
-		mkdir -p /run/containerd/runc/k8s.io ;\
-		chmod 755 /run/containerd/runc/k8s.io ;\
-		bats --filter-tags "k3s,checkpoint,restore" -v test/regression/e2e/k3s_pod_cr.bats ;\
-	else \
-		./test/run-e2e-docker.sh test/regression/e2e/k3s_pod_cr.bats ;\
-	fi
 
 ##########
 ##@ Docker
@@ -257,13 +282,13 @@ PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gp
 PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
 
-DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --network=host -it --rm \
+DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=host -it --rm \
 				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
 				$(PLUGIN_LIB_MOUNTS) \
 				$(PLUGIN_BIN_MOUNTS) \
 				$(PLUGIN_BIN_MOUNTS_CRIU) \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=private --network=host \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host \
 				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
 DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
@@ -313,4 +338,4 @@ format: ## Format all code
 
 spacing=24
 help:  ## Display this help
-	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\033[36m\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[34m%-$(spacing)s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\033[36m\033[0m\n"} /^[a-zA-Z1-9_-]+:.*?##/ { printf "  \033[34m%-$(spacing)s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

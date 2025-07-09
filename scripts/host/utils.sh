@@ -7,6 +7,10 @@ if ! which sudo &>/dev/null; then
     export SUDO_USE=""
 fi
 
+if [ -x /bin/systemctl ] || type systemctl > /dev/null 2>&1; then
+    export HAS_SYSTEMD=true
+fi
+
 export APP_NAME="cedana"
 export APP_PATH="/usr/local/bin/$APP_NAME"
 export SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"

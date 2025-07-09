@@ -4,9 +4,9 @@
 #
 # bats file_tags=gpu,large
 
-load ../helpers/utils
-load ../helpers/daemon
-load ../helpers/gpu
+load ../../helpers/utils
+load ../../helpers/daemon
+load ../../helpers/gpu
 
 load_lib support
 load_lib assert

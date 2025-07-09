@@ -30,23 +30,6 @@ fi
 PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
 
 #
-# Set up authentication for propagator API calls
-# @param $1: Auth token (optional, uses CEDANA_AUTH_TOKEN if not provided)
-#
-setup_propagator_auth() {
-    local token="${1:-$CEDANA_AUTH_TOKEN}"
-
-    if [ -z "$token" ]; then
-        echo "Error: CEDANA_AUTH_TOKEN not set and no token provided"
-        return 1
-    fi
-
-    export PROPAGATOR_AUTH_TOKEN="$token"
-    echo "Propagator authentication configured"
-    return 0
-}
-
-#
 # Get available clusters from the propagator service
 # Returns JSON array of clusters
 #

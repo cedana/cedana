@@ -61,6 +61,10 @@ on:
         required: false
         default: 8cpu-16g-1xT4G
 
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+
 jobs:
   unit:
     name: Unit
@@ -119,9 +123,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -143,7 +144,7 @@ jobs:
           sudo -E cp -r ./scripts/host/* /cedana/scripts/host
           sudo -E /cedana/scripts/host/k8s-setup-host.sh
 
-  regression:
+  basic:
     name: Basic
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
     timeout-minutes: 30
@@ -158,10 +159,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -220,8 +218,8 @@ jobs:
           path: |
             /tmp/report*.xml
 
-  regression-plugins:
-    name: Plugins
+  plugin:
+    name: Plugin
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
     timeout-minutes: 30
     strategy:
@@ -242,10 +240,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -324,7 +319,7 @@ jobs:
           path: |
             /tmp/report*.xml
 
-  regression-streamer:
+  streamer:
     name: Streamer
     uses: ./.github/workflows/test_streamer.yml
     if: inputs.streamer
@@ -341,7 +336,7 @@ jobs:
       runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
-  regression-gpu:
+  gpu:
     name: GPU
     uses: ./.github/workflows/test_gpu.yml
     if: inputs.gpu
@@ -356,10 +351,26 @@ jobs:
       runner_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
+  k8s:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      controller_version: "release"
+      debug: ${{ inputs.debug }}
+      k3s: true
+      eks: ${{ inputs.large }}
+      gpu: ${{ inputs.gpu }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner_gpu }}
+      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
+      post_summary: false # Will post consolidated summary instead
+
   post-summary:
     name: Post Summary
     if: always()
-    needs: [regression, regression-plugins, regression-streamer, regression-gpu]
+    needs: [basic, plugin, streamer, gpu, k8s]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -59,6 +59,7 @@ jobs:
       criu_version: release
       gpu_version: main
       streamer_version: main
+      runtime_shim_version: release
 
   test:
     name: Test

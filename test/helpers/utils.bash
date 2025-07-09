@@ -57,8 +57,24 @@ env_exists() {
     [ -n "${!var}" ]
 }
 
+check_env() {
+    local var=$1
+    if ! env_exists "$var"; then
+        echo "[ERROR] Environment variable '$var' is not set." >&2
+        exit 1
+    fi
+}
+
 cmd_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+check_cmd() {
+    local cmd=$1
+    if ! cmd_exists "$cmd"; then
+        echo "[ERROR] Command '$cmd' is not available." >&2
+        exit 1
+    fi
 }
 
 # Execute a function only once
@@ -103,4 +119,39 @@ wait_for_pid() {
     done
 
     return 0
+}
+
+# Wait for a cmd to start returning zero exit code
+wait_for_cmd() {
+    local timeout=${1:-60}
+    local interval=${2:-1}
+    shift 2
+    local elapsed=0
+    while ! "$@" &> /dev/null; do
+        if (( elapsed >= timeout )); then
+            return 1
+        fi
+        sleep "$interval"
+        ((elapsed += interval))
+    done
+    return 0
+}
+
+
+debug_log() {
+    local message="$1"
+    if [ "$DEBUG" = "1" ]; then
+        echo "[DEBUG] $message" >&3
+    else
+        echo "[DEBUG] $message"
+    fi
+}
+
+debug() {
+    if [ "$DEBUG" = "1" ]; then
+        echo "[DEBUG] Executing: $*" >&3
+        "$@" >&3 2>&1
+    else
+        "$@"
+    fi
 }

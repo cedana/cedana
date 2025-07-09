@@ -51,6 +51,10 @@ on:
         required: false
         default: false
 
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+
 jobs:
   cuda:
     name: CUDA
@@ -72,10 +76,8 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all -v /var/run/docker.sock:/var/run/docker.sock
+      options: --privileged --init --ipc=host --gpus all -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
     env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: runs-on/action@v1

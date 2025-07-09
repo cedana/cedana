@@ -37,7 +37,7 @@ setup_file_daemon() {
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
-        start_daemon_at "$SOCK"
+        debug start_daemon_at "$SOCK"
     fi
 }
 teardown_file_daemon() {
@@ -52,7 +52,7 @@ setup_daemon() {
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
-        start_daemon_at "$SOCK"
+        debug start_daemon_at "$SOCK"
     else
         log_file=$(daemon_log_file "$CEDANA_ADDRESS")
         tail -f "$log_file" &
