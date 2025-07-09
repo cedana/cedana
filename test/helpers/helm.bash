@@ -20,7 +20,7 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set cedanaConfig.logLevel=$CEDANA_LOG_LEVEL"
     helm_cmd="$helm_cmd --set cedanaConfig.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
     helm_cmd="$helm_cmd --set cedanaConfig.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
-    helm_cmd="$helm_cmd --set cedanaConfig.pluginsBuilds=release" # don't download any from registry
+    helm_cmd="$helm_cmd --set cedanaConfig.pluginsBuilds=local" # don't download any from registry
     if [ -n "$CEDANA_CONTROLLER_TAG" ]; then
         helm_cmd="$helm_cmd --set controllerManager.manager.image.repository=$CEDANA_CONTROLLER_REPO"
         helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CEDANA_CONTROLLER_TAG"
