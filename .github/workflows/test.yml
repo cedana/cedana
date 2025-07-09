@@ -185,8 +185,10 @@ jobs:
           chmod +x ./criu
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install CRIU
-        run: sudo -E ./cedana plugin install criu
+      - name: Install
+        run: |
+          make install
+          sudo -E cedana plugin install criu
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -272,8 +274,10 @@ jobs:
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install plugin
-        run: sudo -E ./cedana plugin install ${{ matrix.plugin }} criu storage/cedana
+      - name: Install
+        run: |
+          make install
+          sudo -E cedana plugin install ${{ matrix.plugin }} criu storage/cedana
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"

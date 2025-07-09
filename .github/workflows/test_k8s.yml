@@ -88,12 +88,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        cr:
+          - streamer
+          - default
         arch:
           - amd64
           - arm64
-        cr:
-          - stream
-          - normal
     container:
       image: ${{ inputs.gpu && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
@@ -136,23 +136,30 @@ jobs:
           name: gpu-${{ matrix.arch }}
 
       - name: Download streamer plugin
-        if: ${{ matrix.cr == 'stream' }}
+        if: ${{ matrix.cr == 'streamer' }}
         uses: actions/download-artifact@v4
         with:
           name: streamer-${{ matrix.arch }}
 
-      - name: Install plugins
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install
         env:
           GPU: ${{ inputs.gpu }}
-          STREAMER: ${{ matrix.cr == 'stream' }}
+          STREAMER: ${{ matrix.cr == 'streamer' }}
         run: |
-          sudo -E ./cedana plugin install runc containerd crio criu storage/cedana
-          sudo -E ./cedana plugin install k8s/runtime-shim  # automatically installs the downloaded binary if available instead
+          make install
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana
+          sudo -E cedana plugin install k8s/runtime-shim  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
-            sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
+            sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
           fi
           if [ "$STREAMER" = "true" ]; then
-            sudo -E ./cedana plugin install streamer # automatically installs the downloaded binary if available instead
+            sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
           fi
 
       - name: Mark git dir as safe
@@ -168,7 +175,7 @@ jobs:
         env:
           GPU: ${{ inputs.gpu }}
           PARALLELISM: ${{ inputs.parallelism }}
-          CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'stream' && '4' || '0' }}
+          CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_CONTROLLER_REPO: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
           CEDANA_CONTROLLER_TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
           RETRIES: 1

@@ -2,7 +2,6 @@
 
 # This is a helper file assumes its users are in the same directory as the Makefile
 
-export PATH="./:$PATH" # ensure binaries are available
 export CEDANA_PROTOCOL="unix"
 export CEDANA_REMOTE=false
 export CEDANA_LOG_LEVEL=debug
