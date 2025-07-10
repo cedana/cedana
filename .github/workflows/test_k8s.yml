@@ -203,10 +203,144 @@ jobs:
           path: |
             /tmp/report*.xml
 
+  eks:
+    name: EKS
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        cr:
+          - streamer
+          - default
+        arch:
+          - amd64
+          - arm64
+    container:
+      image: ${{ inputs.gpu && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init ${{ inputs.gpu && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+    steps:
+      - uses: runs-on/action@v1
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Checkout cedana-samples
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-samples
+          ref: feat/ci-tf
+          path: cedana-samples
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana-${{ matrix.arch }}
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins-${{ matrix.arch }}
+
+      - name: Download CRIU
+        uses: actions/download-artifact@v4
+        with:
+          name: criu-${{ matrix.arch }}
+
+      - name: Download runtime shim
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-shim-${{ matrix.arch }}
+
+      - name: Download GPU plugin
+        if: ${{ inputs.gpu }}
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu-${{ matrix.arch }}
+
+      - name: Download streamer plugin
+        if: ${{ matrix.cr == 'streamer' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer-${{ matrix.arch }}
+
+      - name: Make executable
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+
+      - name: Install
+        env:
+          GPU: ${{ inputs.gpu }}
+          STREAMER: ${{ matrix.cr == 'streamer' }}
+        run: |
+          make install
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana
+          sudo -E cedana plugin install k8s/runtime-shim  # automatically installs the downloaded binary if available instead
+          if [ "$GPU" = "true" ]; then
+            sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
+          fi
+          if [ "$STREAMER" = "true" ]; then
+            sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
+          fi
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run EKS tests
+        env:
+          GPU: ${{ inputs.gpu }}
+          PARALLELISM: ${{ inputs.parallelism }}
+          CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
+          CEDANA_CONTROLLER_REPO: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
+          CEDANA_CONTROLLER_TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
+          RETRIES: 1
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          if [ "$GPU" = "true" ]; then
+            if [ "$LARGE" = "true" ]; then
+              make test-k8s TAGS=eks PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
+            else
+              make test-k8s TAGS=eks,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
+            fi
+          else
+            if [ "$LARGE" = "true" ]; then
+              make test-k8s TAGS=eks,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
+            else
+              make test-k8s TAGS=eks,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
+            fi
+          fi
+
+      - name: Upload report
+        if: always()
+        id: upload-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.arch }}-k8s-eks-${{ matrix.cr }}
+          path: |
+            /tmp/report*.xml
+
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
-    needs: k3s
+    needs: [k3s, eks]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
