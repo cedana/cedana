@@ -393,15 +393,19 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 	return resp, profiling, nil
 }
 
+type Info struct {
+	Data *profiling.Data `json:"data"`
+}
+
 type CheckpointInformation struct {
-	ActionId     string          `json:"action_id"`
-	PodId        string          `json:"pod_id"`
-	CheckpointId string          `json:"checkpoint_id"`
-	Status       string          `json:"status"`
-	Path         string          `json:"path"`
-	Gpu          bool            `json:"gpu"`
-	Platform     string          `json:"platform"`
-	Duration     *profiling.Data `json:"duration"`
+	ActionId     string `json:"action_id"`
+	PodId        string `json:"pod_id"`
+	CheckpointId string `json:"checkpoint_id"`
+	Status       string `json:"status"`
+	Path         string `json:"path"`
+	Gpu          bool   `json:"gpu"`
+	Platform     string `json:"platform"`
+	Info         Info   `json:"info"`
 }
 
 func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp) error {
@@ -412,6 +416,11 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		log.Error().Err(err).Msg("creation of publisher failed")
 		return err
 	}
+
+	info := Info{
+		Data: profiling,
+	}
+
 	data, err := json.Marshal(CheckpointInformation{
 		ActionId:     req.ActionId,
 		PodId:        pod_id,
@@ -420,7 +429,7 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		Status:       "success",
 		Gpu:          resp.State.GPUEnabled,
 		Platform:     resp.State.Host.Platform,
-		Duration:     profiling,
+		Info:         info,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create checkpoint info")
