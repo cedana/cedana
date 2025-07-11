@@ -361,7 +361,7 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
-      controller_version: "main"
+      controller_version: "release"
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
       gpu: ${{ inputs.gpu }}
