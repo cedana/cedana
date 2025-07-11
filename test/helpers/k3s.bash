@@ -27,6 +27,9 @@ setup_k3s_cluster() {
         start_k3s_cluster
     fi
 
+    # XXX: The tar in busybox is incompatible with CRIU
+    rm /var/lib/rancher/k3s/data/current/bin/tar
+
     debug_log "k3s cluster is ready"
 }
 
