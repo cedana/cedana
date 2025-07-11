@@ -66,8 +66,8 @@ env:
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
 
 jobs:
-  api-integration:
-    name: API Integration
+  propagator-integration:
+    name: Propagator Integration
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -85,6 +85,7 @@ jobs:
     name: K3s
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
     timeout-minutes: 30
+    needs: propagator-integration
     strategy:
       fail-fast: false
       matrix:
@@ -108,6 +109,12 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Download binary
         uses: actions/download-artifact@v4
