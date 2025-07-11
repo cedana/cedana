@@ -116,6 +116,12 @@ jobs:
           name: digests-${{ matrix.arch }}
           path: /tmp/digests
 
+      - name: Download image name
+        uses: actions/download-artifact@v4
+        with:
+          name: image-name
+          path: /tmp/image-name
+
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
@@ -188,18 +194,19 @@ jobs:
           RETRIES: 1
         run: |
           DIGEST=$(ls /tmp/digests | grep "${{ matrix.arch }}" | head -n 1)
+          IMAGE_NAME=$(cat /tmp/image-name)
 
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
+              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG HELPER_REPO=$IMAGE_NAME@sha256$DIGEST HELPER_TAG=""
             else
-              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
+              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG HELPER_REPO=$IMAGE_NAME@sha256$DIGEST HELPER_TAG=""
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
+              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG HELPER_REPO=$IMAGE_NAME@sha256$DIGEST HELPER_TAG=""
             else
-              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
+              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG HELPER_REPO=$IMAGE_NAME@sha256$DIGEST HELPER_TAG=""
             fi
           fi
 

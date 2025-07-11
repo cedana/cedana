@@ -29,7 +29,7 @@ helm_install_cedana() {
         helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CONTROLLER_TAG"
         helm_cmd="$helm_cmd --set controllerManager.manager.image.pullPolicy=Always"
     fi
-    if [ -n "$HELPER_TAG" ] && [ -n "$HELPER_REPO" ]; then
+    if [ -n "$HELPER_TAG" ] || [ -n "$HELPER_REPO" ]; then
         helm_cmd="$helm_cmd --set daemonHelper.image.repository=$HELPER_REPO"
         helm_cmd="$helm_cmd --set daemonHelper.image.tag=$HELPER_TAG"
         helm_cmd="$helm_cmd --set daemonHelper.image.pullPolicy=Always"
