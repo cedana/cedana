@@ -46,27 +46,11 @@ teardown_file() {
     [ "$status" -eq 0 ]
 }
 
+# bats test_tags=deploy,bats:focus
 @test "Deploy a pod" {
     local name
     name=$(unix_nano)
-    local spec=/tmp/test-pod-$name.yaml
-
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: $NAMESPACE
-  labels:
-    app: "$name"
-spec:
-  restartPolicy: Never
-  containers:
-  - name: "$name"
-    image: alpine:latest
-    command: ["/bin/sh"]
-    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
-EOF
+    local spec=/cedana-samples/kubernetes/counting.yaml
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]
@@ -74,6 +58,8 @@ EOF
     # Check if pod is running
     run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
+
+    sleep 100
 
     run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
     [ "$status" -eq 0 ]
@@ -83,25 +69,8 @@ EOF
 @test "Checkpoint a pod (wait for completion)" {
     local name
     name=$(unix_nano)
-    local spec=/tmp/test-pod-$name.yaml
+    local spec=/cedana-samples/kubernetes/counting.yaml
     local action_id
-
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: $NAMESPACE
-  labels:
-    app: "$name"
-spec:
-  restartPolicy: Never
-  containers:
-  - name: "$name"
-    image: alpine:latest
-    command: ["/bin/sh"]
-    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
-EOF
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]
@@ -132,25 +101,8 @@ EOF
 @test "Restore a pod with original pod running (wait until running)" {
     local name
     name=$(unix_nano)
-    local spec=/tmp/test-pod-$name.yaml
+    local spec=/cedana-samples/kubernetes/counting.yaml
     local action_id
-
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: $NAMESPACE
-  labels:
-    app: "$name"
-spec:
-  restartPolicy: Never
-  containers:
-  - name: "$name"
-    image: alpine:latest
-    command: ["/bin/sh"]
-    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
-EOF
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]
@@ -202,25 +154,8 @@ EOF
 @test "Restore a pod with original pod deleted (wait until running)" {
     local name
     name=$(unix_nano)
-    local spec=/tmp/test-pod-$name.yaml
+    local spec=/cedana-samples/kubernetes/counting.yaml
     local action_id
-
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: $NAMESPACE
-  labels:
-    app: "$name"
-spec:
-  restartPolicy: Never
-  containers:
-  - name: "$name"
-    image: alpine:latest
-    command: ["/bin/sh"]
-    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
-EOF
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]

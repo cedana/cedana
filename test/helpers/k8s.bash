@@ -36,6 +36,8 @@ EOF
         args: ${args}
 EOF
     fi
+
+    echo "$spec"
 }
 
 gpu_pod_spec () {
@@ -71,6 +73,8 @@ EOF
         args: ${args}
 EOF
     fi
+
+    echo "$spec"
 }
 
 # List all restored pods in a given namespace.
