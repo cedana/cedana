@@ -39,7 +39,7 @@ helm_install_cedana() {
     local cluster_name="$1"
     local namespace="$2"
 
-    local helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm --version 0.4.3-pre"
+    local helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm --version 0.0.0-test"
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
     helm_cmd="$helm_cmd --set cedanaConfig.cedanaUrl=$CEDANA_URL"
     helm_cmd="$helm_cmd --set cedanaConfig.cedanaAuthToken=$CEDANA_AUTH_TOKEN"
@@ -48,15 +48,26 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set cedanaConfig.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
     helm_cmd="$helm_cmd --set cedanaConfig.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     helm_cmd="$helm_cmd --set cedanaConfig.pluginsBuilds=local" # don't download any from registry
-    if [ -n "$CONTROLLER_TAG" ] && [ -n "$CONTROLLER_REPO" ]; then
+    if [ -n "$CONTROLLER_REPO" ]; then
         helm_cmd="$helm_cmd --set controllerManager.manager.image.repository=$CONTROLLER_REPO"
-        helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CONTROLLER_TAG"
+        if [ -n "$CONTROLLER_TAG" ]; then
+            helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CONTROLLER_TAG"
+        fi
+        if [ -n "$CONTROLLER_DIGEST" ]; then
+            helm_cmd="$helm_cmd --set controllerManager.manager.image.digest=$CONTROLLER_DIGEST"
+        fi
         helm_cmd="$helm_cmd --set controllerManager.manager.image.pullPolicy=Always"
     fi
-
-    helm_cmd="$helm_cmd --set daemonHelper.image.repository=cedana/cedana-helper-test"
-    helm_cmd="$helm_cmd --set daemonHelper.image.tag=feat-ced-1201"
-    helm_cmd="$helm_cmd --set daemonHelper.image.pullPolicy=Always"
+    if [ -n "$HELPER_REPO" ]; then
+        helm_cmd="$helm_cmd --set daemonHelper.image.repository=$HELPER_REPO"
+        if [ -n "$HELPER_TAG" ]; then
+            helm_cmd="$helm_cmd --set daemonHelper.image.tag=$HELPER_TAG"
+        fi
+        if [ -n "$HELPER_DIGEST" ]; then
+            helm_cmd="$helm_cmd --set daemonHelper.image.digest=$HELPER_DIGEST"
+        fi
+        helm_cmd="$helm_cmd --set daemonHelper.image.pullPolicy=Always"
+    fi
     helm_cmd="$helm_cmd --wait --timeout=2m"
 
     $helm_cmd
