@@ -352,6 +352,15 @@ jobs:
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ inputs.image_name }}@sha256:%s ' *)
 
+      - name: Inspect image
+        if: steps.check_dirs.outputs.DIGESTS_EXISTS == 'true'
+        run: |
+          # check if push was successful
+          docker buildx imagetools inspect ${{ inputs.image_name }}:${{ steps.meta.outputs.version }}
+          # check if commit sha matches with the latest commit sha
+          # we only match docker hub image as both images should be the same
+          echo $(docker run -i --rm ${{ inputs.image_name }}:${{ steps.meta.outputs.version }} -c "cedana -v")
+
       - name: Docker meta (test, latest)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
         id: meta-test-latest
@@ -360,8 +369,7 @@ jobs:
           images: |
             ${{ inputs.test_image_name }}
           tags: |
-            type=raw,value=${{ github.sha }}
-            type=raw,value=${{ github.head_ref || github.ref_name }}
+            type=raw,value=latest
 
       - name: Create manifest list and push (test, latest)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
@@ -378,8 +386,7 @@ jobs:
           images: |
             ${{ inputs.test_image_name }}
           tags: |
-            type=raw,value=${{ github.sha }}
-            type=raw,value=${{ github.head_ref || github.ref_name }}
+            type=raw,value=cuda
 
       - name: Create manifest list and push (test, CUDA)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
@@ -387,14 +394,6 @@ jobs:
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ inputs.test_image_name }}@sha256:%s ' *)
-
-      - name: Inspect image
-        run: |
-          # check if push was successful
-          docker buildx imagetools inspect ${{ inputs.image_name }}:${{ steps.meta.outputs.version }}
-          # check if commit sha matches with the latest commit sha
-          # we only match docker hub image as both images should be the same
-          echo $(docker run -i --rm ${{ inputs.image_name }}:${{ steps.meta.outputs.version }} -c "cedana -v")
 
   post-summary:
     name: Post Summary
