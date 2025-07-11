@@ -120,7 +120,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: image-name
-          path: /tmp/image-name
+          path: /tmp
 
       - name: Download binary
         uses: actions/download-artifact@v4
