@@ -22,7 +22,7 @@ setup_k3s_cluster() {
     wget https://get.k3s.io -O /tmp/k3s-install.sh
     chmod +x /tmp/k3s-install.sh
 
-    if ! /tmp/k3s-install.sh > /dev/null; then
+    if ! /tmp/k3s-install.sh &> /dev/null; then
         debug_log "Installer failed, will try the binary directly"
         start_k3s_cluster
     fi
@@ -44,7 +44,7 @@ start_k3s_cluster() {
     fi
 
     debug_log "k3s binary found, starting k3s..."
-    k3s $INSTALL_K3S_EXEC > /dev/null &
+    k3s $INSTALL_K3S_EXEC &> /dev/null &
 
     debug_log "Waiting for k3s cluster to start..."
     local seconds=0

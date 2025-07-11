@@ -120,8 +120,6 @@ validate_pod() {
     fi
 
     debug_log "Timed out waiting for pod $name to become Ready"
-    local messages
-    messages=$(kubectl get events --field-selector involvedObject.kind=Pod,involvedObject.name="$name" -n "$namespace" -o json | jq '.items[].message')
-    debug_log "$messages"
+    debug echo -e "$(kubectl get events --field-selector involvedObject.kind=Pod,involvedObject.name="$name" -n "$namespace" -o json | jq '.items[].message')"
     return 1
 }
