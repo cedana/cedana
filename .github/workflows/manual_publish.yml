@@ -6,6 +6,8 @@ permissions:
   packages: write
 
 on:
+  pull_request: # TODO: remove after testing
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
       build_cedana:
@@ -66,12 +68,12 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
-      cedana: ${{ inputs.build_cedana }}
-      plugins: ${{ inputs.build_plugins }}
-      image: ${{ inputs.build_image }}
-      image_name: ${{ inputs.image_name }}
-      test_image: ${{ inputs.build_test_image }}
-      test_image_name: ${{ inputs.test_image_name }}
+      cedana: false
+      plugins: false
+      image: false
+      image_name: cedana/cedana-helper-test
+      test_image: true
+      test_image_name: cedana/cedana-test
 
   publish:
     name: Publish
@@ -79,8 +81,8 @@ jobs:
     needs: build
     secrets: inherit
     with:
-      cloudsmith: ${{ inputs.cloudsmith }}
-      cloudsmith_repo: ${{ inputs.cloudsmith_repo }}
-      dockerhub: ${{ inputs.dockerhub }}
-      image_name: ${{ inputs.image_name }}
-      test_image_name: ${{ inputs.test_image_name }}
+      cloudsmith: false
+      cloudsmith_repo: cedana-alpha
+      dockerhub: true
+      image_name: cedana/cedana-helper-test
+      test_image_name: cedana/cedana-test

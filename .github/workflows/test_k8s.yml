@@ -220,7 +220,7 @@ jobs:
           set -ex
 
           if [ -e /tmp/digests ]; then
-            HELPER_DIGEST=sha256:$(ls /tmp/digests | grep "${{ matrix.arch }}" | head -n 1)
+            HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
             HELPER_REPO=$(cat /tmp/image-name)
           fi
           if [ -e /tmp/controller-digests ]; then
