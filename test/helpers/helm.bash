@@ -32,7 +32,6 @@ helm_install_cedana() {
         if [ -n "$CONTROLLER_DIGEST" ]; then
             helm_cmd="$helm_cmd --set controllerManager.manager.image.digest=$CONTROLLER_DIGEST"
         fi
-        helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CONTROLLER_TAG"
         helm_cmd="$helm_cmd --set controllerManager.manager.image.pullPolicy=Always"
     fi
     if [ -n "$HELPER_REPO" ]; then
