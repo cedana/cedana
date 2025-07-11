@@ -210,8 +210,8 @@ jobs:
           GPU: ${{ inputs.gpu }}
           PARALLELISM: ${{ inputs.parallelism }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
-          HELPER_REPO: ${{ inputs.cedana_version == 'release' && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
-          HELPER_TAG: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
+          HELPER_REPO: ${{ inputs.helper_version == 'release' && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
+          HELPER_TAG: ${{ inputs.helper_version == 'release' && 'latest' || inputs.helper_version }}
           CONTROLLER_REPO: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
           CONTROLLER_TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
           RETRIES: 1
