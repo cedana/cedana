@@ -4,11 +4,11 @@
 
 export CEDANA_PROTOCOL="unix"
 export CEDANA_REMOTE=false
-export CEDANA_LOG_LEVEL=trace
+export CEDANA_LOG_LEVEL=debug
 export CEDANA_LOG_LEVEL_NO_SERVER=debug
 export CEDANA_PROFILING_ENABLED=false
 export CEDANA_CHECKPOINT_COMPRESSION=none
-: "${CEDANA_GPU_SHM_SIZE:=$((1*GIBIBYTE))}" # Since most workloads are small, we keep this default
+: "${CEDANA_GPU_SHM_SIZE:=$((1 * GIBIBYTE))}" # Since most workloads are small, we keep this default
 export CEDANA_GPU_SHM_SIZE
 
 WAIT_TIMEOUT=100

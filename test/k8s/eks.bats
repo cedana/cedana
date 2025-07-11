@@ -8,9 +8,11 @@ load ../helpers/daemon
 load ../helpers/eks
 load ../helpers/helm
 load ../helpers/propagator
+load ../helpers/k8s
 
-export CLUSTER_NAME="cedana-ci-nightly"
+export CLUSTER_NAME="cedana-ci-$(unix_nano)"
 export NAMESPACE="default"
+export CEDANA_NAMESPACE="cedana-system"
 export RUNC_ROOT="/run/containerd/runc/k8s.io"
 
 setup_file() {
@@ -18,13 +20,13 @@ setup_file() {
     wait_for_eks_node_groups
     install_nvidia_gpu_operator
     verify_gpu_operator
-    helm_install_cedana $CLUSTER_NAME
-    restart_eks_cluster
+    helm_install_cedana_eks $CLUSTER_NAME $CEDANA_NAMESPACE
     tail_helm_cedana_logs &
+    CLUSTER_ID=$(cluster_id "$CLUSTER_NAME")
 }
 
 teardown_file() {
-    helm_uninstall_cedana
+    helm_uninstall_cedana $CEDANA_NAMESPACE
     teardown_eks_cluster
 }
 
@@ -35,11 +37,11 @@ teardown_file() {
     [[ "$output" == *"Ready"* ]]
 
     # Test that Cedana components are running
-    run kubectl get pods -n cedana-system
+    run kubectl get pods -n $CEDANA_NAMESPACE
     [ "$status" -eq 0 ]
 
     # Check if all Cedana pods are actually ready
-    run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n cedana-system --timeout=120s
+    run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=120s
     [ "$status" -eq 0 ]
 
     run validate_propagator_connectivity
@@ -74,13 +76,15 @@ EOF
     run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
-    run kubectl delete pod "$name" -n "$NAMESPACE"
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
     [ "$status" -eq 0 ]
 }
 
-@test "Checkpoint a pod" {
+# bats test_tags=dump
+@test "Checkpoint a pod (wait for completion)" {
     name=$(unix_nano)
     spec=/tmp/test-pod-$name.yaml
+    local action_id
 
     cat > "$spec" << EOF
 apiVersion: v1
@@ -110,87 +114,156 @@ EOF
     run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$CLUSTER_NAME"
     [ "$status" -eq 0 ]
 
-    if [ $status -eq 0 ]; then
-        # According to the OpenAPI spec, the checkpoint endpoint returns plain text action_id
-        # Extract UUID pattern from the response to handle any potential debug text
-        action_id=$(echo "$output" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
-
-        # Validate the action ID is a proper UUID
-        if [[ "$action_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-            echo "✅ Checkpoint initiated with action ID: $action_id"
-        else
-            echo "Error: Invalid action ID format received from response: $output"
-            return 1
-        fi
-    fi
-
-    kubectl delete -f "$spec"
-    [ "$status" -eq 0 ]
-}
-
-@test "Checkpoint a pod and wait for completion" {
-    name=$(unix_nano)
-    spec=/tmp/test-pod-$name.yaml
-
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: $NAMESPACE
-  labels:
-    app: "$name"
-spec:
-  restartPolicy: Never
-  containers:
-  - name: counter
-    image: alpine:latest
-    command: ["/bin/sh"]
-    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
-EOF
-
-    run kubectl apply -f "$spec"
-    [ "$status" -eq 0 ]
-
-    # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
-    [ "$status" -eq 0 ]
-
-    # Checkpoint the test pod
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$CLUSTER_NAME"
-    [ "$status" -eq 0 ]
+    action_id=$output
 
     if [ $status -eq 0 ]; then
-        # According to the OpenAPI spec, the checkpoint endpoint returns plain text action_id
-        # Extract UUID pattern from the response to handle any potential debug text
-        action_id=$(echo "$output" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
+        run validate_action_id "$action_id"
+        [ $status -eq 0 ]
 
-        # Validate the action ID is a proper UUID
-        if [[ "$action_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-            echo "✅ Checkpoint initiated with action ID: $action_id"
-        else
-            echo "Error: Invalid action ID format received from response: $output"
-            return 1
-        fi
-
-        echo "Polling checkpoint action status using dedicated endpoint..."
         run poll_action_status "$action_id" "checkpoint"
         [ "$status" -eq 0 ]
+    fi
 
-        # Get the checkpoint ID using the action ID
-        echo "Retrieving checkpoint ID from action..."
-        checkpoint_id=$(get_checkpoint_id_from_action "$action_id")
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
+    [ "$status" -eq 0 ]
+}
 
-        if [ $? -eq 0 ] && [ -n "$checkpoint_id" ] && [ "$checkpoint_id" != "null" ]; then
-            echo "✅ Checkpoint completed with ID: $checkpoint_id"
-        else
-            echo "Error: Failed to get checkpoint ID for action $action_id"
-            return 1
+# bats test_tags=restore
+@test "Restore a pod with original pod running (wait until running)" {
+    name=$(unix_nano)
+    spec=/tmp/test-pod-$name.yaml
+    local action_id
+
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: $NAMESPACE
+  labels:
+    app: "$name"
+spec:
+  restartPolicy: Never
+  containers:
+  - name: counter
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
+EOF
+
+    run kubectl apply -f "$spec"
+    [ "$status" -eq 0 ]
+
+    # Check if pod is running
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
+    [ "$status" -eq 0 ]
+
+    # Checkpoint the test pod
+    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$CLUSTER_NAME"
+    [ "$status" -eq 0 ]
+
+    action_id=$output
+
+    if [ $status -eq 0 ]; then
+        run validate_action_id "$action_id"
+        [ $status -eq 0 ]
+
+        run poll_action_status "$action_id" "checkpoint"
+        [ "$status" -eq 0 ]
+    fi
+
+    run restore_pod "$action_id" "$CLUSTER_ID"
+    [ $status -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id="$output"
+        run validate_action_id "$action_id"
+        [ $status -eq 0 ]
+
+        run get_restored_pod "$NAMESPACE" "$name"
+        [ $status -eq 0 ]
+
+        if [ $status -eq 0 ]; then
+            local restored_pod="$output"
+            run validate_pod "$NAMESPACE" "$restored_pod" 20s
+            [ $status -eq 0 ]
+
+            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=false
+            [ "$status" -eq 0 ]
         fi
     fi
 
-    kubectl delete -f "$spec"
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
     [ "$status" -eq 0 ]
+}
+
+# bats test_tags=restore
+@test "Restore a pod with original pod deleted (wait until running)" {
+    name=$(unix_nano)
+    spec=/tmp/test-pod-$name.yaml
+    local action_id
+
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: $NAMESPACE
+  labels:
+    app: "$name"
+spec:
+  restartPolicy: Never
+  containers:
+  - name: counter
+    image: alpine:latest
+    command: ["/bin/sh"]
+    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
+EOF
+
+    run kubectl apply -f "$spec"
+    [ "$status" -eq 0 ]
+
+    # Check if pod is running
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
+    [ "$status" -eq 0 ]
+
+    # Checkpoint the test pod
+    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$CLUSTER_NAME"
+    [ "$status" -eq 0 ]
+
+    action_id=$output
+
+    if [ $status -eq 0 ]; then
+        run validate_action_id "$action_id"
+        [ $status -eq 0 ]
+
+        run poll_action_status "$action_id" "checkpoint"
+        [ "$status" -eq 0 ]
+    fi
+
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
+    [ "$status" -eq 0 ]
+
+    run restore_pod "$action_id" "$CLUSTER_ID"
+    [ $status -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id="$output"
+        run validate_action_id "$action_id"
+        [ $status -eq 0 ]
+
+        run get_restored_pod "$NAMESPACE" "$name"
+        [ $status -eq 0 ]
+
+        if [ $status -eq 0 ]; then
+            local restored_pod="$output"
+            run validate_pod "$NAMESPACE" "$restored_pod" 20s
+            [ $status -eq 0 ]
+
+            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=false
+            [ "$status" -eq 0 ]
+        fi
+    fi
 }
 
 @test "Deploy a GPU pod and verify it's running" {
@@ -237,7 +310,7 @@ EOF
     [ "$status" -eq 0 ]
     [[ "$output" == *"GPU test completed"* ]]
 
-    run kubectl delete pod "$name" -n "$NAMESPACE"
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
     [ "$status" -eq 0 ]
 }
 
@@ -255,6 +328,7 @@ metadata:
     app: "$name"
 spec:
   restartPolicy: Never
+  runtimeClassName: cedana # for Cedana GPU C/R support
   nodeSelector:
     instance-type: gpu
   containers:
@@ -293,6 +367,6 @@ EOF
         fi
     fi
 
-    kubectl delete -f "$spec"
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
     [ "$status" -eq 0 ]
-} 
+}
