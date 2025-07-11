@@ -53,7 +53,7 @@ jobs:
 
   download:
     name: Download
-    needs: pr-title-check
+    needs: check
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
