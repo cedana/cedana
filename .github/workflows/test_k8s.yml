@@ -217,6 +217,7 @@ jobs:
           RETRIES: 1
         run: |
           # NOTE: If digests found locally, we will pass that as well, so it will override the tag
+          set -eux
 
           if [ -e /tmp/digests ]; then
             HELPER_DIGEST=sha256:$(ls /tmp/digests | grep "${{ matrix.arch }}" | head -n 1)
