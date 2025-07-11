@@ -353,7 +353,7 @@ jobs:
 
       - name: Docker meta (test, latest)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
-        id: meta
+        id: meta-test-latest
         uses: docker/metadata-action@v5
         with:
           images: |
@@ -371,7 +371,7 @@ jobs:
 
       - name: Docker meta (test, CUDA)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
-        id: meta
+        id: meta-test-cuda
         uses: docker/metadata-action@v5
         with:
           images: |
