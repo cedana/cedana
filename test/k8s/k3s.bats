@@ -46,7 +46,7 @@ teardown_file() {
     [ "$status" -eq 0 ]
 }
 
-# bats test_tags=deploy,bats:focus
+# bats test_tags=deploy
 @test "Deploy a pod" {
     local name
     name=$(unix_nano)
