@@ -208,7 +208,7 @@ jobs:
           if-no-files-found: error
 
   test_image:
-    name: Image
+    name: Test Image
     runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
