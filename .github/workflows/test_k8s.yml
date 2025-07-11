@@ -176,21 +176,21 @@ jobs:
           GPU: ${{ inputs.gpu }}
           PARALLELISM: ${{ inputs.parallelism }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
-          CEDANA_CONTROLLER_REPO: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
-          CEDANA_CONTROLLER_TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
+          CONTROLLER_REPO: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
+          CONTROLLER_TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
           RETRIES: 1
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
+              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
             else
-              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
+              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
+              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
             else
-              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1
+              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
             fi
           fi
 
