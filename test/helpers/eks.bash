@@ -130,7 +130,7 @@ setup_eks_cluster() {
     fi
 
     debug_log "Updating kubeconfig..."
-    if ! aws eks update-kubeconfig --region "$AWS_REGION" --name "$CLUSTER_NAME"; then
+    if ! aws eks update-kubeconfig --region "$AWS_REGION" --name "cedana-ci-nightly"; then
         debug_log "Error: Failed to update kubeconfig"
         return 1
     fi
