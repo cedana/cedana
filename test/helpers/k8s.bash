@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+
+##########################
+### Kubernetes Helpers ###
+##########################
+
+simple_pod_spec () {
+    local name="$1"
+    local image="$2"
+    local command="$3"
+    local args="$4"
+    local namespace="${5:-default}"
+
+    local spec=/tmp/pod-${name}.yaml
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: $namespace
+  labels:
+    app: "$name"
+spec:
+  restartPolicy: Never
+  containers:
+  - name: $name
+    image: $image
+EOF
+    if [[ -n "$command" ]]; then
+    cat >> "$spec" << EOF
+        command: ${command}
+EOF
+    fi
+    if [[ -n "$args" ]]; then
+    cat >> "$spec" << EOF
+        args: ${args}
+EOF
+    fi
+}
+
+gpu_pod_spec () {
+    local name="$1"
+    local image="$2"
+    local command="$3"
+    local args="$4"
+    local namespace="${5:-default}"
+
+    local spec=/tmp/pod-${name}.yaml
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: $namespace
+  labels:
+    app: "$name"
+spec:
+  restartPolicy: Never
+  runtimeClassName: cedana # for Cedana GPU C/R support
+  containers:
+  - name: $name
+    image: $image
+EOF
+    if [[ -n "$command" ]]; then
+    cat >> "$spec" << EOF
+        command: ${command}
+EOF
+    fi
+    if [[ -n "$args" ]]; then
+    cat >> "$spec" << EOF
+        args: ${args}
+EOF
+    fi
+}
+
+# List all restored pods in a given namespace.
+# Does a simple filter on pod names containing "restored".
+list_restored_pods() {
+    local namespace="$1"
+    kubectl get pods -n "$namespace" -o json | jq -r '.items[] | select(.metadata.name | contains("restored")) | .metadata.name'
+}
+
+# Gets a specific restored pod by its original pod name.
+get_restored_pod() {
+    local namespace="$1"
+    local name="$2"
+
+    local restored_pods
+    restored_pods=$(list_restored_pods "$namespace")
+
+    for restored_pod in $restored_pods; do
+        # check if the pod contains a container with the same name
+        if kubectl get pod "$restored_pod" -n "$namespace" -o jsonpath='{.spec.containers[*].name}' | grep -q "$name"; then
+            echo "$restored_pod"
+            return 0
+        fi
+    done
+
+    debug_log "No restored pods found for original pod $name"
+    return 1
+}
+
+# Validates if a pod is ready with a timeout.
+# Dumps the pod description if it fails to become ready.
+validate_pod() {
+    local namespace="$1"
+    local name="$2"
+    local timeout="$3"
+
+    if ! kubectl get pod "$name" -n "$namespace" &>/dev/null; then
+        debug_log "Pod $name does not exist in namespace $namespace"
+        return 1
+    fi
+
+    debug_log "Waiting for pod $name in namespace $namespace to become Ready"
+
+    if kubectl wait --for=condition=Ready pod/"$name" -n "$namespace" --timeout="$timeout" 2>/dev/null; then
+        debug_log "Pod $name is Ready"
+        return 0
+    fi
+
+    debug_log "Timed out waiting for pod $name to become Ready"
+    debug echo -e "$(kubectl get events --field-selector involvedObject.kind=Pod,involvedObject.name="$name" -n "$namespace" -o json | jq '.items[].message')"
+    return 1
+}

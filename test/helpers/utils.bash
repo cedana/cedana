@@ -52,6 +52,11 @@ kill_at_sock() {
     fuser "$sock" -k -"$signal"
 }
 
+path_exists() {
+    local path=$1
+    [ -e "$path" ]
+}
+
 env_exists() {
     local var=$1
     [ -n "${!var}" ]
@@ -142,8 +147,6 @@ debug_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
         echo "[DEBUG] $message" >&3
-    else
-        echo "[DEBUG] $message"
     fi
 }
 
@@ -152,6 +155,6 @@ debug() {
         echo "[DEBUG] Executing: $*" >&3
         "$@" >&3 2>&1
     else
-        "$@"
+        "$@" >&2
     fi
 }

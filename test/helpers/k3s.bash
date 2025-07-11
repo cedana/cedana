@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 
+##################################
+### K3s and Helm Setup Helpers ###
+##################################
+
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 INSTALL_K3S_EXEC="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
         --snapshotter=native"
-
-##################################
-### K3s and Helm Setup Helpers ###
-##################################
+CONTAINEDERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
 
 kubectl() {
     command k3s kubectl "$@"
@@ -21,11 +22,13 @@ setup_k3s_cluster() {
     wget https://get.k3s.io -O /tmp/k3s-install.sh
     chmod +x /tmp/k3s-install.sh
 
-    if ! /tmp/k3s-install.sh; then
+    if ! /tmp/k3s-install.sh &> /dev/null; then
         debug_log "Installer failed, will try the binary directly"
-        debug_log "Starting k3s cluster setup..."
         start_k3s_cluster
     fi
+
+    # XXX: The tar in busybox is incompatible with CRIU
+    rm /var/lib/rancher/k3s/data/current/bin/tar
 
     debug_log "k3s cluster is ready"
 }
@@ -33,13 +36,18 @@ setup_k3s_cluster() {
 start_k3s_cluster() {
     debug_log "Starting k3s cluster..."
 
+    # XXX: Pre-install the runtime shim so we won't have to restart k3s otherwise it needs to
+    # be restarted after Cedana installs the new runtime shim.
+
+    install_runtime_shim
+
     if ! command -v k3s &> /dev/null; then
         debug_log "k3s binary not found"
         return 1
-    else
-        debug_log "k3s binary found, starting k3s..."
-        k3s $INSTALL_K3S_EXEC &
     fi
+
+    debug_log "k3s binary found, starting k3s..."
+    k3s $INSTALL_K3S_EXEC &> /dev/null &
 
     debug_log "Waiting for k3s cluster to start..."
     local seconds=0
@@ -105,29 +113,29 @@ restart_k3s_cluster() {
     start_k3s_cluster
 }
 
-verify_k3s_cedana_runtime() {
-    if cat /var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl | grep -q 'cedana'; then
-        return 0
-    else
+install_runtime_shim() {
+    debug_log "Installing Cedana runtime shim for k3s..."
+
+    if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
+        debug_log "Shim not found in /usr/local/bin"
         return 1
     fi
-}
 
-wait_for_k3s_cedana_runtime() {
-    debug_log "Waiting for cedana runtime to be configured in containerd..."
-    local timeout=60
-    local interval=1
-    local elapsed=0
+    if ! path_exists $CONTAINEDERD_CONFIG_PATH; then
+        mkdir -p "$(dirname "$CONTAINEDERD_CONFIG_PATH")"
+        touch "$CONTAINEDERD_CONFIG_PATH"
+    fi
 
-    until verify_k3s_cedana_runtime; do
-        if (( elapsed >= timeout )); then
-            debug_log "Timed out waiting for cedana runtime to be configured"
-            return 1
-        fi
-        sleep "$interval"
-        ((elapsed += interval))
-    done
+    local template=$CONTAINEDERD_CONFIG_PATH.tmpl
+    if ! grep -q 'cedana' "$template"; then
+        echo "k3s detected. Creating default config file at $template"
+        echo '{{ template "base" . }}' > $template
+        cat >> $template <<'END_CAT'
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+    runtime_type = "io.containerd.runc.v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+END_CAT
+    fi
 
-    debug_log "Cedana runtime is configured in containerd"
-    return 0
+    debug_log "Installing Cedana runtime shim for k3s"
 }

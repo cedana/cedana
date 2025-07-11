@@ -2,7 +2,7 @@ name: PR
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
       debug_build:
@@ -37,9 +37,11 @@ jobs:
     secrets: inherit
     with:
       shell: true
+      pr_title: true
 
   build:
     name: Build
+    needs: check
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
@@ -51,6 +53,7 @@ jobs:
 
   download:
     name: Download
+    needs: check
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
