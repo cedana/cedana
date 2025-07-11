@@ -149,6 +149,8 @@ ARGS?=
 TIMEOUT?=300
 RETRIES?=0
 DEBUG?=0
+HELPER_REPO?=cedana/cedana-helper
+HELPER_TAG?=latest
 CONTROLLER_REPO?=cedana/cedana-controller
 CONTROLLER_TAG?=latest
 BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
@@ -211,7 +213,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<branch>)
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, HELPER_REPO=<repo>, HELPER_TAG=<tag>)
 	if [ -f /.dockerenv ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -234,13 +236,13 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
 			$(DOCKER_TEST_CREATE_CUDA) ;\
 			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-k8s ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) CONTROLLER_REPO=$(CONTROLLER_REPO) CONTROLLER_TAG=$(CONTROLLER_TAG) ;\
+			$(DOCKER_TEST_EXEC) make test-k8s ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) CONTROLLER_REPO=$(CONTROLLER_REPO) CONTROLLER_TAG=$(CONTROLLER_TAG) HELPER_REPO=$(HELPER_REPO) HELPER_TAG=$(HELPER_TAG) ;\
 			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
 			$(DOCKER_TEST_CREATE) ;\
 			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-k8s ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) CONTROLLER_REPO=$(CONTROLLER_REPO) CONTROLLER_TAG=$(CONTROLLER_TAG) ;\
+			$(DOCKER_TEST_EXEC) make test-k8s ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) CONTROLLER_REPO=$(CONTROLLER_REPO) CONTROLLER_TAG=$(CONTROLLER_TAG) HELPER_REPO=$(HELPER_REPO) HELPER_TAG=$(HELPER_TAG) ;\
 			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		fi ;\
 	fi

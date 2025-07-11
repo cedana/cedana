@@ -75,7 +75,7 @@ EOF
     run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
     [ "$status" -eq 0 ]
 }
 
@@ -124,7 +124,7 @@ EOF
         [ "$status" -eq 0 ]
     fi
 
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
     [ "$status" -eq 0 ]
 }
 
@@ -189,12 +189,12 @@ EOF
             run validate_pod "$NAMESPACE" "$restored_pod" 20s
             [ $status -eq 0 ]
 
-            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=false
+            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
             [ "$status" -eq 0 ]
         fi
     fi
 
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
     [ "$status" -eq 0 ]
 }
 
@@ -243,7 +243,7 @@ EOF
         [ "$status" -eq 0 ]
     fi
 
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
+    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
     [ "$status" -eq 0 ]
 
     run restore_pod "$action_id" "$CLUSTER_ID"
@@ -262,7 +262,7 @@ EOF
             run validate_pod "$NAMESPACE" "$restored_pod" 20s
             [ $status -eq 0 ]
 
-            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=false
+            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
             [ "$status" -eq 0 ]
         fi
     fi

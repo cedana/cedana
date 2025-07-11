@@ -110,15 +110,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Download binary
+      - name: Download digest
         uses: actions/download-artifact@v4
         with:
-          name: cedana-${{ matrix.arch }}
-
-      - name: Download plugins
-        uses: actions/download-artifact@v4
-        with:
-          name: plugins-${{ matrix.arch }}
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests
 
       - name: Download CRIU
         uses: actions/download-artifact@v4
@@ -181,6 +177,8 @@ jobs:
           CONTROLLER_TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
           RETRIES: 1
         run: |
+          DIGEST=$(ls /tmp/digests | grep "${{ matrix.arch }}" | head -n 1)
+
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
               make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG
