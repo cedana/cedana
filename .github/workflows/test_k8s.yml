@@ -83,7 +83,7 @@ jobs:
       - name: Quick connectivity test
         run: |
           echo "Testing basic connectivity to Propagator API..."
-          curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" || true
+          curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
           echo "✓ Connectivity test completed"
 
   k3s:
@@ -217,7 +217,7 @@ jobs:
           RETRIES: 1
         run: |
           # NOTE: If digests found locally, we will pass that as well, so it will override the tag
-          set -eux
+          set -ex
 
           if [ -e /tmp/digests ]; then
             HELPER_DIGEST=sha256:$(ls /tmp/digests | grep "${{ matrix.arch }}" | head -n 1)
