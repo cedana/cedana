@@ -268,7 +268,7 @@ jobs:
         id: build
         uses: docker/build-push-action@v6
         with:
-          context: test
+          context: ./test
           file: Dockerfile${{ matrix.tag == 'cuda' && '.cuda' || '' }}
           push: true
           platforms: linux/${{ matrix.arch }}
