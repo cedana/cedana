@@ -80,52 +80,6 @@ EOF
 }
 
 # bats test_tags=dump
-@test "Checkpoint a pod" {
-    local name
-    name=$(unix_nano)
-    local spec=/tmp/test-pod-$name.yaml
-    local action_id
-
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: $NAMESPACE
-  labels:
-    app: "$name"
-spec:
-  restartPolicy: Never
-  containers:
-  - name: "$name"
-    image: alpine:latest
-    command: ["/bin/sh"]
-    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
-EOF
-
-    run kubectl apply -f "$spec"
-    [ "$status" -eq 0 ]
-
-    # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
-    [ "$status" -eq 0 ]
-
-    # Checkpoint the test pod
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE"
-    [ "$status" -eq 0 ]
-
-    action_id=$output
-
-    if [ $status -eq 0 ]; then
-        run validate_action_id "$action_id"
-        [ $status -eq 0 ]
-    fi
-
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
-    [ "$status" -eq 0 ]
-}
-
-# bats test_tags=dump
 @test "Checkpoint a pod (wait for completion)" {
     local name
     name=$(unix_nano)
@@ -168,67 +122,6 @@ EOF
 
         run poll_action_status "$action_id" "checkpoint"
         [ "$status" -eq 0 ]
-    fi
-
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
-    [ "$status" -eq 0 ]
-}
-
-# bats test_tags=restore
-@test "Restore a pod with original pod running" {
-    local name
-    name=$(unix_nano)
-    local spec=/tmp/test-pod-$name.yaml
-    local action_id
-
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: $NAMESPACE
-  labels:
-    app: "$name"
-spec:
-  restartPolicy: Never
-  containers:
-  - name: "$name"
-    image: alpine:latest
-    command: ["/bin/sh"]
-    args: ["-c", "counter=0; while true; do echo \"Count: \$counter\" | tee -a /tmp/counter.log; echo \$counter > /tmp/current_count; counter=\$((counter + 1)); sleep 1; done"]
-EOF
-
-    run kubectl apply -f "$spec"
-    [ "$status" -eq 0 ]
-
-    # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
-    [ "$status" -eq 0 ]
-
-    # Checkpoint the test pod
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE"
-    [ "$status" -eq 0 ]
-
-    action_id=$output
-
-    if [ $status -eq 0 ]; then
-        run validate_action_id "$action_id"
-        [ $status -eq 0 ]
-
-        run poll_action_status "$action_id" "checkpoint"
-        [ "$status" -eq 0 ]
-    fi
-
-    debug_log "Restoring pod from checkpoint..."
-
-    run restore_pod "$action_id" "$CLUSTER_ID"
-    [ $status -eq 0 ]
-
-    action_id="$output"
-
-    if [ $status -eq 0 ]; then
-        run validate_action_id "$action_id"
-        [ $status -eq 0 ]
     fi
 
     run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
@@ -295,10 +188,10 @@ EOF
             local restored_pod="$output"
             run validate_pod "$NAMESPACE" "$restored_pod" 20s
             [ $status -eq 0 ]
-        fi
 
-        run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
-        [ "$status" -eq 0 ]
+            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=false
+            [ "$status" -eq 0 ]
+        fi
     fi
 
     run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
@@ -368,9 +261,9 @@ EOF
             local restored_pod="$output"
             run validate_pod "$NAMESPACE" "$restored_pod" 20s
             [ $status -eq 0 ]
-        fi
 
-        run kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
-        [ "$status" -eq 0 ]
+            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=false
+            [ "$status" -eq 0 ]
+        fi
     fi
 }
