@@ -32,16 +32,6 @@ on:
         description: "Publish images to Docker Hub"
         required: false
         default: false
-      image_name:
-        type: string
-        description: "Name of the image to publish"
-        required: false
-        default: cedana/cedana-helper
-      test_image_name:
-        type: string
-        description: "Name of the test image to publish"
-        required: false
-        default: cedana/cedana-test
       post_summary:
         type: boolean
         description: "Post summary to Slack"
@@ -295,6 +285,14 @@ jobs:
           pattern: digests-*
           merge-multiple: true
 
+      - name: Download image name
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: /tmp/image-name
+          name: image-name
+          merge-multiple: true
+
       - name: Download digests (test, latest)
         uses: actions/download-artifact@v4
         continue-on-error: true
@@ -311,16 +309,25 @@ jobs:
           pattern: test-digests-cuda-*
           merge-multiple: true
 
+      - name: Download image name (test)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: /tmp/test-image-name
+          name: test-image-name
+
       - name: Check directories and set variables
         id: check_dirs
         run: |
           if [ -d /tmp/digests ]; then
             echo "DIGESTS_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "IMAGE_NAME=$(ls /tmp/image-name)" >> $GITHUB_OUTPUT
           else
             echo "DIGESTS_EXISTS=false" >> $GITHUB_OUTPUT
           fi
           if [ -d /tmp/test-digests-latest ] && [ -d /tmp/test-digests-cuda ]; then
             echo "TEST_DIGESTS_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "TEST_IMAGE_NAME=$(ls /tmp/test-image-name)" >> $GITHUB_OUTPUT
           else
             echo "TEST_DIGESTS_EXISTS=false" >> $GITHUB_OUTPUT
           fi
@@ -340,7 +347,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ inputs.image_name }}
+            ${{ steps.check_dirs.outputs.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ github.head_ref || github.ref_name }}
@@ -350,16 +357,16 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ inputs.image_name }}@sha256:%s ' *)
+            $(printf '${{ steps.check_dirs.outputs.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect image
         if: steps.check_dirs.outputs.DIGESTS_EXISTS == 'true'
         run: |
           # check if push was successful
-          docker buildx imagetools inspect ${{ inputs.image_name }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ steps.check_dirs.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           # check if commit sha matches with the latest commit sha
           # we only match docker hub image as both images should be the same
-          echo $(docker run -i --rm ${{ inputs.image_name }}:${{ steps.meta.outputs.version }} -c "cedana -v")
+          echo $(docker run -i --rm ${{ steps.check_dirs.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.version }} -c "cedana -v")
 
       - name: Docker meta (test, latest)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
@@ -367,7 +374,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ inputs.test_image_name }}
+            ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
           tags: |
             type=raw,value=latest
 
@@ -376,7 +383,7 @@ jobs:
         working-directory: /tmp/test-digests-latest
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ inputs.test_image_name }}@sha256:%s ' *)
+            $(printf '${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Docker meta (test, CUDA)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
@@ -384,7 +391,7 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ inputs.test_image_name }}
+            ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
           tags: |
             type=raw,value=cuda
 
@@ -393,7 +400,7 @@ jobs:
         working-directory: /tmp/test-digests-cuda
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ inputs.test_image_name }}@sha256:%s ' *)
+            $(printf '${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}@sha256:%s ' *)
 
   post-summary:
     name: Post Summary

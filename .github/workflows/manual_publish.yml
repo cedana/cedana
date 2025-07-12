@@ -82,5 +82,3 @@ jobs:
       cloudsmith: ${{ inputs.cloudsmith }}
       cloudsmith_repo: ${{ inputs.cloudsmith_repo }}
       dockerhub: ${{ inputs.dockerhub }}
-      image_name: ${{ inputs.image_name }}
-      test_image_name: ${{ inputs.test_image_name }}

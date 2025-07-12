@@ -94,5 +94,4 @@ jobs:
       cloudsmith: true
       cloudsmith_repo: cedana-alpha
       dockerhub: true
-      image_name: cedana/cedana-helper-test
       post_summary: false

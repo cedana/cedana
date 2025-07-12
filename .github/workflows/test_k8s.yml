@@ -30,16 +30,6 @@ on:
         description: "Run large tests"
         required: false
         default: false
-      helper_version:
-        type: string
-        description: "Cedana helper version (branch name or 'release' for latest release)"
-        required: false
-        default: "release"
-      controller_version:
-        type: string
-        description: Controller version (branch name or "release" for latest release)
-        required: false
-        default: "release"
       runner:
         type: string
         description: "Runner machine for CPU tests"
@@ -117,31 +107,27 @@ jobs:
 
       - name: Download helper digest
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: digests-${{ matrix.arch }}
           path: /tmp/digests
 
       - name: Download helper image name
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: image-name
-          path: /tmp
+          path: /tmp/image-name
 
       - name: Download controller digest
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: controller-digests-${{ matrix.arch }}
           path: /tmp/controller-digests
 
       - name: Download controller image name
         uses: actions/download-artifact@v4
-        continue-on-error: true
         with:
           name: controller-image-name
-          path: /tmp
+          path: /tmp/controller-image-name
 
       - name: Download binary
         uses: actions/download-artifact@v4
@@ -210,35 +196,24 @@ jobs:
           GPU: ${{ inputs.gpu }}
           PARALLELISM: ${{ inputs.parallelism }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
-          HELPER_REPO: ${{ inputs.helper_version == 'release' && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
-          HELPER_TAG: ${{ inputs.helper_version == 'release' && 'latest' || inputs.helper_version }}
-          CONTROLLER_REPO: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
-          CONTROLLER_TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
           RETRIES: 1
         run: |
-          # NOTE: If digests found locally, we will pass that as well, so it will override the tag
-          set -ex
-
-          if [ -e /tmp/digests ]; then
-            HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
-            HELPER_REPO=$(cat /tmp/image-name)
-          fi
-          if [ -e /tmp/controller-digests ]; then
-            CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | grep "${{ matrix.arch }}" | head -n 1)
-            CONTROLLER_REPO=$(cat /tmp/controller-image-name)
-          fi
+          HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
+          HELPER_REPO=$(ls /tmp/image-name | head -n 1)
+          CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
+          CONTROLLER_REPO=$(ls /tmp/controller-image-name | head -n 1)
 
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_TAG=$HELPER_TAG HELPER_DIGEST=$HELPER_DIGEST
+              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
             else
-              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_TAG=$HELPER_TAG HELPER_DIGEST=$HELPER_DIGEST
+              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_TAG=$HELPER_TAG HELPER_DIGEST=$HELPER_DIGEST
+              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
             else
-              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_TAG=$CONTROLLER_TAG CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_TAG=$HELPER_TAG HELPER_DIGEST=$HELPER_DIGEST
+              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=1 CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
             fi
           fi
 

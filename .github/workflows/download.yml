@@ -29,6 +29,11 @@ on:
         description: Version for streamer binaries (branch name or "release" for latest release)
         required: false
         default: "none"
+      controller_version:
+        type: string
+        description: Version for controller binaries (branch name or "release" for latest release)
+        required: false
+        default: "none"
       runtime_shim_version:
         type: string
         description: Version for runtime shim binaries (branch name or "release" for latest release)
@@ -106,6 +111,31 @@ jobs:
         with:
           name: plugins-${{ matrix.arch }}
           path: ./plugins/*
+
+      - name: Get digest
+        env:
+          IMAGE_NAME: ${{ inputs.cedana_version == 'release' && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
+          TAG: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
+        run: |
+          docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
+          touch "/tmp/digests/${digest#sha256:}"
+          touch "/tmp/image-name/$IMAGE_NAME"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+
+      - name: Upload image name
+        if: ${{ matrix.arch == 'amd64' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-name
+          path: /tmp/image-name/*
+          if-no-files-found: error
 
   criu:
     name: CRIU
@@ -210,6 +240,51 @@ jobs:
         with:
           name: streamer-${{ matrix.arch }}
           path: ./streamer/*
+
+  controller:
+    name: Controller
+    if: ${{ inputs.controller_version != 'none' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+      max-parallel: 1 # to avoid unknown cloudsmith failures
+    steps:
+      - uses: runs-on/action@v1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Get digest
+        env:
+          IMAGE_NAME: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
+          TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
+        run: |
+          docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
+          touch "/tmp/digests/${digest#sha256:}"
+          touch "/tmp/image-name/$IMAGE_NAME"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: controller-digests-${{ matrix.arch }}
+          path: /tmp/controller-digests/*
+          if-no-files-found: error
+
+      - name: Upload image name
+        if: ${{ matrix.arch == 'amd64' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: controller-image-name
+          path: /tmp/controller-image-name/*
+          if-no-files-found: error
 
   runtime-shim:
     name: Runtime Shim
