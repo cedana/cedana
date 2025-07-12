@@ -201,8 +201,8 @@ jobs:
         env:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           GPU: ${{ inputs.gpu }}
-          PARALLELISM: 1
-          DEBUG: 1 # debug logging
+          PARALLELISM: ${{ inputs.parallelism }}
+          DEBUG: 0 # debug logging
           RETRIES: 1
         run: |
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
