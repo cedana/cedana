@@ -146,7 +146,7 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-TIMEOUT?=300
+TIMEOUT?=600
 RETRIES?=0
 DEBUG?=0
 HELPER_REPO?=cedana/cedana-helper
