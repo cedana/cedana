@@ -4,6 +4,19 @@
 ### Kubernetes Helpers ###
 ##########################
 
+# Generate a new spec from an existing one with a new name.
+new_spec () {
+    local spec="$1"
+    local newname="$2"
+
+    local newspec="/tmp/${newname}.yaml"
+
+    # Replace all "name:" fields with the new name
+    sed -E "s/^([[:space:]]*name:[[:space:]]*).*/\1${newname}/" "$spec" > "$newspec"
+
+    echo "$newspec"
+}
+
 simple_pod_spec () {
     local name="$1"
     local image="$2"

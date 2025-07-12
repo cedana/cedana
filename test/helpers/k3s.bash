@@ -137,5 +137,5 @@ install_runtime_shim() {
 END_CAT
     fi
 
-    debug_log "Installing Cedana runtime shim for k3s"
+    debug_log "Installed Cedana runtime shim for k3s"
 }
