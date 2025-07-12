@@ -7,7 +7,12 @@ set -e
 # first
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
 cp -r /scripts/host/* /host/cedana/scripts/host
-chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
+
+if [ -f /host/.dockerenv ]; then # for tests
+    chroot /host pkill -f 'cedana daemon' || true
+else
+    chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
+fi
 
 # We load the binary from docker image for the container
 # Copy Cedana binaries and scripts to the host

@@ -52,13 +52,34 @@ kill_at_sock() {
     fuser "$sock" -k -"$signal"
 }
 
+path_exists() {
+    local path=$1
+    [ -e "$path" ]
+}
+
 env_exists() {
     local var=$1
     [ -n "${!var}" ]
 }
 
+check_env() {
+    local var=$1
+    if ! env_exists "$var"; then
+        error_log "Environment variable '$var' is not set."
+        exit 1
+    fi
+}
+
 cmd_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+check_cmd() {
+    local cmd=$1
+    if ! cmd_exists "$cmd"; then
+        error_log "Command '$cmd' is not available."
+        exit 1
+    fi
 }
 
 # Execute a function only once
@@ -103,4 +124,55 @@ wait_for_pid() {
     done
 
     return 0
+}
+
+# Wait for a cmd to start returning zero exit code, then return the output.
+wait_for_cmd() {
+    local timeout=${1:-60}
+    local interval=1
+    shift 1
+    local elapsed=0
+    while ! "$@" 2> /dev/null; do
+        if (( elapsed >= timeout )); then
+            error_log "Timed out waiting for '$*' to succeed after $timeout seconds"
+            return 1
+        fi
+        debug_log "Waiting for '$*'"
+        sleep "$interval"
+        ((elapsed += interval))
+    done
+    return 0
+}
+
+
+debug_log() {
+    local message="$1"
+    if [ "$DEBUG" == "1" ]; then
+        echo "[DEBUG] $message" >&3
+    fi
+}
+
+error_log() {
+    local message="$1"
+    if [ "$DEBUG" == "1" ]; then
+        echo "[ERROR] $message" >&3
+    else
+        echo "[ERROR] $message" >&2
+    fi
+}
+
+debug() {
+    if [ "$DEBUG" == "1" ]; then
+        "$@" >&3 2>&1
+    else
+        "$@" >&2
+    fi
+}
+
+error() {
+    if [ "$DEBUG" == "1" ]; then
+        "$@" >&3 2>&1
+    else
+        "$@" >&2
+    fi
 }

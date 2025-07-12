@@ -3,8 +3,8 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=base,run
 
-load helpers/utils
-load helpers/daemon
+load ../helpers/utils
+load ../helpers/daemon
 
 load_lib support
 load_lib assert

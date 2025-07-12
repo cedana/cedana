@@ -51,6 +51,10 @@ on:
         required: false
         default: false
 
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+
 jobs:
   cuda:
     name: CUDA
@@ -72,10 +76,8 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all -v /var/run/docker.sock:/var/run/docker.sock
+      options: --privileged --init --ipc=host --gpus all -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
     env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: runs-on/action@v1
@@ -118,17 +120,17 @@ jobs:
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
-          chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install plugins
+      - name: Install
         env:
           STREAMER: ${{ inputs.streamer }}
         run: |
-          sudo -E ./cedana plugin install runc containerd crio criu storage/cedana
-          sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
+          make install
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana
+          sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
           if [ "$STREAMER" = "true" ]; then
-            sudo -E ./cedana plugin install streamer # automatically installs the downloaded binary if available instead
+            sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
           fi
 
       - name: Mark git dir as safe

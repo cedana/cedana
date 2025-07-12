@@ -1,4 +1,4 @@
-name: Test / Streamer
+name: Test / Kubernetes
 
 permissions:
   contents: read
@@ -50,11 +50,6 @@ on:
         description: "Parallelism for running tests"
         required: false
         default: 4
-      parallelism_gpu:
-        type: number
-        description: "Parallelism for running GPU tests"
-        required: false
-        default: 2
       post_summary:
         type: boolean
         description: "Post test summary"
@@ -66,13 +61,32 @@ env:
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
 
 jobs:
-  streamer:
-    name: Streamer
+  propagator-connectivity:
+    name: Propagator Connectivity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Quick connectivity test
+        run: |
+          echo "Testing basic connectivity to Propagator API..."
+          curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
+          echo "✓ Connectivity test completed"
+
+  k3s:
+    name: K3s
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
     timeout-minutes: 30
+    needs: propagator-connectivity
     strategy:
       fail-fast: false
       matrix:
+        cr:
+          - streamer
+          - default
         arch:
           - amd64
           - arm64
@@ -82,8 +96,6 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init ${{ inputs.gpu && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
-    env:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -92,6 +104,30 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Download helper digest
+        uses: actions/download-artifact@v4
+        with:
+          name: digests-${{ matrix.arch }}
+          path: /tmp/digests
+
+      - name: Download helper image name
+        uses: actions/download-artifact@v4
+        with:
+          name: image-name
+          path: /tmp/image-name
+
+      - name: Download controller digest
+        uses: actions/download-artifact@v4
+        with:
+          name: controller-digests-${{ matrix.arch }}
+          path: /tmp/controller-digests
+
+      - name: Download controller image name
+        uses: actions/download-artifact@v4
+        with:
+          name: controller-image-name
+          path: /tmp/controller-image-name
 
       - name: Download binary
         uses: actions/download-artifact@v4
@@ -103,23 +139,27 @@ jobs:
         with:
           name: plugins-${{ matrix.arch }}
 
-      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: streamer-${{ matrix.arch }}
-
-      - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        if: inputs.gpu
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: gpu-${{ matrix.arch }}
-
       - name: Download CRIU
         uses: actions/download-artifact@v4
         with:
           name: criu-${{ matrix.arch }}
+
+      - name: Download runtime shim
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-shim-${{ matrix.arch }}
+
+      - name: Download GPU plugin
+        if: ${{ inputs.gpu }}
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu-${{ matrix.arch }}
+
+      - name: Download streamer plugin
+        if: ${{ matrix.cr == 'streamer' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer-${{ matrix.arch }}
 
       - name: Make executable
         run: |
@@ -130,12 +170,16 @@ jobs:
       - name: Install
         env:
           GPU: ${{ inputs.gpu }}
+          STREAMER: ${{ matrix.cr == 'streamer' }}
         run: |
           make install
           sudo -E cedana plugin install runc containerd crio criu storage/cedana
-          sudo -E cedana plugin install streamer  # automatically installs the downloaded binary if available instead
+          sudo -E cedana plugin install k8s/runtime-shim  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
             sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
+          fi
+          if [ "$STREAMER" = "true" ]; then
+            sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
           fi
 
       - name: Mark git dir as safe
@@ -147,25 +191,30 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Run regression tests
+      - name: Run k8s tests
         env:
+          CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           GPU: ${{ inputs.gpu }}
-          LARGE: ${{ inputs.large }}
-          PARALLELISM: ${{ inputs.parallelism }}
-          PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
+          PARALLELISM: 1
+          DEBUG: 1 # debug logging
           RETRIES: 1
         run: |
+          HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
+          HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
+          CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
+          CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
+
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
+              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
             else
-              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
+              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
             else
-              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
             fi
           fi
 
@@ -174,14 +223,14 @@ jobs:
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-streamer
+          name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}
           path: |
             /tmp/report*.xml
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
-    needs: streamer
+    needs: k3s
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -200,7 +249,7 @@ jobs:
         id: download-report
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-streamer
+          pattern: test-report-${{ matrix.arch }}-k8s*
           path: report
 
       - name: Generate consolidated report
@@ -219,8 +268,8 @@ jobs:
           title: ${{ matrix.arch }}
           update-comment: true
           overwrite-comment: true
-          comment-tag: test-report-streamer-${{ matrix.arch }}
+          comment-tag: test-report-k8s-${{ matrix.arch }}
           group-by: "suite"
           always-group-by: true
           upload-artifact: true
-          artifact-name: ctrf-report-streamer-${{ matrix.arch }}
+          artifact-name: ctrf-report-k8s-${{ matrix.arch }}
