@@ -201,7 +201,7 @@ jobs:
         env:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           GPU: ${{ inputs.gpu }}
-          PARALLELISM: 1 # TODO: revert onces tested
+          PARALLELISM: ${{ inputs.parallelism }}
           DEBUG: 0 # debug logging
           RETRIES: 1
         run: |
