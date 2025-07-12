@@ -68,7 +68,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "Checkpoint a pod (wait for completion)" {
+@test "Checkpoint a pod (wait for completion, streams=$CEDANA_CHECKPOINT_STREAMS)" {
     local name
     name=$(unix_nano)
     local spec
@@ -101,7 +101,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "Restore a pod with original pod running (wait until running)" {
+@test "Restore a pod with original pod running (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
     local name
     name=$(unix_nano)
     local spec
@@ -155,7 +155,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "Restore a pod with original pod deleted (wait until running)" {
+@test "Restore a pod with original pod deleted (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
     local name
     name=$(unix_nano)
     local spec
