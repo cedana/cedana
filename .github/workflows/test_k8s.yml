@@ -61,8 +61,8 @@ env:
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
 
 jobs:
-  propagator-integration:
-    name: Propagator Integration
+  propagator-connectivity:
+    name: Propagator Connectivity
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -80,7 +80,7 @@ jobs:
     name: K3s
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
     timeout-minutes: 30
-    needs: propagator-integration
+    needs: propagator-connectivity
     strategy:
       fail-fast: false
       matrix:
@@ -202,7 +202,7 @@ jobs:
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
           CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
-          CONTROLLER_REPO=$(ls /tmp/controller-image-name/name.txt | head -n 1)
+          CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
 
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
