@@ -11,8 +11,13 @@ new_spec () {
 
     local newspec="/tmp/${newname}.yaml"
 
-    # Replace all "name:" fields with the new name
-    sed -E "s/^([[:space:]]*name:[[:space:]]*).*/\1${newname}/" "$spec" > "$newspec"
+    # Get the oldname from the first "name:" line
+    local oldname
+    oldname=$(grep -m1 '^[[:space:]]*name:' "$spec" | sed -E 's/^[[:space:]]*name:[[:space:]]*"?([^"]+)"?/\1/')
+
+    # Replace all 'name: <oldname>' patterns with the quoted newname
+    sed -E "s/^([[:space:]\-]*name:[[:space:]]*)\"?$oldname\"?/\1\"$newname\"/g" "$spec" > "$newspec"
+    debug cat "$newspec"
 
     echo "$newspec"
 }
