@@ -50,7 +50,8 @@ teardown_file() {
 @test "Deploy a pod" {
     local name
     name=$(unix_nano)
-    local spec=/cedana-samples/kubernetes/counting.yaml
+    local spec
+    spec=$(new_spec /cedana-samples/kubernetes/counting.yaml "$name")
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]
@@ -69,7 +70,8 @@ teardown_file() {
 @test "Checkpoint a pod (wait for completion)" {
     local name
     name=$(unix_nano)
-    local spec=/cedana-samples/kubernetes/counting.yaml
+    local spec
+    spec=$(new_spec /cedana-samples/kubernetes/counting.yaml "$name")
     local action_id
 
     run kubectl apply -f "$spec"
@@ -101,7 +103,8 @@ teardown_file() {
 @test "Restore a pod with original pod running (wait until running)" {
     local name
     name=$(unix_nano)
-    local spec=/cedana-samples/kubernetes/counting.yaml
+    local spec
+    spec=$(new_spec /cedana-samples/kubernetes/counting.yaml "$name")
     local action_id
 
     run kubectl apply -f "$spec"
@@ -154,7 +157,8 @@ teardown_file() {
 @test "Restore a pod with original pod deleted (wait until running)" {
     local name
     name=$(unix_nano)
-    local spec=/cedana-samples/kubernetes/counting.yaml
+    local spec
+    spec=$(new_spec /cedana-samples/kubernetes/counting.yaml "$name")
     local action_id
 
     run kubectl apply -f "$spec"

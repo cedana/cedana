@@ -35,7 +35,25 @@ install_kubectl() {
     return 1
 }
 
-simple_pod_spec () {
+# Generate a new spec from an existing one with a new name.
+new_spec() {
+    local spec="$1"
+    local newname="$2"
+
+    local newspec="/tmp/${newname}.yaml"
+
+    # Get the oldname from the first "name:" line
+    local oldname
+    oldname=$(grep -m1 '^[[:space:]]*name:' "$spec" | sed -E 's/^[[:space:]]*name:[[:space:]]*"?([^"]+)"?/\1/')
+
+    # Replace all 'name: <oldname>' patterns with the quoted newname
+    sed -E "s/^([[:space:]\-]*name:[[:space:]]*)\"?$oldname\"?/\1\"$newname\"/g" "$spec" >"$newspec"
+    debug cat "$newspec"
+
+    echo "$newspec"
+}
+
+simple_pod_spec() {
     local name="$1"
     local image="$2"
     local command="$3"
@@ -43,7 +61,7 @@ simple_pod_spec () {
     local namespace="${5:-default}"
 
     local spec=/tmp/pod-${name}.yaml
-    cat > "$spec" << EOF
+    cat >"$spec" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -58,12 +76,12 @@ spec:
     image: $image
 EOF
     if [[ -n "$command" ]]; then
-    cat >> "$spec" << EOF
+        cat >>"$spec" <<EOF
         command: ${command}
 EOF
     fi
     if [[ -n "$args" ]]; then
-    cat >> "$spec" << EOF
+        cat >>"$spec" <<EOF
         args: ${args}
 EOF
     fi
@@ -71,7 +89,7 @@ EOF
     echo "$spec"
 }
 
-gpu_pod_spec () {
+gpu_pod_spec() {
     local name="$1"
     local image="$2"
     local command="$3"
@@ -79,7 +97,7 @@ gpu_pod_spec () {
     local namespace="${5:-default}"
 
     local spec=/tmp/pod-${name}.yaml
-    cat > "$spec" << EOF
+    cat >"$spec" <<EOF
 apiVersion: v1
 kind: Pod
 metadata:
@@ -95,12 +113,12 @@ spec:
     image: $image
 EOF
     if [[ -n "$command" ]]; then
-    cat >> "$spec" << EOF
+        cat >>"$spec" <<EOF
         command: ${command}
 EOF
     fi
     if [[ -n "$args" ]]; then
-    cat >> "$spec" << EOF
+        cat >>"$spec" <<EOF
         args: ${args}
 EOF
     fi
@@ -112,7 +130,7 @@ EOF
 # Does a simple filter on pod names containing "restored".
 list_restored_pods() {
     local namespace="$1"
-    
+
     # Ensure kubectl is available
     if ! command -v kubectl &>/dev/null; then
         install_kubectl
@@ -121,7 +139,7 @@ list_restored_pods() {
             return 1
         fi
     fi
-    
+
     kubectl get pods -n "$namespace" -o json | jq -r '.items[] | select(.metadata.name | contains("restored")) | .metadata.name'
 }
 
