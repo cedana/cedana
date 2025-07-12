@@ -42,7 +42,7 @@ start_k3s_cluster() {
     install_runtime_shim
 
     if ! command -v k3s &> /dev/null; then
-        debug_log "k3s binary not found"
+        error_log "k3s binary not found"
         return 1
     fi
 
@@ -54,7 +54,7 @@ start_k3s_cluster() {
     local timeout=60
     until [ "$(kubectl get nodes --no-headers 2>/dev/null | wc -l)" -ge 1 ]; do
         (( seconds >= timeout )) && {
-            debug_log "Timed out waiting for k3s node object to exist"
+            error_log "Timed out waiting for k3s node object to exist"
             return 1
         }
         sleep 1
@@ -62,7 +62,7 @@ start_k3s_cluster() {
 
     debug_log "Waiting for k3s node to be Ready..."
     if ! kubectl wait --for=condition=Ready node --all --timeout=60s; then
-        debug_log "Timed out waiting for k3s node to be Ready"
+        error_log "Timed out waiting for k3s node to be Ready"
         return 1
     fi
 
@@ -74,7 +74,7 @@ stop_k3s_cluster() {
 
     if command -v k3s-killall.sh &> /dev/null; then
         debug_log "Running k3s killall script..."
-        timeout 60 k3s-killall.sh || echo "k3s killall script timed out or failed"
+        timeout 60 k3s-killall.sh || error_log "k3s killall script timed out or failed"
     fi
 
     debug_log "Stopping k3s processes..."
@@ -91,7 +91,7 @@ teardown_k3s_cluster() {
 
     if command -v k3s-uninstall.sh &> /dev/null; then
         debug_log "Running k3s uninstall script..."
-        timeout 60 k3s-uninstall.sh || echo "k3s uninstall script timed out or failed"
+        timeout 60 k3s-uninstall.sh || error_log "k3s uninstall script timed out or failed"
     fi
 
     debug_log "Stopping k3s processes..."
@@ -128,7 +128,7 @@ install_runtime_shim() {
 
     local template=$CONTAINEDERD_CONFIG_PATH.tmpl
     if ! grep -q 'cedana' "$template"; then
-        echo "k3s detected. Creating default config file at $template"
+        debug_log "k3s detected. Creating default config file at $template"
         echo '{{ template "base" . }}' > $template
         cat >> $template <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]

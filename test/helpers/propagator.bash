@@ -70,7 +70,7 @@ checkpoint_pod() {
         echo "$body"
         return 0
     else
-        debug_log "Error: Failed to checkpoint pod (HTTP $http_code): $body"
+        error_log "Error: Failed to checkpoint pod (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -123,7 +123,7 @@ restore_pod() {
         echo "$body"
         return 0
     else
-        debug_log "Error: Failed to restore pod (HTTP $http_code): $body"
+        error_log "Error: Failed to restore pod (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -225,7 +225,7 @@ poll_action_status() {
         sleep 5
     done
 
-    debug_log "Error: Timeout waiting for $operation action '$action_id' to complete"
+    error_log "Error: Timeout waiting for $operation action '$action_id' to complete"
     return 1
 }
 
@@ -237,7 +237,7 @@ get_checkpoint_id_from_action() {
     action_id="${action_id//\"/}" # remove quotes if present
 
     if [ -z "$action_id" ]; then
-        debug_log "Error: get_checkpoint_id_from_action requires action_id"
+        error_log "Error: get_checkpoint_id_from_action requires action_id"
         return 1
     fi
 
@@ -259,11 +259,11 @@ get_checkpoint_id_from_action() {
             echo "$checkpoint_id"
             return 0
         else
-            debug_log "Error: Could not find checkpoint_id for action '$action_id'"
+            error_log "Error: Could not find checkpoint_id for action '$action_id'"
             return 1
         fi
     else
-        debug_log "Error: Failed to get actions (HTTP $http_code): $body"
+        error_log "Error: Failed to get actions (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -275,7 +275,7 @@ cleanup_checkpoint() {
     checkpoint_id="${checkpoint_id//\"/}" # remove quotes if present
 
     if [ -z "$checkpoint_id" ]; then
-        debug_log "Error: cleanup_checkpoint requires checkpoint_id"
+        error_log "Error: cleanup_checkpoint requires checkpoint_id"
         return 1
     fi
 
@@ -305,7 +305,7 @@ extract_checkpoint_id() {
     local action_response="$1"
 
     if [ -z "$action_response" ]; then
-        debug_log "Error: extract_checkpoint_id requires action_response"
+        error_log "Error: extract_checkpoint_id requires action_response"
         return 1
     fi
 
@@ -328,7 +328,7 @@ validate_propagator_connectivity() {
         debug_log "Propagator service connectivity validated"
         return 0
     else
-        debug_log "Error: Failed to connect to propagator service (HTTP $http_code): $body"
+        error_log "Error: Failed to connect to propagator service (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -341,7 +341,7 @@ parse_json_response() {
     local filter="$2"
 
     if [ -z "$json" ] || [ -z "$filter" ]; then
-        debug_log "Error: parse_json_response requires json and filter"
+        error_log "Error: parse_json_response requires json and filter"
         return 1
     fi
 
@@ -374,7 +374,7 @@ get_checkpoints() {
         echo "$body"
         return 0
     else
-        debug_log "Error: Failed to get checkpoints (HTTP $http_code): $body"
+        error_log "Error: Failed to get checkpoints (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -390,7 +390,7 @@ list_checkpoints() {
     local exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
-        debug_log "Failed to retrieve checkpoints"
+        error_log "Failed to retrieve checkpoints"
         return $exit_code
     fi
 
@@ -435,10 +435,10 @@ get_latest_pod_action_id() {
         echo "$body"
         return 0
     elif [ "$http_code" -eq 404 ]; then
-        debug_log "Error: No action found for pod '$pod_id'"
+        error_log "Error: No action found for pod '$pod_id'"
         return 1
     else
-        debug_log "Error: Failed to get action for pod (HTTP $http_code): $body"
+        error_log "Error: Failed to get action for pod (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -452,7 +452,7 @@ poll_restore_action_status() {
     local operation="${2:-restore}"
 
     if [ -z "$action_id" ]; then
-        debug_log "Error: poll_restore_action_status requires action_id"
+        error_log "Error: poll_restore_action_status requires action_id"
         return 1
     fi
 
@@ -483,8 +483,8 @@ poll_restore_action_status() {
                         return 0
                         ;;
                     "failed"|"error")
-                        debug_log "Error: $operation action failed with status '$status'"
-                        debug_log "Action details: $action_info"
+                        error_log "Error: $operation action failed with status '$status'"
+                        error_log "Action details: $action_info"
                         return 1
                         ;;
                     *)
@@ -501,7 +501,7 @@ poll_restore_action_status() {
         sleep 5
     done
 
-    debug_log "Error: Timeout waiting for $operation action '$action_id' to complete"
+    error_log "Error: Timeout waiting for $operation action '$action_id' to complete"
     return 1
 }
 
@@ -522,7 +522,7 @@ list_clusters() {
         echo "$body"
         return 0
     else
-        debug_log "Error: Failed to get clusters (HTTP $http_code): $body"
+        error_log "Error: Failed to get clusters (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -542,7 +542,7 @@ cluster_id() {
         fi
     fi
 
-    debug_log "Error: Cluster '$name' not found or no clusters available"
+    error_log "Error: Cluster '$name' not found or no clusters available"
     return 1
 }
 
@@ -553,7 +553,7 @@ validate_action_id() {
     if [[ "$id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
         debug_log "✅ Valid action ID: $id"
     else
-        debug_log "Error: Invalid action ID: $id"
+        error_log "Error: Invalid action ID: $id"
         return 1
     fi
 

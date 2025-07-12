@@ -117,7 +117,7 @@ get_restored_pod() {
         fi
     done
 
-    debug_log "No restored pods found for original pod $name"
+    error_log "No restored pods found for original pod $name"
     return 1
 }
 
@@ -140,7 +140,10 @@ validate_pod() {
         return 0
     fi
 
-    debug_log "Timed out waiting for pod $name to become Ready"
-    debug echo -e "$(kubectl get events --field-selector involvedObject.kind=Pod,involvedObject.name="$name" -n "$namespace" -o json | jq '.items[].message')"
+    error_log "Timed out waiting for pod $name to become Ready"
+    error_log "Events from pod $name in namespace $namespace:"
+    error echo -e "$(kubectl get events --field-selector involvedObject.kind=Pod,involvedObject.name="$name" -n "$namespace" -o json | jq '.items[].message')"
+    error_log "Logs from pod $name in namespace $namespace:"
+    error kubectl logs "$name" -n "$namespace" --tail=1000 --prefix=true 2>/dev/null || echo "No logs available"
     return 1
 }

@@ -51,7 +51,8 @@ helm_install_cedana() {
     debug kubectl logs -f -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true &
 
     if [ $? -ne 0 ]; then
-        debug_log "Error: Failed to install Cedana helm chart"
+        error_log "Error: Failed to install Cedana helm chart"
+        error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
     fi
 }
@@ -63,7 +64,7 @@ helm_uninstall_cedana() {
     helm uninstall cedana -n "$namespace"
 
     if [ $? -ne 0 ]; then
-        debug_log "Error: Failed to uninstall Cedana helm chart"
+        error_log "Error: Failed to uninstall Cedana helm chart"
         return 1
     fi
 

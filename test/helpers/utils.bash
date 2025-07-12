@@ -150,9 +150,25 @@ debug_log() {
     fi
 }
 
+error_log() {
+    local message="$1"
+    if [ "$DEBUG" == "1" ]; then
+        echo "[ERROR] $message" >&3
+    else
+        echo "[ERROR] $message" >&2
+    fi
+}
+
 debug() {
     if [ "$DEBUG" == "1" ]; then
-        echo "[DEBUG] Executing: $*" >&3
+        "$@" >&3 2>&1
+    else
+        "$@" >&2
+    fi
+}
+
+error() {
+    if [ "$DEBUG" == "1" ]; then
         "$@" >&3 2>&1
     else
         "$@" >&2

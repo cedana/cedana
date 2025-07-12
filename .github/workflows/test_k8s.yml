@@ -95,7 +95,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ inputs.gpu && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+      options: --privileged --init ${{ inputs.gpu && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host --network=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
