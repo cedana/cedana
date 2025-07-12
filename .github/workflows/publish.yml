@@ -321,13 +321,13 @@ jobs:
         run: |
           if [ -d /tmp/digests ]; then
             echo "DIGESTS_EXISTS=true" >> $GITHUB_OUTPUT
-            echo "IMAGE_NAME=$(ls /tmp/image-name)" >> $GITHUB_OUTPUT
+            echo "IMAGE_NAME=$(cat /tmp/image-name/name.txt)" >> $GITHUB_OUTPUT
           else
             echo "DIGESTS_EXISTS=false" >> $GITHUB_OUTPUT
           fi
           if [ -d /tmp/test-digests-latest ] && [ -d /tmp/test-digests-cuda ]; then
             echo "TEST_DIGESTS_EXISTS=true" >> $GITHUB_OUTPUT
-            echo "TEST_IMAGE_NAME=$(ls /tmp/test-image-name)" >> $GITHUB_OUTPUT
+            echo "TEST_IMAGE_NAME=$(cat /tmp/test-image-name/name.txt)" >> $GITHUB_OUTPUT
           else
             echo "TEST_DIGESTS_EXISTS=false" >> $GITHUB_OUTPUT
           fi

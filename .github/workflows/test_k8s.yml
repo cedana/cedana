@@ -199,9 +199,9 @@ jobs:
           RETRIES: 1
         run: |
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
-          HELPER_REPO=$(ls /tmp/image-name | head -n 1)
+          HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
           CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
-          CONTROLLER_REPO=$(ls /tmp/controller-image-name | head -n 1)
+          CONTROLLER_REPO=$(ls /tmp/controller-image-name/name.txt | head -n 1)
 
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then

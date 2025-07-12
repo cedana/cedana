@@ -197,9 +197,10 @@ jobs:
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
+          mkdir -p /tmp/image-name
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
-          touch "/tmp/image-name/${{ inputs.image_name }}"
+          echo "${{ inputs.image_name }}" > /tmp/image-name/name.txt
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
@@ -281,9 +282,10 @@ jobs:
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
+          mkdir -p /tmp/image-name
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
-          touch "/tmp/image-name/${{ inputs.test_image_name }}"
+          echo "${{ inputs.test_image_name }}" > /tmp/image-name/name.txt
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
