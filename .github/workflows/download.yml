@@ -279,7 +279,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: controller-digests-${{ matrix.arch }}
-          path: /tmp/controller-digests/*
+          path: /tmp/digests/*
           if-no-files-found: error
 
       - name: Upload image name
@@ -287,7 +287,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: controller-image-name
-          path: /tmp/controller-image-name/*
+          path: /tmp/image-name/*
           if-no-files-found: error
 
   runtime-shim:
