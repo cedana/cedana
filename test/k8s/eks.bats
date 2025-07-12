@@ -12,6 +12,7 @@ load ../helpers/k8s
 
 export CLUSTER_NAME="cedana-ci-$(unix_nano)"
 export NAMESPACE="default"
+export CLUSTER_ID
 export CEDANA_NAMESPACE="cedana-system"
 export RUNC_ROOT="/run/containerd/runc/k8s.io"
 
