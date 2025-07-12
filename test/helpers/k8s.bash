@@ -17,7 +17,6 @@ new_spec () {
 
     # Replace all 'name: <oldname>' patterns with the quoted newname
     sed -E "s/^([[:space:]\-]*name:[[:space:]]*)\"?$oldname\"?/\1\"$newname\"/g" "$spec" > "$newspec"
-    debug cat "$newspec"
 
     echo "$newspec"
 }
