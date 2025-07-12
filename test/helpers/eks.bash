@@ -158,8 +158,8 @@ wait_for_eks_node_groups() {
     local elapsed=0
 
     while [ $elapsed -lt $timeout ]; do
-        if aws eks describe-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "cedana-cpu-ci-pool" --region "$AWS_REGION" --query 'nodegroup.status' --output text 2>/dev/null | grep -q "ACTIVE" &&
-            aws eks describe-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name "cedana-1xgpu-ci-pool" --region "$AWS_REGION" --query 'nodegroup.status' --output text 2>/dev/null | grep -q "ACTIVE"; then
+        if aws eks describe-nodegroup --cluster-name "cedana-ci-nightly" --nodegroup-name "cedana-cpu-ci-pool" --region "$AWS_REGION" --query 'nodegroup.status' --output text 2>/dev/null | grep -q "ACTIVE" &&
+            aws eks describe-nodegroup --cluster-name "cedana-ci-nightly" --nodegroup-name "cedana-1xgpu-ci-pool" --region "$AWS_REGION" --query 'nodegroup.status' --output text 2>/dev/null | grep -q "ACTIVE"; then
             debug_log "All EKS node groups are ready"
             return 0
         fi

@@ -95,7 +95,7 @@ helm_install_cedana_eks() {
     local cluster_name="$1"
     local namespace="$2"
 
-    local helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm --version 0.4.3-pre"
+    local helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm --version 0.0.0-test"
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
     helm_cmd="$helm_cmd --set cedanaConfig.cedanaUrl=$CEDANA_URL"
     helm_cmd="$helm_cmd --set cedanaConfig.cedanaAuthToken=$CEDANA_AUTH_TOKEN"
