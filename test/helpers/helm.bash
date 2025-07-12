@@ -110,8 +110,8 @@ helm_install_cedana_eks() {
         helm_cmd="$helm_cmd --set controllerManager.manager.image.pullPolicy=Always"
     fi
 
-    helm_cmd="$helm_cmd --set daemonHelper.image.repository=cedana/cedana-helper-test"
-    helm_cmd="$helm_cmd --set daemonHelper.image.tag=feat-ced-1201"
+    helm_cmd="$helm_cmd --set daemonHelper.image.repository=cedana/cedana-helper"
+    helm_cmd="$helm_cmd --set daemonHelper.image.tag=v0.9.252"
     helm_cmd="$helm_cmd --set daemonHelper.image.pullPolicy=Always"
     helm_cmd="$helm_cmd --wait --timeout=2m"
 
