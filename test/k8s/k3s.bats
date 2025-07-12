@@ -60,8 +60,6 @@ teardown_file() {
     run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
-    sleep 100
-
     run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
     [ "$status" -eq 0 ]
 }
