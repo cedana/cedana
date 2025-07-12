@@ -44,7 +44,7 @@ helm_install_cedana() {
         fi
         helm_cmd="$helm_cmd --set daemonHelper.image.pullPolicy=Always"
     fi
-    # helm_cmd="$helm_cmd --wait --timeout=2m"
+    helm_cmd="$helm_cmd --wait --timeout=5m"
 
     $helm_cmd
 
