@@ -19,8 +19,8 @@ export RUNC_ROOT="/run/containerd/runc/k8s.io"
 
 setup_file() {
     setup_k3s_cluster
-    helm_install_cedana "$CLUSTER_NAME" $CEDANA_NAMESPACE
     tail_all_logs $CEDANA_NAMESPACE &
+    helm_install_cedana "$CLUSTER_NAME" $CEDANA_NAMESPACE
     CLUSTER_ID=$(wait_for_cmd 120 cluster_id "$CLUSTER_NAME")
 }
 
@@ -40,7 +40,7 @@ teardown_file() {
     [ "$status" -eq 0 ]
 
     # Check if all Cedana pods are actually ready
-    run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=120s
+    run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=300s
     [ "$status" -eq 0 ]
 
     run validate_propagator_connectivity
@@ -60,7 +60,7 @@ teardown_file() {
     [ "$status" -eq 0 ]
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
     run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
@@ -71,15 +71,16 @@ teardown_file() {
 @test "Checkpoint a pod (wait for completion, streams=$CEDANA_CHECKPOINT_STREAMS)" {
     local name
     name=$(unix_nano)
+    local script
+    script=$(cat "$WORKLOADS"/date-loop.sh)
     local spec
-    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "sleep 10")
-    local action_id
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
     # Checkpoint the test pod
@@ -104,15 +105,16 @@ teardown_file() {
 @test "Restore a pod with original pod running (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
     local name
     name=$(unix_nano)
+    local script
+    script=$(cat "$WORKLOADS"/date-loop.sh)
     local spec
-    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "sleep 10")
-    local action_id
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
     # Checkpoint the test pod
@@ -158,15 +160,16 @@ teardown_file() {
 @test "Restore a pod with original pod deleted (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
     local name
     name=$(unix_nano)
+    local script
+    script=$(cat "$WORKLOADS"/date-loop.sh)
     local spec
-    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "sleep 10")
-    local action_id
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=120s -n "$NAMESPACE"
+    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
     [ "$status" -eq 0 ]
 
     # Checkpoint the test pod

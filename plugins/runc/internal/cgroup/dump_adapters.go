@@ -15,15 +15,18 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func ManageCgroupsForDump(mode criu_proto.CriuCgMode) types.Adapter[types.Dump] {
+func ManageCgroupsForDump(defaultMode criu_proto.CriuCgMode) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 			if req.GetCriu() == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
 
-			req.Criu.ManageCgroups = proto.Bool(true)
-			req.Criu.ManageCgroupsMode = &mode
+			// Only override if it is not already set.
+			if req.Criu.ManageCgroupsMode == nil {
+				req.Criu.ManageCgroups = proto.Bool(true)
+				req.Criu.ManageCgroupsMode = &defaultMode
+			}
 
 			return next(ctx, opts, resp, req)
 		}

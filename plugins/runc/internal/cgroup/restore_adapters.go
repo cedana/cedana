@@ -28,15 +28,18 @@ import (
 )
 
 // Sets the ManageCgroups field in the criu options to true.
-func ManageCgroupsForRestore(mode criu_proto.CriuCgMode) types.Adapter[types.Restore] {
+func ManageCgroupsForRestore(defaultMode criu_proto.CriuCgMode) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			if req.GetCriu() == nil {
 				req.Criu = &criu_proto.CriuOpts{}
 			}
 
-			req.Criu.ManageCgroups = proto.Bool(true)
-			req.Criu.ManageCgroupsMode = &mode
+			// Only override if it is not already set.
+			if req.Criu.ManageCgroupsMode == nil {
+				req.Criu.ManageCgroups = proto.Bool(true)
+				req.Criu.ManageCgroupsMode = &defaultMode
+			}
 
 			return next(ctx, opts, resp, req)
 		}

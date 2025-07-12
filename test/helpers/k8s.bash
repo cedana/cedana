@@ -106,8 +106,8 @@ validate_pod() {
     error_log "Timed out waiting for pod $name to become Ready"
     error_log "Dumping pod description for $name in namespace $namespace:"
     error kubectl describe pod "$name" -n "$namespace" || error_lod "No description available"
-    error_log "Events from pod $name in namespace $namespace:"
-    error echo -e "$(kubectl get events --field-selector involvedObject.kind=Pod,involvedObject.name="$name" -n "$namespace" -o json | jq '.items[].message')"
+    # error_log "Events from pod $name in namespace $namespace:"
+    # error echo -e "$(kubectl get events --field-selector involvedObject.kind=Pod,involvedObject.name="$name" -n "$namespace" -o json | jq '.items[].message')"
     error_log "Logs from pod $name in namespace $namespace:"
     error kubectl logs "$name" -n "$namespace" --tail=1000 --prefix=true 2>/dev/null || echo "No logs available"
     return 1

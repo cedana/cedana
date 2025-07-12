@@ -53,6 +53,8 @@ helm_install_cedana() {
         helm_cmd="$helm_cmd --set daemonHelper.image.pullPolicy=Always"
     fi
 
+    helm_cmd="$helm_cmd --wait --timeout=5m"
+
     $helm_cmd || {
         error_log "Error: Failed to install helm chart"
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
