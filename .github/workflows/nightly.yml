@@ -14,8 +14,11 @@ jobs:
     secrets: inherit
     with:
       cedana_version: main
+      criu_version: release
       gpu_version: main
       streamer_version: main
+      controller_version: main
+      runtime_shim_version: release
 
   test:
     name: Test
