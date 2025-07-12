@@ -20,7 +20,8 @@ export RUNC_ROOT="/run/containerd/runc/k8s.io"
 setup_file() {
     setup_k3s_cluster
     helm_install_cedana "$CLUSTER_NAME" $CEDANA_NAMESPACE
-    CLUSTER_ID=$(cluster_id "$CLUSTER_NAME")
+    CLUSTER_ID=$(wait_for_cmd 120 cluster_id "$CLUSTER_NAME")
+    tail_cedana_logs $CEDANA_NAMESPACE 1000 &
 }
 
 teardown_file() {

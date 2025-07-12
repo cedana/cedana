@@ -147,3 +147,11 @@ validate_pod() {
     error kubectl logs "$name" -n "$namespace" --tail=1000 --prefix=true 2>/dev/null || echo "No logs available"
     return 1
 }
+
+tail_cedana_logs() {
+    local namespace="$1"
+    local tail_lines="${2:-1000}"
+
+    debug_log "Tailing Cedana logs in namespace $namespace"
+    debug kubectl logs -f -n "$namespace" -l app.kubernetes.io/instance=cedana --tail="$tail_lines" --prefix=true
+}

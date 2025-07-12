@@ -65,7 +65,7 @@ env_exists() {
 check_env() {
     local var=$1
     if ! env_exists "$var"; then
-        echo "[ERROR] Environment variable '$var' is not set." >&2
+        error_log "Environment variable '$var' is not set."
         exit 1
     fi
 }
@@ -77,7 +77,7 @@ cmd_exists() {
 check_cmd() {
     local cmd=$1
     if ! cmd_exists "$cmd"; then
-        echo "[ERROR] Command '$cmd' is not available." >&2
+        error_log "Command '$cmd' is not available."
         exit 1
     fi
 }
@@ -126,16 +126,18 @@ wait_for_pid() {
     return 0
 }
 
-# Wait for a cmd to start returning zero exit code
+# Wait for a cmd to start returning zero exit code, then return the output.
 wait_for_cmd() {
     local timeout=${1:-60}
-    local interval=${2:-1}
-    shift 2
+    local interval=1
+    shift 1
     local elapsed=0
-    while ! "$@" &> /dev/null; do
+    while ! "$@" 2> /dev/null; do
         if (( elapsed >= timeout )); then
+            error_log "Timed out waiting for '$*' to succeed after $timeout seconds"
             return 1
         fi
+        debug_log "Waiting for '$*'"
         sleep "$interval"
         ((elapsed += interval))
     done

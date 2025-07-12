@@ -44,11 +44,7 @@ helm_install_cedana() {
         fi
         helm_cmd="$helm_cmd --set daemonHelper.image.pullPolicy=Always"
     fi
-    helm_cmd="$helm_cmd --wait --timeout=5m"
-
     $helm_cmd
-
-    debug kubectl logs -f -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true &
 
     if [ $? -ne 0 ]; then
         error_log "Error: Failed to install Cedana helm chart"
@@ -72,8 +68,6 @@ helm_uninstall_cedana() {
     while kubectl get pods -n "$namespace" --no-headers 2>/dev/null | grep -q .; do
         sleep 2
     done
-
-    kubectl delete namespace "$namespace" --ignore-not-found=true
 
     debug_log "Cedana helm chart uninstalled successfully"
 }
