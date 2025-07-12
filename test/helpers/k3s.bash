@@ -47,21 +47,15 @@ start_k3s_cluster() {
     fi
 
     debug_log "k3s binary found, starting k3s..."
-    k3s $INSTALL_K3S_EXEC &> /dev/null &
+    eval "k3s $INSTALL_K3S_EXEC" &> /dev/null &
 
     debug_log "Waiting for k3s cluster to start..."
-    local seconds=0
-    local timeout=60
-    until [ "$(kubectl get nodes --no-headers 2>/dev/null | wc -l)" -ge 1 ]; do
-        (( seconds >= timeout )) && {
-            error_log "Timed out waiting for k3s node object to exist"
-            return 1
-        }
-        sleep 1
-    done
+
+    local timeout=120
+    wait_for_cmd "$timeout" "kubectl get nodes | grep -q ."
 
     debug_log "Waiting for k3s node to be Ready..."
-    if ! kubectl wait --for=condition=Ready node --all --timeout=60s; then
+    if ! kubectl wait --for=condition=Ready node --all --timeout="$timeout"s; then
         error_log "Timed out waiting for k3s node to be Ready"
         return 1
     fi
@@ -74,7 +68,7 @@ stop_k3s_cluster() {
 
     if command -v k3s-killall.sh &> /dev/null; then
         debug_log "Running k3s killall script..."
-        timeout 60 k3s-killall.sh || error_log "k3s killall script timed out or failed"
+        timeout 120 k3s-killall.sh || error_log "k3s killall script timed out or failed"
     fi
 
     debug_log "Stopping k3s processes..."
@@ -91,11 +85,12 @@ teardown_k3s_cluster() {
 
     if command -v k3s-uninstall.sh &> /dev/null; then
         debug_log "Running k3s uninstall script..."
-        timeout 60 k3s-uninstall.sh || error_log "k3s uninstall script timed out or failed"
+        timeout 120 k3s-uninstall.sh || error_log "k3s uninstall script timed out or failed"
     fi
 
     debug_log "Stopping k3s processes..."
     pkill k3s || true
+    pkill containerd || true
 
     sleep 2
 
@@ -114,7 +109,7 @@ restart_k3s_cluster() {
 }
 
 install_runtime_shim() {
-    debug_log "Installing Cedana runtime shim for k3s..."
+    debug_log "Installing runtime shim for k3s..."
 
     if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
         debug_log "Shim not found in /usr/local/bin"
@@ -128,7 +123,6 @@ install_runtime_shim() {
 
     local template=$CONTAINEDERD_CONFIG_PATH.tmpl
     if ! grep -q 'cedana' "$template"; then
-        debug_log "k3s detected. Creating default config file at $template"
         echo '{{ template "base" . }}' > $template
         cat >> $template <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
@@ -137,5 +131,5 @@ install_runtime_shim() {
 END_CAT
     fi
 
-    debug_log "Installed Cedana runtime shim for k3s"
+    debug_log "Installed runtime shim for k3s"
 }

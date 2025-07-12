@@ -20,8 +20,8 @@ export RUNC_ROOT="/run/containerd/runc/k8s.io"
 setup_file() {
     setup_k3s_cluster
     helm_install_cedana "$CLUSTER_NAME" $CEDANA_NAMESPACE
+    tail_all_logs $CEDANA_NAMESPACE &
     CLUSTER_ID=$(wait_for_cmd 120 cluster_id "$CLUSTER_NAME")
-    tail_cedana_logs $CEDANA_NAMESPACE 1000 &
 }
 
 teardown_file() {
@@ -51,8 +51,10 @@ teardown_file() {
 @test "Deploy a pod" {
     local name
     name=$(unix_nano)
+    local script
+    script=$(cat "$WORKLOADS"/date-loop.sh)
     local spec
-    spec=$(new_spec /cedana-samples/kubernetes/counting.yaml "$name")
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
     run kubectl apply -f "$spec"
     [ "$status" -eq 0 ]
@@ -70,7 +72,7 @@ teardown_file() {
     local name
     name=$(unix_nano)
     local spec
-    spec=$(new_spec /cedana-samples/kubernetes/counting.yaml "$name")
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "sleep 10")
     local action_id
 
     run kubectl apply -f "$spec"
@@ -103,7 +105,7 @@ teardown_file() {
     local name
     name=$(unix_nano)
     local spec
-    spec=$(new_spec /cedana-samples/kubernetes/counting.yaml "$name")
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "sleep 10")
     local action_id
 
     run kubectl apply -f "$spec"
@@ -157,7 +159,7 @@ teardown_file() {
     local name
     name=$(unix_nano)
     local spec
-    spec=$(new_spec /cedana-samples/kubernetes/counting.yaml "$name")
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "sleep 10")
     local action_id
 
     run kubectl apply -f "$spec"

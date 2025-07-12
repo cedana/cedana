@@ -21,12 +21,11 @@ new_spec () {
     echo "$newspec"
 }
 
-simple_pod_spec () {
-    local name="$1"
-    local image="$2"
-    local command="$3"
+cmd_pod_spec () {
+    local namespace="${1:-default}"
+    local name="$2"
+    local image="$3"
     local args="$4"
-    local namespace="${5:-default}"
 
     local spec=/tmp/pod-${name}.yaml
     cat > "$spec" << EOF
@@ -40,56 +39,21 @@ metadata:
 spec:
   restartPolicy: Never
   containers:
-  - name: $name
+  - name: "$name"
     image: $image
+    command: ["/bin/sh", "-c"]
 EOF
-    if [[ -n "$command" ]]; then
-    cat >> "$spec" << EOF
-        command: ${command}
-EOF
-    fi
+
     if [[ -n "$args" ]]; then
-    cat >> "$spec" << EOF
-        args: ${args}
-EOF
+        # Print args as multi-line block, indent each line correctly
+        printf "    args:\n" >> "$spec"
+        printf "      - |\n" >> "$spec"
+        while IFS= read -r line; do
+            printf "        %s\n" "$line" >> "$spec"
+        done <<< "$args"
     fi
 
-    echo "$spec"
-}
-
-gpu_pod_spec () {
-    local name="$1"
-    local image="$2"
-    local command="$3"
-    local args="$4"
-    local namespace="${5:-default}"
-
-    local spec=/tmp/pod-${name}.yaml
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: $namespace
-  labels:
-    app: "$name"
-spec:
-  restartPolicy: Never
-  runtimeClassName: cedana # for Cedana GPU C/R support
-  containers:
-  - name: $name
-    image: $image
-EOF
-    if [[ -n "$command" ]]; then
-    cat >> "$spec" << EOF
-        command: ${command}
-EOF
-    fi
-    if [[ -n "$args" ]]; then
-    cat >> "$spec" << EOF
-        args: ${args}
-EOF
-    fi
+    # debug cat "$spec"
 
     echo "$spec"
 }
@@ -148,10 +112,17 @@ validate_pod() {
     return 1
 }
 
-tail_cedana_logs() {
+tail_all_logs() {
     local namespace="$1"
-    local tail_lines="${2:-1000}"
+    local timeout="${2:-120s}"
 
-    debug_log "Tailing Cedana logs in namespace $namespace"
-    debug kubectl logs -f -n "$namespace" -l app.kubernetes.io/instance=cedana --tail="$tail_lines" --prefix=true
+    wait_for_cmd "$timeout" "kubectl get pods -n $namespace | grep -q ."
+
+    debug_log "Waiting for all pods in namespace $namespace to be Running"
+
+    kubectl get pods -n "$namespace" -o name | xargs -n1 -P0 -I{} kubectl wait --for=jsonpath='{.status.phase}=Running' -n "$namespace" --timeout="$timeout" {}
+
+    debug_log "Tailing all logs in namespace $namespace"
+
+    debug "kubectl get pods -n $namespace -o name | xargs -n1 -P0 -I{} kubectl logs -n $namespace -f {}"
 }

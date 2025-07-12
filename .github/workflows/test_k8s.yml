@@ -105,6 +105,12 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Download helm chart
+        uses: actions/download-artifact@v4
+        with:
+          name: helm-chart
+          path: /tmp/helm-chart
+
       - name: Download helper digest
         uses: actions/download-artifact@v4
         with:
@@ -203,18 +209,55 @@ jobs:
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
           CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
           CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
+          HELM_CHART=/tmp/helm-chart
 
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
+              make test-k8s \
+                TAGS=k3s \
+                PARALLELISM=$PARALLELISM \
+                RETRIES=$RETRIES \
+                DEBUG=$DEBUG \
+                CONTROLLER_REPO=$CONTROLLER_REPO \
+                CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
+                HELPER_REPO=$HELPER_REPO \
+                HELPER_DIGEST=$HELPER_DIGEST \
+                HELM_CHART=$HELM_CHART
             else
-              make test-k8s TAGS=k3s,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
+              make test-k8s \
+                TAGS=k3s,!large \
+                PARALLELISM=$PARALLELISM \
+                RETRIES=$RETRIES \
+                DEBUG=$DEBUG \
+                CONTROLLER_REPO=$CONTROLLER_REPO \
+                CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
+                HELPER_REPO=$HELPER_REPO \
+                HELPER_DIGEST=$HELPER_DIGEST \
+                HELM_CHART=$HELM_CHART
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-k8s TAGS=k3s,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
+              make test-k8s \
+                TAGS=k3s,!gpu \
+                PARALLELISM=$PARALLELISM \
+                RETRIES=$RETRIES \
+                DEBUG=$DEBUG \
+                CONTROLLER_REPO=$CONTROLLER_REPO \
+                CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
+                HELPER_REPO=$HELPER_REPO \
+                HELPER_DIGEST=$HELPER_DIGEST \
+                HELM_CHART=$HELM_CHART
             else
-              make test-k8s TAGS=k3s,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG CONTROLLER_REPO=$CONTROLLER_REPO CONTROLLER_DIGEST=$CONTROLLER_DIGEST HELPER_REPO=$HELPER_REPO HELPER_DIGEST=$HELPER_DIGEST
+              make test-k8s \
+                TAGS=k3s,!gpu,!large \
+                PARALLELISM=$PARALLELISM \
+                RETRIES=$RETRIES \
+                DEBUG=$DEBUG \
+                CONTROLLER_REPO=$CONTROLLER_REPO \
+                CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
+                HELPER_REPO=$HELPER_REPO \
+                HELPER_DIGEST=$HELPER_DIGEST \
+                HELM_CHART=$HELM_CHART
             fi
           fi
 

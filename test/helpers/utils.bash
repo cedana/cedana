@@ -132,15 +132,30 @@ wait_for_cmd() {
     local interval=1
     shift 1
     local elapsed=0
-    while ! "$@" 2> /dev/null; do
-        if (( elapsed >= timeout )); then
-            error_log "Timed out waiting for '$*' to succeed after $timeout seconds"
-            return 1
-        fi
-        debug_log "Waiting for '$*'"
-        sleep "$interval"
-        ((elapsed += interval))
-    done
+    debug_log "Waiting for '$*' (timeout: $timeout seconds)"
+    # Remove quotes from single argument case
+    if [ "$#" -eq 1 ]; then
+        local cmd=$1
+        while ! eval "$cmd" 2> /dev/null; do
+            if (( elapsed >= timeout )); then
+                error_log "Timed out waiting for '$cmd' to succeed after $timeout seconds"
+                return 1
+            fi
+            sleep "$interval"
+            ((elapsed += interval))
+        done
+    else
+        while ! "$@" 2> /dev/null; do
+            if (( elapsed >= timeout )); then
+                error_log "Timed out waiting for '$*' to succeed after $timeout seconds"
+                return 1
+            fi
+            sleep "$interval"
+            ((elapsed += interval))
+        done
+    fi
+    debug_log "'$*' succeeded after $elapsed seconds"
+
     return 0
 }
 
@@ -163,16 +178,32 @@ error_log() {
 
 debug() {
     if [ "$DEBUG" == "1" ]; then
-        "$@" >&3 2>&1
+        if [ "$#" -eq 1 ]; then
+            eval "$1" >&3 2>&1
+        else
+            "$@" >&3 2>&1
+        fi
     else
-        "$@" >&2
+        if [ "$#" -eq 1 ]; then
+            eval "$1" >&2
+        else
+            "$@" >&2
+        fi
     fi
 }
 
 error() {
     if [ "$DEBUG" == "1" ]; then
-        "$@" >&3 2>&1
+        if [ "$#" -eq 1 ]; then
+            eval "$1" >&3 2>&1
+        else
+            "$@" >&3 2>&1
+        fi
     else
-        "$@" >&2
+        if [ "$#" -eq 1 ]; then
+            eval "$1" >&2
+        else
+            "$@" >&2
+        fi
     fi
 }
