@@ -4,7 +4,7 @@
 
 export CEDANA_PROTOCOL=${CEDANA_PROTOCOL:-unix}
 export CEDANA_REMOTE=${CEDANA_REMOTE:-false}
-export CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-trace}
+export CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-debug}
 export CEDANA_LOG_LEVEL_NO_SERVER=$CEDANA_LOG_LEVEL
 export CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-false}
 export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
@@ -33,7 +33,8 @@ WAIT_TIMEOUT=100
 setup_file_daemon() {
     if env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        export CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_CONFIG_DIR
+        CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
@@ -48,7 +49,8 @@ teardown_file_daemon() {
 setup_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        export CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_CONFIG_DIR
+        CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"

@@ -349,27 +349,27 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 						$(PLUGIN_BIN_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_CRIU)
 
-docker: ## Build the helper Docker image
+docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building helper Docker image..."
 	docker buildx build --platform $(PLATFORM) -t $(DOCKER_IMAGE) --load . ;\
 
-docker-test: ## Build the test Docker image
+docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test Docker image..."
 	cd test ;\
 	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE) --load . ;\
 	cd -
 
-docker-test-cuda: ## Build the test Docker image (CUDA)
+docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
 	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
-docker-test-push: ## Push the test Docker image
+docker-test-push: ## Push the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-cuda-push: ## Push the test Docker image (CUDA)
+docker-test-cuda-push: ## Push the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 

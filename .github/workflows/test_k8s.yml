@@ -200,6 +200,7 @@ jobs:
       - name: Run k8s tests
         env:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
+          CEDANA_LOG_LEVEL: trace # trace until stabilized
           GPU: ${{ inputs.gpu }}
           # PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM: 1
