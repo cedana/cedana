@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 
 install_helm() {
+    if command -v helm &> /dev/null; then
+        debug_log "helm is already installed"
+        return 0
+    fi
     debug_log "Installing helm..."
     curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
     chmod 700 /tmp/get_helm.sh
     /tmp/get_helm.sh
+    rm -f /tmp/get_helm.sh
+    debug_log "helm installed"
 }
 
 helm_install_cedana() {
-    install_helm
-
     debug_log "Installing helm chart... (chart: $HELM_CHART)"
 
     local cluster_name="$1"
@@ -34,26 +38,24 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set cedanaConfig.pluginsBuilds=local" # don't download any from registry
     if [ -n "$CONTROLLER_REPO" ]; then
         helm_cmd="$helm_cmd --set controllerManager.manager.image.repository=$CONTROLLER_REPO"
-        if [ -n "$CONTROLLER_TAG" ]; then
-            helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CONTROLLER_TAG"
-        fi
         if [ -n "$CONTROLLER_DIGEST" ]; then
             helm_cmd="$helm_cmd --set controllerManager.manager.image.digest=$CONTROLLER_DIGEST"
+        elif [ -n "$CONTROLLER_TAG" ]; then
+            helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CONTROLLER_TAG"
         fi
-        helm_cmd="$helm_cmd --set controllerManager.manager.image.pullPolicy=Always"
+        helm_cmd="$helm_cmd --set controllerManager.manager.image.imagePullPolicy=IfNotPresent"
     fi
     if [ -n "$HELPER_REPO" ]; then
         helm_cmd="$helm_cmd --set daemonHelper.image.repository=$HELPER_REPO"
-        if [ -n "$HELPER_TAG" ]; then
-            helm_cmd="$helm_cmd --set daemonHelper.image.tag=$HELPER_TAG"
-        fi
         if [ -n "$HELPER_DIGEST" ]; then
             helm_cmd="$helm_cmd --set daemonHelper.image.digest=$HELPER_DIGEST"
+        elif [ -n "$HELPER_TAG" ]; then
+            helm_cmd="$helm_cmd --set daemonHelper.image.tag=$HELPER_TAG"
         fi
-        helm_cmd="$helm_cmd --set daemonHelper.image.pullPolicy=Always"
+        helm_cmd="$helm_cmd --set daemonHelper.image.imagePullPolicy=IfNotPresent"
     fi
 
-    helm_cmd="$helm_cmd --wait --timeout=5m"
+    helm_cmd="$helm_cmd --wait --atomic --timeout=3m"
 
     $helm_cmd || {
         error_log "Error: Failed to install helm chart"
@@ -73,7 +75,7 @@ helm_uninstall_cedana() {
 
     debug_log "Waiting for all pods in $namespace namespace to terminate..."
 
-    wait_for_cmd 60 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
+    wait_for_cmd_fail 60 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
 
     debug_log "Helm chart uninstalled successfully"
 }

@@ -46,6 +46,8 @@ type CRIU struct {
     BinaryPath string `json:"binary_path" key:"binary_path" yaml:"binary_path" mapstructure:"binary_path"`
     // LeaveRunning sets whether to leave the process running after checkpoint
     LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
+		// ManageCgroupsMode sets the default cgroup C/R mode for CRIU (none, props, soft, full, strict, ignore)
+		ManageCgroupsMode string `json:"manage_cgroups_mode" key:"manage_cgroups_mode" yaml:"manage_cgroups_mode" mapstructure:"manage_cgroups_mode"`
 }
 ```
 
@@ -110,6 +112,8 @@ type GPU struct {
 		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		// LdLibPath holds any additional directories to search for GPU libraries
+		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
 }
 ```
 

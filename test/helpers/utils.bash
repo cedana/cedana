@@ -159,6 +159,39 @@ wait_for_cmd() {
     return 0
 }
 
+# Same as wait_for_cmd, but waits for the command to fail instead of succeed.
+wait_for_cmd_fail() {
+    local timeout=${1:-60}
+    local interval=1
+    shift 1
+    local elapsed=0
+    debug_log "Waiting for '$*' to fail (timeout: $timeout seconds)"
+    # Remove quotes from single argument case
+    if [ "$#" -eq 1 ]; then
+        local cmd=$1
+        while eval "$cmd" 2> /dev/null; do
+            if (( elapsed >= timeout )); then
+                error_log "Timed out waiting for '$cmd' to fail after $timeout seconds"
+                return 1
+            fi
+            sleep "$interval"
+            ((elapsed += interval))
+        done
+    else
+        while "$@" 2> /dev/null; do
+            if (( elapsed >= timeout )); then
+                error_log "Timed out waiting for '$*' to fail after $timeout seconds"
+                return 1
+            fi
+            sleep "$interval"
+            ((elapsed += interval))
+        done
+    fi
+    debug_log "'$*' failed after $elapsed seconds"
+
+    return 0
+}
+
 
 debug_log() {
     local message="$1"

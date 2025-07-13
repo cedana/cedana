@@ -150,12 +150,12 @@ TIMEOUT?=600
 RETRIES?=0
 DEBUG?=0
 HELPER_REPO?=cedana/cedana-helper
-HELPER_TAG?=latest
+HELPER_TAG?=""
 HELPER_DIGEST?=""
 CONTROLLER_REPO?=cedana/cedana-controller
-CONTROLLER_TAG?=latest
+CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
-HELM_CHART?=
+HELM_CHART?=""
 BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter junit
@@ -288,15 +288,26 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 
 test-enter: ## Enter the test environment
 	$(DOCKER_TEST_CREATE) ;\
-	$(DOCKER_TEST_START) >/dev/null ;\
-	$(DOCKER_TEST_EXEC) /bin/bash ;\
-	$(DOCKER_TEST_REMOVE) >/dev/null
+	if [ "$$?" -ne 0 ]; then \
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+	else \
+		$(DOCKER_TEST_START) >/dev/null ;\
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+		$(DOCKER_TEST_REMOVE) >/dev/null ;\
+	fi ;\
 
 test-enter-cuda: ## Enter the test environment (CUDA)
 	$(DOCKER_TEST_CREATE_CUDA) ;\
-	$(DOCKER_TEST_START) >/dev/null ;\
-	$(DOCKER_TEST_EXEC) /bin/bash ;\
-	$(DOCKER_TEST_REMOVE) >/dev/null
+	if [ "$$?" -ne 0 ]; then \
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+	else \
+		$(DOCKER_TEST_START) >/dev/null ;\
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+		$(DOCKER_TEST_REMOVE) >/dev/null ;\
+	fi ;\
+
+test-k9s: ## Enter k9s in the test environment
+	$(DOCKER_TEST_EXEC) k9s ;\
 
 ##########
 ##@ Docker
@@ -306,22 +317,24 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 # and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
 # the default).
 
-DOCKER_CONTAINER_NAME=cedana-test
+DOCKER_IMAGE=cedana/cedana-helper:latest
+DOCKER_TEST_CONTAINER_NAME=cedana-test
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
-DOCKER_TEST_START=docker start $(DOCKER_CONTAINER_NAME)
-DOCKER_TEST_EXEC=docker exec -it $(DOCKER_CONTAINER_NAME)
-DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_CONTAINER_NAME)
+DOCKER_TEST_START=docker start $(DOCKER_TEST_CONTAINER_NAME)
+DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
+DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME)
+PLATFORM=linux/amd64,linux/arm64
 
-PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-HELM_CHART_COPY=if [ -e $(HELM_CHART) ]; then docker cp $(HELM_CHART) $(DOCKER_CONTAINER_NAME):/helm-chart ; fi >/dev/null
+PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host \
-				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --name=$(DOCKER_TEST_CONTAINER_NAME) \
+						-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN) \
 				$(DOCKER_ADDITIONAL_OPTS)
 DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
@@ -336,16 +349,20 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 						$(PLUGIN_BIN_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_CRIU)
 
+docker: ## Build the helper Docker image
+	@echo "Building helper Docker image..."
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_IMAGE) --load . ;\
+
 docker-test: ## Build the test Docker image
 	@echo "Building test Docker image..."
 	cd test ;\
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE) --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE) --load . ;\
 	cd -
 
 docker-test-cuda: ## Build the test Docker image (CUDA)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
 docker-test-push: ## Push the test Docker image

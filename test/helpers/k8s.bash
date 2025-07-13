@@ -4,6 +4,56 @@
 ### Kubernetes Helpers ###
 ##########################
 
+install_kubectl() {
+    if command -v kubectl &> /dev/null; then
+        debug_log "kubectl is already installed"
+        return 0
+    fi
+    debug_log "Installing kubectl..."
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)
+            KC_ARCH="amd64"
+            ;;
+        aarch64|arm64)
+            KC_ARCH="arm64"
+            ;;
+        *)
+            error_log "Unsupported architecture for kubectl: $ARCH"
+            return 1
+            ;;
+    esac
+    curl -Lo /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/$KC_ARCH/kubectl
+    install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+    rm -f /tmp/kubectl
+    debug_log "kubectl installed"
+}
+
+install_k9s () {
+    if command -v k9s &> /dev/null; then
+        debug_log "k9s is already installed"
+        return 0
+    fi
+    debug_log "Installing k9s..."
+    ARCH=$(uname -m)
+    case "$ARCH" in
+        x86_64)
+            K9S_ARCH="amd64"
+            ;;
+        aarch64|arm64)
+            K9S_ARCH="arm64"
+            ;;
+        *)
+            error_log "Unsupported architecture for k9s: $ARCH"
+            return 1
+            ;;
+    esac
+    wget https://github.com/derailed/k9s/releases/latest/download/k9s_linux_"$K9S_ARCH".deb -O /tmp/k9s.deb
+    apt install -y /tmp/k9s.deb
+    rm -f /tmp/k9s.deb
+    debug_log "k9s installed"
+}
+
 # Generate a new spec from an existing one with a new name.
 new_spec () {
     local spec="$1"
@@ -90,6 +140,8 @@ validate_pod() {
     local namespace="$1"
     local name="$2"
     local timeout="$3"
+    local stable_check_duration=5 # seconds to check if pod stays Ready
+    local stable_check_interval=1 # polling interval
 
     if ! kubectl get pod "$name" -n "$namespace" &>/dev/null; then
         debug_log "Pod $name does not exist in namespace $namespace"
@@ -100,7 +152,27 @@ validate_pod() {
 
     if kubectl wait --for=condition=Ready pod/"$name" -n "$namespace" --timeout="$timeout" 2>/dev/null; then
         debug_log "Pod $name is Ready"
-        return 0
+
+        # Additional check: Verify pod stays Ready for a while
+        local ready_consistently=true
+        local elapsed=0
+        while [ $elapsed -lt $stable_check_duration ]; do
+            status=$(kubectl get pod "$name" -n "$namespace" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+            if [ "$status" != "True" ]; then
+                ready_consistently=false
+                break
+            fi
+            sleep $stable_check_interval
+            ((elapsed+=stable_check_interval))
+        done
+
+        if $ready_consistently; then
+            debug_log "Pod $name stayed Ready for $stable_check_duration seconds"
+            return 0
+        else
+            error_log "Pod $name did not stay Ready for the required duration"
+            # fall through to error handling below
+        fi
     fi
 
     error_log "Timed out waiting for pod $name to become Ready"
@@ -113,17 +185,50 @@ validate_pod() {
     return 1
 }
 
+# Tails logs of all pods in a given namespace, waiting for them to be Running first.
 tail_all_logs() {
     local namespace="$1"
-    local timeout="${2:-120s}"
+    local timeout="${2:-120}"
 
     wait_for_cmd "$timeout" "kubectl get pods -n $namespace | grep -q ."
 
-    debug_log "Waiting for all pods in namespace $namespace to be Running"
+    debug_log "Waiting for all pods in namespace $namespace to be Running (timeout: $timeout seconds)"
 
-    kubectl get pods -n "$namespace" -o name | xargs -n1 -P0 -I{} kubectl wait --for=jsonpath='{.status.phase}=Running' -n "$namespace" --timeout="$timeout" {}
+    kubectl get pods -n "$namespace" -o name | xargs -P0 -I{} kubectl wait --for=jsonpath='{.status.phase}=Running' -n "$namespace" --timeout="$timeout"s {} || {
+        error_log "Failed to wait for all pods in namespace $namespace to be Running"
+        for pod in $(kubectl get pods -n "$namespace" -o name); do
+            error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
+            kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
+                error_log "$line"
+            done
+        done
+        return 1
+    }
 
     debug_log "Tailing all logs in namespace $namespace"
 
-    debug "kubectl get pods -n $namespace -o name | xargs -n1 -P0 -I{} kubectl logs -n $namespace -f {}"
+    debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace -f {}"
+}
+
+# Waits for all pods in a given namespace to be Ready.
+wait_for_ready() {
+    local namespace="$1"
+    local timeout="${2:-120}"
+
+    wait_for_cmd "$timeout" "kubectl get pods -n $namespace | grep -q ."
+
+    debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
+
+    kubectl wait --for=condition=Ready pod --all -n "$namespace" --timeout="$timeout"s || {
+        error_log "Failed to wait for all pods in namespace $namespace to be Ready"
+        for pod in $(kubectl get pods -n "$namespace" -o name); do
+            error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
+            kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
+                error_log "$line"
+            done
+        done
+        return 1
+    }
+
+    debug_log "All pods in namespace $namespace are Ready"
 }

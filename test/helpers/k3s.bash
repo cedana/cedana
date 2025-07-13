@@ -9,7 +9,9 @@ INSTALL_K3S_EXEC="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
         --snapshotter=native"
-CONTAINEDERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
+CONTAINERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
+CONTAINERD_SOCK_PATH="/run/k3s/containerd/containerd.sock"
+CONTAINERD_NAMESPACE="k8s.io"
 
 kubectl() {
     command k3s kubectl "$@"
@@ -30,6 +32,12 @@ setup_k3s_cluster() {
     # XXX: The tar in busybox is incompatible with CRIU
     rm /var/lib/rancher/k3s/data/current/bin/tar
 
+    mkdir -p ~/.kube
+    cat $KUBECONFIG > ~/.kube/config
+
+    preload_images_k3s "cedana/cedana-helper:latest"
+    preload_images_k3s "cedana/cedana-controller:latest"
+
     debug_log "k3s cluster is ready"
 }
 
@@ -39,7 +47,7 @@ start_k3s_cluster() {
     # XXX: Pre-install the runtime shim so we won't have to restart k3s otherwise it needs to
     # be restarted after Cedana installs the new runtime shim.
 
-    install_runtime_shim
+    install_runtime_shim_k3s
 
     if ! command -v k3s &> /dev/null; then
         error_log "k3s binary not found"
@@ -73,6 +81,9 @@ stop_k3s_cluster() {
 
     debug_log "Stopping k3s processes..."
     pkill k3s || true
+    pkill containerd-shim-runc-v2 || true
+    pkill cedana-shim-runc-v2 || true
+    pkill kubectl || true
 
     sleep 2
 
@@ -90,7 +101,9 @@ teardown_k3s_cluster() {
 
     debug_log "Stopping k3s processes..."
     pkill k3s || true
-    pkill containerd || true
+    pkill -f containerd-shim-runc-v2 || true
+    pkill -f cedana-shim-runc-v2 || true
+    pkill kubectl || true
 
     sleep 2
 
@@ -108,7 +121,7 @@ restart_k3s_cluster() {
     start_k3s_cluster
 }
 
-install_runtime_shim() {
+install_runtime_shim_k3s() {
     debug_log "Installing runtime shim for k3s..."
 
     if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
@@ -116,12 +129,12 @@ install_runtime_shim() {
         return 1
     fi
 
-    if ! path_exists $CONTAINEDERD_CONFIG_PATH; then
-        mkdir -p "$(dirname "$CONTAINEDERD_CONFIG_PATH")"
-        touch "$CONTAINEDERD_CONFIG_PATH"
+    if ! path_exists $CONTAINERD_CONFIG_PATH; then
+        mkdir -p "$(dirname "$CONTAINERD_CONFIG_PATH")"
+        touch "$CONTAINERD_CONFIG_PATH"
     fi
 
-    local template=$CONTAINEDERD_CONFIG_PATH.tmpl
+    local template=$CONTAINERD_CONFIG_PATH.tmpl
     if ! grep -q 'cedana' "$template"; then
         echo '{{ template "base" . }}' > $template
         cat >> $template <<'END_CAT'
@@ -132,4 +145,33 @@ END_CAT
     fi
 
     debug_log "Installed runtime shim for k3s"
+}
+
+# Pre-load an image into k3s from docker if available locally
+preload_images_k3s() {
+    local image="$1"
+    if ! docker images -q "$image" | grep -q .; then
+        debug_log "Local $image image not found, skipping..."
+        return 0
+    fi
+
+    local tar
+    tar=/tmp/$(unix_nano).tar
+    debug_log "Local $image image found, preloading..."
+    docker save "$image" -o "$tar"
+
+    local digest_ref
+    digest_ref=$(docker inspect --format='{{index .RepoDigests 0}}' "$image")
+
+    if [ -z "${digest_ref}" ]; then
+      error_log "Failed to find digest for image ${image}. Skipping..."
+      return 0
+    fi
+
+    ctr -n $CONTAINERD_NAMESPACE --address $CONTAINERD_SOCK_PATH images import "$tar"
+    rm -f "$tar"
+
+    ctr -n $CONTAINERD_NAMESPACE --address $CONTAINERD_SOCK_PATH images tag docker.io/"$image" docker.io/"$digest_ref"
+
+    debug_log "Preloaded image $image into k3s"
 }
