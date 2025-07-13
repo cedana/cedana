@@ -35,8 +35,16 @@ setup_k3s_cluster() {
     mkdir -p ~/.kube
     cat $KUBECONFIG > ~/.kube/config
 
-    preload_images_k3s "cedana/cedana-helper:latest"
-    preload_images_k3s "cedana/cedana-controller:latest"
+    if [ -n "$CONTROLLER_DIGEST" ]; then
+        preload_images_k3s "cedana/cedana-controller@$CONTROLLER_DIGEST"
+    elif [ -n "$CONTROLLER_TAG" ]; then
+        preload_images_k3s "cedana/cedana-controller:$CONTROLLER_TAG"
+    fi
+    if [ -n "$HELPER_DIGEST" ]; then
+        preload_images_k3s "cedana/cedana-helper@$HELPER_DIGEST"
+    elif [ -n "$HELPER_TAG" ]; then
+        preload_images_k3s "cedana/cedana-helper:$HELPER_TAG"
+    fi
 
     debug_log "k3s cluster is ready"
 }
