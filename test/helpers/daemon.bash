@@ -65,7 +65,7 @@ teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
     elif env_exists "TAIL_PID"; then
-        kill "$TAIL_PID"
+        kill "$TAIL_PID" || true
     fi
 }
 

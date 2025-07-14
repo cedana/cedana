@@ -18,16 +18,27 @@ export CEDANA_NAMESPACE="cedana-system"
 export RUNC_ROOT="/run/containerd/runc/k8s.io"
 
 setup_file() {
-    setup_k3s_cluster
+    setup_cluster
     tail_all_logs $CEDANA_NAMESPACE 120 &
+    tail_pid=$!
     helm_install_cedana "$CLUSTER_NAME" $CEDANA_NAMESPACE
     wait_for_ready "$CEDANA_NAMESPACE" 120
     CLUSTER_ID=$(wait_for_cmd 120 cluster_id "$CLUSTER_NAME")
+    kill $tail_pid || true # will tail logs individually for each test (for error trace)
 }
 
 teardown_file() {
     helm_uninstall_cedana $CEDANA_NAMESPACE
-    teardown_k3s_cluster
+    teardown_cluster
+}
+
+setup() {
+    tail_all_logs $CEDANA_NAMESPACE 20 500 &
+    export TAIL_PID=$!
+}
+
+teardown() {
+    kill "$TAIL_PID" || true
 }
 
 @test "Verify cluster and helm installation" {

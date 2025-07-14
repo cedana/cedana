@@ -189,6 +189,7 @@ validate_pod() {
 tail_all_logs() {
     local namespace="$1"
     local timeout="${2:-120}"
+    local tail=${3:-10}
 
     wait_for_cmd "$timeout" "kubectl get pods -n $namespace | grep -q ."
 
@@ -207,7 +208,8 @@ tail_all_logs() {
 
     debug_log "Tailing all logs in namespace $namespace"
 
-    debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace -f {}"
+    debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace -f
+    --tail $tail {}"
 }
 
 # Waits for all pods in a given namespace to be Ready.

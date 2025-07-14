@@ -225,7 +225,7 @@ poll_action_status() {
         sleep 5
     done
 
-    error_log "Error: Timeout waiting for $operation action '$action_id' to complete"
+    error_log "Error: Timeout waiting for $operation action '$action_id' to complete (last status: $status)"
     return 1
 }
 
@@ -441,68 +441,6 @@ get_latest_pod_action_id() {
         error_log "Error: Failed to get action for pod (HTTP $http_code): $body"
         return 1
     fi
-}
-
-# Poll restore action status until completion using the actions API
-# @param $1: Action ID
-# @param $2: Operation type (checkpoint|restore) for logging
-poll_restore_action_status() {
-    local action_id="$1"
-    action_id="${action_id//\"/}" # remove quotes if present
-    local operation="${2:-restore}"
-
-    if [ -z "$action_id" ]; then
-        error_log "Error: poll_restore_action_status requires action_id"
-        return 1
-    fi
-
-    debug_log "Polling status for $operation action '$action_id'..."
-
-    for i in $(seq 1 60); do  # 5 minute timeout
-        local response
-        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-            -w "%{http_code}")
-
-        local http_code="${response: -3}"
-        local body="${response%???}"
-
-        if [ "$http_code" -eq 200 ]; then
-            local action_info
-            action_info=$(echo "$body" | jq --arg id "$action_id" '.[] | select(.action_id == $id)' 2>/dev/null)
-
-            if [ -n "$action_info" ]; then
-                local status
-                status=$(echo "$action_info" | jq -r '.status' 2>/dev/null)
-
-                debug_log "Action status: $status (attempt $i/60)"
-
-                case "$status" in
-                    "success"|"completed"|"ready")
-                        debug_log "$operation action completed successfully"
-                        return 0
-                        ;;
-                    "failed"|"error")
-                        error_log "Error: $operation action failed with status '$status'"
-                        error_log "Action details: $action_info"
-                        return 1
-                        ;;
-                    *)
-                        # Continue polling for other statuses
-                        ;;
-                esac
-            else
-                debug_log "Warning: Action '$action_id' not found in response (attempt $i/60)"
-            fi
-        else
-            debug_log "Warning: Failed to get actions (HTTP $http_code): $body (attempt $i/60)"
-        fi
-
-        sleep 5
-    done
-
-    error_log "Error: Timeout waiting for $operation action '$action_id' to complete"
-    return 1
 }
 
 # List clusters from the propagator service
