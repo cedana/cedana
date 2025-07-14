@@ -15,21 +15,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func ManageCgroupsForDump(mode criu_proto.CriuCgMode) types.Adapter[types.Dump] {
-	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
-			if req.GetCriu() == nil {
-				req.Criu = &criu_proto.CriuOpts{}
-			}
-
-			req.Criu.ManageCgroups = proto.Bool(true)
-			req.Criu.ManageCgroupsMode = &mode
-
-			return next(ctx, opts, resp, req)
-		}
-	}
-}
-
 func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		manager, ok := ctx.Value(runc_keys.CONTAINER_CGROUP_MANAGER_CONTEXT_KEY).(cgroups.Manager)

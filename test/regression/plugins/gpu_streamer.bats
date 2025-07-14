@@ -4,9 +4,9 @@
 #
 # bats file_tags=gpu,streamer
 
-load ../helpers/utils
-load ../helpers/daemon
-load ../helpers/gpu
+load ../../helpers/utils
+load ../../helpers/daemon
+load ../../helpers/gpu
 
 load_lib support
 load_lib assert

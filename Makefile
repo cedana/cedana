@@ -146,8 +146,16 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-TIMEOUT?=300
+TIMEOUT?=600
 RETRIES?=0
+DEBUG?=0
+HELPER_REPO?=cedana/cedana-helper
+HELPER_TAG?=""
+HELPER_DIGEST?=""
+CONTROLLER_REPO?=cedana/cedana-controller
+CONTROLLER_TAG?=""
+CONTROLLER_DIGEST?=""
+HELM_CHART?=""
 BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter junit
@@ -155,13 +163,13 @@ BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter junit
 
-test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
+test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>)
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -172,7 +180,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-isolated.xml ;\
+			mv /tmp/report.xml /tmp/report-$(date +%s%N).xml ;\
 		fi ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -181,7 +189,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persisted=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-persisted.xml ;\
+			mv /tmp/report.xml /tmp/report-$(date +%s%N)-persisted.xml ;\
 		fi ;\
 		if [ $$status_isolated -ne 0 ]; then \
 			echo "Isolated tests failed" ;\
@@ -197,28 +205,109 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
 			$(DOCKER_TEST_CREATE_CUDA) ;\
 			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) ;\
+			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
 			$(DOCKER_TEST_CREATE) ;\
 			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) ;\
+			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) DEBUG=$(DEBUG) ;\
+			$(DOCKER_TEST_REMOVE) >/dev/null ;\
+		fi ;\
+	fi
+
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
+	if [ -f /.dockerenv ]; then \
+		echo "Running kubernetes e2e tests..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		if [ "$(TAGS)" = "" ]; then \
+			$(BATS_CMD) -r test/k8s ; status=$$? ;\
+		else \
+			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
+		fi ;\
+		if [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/report-$(date +%s%N).xml ;\
+		fi ;\
+		if [ $$status -ne 0 ]; then \
+			echo "Kubernetes e2e tests failed" ;\
+			exit $$status ;\
+		else \
+			echo "All kubernetes e2e tests passed!" ;\
+		fi ;\
+	else \
+        MAKE_ADDITIONAL_OPTS=""; \
+        if [ -n "$(HELM_CHART)" ]; then \
+			if echo "$(HELM_CHART)" | grep -q /; then \
+				MAKE_ADDITIONAL_OPTS="HELM_CHART=/helm-chart"; \
+			else \
+				MAKE_ADDITIONAL_OPTS="HELM_CHART=$(HELM_CHART)"; \
+			fi; \
+        fi; \
+		if [ "$(GPU)" = "1" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_CREATE_CUDA) ;\
+			$(DOCKER_TEST_START) >/dev/null ;\
+			$(DOCKER_TEST_EXEC) make test-k8s \
+				ARGS=$(ARGS) \
+				PARALLELISM=$(PARALLELISM) \
+				GPU=$(GPU) \
+				TAGS=$(TAGS) \
+				TIMEOUT=$(TIMEOUT) \
+				RETRIES=$(RETRIES) \
+				DEBUG=$(DEBUG) \
+				CONTROLLER_REPO=$(CONTROLLER_REPO) \
+				CONTROLLER_TAG=$(CONTROLLER_TAG) \
+				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
+				HELPER_REPO=$(HELPER_REPO) \
+				HELPER_TAG=$(HELPER_TAG) \
+				HELPER_DIGEST=$(HELPER_DIGEST) \
+				$$MAKE_ADDITIONAL_OPTS ;\
+			$(DOCKER_TEST_REMOVE) >/dev/null ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_CREATE) ;\
+			$(DOCKER_TEST_START) >/dev/null ;\
+			$(DOCKER_TEST_EXEC) make test-k8s \
+				ARGS=$(ARGS) \
+				PARALLELISM=$(PARALLELISM) \
+				GPU=$(GPU) \
+				TAGS=$(TAGS) \
+				TIMEOUT=$(TIMEOUT) \
+				RETRIES=$(RETRIES) \
+				DEBUG=$(DEBUG) \
+				CONTROLLER_REPO=$(CONTROLLER_REPO) \
+				CONTROLLER_TAG=$(CONTROLLER_TAG) \
+				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
+				HELPER_REPO=$(HELPER_REPO) \
+				HELPER_TAG=$(HELPER_TAG) \
+				HELPER_DIGEST=$(HELPER_DIGEST) \
+				$$MAKE_ADDITIONAL_OPTS ;\
 			$(DOCKER_TEST_REMOVE) >/dev/null ;\
 		fi ;\
 	fi
 
 test-enter: ## Enter the test environment
 	$(DOCKER_TEST_CREATE) ;\
-	$(DOCKER_TEST_START) >/dev/null ;\
-	$(DOCKER_TEST_EXEC) /bin/bash ;\
-	$(DOCKER_TEST_REMOVE) >/dev/null
+	if [ "$$?" -ne 0 ]; then \
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+	else \
+		$(DOCKER_TEST_START) >/dev/null ;\
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+		$(DOCKER_TEST_REMOVE) >/dev/null ;\
+	fi ;\
 
 test-enter-cuda: ## Enter the test environment (CUDA)
 	$(DOCKER_TEST_CREATE_CUDA) ;\
-	$(DOCKER_TEST_START) >/dev/null ;\
-	$(DOCKER_TEST_EXEC) /bin/bash ;\
-	$(DOCKER_TEST_REMOVE) >/dev/null
+	if [ "$$?" -ne 0 ]; then \
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+	else \
+		$(DOCKER_TEST_START) >/dev/null ;\
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+		$(DOCKER_TEST_REMOVE) >/dev/null ;\
+	fi ;\
+
+test-k9s: ## Enter k9s in the test environment
+	$(DOCKER_TEST_EXEC) k9s ;\
 
 ##########
 ##@ Docker
@@ -228,44 +317,31 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 # and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
 # the default).
 
-DOCKER_CONTAINER_NAME=cedana-test
+DOCKER_IMAGE=cedana/cedana-helper:latest
+DOCKER_TEST_CONTAINER_NAME=cedana-test
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
-DOCKER_TEST_START=docker start $(DOCKER_CONTAINER_NAME)
-DOCKER_TEST_EXEC=docker exec -it $(DOCKER_CONTAINER_NAME)
-DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_CONTAINER_NAME)
+DOCKER_TEST_START=docker start $(DOCKER_TEST_CONTAINER_NAME)
+DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
+DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME)
+PLATFORM=linux/amd64,linux/arm64
 
-PLUGIN_LIB_MOUNTS=$(shell find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
-PLUGIN_BIN_MOUNTS=$(shell find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
-PLUGIN_LIB_MOUNTS_GPU=$(shell find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
-PLUGIN_BIN_MOUNTS_GPU=$(shell find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
-PLUGIN_BIN_MOUNTS_CRIU=$(shell find /usr/local/bin -type f -name 'criu' -exec printf '-v %s:%s ' {} {} \;)
+PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-
-DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --network=host -it --rm \
-				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
-				$(PLUGIN_LIB_MOUNTS) \
-				$(PLUGIN_BIN_MOUNTS) \
-				$(PLUGIN_BIN_MOUNTS_CRIU) \
-				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=private --network=host \
-				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
-				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
-DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --name=$(DOCKER_TEST_CONTAINER_NAME) \
+						-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
+				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN) \
+				$(DOCKER_ADDITIONAL_OPTS)
 DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
-						$(PLUGIN_BIN_COPY_CRIU)
-DOCKER_TEST_RUN_CUDA=docker run --gpus=all --ipc=host \
-					 $(DOCKER_TEST_RUN_OPTS) \
-					 $(PLUGIN_LIB_MOUNTS_GPU) \
-					 $(PLUGIN_BIN_MOUNTS_GPU) \
-					 $(DOCKER_TEST_IMAGE_CUDA)
+						$(PLUGIN_BIN_COPY_CRIU) && \
+						$(HELM_CHART_COPY)
 DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
@@ -273,23 +349,27 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 						$(PLUGIN_BIN_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_CRIU)
 
-docker-test: ## Build the test Docker image
+docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
+	@echo "Building helper Docker image..."
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_IMAGE) --load . ;\
+
+docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test Docker image..."
 	cd test ;\
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE) --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE) --load . ;\
 	cd -
 
-docker-test-cuda: ## Build the test Docker image (CUDA)
+docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
-docker-test-push: ## Push the test Docker image
+docker-test-push: ## Push the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-cuda-push: ## Push the test Docker image (CUDA)
+docker-test-cuda-push: ## Push the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 
@@ -303,4 +383,4 @@ format: ## Format all code
 
 spacing=24
 help:  ## Display this help
-	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\033[36m\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[34m%-$(spacing)s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\033[36m\033[0m\n"} /^[a-zA-Z1-9_-]+:.*?##/ { printf "  \033[34m%-$(spacing)s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

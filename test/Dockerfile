@@ -5,7 +5,9 @@ FROM cedana/cedana-samples:cuda12.4-torch2.4 AS cedana-samples
 FROM ubuntu:24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
-ARG GO_VERSION=1.23.0
+ARG GO_VERSION=1.24.3
+ARG KUBECTL_VERSION=1.33.0
+ARG K9S_VERSION=latest
 
 # install packages
 RUN <<EOT
@@ -28,20 +30,23 @@ set -eux
 apt-get install -y bats bats-assert bats-support bats-file
 EOT
 
-# install otelcol
-RUN <<EOT
-curl --proto '=https' --tlsv1.2 -fOL https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.114.0/otelcol_0.114.0_linux_amd64.tar.gz
-tar -xvf otelcol_0.114.0_linux_amd64.tar.gz
-mv otelcol /usr/local/bin/
-EOT
-
-# install go
+# Setup go
 RUN <<EOT
 set -eux
-wget https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz && rm -rf /usr/local/go
-tar -C /usr/local -xzf go${GO_VERSION}.linux-amd64.tar.gz && rm go${GO_VERSION}.linux-amd64.tar.gz
+if [ $(uname -m) = "aarch64" ]; then
+    ARCH=arm64
+elif [ $(uname -m) = "x86_64" ]; then
+    ARCH=amd64
+else
+    echo "Unsupported architecture: $(uname -m)"
+    exit 1
+fi
+wget https://go.dev/dl/go${GO_VERSION}.linux-${ARCH}.tar.gz
+rm -rf /usr/local/go
+tar -C /usr/local -xzf go${GO_VERSION}.linux-${ARCH}.tar.gz
+ln -s /usr/local/go/bin/go /usr/local/bin/go
+rm go${GO_VERSION}.linux-${ARCH}.tar.gz
 EOT
-ENV PATH=${PATH}:/usr/local/go/bin:${GOPATH}/bin:/usr/local/bin
 
 # Install Docker (CLI only)
 RUN <<EOT
@@ -55,6 +60,54 @@ echo \
 tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt-get update
 apt-get install -y docker-ce docker-ce-cli
+EOT
+
+# install kubectl
+RUN <<EOT
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)
+        KC_ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        KC_ARCH="arm64"
+        ;;
+    *)
+        error_log "Unsupported architecture for kubectl: $ARCH"
+        return 1
+        ;;
+esac
+curl -LO https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/${KC_ARCH}/kubectl
+install -m 0755 kubectl /usr/local/bin/kubectl
+rm -f kubectl
+EOT
+
+# install helm
+RUN <<EOT
+curl -fsSL -o /tmp/get_helm.sh https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3
+chmod 700 /tmp/get_helm.sh
+/tmp/get_helm.sh
+rm -f /tmp/get_helm.sh
+EOT
+
+# install k9s
+RUN <<EOT
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)
+        K9S_ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        K9S_ARCH="arm64"
+        ;;
+    *)
+        error_log "Unsupported architecture for k9s: $ARCH"
+        return 1
+        ;;
+esac
+wget https://github.com/derailed/k9s/releases/${K9S_VERSION}/download/k9s_linux_"${K9S_ARCH}".deb -O /tmp/k9s.deb
+apt install -y /tmp/k9s.deb
+rm -f /tmp/k9s.deb
 EOT
 
 # copy cedana-samples

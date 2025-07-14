@@ -37,7 +37,7 @@ install_yum_packages() {
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     case "$ID" in
-    debian | ubuntu)
+    debian | ubuntu | pop)
         install_apt_packages
         ;;
     rhel | centos | fedora | amzn)
@@ -59,5 +59,10 @@ fi
 
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
 
-"$DIR"/systemd-reset.sh
-"$DIR"/systemd-install.sh
+if [ -f /.dockerenv ]; then # for tests
+    pkill -f 'cedana daemon' || true
+    $APP_PATH daemon start &> /var/log/cedana-daemon.log &
+else
+    "$DIR"/systemd-reset.sh
+    "$DIR"/systemd-install.sh
+fi

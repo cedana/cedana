@@ -8,7 +8,7 @@ INFERENCE_MODELS=(
 
 check_huggingface_token() {
     if [ -z "$HF_TOKEN" ]; then
-        echo "HF_TOKEN unset"
+        error_log "HF_TOKEN unset"
         exit 1
     fi
 }
@@ -17,11 +17,11 @@ install_requirements() {
     local req_file="/cedana-samples/requirements.txt"
 
     if [ ! -f "$req_file" ]; then
-        echo "Requirements file not found: $req_file"
+        error_log "Requirements file not found: $req_file"
         exit 1
     fi
 
-    echo "Installing requirements from $req_file for GPU tests"
+    debug_log "Installing requirements from $req_file for GPU tests"
     # runs inside container, so we can break system packages
     pip install --break-system-packages -r "$req_file" &>/dev/null
 }
@@ -29,7 +29,7 @@ install_requirements() {
 download_hf_models() {
     check_huggingface_token
     for model in "${INFERENCE_MODELS[@]}"; do
-        echo "Downloading $model"
+        debug_log "Downloading $model"
         python3 /cedana-samples/gpu_smr/pytorch/llm/download_hf_model.py --model "$model" &>/dev/null
     done
 }

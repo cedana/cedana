@@ -7,7 +7,12 @@ set -e
 # first
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
 cp -r /scripts/host/* /host/cedana/scripts/host
-chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
+
+if [ -f /host/.dockerenv ]; then # for tests
+    chroot /host pkill -f 'cedana daemon' || true
+else
+    chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
+fi
 
 # Updates the cedana daemon to the latest version
 # and restarts using the existing configuration
@@ -33,4 +38,9 @@ env \
     CEDANA_PLUGINS_GPU_VERSION="$CEDANA_PLUGINS_GPU_VERSION" \
     CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
     chroot /host /bin/bash /cedana/scripts/host/k8s-install-plugins.sh
-chroot /host /bin/bash /cedana/scripts/host/systemd-install.sh
+
+if [ -f /host/.dockerenv ]; then # for tests
+    chroot /host /usr/local/bin/cedana daemon start &> /var/log/cedana-daemon.log &
+else
+    chroot /host /bin/bash /cedana/scripts/host/systemd-install.sh
+fi

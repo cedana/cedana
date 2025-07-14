@@ -2,7 +2,7 @@ name: PR
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
       debug_build:
@@ -31,28 +31,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  pr-title-check:
-    name: Enforce PR Title
-    runs-on: ubuntu-latest
-    steps:
-      - name: Validate PR title
-        run: |
-          TITLE="${{ github.event.pull_request.title }}"
-          echo "PR Title: $TITLE"
-          if [[ ! "$TITLE" =~ ^CED-[0-9]+:\  ]]; then
-            echo "❌ PR title must start with 'CED-<number>: ' (note the colon and space)"
-            exit 1
-          fi
   check:
     name: Check
     uses: ./.github/workflows/check.yml
     secrets: inherit
     with:
       shell: true
+      pr_title: true
 
   build:
     name: Build
-    needs: pr-title-check
+    needs: check
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
@@ -64,13 +53,16 @@ jobs:
 
   download:
     name: Download
-    needs: pr-title-check
+    needs: check
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
       criu_version: release
       gpu_version: main
       streamer_version: main
+      helm_chart_version: feature/ced-1338-add-digest-to-helm-images
+      controller_version: main
+      runtime_shim_version: release
 
   test:
     name: Test
@@ -79,6 +71,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      post_summary_slack: nightly
 
   bench:
     name: Bench
@@ -90,7 +83,6 @@ jobs:
       samples: 1
       push_results: false
       post_summary_pr: true
-      post_summary_slack: false
       comparison_patch: true
       comparison_native: false
 
@@ -104,5 +96,4 @@ jobs:
       cloudsmith: true
       cloudsmith_repo: cedana-alpha
       dockerhub: true
-      image_name: cedana/cedana-helper-test
       post_summary: false

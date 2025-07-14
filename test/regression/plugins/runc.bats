@@ -3,9 +3,9 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=runc
 
-load ../helpers/utils
-load ../helpers/daemon
-load ../helpers/runc
+load ../../helpers/utils
+load ../../helpers/daemon
+load ../../helpers/runc
 
 load_lib support
 load_lib assert

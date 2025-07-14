@@ -32,4 +32,8 @@ go.work.sum
 rootfs
 rootfs_cuda
 _rootfs
+
+.cursor/
+prompts/
+specs/
 _rootfs_cuda
