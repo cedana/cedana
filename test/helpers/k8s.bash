@@ -189,7 +189,7 @@ validate_pod() {
 tail_all_logs() {
     local namespace="$1"
     local timeout="${2:-120}"
-    local tail=${3:-10}
+    local tail=${3:--1}
 
     wait_for_cmd "$timeout" "kubectl get pods -n $namespace | grep -q ."
 
@@ -209,6 +209,32 @@ tail_all_logs() {
     debug_log "Tailing all logs in namespace $namespace"
 
     debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace -f --tail $tail {}"
+}
+
+# Logs of all pods in a given namespace, waiting for them to be Running first.
+all_logs() {
+    local namespace="$1"
+    local timeout="${2:-120}"
+    local tail=${3:--1}
+
+    wait_for_cmd "$timeout" "kubectl get pods -n $namespace | grep -q ."
+
+    debug_log "Waiting for all pods in namespace $namespace to be Running (timeout: $timeout seconds)"
+
+    kubectl get pods -n "$namespace" -o name | xargs -P0 -I{} kubectl wait --for=jsonpath='{.status.phase}=Running' -n "$namespace" --timeout="$timeout"s {} || {
+        error_log "Failed to wait for all pods in namespace $namespace to be Running"
+        for pod in $(kubectl get pods -n "$namespace" -o name); do
+            error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
+            kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
+                error_log "$line"
+            done
+        done
+        return 1
+    }
+
+    debug_log "Tailing all logs in namespace $namespace"
+
+    debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace --tail $tail {}"
 }
 
 # Waits for all pods in a given namespace to be Ready.
