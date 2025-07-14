@@ -1,8 +1,14 @@
 name: Nightly
-permissions:
-  contents: write
 
 # This workflow runs all the large tests and benchmarks nightly.
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
 on:
   schedule:
     - cron: "0 0 * * *" # Every day at midnight
@@ -37,6 +43,7 @@ jobs:
       runner_gpu_arm: 32cpu-64g-1xT4G # use larger runner
       parallelism: 8
       parallelism_gpu: 4
+      post_summary_slack: nightly
 
   bench:
     name: Bench
@@ -52,5 +59,5 @@ jobs:
       results_dataset: cedana_nightly
       comparison_patch: true
       comparison_native: true
-      post_summary_slack_nightly: true
+      post_summary_slack: nightly
       runner: 16cpu-64g-1xL4 # use larger runner (bench will automatically run larger metrics)

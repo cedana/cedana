@@ -50,6 +50,11 @@ on:
         description: "Runner machine for GPU tests (arm64)"
         required: false
         default: 8cpu-16g-1xT4G
+      post_summary_slack:
+        type: string
+        description: "Webhook URL for posting summary to Slack"
+        required: false
+        default: ""
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -406,3 +411,12 @@ jobs:
           always-group-by: true
           upload-artifact: true
           artifact-name: ctrf-report-${{ matrix.arch }}
+
+      - name: Post report to Slack
+        if: ${{ inputs.post_summary_slack != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || secrets.SLACK_WEBHOOK_URL_TESTS }}
+          TITLE: "Test results (${{ matrix.arch }})"
+          PREFIX: ${{ github.repository }}
+        run: |
+          npx slack-ctrf results "ctrf/*.json" --title "$TITLE" --prefix "$PREFIX"
