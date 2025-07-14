@@ -461,6 +461,7 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 				RootfsOnly: rootfsOnly,
 				Username:   username,
 				Secret:     secret,
+				Address:    "/run/k3s/containerd/containerd.sock",
 			},
 		},
 	})
