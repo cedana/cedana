@@ -20,11 +20,6 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      streamer:
-        type: boolean
-        description: "Run including streamer tests"
-        required: false
-        default: false
       large:
         type: boolean
         description: "Run large tests"
@@ -51,6 +46,14 @@ on:
         required: false
         default: false
 
+env:
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  RETRIES: 1
+  DEBUG: 0 # bats debug logging
+
 jobs:
   cuda:
     name: CUDA
@@ -64,6 +67,9 @@ jobs:
           # - 12-2
           - 12-4
           - 12-8
+        cr:
+          - default
+          - streamer
         arch:
           - amd64
           - arm64
@@ -72,11 +78,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all -v /var/run/docker.sock:/var/run/docker.sock
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      options: --privileged --init --ipc=host --gpus all -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -97,14 +99,12 @@ jobs:
           name: plugins-${{ matrix.arch }}
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        if: inputs.streamer
-        continue-on-error: true
+        if: ${{ matrix.cr == 'streamer' }}
         uses: actions/download-artifact@v4
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: gpu-${{ matrix.arch }}
@@ -118,17 +118,17 @@ jobs:
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
-          chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install plugins
+      - name: Install
         env:
-          STREAMER: ${{ inputs.streamer }}
+          STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
         run: |
-          sudo -E ./cedana plugin install runc containerd crio criu storage/cedana
-          sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
+          make install
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana
+          sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
           if [ "$STREAMER" = "true" ]; then
-            sudo -E ./cedana plugin install streamer # automatically installs the downloaded binary if available instead
+            sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
           fi
 
       - name: Mark git dir as safe
@@ -142,16 +142,15 @@ jobs:
 
       - name: Run regression tests
         env:
-          STREAMER: ${{ inputs.streamer }}
+          STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
-          RETRIES: 1
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM RETRIES=$RETRIES
             else
-              make test-regression TAGS=gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
             fi
           else
             if [ "$LARGE" = "true" ]; then
@@ -166,7 +165,7 @@ jobs:
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}
+          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
           path: |
             /tmp/report*.xml
 
@@ -197,7 +196,7 @@ jobs:
         id: download-report
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}
+          pattern: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-*
           path: report
 
       - name: Generate consolidated report

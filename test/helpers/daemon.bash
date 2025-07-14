@@ -2,13 +2,13 @@
 
 # This is a helper file assumes its users are in the same directory as the Makefile
 
-export PATH="./:$PATH" # ensure binaries are available
-export CEDANA_PROTOCOL="unix"
-export CEDANA_REMOTE=false
-export CEDANA_LOG_LEVEL=debug
-export CEDANA_LOG_LEVEL_NO_SERVER=debug
-export CEDANA_PROFILING_ENABLED=false
-export CEDANA_CHECKPOINT_COMPRESSION=none
+export CEDANA_PROTOCOL=${CEDANA_PROTOCOL:-unix}
+export CEDANA_REMOTE=${CEDANA_REMOTE:-false}
+export CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-debug}
+export CEDANA_LOG_LEVEL_NO_SERVER=$CEDANA_LOG_LEVEL
+export CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-false}
+export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
+export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 : "${CEDANA_GPU_SHM_SIZE:=$((1*GIBIBYTE))}" # Since most workloads are small, we keep this default
 export CEDANA_GPU_SHM_SIZE
 
@@ -33,11 +33,12 @@ WAIT_TIMEOUT=100
 setup_file_daemon() {
     if env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        export CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_CONFIG_DIR
+        CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
-        start_daemon_at "$SOCK"
+        debug start_daemon_at "$SOCK"
     fi
 }
 teardown_file_daemon() {
@@ -48,14 +49,15 @@ teardown_file_daemon() {
 setup_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        export CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_CONFIG_DIR
+        CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
-        start_daemon_at "$SOCK"
+        debug start_daemon_at "$SOCK"
     else
         log_file=$(daemon_log_file "$CEDANA_ADDRESS")
-        tail -f "$log_file" &
+        debug tail -f "$log_file" &
         export TAIL_PID=$!
     fi
 }
@@ -63,7 +65,7 @@ teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
     elif env_exists "TAIL_PID"; then
-        kill "$TAIL_PID"
+        kill "$TAIL_PID" || true
     fi
 }
 
@@ -85,7 +87,7 @@ wait_for_start() {
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
-            echo "Daemon failed to start" 1>&2
+            error_log "Daemon failed to start"
             exit 1
         fi
     done
@@ -94,7 +96,7 @@ wait_for_start() {
 stop_daemon_at() {
     local sock=$1
     if [ ! -e "$sock" ] || [ ! -S "$sock" ]; then
-        echo "Socket $sock does not exist, skipping stop"
+        debug_log "Socket $sock does not exist, skipping stop"
         return 0
     fi
     kill_at_sock "$sock" TERM
@@ -108,7 +110,7 @@ wait_for_stop() {
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
-            echo "Daemon failed to stop" 1>&2
+            error_log "Daemon failed to stop"
             exit 1
         fi
     done

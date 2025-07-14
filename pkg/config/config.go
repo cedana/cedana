@@ -34,11 +34,27 @@ const (
 	DEFAULT_CHECKPOINT_DIR         = "/tmp"
 	DEFAULT_CHECKPOINT_STREAMS     = 0
 
+	DEFAULT_DB_REMOTE = false
+	DEFAULT_DB_PATH   = "/tmp/cedana.db"
+
+	DEFAULT_PROFILING_ENABLED   = true
+	DEFAULT_PROFILING_PRECISION = "auto"
+
+	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai"
+	DEFAULT_CONNECTION_AUTH_TOKEN = ""
+
+	DEFAULT_METRICS_OTEL = false
+
+	DEFAULT_CLIENT_WAIT_FOR_READY = false
+
 	DEFAULT_GPU_POOL_SIZE   = 0
 	DEFAULT_GPU_LOG_DIR     = "/tmp"
 	DEFAULT_GPU_SOCK_DIR    = "/tmp"
 	DEFAULT_GPU_FREEZE_TYPE = "IPC"
 	DEFAULT_GPU_SHM_SIZE    = 8 * utils.GIBIBYTE
+
+	DEFAULT_CRIU_LEAVE_RUNNING  = false
+	DEFAULT_CRIU_MANAGE_CGROUPS = "soft"
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
@@ -59,22 +75,22 @@ var Global Config = Config{
 		Streams:     DEFAULT_CHECKPOINT_STREAMS,
 	},
 	DB: DB{
-		Remote: false,
-		Path:   filepath.Join(os.TempDir(), "cedana.db"),
+		Remote: DEFAULT_DB_REMOTE,
+		Path:   DEFAULT_DB_PATH,
 	},
 	Profiling: Profiling{
-		Enabled:   true,
-		Precision: "auto",
+		Enabled:   DEFAULT_PROFILING_ENABLED,
+		Precision: DEFAULT_PROFILING_PRECISION,
 	},
 	Connection: Connection{
-		URL:       "",
-		AuthToken: "",
+		URL:       DEFAULT_CONNECTION_URL,
+		AuthToken: DEFAULT_CONNECTION_AUTH_TOKEN,
 	},
 	Metrics: Metrics{
-		Otel: false,
+		Otel: DEFAULT_METRICS_OTEL,
 	},
 	Client: Client{
-		WaitForReady: false,
+		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,
 	},
 	GPU: GPU{
 		PoolSize:   DEFAULT_GPU_POOL_SIZE,
@@ -84,7 +100,8 @@ var Global Config = Config{
 		ShmSize:    DEFAULT_GPU_SHM_SIZE,
 	},
 	CRIU: CRIU{
-		LeaveRunning: false,
+		LeaveRunning:  DEFAULT_CRIU_LEAVE_RUNNING,
+		ManageCgroups: DEFAULT_CRIU_MANAGE_CGROUPS,
 	},
 	Plugins: Plugins{
 		LibDir: DEFAULT_PLUGINS_LIB_DIR,

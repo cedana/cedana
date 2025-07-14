@@ -20,16 +20,6 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      gpu:
-        type: boolean
-        description: "Run GPU tests"
-        required: false
-        default: true
-      streamer:
-        type: boolean
-        description: "Run streamer tests"
-        required: false
-        default: true
       large:
         type: boolean
         description: "Run large tests"
@@ -60,6 +50,18 @@ on:
         description: "Runner machine for GPU tests (arm64)"
         required: false
         default: 8cpu-16g-1xT4G
+      post_summary_slack:
+        type: string
+        description: "Webhook URL for posting summary to Slack"
+        required: false
+        default: ""
+
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  RETRIES: 1
+  DEBUG: 0 # bats debug logging
 
 jobs:
   unit:
@@ -119,9 +121,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -143,7 +142,7 @@ jobs:
           sudo -E cp -r ./scripts/host/* /cedana/scripts/host
           sudo -E /cedana/scripts/host/k8s-setup-host.sh
 
-  regression:
+  basic:
     name: Basic
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
     timeout-minutes: 30
@@ -158,10 +157,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -187,8 +183,10 @@ jobs:
           chmod +x ./criu
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install CRIU
-        run: sudo -E ./cedana plugin install criu
+      - name: Install
+        run: |
+          make install
+          sudo -E cedana plugin install criu
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -203,7 +201,6 @@ jobs:
         env:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
-          RETRIES: 1
         run: |
           if [ "$LARGE" = "true" ]; then
             make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES
@@ -220,8 +217,8 @@ jobs:
           path: |
             /tmp/report*.xml
 
-  regression-plugins:
-    name: Plugins
+  plugin:
+    name: Plugin
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
     timeout-minutes: 30
     strategy:
@@ -242,10 +239,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -277,8 +271,10 @@ jobs:
           chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install plugin
-        run: sudo -E ./cedana plugin install ${{ matrix.plugin }} criu storage/cedana
+      - name: Install
+        run: |
+          make install
+          sudo -E cedana plugin install ${{ matrix.plugin }} criu storage/cedana
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -294,7 +290,6 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PLUGIN: ${{ matrix.plugin }}
-          RETRIES: 1
         run: |
           # replace slash in plugin with colon so that the tag is namespaced correctly
           # e.g. storage/cedana -> storage:cedana
@@ -324,15 +319,13 @@ jobs:
           path: |
             /tmp/report*.xml
 
-  regression-streamer:
+  streamer:
     name: Streamer
     uses: ./.github/workflows/test_streamer.yml
-    if: inputs.streamer
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      gpu: false # will be tested in the regression-gpu job already
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
       parallelism_gpu: ${{ inputs.parallelism_gpu }}
@@ -341,25 +334,36 @@ jobs:
       runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
-  regression-gpu:
+  gpu:
     name: GPU
     uses: ./.github/workflows/test_gpu.yml
-    if: inputs.gpu
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      streamer: ${{ inputs.streamer }}
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner_gpu }}
       runner_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
+  k8s:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner_gpu }}
+      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
+      post_summary: false # Will post consolidated summary instead
+
   post-summary:
     name: Post Summary
     if: always()
-    needs: [regression, regression-plugins, regression-streamer, regression-gpu]
+    needs: [basic, plugin, streamer, gpu, k8s]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -407,3 +411,15 @@ jobs:
           always-group-by: true
           upload-artifact: true
           artifact-name: ctrf-report-${{ matrix.arch }}
+
+      - name: Create supporting markdown
+        run: |
+          echo "${{ github.repository }}" > prefix.md
+
+      - name: Post report to Slack
+        if: ${{ inputs.post_summary_slack != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || secrets.SLACK_WEBHOOK_URL_TESTS }}
+          TITLE: "Test results (${{ matrix.arch }})"
+        run: |
+          npx slack-ctrf results "ctrf/*.json" --title "$TITLE" --prefix prefix.md

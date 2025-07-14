@@ -4,7 +4,7 @@
 
 start_containerd() {
     if ! cmd_exists containerd; then
-        echo "containerd is not installed. Please install it first."
+        error_log "containerd is not installed. Please install it first."
         exit 1
     fi
 
@@ -15,6 +15,6 @@ stop_containerd() {
     if pid=$(pidof containerd); then
         kill -9 "$pid"
     else
-        echo "containerd is not running."
+        debug_log "containerd is not running."
     fi
 }

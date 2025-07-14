@@ -24,6 +24,7 @@ import (
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -364,17 +365,17 @@ func FindContainersForReq(req CheckpointPodReq, address, protocol string) ([]*k8
 	return res, nil
 }
 
-func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, address, protocol string) (*daemon.DumpResp, error) {
+func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, address, protocol string) (*daemon.DumpResp, *profiling.Data, error) {
 	client, err := client.New(address, protocol)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer client.Close()
 
 	leaveRunning := true
 	tcpEstablished := true
 
-	resp, _, err := client.Dump(ctx, &daemon.DumpReq{
+	resp, profiling, err := client.Dump(ctx, &daemon.DumpReq{
 		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
 		Type: "runc",
 		Criu: &criu.CriuOpts{
@@ -389,9 +390,13 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return resp, nil
+	return resp, profiling, nil
+}
+
+type Info struct {
+	Data *profiling.Data `json:"data"`
 }
 
 type ImageSecret struct {
@@ -424,10 +429,10 @@ func GetImageSecret() (*ImageSecret, error) {
 	return &secret, nil
 }
 
-func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namespace, address, protocol string, rootfsOnly bool) (*daemon.DumpResp, error) {
+func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namespace, address, protocol string, rootfsOnly bool) (*daemon.DumpResp, *profiling.Data, error) {
 	client, err := client.New(address, protocol)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer client.Close()
 
@@ -437,16 +442,16 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 	image, err := GetImageSecret()
 	if err != nil {
 		// failed to fetch the image upload information
-		return nil, err
+		return nil, nil, err
 	}
 	s := strings.Split(image.ImageSecret, ":")
 	if len(s) <= 1 {
-		return nil, fmt.Errorf("failed to fetch valid image secrets; failed to parse secrets from propagator")
+		return nil, nil, fmt.Errorf("failed to fetch valid image secrets; failed to parse secrets from propagator")
 	}
 	username := s[0]
 	secret := s[1]
 
-	resp, _, err := client.Dump(ctx, &daemon.DumpReq{
+	resp, profiling, err := client.Dump(ctx, &daemon.DumpReq{
 		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
 		Type: "containerd",
 		Criu: &criu.CriuOpts{
@@ -466,9 +471,9 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 		},
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return resp, nil
+	return resp, profiling, nil
 }
 
 type CheckpointInformation struct {
@@ -479,9 +484,10 @@ type CheckpointInformation struct {
 	Path         string `json:"path"`
 	Gpu          bool   `json:"gpu"`
 	Platform     string `json:"platform"`
+	Info         Info   `json:"info"`
 }
 
-func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, resp *daemon.DumpResp) error {
+func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp) error {
 	publisher, err := rabbitmq.NewPublisher(
 		es.conn,
 	)
@@ -489,6 +495,11 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		log.Error().Err(err).Msg("creation of publisher failed")
 		return err
 	}
+
+	info := Info{
+		Data: profiling,
+	}
+
 	data, err := json.Marshal(CheckpointInformation{
 		ActionId:     req.ActionId,
 		PodId:        pod_id,
@@ -497,6 +508,7 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		Status:       "success",
 		Gpu:          resp.State.GPUEnabled,
 		Platform:     resp.State.Host.Platform,
+		Info:         info,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create checkpoint info")
@@ -558,7 +570,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 				continue
 			}
 			if req.Kind == "rootfs" || req.Kind == "rootfsonly" {
-				resp, err := CheckpointContainerRootfs(
+				resp, profiling, err := CheckpointContainerRootfs(
 					context.Background(),
 					*checkpointId,
 					container.Runc.ID,
@@ -571,25 +583,25 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 					log.Error().Err(err).Msg("Failed to roofs checkpoint container in pod")
 				} else {
 					log.Info().Msg("Publishing checkpoint...")
-					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, resp)
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
 					}
 				}
 			} else {
-				resp, err := CheckpointContainer(
-					context.Background(),
-					*checkpointId,
-					container.Runc.ID,
-					runcRoot,
-					address,
-					protocol,
-				)
-				if err != nil {
-					log.Error().Err(err).Msg("Failed to checkpoint pod containers")
-				} else {
-					log.Info().Msg("Publishing checkpoint...")
-					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, resp)
+        resp, profiling, err := CheckpointContainer(
+          context.Background(),
+          *checkpointId,
+          container.Runc.ID,
+          runcRoot,
+          address,
+          protocol,
+        )
+        if err != nil {
+          log.Error().Err(err).Msg("Failed to checkpoint pod containers")
+        } else {
+          log.Info().Msg("Publishing checkpoint...")
+          err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
 					}

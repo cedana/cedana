@@ -7,7 +7,12 @@ set -e
 # first
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
 cp -r /scripts/host/* /host/cedana/scripts/host
-chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
+
+if [ -f /host/.dockerenv ]; then # for tests
+    chroot /host pkill -f 'cedana daemon' || true
+else
+    chroot /host /bin/bash /cedana/scripts/host/systemd-reset.sh
+fi
 
 # We load the binary from docker image for the container
 # Copy Cedana binaries and scripts to the host
@@ -39,6 +44,8 @@ CEDANA_GPU_FREEZE_TYPE=${CEDANA_GPU_FREEZE_TYPE:-"IPC"}
 CEDANA_GPU_SHM_SIZE=${CEDANA_GPU_SHM_SIZE:-8589934592} # 8GB
 CEDANA_GPU_LD_LIB_PATH=${CEDANA_GPU_LD_LIB_PATH:-"/run/nvidia/driver/usr/lib/x86_64-linux-gnu"}
 
+CEDANA_CRIU_MANAGE_CGROUPS=${CEDANA_CRIU_MANAGE_CGROUPS:-"soft"}
+
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
@@ -66,6 +73,7 @@ env \
     CEDANA_GPU_FREEZE_TYPE="$CEDANA_GPU_FREEZE_TYPE" \
     CEDANA_GPU_SHM_SIZE="$CEDANA_GPU_SHM_SIZE" \
     CEDANA_GPU_LD_LIB_PATH="$CEDANA_GPU_LD_LIB_PATH" \
+    CEDANA_CRIU_MANAGE_CGROUPS="$CEDANA_CRIU_MANAGE_CGROUPS" \
     CEDANA_PLUGINS_BUILDS="$CEDANA_PLUGINS_BUILDS" \
     CEDANA_PLUGINS_NATIVE_VERSION="$CEDANA_PLUGINS_NATIVE_VERSION" \
     CEDANA_PLUGINS_CRIU_VERSION="$CEDANA_PLUGINS_CRIU_VERSION" \

@@ -3,7 +3,6 @@ package main
 import (
 	"syscall"
 
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/runc/cmd"
@@ -73,7 +72,6 @@ var (
 		namespace.AddExternalNamespacesForDump(configs.NEWNET, configs.NEWPID),
 		filesystem.AddMountsForDump,
 		filesystem.AddMaskedPathsForDump,
-		cgroup.ManageCgroupsForDump(criu.CriuCgMode_SOFT),
 		cgroup.UseCgroupFreezerIfAvailableForDump,
 		device.AddDevicesForDump,
 		network.LockNetworkBeforeDump,
@@ -100,7 +98,6 @@ var (
 
 		network.RestoreNetworkConfiguration,
 		network.UnlockNetworkAfterRestore,
-		cgroup.ManageCgroupsForRestore(criu.CriuCgMode_SOFT),
 		cgroup.ApplyCgroupsOnRestore,
 		container.RunHooksOnRestore,
 		container.RestoreConsole,
