@@ -208,8 +208,7 @@ tail_all_logs() {
 
     debug_log "Tailing all logs in namespace $namespace"
 
-    debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace -f
-    --tail $tail {}"
+    debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace -f --tail $tail {}"
 }
 
 # Waits for all pods in a given namespace to be Ready.
