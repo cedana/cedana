@@ -164,7 +164,7 @@ jobs:
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}
+          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
           path: |
             /tmp/report*.xml
 
@@ -195,7 +195,7 @@ jobs:
         id: download-report
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}
+          pattern: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-*
           path: report
 
       - name: Generate consolidated report

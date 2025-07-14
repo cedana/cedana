@@ -153,9 +153,9 @@ jobs:
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,gpu PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
             else
-              make test-regression TAGS=streamer,gpu,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
             fi
           else
             if [ "$LARGE" = "true" ]; then
@@ -170,7 +170,7 @@ jobs:
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-streamer
+          name: test-report-${{ matrix.arch }}-streamer-${{ matrix.compute }}
           path: |
             /tmp/report*.xml
 
@@ -196,7 +196,7 @@ jobs:
         id: download-report
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-streamer
+          pattern: test-report-${{ matrix.arch }}-streamer-*
           path: report
 
       - name: Generate consolidated report

@@ -266,7 +266,7 @@ jobs:
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}
+          name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}-${{ matrix.compute }}
           path: |
             /tmp/report*.xml
 
