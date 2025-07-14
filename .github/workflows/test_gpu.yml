@@ -59,6 +59,7 @@ jobs:
   cuda:
     name: CUDA
     runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.arch == 'amd64' && inputs.runner || inputs.runner_arm64 }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/extras=s3-cache
+    if: ${{ inputs.streamer || matrix.cr != 'streamer' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -68,6 +69,9 @@ jobs:
           # - 12-2
           - 12-4
           - 12-8
+        cr:
+          - default
+          - streamer
         arch:
           - amd64
           - arm64
@@ -99,14 +103,12 @@ jobs:
           name: plugins-${{ matrix.arch }}
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        if: inputs.streamer
-        continue-on-error: true
+        if: ${{ matrix.cr == 'streamer' }}
         uses: actions/download-artifact@v4
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: gpu-${{ matrix.arch }}
@@ -124,7 +126,7 @@ jobs:
 
       - name: Install
         env:
-          STREAMER: ${{ inputs.streamer }}
+          STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
         run: |
           make install
           sudo -E cedana plugin install runc containerd crio criu storage/cedana
@@ -144,16 +146,16 @@ jobs:
 
       - name: Run regression tests
         env:
-          STREAMER: ${{ inputs.streamer }}
+          STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           RETRIES: 1
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM RETRIES=$RETRIES
             else
-              make test-regression TAGS=gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
             fi
           else
             if [ "$LARGE" = "true" ]; then

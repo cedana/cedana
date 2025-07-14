@@ -20,6 +20,11 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
+      gpu:
+        type: boolean
+        description: "Run including GPU tests"
+        required: false
+        default: false
       large:
         type: boolean
         description: "Run large tests"
@@ -74,6 +79,7 @@ jobs:
   k3s:
     name: K3s
     runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/extras=s3-cache
+    if: ${{ inputs.gpu || matrix.compute != 'CUDA' }}
     timeout-minutes: 30
     needs: propagator-connectivity
     strategy:
@@ -83,8 +89,8 @@ jobs:
           - CPU
           - CUDA
         cr:
-          - streamer
           - default
+          - streamer
         arch:
           - amd64
           - arm64
@@ -174,7 +180,7 @@ jobs:
       - name: Install
         env:
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
-          STREAMER: ${{ matrix.cr == 'streamer' }}
+          STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
         run: |
           make install
           sudo -E cedana plugin install runc containerd crio criu storage/cedana
