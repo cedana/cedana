@@ -59,6 +59,9 @@ on:
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  RETRIES: 1
+  DEBUG: 0 # bats debug logging
 
 jobs:
   streamer:
@@ -149,8 +152,6 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: 1
-          RETRIES: 1
-          DEBUG: 1 # debug logging
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then

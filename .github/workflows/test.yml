@@ -54,6 +54,9 @@ on:
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  RETRIES: 1
+  DEBUG: 0 # bats debug logging
 
 jobs:
   unit:
@@ -193,7 +196,6 @@ jobs:
         env:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
-          RETRIES: 1
         run: |
           if [ "$LARGE" = "true" ]; then
             make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES
@@ -283,7 +285,6 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PLUGIN: ${{ matrix.plugin }}
-          RETRIES: 1
         run: |
           # replace slash in plugin with colon so that the tag is namespaced correctly
           # e.g. storage/cedana -> storage:cedana

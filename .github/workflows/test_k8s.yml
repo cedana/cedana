@@ -54,6 +54,9 @@ on:
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  RETRIES: 1
+  DEBUG: 0 # bats debug logging
 
 jobs:
   propagator-connectivity:
@@ -201,8 +204,6 @@ jobs:
           CEDANA_LOG_LEVEL: trace # trace until stabilized
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
           PARALLELISM: ${{ inputs.parallelism }}
-          DEBUG: 0 # debug logging
-          RETRIES: 1
         run: |
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
