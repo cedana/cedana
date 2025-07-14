@@ -20,11 +20,6 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      gpu:
-        type: boolean
-        description: "Run including GPU tests"
-        required: false
-        default: false
       large:
         type: boolean
         description: "Run large tests"
@@ -79,7 +74,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    if: ${{ inputs.gpu || matrix.compute != 'CUDA' }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:

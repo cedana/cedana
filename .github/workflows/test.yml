@@ -20,16 +20,6 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      gpu:
-        type: boolean
-        description: "Run GPU tests"
-        required: false
-        default: true
-      streamer:
-        type: boolean
-        description: "Run streamer tests"
-        required: false
-        default: true
       large:
         type: boolean
         description: "Run large tests"
@@ -326,12 +316,10 @@ jobs:
   streamer:
     name: Streamer
     uses: ./.github/workflows/test_streamer.yml
-    if: inputs.streamer
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      gpu: false # will be tested in the regression-gpu job already
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
       parallelism_gpu: ${{ inputs.parallelism_gpu }}
@@ -343,12 +331,10 @@ jobs:
   gpu:
     name: GPU
     uses: ./.github/workflows/test_gpu.yml
-    if: inputs.gpu
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      streamer: ${{ inputs.streamer }}
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner_gpu }}
