@@ -462,7 +462,7 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 			Containerd: &containerd.Containerd{
 				ID:         runcId,
 				Image:      "cedana/cedana-checkpoints:" + checkpointId,
-				Namespace:  namespace,
+				Namespace:  "k8s.io",
 				RootfsOnly: rootfsOnly,
 				Username:   username,
 				Secret:     secret,
@@ -589,19 +589,19 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 					}
 				}
 			} else {
-        resp, profiling, err := CheckpointContainer(
-          context.Background(),
-          *checkpointId,
-          container.Runc.ID,
-          runcRoot,
-          address,
-          protocol,
-        )
-        if err != nil {
-          log.Error().Err(err).Msg("Failed to checkpoint pod containers")
-        } else {
-          log.Info().Msg("Publishing checkpoint...")
-          err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp)
+				resp, profiling, err := CheckpointContainer(
+					context.Background(),
+					*checkpointId,
+					container.Runc.ID,
+					runcRoot,
+					address,
+					protocol,
+				)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to checkpoint pod containers")
+				} else {
+					log.Info().Msg("Publishing checkpoint...")
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
 					}
