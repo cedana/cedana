@@ -412,11 +412,15 @@ jobs:
           upload-artifact: true
           artifact-name: ctrf-report-${{ matrix.arch }}
 
+      - name: Create supporting markdown
+        run: |
+          echo "${{ github.repository }}" > prefix.md
+
       - name: Post report to Slack
         if: ${{ inputs.post_summary_slack != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || secrets.SLACK_WEBHOOK_URL_TESTS }}
           TITLE: "Test results (${{ matrix.arch }})"
-          PREFIX: ${{ github.repository }}
+          PREFIX: prefix.md
         run: |
           npx slack-ctrf results "ctrf/*.json" --title "$TITLE" --prefix "$PREFIX"
