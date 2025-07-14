@@ -225,7 +225,7 @@ jobs:
                 HELM_CHART=$HELM_CHART
             else
               make test-k8s \
-                TAGS=k3s,!large \
+                TAGS=k3s,gpu,!large \
                 PARALLELISM=$PARALLELISM \
                 RETRIES=$RETRIES \
                 DEBUG=$DEBUG \
