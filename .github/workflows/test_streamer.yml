@@ -151,7 +151,7 @@ jobs:
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
-          PARALLELISM_GPU: 1
+          PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
