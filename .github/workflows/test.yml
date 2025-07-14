@@ -363,7 +363,6 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
-      gpu: ${{ inputs.gpu }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}

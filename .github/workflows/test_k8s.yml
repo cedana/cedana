@@ -20,11 +20,6 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      gpu:
-        type: boolean
-        description: "Run including GPU tests"
-        required: false
-        default: false
       large:
         type: boolean
         description: "Run large tests"
@@ -78,12 +73,15 @@ jobs:
 
   k3s:
     name: K3s
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/extras=s3-cache
     timeout-minutes: 30
     needs: propagator-connectivity
     strategy:
       fail-fast: false
       matrix:
+        compute:
+          - CPU
+          - CUDA
         cr:
           - streamer
           - default
@@ -91,11 +89,11 @@ jobs:
           - amd64
           - arm64
     container:
-      image: ${{ inputs.gpu && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ inputs.gpu && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -156,7 +154,7 @@ jobs:
           name: runtime-shim-${{ matrix.arch }}
 
       - name: Download GPU plugin
-        if: ${{ inputs.gpu }}
+        if: ${{ matrix.compute == 'CUDA' }}
         uses: actions/download-artifact@v4
         with:
           name: gpu-${{ matrix.arch }}
@@ -175,7 +173,7 @@ jobs:
 
       - name: Install
         env:
-          GPU: ${{ inputs.gpu }}
+          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
           STREAMER: ${{ matrix.cr == 'streamer' }}
         run: |
           make install
@@ -201,7 +199,7 @@ jobs:
         env:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_LOG_LEVEL: trace # trace until stabilized
-          GPU: ${{ inputs.gpu }}
+          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
           # PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM: 1
           DEBUG: 1 # debug logging
@@ -216,7 +214,7 @@ jobs:
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
               make test-k8s \
-                TAGS=k3s \
+                TAGS=k3s,gpu \
                 PARALLELISM=$PARALLELISM \
                 RETRIES=$RETRIES \
                 DEBUG=$DEBUG \
