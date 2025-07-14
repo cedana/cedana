@@ -69,7 +69,6 @@ jobs:
   streamer:
     name: Streamer
     runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/extras=s3-cache
-    if: ${{ inputs.gpu || matrix.compute != 'CUDA' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -80,6 +79,7 @@ jobs:
         arch:
           - amd64
           - arm64
+    if: ${{ inputs.gpu || matrix.compute != 'CUDA' }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
