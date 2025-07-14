@@ -124,6 +124,7 @@ jobs:
         run: |
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
+          TAG=$(echo $TAG | sed 's/\//-/g')
           docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
           digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
           touch "/tmp/digests/${digest#sha256:}"
@@ -274,6 +275,7 @@ jobs:
         run: |
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
+          TAG=$(echo $TAG | sed 's/\//-/g')
           docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
           digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
           touch "/tmp/digests/${digest#sha256:}"
