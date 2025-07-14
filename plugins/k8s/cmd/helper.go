@@ -461,7 +461,7 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 		Details: &daemon.Details{
 			Containerd: &containerd.Containerd{
 				ID:         runcId,
-				Image:      "cedana/cedana-checkpoints:" + checkpointId,
+				Image:      image.ImageSource + ":" + checkpointId,
 				Namespace:  "k8s.io",
 				RootfsOnly: rootfsOnly,
 				Username:   username,
