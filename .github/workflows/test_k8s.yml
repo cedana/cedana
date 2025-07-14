@@ -200,9 +200,8 @@ jobs:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_LOG_LEVEL: trace # trace until stabilized
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
-          # PARALLELISM: ${{ inputs.parallelism }}
-          PARALLELISM: 1
-          DEBUG: 1 # debug logging
+          PARALLELISM: ${{ inputs.parallelism }}
+          DEBUG: 0 # debug logging
           RETRIES: 1
         run: |
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
