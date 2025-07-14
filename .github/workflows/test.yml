@@ -421,6 +421,5 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || secrets.SLACK_WEBHOOK_URL_TESTS }}
           TITLE: "Test results (${{ matrix.arch }})"
-          PREFIX: prefix.md
         run: |
-          npx slack-ctrf results "ctrf/*.json" --title "$TITLE" --prefix "$PREFIX"
+          npx slack-ctrf results "ctrf/*.json" --title "$TITLE" --prefix prefix.md
