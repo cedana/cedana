@@ -327,7 +327,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: runtime-shim-${{ matrix.arch }}
+          name: shim-runc-v2-${{ matrix.arch }}
           path: ./runtime-shim/*
 
   helm-chart:
