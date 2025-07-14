@@ -57,6 +57,7 @@ on:
         default: false
 
 env:
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
@@ -83,8 +84,6 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
-    env:
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4

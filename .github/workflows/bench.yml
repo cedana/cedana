@@ -62,6 +62,13 @@ on:
         required: false
         default: "16cpu-64g-1xL4"
 
+env:
+  CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  SAMPLES: ${{ inputs.samples }}
+
 jobs:
   cedana_runtime_1:
     name: Cedana (runtime 1)
@@ -134,10 +141,6 @@ jobs:
 
       - name: Run
         env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           SAMPLES: ${{ inputs.samples }}
         run: |
           echo Using bench config:
@@ -240,12 +243,6 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run
-        env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
         run: |
           echo Using bench config:
           cat bench.json
@@ -341,12 +338,6 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run
-        env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
         run: |
           echo Using bench config:
           cat bench.json
@@ -443,12 +434,6 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run
-        env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
         run: |
           echo Using bench config:
           cat bench.json
@@ -498,12 +483,6 @@ jobs:
           limit-access-to-actor: true
 
       - name: Run
-        env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
         run: |
           echo Using bench config:
           cat bench.json
