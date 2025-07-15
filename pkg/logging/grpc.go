@@ -31,29 +31,29 @@ func UnaryLogger() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		resp, err := handler(ctx, req)
 
-		// redactEnv recursively removes Env fields for logging
-		redactEnv := func(v any) any {
-			if v == nil {
-				return nil
-			}
-			b, err := json.Marshal(v)
-			if err != nil {
-				return v // fallback to original if marshal fails
-			}
-			var m map[string]any
-			if err := json.Unmarshal(b, &m); err != nil {
-				return v
-			}
-			delete(m, "Env")
-			return m
-		}
-
 		if err != nil {
-			log.Error().Str("method", info.FullMethod).Interface("request", redactEnv(req)).Interface("response", redactEnv(resp)).Err(err).Msg("gRPC request failed")
+			log.Error().Str("method", info.FullMethod).Interface("request", RedactEnv(req)).Interface("response", RedactEnv(resp)).Err(err).Msg("gRPC request failed")
 		} else {
-			log.Trace().Str("method", info.FullMethod).Interface("response", redactEnv(resp)).Msg("gRPC request succeeded")
+			log.Trace().Str("method", info.FullMethod).Interface("response", RedactEnv(resp)).Msg("gRPC request succeeded")
 		}
 
 		return resp, err
 	}
+}
+
+// RedactEnv recursively removes Env fields for logging
+func RedactEnv(v any) any {
+	if v == nil {
+		return nil
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return v // fallback to original if marshal fails
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return v
+	}
+	delete(m, "Env")
+	return m
 }
