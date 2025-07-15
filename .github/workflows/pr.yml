@@ -71,7 +71,6 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      post_summary_slack: nightly
 
   bench:
     name: Bench

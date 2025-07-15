@@ -209,11 +209,13 @@ jobs:
           fi
 
       - name: Setup node
+        if: always()
         uses: actions/setup-node@v4
         with:
           node-version: "21"
 
       - name: Generate report (isolated)
+        if: always()
         run: |
           npx junit-to-ctrf "/tmp/report*isolated.xml" -t bats -o /tmp/report-isolated.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
@@ -225,6 +227,7 @@ jobs:
             --testEnvironment "Isolated daemon" --reportName "Basic (${{ matrix.arch }})"
 
       - name: Generate report (persistent)
+        if: always()
         run: |
           npx junit-to-ctrf "/tmp/report*persistent.xml" -t bats -o /tmp/report-persistent.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
@@ -336,11 +339,13 @@ jobs:
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
 
       - name: Setup node
+        if: always()
         uses: actions/setup-node@v4
         with:
           node-version: "21"
 
       - name: Generate report (isolated)
+        if: always()
         run: |
           npx junit-to-ctrf "/tmp/report*isolated.xml" -t bats -o /tmp/report-isolated.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
@@ -352,6 +357,7 @@ jobs:
             --testEnvironment "Isolated daemon" --reportName "${{ matrix.plugin }} (${{ matrix.arch }})"
 
       - name: Generate report (persistent)
+        if: always()
         run: |
           npx junit-to-ctrf "/tmp/report*persistent.xml" -t bats -o /tmp/report-persistent.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
@@ -450,6 +456,7 @@ jobs:
           report-path: report/**/*.json
           github-report: true
           failed-folded-report: true
+          flaky-report: true
           summary: true
           pull-request: true
           title: ${{ matrix.arch }}

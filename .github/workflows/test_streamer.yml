@@ -167,11 +167,13 @@ jobs:
           fi
 
       - name: Setup node
+        if: always()
         uses: actions/setup-node@v4
         with:
           node-version: "21"
 
       - name: Generate report (isolated)
+        if: always()
         run: |
           npx junit-to-ctrf "/tmp/report*isolated.xml" -t bats -o /tmp/report-isolated.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
@@ -183,6 +185,7 @@ jobs:
             --testEnvironment "Isolated daemon" --reportName "streamer (${{ matrix.compute }}, ${{ matrix.arch }})"
 
       - name: Generate report (persistent)
+        if: always()
         run: |
           npx junit-to-ctrf "/tmp/report*persistent.xml" -t bats -o /tmp/report-persistent.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
