@@ -122,7 +122,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				err = status.Errorf(codes.Internal, "failed to open hostmem file %s: %v", newPath, err)
 				return false
 			}
-			defer newFile.Close()
 
 			extraFiles = append(extraFiles, newFile)
 			toClose = append(toClose, newFile)
