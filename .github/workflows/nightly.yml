@@ -3,7 +3,7 @@ name: Nightly
 # This workflow runs all the large tests and benchmarks nightly.
 
 permissions:
-  contents: read
+  contents: write
   packages: read
   id-token: write
   pull-requests: write

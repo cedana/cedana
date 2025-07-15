@@ -208,6 +208,31 @@ jobs:
             make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
           fi
 
+      - name: Setup node
+        uses: actions/setup-node@v4
+
+      - name: Generate report (isolated)
+        run: |
+          npx junit-to-ctrf "/tmp/report*isolated.xml" -t bats -o /tmp/report-isolated.json -e \
+            --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
+            --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
+            --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
+            --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
+            --testEnvironment "Isolated daemon" --reportName "Basic (${{ matrix.arch }})"
+
+      - name: Generate report (persistent)
+        run: |
+          npx junit-to-ctrf "/tmp/report*persistent.xml" -t bats -o /tmp/report-persistent.json -e \
+            --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
+            --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
+            --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
+            --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
+            --testEnvironment "Persistent daemon" --reportName "Basic (${{ matrix.arch }})"
+
       - name: Upload report
         if: always()
         id: upload-report
@@ -215,7 +240,7 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}
           path: |
-            /tmp/report*.xml
+            /tmp/report*.json
 
   plugin:
     name: Plugin
@@ -308,6 +333,31 @@ jobs:
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
 
+      - name: Setup node
+        uses: actions/setup-node@v4
+
+      - name: Generate report (isolated)
+        run: |
+          npx junit-to-ctrf "/tmp/report*isolated.xml" -t bats -o /tmp/report-isolated.json -e \
+            --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
+            --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
+            --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
+            --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
+            --testEnvironment "Isolated daemon" --reportName "${{ matrix.plugin }} (${{ matrix.arch }})"
+
+      - name: Generate report (persistent)
+        run: |
+          npx junit-to-ctrf "/tmp/report*persistent.xml" -t bats -o /tmp/report-persistent.json -e \
+            --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
+            --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
+            --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
+            --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
+            --testEnvironment "Persistent daemon" --reportName "${{ matrix.plugin }} (${{ matrix.arch }})"
+
       - name: Upload report
         if: always()
         id: upload-report
@@ -317,7 +367,7 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
-            /tmp/report*.xml
+            /tmp/report*.json
 
   streamer:
     name: Streamer
@@ -371,6 +421,7 @@ jobs:
         arch:
           - amd64
           - arm64
+      max-parallel: 1
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -390,15 +441,12 @@ jobs:
           pattern: test-report-${{ matrix.arch }}*
           path: report
 
-      - name: Generate consolidated report
-        run: npx junit-to-ctrf "report/**/*.xml" -o ctrf/report.json
-
       - name: Post report
         uses: ctrf-io/github-test-reporter@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          report-path: ctrf/*.json
+          report-path: report/**/*.json
           github-report: true
           failed-folded-report: true
           summary: true
@@ -412,14 +460,11 @@ jobs:
           upload-artifact: true
           artifact-name: ctrf-report-${{ matrix.arch }}
 
-      - name: Create supporting markdown
-        run: |
-          echo "${{ github.repository }}" > prefix.md
-
       - name: Post report to Slack
         if: ${{ inputs.post_summary_slack != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || secrets.SLACK_WEBHOOK_URL_TESTS }}
           TITLE: "Test results (${{ matrix.arch }})"
         run: |
-          npx slack-ctrf results "ctrf/*.json" --title "$TITLE"
+          npx slack-ctrf results "report/**/*.json" --title "$TITLE" --prefix ${{ github.repository }}
+          npx slack-ctrf failed "report/**/*.json" --consolidated

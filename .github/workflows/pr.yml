@@ -62,7 +62,7 @@ jobs:
       streamer_version: main
       helm_chart_version: main
       controller_version: staging
-      runtime_shim_version: release
+      runtime_shim_version: cedana
 
   test:
     name: Test
@@ -71,6 +71,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      post_summary_slack: nightly
 
   bench:
     name: Bench
