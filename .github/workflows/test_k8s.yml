@@ -263,6 +263,8 @@ jobs:
 
       - name: Setup node
         uses: actions/setup-node@v4
+        with:
+          node-version: "21"
 
       - name: Generate report
         run: |
