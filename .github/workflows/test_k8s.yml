@@ -261,12 +261,15 @@ jobs:
             fi
           fi
 
+      - name: Setup node
+        uses: actions/setup-node@v4
+
       - name: Generate report
         run: |
           npx junit-to-ctrf "/tmp/report*.xml" -t bats -o /tmp/report.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
             --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
-            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
             --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
             --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
             --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
@@ -306,15 +309,12 @@ jobs:
           pattern: test-report-${{ matrix.arch }}-k8s*
           path: report
 
-      - name: Generate consolidated report
-        run: npx junit-to-ctrf "report/**/*.xml" -o ctrf/report.json
-
       - name: Post report
         uses: ctrf-io/github-test-reporter@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          report-path: ctrf/*.json
+          report-path: report/**/*.json
           github-report: true
           failed-folded-report: true
           summary: true

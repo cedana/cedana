@@ -216,7 +216,7 @@ jobs:
           npx junit-to-ctrf "/tmp/report*isolated.xml" -t bats -o /tmp/report-isolated.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
             --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
-            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
             --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
             --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
             --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
@@ -227,7 +227,7 @@ jobs:
           npx junit-to-ctrf "/tmp/report*persistent.xml" -t bats -o /tmp/report-persistent.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
             --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
-            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
             --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
             --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
             --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
@@ -341,7 +341,7 @@ jobs:
           npx junit-to-ctrf "/tmp/report*isolated.xml" -t bats -o /tmp/report-isolated.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
             --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
-            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
             --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
             --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
             --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
@@ -352,7 +352,7 @@ jobs:
           npx junit-to-ctrf "/tmp/report*persistent.xml" -t bats -o /tmp/report-persistent.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
             --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
-            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
             --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
             --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
             --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
@@ -431,9 +431,6 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup node
-        uses: actions/setup-node@v4
-
       - name: Download report
         id: download-report
         uses: actions/download-artifact@v4
@@ -459,6 +456,9 @@ jobs:
           always-group-by: true
           upload-artifact: true
           artifact-name: ctrf-report-${{ matrix.arch }}
+
+      - name: Setup node
+        uses: actions/setup-node@v4
 
       - name: Post report to Slack
         if: ${{ inputs.post_summary_slack != '' }}
