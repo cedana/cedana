@@ -265,7 +265,7 @@ jobs:
         if: always()
         uses: actions/setup-node@v4
         with:
-          node-version: "21"
+          node-version: "20"
 
       - name: Generate report
         if: always()
