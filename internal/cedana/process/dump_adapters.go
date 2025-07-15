@@ -58,7 +58,7 @@ func FillProcessStateForDump(next types.Dump) types.Dump {
 			)
 		}
 
-		err = utils.FillProcessState(ctx, state.PID, state)
+		err = utils.FillProcessState(ctx, state.PID, state, true)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to fill process state: %v", err)
 		}
@@ -127,10 +127,17 @@ func DetectIOUringForDump(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		for _, f := range state.GetOpenFiles() {
+		var ioUring bool
+
+		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
 			if strings.Contains(f.Path, "io_uring") {
-				return nil, status.Errorf(codes.Unimplemented, "IOUring dump is not supported at the moment")
+				ioUring = true
 			}
+			return !ioUring
+		})
+
+		if ioUring {
+			return nil, status.Errorf(codes.Unimplemented, "IOUring dump is not supported at the moment")
 		}
 
 		return next(ctx, opts, resp, req)
@@ -168,19 +175,17 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		files := state.GetOpenFiles()
-		mounts := state.GetMounts()
-
 		mountIds := make(map[uint64]any)
-		for _, m := range mounts {
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
 			mountIds[m.ID] = nil
-		}
+			return true
+		})
 
 		if req.GetCriu() == nil {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		for _, f := range files {
+		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
@@ -195,7 +200,9 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 					req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
 				}
 			}
-		}
+
+			return true
+		})
 
 		return next(ctx, opts, resp, req)
 	}

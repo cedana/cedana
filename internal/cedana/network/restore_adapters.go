@@ -7,6 +7,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 )
@@ -21,14 +22,16 @@ func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {
-			for _, Conn := range state.GetOpenConnections() {
-				if Conn.Type == syscall.SOCK_STREAM { // TCP
+			utils.WalkTree(state, "OpenConnections", "Children", func(c *daemon.Connection) bool {
+				if c.Type == syscall.SOCK_STREAM { // TCP
 					hasTCP = true
 				}
-				if Conn.Type == syscall.AF_UNIX { // Interprocess
+				if c.Type == syscall.AF_UNIX { // Interprocess
 					hasExtUnixSocket = true
 				}
-			}
+
+				return true
+			})
 		} else {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")
 		}
