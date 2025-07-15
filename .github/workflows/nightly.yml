@@ -13,6 +13,12 @@ on:
   schedule:
     - cron: "0 0 * * *" # Every day at midnight
   workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run with debugging enabled"
+        required: false
+        default: false
 
 jobs:
   download:
@@ -34,7 +40,7 @@ jobs:
     needs: download
     secrets: inherit
     with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
       runner: 16cpu-64g # use larger runner
       runner_gpu: 16cpu-64g-1xL40S # use larger runner
@@ -49,7 +55,7 @@ jobs:
     needs: download
     secrets: inherit
     with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       cedana: true
       native: false
       samples: 3
