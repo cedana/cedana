@@ -261,6 +261,24 @@ jobs:
             fi
           fi
 
+      - name: Setup node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "21"
+
+      - name: Generate report
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report*.xml" -t bats -o /tmp/report.json -e \
+            --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
+            --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
+            --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
+            --repositoryName ${{ github.repository }} --repositoryUrl ${{ github.server_url }}/${{ github.repository }} \
+            --commit ${{ github.sha }} --branchName ${{ github.head_ref || github.ref_name }} \
+            --osPlatform "$(uname -s) (${{ matrix.arch }})" --osRelease $(uname -r) \
+            --testEnvironment "Kubernetes" --reportName "K3s (${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
+
       - name: Upload report
         if: always()
         id: upload-report
@@ -268,7 +286,7 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}-${{ matrix.compute }}
           path: |
-            /tmp/report*.xml
+            /tmp/report*.json
 
   post-summary:
     name: Post Summary
@@ -295,15 +313,12 @@ jobs:
           pattern: test-report-${{ matrix.arch }}-k8s*
           path: report
 
-      - name: Generate consolidated report
-        run: npx junit-to-ctrf "report/**/*.xml" -o ctrf/report.json
-
       - name: Post report
         uses: ctrf-io/github-test-reporter@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          report-path: ctrf/*.json
+          report-path: report/**/*.json
           github-report: true
           failed-folded-report: true
           summary: true

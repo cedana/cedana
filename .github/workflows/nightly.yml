@@ -3,7 +3,7 @@ name: Nightly
 # This workflow runs all the large tests and benchmarks nightly.
 
 permissions:
-  contents: read
+  contents: write
   packages: read
   id-token: write
   pull-requests: write
@@ -12,6 +12,13 @@ permissions:
 on:
   schedule:
     - cron: "0 0 * * *" # Every day at midnight
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run with debugging enabled"
+        required: false
+        default: false
 
 jobs:
   download:
@@ -24,7 +31,7 @@ jobs:
       gpu_version: main
       streamer_version: main
       helm_chart_version: main
-      controller_version: main
+      controller_version: staging
       runtime_shim_version: release
 
   test:
@@ -33,14 +40,11 @@ jobs:
     needs: download
     secrets: inherit
     with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      cpu: true
-      gpu: true
-      streamer: true
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
       runner: 16cpu-64g # use larger runner
       runner_gpu: 16cpu-64g-1xL40S # use larger runner
-      runner_gpu_arm: 32cpu-64g-1xT4G # use larger runner
+      runner_gpu_arm64: 32cpu-64g-1xT4G # use larger runner
       parallelism: 8
       parallelism_gpu: 4
       post_summary_slack: nightly
@@ -51,7 +55,7 @@ jobs:
     needs: download
     secrets: inherit
     with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       cedana: true
       native: false
       samples: 3

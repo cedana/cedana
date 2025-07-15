@@ -55,14 +55,13 @@ on:
         default: cedana-alpha
       dockerhub:
         type: boolean
-        description: "Publish images to Docker Hub"
+        description: "Publish images to DockerHub"
         required: false
         default: false
 
 jobs:
   build:
     name: Build
-    needs: check
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
