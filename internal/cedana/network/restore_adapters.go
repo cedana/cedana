@@ -29,7 +29,6 @@ func DetectNetworkOptionsForRestore(next types.Restore) types.Restore {
 				if c.Type == syscall.AF_UNIX { // Interprocess
 					hasExtUnixSocket = true
 				}
-
 				return true
 			})
 		} else {
