@@ -9,8 +9,6 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -24,23 +22,27 @@ func DetectNetworkOptionsForDump(next types.Dump) types.Dump {
 		var hasTCP, hasExtUnixSocket bool
 
 		if state := resp.GetState(); state != nil {
-			for _, Conn := range state.GetOpenConnections() {
-				if Conn.Type == syscall.SOCK_STREAM { // TCP
+			utils.WalkTree(state, "OpenConnections", "Children", func(c *daemon.Connection) bool {
+				if c.Type == syscall.SOCK_STREAM { // TCP
 					hasTCP = true
 				}
-				if Conn.Type == syscall.AF_UNIX { // Interprocess
+				if c.Type == syscall.AF_UNIX { // Interprocess
 					hasExtUnixSocket = true
 				}
-			}
+				return true
+			})
 
-			activeTCP, err := utils.HasActiveTCPConnections(int32(state.GetPID()))
-			if err != nil {
-				return nil, status.Errorf(
-					codes.Internal,
-					"failed to check active TCP connections: %v",
-					err,
-				)
-			}
+			var activeTCP bool
+
+			utils.WalkTree(state, "PID", "Children", func(pid uint32) bool {
+				var err error
+				activeTCP, err = utils.HasActiveTCPConnections(pid)
+				if err != nil {
+					log.Warn().Err(err).Msgf("Failed to check active TCP connections for PID %d", pid)
+				}
+				return !activeTCP
+			})
+
 			hasTCP = hasTCP || activeTCP
 		} else {
 			log.Warn().Msg("No process info found. it should have been filled by an adapter")

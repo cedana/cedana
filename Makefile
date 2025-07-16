@@ -180,7 +180,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-$(date +%s%N)-isolated.xml ;\
+			mv /tmp/report.xml /tmp/report-isolated.xml ;\
 		fi ;\
 		echo "Using a persistent instance of daemon across tests..." ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -189,7 +189,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persistent=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-$(date +%s%N)-persistent.xml ;\
+			mv /tmp/report.xml /tmp/report-persistent.xml ;\
 		fi ;\
 		if [ $$status_isolated -ne 0 ]; then \
 			echo "Isolated tests failed" ;\
@@ -226,7 +226,7 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-$(date +%s%N).xml ;\
+			mv /tmp/report.xml /tmp/report.xml ;\
 		fi ;\
 		if [ $$status -ne 0 ]; then \
 			echo "Kubernetes e2e tests failed" ;\

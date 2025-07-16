@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -99,32 +100,46 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			Fd:  proto.Int32(int32(2 + len(extraFiles))),
 		})
 
+		var toClose []*os.File
+
 		// Inherit hostmem files as well, if any
-		for _, file := range state.OpenFiles {
+		utils.WalkTree(state, "OpenFiles", "Children", func(file *daemon.File) bool {
 			path := file.Path
 			re := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
 			matches := re.FindStringSubmatch(path)
 			if len(matches) != 3 {
-				continue
+				return true
 			}
 			pid, err := strconv.Atoi(matches[2])
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to parse PID from hostmem file path %s: %v", path, err)
+				err = status.Errorf(codes.Internal, "failed to parse PID from hostmem file path %s: %v", path, err)
+				return false
 			}
 
 			newPath := fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
 			newFile, err := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o777)
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to open hostmem file %s: %v", newPath, err)
+				err = status.Errorf(codes.Internal, "failed to open hostmem file %s: %v", newPath, err)
+				return false
 			}
-			defer newFile.Close()
 
 			extraFiles = append(extraFiles, newFile)
+			toClose = append(toClose, newFile)
 
 			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
 				Key: proto.String(strings.TrimPrefix(path, "/")),
 				Fd:  proto.Int32(int32(2 + len(extraFiles))),
 			})
+
+			return true
+		})
+
+		for _, file := range toClose {
+			defer file.Close()
+		}
+
+		if err != nil {
+			return nil, err
 		}
 
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
