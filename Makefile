@@ -158,10 +158,10 @@ CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
-				--output /tmp --report-formatter junit
+				--output /tmp --report-formatter junit --formatter pretty
 BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
-				--output /tmp --report-formatter junit
+				--output /tmp --report-formatter junit --formatter pretty
 
 test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
 
