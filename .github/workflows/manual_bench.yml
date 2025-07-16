@@ -1,3 +1,5 @@
+name: Manual (bench)
+
 on:
   workflow_dispatch:
     inputs:
