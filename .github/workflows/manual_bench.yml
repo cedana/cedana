@@ -71,7 +71,7 @@ jobs:
     name: Bench
     uses: ./.github/workflows/bench.yml
     if: ${{ !cancelled() }}
-    needs: [build, download]
+    needs: download
     secrets: inherit
     with:
       cedana: ${{ inputs.runtime == 'cedana' }}
