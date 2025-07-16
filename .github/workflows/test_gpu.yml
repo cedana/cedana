@@ -169,7 +169,7 @@ jobs:
       - name: Generate report (isolated)
         if: always()
         run: |
-          npx junit-to-ctrf "/tmp/report*isolated.xml" -t bats -o /tmp/report-isolated.json -e \
+          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
             --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
             --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
@@ -181,7 +181,7 @@ jobs:
       - name: Generate report (persistent)
         if: always()
         run: |
-          npx junit-to-ctrf "/tmp/report*persistent.xml" -t bats -o /tmp/report-persistent.json -e \
+          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
             --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
             --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \

@@ -270,7 +270,7 @@ jobs:
       - name: Generate report
         if: always()
         run: |
-          npx junit-to-ctrf "/tmp/report*.xml" -t bats -o /tmp/report.json -e \
+          npx junit-to-ctrf "/tmp/report.xml" -t bats -o /tmp/report.json -e \
             --appName cedana --appVersion ${{ github.head_ref || github.ref_name }} \
             --buildName ${{ github.head_ref || github.ref_name }} --buildNumber ${{ github.run_number }} \
             --buildUrl ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} \
