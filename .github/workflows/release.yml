@@ -79,11 +79,11 @@ jobs:
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
       samples: 2
-      push_results: true
       post_summary_pr: false
       post_summary_slack: default
       comparison_patch: true
       comparison_native: true
+      push_results: true
       results_dataset: cedana
 
   publish:
