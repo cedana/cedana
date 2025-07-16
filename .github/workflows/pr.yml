@@ -41,7 +41,6 @@ jobs:
 
   build:
     name: Build
-    needs: check
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
@@ -53,7 +52,6 @@ jobs:
 
   download:
     name: Download
-    needs: check
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
