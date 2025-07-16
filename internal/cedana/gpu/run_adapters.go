@@ -109,6 +109,7 @@ func ProcessInterception(next types.Run) types.Run {
 		env := req.GetEnv()
 
 		env = append(env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
+		env = append(env, "NCCL_SHM_DISABLE=1") // Disable for now to avoid conflicts with NCCL's shm usage
 		env = append(env, "CEDANA_GPU_ID="+id)
 
 		req.Env = env
