@@ -38,7 +38,7 @@ func WritePIDFileForRestore(next types.Restore) types.Restore {
 			resp.Messages = append(resp.Messages, fmt.Sprintf("Failed to create PID file %s: %s", pidFile, err.Error()))
 		}
 
-		_, err = file.WriteString(fmt.Sprintf("%d", resp.PID))
+		_, err = fmt.Fprintf(file, "%d", resp.PID)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Failed to write PID to file %s", pidFile)
 			resp.Messages = append(resp.Messages, fmt.Sprintf("Failed to write PID to file %s: %s", pidFile, err.Error()))
@@ -129,19 +129,24 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 		inheritFds := req.Criu.InheritFd
 
-		files := state.GetOpenFiles()
-		mounts := state.GetMounts()
-
 		mountIds := make(map[uint64]any)
-		for _, m := range mounts {
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
 			mountIds[m.ID] = nil
-		}
+			return true
+		})
 
-		for _, f := range files {
+		visited := make(map[string]bool)
+
+		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
 			_, internal := mountIds[f.MountID]
+
+			if visited[f.Path] {
+				return true
+			}
+			visited[f.Path] = true
 
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
@@ -163,22 +168,24 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 				if f.IsTTY || daemonless {
 					if !daemonless {
-						return nil, status.Errorf(codes.FailedPrecondition,
+						err = status.Errorf(codes.FailedPrecondition,
 							"found open file %s with fd %d which is a TTY and so restoring will fail because no TTY to inherit. Try --no-server restore", f.Path, f.Fd)
+						return false
 					}
-					if f.Fd == 0 {
+					switch f.Fd {
+					case 0:
 						extraFiles = append(extraFiles, os.Stdin)
 						inheritFds = append(inheritFds, &criu_proto.InheritFd{
 							Fd:  proto.Int32(int32(2 + len(extraFiles))),
 							Key: proto.String(path),
 						})
-					} else if f.Fd == 1 {
+					case 1:
 						extraFiles = append(extraFiles, os.Stdout)
 						inheritFds = append(inheritFds, &criu_proto.InheritFd{
 							Fd:  proto.Int32(int32(2 + len(extraFiles))),
 							Key: proto.String(path),
 						})
-					} else if f.Fd == 2 {
+					case 2:
 						extraFiles = append(extraFiles, os.Stderr)
 						inheritFds = append(inheritFds, &criu_proto.InheritFd{
 							Fd:  proto.Int32(int32(2 + len(extraFiles))),
@@ -207,7 +214,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					}
 				}
 			}
-		}
+
+			return true
+		})
 
 		req.Criu.InheritFd = inheritFds
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)

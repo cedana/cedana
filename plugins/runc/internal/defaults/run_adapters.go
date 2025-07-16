@@ -31,7 +31,7 @@ func FillMissingRunDefaults(next types.Run) types.Run {
 
 		daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
 		if !daemonless {
-			req.Details.Runc.NoSubreaper = false // we always reap when we are the daemon is managing
+			req.Details.Runc.NoSubreaper = false // we always reap when the daemon is managing
 		}
 
 		return next(ctx, opts, resp, req)

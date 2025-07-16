@@ -122,8 +122,9 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		// NOTE: It's possible that after the restore failed, the process
 		// exists as a zombie process. We need to reap it.
 		if pid := resp.GetState().GetPID(); pid != 0 {
-			p, _ := os.FindProcess(int(pid))
-			p.Wait()
+			if p, err := os.FindProcess(int(pid)); err == nil {
+				p.Wait()
+			}
 		}
 
 		return nil, status.Errorf(codes.Internal, "failed CRIU restore: %v", err)

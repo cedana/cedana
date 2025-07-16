@@ -169,10 +169,11 @@ func Confirm(ctx context.Context, msg string) bool {
 			}
 
 			response = strings.ToLower(strings.TrimSpace(response))
-			if response == "y" || response == "yes" {
+			switch response {
+			case "y", "yes":
 				answer <- true
 				return
-			} else if response == "n" || response == "no" || response == "" {
+			case "n", "no", "":
 				answer <- false
 				return
 			}

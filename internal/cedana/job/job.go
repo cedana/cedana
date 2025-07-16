@@ -109,7 +109,7 @@ func (j *Job) FillState(ctx context.Context, pid uint32) error {
 	j.Lock()
 	defer j.Unlock()
 
-	return utils.FillProcessState(ctx, pid, j.proto.State)
+	return utils.FillProcessState(ctx, pid, j.proto.State, true)
 }
 
 func (j *Job) GetDetails() *daemon.Details {
@@ -217,7 +217,7 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 	}
 
 	// Try to fill rest as much as possible, let it error
-	utils.FillProcessState(context.TODO(), state.PID, state)
+	utils.FillProcessState(context.TODO(), state.PID, state, true)
 
 	return
 }
