@@ -81,6 +81,7 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
       samples: 1
       push_results: false
+      results_dataset: cedana_alpha
       post_summary_pr: true
       comparison_patch: true
       comparison_native: false

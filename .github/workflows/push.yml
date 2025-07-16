@@ -72,6 +72,7 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
       samples: 2
       push_results: true
+      results_dataset: cedana_alpha
       post_summary_pr: false
 
   publish:
