@@ -170,25 +170,25 @@ jobs:
         if: always()
         run: |
           npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
-            --appName="cedana" --appVersion="${{ github.head_ref || github.ref_name }}" \
-            --buildName="${{ github.head_ref || github.ref_name }}" --buildNumber="${{ github.run_number }}" \
-            --buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --repositoryName="${{ github.repository }}" --repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            --commit="${{ github.sha }}" --branchName="${{ github.head_ref || github.ref_name }}" \
-            --osPlatform="$(uname -s) (${{ matrix.arch }})" --osRelease="$(uname -r)" \
-            --testEnvironment="Isolated daemon" --reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
+            appName="cedana" appVersion="${{ github.head_ref || github.ref_name }}" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="Isolated daemon" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
 
       - name: Generate report (persistent)
         if: always()
         run: |
           npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
-            --appName="cedana" --appVersion="${{ github.head_ref || github.ref_name }}" \
-            --buildName="${{ github.head_ref || github.ref_name }}" --buildNumber="${{ github.run_number }}" \
-            --buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            --repositoryName="${{ github.repository }}" --repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            --commit="${{ github.sha }}" --branchName="${{ github.head_ref || github.ref_name }}" \
-            --osPlatform="$(uname -s) (${{ matrix.arch }})" --osRelease="$(uname -r)" \
-            --testEnvironment="Persistent daemon" --reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
+            appName="cedana" appVersion="${{ github.head_ref || github.ref_name }}" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="Persistent daemon" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
 
       - name: Upload report
         if: always()
