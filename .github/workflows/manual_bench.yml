@@ -80,5 +80,5 @@ jobs:
       comparison_patch: ${{ inputs.bench_comparison_patch }}
       comparison_native: ${{ inputs.bench_comparison_native }}
       push_results: ${{ inputs.bench_push_results }}
-      results_dataset: ${{ inputs.bench_result_dataset }}
+      results_dataset: ${{ inputs.bench_results_dataset }}
       runner: ${{ inputs.runner }}
