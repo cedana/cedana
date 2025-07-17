@@ -248,6 +248,7 @@ jobs:
           echo Using bench config:
           cat bench.json
           ./bench run cedana \
+          -m ml-inference-throughput \
           -m ml-training-time \
           --save -n $SAMPLES
 

@@ -58,7 +58,7 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       cedana: true
       native: false
-      samples: 3
+      samples: 2
       push_results: true
       results_dataset: cedana_nightly
       comparison_patch: true
