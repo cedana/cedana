@@ -475,7 +475,6 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		es.conn,
 		queueName,
 		rabbitmq.WithConsumerOptionsExchangeName("daemon_broadcast_request"),
-		rabbitmq.WithConsumerOptionsConcurrency(100),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
