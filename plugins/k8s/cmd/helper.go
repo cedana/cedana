@@ -39,8 +39,9 @@ var (
 )
 
 const (
-	MAX_RETRIES         = 5
-	CLIENT_RETRY_PERIOD = time.Second
+	MAX_RETRIES           = 5
+	CLIENT_RETRY_PERIOD   = time.Second
+	PLUGIN_REFRESH_PERIOD = 30 * time.Second
 )
 
 //go:embed scripts/setup-host.sh
@@ -57,6 +58,9 @@ var startChrootScript string
 
 //go:embed scripts/stop-chroot.sh
 var stopChrootScript string
+
+//go:embed scripts/install-plugins.sh
+var installPluginsScript string
 
 func init() {
 	HelperCmd.AddCommand(destroyCmd)
@@ -84,6 +88,27 @@ var HelperCmd = &cobra.Command{
 			if err := runScript(ctx, setupHostScript, true); err != nil {
 				return fmt.Errorf("error setting up host: %w", err)
 			}
+
+			// Keep refreshing plugins regularly to account for any changes on the host
+			go func() {
+				ticker := time.NewTicker(PLUGIN_REFRESH_PERIOD)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						log.Info().Msg("Context done, stopping plugin refresh")
+						return
+					case <-ticker.C:
+						if err := runScript(ctx, installPluginsScript, true); err != nil {
+							log.Error().Err(err).Msg("error installing plugins")
+						} else {
+							log.Info().Msg("plugins installed successfully")
+						}
+					case <-ctx.Done():
+						return
+					}
+				}
+			}()
 		}
 
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
