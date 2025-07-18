@@ -101,6 +101,8 @@ type (
 		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 		// LdLibPath holds any additional directories to search for GPU libraries
 		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
+		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
+		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 	}
 
 	Plugins struct {
