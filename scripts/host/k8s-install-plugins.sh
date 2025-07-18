@@ -67,6 +67,8 @@ if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
+        echo "Sending SIGHUP to containerd..."
+        (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
     fi
 else
     PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
@@ -77,7 +79,7 @@ else
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
+        echo "Sending SIGHUP to containerd..."
+        (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
     fi
-    echo "Sending SIGHUP to containerd..."
-    (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
 fi
