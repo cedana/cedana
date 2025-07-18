@@ -85,9 +85,14 @@ var HelperCmd = &cobra.Command{
 
 		setupHost, _ := cmd.Flags().GetBool("setup-host")
 		if setupHost {
+
+			// Make sure that the go routine doesn't interrupt the setup install
+			var scriptMutex sync.Mutex
+			scriptMutex.Lock()
 			if err := runScript(ctx, setupHostScript, true); err != nil {
 				return fmt.Errorf("error setting up host: %w", err)
 			}
+			scriptMutex.Unlock()
 
 			// Keep refreshing plugins regularly to account for any changes on the host
 			go func() {
