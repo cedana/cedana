@@ -10,8 +10,8 @@ permissions:
   checks: write
 
 on:
-  schedule:
-    - cron: "0 0 * * *" # Every day at midnight
+  # schedule:
+  #   - cron: "0 0 * * *" # Every day at midnight
   workflow_dispatch:
     inputs:
       debug:
