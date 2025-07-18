@@ -162,7 +162,7 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			c = &controller{
 				ID:      id,
 				Address: fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id),
-				Booking: flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_RDWR)),
+				Booking: flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR)),
 				UID:     fileInfo.Sys().(*syscall.Stat_t).Uid,
 				GID:     fileInfo.Sys().(*syscall.Stat_t).Gid,
 			}
@@ -414,8 +414,6 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		if err != nil {
 			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU on dump error")
 		}
-
-		return
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
