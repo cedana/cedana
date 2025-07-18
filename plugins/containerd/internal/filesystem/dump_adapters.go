@@ -116,8 +116,6 @@ func DumpRootfs(next types.Dump) types.Dump {
 }
 
 func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) error {
-	id := container.ID()
-
 	info, err := container.Info(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get container info: %v", err)
@@ -148,15 +146,7 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 		contentStore = client.ContentStore()
 	)
 
-	// TODO BS - the id+"-snapshot" is a hack right now. We should have proper sha256 hashes
-	// ex:
-	// KEY                                                                     PARENT                                                                  KIND
-	// sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a                                                                         Committed
-	// this is bad:
-	// test-snapshot                                                           sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
-	// test1-snapshot                                                          sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
-	// test2-snapshot                                                          sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
-	diffLayerDesc, diffID, err := createDiff(ctx, id+"-snapshot", contentStore, snapshotter, differ)
+	diffLayerDesc, diffID, err := createDiff(ctx, info.SnapshotKey, contentStore, snapshotter, differ)
 	if err != nil {
 		return fmt.Errorf("failed to export layer: %w", err)
 	}
