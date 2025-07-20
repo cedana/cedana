@@ -1,7 +1,10 @@
 name: Bench
 
 permissions:
-  contents: read
+  contents: "read"
+  packages: "read"
+  id-token: "write"
+  pull-requests: "write"
 
 on:
   workflow_call:
@@ -467,8 +470,6 @@ jobs:
   native:
     name: Native (all)
     if: inputs.native
-    permissions:
-      contents: read
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
@@ -516,14 +517,9 @@ jobs:
     name: Post Summary
     if: ${{ !cancelled() }}
     needs: [cedana_runtime_1, cedana_runtime_2, cedana_cr_1, cedana_cr_2, native]
-    permissions:
-      contents: "read"
-      packages: "read"
-      id-token: "write"
-      pull-requests: "write"
     runs-on: ubuntu-latest
     container:
-      image: cedana/cedana-bench:ubuntu
+      image: cedana/cedana-bench:slim
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}

@@ -2,13 +2,6 @@ name: Nightly
 
 # This workflow runs all the large tests and benchmarks nightly.
 
-permissions:
-  contents: write
-  packages: read
-  id-token: write
-  pull-requests: write
-  checks: write
-
 on:
   # schedule:
   #   - cron: "0 0 * * *" # Every day at midnight
