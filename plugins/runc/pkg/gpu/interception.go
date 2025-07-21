@@ -54,6 +54,7 @@ func AddGPUInterceptionToSpec(spec *specs.Spec, libraryPath string, id string) e
 		return fmt.Errorf("spec does not have a process")
 	}
 	spec.Process.Env = append(spec.Process.Env, "LD_PRELOAD="+libraryPath)
+	spec.Process.Env = append(spec.Process.Env, "NCCL_SHM_DISABLE=1") // Disable for now to avoid conflicts with NCCL's shm usage
 	spec.Process.Env = append(spec.Process.Env, "CEDANA_GPU_ID=container")
 
 	return nil

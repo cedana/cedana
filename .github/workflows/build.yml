@@ -219,7 +219,7 @@ jobs:
 
   test_image:
     name: Test Image
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/tag=${{ matrix.tag }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:

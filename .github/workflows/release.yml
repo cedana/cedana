@@ -27,15 +27,6 @@ on:
         required: false
         default: false
 
-permissions:
-  contents: write
-  packages: write
-  actions: read
-  id-token: write
-  pull-requests: write
-  checks: write
-
-# Cancel any preceding run on the pull request.
 concurrency:
   group: cedana-release-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -81,8 +72,8 @@ jobs:
       samples: 2
       post_summary_pr: false
       post_summary_slack: default
-      comparison_patch: true
-      comparison_native: true
+      comparison_previous: true
+      comparison_runtime: true
       push_results: true
       results_dataset: cedana
 

@@ -1,3 +1,5 @@
+name: Manual (bench)
+
 on:
   workflow_dispatch:
     inputs:
@@ -28,14 +30,14 @@ on:
         description: Number of samples to run for each metric
         required: false
         default: 2
-      bench_comparison_patch:
+      bench_comparison_previous:
         type: boolean
-        description: Compare benchmark results with last patch
+        description: Compare benchmark results with previous
         required: false
         default: false
-      bench_comparison_native:
+      bench_comparison_runtime:
         type: boolean
-        description: Compare benchmark results with native
+        description: Compare benchmark results with other runtimes
         required: false
         default: false
       bench_push_results:
@@ -75,8 +77,8 @@ jobs:
       cedana: ${{ inputs.runtime == 'cedana' }}
       native: ${{ inputs.runtime == 'native' }}
       samples: ${{ inputs.bench_samples }}
-      comparison_patch: ${{ inputs.bench_comparison_patch }}
-      comparison_native: ${{ inputs.bench_comparison_native }}
+      comparison_previous: ${{ inputs.bench_comparison_previous }}
+      comparison_runtime: ${{ inputs.bench_comparison_runtime }}
       push_results: ${{ inputs.bench_push_results }}
-      results_dataset: ${{ inputs.bench_result_dataset }}
+      results_dataset: ${{ inputs.bench_results_dataset }}
       runner: ${{ inputs.runner }}

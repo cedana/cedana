@@ -41,7 +41,6 @@ jobs:
 
   build:
     name: Build
-    needs: check
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
@@ -53,7 +52,6 @@ jobs:
 
   download:
     name: Download
-    needs: check
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
@@ -83,8 +81,8 @@ jobs:
       push_results: false
       results_dataset: cedana_alpha
       post_summary_pr: true
-      comparison_patch: true
-      comparison_native: false
+      comparison_previous: true
+      comparison_runtime: false
 
   publish:
     name: Publish

@@ -1,10 +1,5 @@
 name: Manual (publish)
 
-permissions:
-  contents: read
-  actions: read
-  packages: write
-
 on:
   workflow_dispatch:
     inputs:
