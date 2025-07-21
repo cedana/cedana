@@ -292,7 +292,7 @@ jobs:
 
       - name: Upload plots (runtime comparison)
         if: inputs.comparison_runtime
-        id: upload-plots
+        id: upload-plots-runtime
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           predefinedAcl: publicRead
