@@ -3,8 +3,7 @@
 
 set -e
 
-# NOTE: The scripts are executed before the binaries, ensure they are copied to the host
-# first
+# NOTE: The scripts are executed before the binaries, ensure they are copied to the host first
 mkdir -p /host/cedana /host/cedana/bin /host/cedana/scripts/host /host/cedana/lib
 cp -r /scripts/host/* /host/cedana/scripts/host
 

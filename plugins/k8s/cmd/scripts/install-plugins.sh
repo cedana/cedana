@@ -1,0 +1,14 @@
+#!/bin/bash
+# NOTE: This script assumes it's executed in the container environment, and Cedana is already
+# installed on the host.
+
+set -e
+
+env \
+    CEDANA_PLUGINS_BUILDS="$CEDANA_PLUGINS_BUILDS" \
+    CEDANA_PLUGINS_NATIVE_VERSION="$CEDANA_PLUGINS_NATIVE_VERSION" \
+    CEDANA_PLUGINS_CRIU_VERSION="$CEDANA_PLUGINS_CRIU_VERSION" \
+    CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION="$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION" \
+    CEDANA_PLUGINS_GPU_VERSION="$CEDANA_PLUGINS_GPU_VERSION" \
+    CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
+    chroot /host /bin/bash /cedana/scripts/host/k8s-install-plugins.sh
