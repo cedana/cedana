@@ -55,8 +55,10 @@ func InitLogger(level string) {
 	writers = append(writers, consoleWriter)
 
 	if config.Global.Metrics.Otel {
+		log.Info().Msg("otlp credentials")
 		endpoint, headers, err := getOtelCreds()
 		if err != nil {
+			log.Error().Err(err).Msg("failed to get otlp creds")
 			return
 		}
 

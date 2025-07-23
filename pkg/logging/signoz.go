@@ -83,6 +83,8 @@ func NewSigNozJsonWriter(endpoint, token, serviceName string, otherResourceAttrs
 		}
 	}
 	resources["service.name"] = "cedana"
+	resources["service.version"] = version.GetVersion()
+	resources["k8s.cluster.name"] = os.Getenv("CEDANA_CLUSTER_NAME")
 
 	sw := &SigNozJsonWriter{
 		httpClient:    &http.Client{Timeout: 15 * time.Second}, // Increased timeout slightly for batch
