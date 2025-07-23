@@ -87,4 +87,5 @@ jobs:
       github: true
       cloudsmith: true
       dockerhub: true
+      dockerhub_latest: true
       post_summary: true
