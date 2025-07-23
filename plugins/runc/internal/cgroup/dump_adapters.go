@@ -82,17 +82,17 @@ func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
 
 			log.Debug().Interface("cgroupPaths", cgroupPaths).Msg("parsed current cgroup paths")
 
-			// Look for a suitable freezer cgroup path
+			// Look for freezer cgroup path
 			for controller, path := range cgroupPaths {
 				var freezerPath string
 				var checkPath string
 
 				if cgroups.IsCgroup2UnifiedMode() {
-					// cgroup v2 - unified hierarchy
+					// cgroup v2: unified hierarchy
 					freezerPath = filepath.Join("/sys/fs/cgroup", path)
 					checkPath = filepath.Join(freezerPath, "cgroup.freeze")
 				} else {
-					// cgroup v1 - check if this is the freezer controller or systemd unified
+					// cgroup v1: check if this is the freezer controller or systemd unified
 					if controller == "freezer" {
 						freezerPath = filepath.Join("/sys/fs/cgroup/freezer", path)
 						checkPath = filepath.Join(freezerPath, "freezer.state")
@@ -101,7 +101,8 @@ func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
 						freezerPath = filepath.Join("/sys/fs/cgroup", path)
 						checkPath = filepath.Join(freezerPath, "freezer.state")
 					} else {
-						continue // skip non-freezer controllers
+						// skip non-freezer controllers
+						continue
 					}
 				}
 

@@ -213,7 +213,6 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return nil, err
 		}
 
-		// Handle the exit code handling
 		if !daemonless {
 			opts.WG.Add(1)
 			go func() {
