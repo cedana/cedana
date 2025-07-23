@@ -274,7 +274,7 @@ jobs:
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: |
           runtime_args=""
-          for runtime in $(echo ${{ needs.init.outputs.runtimes }} | jq -r '.[]'); do
+          for runtime in $(echo '${{ needs.init.outputs.runtimes }}' | jq -r '.[]'); do
             runtime_args="$runtime_args --runtime $runtime:2"
           done
           ./bench results pull $runtime_args
@@ -287,7 +287,7 @@ jobs:
           RUNTIME: ${{ matrix.runtime }}
         run: |
           runtime_args=""
-          for runtime in $(echo ${{ needs.init.outputs.runtimes }} | jq -r '.[]'); do
+          for runtime in $(echo '${{ needs.init.outputs.runtimes }}' | jq -r '.[]'); do
             if [ "$runtime" != $RUNTIME ]; then
               runtime_args="$runtime_args --runtime $runtime"
             fi
