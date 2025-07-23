@@ -273,14 +273,14 @@ jobs:
           - arm64
     steps:
       - uses: runs-on/action@v1
-
       - name: Get tag
         id: get_tag
         env:
           VERSION: ${{ inputs.controller_version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "$VERSION" = "release" ]; then
-            tag=$(curl -s https://api.github.com/repos/cedana/cedana-controller/releases/latest | jq -r .tag_name)
+            tag=$(curl -s -H "Authorization: token $GH_TOKEN" https://api.github.com/repos/cedana/cedana-controller/releases/latest | jq -r .tag_name)
             echo "tag=$tag" >> $GITHUB_OUTPUT
           else
             echo "tag=$VERSION" >> $GITHUB_OUTPUT
