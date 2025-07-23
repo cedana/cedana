@@ -63,7 +63,7 @@ on:
         type: string
         description: "Runner machine for benchmark"
         required: false
-        default: "16cpu-64g-1xL4"
+        default: "8cpu-32g-1xL4"
 
 env:
   CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
@@ -100,6 +100,12 @@ jobs:
             runtimes_json=$(echo "$runtimes_json" | jq -c '. + ["native"]')
           fi
           echo "runtimes=$runtimes_json" >> $GITHUB_OUTPUT
+
+      - name: List metrics
+        id: list-metrics
+        run: |
+          metrics=$(jq -c '[.metrics.list | to_entries[] | select(.value.disabled != true) | .key as $metric | (.value.workloads[] | "\($metric)@\(.)")]' bench.json)
+          echo "metrics=$metrics" >> $GITHUB_OUTPUT
 
   run:
     name: Run
