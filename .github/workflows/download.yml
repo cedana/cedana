@@ -117,10 +117,22 @@ jobs:
           name: plugins-${{ matrix.arch }}
           path: ./plugins/*
 
+      - name: Get tag
+        id: get_tag
+        env:
+          VERSION: ${{ inputs.cedana_version }}
+        run: |
+          if [ "$VERSION" = "release" ]; then
+            tag=$(curl -s https://api.github.com/repos/cedana/cedana/releases/latest | jq -r .tag_name)
+            echo "tag=$tag" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
       - name: Get digest
         env:
           IMAGE_NAME: ${{ inputs.cedana_version == 'release' && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
-          TAG: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
+          TAG: ${{ steps.get_tag.outputs.tag }}
         run: |
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
@@ -262,6 +274,18 @@ jobs:
     steps:
       - uses: runs-on/action@v1
 
+      - name: Get tag
+        id: get_tag
+        env:
+          VERSION: ${{ inputs.controller_version }}
+        run: |
+          if [ "$VERSION" = "release" ]; then
+            tag=$(curl -s https://api.github.com/repos/cedana/cedana-controller/releases/latest | jq -r .tag_name)
+            echo "tag=$tag" >> $GITHUB_OUTPUT
+          else
+            echo "tag=$VERSION" >> $GITHUB_OUTPUT
+          fi
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -271,7 +295,7 @@ jobs:
       - name: Get digest
         env:
           IMAGE_NAME: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
-          TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
+          TAG: ${{ steps.get_tag.outputs.tag }}
         run: |
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
