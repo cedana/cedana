@@ -487,7 +487,7 @@ type CheckpointInformation struct {
 	Info         Info   `json:"info"`
 }
 
-func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp) error {
+func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp, rootfs bool) error {
 	publisher, err := rabbitmq.NewPublisher(
 		es.conn,
 	)
@@ -499,17 +499,19 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 	info := Info{
 		Data: profiling,
 	}
-
-	data, err := json.Marshal(CheckpointInformation{
+	ci := CheckpointInformation{
 		ActionId:     req.ActionId,
 		PodId:        pod_id,
-		Path:         resp.Path,
 		CheckpointId: id,
 		Status:       "success",
-		Gpu:          resp.State.GPUEnabled,
-		Platform:     resp.State.Host.Platform,
 		Info:         info,
-	})
+	}
+	if !rootfs {
+		ci.Gpu = resp.State.GPUEnabled
+		ci.Platform = resp.State.Host.Platform
+		ci.Path = resp.Path
+	}
+	data, err := json.Marshal(ci)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create checkpoint info")
 		return err
@@ -583,7 +585,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 					log.Error().Err(err).Msg("Failed to roofs checkpoint container in pod")
 				} else {
 					log.Info().Msg("Publishing checkpoint...")
-					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp)
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp, true)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
 					}
@@ -601,7 +603,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 					log.Error().Err(err).Msg("Failed to checkpoint pod containers")
 				} else {
 					log.Info().Msg("Publishing checkpoint...")
-					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp)
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp, false)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
 					}
