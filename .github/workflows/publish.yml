@@ -1,7 +1,7 @@
 name: Publish
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 on:
@@ -29,7 +29,12 @@ on:
         default: cedana
       dockerhub:
         type: boolean
-        description: "Publish images to Docker Hub"
+        description: "Publish images to DockerHub"
+        required: false
+        default: false
+      dockerhub_latest:
+        type: boolean
+        description: "Publish latest tag(s) to DockerHub"
         required: false
         default: false
       post_summary:
@@ -351,6 +356,7 @@ jobs:
           tags: |
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ github.head_ref || github.ref_name }}
+            ${{ inputs.dockerhub_latest && 'type=raw,value=latest' || '' }}
 
       - name: Create manifest list and push
         if: steps.check_dirs.outputs.DIGESTS_EXISTS == 'true'
@@ -376,7 +382,9 @@ jobs:
           images: |
             ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
           tags: |
-            type=raw,value=latest
+            type=raw,value=${{ github.sha }}
+            type=raw,value=${{ github.head_ref || github.ref_name }}
+            ${{ inputs.dockerhub_latest && 'type=raw,value=latest' || '' }}
 
       - name: Create manifest list and push (test, latest)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
@@ -393,7 +401,9 @@ jobs:
           images: |
             ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
           tags: |
-            type=raw,value=cuda
+            type=raw,value=${{ github.sha }}
+            type=raw,value=${{ github.head_ref || github.ref_name }}
+            ${{ inputs.dockerhub_latest && 'type=raw,value=latest' || '' }}
 
       - name: Create manifest list and push (test, CUDA)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'

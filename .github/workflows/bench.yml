@@ -274,10 +274,10 @@ jobs:
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: |
           runtime_args=""
-          for runtime in $(echo ${{ needs.init.outputs.runtimes }} | jq -r '.[]'); do
+          for runtime in $(echo '${{ needs.init.outputs.runtimes }}' | jq -r '.[]'); do
             runtime_args="$runtime_args --runtime $runtime:2"
           done
-          ./bench results pull $runtime_args
+          ./bench results pull $runtime_args -f
 
       - name: Plot comparison (runtime)
         if: inputs.comparison_runtime
@@ -287,7 +287,7 @@ jobs:
           RUNTIME: ${{ matrix.runtime }}
         run: |
           runtime_args=""
-          for runtime in $(echo ${{ needs.init.outputs.runtimes }} | jq -r '.[]'); do
+          for runtime in $(echo '${{ needs.init.outputs.runtimes }}' | jq -r '.[]'); do
             if [ "$runtime" != $RUNTIME ]; then
               runtime_args="$runtime_args --runtime $runtime"
             fi
@@ -413,7 +413,9 @@ jobs:
         if: ${{ ! inputs.comparison_runtime && !inputs.comparison_previous }}
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/results
-          RESULTS_DESCRIPTION: "> ${{ matrix.runtime }}"
+          RESULTS_TITLE: ${{ github.repository }}
+          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** (${{ matrix.runtime }}) results"
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md
           utils/results-summary > $GITHUB_STEP_SUMMARY

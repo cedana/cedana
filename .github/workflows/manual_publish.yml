@@ -3,16 +3,6 @@ name: Manual (publish)
 on:
   workflow_dispatch:
     inputs:
-      build_cedana:
-        type: boolean
-        description: "Build Cedana"
-        required: false
-        default: false
-      build_plugins:
-        type: boolean
-        description: "Build plugins"
-        required: false
-        default: false
       build_image:
         type: boolean
         description: "Build Docker image"
@@ -53,6 +43,16 @@ on:
         description: "Publish images to DockerHub"
         required: false
         default: false
+      dockerhub_latest:
+        type: boolean
+        description: "Publish latest tag(s) to DockerHub"
+        required: false
+        default: false
+      post_summary:
+        type: boolean
+        description: "Post summary to Slack"
+        required: false
+        default: false
 
 jobs:
   build:
@@ -60,8 +60,8 @@ jobs:
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
-      cedana: ${{ inputs.build_cedana }}
-      plugins: ${{ inputs.build_plugins }}
+      cedana: true
+      plugins: true
       image: ${{ inputs.build_image }}
       image_name: ${{ inputs.image_name }}
       test_image: ${{ inputs.build_test_image }}
@@ -73,6 +73,9 @@ jobs:
     needs: build
     secrets: inherit
     with:
+      github: ${{ inputs.github }}
       cloudsmith: ${{ inputs.cloudsmith }}
       cloudsmith_repo: ${{ inputs.cloudsmith_repo }}
       dockerhub: ${{ inputs.dockerhub }}
+      dockerhub_latest: ${{ inputs.dockerhub_latest }}
+      post_summary: ${{ inputs.post_summary }}
