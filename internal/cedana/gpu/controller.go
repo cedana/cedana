@@ -52,7 +52,7 @@ const (
 
 	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
 	PARALLEL_DUMP    = true
-  PARALLEL_RESTORE = false // XXX: Disabled until host mem handling is improved
+	PARALLEL_RESTORE = false // XXX: Disabled until host mem handling is improved
 )
 
 type controller struct {
@@ -348,7 +348,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
 
-		log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze complete")
+		log.Info().Str("ID", id).Uint32("PID", pid).Interface("type", freezeType[0]).Msg("GPU freeze complete")
 
 		// Begin GPU dump in parallel to CRIU dump
 
@@ -414,8 +414,6 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		if err != nil {
 			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU on dump error")
 		}
-
-		return
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
