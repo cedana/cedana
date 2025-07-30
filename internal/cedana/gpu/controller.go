@@ -342,7 +342,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		freezeType = append(freezeType, gpu.FreezeType_FREEZE_TYPE_IPC) // Default to IPC freeze type if not provided
 
-		log.Debug().Str("ID", id).Uint32("PID", pid).Interface("type", freezeType[0]).Msg("GPU freeze starting")
+		log.Debug().Str("ID", id).Uint32("PID", pid).Str("type", freezeType[0].String()).Msg("GPU freeze starting")
 
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{Type: freezeType[0]})
 		if err != nil {
@@ -350,7 +350,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
 
-		log.Info().Str("ID", id).Uint32("PID", pid).Interface("type", freezeType[0]).Msg("GPU freeze complete")
+		log.Info().Str("ID", id).Uint32("PID", pid).Str("type", freezeType[0].String()).Msg("GPU freeze complete")
 
 		// Begin GPU dump in parallel to CRIU dump
 
