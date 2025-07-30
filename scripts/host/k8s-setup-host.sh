@@ -33,7 +33,7 @@ install_apt_packages() {
 }
 
 install_yum_packages() {
-    yum install -y "${YUM_PACKAGES[@]}" || echo "Failed to install YUM packages" >&2
+    yum install -y --skip-broken "${YUM_PACKAGES[@]}" || echo "Failed to install YUM packages" >&2
 }
 
 # Detect OS and install appropriate packages
