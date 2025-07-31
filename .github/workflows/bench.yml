@@ -63,14 +63,13 @@ on:
         type: string
         description: "Runner machine for benchmark"
         required: false
-        default: "4cpu-16g-1xL4"
+        default: "8cpu-32g-1xL4"
 
 env:
   CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-  CEDANA_GPU_SHM_SIZE: 4294967296 # 4GiB
   SAMPLES: ${{ inputs.samples }}
   RETRIES: 2
 
