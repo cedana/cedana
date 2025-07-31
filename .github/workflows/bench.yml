@@ -94,7 +94,7 @@ jobs:
         id: list-runtimes
         run: |
           runtimes_json="[]"
-          runtimes_all_json="["cedana", "native"]"
+          runtimes_all_json='["cedana", "native"]'
           if [ "${{ inputs.cedana }}" = "true" ]; then
             runtimes_json=$(echo "$runtimes_json" | jq -c '. + ["cedana"]')
           fi
