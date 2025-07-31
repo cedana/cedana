@@ -34,7 +34,7 @@ on:
         type: string
         description: "Runner machine for tests"
         required: false
-        default: 4cpu-16g-1xL4
+        default: 4cpu-16g-1xT4
       runner_arm64:
         type: string
         description: "Runner machine for tests (arm64)"

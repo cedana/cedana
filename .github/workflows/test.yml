@@ -44,7 +44,7 @@ on:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 4cpu-16g-1xL4
+        default: 4cpu-16g-1xT4
       runner_gpu_arm64:
         type: string
         description: "Runner machine for GPU tests (arm64)"
