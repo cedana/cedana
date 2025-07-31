@@ -374,13 +374,15 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 
 	leaveRunning := true
 	tcpEstablished := true
+	tcpSkipInFlight := true
 
 	resp, profiling, err := client.Dump(ctx, &daemon.DumpReq{
 		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
 		Type: "runc",
 		Criu: &criu.CriuOpts{
-			LeaveRunning:   &leaveRunning,
-			TcpEstablished: &tcpEstablished,
+			LeaveRunning:    &leaveRunning,
+			TcpEstablished:  &tcpEstablished,
+			TcpSkipInFlight: &tcpSkipInFlight,
 		},
 		Details: &daemon.Details{
 			Runc: &runc.Runc{
