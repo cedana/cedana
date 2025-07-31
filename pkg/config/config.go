@@ -52,6 +52,7 @@ const (
 	DEFAULT_GPU_SOCK_DIR    = "/tmp"
 	DEFAULT_GPU_FREEZE_TYPE = "IPC"
 	DEFAULT_GPU_SHM_SIZE    = 8 * utils.GIBIBYTE
+	DEFAULT_GPU_DEBUG       = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "soft"
@@ -98,6 +99,7 @@ var Global Config = Config{
 		SockDir:    DEFAULT_GPU_SOCK_DIR,
 		FreezeType: DEFAULT_GPU_FREEZE_TYPE,
 		ShmSize:    DEFAULT_GPU_SHM_SIZE,
+		Debug:      DEFAULT_GPU_DEBUG,
 	},
 	CRIU: CRIU{
 		LeaveRunning:  DEFAULT_CRIU_LEAVE_RUNNING,

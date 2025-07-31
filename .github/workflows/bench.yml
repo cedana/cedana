@@ -85,6 +85,7 @@ jobs:
     outputs:
       metrics: ${{ steps.list-metrics.outputs.metrics }}
       runtimes: ${{ steps.list-runtimes.outputs.runtimes }}
+      runtimes_all: ${{ steps.list-runtimes.outputs.runtimes_all }}
     defaults:
       run:
         working-directory: /src
@@ -93,6 +94,7 @@ jobs:
         id: list-runtimes
         run: |
           runtimes_json="[]"
+          runtimes_all_json="["cedana", "native"]"
           if [ "${{ inputs.cedana }}" = "true" ]; then
             runtimes_json=$(echo "$runtimes_json" | jq -c '. + ["cedana"]')
           fi
@@ -100,6 +102,7 @@ jobs:
             runtimes_json=$(echo "$runtimes_json" | jq -c '. + ["native"]')
           fi
           echo "runtimes=$runtimes_json" >> $GITHUB_OUTPUT
+          echo "runtimes_all=$runtimes_all_json" >> $GITHUB_OUTPUT
 
       - name: List metrics
         id: list-metrics
@@ -274,7 +277,7 @@ jobs:
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: |
           runtime_args=""
-          for runtime in $(echo '${{ needs.init.outputs.runtimes }}' | jq -r '.[]'); do
+          for runtime in $(echo '${{ needs.init.outputs.runtimes_all }}' | jq -r '.[]'); do
             runtime_args="$runtime_args --runtime $runtime:2"
           done
           ./bench results pull $runtime_args -f
@@ -287,7 +290,7 @@ jobs:
           RUNTIME: ${{ matrix.runtime }}
         run: |
           runtime_args=""
-          for runtime in $(echo '${{ needs.init.outputs.runtimes }}' | jq -r '.[]'); do
+          for runtime in $(echo '${{ needs.init.outputs.runtimes_all }}' | jq -r '.[]'); do
             if [ "$runtime" != $RUNTIME ]; then
               runtime_args="$runtime_args --runtime $runtime"
             fi
@@ -311,7 +314,7 @@ jobs:
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/runtime-comparison/results
           RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison with other runtimes"
+          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** (right) comparison with other runtimes (left)"
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md
@@ -364,7 +367,7 @@ jobs:
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/previous-comparison/results
           RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison with previous result"
+          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** (right) comparison with previous result (left)"
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md

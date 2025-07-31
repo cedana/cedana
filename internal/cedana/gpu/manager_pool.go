@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/rs/zerolog/log"
 )
@@ -73,6 +74,11 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 	free, busy, remaining := m.controllers.List()
 
 	log.Debug().Int("free", len(free)).Int("busy", len(busy)).Int("target", m.poolSize).Msg("GPU controller pool")
+
+	if config.Global.GPU.Debug {
+		log.Warn().Msg("GPU controller pool is in debug mode, not maintaining pool size")
+		return nil // Allow external maintenance of pool for debugging
+	}
 
 	// Remove controllers not in either free or busy list
 
