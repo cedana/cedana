@@ -70,6 +70,7 @@ env:
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_GPU_SHM_SIZE: 4294967296 # 4GiB
   SAMPLES: ${{ inputs.samples }}
   RETRIES: 2
 
