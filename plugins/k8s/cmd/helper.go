@@ -399,14 +399,14 @@ type ProfilingInfo struct {
 }
 
 type CheckpointInformation struct {
-	ActionId     string        `json:"action_id"`
-	PodId        string        `json:"pod_id"`
-	CheckpointId string        `json:"checkpoint_id"`
-	Status       string        `json:"status"`
-	Path         string        `json:"path"`
-	Gpu          bool          `json:"gpu"`
-	Platform     string        `json:"platform"`
-	Info         ProfilingInfo `json:"info"`
+	ActionId      string        `json:"action_id"`
+	PodId         string        `json:"pod_id"`
+	CheckpointId  string        `json:"checkpoint_id"`
+	Status        string        `json:"status"`
+	Path          string        `json:"path"`
+	Gpu           bool          `json:"gpu"`
+	Platform      string        `json:"platform"`
+	ProfilingInfo ProfilingInfo `json:"profiling_info"`
 }
 
 func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp) error {
@@ -423,20 +423,20 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		totalDuration += component.Duration
 	}
 
-	info := ProfilingInfo{
+	profilingInfo := ProfilingInfo{
 		RawProfilingData: profiling,
 		TotalDuration:    totalDuration,
 	}
 
 	data, err := json.Marshal(CheckpointInformation{
-		ActionId:     req.ActionId,
-		PodId:        pod_id,
-		Path:         resp.Path,
-		CheckpointId: id,
-		Status:       "success",
-		Gpu:          resp.State.GPUEnabled,
-		Platform:     resp.State.Host.Platform,
-		Info:         info,
+		ActionId:      req.ActionId,
+		PodId:         pod_id,
+		Path:          resp.Path,
+		CheckpointId:  id,
+		Status:        "success",
+		Gpu:           resp.State.GPUEnabled,
+		Platform:      resp.State.Host.Platform,
+		ProfilingInfo: profilingInfo,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create checkpoint info")
