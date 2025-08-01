@@ -131,7 +131,7 @@ jobs:
 
       - name: Get digest
         env:
-          IMAGE_NAME: ${{ inputs.cedana_version == 'release' && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
+          IMAGE_NAME: ${{ (inputs.cedana_version == 'release' || startsWith(inputs.cedana_version, 'v')) && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
           TAG: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           mkdir -p /tmp/digests
@@ -289,7 +289,7 @@ jobs:
 
       - name: Get digest
         env:
-          IMAGE_NAME: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
+          IMAGE_NAME: ${{ (inputs.controller_version == 'release' || startsWith(inputs.controller_version, 'v')) && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
           TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
         run: |
           mkdir -p /tmp/digests
