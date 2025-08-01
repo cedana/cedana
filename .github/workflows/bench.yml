@@ -109,10 +109,12 @@ jobs:
         run: |
           set -euo pipefail
           wanted_runtimes=($(echo "${{ inputs.runtimes }}" | tr ', ' ' '))
+          for w in "${wanted_runtimes[@]}"; do
+            echo "Checking runtime: $w"
+          done
           in_runtimes() {
               local r="$1"
               for w in "${wanted_runtimes[@]}"; do
-                  echo "comparing $w with $r"
                   [[ "$w" == "$r" ]] && return 0
               done
               return 1
