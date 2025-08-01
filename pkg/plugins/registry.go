@@ -20,8 +20,8 @@ var Registry = []Plugin{
 	{
 		Name:      "criu/cuda",
 		Type:      EXTERNAL,
-		Binaries:  []Binary{{Name: "cuda-checkpoint"}},
-		Libraries: []Binary{{Name: "cuda_plugin.so", InstallDir: "/usr/lib/criu"}},
+		Binaries:  []Binary{{Name: "cuda-checkpoint", InstallDir: "/usr/local/bin"}}, // Do not change
+		Libraries: []Binary{{Name: "cuda_plugin.so", InstallDir: "/usr/lib/criu"}},   // Do not change
 	},
 
 	// Container runtimes
