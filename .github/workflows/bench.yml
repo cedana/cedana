@@ -105,7 +105,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          runtimes=($(echo "$runtimes" | tr ', ' ' '))
+          runtimes=($(echo "${{ inputs.runtimes }}" | tr ', ' ' '))
           for runtime in "${runtimes[@]}"; do
             ./bench run $runtime --dry-run
           done
