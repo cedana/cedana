@@ -313,8 +313,8 @@ jobs:
         id: summary-runtime
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/runtime-comparison/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** (right) comparison with other runtimes (left)"
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime (rightmost) comparison with other runtimes
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md
@@ -366,8 +366,8 @@ jobs:
         id: summary-previous
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/previous-comparison/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** (right) comparison with previous result (left)"
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime (rightmost) comparison with previous result(s)
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md
@@ -416,8 +416,8 @@ jobs:
         if: ${{ ! inputs.comparison_runtime && !inputs.comparison_previous }}
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** (${{ matrix.runtime }}) results"
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime results
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md
