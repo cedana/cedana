@@ -69,18 +69,18 @@ env:
   RETRIES: 2
 
 jobs:
-  init:
-    name: Initialize
+  dry-run:
+    name: Dry Run
     runs-on: ubuntu-latest
     container:
       image: cedana/cedana-bench:slim
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --ipc=host --gpus all
     outputs:
-      runtimes_all: ${{ steps.list-runtimes.outputs.runtimes_all }}
       runtimes: ${{ steps.list-runtimes.outputs.runtimes }}
-      matrix: ${{ steps.prepare-matrix.outputs.matrix }}
+      matrix: ${{ steps.dry-run.outputs.matrix }}
     defaults:
       run:
         working-directory: /src
@@ -88,9 +88,6 @@ jobs:
       - name: List runtimes
         id: list-runtimes
         run: |
-          runtimes_all=$(jq -c '[.runtimes.list | to_entries[] | .key]' bench.json)
-          echo "runtimes_all=$runtimes_all" >> $GITHUB_OUTPUT
-
           runtimes="[]"
           for runtime in $(echo "${{ inputs.runtimes }}" | tr ', ' ' '); do
             if jq -e ".runtimes.list[\"$runtime\"]" bench.json > /dev/null; then
@@ -103,39 +100,22 @@ jobs:
           runtimes=$(echo "$runtimes" | jq -c '.')
           echo "runtimes=$runtimes" >> $GITHUB_OUTPUT
 
-      - name: Prepare matrix
-        id: prepare-matrix
+      - name: Dry run
+        id: dry-run
         shell: bash
         run: |
           set -euo pipefail
-          runtimes="${{ inputs.runtimes }}"
-          wanted_runtimes=($(echo "$runtimes" | tr ', ' ' '))
-          in_runtimes() {
-              local r=$1
-              for w in "${wanted_runtimes[@]}"; do
-                  [[ $w == "$r" ]] && return 0
-              done
-              return 1
-          }
-          jq -c '.metrics.list | to_entries[] | select(.value.disabled != true)' bench.json | while read -r entry; do
-              metric=$(jq -r '.key' <<< "$entry")
-              has_runner=$(jq -r '.value | has("runners")' <<< "$entry")
-              if [[ "$has_runner" == true ]]; then
-                  jq -r '.value.runners | to_entries[] | "\(.key) \(.value)"' <<< "$entry" | while read -r runtime runner; do
-                      jq -r '.value.workloads[]' <<< "$entry" | while read -r workload; do
-                          if [[ -f "runners/$runtime/$runner" ]] && in_runtimes "$runtime"; then
-                              echo "{\"runtime\": \"$runtime\", \"metric\": \"$metric\", \"workload\": \"$workload\"}"
-                          fi
-                      done
-                  done
-              fi
-          done | jq -s '.' > matrix.json
+          runtimes=($(echo "$runtimes" | tr ', ' ' '))
+          for runtime in "${runtimes[@]}"; do
+            ./bench run $runtime --dry-run
+          done
+          jq -s 'flatten' results/dry-run-* > matrix.json
           matrix=$(jq -c '.' matrix.json)
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   run:
     name: Run
-    needs: init
+    needs: dry-run
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-8/tag=${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
@@ -146,7 +126,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJson(needs.init.outputs.matrix) }}
+        include: ${{ fromJson(needs.dry-run.outputs.matrix) }}
     defaults:
       run:
         working-directory: /src
@@ -239,7 +219,7 @@ jobs:
   post-summary:
     name: Post Summary
     if: ${{ !cancelled() }}
-    needs: [init, run]
+    needs: [dry-run, run]
     runs-on: ubuntu-latest
     container:
       image: cedana/cedana-bench:slim
@@ -249,7 +229,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: ${{ fromJson(needs.init.outputs.runtimes) }}
+        runtime: ${{ fromJson(needs.dry-run.outputs.runtimes) }}
     defaults:
       run:
         working-directory: /src
@@ -293,7 +273,7 @@ jobs:
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: |
           runtime_args=""
-          for runtime in $(echo '${{ needs.init.outputs.runtimes_all }}' | jq -r '.[]'); do
+          for runtime in $(jq -r '.runtimes.list | keys[]' bench.json); do
             runtime_args="$runtime_args --runtime $runtime:2"
           done
           ./bench results pull $runtime_args -f
@@ -306,7 +286,7 @@ jobs:
           RUNTIME: ${{ matrix.runtime }}
         run: |
           runtime_args=""
-          for runtime in $(echo '${{ needs.init.outputs.runtimes_all }}' | jq -r '.[]'); do
+          for runtime in $(jq -r '.runtimes.list | keys[]' bench.json); do
             if [ "$runtime" != $RUNTIME ]; then
               runtime_args="$runtime_args --runtime $runtime"
             fi
