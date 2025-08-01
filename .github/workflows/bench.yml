@@ -100,6 +100,7 @@ jobs:
               exit 1
             fi
           done
+          runtimes=$(echo "$runtimes" | jq -c '.')
           echo "runtimes=$runtimes" >> $GITHUB_OUTPUT
 
       - name: Prepare matrix
