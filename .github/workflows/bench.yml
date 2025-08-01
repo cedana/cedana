@@ -71,7 +71,7 @@ env:
 jobs:
   dry-run:
     name: Dry Run
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-8/extras=s3-cache
     container:
       image: cedana/cedana-bench:slim
       credentials:
