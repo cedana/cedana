@@ -108,7 +108,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          runtimes="${{ inputs.runtimes }}"
+          runtimes="cedana"
           wanted_runtimes=($(echo "$runtimes" | tr ', ' ' '))
           in_runtimes() {
               local r=$1
