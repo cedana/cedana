@@ -393,19 +393,20 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 	return resp, profiling, nil
 }
 
-type Info struct {
-	Data *profiling.Data `json:"data"`
+type ProfilingInfo struct {
+	RawProfilingData *profiling.Data `json:"raw_profiling_data"`
+	TotalDuration    int64           `json:"total_duration"`
 }
 
 type CheckpointInformation struct {
-	ActionId     string `json:"action_id"`
-	PodId        string `json:"pod_id"`
-	CheckpointId string `json:"checkpoint_id"`
-	Status       string `json:"status"`
-	Path         string `json:"path"`
-	Gpu          bool   `json:"gpu"`
-	Platform     string `json:"platform"`
-	Info         Info   `json:"info"`
+	ActionId     string        `json:"action_id"`
+	PodId        string        `json:"pod_id"`
+	CheckpointId string        `json:"checkpoint_id"`
+	Status       string        `json:"status"`
+	Path         string        `json:"path"`
+	Gpu          bool          `json:"gpu"`
+	Platform     string        `json:"platform"`
+	Info         ProfilingInfo `json:"info"`
 }
 
 func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp) error {
@@ -417,8 +418,14 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		return err
 	}
 
-	info := Info{
-		Data: profiling,
+	totalDuration := profiling.Duration
+	for _, component := range profiling.Components {
+		totalDuration += component.Duration
+	}
+
+	info := ProfilingInfo{
+		RawProfilingData: profiling,
+		TotalDuration:    totalDuration,
 	}
 
 	data, err := json.Marshal(CheckpointInformation{
