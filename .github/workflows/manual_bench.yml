@@ -18,13 +18,11 @@ on:
         description: Version for streamer binaries (branch name or "release" for latest release)
         required: false
         default: "main"
-      runtime:
-        type: choice
-        description: Runtime to run benchmark on
+      runtimes:
+        type: string
+        description: Runtimes to run benchmarks for (comma-separated)
         required: true
-        options:
-          - native
-          - cedana
+        default: cedana, native, criu
       bench_samples:
         type: number
         description: Number of samples to run for each metric
@@ -34,12 +32,12 @@ on:
         type: boolean
         description: Compare benchmark results with previous
         required: false
-        default: false
+        default: true
       bench_comparison_runtime:
         type: boolean
         description: Compare benchmark results with other runtimes
         required: false
-        default: false
+        default: true
       bench_push_results:
         type: boolean
         description: "Push benchmark results to storage"

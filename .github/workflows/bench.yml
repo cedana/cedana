@@ -9,21 +9,16 @@ permissions:
 on:
   workflow_call:
     inputs:
-      cedana:
-        type: boolean
-        description: "Run Cedana benchmark"
-        required: false
-        default: true
-      native:
-        type: boolean
-        description: "Run native benchmark"
-        required: false
-        default: false
       debug:
         type: boolean
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
+      runtimes:
+        type: string
+        description: "List of comma-separated runtimes to run benchmarks for"
+        required: true
+        default: cedana
       samples:
         type: string
         description: "Number of samples to run for each metric"
@@ -62,7 +57,7 @@ on:
       runner:
         type: string
         description: "Runner machine for benchmark"
-        required: false
+        required: true
         default: "8cpu-32g-1xL4"
 
 env:
@@ -83,9 +78,9 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     outputs:
-      metrics: ${{ steps.list-metrics.outputs.metrics }}
-      runtimes: ${{ steps.list-runtimes.outputs.runtimes }}
       runtimes_all: ${{ steps.list-runtimes.outputs.runtimes_all }}
+      runtimes: ${{ steps.list-runtimes.outputs.runtimes }}
+      matrix: ${{ steps.prepare-matrix.outputs.matrix }}
     defaults:
       run:
         working-directory: /src
@@ -93,27 +88,56 @@ jobs:
       - name: List runtimes
         id: list-runtimes
         run: |
-          runtimes_json="[]"
-          runtimes_all_json='["cedana", "native"]'
-          if [ "${{ inputs.cedana }}" = "true" ]; then
-            runtimes_json=$(echo "$runtimes_json" | jq -c '. + ["cedana"]')
-          fi
-          if [ "${{ inputs.native }}" = "true" ]; then
-            runtimes_json=$(echo "$runtimes_json" | jq -c '. + ["native"]')
-          fi
-          echo "runtimes=$runtimes_json" >> $GITHUB_OUTPUT
-          echo "runtimes_all=$runtimes_all_json" >> $GITHUB_OUTPUT
+          runtimes_all=$(jq -c '[.runtimes.list | to_entries[] | .key]' bench.json)
+          echo "runtimes_all=$runtimes_all" >> $GITHUB_OUTPUT
 
-      - name: List metrics
-        id: list-metrics
+          runtimes="[]"
+          for runtime in $(echo "${{ inputs.runtimes }}" | tr ', ' ' '); do
+            if jq -e ".runtimes.list[\"$runtime\"]" bench.json > /dev/null; then
+              runtimes=$(echo "$runtimes" | jq --arg runtime "$runtime" '. + [$runtime]')
+            else
+              echo "Error: Runtime '$runtime' not found in bench.json" >&2
+              exit 1
+            fi
+          done
+          echo "runtimes=$runtimes" >> $GITHUB_OUTPUT
+
+      - name: Prepare matrix
+        id: prepare-matrix
+        shell: bash
         run: |
-          metrics=$(jq -c '[.metrics.list | to_entries[] | select(.value.disabled != true) | .key as $metric | (.value.workloads[] | "\($metric)@\(.)")]' bench.json)
-          echo "metrics=$metrics" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          wanted_runtimes=($(echo "${{ inputs.runtimes }}" | tr ', ' ' '))
+          in_runtimes() {
+              local r="$1"
+              for w in "${wanted_runtimes[@]}"; do
+                  [[ "$w" == "$r" ]] && return 0
+              done
+              return 1
+          }
+          jq -c '.metrics.list | to_entries[] | select(.value.disabled != true)' bench.json | while read -r entry; do
+              metric=$(jq -r '.key' <<< "$entry")
+              has_runner=$(jq -r '.value | has("runners")' <<< "$entry")
+              if [[ "$has_runner" == true ]]; then
+                  jq -r '.value.runners | to_entries[] | "\(.key) \(.value)"' <<< "$entry" | while read -r runtime runner; do
+                      if ! in_runtimes "$runtime"; then
+                          continue
+                      fi
+                      jq -r '.value.workloads[]' <<< "$entry" | while read -r workload; do
+                          if [[ -f "runners/$runtime/$runner" ]]; then
+                              echo "{\"runtime\": \"$runtime\", \"metric\": \"$metric\", \"workload\": \"$workload\"}"
+                          fi
+                      done
+                  done
+              fi
+          done | jq -s '.' > matrix.json
+          matrix=$(jq -c '.' matrix.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   run:
     name: Run
     needs: init
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/tag=${{ matrix.runtime }}-${{ matrix.metric }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/tag=${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -123,8 +147,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        metric: ${{ fromJson(needs.init.outputs.metrics) }}
-        runtime: ${{ fromJson(needs.init.outputs.runtimes) }}
+        include: ${{ fromJson(needs.init.outputs.matrix) }}
     defaults:
       run:
         working-directory: /src
@@ -132,35 +155,30 @@ jobs:
       - uses: runs-on/action@v1
 
       - name: Download GPU binaries
-        if: ${{ matrix.runtime == 'cedana' }}
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
           name: gpu-amd64
 
       - name: Download Cedana binary
-        if: ${{ matrix.runtime == 'cedana' }}
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
           name: cedana-amd64
 
       - name: Download Cedana plugins
-        if: ${{ matrix.runtime == 'cedana' }}
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
           name: plugins-amd64
 
       - name: Download CRIU binary
-        if: ${{ matrix.runtime == 'cedana' }}
         uses: actions/download-artifact@v4
         id: download-binaries-criu
         with:
           name: criu-amd64
 
       - name: Configure
-        if: ${{ matrix.runtime == 'cedana' }}
         env:
           PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
           PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
@@ -195,10 +213,9 @@ jobs:
       - name: Run
         env:
           RUNTIME: ${{ matrix.runtime }}
-          METRIC_WORKLOAD: ${{ matrix.metric }}
+          METRIC: ${{ matrix.metric }}
+          WORKLOAD: ${{ matrix.workload }}
         run: |
-          METRIC="$(printf '%s' "$METRIC_WORKLOAD" | awk -F'@' '{print $1}')"
-          WORKLOAD="$(printf '%s' "$METRIC_WORKLOAD" | awk -F'@' '{print $2}')"
           ./bench run $RUNTIME -m $METRIC -w $WORKLOAD -n $SAMPLES -r $RETRIES --save
 
       - name: Upload logs
@@ -206,7 +223,7 @@ jobs:
         id: upload-logs
         uses: actions/upload-artifact@v4
         with:
-          name: bench-logs-${{ matrix.runtime }}-${{ matrix.metric }}
+          name: bench-logs-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
             /src/*.log
             /tmp/*.log
