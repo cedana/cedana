@@ -17,7 +17,7 @@ on:
       runtimes:
         type: string
         description: "List of comma-separated runtimes to run benchmarks for"
-        required: true
+        required: false
         default: cedana
       samples:
         type: string
@@ -57,7 +57,7 @@ on:
       runner:
         type: string
         description: "Runner machine for benchmark"
-        required: true
+        required: false
         default: "8cpu-32g-1xL4"
 
 env:
