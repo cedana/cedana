@@ -232,7 +232,7 @@ jobs:
         id: upload-results
         uses: actions/upload-artifact@v4
         with:
-          name: bench-results-${{ matrix.runtime }}-${{ matrix.metric }}
+          name: bench-results-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
             /src/results
 
