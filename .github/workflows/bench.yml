@@ -92,7 +92,7 @@ jobs:
           echo "runtimes_all=$runtimes_all" >> $GITHUB_OUTPUT
 
           runtimes="[]"
-          for runtime in $(echo "${{ inputs.runtimes }}" | tr ', ' ' '); do
+          for runtime in $(echo "${{ inputs.runtimes }}" | tr ', ' ' ' | tr -s ' '); do
             if jq -e ".runtimes.list[\"$runtime\"]" bench.json > /dev/null; then
               runtimes=$(echo "$runtimes" | jq --arg runtime "$runtime" '. + [$runtime]')
             else
@@ -108,11 +108,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          wanted_runtimes=($(echo "${{ inputs.runtimes }}" | tr ', ' ' '))
+          wanted_runtimes=($(echo "${{ inputs.runtimes }}" | tr ',' ' ' | tr -s ' '))
           in_runtimes() {
               local r="$1"
               for w in "${wanted_runtimes[@]}"; do
-                  if [[ "$w" == "$r" ]]; then
+                  echo "comparing '$w' with '$r'"
+                  if [[ $w == $r ]]; then
                       return 0
                   fi
               done
