@@ -72,8 +72,7 @@ jobs:
     needs: download
     secrets: inherit
     with:
-      cedana: ${{ inputs.runtime == 'cedana' }}
-      native: ${{ inputs.runtime == 'native' }}
+      runtimes: ${{ inputs.runtimes }}
       samples: ${{ inputs.bench_samples }}
       comparison_previous: ${{ inputs.bench_comparison_previous }}
       comparison_runtime: ${{ inputs.bench_comparison_runtime }}

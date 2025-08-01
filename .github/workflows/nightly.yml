@@ -19,13 +19,13 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      cedana_version: main
-      criu_version: release
-      gpu_version: main
-      streamer_version: main
-      helm_chart_version: main
-      controller_version: staging
-      runtime_shim_version: release
+      cedana_version: ${{ vars.NIGHTLY_CEDANA_VERSION }}
+      criu_version: ${{ vars.NIGHTLY_CRIU_VERSION }}
+      gpu_version: ${{ vars.NIGHTLY_GPU_VERSION }}
+      streamer_version: ${{ vars.NIGHTLY_STREAMER_VERSION }}
+      helm_chart_version: ${{ vars.NIGHTLY_HELM_CHART_VERSION }}
+      controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
+      runtime_shim_version: ${{ vars.NIGHTLY_RUNTIME_SHIM_VERSION }}
 
   test:
     name: Test
@@ -49,8 +49,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
-      cedana: true
-      native: false
+      runtimes: cedana
       samples: 2
       push_results: true
       results_dataset: cedana_nightly

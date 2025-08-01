@@ -16,7 +16,7 @@ on:
         default: false
       runtimes:
         type: string
-        description: "List of comma-separated runtimes to run benchmarks for"
+        description: "Runtimes to run benchmarks for (comma-separated)"
         required: false
         default: cedana
       samples:
@@ -112,7 +112,9 @@ jobs:
           in_runtimes() {
               local r="$1"
               for w in "${wanted_runtimes[@]}"; do
-                  [[ "$w" == "$r" ]] && return 0
+                  if [[ "$w" == "$r" ]]; then
+                      return 0
+                  fi
               done
               return 1
           }
