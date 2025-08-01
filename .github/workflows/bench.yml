@@ -133,28 +133,6 @@ jobs:
           matrix=$(jq -c '.' matrix.json)
           echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
-          jq -c '.metrics.list | to_entries[] | select(.value.disabled != true)' bench.json | while read -r entry; do
-              metric=$(jq -r '.key' <<< "$entry")
-              has_runner=$(jq -r '.value | has("runners")' <<< "$entry")
-              if [[ "$has_runner" == true ]]; then
-                  jq -r '.value.runners | to_entries[] | "\(.key) \(.value)"' <<< "$entry" | while read -r runtime runner; do
-                      jq -r '.value.workloads[]' <<< "$entry" | while read -r workload; do
-                          echo "runtime: $runtime"
-                          echo "metric: $metric"
-                          echo "workload: $workload"
-                          echo "runner: $runner"
-                          pwd
-                          ls -l "/src"
-                          ls -l "/src/runners"
-                          ls -l "/src/runners/$runtime"
-                          if [[ -f "runners/$runtime/$runner" ]] && in_runtimes "$runtime"; then
-                              echo "{\"runtime\": \"$runtime\", \"metric\": \"$metric\", \"workload\": \"$workload\"}"
-                          fi
-                      done
-                  done
-              fi
-          done
-
   run:
     name: Run
     needs: init
