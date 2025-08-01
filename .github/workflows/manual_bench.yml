@@ -13,11 +13,11 @@ on:
         description: Version for GPU binaries (branch name or "release" for latest release)
         required: false
         default: "main"
-      streamer_version:
+      criu_version:
         type: string
-        description: Version for streamer binaries (branch name or "release" for latest release)
+        description: Version for CRIU binaries (branch name or "release" for latest release)
         required: false
-        default: "main"
+        default: "release"
       runtimes:
         type: string
         description: Runtimes to run benchmarks for (comma-separated)
@@ -59,16 +59,14 @@ jobs:
     name: Download
     uses: ./.github/workflows/download.yml
     secrets: inherit
-    if: inputs.runtime == 'cedana'
     with:
       cedana_version: ${{ inputs.cedana_version }}
       gpu_version: ${{ inputs.gpu_version }}
-      streamer_version: ${{ inputs.streamer_version }}
+      criu_version: ${{ inputs.criu_version }}
 
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    if: ${{ !cancelled() }}
     needs: download
     secrets: inherit
     with:

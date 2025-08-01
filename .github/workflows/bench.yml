@@ -172,6 +172,7 @@ jobs:
           chmod +x $PATH_BINARIES_GPU/*
           chmod +x $PATH_BINARIES_CEDANA/*
           chmod +x $PATH_BINARIES_CRIU/*
+
           jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
           mv temp.json bench.json
           jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
@@ -182,6 +183,9 @@ jobs:
           mv temp.json bench.json
           jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
           mv temp.json bench.json
+
+          cd bin
+          ./cedana plugin install criu criu/cuda
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
