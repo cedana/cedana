@@ -108,7 +108,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          runtimes="cedana"
+          runtimes="${{ inputs.runtimes }}"
           wanted_runtimes=($(echo "$runtimes" | tr ', ' ' '))
           in_runtimes() {
               local r=$1
@@ -122,13 +122,13 @@ jobs:
           has_runner=$(jq -r '.value | has("runners")' <<< "$entry")
           if [[ "$has_runner" == true ]]; then
               jq -r '.value.runners | to_entries[] | "\(.key) \(.value)"' <<< "$entry" | while read -r runtime runner; do
-              if in_runtimes "$runtime"; then
+              # if in_runtimes "$runtime"; then
                   jq -r '.value.workloads[]' <<< "$entry" | while read -r workload; do
-                  if [[ -f "runners/$runtime/$runner" ]]; then
-                      echo "{\"runtime\": \"$runtime\", \"metric\": \"$metric\", \"workload\": \"$workload\"}"
-                  fi
-              done
-              fi
+                      if [[ -f "runners/$runtime/$runner" ]]; then
+                          echo "{\"runtime\": \"$runtime\", \"metric\": \"$metric\", \"workload\": \"$workload\"}"
+                      fi
+                  done
+              # fi
           done
           fi
           done | jq -s '.' > matrix.json
