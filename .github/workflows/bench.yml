@@ -143,7 +143,7 @@ jobs:
                           echo "metric: $metric"
                           echo "workload: $workload"
                           echo "runner: $runner"
-                          ls -l "runners/$runtime/$runner"
+                          ls -l "runners/$runtime"
                           if [[ -f "runners/$runtime/$runner" ]] && in_runtimes "$runtime"; then
                               echo "{\"runtime\": \"$runtime\", \"metric\": \"$metric\", \"workload\": \"$workload\"}"
                           fi
