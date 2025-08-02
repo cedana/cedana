@@ -376,8 +376,10 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 	tcpEstablished := true
 	tcpSkipInFlight := true
 
+	// NOTE: Checkpoint dir is assumed to be set through config/env
+
 	resp, profiling, err := client.Dump(ctx, &daemon.DumpReq{
-		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
+		Name: checkpointId,
 		Type: "runc",
 		Criu: &criu.CriuOpts{
 			LeaveRunning:    &leaveRunning,
@@ -453,8 +455,10 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 	username := s[0]
 	secret := s[1]
 
+	// NOTE: Checkpoint dir is assumed to be set through config/env
+
 	resp, profiling, err := client.Dump(ctx, &daemon.DumpReq{
-		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
+		Name: checkpointId,
 		Type: "containerd",
 		Criu: &criu.CriuOpts{
 			LeaveRunning:   &leaveRunning,
