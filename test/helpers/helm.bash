@@ -29,13 +29,17 @@ helm_install_cedana() {
         helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
     fi
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
-    helm_cmd="$helm_cmd --set cedanaConfig.cedanaUrl=$CEDANA_URL"
-    helm_cmd="$helm_cmd --set cedanaConfig.cedanaAuthToken=$CEDANA_AUTH_TOKEN"
-    helm_cmd="$helm_cmd --set cedanaConfig.cedanaClusterName=$cluster_name"
-    helm_cmd="$helm_cmd --set cedanaConfig.logLevel=$CEDANA_LOG_LEVEL"
-    helm_cmd="$helm_cmd --set cedanaConfig.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
-    helm_cmd="$helm_cmd --set cedanaConfig.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
-    helm_cmd="$helm_cmd --set cedanaConfig.pluginsBuilds=local" # don't download any from registry
+    helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"
+    helm_cmd="$helm_cmd --set config.authToken=$CEDANA_AUTH_TOKEN"
+    helm_cmd="$helm_cmd --set config.clusterName=$cluster_name"
+    helm_cmd="$helm_cmd --set config.logLevel=$CEDANA_LOG_LEVEL"
+    helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
+    helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
+    helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
+    helm_cmd="$helm_cmd --set config.pluginsBuilds=local" # don't download any from registry
+    helm_cmd="$helm_cmd --set config.awsAccessKeyId=$AWS_ACCESS_KEY_ID"
+    helm_cmd="$helm_cmd --set config.awsSecretAccessKey=$AWS_SECRET_ACCESS_KEY"
+    helm_cmd="$helm_cmd --set config.awsRegion=$AWS_REGION"
     if [ -n "$CONTROLLER_REPO" ]; then
         helm_cmd="$helm_cmd --set controllerManager.manager.image.repository=$CONTROLLER_REPO"
     fi

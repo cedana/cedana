@@ -7,11 +7,12 @@ export CEDANA_REMOTE=${CEDANA_REMOTE:-false}
 export CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-debug}
 export CEDANA_LOG_LEVEL_NO_SERVER=$CEDANA_LOG_LEVEL
 export CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-false}
+export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-/tmp}
 export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
 export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1*GIBIBYTE))}"
 
-WAIT_TIMEOUT=100
+WAIT_TIMEOUT=30
 
 ##################
 # BATS LIFECYCLE #
@@ -56,15 +57,16 @@ setup_daemon() {
         debug start_daemon_at "$SOCK"
     else
         log_file=$(daemon_log_file "$CEDANA_ADDRESS")
-        debug tail -f "$log_file" &
-        export TAIL_PID=$!
+        tail -f "$log_file" &
+        TAIL_PID=$!
+        export TAIL_PID
     fi
 }
 teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
-    elif env_exists "TAIL_PID"; then
-        kill "$TAIL_PID" || true
+    else
+        kill "$TAIL_PID"
     fi
 }
 
@@ -83,7 +85,7 @@ wait_for_start() {
     local sock=$1
     local i=0
     while [ ! -S "$sock" ]; do
-        sleep 0.1
+        sleep 1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
             error_log "Daemon failed to start"
@@ -106,7 +108,7 @@ wait_for_stop() {
     local sock=$1
     local i=0
     while cedana ps &>/dev/null; do
-        sleep 0.1
+        sleep 1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
             error_log "Daemon failed to stop"

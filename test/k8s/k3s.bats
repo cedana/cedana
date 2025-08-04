@@ -144,7 +144,7 @@ teardown() {
         run validate_action_id "$action_id"
         [ $status -eq 0 ]
 
-        run get_restored_pod "$NAMESPACE" "$name"
+        run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
         [ $status -eq 0 ]
 
         if [ $status -eq 0 ]; then
@@ -204,7 +204,7 @@ teardown() {
         run validate_action_id "$action_id"
         [ $status -eq 0 ]
 
-        run get_restored_pod "$NAMESPACE" "$name"
+        run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
         [ $status -eq 0 ]
 
         if [ $status -eq 0 ]; then

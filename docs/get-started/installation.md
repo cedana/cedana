@@ -66,9 +66,9 @@ You can directly start the daemon with:
 sudo cedana daemon start
 ```
 
-The daemon requires root privileges for checkpoint/restore operations.
+The daemon requires root privileges for checkpoint/restore operations.  Check the [CLI reference](../references/cli/cedana.md) for all options.
 
-If you're a systemd user, you may also install it as a service (if built from source):
+If you're a _systemd_ user, you may also install it as a service (if built from source):
 
 ```sh
 make install-systemd

@@ -11,37 +11,37 @@ on:
     inputs:
       cedana_version:
         type: string
-        description: Version for Cedana binaries (branch name or "release" for latest release)
+        description: Version for Cedana binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
       criu_version:
         type: string
-        description: Version for CRIU binaries (branch name or "release" for latest release)
+        description: Version for CRIU binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
       gpu_version:
         type: string
-        description: Version for GPU binaries (branch name or "release" for latest release)
+        description: Version for GPU binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
       streamer_version:
         type: string
-        description: Version for streamer binaries (branch name or "release" for latest release)
+        description: Version for streamer binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
       controller_version:
         type: string
-        description: Version for controller binaries (branch name or "release" for latest release)
+        description: Version for controller binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
       runtime_shim_version:
         type: string
-        description: Version for runtime shim binaries (branch name or "release" for latest release)
+        description: Version for runtime shim binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
       helm_chart_version:
         type: string
-        description: Version for Cedana Helm chart (branch name or "release" for latest release)
+        description: Version for Cedana Helm chart (branch name, tag or "release" for latest release)
         required: false
         default: "none"
 
@@ -69,6 +69,8 @@ jobs:
           cd cedana
           if [ "$VERSION" = "release" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/cedana-$ARCH/versions/latest/cedana
+          elif [ "${VERSION#v}" != "$VERSION" ]; then
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/cedana-$ARCH/versions/$VERSION/cedana
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/cedana-$ARCH/versions/$VERSION/cedana
@@ -92,6 +94,16 @@ jobs:
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-cedana.so-$ARCH/versions/latest/libcedana-storage-cedana.so
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-s3.so-$ARCH/versions/latest/libcedana-storage-s3.so
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-gcs.so-$ARCH/versions/latest/libcedana-storage-gcs.so
+          elif [ "${VERSION#v}" != "$VERSION" ]; then
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-runc.so-$ARCH/versions/$VERSION/libcedana-runc.so
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-containerd.so-$ARCH/versions/$VERSION/libcedana-containerd.so
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-crio.so-$ARCH/versions/$VERSION/libcedana-crio.so
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-k8s.so-$ARCH/versions/$VERSION/libcedana-k8s.so
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-kata.so-$ARCH/versions/$VERSION/libcedana-kata.so
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$VERSION/libcedana-cloud-hypervisor.so
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$VERSION/libcedana-storage-cedana.so
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-s3.so-$ARCH/versions/$VERSION/libcedana-storage-s3.so
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$VERSION/libcedana-storage-gcs.so
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-runc.so-$ARCH/versions/$VERSION/libcedana-runc.so
@@ -119,7 +131,7 @@ jobs:
 
       - name: Get digest
         env:
-          IMAGE_NAME: ${{ inputs.cedana_version == 'release' && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
+          IMAGE_NAME: ${{ (inputs.cedana_version == 'release' || startsWith(inputs.cedana_version, 'v')) && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
           TAG: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           mkdir -p /tmp/digests
@@ -168,6 +180,8 @@ jobs:
           cd criu
           if [ "$VERSION" = "release" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/names/criu-$ARCH/versions/latest/criu
+          elif [ "${VERSION#v}" != "$VERSION" ]; then
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/names/criu-$ARCH/versions/$VERSION/criu
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu-alpha/raw/names/criu-$ARCH/versions/$VERSION/criu
@@ -203,6 +217,9 @@ jobs:
           if [ "$VERSION" = "release" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/cedana-gpu-controller-$ARCH/versions/latest/cedana-gpu-controller
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/libcedana-gpu.so-$ARCH/versions/latest/libcedana-gpu.so
+          elif [ "${VERSION#v}" != "$VERSION" ]; then
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/cedana-gpu-controller-$ARCH/versions/$VERSION/cedana-gpu-controller
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/libcedana-gpu.so-$ARCH/versions/$VERSION/libcedana-gpu.so
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/names/cedana-gpu-controller-$ARCH/versions/$VERSION/cedana-gpu-controller
@@ -238,6 +255,8 @@ jobs:
           cd streamer
           if [ "$VERSION" = "release" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/names/cedana-image-streamer-$ARCH/versions/latest/cedana-image-streamer
+          elif [ "${VERSION#v}" != "$VERSION" ]; then
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/names/cedana-image-streamer-$ARCH/versions/$VERSION/cedana-image-streamer
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer-alpha/raw/names/cedana-image-streamer-$ARCH/versions/$VERSION/cedana-image-streamer
@@ -270,7 +289,7 @@ jobs:
 
       - name: Get digest
         env:
-          IMAGE_NAME: ${{ inputs.controller_version == 'release' && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
+          IMAGE_NAME: ${{ (inputs.controller_version == 'release' || startsWith(inputs.controller_version, 'v')) && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
           TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
         run: |
           mkdir -p /tmp/digests
@@ -319,6 +338,8 @@ jobs:
           cd runtime-shim
           if [ "$VERSION" = "release" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim/raw/names/cedana-shim-runc-v2-$ARCH/versions/latest/cedana-shim-runc-v2
+          elif [ "${VERSION#v}" != "$VERSION" ]; then
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim-alpha/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2

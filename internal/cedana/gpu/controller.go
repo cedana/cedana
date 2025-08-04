@@ -52,7 +52,7 @@ const (
 
 	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
 	PARALLEL_DUMP    = true
-  PARALLEL_RESTORE = false // XXX: Disabled until host mem handling is improved
+	PARALLEL_RESTORE = false // XXX: Disabled until host mem handling is improved
 )
 
 type controller struct {
@@ -162,7 +162,7 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			c = &controller{
 				ID:      id,
 				Address: fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id),
-				Booking: flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_RDWR)),
+				Booking: flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR)),
 				UID:     fileInfo.Sys().(*syscall.Stat_t).Uid,
 				GID:     fileInfo.Sys().(*syscall.Stat_t).Gid,
 			}
@@ -342,13 +342,15 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		freezeType = append(freezeType, gpu.FreezeType_FREEZE_TYPE_IPC) // Default to IPC freeze type if not provided
 
+		log.Debug().Str("ID", id).Uint32("PID", pid).Str("type", freezeType[0].String()).Msg("GPU freeze starting")
+
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{Type: freezeType[0]})
 		if err != nil {
 			log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
 
-		log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze complete")
+		log.Info().Str("ID", id).Uint32("PID", pid).Str("type", freezeType[0].String()).Msg("GPU freeze complete")
 
 		// Begin GPU dump in parallel to CRIU dump
 
@@ -357,6 +359,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
+
+			log.Debug().Str("ID", id).Uint32("PID", pid).Msg("GPU dump starting")
 
 			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream(), LeaveRunning: opts.GetLeaveRunning()})
 			if err != nil {
@@ -386,9 +390,13 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		defer controller.Termination.Unlock()
 
+		log.Debug().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU unfreeze starting")
+
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
 			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU")
+		} else {
+			log.Info().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU unfreeze completed")
 		}
 
 		return errors.Join(err, utils.GRPCError(<-dumpErr))
@@ -410,12 +418,14 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		controller.Termination.TryLock() // Might be already locked, so ensure we don't deadlock
 		defer controller.Termination.Unlock()
 
+		log.Debug().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU unfreeze starting")
+
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
-			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU on dump error")
+			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU")
+		} else {
+			log.Info().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU unfreeze completed")
 		}
-
-		return
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
@@ -436,6 +446,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 			controller.Termination.Lock() // Required to ensure the controller does not get terminated while restoring
 			defer controller.Termination.Unlock()
+
+			log.Debug().Str("ID", controller.ID).Msg("GPU restore starting")
 
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {

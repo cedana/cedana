@@ -61,6 +61,9 @@ env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
   RETRIES: 1
   DEBUG: 0 # bats debug logging
 
@@ -130,7 +133,7 @@ jobs:
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
         run: |
           make install
-          sudo -E cedana plugin install runc containerd crio criu storage/cedana
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana storage/s3 storage/gcs
           sudo -E cedana plugin install streamer  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
             sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead

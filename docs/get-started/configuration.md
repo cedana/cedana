@@ -35,6 +35,9 @@ type Config struct {
     GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
     // Plugin settings
     Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
+
+		// AWS settings
+		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
 }
 ```
 
@@ -114,6 +117,8 @@ type GPU struct {
 		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 		// LdLibPath holds any additional directories to search for GPU libraries
 		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
+		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
+		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 }
 ```
 
@@ -147,5 +152,18 @@ type Profiling struct {
     Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
     // Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
     Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
+}
+```
+
+## [AWS](../../pkg/config/types.go#L123-L131)
+
+```go
+type AWS struct {
+		// AccessKeyID is the AWS access key ID
+		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
+		// SecretAccessKey is the AWS secret access key
+		SecretAccessKey string `json:"secret_access_key" key:"secret_access_key" yaml:"secret_access_key" mapstructure:"secret_access_key" env_alias:"AWS_SECRET_ACCESS_KEY"`
+		// Region is the AWS region to use
+		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region"`
 }
 ```

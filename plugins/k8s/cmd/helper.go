@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -335,8 +337,8 @@ type CheckpointPodReq struct {
 	PodName   string `json:"pod_name"`
 	RuncRoot  string `json:"runc_root"`
 	Namespace string `json:"namespace"`
-
-	ActionId string `json:"action_id"`
+	Kind      string `json:"kind"`
+	ActionId  string `json:"action_id"`
 }
 
 func FindContainersForReq(req CheckpointPodReq, address, protocol string) ([]*k8s.Container, error) {
@@ -372,13 +374,17 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 
 	leaveRunning := true
 	tcpEstablished := true
+	tcpSkipInFlight := true
+
+	// NOTE: Checkpoint dir is assumed to be set through config/env
 
 	resp, profiling, err := client.Dump(ctx, &daemon.DumpReq{
-		Dir:  fmt.Sprintf("cedana://%s", checkpointId),
+		Name: checkpointId,
 		Type: "runc",
 		Criu: &criu.CriuOpts{
-			LeaveRunning:   &leaveRunning,
-			TcpEstablished: &tcpEstablished,
+			LeaveRunning:    &leaveRunning,
+			TcpEstablished:  &tcpEstablished,
+			TcpSkipInFlight: &tcpSkipInFlight,
 		},
 		Details: &daemon.Details{
 			Runc: &runc.Runc{
@@ -398,6 +404,85 @@ type ProfilingInfo struct {
 	TotalDuration    int64           `json:"total_duration"`
 }
 
+type ImageSecret struct {
+	ImageSecret string `json:"image_secret"`
+	ImageSource string `json:"image_source"`
+}
+
+func GetImageSecret() (*ImageSecret, error) {
+	cedanaClient := cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
+	url := cedanaClient.RequestAdapter.GetBaseUrl() + "/v2/secrets"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Add("Authorization", "Bearer "+os.Getenv("CEDANA_AUTH_TOKEN"))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	secret := ImageSecret{}
+	err = json.Unmarshal(data, &secret)
+	if err != nil {
+		return nil, err
+	}
+	return &secret, nil
+}
+
+func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namespace, address, protocol string, rootfsOnly bool) (*daemon.DumpResp, *profiling.Data, error) {
+	client, err := client.New(address, protocol)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer client.Close()
+
+	leaveRunning := true
+	tcpEstablished := true
+
+	image, err := GetImageSecret()
+	if err != nil {
+		// failed to fetch the image upload information
+		return nil, nil, err
+	}
+	s := strings.Split(image.ImageSecret, ":")
+	if len(s) <= 1 {
+		return nil, nil, fmt.Errorf("failed to fetch valid image secrets; failed to parse secrets from propagator")
+	}
+	username := s[0]
+	secret := s[1]
+
+	// NOTE: Checkpoint dir is assumed to be set through config/env
+
+	resp, profiling, err := client.Dump(ctx, &daemon.DumpReq{
+		Name: checkpointId,
+		Type: "containerd",
+		Criu: &criu.CriuOpts{
+			LeaveRunning:   &leaveRunning,
+			TcpEstablished: &tcpEstablished,
+		},
+		Details: &daemon.Details{
+			Containerd: &containerd.Containerd{
+				ID:         runcId,
+				Image:      image.ImageSource + ":" + checkpointId,
+				Namespace:  "k8s.io",
+				RootfsOnly: rootfsOnly,
+				Username:   username,
+				Secret:     secret,
+				Address:    "/run/k3s/containerd/containerd.sock",
+			},
+		},
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return resp, profiling, nil
+}
+
 type CheckpointInformation struct {
 	ActionId      string        `json:"action_id"`
 	PodId         string        `json:"pod_id"`
@@ -409,7 +494,7 @@ type CheckpointInformation struct {
 	ProfilingInfo ProfilingInfo `json:"profiling_info"`
 }
 
-func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp) error {
+func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp, rootfs bool) error {
 	publisher, err := rabbitmq.NewPublisher(
 		es.conn,
 	)
@@ -427,17 +512,19 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		RawProfilingData: profiling,
 		TotalDuration:    totalDuration,
 	}
-
-	data, err := json.Marshal(CheckpointInformation{
-		ActionId:      req.ActionId,
-		PodId:         pod_id,
-		Path:          resp.Path,
-		CheckpointId:  id,
-		Status:        "success",
-		Gpu:           resp.State.GPUEnabled,
-		Platform:      resp.State.Host.Platform,
-		ProfilingInfo: profilingInfo,
-	})
+	ci := CheckpointInformation{
+		ActionId:     req.ActionId,
+		PodId:        pod_id,
+		CheckpointId: id,
+		Status:       "success",
+		Info:         info,
+	}
+	if !rootfs {
+		ci.Gpu = resp.State.GPUEnabled
+		ci.Platform = resp.State.Host.Platform
+		ci.Path = resp.Path
+	}
+	data, err := json.Marshal(ci)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create checkpoint info")
 		return err
@@ -476,16 +563,16 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		var req CheckpointPodReq
 		if err := json.Unmarshal(msg.Body, &req); err != nil {
 			log.Error().Err(err).Msg("Failed to unmarshal message")
-			return rabbitmq.Manual
+			return rabbitmq.Ack
 		}
 		containers, err := FindContainersForReq(req, address, protocol)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to find pod")
-			return rabbitmq.Manual
+			return rabbitmq.Ack
 		}
 		// if no containers found skip
 		if len(containers) == 0 {
-			return rabbitmq.Manual
+			return rabbitmq.Ack
 		}
 		runcRoot := req.RuncRoot
 		// TODO SA: support multiple container pod checkpoint/restore
@@ -497,21 +584,42 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 				log.Error().Err(err).Str("CedanaUrl", config.Global.Connection.URL).Msg("Failed to populate a remote checkpoint in cedana database")
 				continue
 			}
-			resp, profiling, err := CheckpointContainer(
-				context.Background(),
-				*checkpointId,
-				container.Runc.ID,
-				runcRoot,
-				address,
-				protocol,
-			)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to checkpoint pod containers")
-			} else {
-				log.Info().Msg("Publishing checkpoint...")
-				err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp)
+			if req.Kind == "rootfs" || req.Kind == "rootfsonly" {
+				resp, profiling, err := CheckpointContainerRootfs(
+					context.Background(),
+					*checkpointId,
+					container.Runc.ID,
+					req.Namespace,
+					address,
+					protocol,
+					req.Kind == "rootfsonly",
+				)
 				if err != nil {
-					log.Error().Err(err).Msg("failed to publish checkpoint success")
+					log.Error().Err(err).Msg("Failed to roofs checkpoint container in pod")
+				} else {
+					log.Info().Msg("Publishing checkpoint...")
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp, true)
+					if err != nil {
+						log.Error().Err(err).Msg("failed to publish checkpoint success")
+					}
+				}
+			} else {
+				resp, profiling, err := CheckpointContainer(
+					context.Background(),
+					*checkpointId,
+					container.Runc.ID,
+					runcRoot,
+					address,
+					protocol,
+				)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to checkpoint pod containers")
+				} else {
+					log.Info().Msg("Publishing checkpoint...")
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp, false)
+					if err != nil {
+						log.Error().Err(err).Msg("failed to publish checkpoint success")
+					}
 				}
 			}
 			break

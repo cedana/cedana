@@ -9,21 +9,16 @@ permissions:
 on:
   workflow_call:
     inputs:
-      cedana:
-        type: boolean
-        description: "Run Cedana benchmark"
-        required: false
-        default: true
-      native:
-        type: boolean
-        description: "Run native benchmark"
-        required: false
-        default: false
       debug:
         type: boolean
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
+      runtimes:
+        type: string
+        description: "Runtimes to run benchmarks for (comma-separated)"
+        required: false
+        default: cedana
       samples:
         type: string
         description: "Number of samples to run for each metric"
@@ -74,17 +69,18 @@ env:
   RETRIES: 2
 
 jobs:
-  init:
-    name: Initialize
-    runs-on: ubuntu-latest
+  dry-run:
+    name: Dry Run
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-8/extras=s3-cache
     container:
       image: cedana/cedana-bench:slim
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --ipc=host --gpus all
     outputs:
-      metrics: ${{ steps.list-metrics.outputs.metrics }}
       runtimes: ${{ steps.list-runtimes.outputs.runtimes }}
+      matrix: ${{ steps.dry-run.outputs.matrix }}
     defaults:
       run:
         working-directory: /src
@@ -92,25 +88,35 @@ jobs:
       - name: List runtimes
         id: list-runtimes
         run: |
-          runtimes_json="[]"
-          if [ "${{ inputs.cedana }}" = "true" ]; then
-            runtimes_json=$(echo "$runtimes_json" | jq -c '. + ["cedana"]')
-          fi
-          if [ "${{ inputs.native }}" = "true" ]; then
-            runtimes_json=$(echo "$runtimes_json" | jq -c '. + ["native"]')
-          fi
-          echo "runtimes=$runtimes_json" >> $GITHUB_OUTPUT
+          runtimes="[]"
+          for runtime in $(echo "${{ inputs.runtimes }}" | tr ', ' ' '); do
+            if jq -e ".runtimes.list[\"$runtime\"]" bench.json > /dev/null; then
+              runtimes=$(echo "$runtimes" | jq --arg runtime "$runtime" '. + [$runtime]')
+            else
+              echo "Error: Runtime '$runtime' not found in bench.json" >&2
+              exit 1
+            fi
+          done
+          runtimes=$(echo "$runtimes" | jq -c '.')
+          echo "runtimes=$runtimes" >> $GITHUB_OUTPUT
 
-      - name: List metrics
-        id: list-metrics
+      - name: Dry run
+        id: dry-run
+        shell: bash
         run: |
-          metrics=$(jq -c '[.metrics.list | to_entries[] | select(.value.disabled != true) | .key as $metric | (.value.workloads[] | "\($metric)@\(.)")]' bench.json)
-          echo "metrics=$metrics" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          runtimes=($(echo "${{ inputs.runtimes }}" | tr ', ' ' '))
+          for runtime in "${runtimes[@]}"; do
+            ./bench run $runtime --dry-run
+          done
+          jq -s 'flatten' results/dry-run-* > matrix.json
+          matrix=$(jq -c '.' matrix.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   run:
     name: Run
-    needs: init
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/tag=${{ matrix.runtime }}-${{ matrix.metric }}/extras=s3-cache
+    needs: dry-run
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-8/tag=${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
@@ -120,8 +126,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        metric: ${{ fromJson(needs.init.outputs.metrics) }}
-        runtime: ${{ fromJson(needs.init.outputs.runtimes) }}
+        include: ${{ fromJson(needs.dry-run.outputs.matrix) }}
     defaults:
       run:
         working-directory: /src
@@ -129,35 +134,30 @@ jobs:
       - uses: runs-on/action@v1
 
       - name: Download GPU binaries
-        if: ${{ matrix.runtime == 'cedana' }}
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
         with:
           name: gpu-amd64
 
       - name: Download Cedana binary
-        if: ${{ matrix.runtime == 'cedana' }}
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
           name: cedana-amd64
 
       - name: Download Cedana plugins
-        if: ${{ matrix.runtime == 'cedana' }}
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
           name: plugins-amd64
 
       - name: Download CRIU binary
-        if: ${{ matrix.runtime == 'cedana' }}
         uses: actions/download-artifact@v4
         id: download-binaries-criu
         with:
           name: criu-amd64
 
       - name: Configure
-        if: ${{ matrix.runtime == 'cedana' }}
         env:
           PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
           PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
@@ -172,6 +172,7 @@ jobs:
           chmod +x $PATH_BINARIES_GPU/*
           chmod +x $PATH_BINARIES_CEDANA/*
           chmod +x $PATH_BINARIES_CRIU/*
+
           jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
           mv temp.json bench.json
           jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
@@ -183,6 +184,9 @@ jobs:
           jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
           mv temp.json bench.json
 
+          cd bin
+          ./cedana plugin install criu criu/cuda
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: inputs.debug
@@ -192,10 +196,9 @@ jobs:
       - name: Run
         env:
           RUNTIME: ${{ matrix.runtime }}
-          METRIC_WORKLOAD: ${{ matrix.metric }}
+          METRIC: ${{ matrix.metric }}
+          WORKLOAD: ${{ matrix.workload }}
         run: |
-          METRIC="$(printf '%s' "$METRIC_WORKLOAD" | awk -F'@' '{print $1}')"
-          WORKLOAD="$(printf '%s' "$METRIC_WORKLOAD" | awk -F'@' '{print $2}')"
           ./bench run $RUNTIME -m $METRIC -w $WORKLOAD -n $SAMPLES -r $RETRIES --save
 
       - name: Upload logs
@@ -203,7 +206,7 @@ jobs:
         id: upload-logs
         uses: actions/upload-artifact@v4
         with:
-          name: bench-logs-${{ matrix.runtime }}-${{ matrix.metric }}
+          name: bench-logs-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
             /src/*.log
             /tmp/*.log
@@ -213,14 +216,14 @@ jobs:
         id: upload-results
         uses: actions/upload-artifact@v4
         with:
-          name: bench-results-${{ matrix.runtime }}-${{ matrix.metric }}
+          name: bench-results-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
             /src/results
 
   post-summary:
     name: Post Summary
     if: ${{ !cancelled() }}
-    needs: [init, run]
+    needs: [dry-run, run]
     runs-on: ubuntu-latest
     container:
       image: cedana/cedana-bench:slim
@@ -230,7 +233,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runtime: ${{ fromJson(needs.init.outputs.runtimes) }}
+        runtime: ${{ fromJson(needs.dry-run.outputs.runtimes) }}
     defaults:
       run:
         working-directory: /src
@@ -274,7 +277,7 @@ jobs:
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: |
           runtime_args=""
-          for runtime in $(echo '${{ needs.init.outputs.runtimes }}' | jq -r '.[]'); do
+          for runtime in $(jq -r '.runtimes.list | keys[]' bench.json); do
             runtime_args="$runtime_args --runtime $runtime:2"
           done
           ./bench results pull $runtime_args -f
@@ -287,7 +290,7 @@ jobs:
           RUNTIME: ${{ matrix.runtime }}
         run: |
           runtime_args=""
-          for runtime in $(echo '${{ needs.init.outputs.runtimes }}' | jq -r '.[]'); do
+          for runtime in $(jq -r '.runtimes.list | keys[]' bench.json); do
             if [ "$runtime" != $RUNTIME ]; then
               runtime_args="$runtime_args --runtime $runtime"
             fi
@@ -310,8 +313,8 @@ jobs:
         id: summary-runtime
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/runtime-comparison/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison with other runtimes"
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime (rightmost) comparison with other runtimes
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md
@@ -363,8 +366,8 @@ jobs:
         id: summary-previous
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/previous-comparison/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison with previous result"
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime (rightmost) comparison with previous result(s)
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md
@@ -413,8 +416,8 @@ jobs:
         if: ${{ ! inputs.comparison_runtime && !inputs.comparison_previous }}
         env:
           RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** (${{ matrix.runtime }}) results"
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime results
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
           rm -f summary.md

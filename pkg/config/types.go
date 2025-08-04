@@ -35,6 +35,9 @@ type (
 		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
+
+		// AWS settings
+		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
 	}
 
 	Connection struct {
@@ -46,6 +49,9 @@ type (
 
 	Checkpoint struct {
 		// Dir is the default directory to store checkpoints
+		// - "cedana://<path>" for Cedana-managed global storage (recommended)
+		// - "s3://<path>" for your S3 storage
+		// - "<path>" for node-local storage
 		Dir string `json:"dir" key:"dir" yaml:"dir" mapstructure:"dir"`
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
@@ -101,6 +107,8 @@ type (
 		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 		// LdLibPath holds any additional directories to search for GPU libraries
 		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
+		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
+		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 	}
 
 	Plugins struct {
@@ -110,5 +118,14 @@ type (
 		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
 		// Builds is the build versions to list/download for plugins (release, alpha)
 		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds"`
+	}
+
+	AWS struct {
+		// AccessKeyID is the AWS access key ID
+		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
+		// SecretAccessKey is the AWS secret access key
+		SecretAccessKey string `json:"secret_access_key" key:"secret_access_key" yaml:"secret_access_key" mapstructure:"secret_access_key" env_aliases:"AWS_SECRET_ACCESS_KEY"`
+		// Region is the AWS region to use (uses default region if not set)
+		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
 	}
 )

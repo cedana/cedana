@@ -101,7 +101,7 @@ func Execute(ctx context.Context, version string) error {
 	revision := getRevision()
 	versionTemplate := rootCmd.VersionTemplate()
 	if revision != "" {
-		versionTemplate = fmt.Sprintf("%sgit: %s\n", versionTemplate, revision)
+		versionTemplate = fmt.Sprintf("git: %s\n%s", revision, versionTemplate)
 	}
 	rootCmd.SetVersionTemplate(versionTemplate)
 

@@ -55,6 +55,9 @@ env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
   RETRIES: 1
   DEBUG: 0 # bats debug logging
 
@@ -76,7 +79,7 @@ jobs:
 
   k3s:
     name: K3s
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/tag=${{ matrix.cr }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/tag=${{ matrix.cr }}-${{ matrix.storage }}/extras=s3-cache
     timeout-minutes: 30
     needs: propagator-connectivity
     strategy:
@@ -84,10 +87,13 @@ jobs:
       matrix:
         compute:
           - CPU
-          - CUDA
+          # - CUDA # TODO: Enable when GPU tests are added
         cr:
           - default
           - streamer
+        storage:
+          - storage/cedana
+          - storage/s3
         arch:
           - amd64
           - arm64
@@ -180,7 +186,7 @@ jobs:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
         run: |
           make install
-          sudo -E cedana plugin install runc containerd crio criu storage/cedana
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana storage/s3 storage/gcs
           sudo -E cedana plugin install k8s/runtime-shim  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
             sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
@@ -200,6 +206,7 @@ jobs:
 
       - name: Run k8s tests
         env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci' }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_LOG_LEVEL: trace # trace until stabilized
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
@@ -279,12 +286,20 @@ jobs:
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
             testEnvironment="cedana/cedana-test" reportName="K3s (${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
 
+      - name: Set sanitized storage
+        if: always()
+        env:
+          STORAGE: ${{ matrix.storage }}
+        run: |
+          STORAGE=$(echo $STORAGE | sed 's/\//-/g')
+          echo "STORAGE=$STORAGE" >> $GITHUB_ENV
+
       - name: Upload report
         if: always()
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}-${{ matrix.compute }}
+          name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
           path: |
             /tmp/report*.json
 

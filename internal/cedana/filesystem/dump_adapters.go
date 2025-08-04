@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
@@ -89,9 +91,9 @@ func DumpFilesystem(next types.Dump) types.Dump {
 		// so that if we fail compression/upload, CRIU can still resume the process (only if leave-running is not set)
 
 		if storage.IsRemote() || (compression != "" && compression != "none") {
-			compress := func() error {
-				var path string
-				ext, err := io.ExtForCompression(compression)
+			compress := func() (err error) {
+				var path, ext string
+				ext, err = io.ExtForCompression(compression)
 				if err != nil {
 					return err
 				}
@@ -103,14 +105,14 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
 				defer func() {
-					if e := tarball.Close(); e != nil && err == nil {
-						err = e
-					}
+					err = errors.Join(err, tarball.Close())
 				}()
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
+				_, end := profiling.StartTimingCategory(ctx, "storage", io.Tar)
 				err = io.Tar(imagesDirectory, tarball, compression)
+				end()
 				if err != nil {
 					storage.Delete(path)
 					return fmt.Errorf("failed to create tarball: %w", err)
@@ -130,13 +132,10 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 			if req.GetCriu().GetLeaveRunning() {
 				defer func() {
-					if err == nil {
-						err = compress()
-					}
+					err = errors.Join(err, compress())
 				}()
 			} else {
 				callback := &criu_client.NotifyCallback{
-					Name: "storage",
 					PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) (err error) {
 						return compress()
 					},
