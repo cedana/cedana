@@ -31,7 +31,7 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "remote stream dump process (4 parallelism)" {
+@test "remote (S3) stream dump process (4 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -43,7 +43,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote stream dump process (8 parallelism)" {
+@test "remote (S3) stream dump process (8 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -55,7 +55,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote stream dump process (tar compression)" {
+@test "remote (S3) stream dump process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -70,7 +70,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote stream dump process (gzip compression)" {
+@test "remote (S3) stream dump process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -82,7 +82,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote stream dump process (lz4 compression)" {
+@test "remote (S3) stream dump process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -94,7 +94,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote stream dump process (zlib compression)" {
+@test "remote (S3) stream dump process (zlib compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -106,7 +106,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote stream dump process (no compression, leave running)" {
+@test "remote (S3) stream dump process (no compression, leave running)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -126,7 +126,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote stream dump process (gzip compression, leave running)" {
+@test "remote (S3) stream dump process (gzip compression, leave running)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -150,7 +150,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "remote stream restore process (4 parallelism)" {
+@test "remote (S3) stream restore process (4 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -167,7 +167,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote stream restore process (8 parallelism)" {
+@test "remote (S3) stream restore process (8 parallelism)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -184,7 +184,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote stream restore process (tar compression)" {
+@test "remote (S3) stream restore process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -201,7 +201,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote stream restore process (gzip compression)" {
+@test "remote (S3) stream restore process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -218,7 +218,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote stream restore process (lz4 compression)" {
+@test "remote (S3) stream restore process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -235,7 +235,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote stream restore process (zlib compression)" {
+@test "remote (S3) stream restore process (zlib compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)

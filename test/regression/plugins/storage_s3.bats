@@ -34,7 +34,7 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "remote dump process (new job)" {
+@test "remote (S3) dump process (new job)" {
     jid=$(unix_nano)
 
     run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
@@ -53,7 +53,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote dump process (tar compression)" {
+@test "remote (S3) dump process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -67,7 +67,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote dump process (gzip compression)" {
+@test "remote (S3) dump process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -81,7 +81,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote dump process (lz4 compression)" {
+@test "remote (S3) dump process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -95,7 +95,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote dump process (zlib compression)" {
+@test "remote (S3) dump process (zlib compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -109,7 +109,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote dump process (no compression, leave running)" {
+@test "remote (S3) dump process (no compression, leave running)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -129,7 +129,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote dump process (gzip compression, leave running)" {
+@test "remote (S3) dump process (gzip compression, leave running)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -153,7 +153,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "remote restore process (new job)" {
+@test "remote (S3) restore process (new job)" {
     jid=$(unix_nano)
 
     run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
@@ -175,7 +175,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote restore process (new job, without daemon)" {
+@test "remote (S3) restore process (new job, without daemon)" {
     jid=$(unix_nano)
     code=42
 
@@ -196,7 +196,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote restore process (tar compression)" {
+@test "remote (S3) restore process (tar compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -217,7 +217,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote restore process (gzip compression)" {
+@test "remote (S3) restore process (gzip compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -238,7 +238,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote restore process (lz4 compression)" {
+@test "remote (S3) restore process (lz4 compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
@@ -259,7 +259,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote restore process (zlib compression)" {
+@test "remote (S3) restore process (zlib compression)" {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
     name=$(unix_nano)
