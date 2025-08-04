@@ -87,7 +87,7 @@ jobs:
       matrix:
         compute:
           - CPU
-          - CUDA
+          # - CUDA # TODO: Enable when GPU tests are added
         cr:
           - default
           - streamer
