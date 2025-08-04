@@ -11,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	cedana_config "github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/rs/zerolog/log"
 )
 
 const PATH_PREFIX = "s3://"
@@ -22,6 +23,13 @@ type Storage struct {
 }
 
 func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
+	if cedana_config.Global.AWS.AccessKeyID == "" || cedana_config.Global.AWS.SecretAccessKey == "" {
+		return nil, fmt.Errorf("AWS AccessKeyID and SecretAccessKey must be set in config for using S3 storage")
+	}
+	if cedana_config.Global.AWS.Region == "" {
+		log.Warn().Str("storage", "S3").Msg("AWS Region is not set in the configuration")
+	}
+
 	credProvider := credentials.NewStaticCredentialsProvider(
 		cedana_config.Global.AWS.AccessKeyID,
 		cedana_config.Global.AWS.SecretAccessKey,

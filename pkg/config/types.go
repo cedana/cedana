@@ -125,7 +125,7 @@ type (
 		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
 		// SecretAccessKey is the AWS secret access key
 		SecretAccessKey string `json:"secret_access_key" key:"secret_access_key" yaml:"secret_access_key" mapstructure:"secret_access_key" env_aliases:"AWS_SECRET_ACCESS_KEY"`
-		// Region is the AWS region to use
+		// Region is the AWS region to use (uses default region if not set)
 		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
 	}
 )

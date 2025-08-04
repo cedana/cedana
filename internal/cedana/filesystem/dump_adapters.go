@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
@@ -109,7 +110,9 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
+				_, end := profiling.StartTimingCategory(ctx, "storage", io.Tar)
 				err = io.Tar(imagesDirectory, tarball, compression)
+				end()
 				if err != nil {
 					storage.Delete(path)
 					return fmt.Errorf("failed to create tarball: %w", err)
@@ -133,7 +136,6 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				}()
 			} else {
 				callback := &criu_client.NotifyCallback{
-					Name: "storage",
 					PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) (err error) {
 						return compress()
 					},

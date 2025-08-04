@@ -56,15 +56,16 @@ setup_daemon() {
         debug start_daemon_at "$SOCK"
     else
         log_file=$(daemon_log_file "$CEDANA_ADDRESS")
-        debug tail -f "$log_file" &
-        export TAIL_PID=$!
+        tail -f "$log_file" &
+        TAIL_PID=$!
+        export TAIL_PID
     fi
 }
 teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
-    elif env_exists "TAIL_PID"; then
-        kill "$TAIL_PID" || true
+    else
+        kill "$TAIL_PID"
     fi
 }
 
