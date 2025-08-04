@@ -61,7 +61,9 @@ func (c *File) Write(p []byte) (int, error) {
 			defer close(c.done)
 			defer pr.Close()
 
-			uploader := manager.NewUploader(c.client)
+			uploader := manager.NewUploader(c.client, func(u *manager.Uploader) {
+				u.PartSize = MULTIPART_SIZE
+			})
 
 			_, err := uploader.Upload(
 				c.ctx, &s3.PutObjectInput{
