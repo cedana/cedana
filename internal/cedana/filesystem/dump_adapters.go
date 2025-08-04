@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -89,9 +90,9 @@ func DumpFilesystem(next types.Dump) types.Dump {
 		// so that if we fail compression/upload, CRIU can still resume the process (only if leave-running is not set)
 
 		if storage.IsRemote() || (compression != "" && compression != "none") {
-			compress := func() error {
-				var path string
-				ext, err := io.ExtForCompression(compression)
+			compress := func() (err error) {
+				var path, ext string
+				ext, err = io.ExtForCompression(compression)
 				if err != nil {
 					return err
 				}
@@ -103,9 +104,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
 				defer func() {
-					if e := tarball.Close(); e != nil && err == nil {
-						err = e
-					}
+					err = errors.Join(err, tarball.Close())
 				}()
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
@@ -130,9 +129,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 			if req.GetCriu().GetLeaveRunning() {
 				defer func() {
-					if err == nil {
-						err = compress()
-					}
+					err = errors.Join(err, compress())
 				}()
 			} else {
 				callback := &criu_client.NotifyCallback{

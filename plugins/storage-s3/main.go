@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/plugins/storage-s3/s3"
 )
 
 ///////////////////////////
@@ -11,4 +11,4 @@ import (
 // loaded from ldflag definitions
 var Version string = "dev"
 
-var Storage io.Storage = nil
+var NewStorage = s3.NewStorage
