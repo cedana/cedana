@@ -58,7 +58,7 @@ jobs:
       criu_version: release
       gpu_version: main
       streamer_version: main
-      helm_chart_version: feature/ced-1388-s3-storage-plugin
+      helm_chart_version: main
       controller_version: staging
       runtime_shim_version: cedana
 
