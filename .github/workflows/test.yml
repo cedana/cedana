@@ -60,6 +60,9 @@ env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
   RETRIES: 1
   DEBUG: 0 # bats debug logging
 
@@ -303,7 +306,7 @@ jobs:
       - name: Install
         run: |
           make install
-          sudo -E cedana plugin install ${{ matrix.plugin }} criu storage/cedana
+          sudo -E cedana plugin install ${{ matrix.plugin }} criu storage/cedana storage/s3 storage/gcs
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -371,8 +374,6 @@ jobs:
         if: always()
         id: upload-report
         uses: actions/upload-artifact@v4
-        env:
-          PLUGIN: ${{ env.PLUGIN }}
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |

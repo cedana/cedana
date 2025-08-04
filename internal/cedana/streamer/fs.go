@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -255,7 +256,11 @@ func NewStreamingFs(
 		cmd.Process.Signal(syscall.SIGTERM)
 		wg.Wait()
 		close(ioErr)
-		return <-ioErr
+		var err error
+		for e := range ioErr {
+			err = errors.Join(err, e)
+		}
+		return err
 	}
 
 	return fs, wait, nil
@@ -401,6 +406,9 @@ func (fs *Fs) openFd(name string) (int, error) {
 	}
 
 	sock, err := fs.conn.File()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get file from connection: %w", err)
+	}
 	defer sock.Close()
 	rights := syscall.UnixRights(streamerFd)
 	err = syscall.Sendmsg(int(sock.Fd()), nil, rights, nil, 0)
