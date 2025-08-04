@@ -12,7 +12,7 @@ export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
 export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1*GIBIBYTE))}"
 
-WAIT_TIMEOUT=100
+WAIT_TIMEOUT=30
 
 ##################
 # BATS LIFECYCLE #
@@ -85,7 +85,7 @@ wait_for_start() {
     local sock=$1
     local i=0
     while [ ! -S "$sock" ]; do
-        sleep 0.1
+        sleep 1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
             error_log "Daemon failed to start"
@@ -108,7 +108,7 @@ wait_for_stop() {
     local sock=$1
     local i=0
     while cedana ps &>/dev/null; do
-        sleep 0.1
+        sleep 1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
             error_log "Daemon failed to stop"
