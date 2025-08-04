@@ -286,12 +286,22 @@ jobs:
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
             testEnvironment="cedana/cedana-test" reportName="K3s (${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
 
+      - name: Set sanitized storage
+        if: always()
+        env:
+          STORAGE: ${{ matrix.storage }}
+        run: |
+          STORAGE=$(echo $STORAGE | sed 's/\//-/g')
+          echo "STORAGE=$STORAGE" >> $GITHUB_ENV
+
       - name: Upload report
         if: always()
         id: upload-report
         uses: actions/upload-artifact@v4
+        env:
+          STORAGE: ${{ matrix.storage }}
         with:
-          name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}-${{ matrix.compute }}
+          name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
           path: |
             /tmp/report*.json
 
