@@ -33,9 +33,13 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.authToken=$CEDANA_AUTH_TOKEN"
     helm_cmd="$helm_cmd --set config.clusterName=$cluster_name"
     helm_cmd="$helm_cmd --set config.logLevel=$CEDANA_LOG_LEVEL"
+    helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
     helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
     helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     helm_cmd="$helm_cmd --set config.pluginsBuilds=local" # don't download any from registry
+    helm_cmd="$helm_cmd --set config.awsAccessKeyId=$AWS_ACCESS_KEY_ID"
+    helm_cmd="$helm_cmd --set config.awsSecretAccessKey=$AWS_SECRET_ACCESS_KEY"
+    helm_cmd="$helm_cmd --set config.awsRegion=$AWS_REGION"
     if [ -n "$CONTROLLER_REPO" ]; then
         helm_cmd="$helm_cmd --set controllerManager.manager.image.repository=$CONTROLLER_REPO"
     fi
