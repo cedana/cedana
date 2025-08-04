@@ -306,7 +306,7 @@ jobs:
       - name: Install
         run: |
           make install
-          sudo -E cedana plugin install ${{ matrix.plugin }} criu storage/cedana
+          sudo -E cedana plugin install ${{ matrix.plugin }} criu storage/cedana storage/s3 storage/gcs
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -374,8 +374,6 @@ jobs:
         if: always()
         id: upload-report
         uses: actions/upload-artifact@v4
-        env:
-          PLUGIN: ${{ env.PLUGIN }}
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |

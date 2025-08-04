@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
-# bats file_tags=remote,storage:s3
+# bats file_tags=remote,storage:s3,streamer
 
 load ../../helpers/utils
 load ../../helpers/daemon

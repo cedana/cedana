@@ -133,7 +133,7 @@ jobs:
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
         run: |
           make install
-          sudo -E cedana plugin install runc containerd crio criu storage/cedana
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana storage/s3 storage/gcs
           sudo -E cedana plugin install streamer  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
             sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead

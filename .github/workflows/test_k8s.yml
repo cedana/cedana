@@ -186,7 +186,7 @@ jobs:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
         run: |
           make install
-          sudo -E cedana plugin install runc containerd crio criu storage/cedana
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana storage/s3 storage/gcs
           sudo -E cedana plugin install k8s/runtime-shim  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
             sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
@@ -298,8 +298,6 @@ jobs:
         if: always()
         id: upload-report
         uses: actions/upload-artifact@v4
-        env:
-          STORAGE: ${{ matrix.storage }}
         with:
           name: test-report-${{ matrix.arch }}-k8s-k3s-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
           path: |
