@@ -15,6 +15,7 @@ import (
 	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/internal/db"
 	"github.com/cedana/cedana/internal/metrics"
+	"github.com/cedana/cedana/internal/version"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/plugins"
@@ -169,7 +170,7 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	s.lifetime = lifetime
 
 	if config.Global.Metrics.Otel {
-		shutdown, _ := metrics.InitOtel(ctx, s.version)
+		shutdown, _ := metrics.InitOtel(ctx, version.GetVersion())
 		defer func() {
 			err = shutdown(ctx)
 		}()
