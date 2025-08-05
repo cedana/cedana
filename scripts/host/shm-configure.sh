@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -eo pipefail
 
 # Configure /dev/shm size
 # This script increases the shared memory size on the host node

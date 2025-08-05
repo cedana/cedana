@@ -1,7 +1,7 @@
 #!/bin/bash
 # NOTE: This script assumes it's executed in the container environment
 
-set -e
+set -eo pipefail
 
 # NOTE: The scripts are executed before the binaries, ensure they are copied to the host
 # first

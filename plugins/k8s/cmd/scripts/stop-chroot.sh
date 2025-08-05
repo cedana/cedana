@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 if [ -f /host/.dockerenv ]; then
     chroot /host pkill -f 'cedana daemon' || true

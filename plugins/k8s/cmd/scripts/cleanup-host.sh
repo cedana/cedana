@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 chroot /host sh -c '
 if [ -d /cedana ]; then
