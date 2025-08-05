@@ -3,10 +3,10 @@
 set -eo pipefail
 
 # Configure /dev/shm size
-# This script increases the shared memory size on the host node
+# This script increases the shared memory size
 
-SHM_PATH="/host/dev/shm"
-FSTAB="/host/etc/fstab"
+SHM_PATH="/dev/shm"
+FSTAB="/etc/fstab"
 SIZE=${SHM_CONFIG_SIZE:-"10G"}
 MIN_SIZE=${SHM_CONFIG_MIN_SIZE:-"10G"}
 MIN_BYTES=$(numfmt --from=iec "$MIN_SIZE")
