@@ -9,6 +9,7 @@ FSTAB="/host/etc/fstab"
 SIZE=${SHM_CONFIG_SIZE:-"10G"}
 MIN_SIZE=${SHM_CONFIG_MIN_SIZE:-"10G"}
 MIN_BYTES=$(numfmt --from=iec "$MIN_SIZE")
+SHM_CONFIG_ENABLED=${SHM_CONFIG_ENABLED:-"false"}
 
 if [ "$SHM_CONFIG_ENABLED" != "true" ]; then
     echo "Shared memory configuration is not enabled, skipping..."
