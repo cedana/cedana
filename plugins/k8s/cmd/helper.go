@@ -400,8 +400,8 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 }
 
 type ProfilingInfo struct {
-	RawProfilingData *profiling.Data `json:"raw_profiling_data"`
-	TotalDuration    int64           `json:"total_duration"`
+	Raw           *profiling.Data `json:"raw"`
+	TotalDuration int64           `json:"total_duration"`
 }
 
 type ImageSecret struct {
@@ -509,15 +509,15 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 	}
 
 	profilingInfo := ProfilingInfo{
-		RawProfilingData: profiling,
-		TotalDuration:    totalDuration,
+		Raw:           profiling,
+		TotalDuration: totalDuration,
 	}
 	ci := CheckpointInformation{
-		ActionId:     req.ActionId,
-		PodId:        pod_id,
-		CheckpointId: id,
-		Status:       "success",
-		Info:         info,
+		ActionId:      req.ActionId,
+		PodId:         pod_id,
+		CheckpointId:  id,
+		Status:        "success",
+		ProfilingInfo: profilingInfo,
 	}
 	if !rootfs {
 		ci.Gpu = resp.State.GPUEnabled
