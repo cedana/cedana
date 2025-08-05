@@ -62,6 +62,8 @@ fi
 
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
 
+"$DIR"/shm-configure.sh # install the plugins (including shim)
+
 if [ -f /.dockerenv ]; then # for tests
     pkill -f 'cedana daemon' || true
     $APP_PATH daemon start &> /var/log/cedana-daemon.log &
