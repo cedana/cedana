@@ -39,23 +39,23 @@ type SigNozLogEntry struct {
 func mapZerologLevelToSigNoz(level zerolog.Level) (string, int32) {
 	switch level {
 	case zerolog.TraceLevel:
-		return "TRACE", 1
+		return "trace", 1
 	case zerolog.DebugLevel:
-		return "DEBUG", 5
+		return "debug", 5
 	case zerolog.InfoLevel:
-		return "INFO", 9
+		return "info", 9
 	case zerolog.WarnLevel:
-		return "WARN", 13
+		return "warn", 13
 	case zerolog.ErrorLevel:
-		return "ERROR", 17
+		return "error", 17
 	case zerolog.FatalLevel:
-		return "FATAL", 21
+		return "fatal", 21
 	case zerolog.PanicLevel:
-		return "FATAL", 21 // OTel doesn't have Panic, map to FATAL
+		return "fatal", 21 // OTel doesn't have Panic, map to FATAL
 	case zerolog.NoLevel, zerolog.Disabled:
-		return "UNKNOWN", 0
+		return "unknown", 0
 	default:
-		return strings.ToUpper(level.String()), 0 // Best effort
+		return strings.ToLower(level.String()), 0 // Best effort
 	}
 }
 

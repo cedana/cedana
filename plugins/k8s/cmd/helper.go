@@ -399,8 +399,9 @@ func CheckpointContainer(ctx context.Context, checkpointId, runcId, runcRoot, ad
 	return resp, profiling, nil
 }
 
-type Info struct {
-	Data *profiling.Data `json:"data"`
+type ProfilingInfo struct {
+	Raw           *profiling.Data `json:"raw"`
+	TotalDuration int64           `json:"total_duration"`
 }
 
 type ImageSecret struct {
@@ -483,14 +484,14 @@ func CheckpointContainerRootfs(ctx context.Context, checkpointId, runcId, namesp
 }
 
 type CheckpointInformation struct {
-	ActionId     string `json:"action_id"`
-	PodId        string `json:"pod_id"`
-	CheckpointId string `json:"checkpoint_id"`
-	Status       string `json:"status"`
-	Path         string `json:"path"`
-	Gpu          bool   `json:"gpu"`
-	Platform     string `json:"platform"`
-	Info         Info   `json:"info"`
+	ActionId      string        `json:"action_id"`
+	PodId         string        `json:"pod_id"`
+	CheckpointId  string        `json:"checkpoint_id"`
+	Status        string        `json:"status"`
+	Path          string        `json:"path"`
+	Gpu           bool          `json:"gpu"`
+	Platform      string        `json:"platform"`
+	ProfilingInfo ProfilingInfo `json:"profiling_info"`
 }
 
 func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp, rootfs bool) error {
@@ -502,15 +503,21 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		return err
 	}
 
-	info := Info{
-		Data: profiling,
+	totalDuration := profiling.Duration
+	for _, component := range profiling.Components {
+		totalDuration += component.Duration
+	}
+
+	profilingInfo := ProfilingInfo{
+		Raw:           profiling,
+		TotalDuration: totalDuration,
 	}
 	ci := CheckpointInformation{
-		ActionId:     req.ActionId,
-		PodId:        pod_id,
-		CheckpointId: id,
-		Status:       "success",
-		Info:         info,
+		ActionId:      req.ActionId,
+		PodId:         pod_id,
+		CheckpointId:  id,
+		Status:        "success",
+		ProfilingInfo: profilingInfo,
 	}
 	if !rootfs {
 		ci.Gpu = resp.State.GPUEnabled
