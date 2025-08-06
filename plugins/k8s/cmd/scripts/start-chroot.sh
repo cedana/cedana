@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 if [ -f /host/.dockerenv ]; then # for tests
     chroot /host /usr/local/bin/cedana daemon start &> /var/log/cedana-daemon.log &

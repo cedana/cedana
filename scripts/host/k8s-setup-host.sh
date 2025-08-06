@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 # get the directory of the script
 SOURCE="${BASH_SOURCE[0]}"
@@ -61,6 +61,8 @@ else
 fi
 
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
+
+"$DIR"/shm-configure.sh # install the plugins (including shim)
 
 if [ -f /.dockerenv ]; then # for tests
     pkill -f 'cedana daemon' || true
