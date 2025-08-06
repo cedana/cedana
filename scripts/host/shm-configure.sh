@@ -17,10 +17,13 @@ if [ "$SHM_CONFIG_ENABLED" != "true" ]; then
     exit 0
 fi
 
+CURRENT_SIZE=$(df -B1 "$SHM_PATH" | awk 'NR==2 {print $2}')
+
 echo "Configuring /dev/shm with size $SIZE..."
+echo "Current size: $(numfmt --to=iec "$CURRENT_SIZE")"
 
 # 1. Remount if current size is too small
-if [ "$(df --output=size -B 1 "$SHM_PATH" | tail -n 1)" -lt "$MIN_BYTES" ]; then
+if [ "$CURRENT_SIZE" -lt "$MIN_BYTES" ]; then
     echo "Remounting $SHM_PATH with size $SIZE..."
     mount -o remount,size="$SIZE" "$SHM_PATH"
 else
