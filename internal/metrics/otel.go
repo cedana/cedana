@@ -11,6 +11,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
@@ -128,6 +129,10 @@ func newTracerProvider(ctx context.Context, version, endpoint, headers string) (
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String("cedana"),
 			semconv.ServiceVersionKey.String(version),
+			attribute.KeyValue{
+				Key:   "cedana.service.url",
+				Value: attribute.StringValue(config.Global.Connection.URL),
+			},
 		),
 	)
 	if err != nil {
