@@ -445,12 +445,14 @@ get_latest_pod_action_id() {
 
 # List clusters from the propagator service
 # Returns JSON array of clusters
-list_clusters() {
-    debug_log "Retrieving available clusters from propagator..."
+create_cluster() {
+    debug_log "Registering a new cluster"
+    local name="$1"
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/cluster" \
+    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/cluster" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -d '{ "cluster_name": "'${name}'" }' \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -460,7 +462,7 @@ list_clusters() {
         echo "$body"
         return 0
     else
-        error_log "Error: Failed to get clusters (HTTP $http_code): $body"
+        error_log "Error: Failed to register clusters (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -468,19 +470,18 @@ list_clusters() {
 # Get cluster ID from cluster name
 cluster_id() {
     local name="$1"
-    local clusters
-    clusters=$(list_clusters 2>/dev/null)
+    local cluster
+    cluster=$(create_cluster "$name" 2>/dev/null)
 
-    if [ $? -eq 0 ] && [ -n "$clusters" ] && [ "$clusters" != "[]" ] && [ "$clusters" != "null" ]; then
-        local id
-        id=$(echo "$clusters" | jq -r --arg NAME "$name" '.[] | select(.name == $NAME) | .id' | head -n1)
+    if [ $? -eq 0 ] && [ -n "$cluster" ] && [ "$id" != "null" ]; then
+        local id="$cluster"
         if [ -n "$id" ] && [ "$id" != "null" ]; then
             echo "$id"
             return 0
         fi
     fi
 
-    error_log "Error: Cluster '$name' not found or no clusters available"
+    error_log "Error: Cluster registeration of '$name' cluster failed"
     return 1
 }
 

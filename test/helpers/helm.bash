@@ -16,7 +16,7 @@ install_helm() {
 helm_install_cedana() {
     debug_log "Installing helm chart... (chart: $HELM_CHART)"
 
-    local cluster_name="$1"
+    local cluster_id="$1"
     local namespace="$2"
 
     local helm_cmd
@@ -31,7 +31,7 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
     helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"
     helm_cmd="$helm_cmd --set config.authToken=$CEDANA_AUTH_TOKEN"
-    helm_cmd="$helm_cmd --set config.clusterName=$cluster_name"
+    helm_cmd="$helm_cmd --set config.clusterId=$cluster_id"
     helm_cmd="$helm_cmd --set config.logLevel=$CEDANA_LOG_LEVEL"
     helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
     helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
