@@ -28,10 +28,8 @@ PLUGINS="
 # if gpu driver present then add gpu plugin
 if [ -d /proc/driver/nvidia/gpus/ ]; then
     if [ ! -d /run/driver/nvidia ]; then
-        if command -v nvidia-smi &>/dev/null ; then
             PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
             echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
-            echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
             if /sbin/ldconfig -p | grep -q libcuda.so.1; then
                 echo "CUDA driver library found!"
             fi
@@ -43,7 +41,6 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
         # This is required for the gpu-controller to work when chrooted into /run/nvidia/driver path
         mount --rbind /dev/shm /run/nvidia/driver/dev/shm
         chroot /run/driver/nvidia bash -c <<'END_CHROOT'
-            echo "Nvidia Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
             if /sbin/ldconfig -p | grep -q libcuda.so.1; then
                 echo "CUDA driver library found!"
             fi
