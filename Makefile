@@ -225,9 +225,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 		else \
 			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
 		fi ;\
-		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report.xml ;\
-		fi ;\
 		if [ $$status -ne 0 ]; then \
 			echo "Kubernetes e2e tests failed" ;\
 			exit $$status ;\
