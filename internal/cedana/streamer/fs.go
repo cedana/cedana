@@ -40,7 +40,7 @@ const (
 	STOP_LISTENER_MSG  = "stop-listener"
 	IMG_FILE_PATTERN   = "^img-*"
 	IMG_FILE_FORMATTER = "img-%d"
-	CONNECTION_TIMEOUT = 1 * time.Minute
+	CONNECTION_TIMEOUT = 5 * time.Minute
 	PIPE_SIZE          = 4 * utils.MEBIBYTE
 )
 
