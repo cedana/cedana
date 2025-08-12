@@ -43,7 +43,7 @@ const (
 	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai"
 	DEFAULT_CONNECTION_AUTH_TOKEN = ""
 
-	DEFAULT_METRICS_OTEL = false
+	DEFAULT_METRICS = false
 
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
@@ -70,6 +70,7 @@ var Global Config = Config{
 	Protocol:         DEFAULT_PROTOCOL,
 	LogLevel:         DEFAULT_LOG_LEVEL,
 	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
+	Metrics:          DEFAULT_METRICS,
 	Checkpoint: Checkpoint{
 		Dir:         DEFAULT_CHECKPOINT_DIR,
 		Compression: DEFAULT_CHECKPOINT_COMPRESSION,
@@ -86,9 +87,6 @@ var Global Config = Config{
 	Connection: Connection{
 		URL:       DEFAULT_CONNECTION_URL,
 		AuthToken: DEFAULT_CONNECTION_AUTH_TOKEN,
-	},
-	Metrics: Metrics{
-		Otel: DEFAULT_METRICS_OTEL,
 	},
 	Client: Client{
 		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,

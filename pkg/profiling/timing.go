@@ -7,8 +7,8 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -22,7 +22,7 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 	var data *Data
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
 	if !ok {
-		return ctx, func() {}
+		data = &Data{}
 	}
 
 	if data.Name == "" {
@@ -39,7 +39,7 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 	}
 
 	start := time.Now()
-	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, data.Name)
+	childCtx, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, data.Name)
 
 	end = func() {
 		duration := time.Since(start)
@@ -81,7 +81,7 @@ func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Conte
 	data.Components = append(data.Components, component)
 
 	start := time.Now()
-	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, component.Name)
+	childCtx, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, component.Name)
 	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, component)
 
 	end = func() {
@@ -167,7 +167,7 @@ func StartTimingCategory(ctx context.Context, category string, f ...any) (childC
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	start := time.Now()
-	childCtx, span := otel.Tracer(metrics.API_TRACER).Start(ctx, childComponent.Name)
+	childCtx, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, childComponent.Name)
 
 	end = func() {
 		duration := time.Since(start)

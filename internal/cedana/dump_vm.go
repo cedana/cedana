@@ -29,7 +29,7 @@ func (s *Server) DumpVM(ctx context.Context, req *daemon.DumpVMReq) (*daemon.Dum
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 	}
 	resp := &daemon.DumpVMResp{}
 

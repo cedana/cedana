@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"strings"
@@ -77,11 +78,7 @@ type SigNozJsonWriter struct {
 
 func NewSigNozJsonWriter(endpoint, token, serviceName string, otherResourceAttrs map[string]string, maxBatchSize int, flushIntervalMs int) *SigNozJsonWriter {
 	resources := make(map[string]string)
-	if otherResourceAttrs != nil {
-		for k, v := range otherResourceAttrs {
-			resources[k] = v
-		}
-	}
+	maps.Copy(resources, otherResourceAttrs)
 	resources["service.name"] = "cedana"
 
 	sw := &SigNozJsonWriter{
@@ -247,40 +244,4 @@ func CloseLoggers() {
 		globalSigNozWriter.Close()
 	}
 	log.Info().Msg("Loggers closed.")
-}
-
-func getOtelCreds() (string, string, error) {
-	url := config.Global.Connection.URL
-	authToken := config.Global.Connection.AuthToken
-	if url == "" || authToken == "" {
-		return "", "", fmt.Errorf("connection URL or AuthToken unset in config/env")
-	}
-
-	url = url + "/otel/credentials"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return "", "", err
-	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("failed to fetch otel credentials, status code: %d", resp.StatusCode)
-	}
-
-	var creds struct {
-		Endpoint string `json:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-		Headers  string `json:"OTEL_EXPORTER_OTLP_HEADERS"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&creds); err != nil {
-		return "", "", err
-	}
-
-	return creds.Endpoint, creds.Headers, nil
 }
