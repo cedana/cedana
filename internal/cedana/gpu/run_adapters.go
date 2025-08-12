@@ -9,6 +9,7 @@ package gpu
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/features"
@@ -16,6 +17,7 @@ import (
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -108,7 +110,7 @@ func ProcessInterception(next types.Run) types.Run {
 
 		env := req.GetEnv()
 
-		env = append(env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
+		env = append(env, fmt.Sprintf("LD_PRELOAD=%s:%s", gpu.LibraryPaths()[0], utils.Getenv(env, "LD_PRELOAD")))
 		env = append(env, "NCCL_SHM_DISABLE=1") // Disable for now to avoid conflicts with NCCL's shm usage
 		env = append(env, "CEDANA_GPU_ID="+id)
 
