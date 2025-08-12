@@ -14,10 +14,10 @@ import (
 	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/internal/db"
-	"github.com/cedana/cedana/internal/metrics"
 	"github.com/cedana/cedana/internal/version"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
@@ -50,7 +50,6 @@ type ServeOpts struct {
 	Address  string
 	Protocol string
 	Version  string
-	Metrics  config.Metrics
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
@@ -93,19 +92,17 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 	server := &Server{
 		Cedana: Cedana{
-			gpus:     gpuManager,
-			plugins:  pluginManager,
-			wg:       wg,
-			lifetime: ctx,
+			gpus:      gpuManager,
+			plugins:   pluginManager,
+			WaitGroup: wg,
+			lifetime:  ctx,
 		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(
 				logging.StreamLogger(),
-				metrics.StreamTracer(host),
 			),
 			grpc.ChainUnaryInterceptor(
 				logging.UnaryLogger(),
-				metrics.UnaryTracer(host),
 				profiling.UnaryProfiler(),
 			),
 		),
@@ -169,8 +166,8 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	lifetime, cancel := context.WithCancelCause(ctx)
 	s.lifetime = lifetime
 
-	if config.Global.Metrics.Otel {
-		shutdown, _ := metrics.InitOtel(ctx, version.GetVersion())
+	if config.Global.Metrics {
+		shutdown, _ := metrics.Init(ctx, version.GetVersion())
 		defer func() {
 			err = shutdown(ctx)
 		}()
@@ -189,7 +186,7 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	err = lifetime.Err()
 
 	// Wait for all background go routines to finish
-	s.wg.Wait()
+	s.Wait()
 	s.Stop()
 
 	return

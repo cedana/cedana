@@ -23,7 +23,7 @@ import (
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func InitOtel(ctx context.Context, version string) (shutdown func(context.Context) error, err error) {
+func Init(ctx context.Context, version string) (shutdown func(context.Context) error, err error) {
 	var shutdownFuncs []func(context.Context) error
 
 	shutdown = func(ctx context.Context) error {
@@ -43,7 +43,7 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	prop := newPropagator()
 	otel.SetTextMapPropagator(prop)
 
-	endpoint, headers, err := getOtelCreds()
+	endpoint, headers, err := GetOtelCreds()
 	if err != nil {
 		handleErr(err)
 		return
@@ -63,7 +63,7 @@ func InitOtel(ctx context.Context, version string) (shutdown func(context.Contex
 	return
 }
 
-func getOtelCreds() (string, string, error) {
+func GetOtelCreds() (string, string, error) {
 	url := config.Global.Connection.URL
 	authToken := config.Global.Connection.AuthToken
 	if url == "" || authToken == "" {

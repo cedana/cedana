@@ -24,7 +24,7 @@ func (s *Server) RestoreVM(ctx context.Context, req *daemon.RestoreVMReq) (*daem
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 		FdStore:  &s.fdStore,
 	}
 	resp := &daemon.RestoreVMResp{}

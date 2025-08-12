@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -54,9 +55,10 @@ func InitLogger(level string) {
 	var writers []io.Writer
 	writers = append(writers, consoleWriter)
 
-	if config.Global.Metrics.Otel {
-		endpoint, headers, err := getOtelCreds()
+	if config.Global.Metrics {
+		endpoint, headers, err := metrics.GetOtelCreds()
 		if err != nil {
+			log.Error().Err(err).Msg("failed to get otel creds")
 			return
 		}
 

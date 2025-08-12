@@ -56,7 +56,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 	}
 	resp := &daemon.RestoreResp{}
 
@@ -103,7 +103,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 	}
 	resp := &daemon.RestoreResp{}
 
