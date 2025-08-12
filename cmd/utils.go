@@ -30,6 +30,8 @@ func getRevision() string {
 func printProfilingData(data *profiling.Data) {
 	var total time.Duration
 
+	fmt.Print("Profiling data received:\n\n")
+
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
