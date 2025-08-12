@@ -31,7 +31,7 @@ func UnaryProfiler() grpc.UnaryServerInterceptor {
 			return nil, err
 		}
 
-		err = AttachTrailer(ctx)
+		err = AttachTrailer(chilCtx)
 		if err != nil {
 			return nil, err
 		}

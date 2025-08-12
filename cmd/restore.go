@@ -18,7 +18,6 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 
@@ -180,11 +179,8 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		var resp *daemon.RestoreResp
-		var profiling *profiling.Data
-
 		if noServer {
-			cedana, err := cedana.New(ctx)
+			cedana, err := cedana.New(ctx, "restore")
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
 			}
@@ -211,7 +207,7 @@ var restoreCmd = &cobra.Command{
 			defer client.Close()
 
 			// Assuming request is now ready to be sent to the server
-			resp, profiling, err = client.Restore(cmd.Context(), req)
+			resp, profiling, err := client.Restore(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
@@ -224,10 +220,10 @@ var restoreCmd = &cobra.Command{
 			if attach {
 				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 			}
-		}
 
-		for _, message := range resp.GetMessages() {
-			fmt.Println(message)
+			for _, message := range resp.GetMessages() {
+				fmt.Println(message)
+			}
 		}
 
 		return nil

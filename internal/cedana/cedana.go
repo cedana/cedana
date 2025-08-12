@@ -29,7 +29,7 @@ type Cedana struct {
 	*sync.WaitGroup
 }
 
-func New(ctx context.Context) (*Cedana, error) {
+func New(ctx context.Context, description ...any) (*Cedana, error) {
 	logging.SetLevel(config.Global.LogLevelNoServer)
 
 	wg := &sync.WaitGroup{}
@@ -50,7 +50,7 @@ func New(ctx context.Context) (*Cedana, error) {
 	}
 
 	if config.Global.Profiling.Enabled {
-		ctx, profilingShutdown = profiling.StartTiming(ctx)
+		ctx, profilingShutdown = profiling.StartTiming(ctx, description...)
 	}
 
 	return &Cedana{
