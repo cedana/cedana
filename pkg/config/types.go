@@ -5,7 +5,7 @@ package config
 type (
 	// Cedana configuration. Each of the below fields can also be set
 	// through an environment variable with the same name, prefixed, and in uppercase. E.g.
-	// `Metrics.Otel` can be set with `CEDANA_METRICS_OTEL`. The `env_aliases` tag below specifies
+	// `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. The `env_aliases` tag below specifies
 	// alternative (alias) environment variable names (comma-separated).
 	Config struct {
 		// Address to use for incoming/outgoing connections
@@ -16,6 +16,8 @@ type (
 		LogLevel string `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
 		// LogLevelNoServer is the log level used when direct --no-server run/restore is used. This is separate from LogLevel so as to avoid cluttering the process output.
 		LogLevelNoServer string `json:"log_level_no_server" key:"log_level_no_server" yaml:"log_level_no_server" mapstructure:"log_level_no_server"`
+		// Metrics is whether to enable metrics collection and observability
+		Metrics bool `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
 
 		// Connection settings
 		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`
@@ -25,8 +27,6 @@ type (
 		DB DB `json:"db" key:"db" yaml:"db" mapstructure:"db"`
 		// Profiling settings
 		Profiling Profiling `json:"profiling" key:"profiling" yaml:"profiling" mapstructure:"profiling"`
-		// Metrics settings
-		Metrics Metrics `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
 		// Client settings
 		Client Client `json:"client" key:"client" yaml:"client" mapstructure:"client"`
 		// CRIU settings and defaults
@@ -71,11 +71,6 @@ type (
 		Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
 		// Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
 		Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
-	}
-
-	Metrics struct {
-		// Otel sets whether to enable OpenTelemetry metrics
-		Otel bool `json:"otel" key:"otel" yaml:"otel" mapstructure:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
 	}
 
 	Client struct {

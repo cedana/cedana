@@ -55,7 +55,6 @@ var startDaemonCmd = &cobra.Command{
 		server, err := cedana.NewServer(ctx, &cedana.ServeOpts{
 			Address:  config.Global.Address,
 			Protocol: config.Global.Protocol,
-			Metrics:  config.Global.Metrics,
 			Version:  cmd.Version,
 		})
 		if err != nil {

@@ -2,11 +2,11 @@
 
 Cedana configuration lives in your home directory, specifically in `~/.cedana/config.json`. This file is automatically created the first time you use a Cedana command. You can also create it manually.
 
-You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Metrics.Otel` can be set with `CEDANA_METRICS_OTEL`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
+You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
 
 ## [Config](../../pkg/config/types.go#L10-L36)
 
-Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. `Metrics.Otel` can be set with `CEDANA_METRICS_OTEL`. The `env_aliases` tag below specifies alternative (alias) environment variable names (comma-separated).
+Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. The `env_aliases` tag below specifies alternative (alias) environment variable names (comma-separated).
 
 ```go
 type Config struct {
@@ -16,6 +16,8 @@ type Config struct {
     Protocol string `json:"protocol" key:"protocol" yaml:"protocol" mapstructure:"protocol"`
     // LogLevel is the default log level used by the server
     LogLevel string `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
+		// Metrics is whether to enable metrics collection and observability
+    Metrics Metrics `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
 
     // Connection settings
     Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`
@@ -25,8 +27,6 @@ type Config struct {
     DB  DB  `json:"db" key:"db" yaml:"db" mapstructure:"db"`
     // Profiling settings
     Profiling Profiling `json:"profiling" key:"profiling" yaml:"profiling" mapstructure:"profiling"`
-    // Metrics settings
-    Metrics Metrics `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
     // Client settings
     Client Client `json:"client" key:"client" yaml:"client" mapstructure:"client"`
     // CRIU settings and defaults
@@ -119,15 +119,6 @@ type GPU struct {
 		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
-}
-```
-
-## [Metrics](../../pkg/config/types.go#L69-L74)
-
-```go
-type Metrics struct {
-    // Otel sets whether to enable OpenTelemetry metrics
-    Otel bool `json:"otel" key:"otel" yaml:"otel" mapstructure:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
 }
 ```
 

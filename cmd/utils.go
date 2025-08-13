@@ -30,7 +30,7 @@ func getRevision() string {
 func printProfilingData(data *profiling.Data) {
 	var total time.Duration
 
-	fmt.Print("Profiling data received from daemon:\n\n")
+	fmt.Print("Profiling data received:\n\n")
 
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)

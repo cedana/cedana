@@ -16,16 +16,14 @@ const PROFILING_METADATA_KEY = "profiling-bin" // bin is required by gRPC when s
 
 // Sets the profiler data from the context as a trailer in the response.
 func UnaryProfiler() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if !config.Global.Profiling.Enabled {
 			return handler(ctx, req)
 		}
 
 		name := filepath.Base(strings.ToLower(info.FullMethod))
 
-		ctx = context.WithValue(ctx, keys.PROFILING_CONTEXT_KEY, &Data{Name: name})
-
-		chilCtx, end := StartTiming(ctx)
+		chilCtx, end := StartTiming(ctx, name)
 		resp, err := handler(chilCtx, req)
 		end()
 
@@ -33,7 +31,7 @@ func UnaryProfiler() grpc.UnaryServerInterceptor {
 			return nil, err
 		}
 
-		err = AttachTrailer(ctx)
+		err = AttachTrailer(chilCtx)
 		if err != nil {
 			return nil, err
 		}
