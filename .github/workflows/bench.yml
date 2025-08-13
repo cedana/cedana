@@ -256,9 +256,9 @@ jobs:
         name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         env:
-          PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
-          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
-          SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER_BENCH }}
+          SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT_BENCH }}
         with:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
@@ -267,13 +267,13 @@ jobs:
       - name: Push results
         if: inputs.push_results
         env:
-          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID_BENCH }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: ./bench results push
 
       - name: Pull last results
         env:
-          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID_BENCH }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: |
           runtime_args=""
