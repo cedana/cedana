@@ -85,6 +85,11 @@ restore_pod() {
     local cluster_id="$2"
     cluster_id="${cluster_id//\"/}" # remove quotes if present
 
+    if [ -z "$cluster_id" ]; then
+        error_log "restore_pod requires cluster_id"
+        return 1
+    fi
+
     if [ -z "$action_id" ]; then
         error_log "restore_pod requires action_id"
         return 1

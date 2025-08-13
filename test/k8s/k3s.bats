@@ -23,6 +23,7 @@ setup_file() {
     tail_all_logs $CEDANA_NAMESPACE 120 &
     TAIL_PID=$!
     CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
+    export CLUSTER_ID
     helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
     wait_for_ready "$CEDANA_NAMESPACE" 120
 }
