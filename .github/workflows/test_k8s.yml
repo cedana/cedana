@@ -89,13 +89,14 @@ jobs:
 
   k8s:
     name: Kubernetes
-    runs-on: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || 'runs-on=${{github.run_id}}/runner=${{ matrix.compute == "CUDA" && (matrix.arch == "amd64" && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == "CUDA" && "-cuda-12-4" || "" }}/tag=${{ matrix.cr }}-${{ matrix.storage }}/extras=s3-cache' }}
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == "CUDA" && (matrix.arch == "amd64" && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == "CUDA" && "-cuda-12-4" || "" }}/tag=${{ matrix.cr }}-${{ matrix.storage }}/extras=s3-cache
     timeout-minutes: 30
     needs: propagator-connectivity
     strategy:
       fail-fast: true
       matrix:
-        platform: ${{ inputs.platform }}
+        platform:
+          - ${{ inputs.platform }}
         compute:
           - CPU
           # - CUDA # TODO: Enable when GPU tests are added
