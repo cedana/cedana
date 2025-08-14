@@ -70,6 +70,7 @@ env:
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
   RETRIES: 1
   DEBUG: 1 # bats debug logging
+  DEFAULT_RUNS_ON: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/tag=${{ matrix.cr }}-${{ matrix.storage }}/extras=s3-cache
 
 jobs:
   propagator-connectivity:
@@ -89,7 +90,7 @@ jobs:
 
   k8s:
     name: Kubernetes
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == "CUDA" && (matrix.arch == "amd64" && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == "CUDA" && "-cuda-12-4" || "" }}/tag=${{ matrix.cr }}-${{ matrix.storage }}/extras=s3-cache
+    runs-on: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || env.DEFAULT_RUNS_ON }}
     timeout-minutes: 30
     needs: propagator-connectivity
     strategy:
