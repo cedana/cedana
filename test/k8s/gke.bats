@@ -3,9 +3,9 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=k8s,kubernetes,gcp,GCP,gke,GKE
 
-# Set defaults to use remote checkpoint storage with good compression
+# NOTE: Set defaults to use remote checkpoint storage with good compression
 # as this test suite will always run on a remote cluster.
-export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-cedana://}
+export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-cedana://ci}
 export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-lz4}
 
 load ../helpers/utils
