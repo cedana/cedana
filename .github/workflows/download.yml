@@ -73,7 +73,7 @@ jobs:
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/cedana-$ARCH/versions/$VERSION/cedana
           fi
-          echo $VERSION > cedana/cedana-version.txt
+          echo $VERSION > cedana-version.txt
 
       - name: Download plugins
         env:
@@ -105,7 +105,7 @@ jobs:
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-storage-s3.so-$ARCH/versions/$VERSION/libcedana-storage-s3.so
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$VERSION/libcedana-storage-gcs.so
           fi
-          echo $VERSION > plugins/plugins-version.txt
+          echo $VERSION > plugins-version.txt
 
       - name: Upload cedana
         uses: actions/upload-artifact@v4
@@ -174,7 +174,7 @@ jobs:
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu-alpha/raw/names/criu-$ARCH/versions/$VERSION/criu
           fi
-          echo $VERSION > criu/criu-version.txt
+          echo $VERSION > criu-version.txt
 
       - name: Upload CRIU
         uses: actions/upload-artifact@v4
@@ -211,7 +211,7 @@ jobs:
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/names/cedana-gpu-controller-$ARCH/versions/$VERSION/cedana-gpu-controller
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/names/libcedana-gpu.so-$ARCH/versions/$VERSION/libcedana-gpu.so
           fi
-          echo $VERSION > gpu/gpu-version.txt
+          echo $VERSION > gpu-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -246,7 +246,7 @@ jobs:
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer-alpha/raw/names/cedana-image-streamer-$ARCH/versions/$VERSION/cedana-image-streamer
           fi
-          echo $VERSION > streamer/streamer-version.txt
+          echo $VERSION > streamer-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -328,7 +328,7 @@ jobs:
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim-alpha/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
           fi
-          echo $VERSION > runtime-shim/runtime-shim-version.txt
+          echo $VERSION > runtime-shim-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
