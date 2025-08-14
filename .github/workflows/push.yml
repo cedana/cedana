@@ -28,7 +28,7 @@ on:
         default: false
 
 concurrency:
-  group: cedana-push-${{ github.ref }}
+  group: ${{ github.repository }}-push-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
