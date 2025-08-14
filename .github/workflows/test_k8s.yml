@@ -161,6 +161,11 @@ jobs:
           name: controller-image-name
           path: /tmp/controller-image-name
 
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana-${{ matrix.arch }}
+
       - name: Download CRIU
         uses: actions/download-artifact@v4
         with:
