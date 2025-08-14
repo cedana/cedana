@@ -64,6 +64,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
+  FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging
 
@@ -157,15 +158,15 @@ jobs:
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
 

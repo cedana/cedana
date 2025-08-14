@@ -68,6 +68,7 @@ env:
   GCLOUD_REGION: ${{ vars.GCLOUD_REGION }}
   EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
+  FORMATTER: junit
   RETRIES: 1
   DEBUG: 1 # bats debug logging
 
@@ -111,9 +112,9 @@ jobs:
           - arm64
         exclude: # XXX: Until github actions supports concurrency with matrix
           - platform: EKS
-            arch: arm64
-          - platform: GKE
             arch: amd64
+          - platform: GKE
+            arch: arm64
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
@@ -236,7 +237,6 @@ jobs:
           else
             TAGS=$TAGS,!gpu
           fi
-
           if [ "$LARGE" != "true" ]; then
             TAGS=$TAGS,!large
           fi
@@ -246,6 +246,7 @@ jobs:
             PARALLELISM=$PARALLELISM \
             RETRIES=$RETRIES \
             DEBUG=$DEBUG \
+            FORMATTER=$FORMATTER \
             CONTROLLER_REPO=$CONTROLLER_REPO \
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \

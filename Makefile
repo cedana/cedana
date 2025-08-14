@@ -156,12 +156,13 @@ CONTROLLER_REPO?=cedana/cedana-controller
 CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
+FORMATTER?=pretty
 BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
-				--output /tmp --report-formatter junit
+				--output /tmp --report-formatter $(FORMATTER)
 BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
-				--output /tmp --report-formatter junit
+				--output /tmp --report-formatter $(FORMATTER)
 
 test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
 
@@ -224,9 +225,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 			$(BATS_CMD) -r test/k8s ; status=$$? ;\
 		else \
 			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
-		fi ;\
-		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report.xml ;\
 		fi ;\
 		if [ $$status -ne 0 ]; then \
 			echo "Kubernetes e2e tests failed" ;\

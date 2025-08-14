@@ -63,6 +63,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
+  FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging
 
@@ -206,9 +207,9 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
         run: |
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           else
-            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
       - name: Setup node
@@ -327,9 +328,9 @@ jobs:
           # e.g. storage/cedana -> storage:cedana
           PLUGIN=$(echo $PLUGIN | sed 's/\//:/g')
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           else
-            make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
       - name: Set sanitized plugin
