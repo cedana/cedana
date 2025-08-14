@@ -84,7 +84,7 @@ jobs:
 
   k8s:
     name: Kubernetes
-    runs-on: ${{ matrix.arch == 'amd64' && ubuntu-latest || ubuntu-latest-arm64 }}
+    runs-on: ${{ matrix.arch == 'amd64' && 'ubuntu-latest' || 'ubuntu-latest-arm64' }}
     timeout-minutes: 30
     needs: propagator-connectivity
     strategy:
