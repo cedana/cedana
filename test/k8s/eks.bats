@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
-# bats file_tags=k8s,aws,eks,remote
+# bats file_tags=k8s,kubernetes,aws,AWS,eks,EKS
 
 # Set defaults to use remote checkpoint storage with good compression
 # as this test suite will always run on a remote cluster.

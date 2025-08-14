@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
-# bats file_tags=k8s,k3s,remote
+# bats file_tags=k8s,kubernetes,k3s,K3s
 
 load ../helpers/utils
 load ../helpers/daemon # required for config env vars

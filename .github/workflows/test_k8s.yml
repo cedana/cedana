@@ -80,7 +80,7 @@ jobs:
           echo "✓ Connectivity test completed"
 
   k8s:
-    name: K8s
+    name: Kubernetes
     runs-on: ${{ (matrix.platform == 'eks' || matrix.platform == 'gke') && 'ubuntu-latest' || 'runs-on=${{github.run_id}}/runner=${{ matrix.compute == "CUDA" && (matrix.arch == "amd64" && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == "CUDA" && "-cuda-12-4" || "" }}/tag=${{ matrix.cr }}-${{ matrix.storage }}/extras=s3-cache' }}
     timeout-minutes: 30
     needs: propagator-connectivity
@@ -88,9 +88,9 @@ jobs:
       fail-fast: false
       matrix:
         platform:
-          - k3s
-          - eks
-          - gke
+          - K3s
+          - EKS
+          - GKE
         compute:
           - CPU
           # - CUDA # TODO: Enable when GPU tests are added
@@ -104,7 +104,8 @@ jobs:
           - amd64
           - arm64
     concurrency: # NOTE: To ensure for EKS/GKE only one job runs at a time per arch, as the cluster is reused
-      group: ${{ (matrix.platform == 'eks' || matrix.platform == 'gke') && 'test-k8s-${{ matrix.platform }}-${{ matrix.arch }}' || 'test-k8s-${{ github.ref }}-${{ matrix.platform }}-${{ matrix.compute }}-${{ matrix.cr }}-${{ matrix.storage }}-${{ matrix.arch }}' }}
+      group: ${{ (matrix.platform == 'eks' || matrix.platform == 'gke') && 'test-k8s-${{ matrix.platform }}-${{ matrix.arch }}' || '' }}
+      cancel-in-progress: false
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
