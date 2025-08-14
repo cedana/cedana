@@ -87,8 +87,8 @@ jobs:
           curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
           echo "✓ Connectivity test completed"
 
-  k8s:
-    name: Kubernetes
+  cluster:
+    name: Cluster
     runs-on: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || 'runs-on=${{github.run_id}}/runner=${{ matrix.compute == "CUDA" && (matrix.arch == "amd64" && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == "CUDA" && "-cuda-12-4" || "" }}/tag=${{ matrix.cr }}-${{ matrix.storage }}/extras=s3-cache' }}
     timeout-minutes: 30
     needs: propagator-connectivity
@@ -275,7 +275,7 @@ jobs:
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
-    needs: k8s
+    needs: cluster
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
