@@ -436,9 +436,6 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: EKS
       large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
-      runner_gpu: ${{ inputs.runner_gpu }}
-      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
   gke:
@@ -451,9 +448,6 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: GKE
       large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
-      runner_gpu: ${{ inputs.runner_gpu }}
-      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
   post-summary:
