@@ -212,8 +212,12 @@ jobs:
           CEDANA_PLUGINS_BUILDS=alpha
           CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
           CEDANA_PLUGINS_RUNTIME_SHIM_VERSION=$(cat ./runtime-shim-version.txt)
-          CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
-          CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
+          if [ "$GPU" = "true" ]; then
+            CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+          fi
+          if [ "$STREAMER" = "true" ]; then
+            CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
+          fi
 
           TAGS=$PLATFORM
           if [ "$GPU" = "true" ]; then
