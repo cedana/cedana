@@ -20,6 +20,11 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
+      platform:
+        type: string
+        description: "Platform to run tests on (K3s, EKS, GKE)"
+        required: false
+        default: K3s
       large:
         type: boolean
         description: "Run large tests"
@@ -91,9 +96,7 @@ jobs:
       fail-fast: true
       matrix:
         platform:
-          - K3s
-          - EKS
-          - GKE
+          - ${{ inputs.platform }}
         compute:
           - CPU
           # - CUDA # TODO: Enable when GPU tests are added
@@ -106,8 +109,11 @@ jobs:
         arch:
           - amd64
           - arm64
-    # NOTE: To ensure for EKS/GKE only one job runs at a time per arch, as the cluster is reused
-    concurrency: ${{ (matrix.platform == 'EKS' || matrix.platform == 'GKE') && format('test-k8s-{0}-{1}', matrix.platform, matrix.arch) || format('test-k8s-{0}-{1}-{2}-{3}-{4}-{5}', matrix.platform, matrix.compute, matrix.cr, matrix.storage, matrix.arch, github.sha) }}
+        exclude: # XXX: Until github actions supports concurrency with matrix
+          - platform: EKS
+            arch: arm64
+          - platform: GKE
+            arch: amd64
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:

@@ -407,13 +407,48 @@ jobs:
       runner_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
-  k8s:
+  # XXX: Below kubernetes tests are split into separate jobs, instead of using matrix,
+  # because of Github Actions issue of using concurrency group together with matrix jobs:
+  # https://github.com/orgs/community/discussions/26774
+
+  k3s:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
+      platform: K3s
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner_gpu }}
+      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
+      post_summary: false # Will post consolidated summary instead
+
+  eks:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    secrets: inherit
+    concurrency: test-k8s-eks # To ensure only one job runs at a time, as the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: EKS
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner_gpu }}
+      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
+      post_summary: false # Will post consolidated summary instead
+
+  gke:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    secrets: inherit
+    concurrency: test-k8s-gke # To ensure only one job runs at a time, as the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: GKE
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
