@@ -458,7 +458,7 @@ jobs:
   post-summary:
     name: Post Summary
     if: always()
-    needs: [basic, plugin, streamer, gpu, k8s]
+    needs: [basic, plugin, streamer, gpu, k3s, eks, gke]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
