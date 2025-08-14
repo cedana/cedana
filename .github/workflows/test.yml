@@ -430,8 +430,7 @@ jobs:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
     secrets: inherit
-    concurrency: # Since the cluster is reused
-      group: test-k8s-eks
+    concurrency: test-k8s-eks # Since the cluster is reused
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
@@ -446,8 +445,7 @@ jobs:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
     secrets: inherit
-    concurrency: # Since the cluster is reused
-      group: test-k8s-gke
+    concurrency: test-k8s-gke # Since the cluster is reused
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
