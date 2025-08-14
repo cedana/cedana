@@ -246,19 +246,19 @@ jobs:
             CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
           fi
 
-          TAGS="$PLATFORM"
+          TAGS=$PLATFORM
           if [ "$GPU" = "true" ]; then
-            TAGS="$TAGS,gpu"
+            TAGS=$TAGS,gpu
           else
-            TAGS="$TAGS,!gpu"
+            TAGS=$TAGS,!gpu
           fi
 
           if [ "$LARGE" != "true" ]; then
-            TAGS="$TAGS,!large"
+            TAGS=$TAGS,!large
           fi
 
           make test-k8s \
-            TAGS="$TAGS" \
+            TAGS=$TAGS \
             PARALLELISM=$PARALLELISM \
             RETRIES=$RETRIES \
             DEBUG=$DEBUG \
