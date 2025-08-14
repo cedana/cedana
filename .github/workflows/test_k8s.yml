@@ -114,6 +114,7 @@ jobs:
             arch: arm64
           - platform: GKE
             arch: amd64
+      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
