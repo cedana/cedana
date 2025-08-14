@@ -223,6 +223,8 @@ jobs:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           PLATFORM: ${{ matrix.platform }}
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
+          STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
+          LARGE: ${{ inputs.large && 'true' || 'false' }}
           PARALLELISM: ${{ inputs.parallelism }}
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
@@ -237,8 +239,12 @@ jobs:
           CEDANA_PLUGINS_NATIVE_VERSION=$(cat ./plugins-version.txt)
           CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
           CEDANA_PLUGINS_RUNTIME_SHIM_VERSION=$(cat ./runtime-shim-version.txt)
-          CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
-          CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
+          if [ "$GPU" = "true" ]; then
+            CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+          fi
+          if [ "$STREAMER" = "true" ]; then
+            CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
+          fi
 
           TAGS="$PLATFORM"
           if [ "$GPU" = "true" ]; then
