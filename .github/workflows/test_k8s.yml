@@ -73,7 +73,7 @@ env:
 
 jobs:
   propagator-connectivity:
-    name: Propagator Connectivity
+    name: Propagator Connectivity (${{ inputs.platform }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -160,16 +160,6 @@ jobs:
           name: controller-image-name
           path: /tmp/controller-image-name
 
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        with:
-          name: cedana-${{ matrix.arch }}
-
-      - name: Download plugins
-        uses: actions/download-artifact@v4
-        with:
-          name: plugins-${{ matrix.arch }}
-
       - name: Download CRIU
         uses: actions/download-artifact@v4
         with:
@@ -191,27 +181,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: streamer-${{ matrix.arch }}
-
-      - name: Make executable
-        run: |
-          chmod +x ./cedana*
-          chmod +x ./criu
-          echo "$PWD" >> $GITHUB_PATH
-
-      - name: Install
-        env:
-          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
-          STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
-        run: |
-          make install
-          sudo -E cedana plugin install runc containerd crio criu storage/cedana storage/s3 storage/gcs
-          sudo -E cedana plugin install k8s/runtime-shim  # automatically installs the downloaded binary if available instead
-          if [ "$GPU" = "true" ]; then
-            sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
-          fi
-          if [ "$STREAMER" = "true" ]; then
-            sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
-          fi
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -241,15 +210,10 @@ jobs:
           HELM_CHART=/tmp/helm-chart
 
           CEDANA_PLUGINS_BUILDS=alpha
-          CEDANA_PLUGINS_NATIVE_VERSION=$(cat ./plugins-version.txt)
           CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
           CEDANA_PLUGINS_RUNTIME_SHIM_VERSION=$(cat ./runtime-shim-version.txt)
-          if [ "$GPU" = "true" ]; then
-            CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
-          fi
-          if [ "$STREAMER" = "true" ]; then
-            CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
-          fi
+          CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+          CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
 
           TAGS=$PLATFORM
           if [ "$GPU" = "true" ]; then

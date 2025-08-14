@@ -407,8 +407,9 @@ jobs:
       runner_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
-  # XXX: Below kubernetes tests are split into separate jobs, instead of using matrix,
-  # because of Github Actions issue of using concurrency group together with matrix jobs:
+  # XXX: Below kubernetes tests are split into separate workflows, instead of using matrix,
+  # because of Github Actions issue of using concurrency group together with matrix jobs
+  # within the same workflow file.
   # https://github.com/orgs/community/discussions/26774
 
   k3s:
