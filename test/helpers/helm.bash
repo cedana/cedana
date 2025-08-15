@@ -21,7 +21,7 @@ helm_install_cedana() {
             return 1
         }
         wait_for_cmd_fail 60 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
-        sleep 5
+        sleep 30
     fi
 
     debug_log "Installing helm chart... (chart: $HELM_CHART)"

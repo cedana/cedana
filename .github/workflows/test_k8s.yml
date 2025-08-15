@@ -70,7 +70,7 @@ env:
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 1 # bats debug logging
+  DEBUG: 0 # bats debug logging
 
 jobs:
   propagator-connectivity:
