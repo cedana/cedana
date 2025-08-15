@@ -267,13 +267,13 @@ jobs:
       - name: Push results
         if: inputs.push_results
         env:
-          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID_BENCH }}
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: ./bench results push
 
       - name: Pull last results
         env:
-          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID_BENCH }}
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: |
           runtime_args=""
