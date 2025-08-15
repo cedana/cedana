@@ -2,7 +2,6 @@
 
 # This is a helper file assumes its users are in the same directory as the Makefile
 
-export WORKLOADS="test/workloads"
 export ROOTFS_URL="https://dl-cdn.alpinelinux.org/alpine/v3.10/releases/$(uname -m)/alpine-minirootfs-3.10.1-$(uname -m).tar.gz"
 export ROOTFS_CUDA_IMAGE="cedana/cedana-test:cuda"
 

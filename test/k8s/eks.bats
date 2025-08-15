@@ -1,11 +1,16 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
-# bats file_tags=k8s,kubernetes,k3s,K3s
+# bats file_tags=k8s,kubernetes,aws,AWS,eks,EKS
+
+# NOTE: Set defaults to use remote checkpoint storage with good compression
+# as this test suite will always run on a remote cluster.
+export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-cedana://ci}
+export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-lz4}
 
 load ../helpers/utils
 load ../helpers/daemon # required for config env vars
-load ../helpers/k3s
+load ../helpers/aws
 load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator

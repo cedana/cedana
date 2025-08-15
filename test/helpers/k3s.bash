@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-##################################
-### K3s and Helm Setup Helpers ###
-##################################
+###################
+### K3s Helpers ###
+###################
 
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 INSTALL_K3S_EXEC="server \
