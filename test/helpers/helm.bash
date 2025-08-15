@@ -14,10 +14,10 @@ install_helm() {
 }
 
 helm_install_cedana() {
-    debug_log "Installing helm chart... (chart: $HELM_CHART)"
-
-    local cluster_name="$1"
+    local cluster_id="$1"
     local namespace="$2"
+
+    debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
 
     local helm_cmd
 
@@ -31,7 +31,7 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
     helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"
     helm_cmd="$helm_cmd --set config.authToken=$CEDANA_AUTH_TOKEN"
-    helm_cmd="$helm_cmd --set config.clusterName=$cluster_name"
+    helm_cmd="$helm_cmd --set config.clusterId=$cluster_id"
     helm_cmd="$helm_cmd --set config.logLevel=$CEDANA_LOG_LEVEL"
     helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
     helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
@@ -60,7 +60,7 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --wait --atomic --timeout=3m"
 
     $helm_cmd || {
-        error_log "Error: Failed to install helm chart"
+        error_log "Failed to install helm chart"
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
     }
@@ -71,7 +71,7 @@ helm_uninstall_cedana() {
 
     debug_log "Uninstalling helm chart..."
     helm uninstall cedana -n "$namespace" --wait --timeout=2m || {
-        error_log "Error: Failed to uninstall helm chart"
+        error_log "Failed to uninstall helm chart"
         return 1
     }
 
