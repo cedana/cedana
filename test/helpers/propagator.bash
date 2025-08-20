@@ -39,7 +39,7 @@ checkpoint_pod() {
     local namespace="$3"
 
     if [ -z "$pod_name" ] || [ -z "$runc_root" ] || [ -z "$namespace" ]; then
-        debug_log "Error: checkpoint_pod requires pod_name, runc_root, namespace"
+        error_log "checkpoint_pod requires pod_name, runc_root, namespace"
         return 1
     fi
 
@@ -70,7 +70,7 @@ checkpoint_pod() {
         echo "$body"
         return 0
     else
-        error_log "Error: Failed to checkpoint pod (HTTP $http_code): $body"
+        error_log "Failed to checkpoint pod (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -85,8 +85,13 @@ restore_pod() {
     local cluster_id="$2"
     cluster_id="${cluster_id//\"/}" # remove quotes if present
 
+    if [ -z "$cluster_id" ]; then
+        error_log "restore_pod requires cluster_id"
+        return 1
+    fi
+
     if [ -z "$action_id" ]; then
-        debug_log "Error: restore_pod requires action_id"
+        error_log "restore_pod requires action_id"
         return 1
     fi
 
@@ -99,7 +104,8 @@ restore_pod() {
             --arg cluster_id "$cluster_id" \
             '{
                 "action_id": $action_id,
-                "cluster_id": $cluster_id
+                "cluster_id": $cluster_id,
+                "reason": "manual"
             }')
     else
         payload=$(jq -n \
@@ -137,7 +143,7 @@ poll_action_status() {
     local operation="${2:-operation}"
 
     if [ -z "$action_id" ]; then
-        debug_log "Error: poll_action_status requires action_id"
+        error_log "poll_action_status requires action_id"
         return 1
     fi
 
@@ -166,7 +172,7 @@ poll_action_status() {
                 "error")
                     local details
                     details=$(echo "$body" | jq -r '.details // "No details available"' 2>/dev/null)
-                    debug_log "Error: $operation action failed with status '$status'"
+                    error_log "$operation action failed with status '$status'"
                     debug_log "Error details: $details"
                     return 1
                     ;;
@@ -204,7 +210,7 @@ poll_action_status() {
                             return 0
                             ;;
                         "failed"|"error")
-                            debug_log "Error: $operation action failed with status '$status'"
+                            error_log "$operation action failed with status '$status'"
                             debug_log "Action details: $action_info"
                             return 1
                             ;;
@@ -225,7 +231,7 @@ poll_action_status() {
         sleep 5
     done
 
-    error_log "Error: Timeout waiting for $operation action '$action_id' to complete (last status: $status)"
+    error_log "Timeout waiting for $operation action '$action_id' to complete (last status: $status)"
     return 1
 }
 
@@ -237,7 +243,7 @@ get_checkpoint_id_from_action() {
     action_id="${action_id//\"/}" # remove quotes if present
 
     if [ -z "$action_id" ]; then
-        error_log "Error: get_checkpoint_id_from_action requires action_id"
+        error_log "get_checkpoint_id_from_action requires action_id"
         return 1
     fi
 
@@ -259,11 +265,11 @@ get_checkpoint_id_from_action() {
             echo "$checkpoint_id"
             return 0
         else
-            error_log "Error: Could not find checkpoint_id for action '$action_id'"
+            error_log "Could not find checkpoint_id for action '$action_id'"
             return 1
         fi
     else
-        error_log "Error: Failed to get actions (HTTP $http_code): $body"
+        error_log "Failed to get actions (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -275,7 +281,7 @@ cleanup_checkpoint() {
     checkpoint_id="${checkpoint_id//\"/}" # remove quotes if present
 
     if [ -z "$checkpoint_id" ]; then
-        error_log "Error: cleanup_checkpoint requires checkpoint_id"
+        error_log "cleanup_checkpoint requires checkpoint_id"
         return 1
     fi
 
@@ -305,7 +311,7 @@ extract_checkpoint_id() {
     local action_response="$1"
 
     if [ -z "$action_response" ]; then
-        error_log "Error: extract_checkpoint_id requires action_response"
+        error_log "extract_checkpoint_id requires action_response"
         return 1
     fi
 
@@ -328,7 +334,7 @@ validate_propagator_connectivity() {
         debug_log "Propagator service connectivity validated"
         return 0
     else
-        error_log "Error: Failed to connect to propagator service (HTTP $http_code): $body"
+        error_log "Failed to connect to propagator service (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -341,7 +347,7 @@ parse_json_response() {
     local filter="$2"
 
     if [ -z "$json" ] || [ -z "$filter" ]; then
-        error_log "Error: parse_json_response requires json and filter"
+        error_log "parse_json_response requires json and filter"
         return 1
     fi
 
@@ -374,7 +380,7 @@ get_checkpoints() {
         echo "$body"
         return 0
     else
-        error_log "Error: Failed to get checkpoints (HTTP $http_code): $body"
+        error_log "Failed to get checkpoints (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -416,7 +422,7 @@ get_latest_pod_action_id() {
     pod_id="${pod_id//\"/}" # remove quotes if present
 
     if [ -z "$pod_id" ]; then
-        debug_log "Error: get_latest_pod_action_id requires pod_id"
+        error_log "get_latest_pod_action_id requires pod_id"
         return 1
     fi
 
@@ -443,13 +449,47 @@ get_latest_pod_action_id() {
     fi
 }
 
-# List clusters from the propagator service
-# Returns JSON array of clusters
-list_clusters() {
-    debug_log "Retrieving available clusters from propagator..."
+# Register a new cluster via the propagator API
+register_cluster() {
+    local name="$1"
+    if [ -z "$name" ]; then
+        error_log "Error: register_cluster requires cluster name"
+        return 1
+    fi
+
+    debug_log "Registering a new cluster with name '$name'..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/cluster" \
+    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/cluster" \
+        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        -H "Content-Type: application/json" \
+        -d '{ "cluster_name": "'"${name}"'" }' \
+        -w "%{http_code}")
+
+    local http_code="${response: -3}"
+    local body="${response%???}"
+
+    if [ "$http_code" -eq 200 ]; then
+        echo "$body"
+        return 0
+    else
+        error_log "Failed to register clusters (HTTP $http_code): $body"
+        return 1
+    fi
+}
+
+# Deregister an existing cluster via the propagator API
+deregister_cluster() {
+    local id="$1"
+    if [ -z "$id" ]; then
+        error_log "Error: deregister_cluster requires cluster ID"
+        return 1
+    fi
+
+    debug_log "Deregistering a new cluster with ID '$id'..."
+
+    local response
+    response=$(curl -s -X DELETE "${PROPAGATOR_BASE_URL}/v2/cluster/${id}" \
         -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
@@ -460,28 +500,9 @@ list_clusters() {
         echo "$body"
         return 0
     else
-        error_log "Error: Failed to get clusters (HTTP $http_code): $body"
+        error_log "Failed to register clusters (HTTP $http_code): $body"
         return 1
     fi
-}
-
-# Get cluster ID from cluster name
-cluster_id() {
-    local name="$1"
-    local clusters
-    clusters=$(list_clusters 2>/dev/null)
-
-    if [ $? -eq 0 ] && [ -n "$clusters" ] && [ "$clusters" != "[]" ] && [ "$clusters" != "null" ]; then
-        local id
-        id=$(echo "$clusters" | jq -r --arg NAME "$name" '.[] | select(.name == $NAME) | .id' | head -n1)
-        if [ -n "$id" ] && [ "$id" != "null" ]; then
-            echo "$id"
-            return 0
-        fi
-    fi
-
-    error_log "Error: Cluster '$name' not found or no clusters available"
-    return 1
 }
 
 validate_action_id() {

@@ -78,7 +78,7 @@ start_cluster() {
 stop_cluster() {
     debug_log "Stopping k3s cluster..."
 
-    if command -v k3s-killall.sh &> /dev/null; then
+    if command -v k3s-killall.sh; then
         debug_log "Running k3s killall script..."
         timeout 120 k3s-killall.sh || error_log "k3s killall script timed out or failed"
     fi
@@ -98,7 +98,7 @@ stop_cluster() {
 teardown_cluster() {
     debug_log "Tearing down k3s cluster..."
 
-    if command -v k3s-uninstall.sh &> /dev/null; then
+    if command -v k3s-uninstall.sh; then
         debug_log "Running k3s uninstall script..."
         timeout 120 k3s-uninstall.sh || error_log "k3s uninstall script timed out or failed"
     fi
@@ -122,7 +122,7 @@ install_runtime_shim() {
     debug_log "Installing runtime shim for k3s..."
 
     if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
-        debug_log "Shim not found in /usr/local/bin"
+        error_log "Shim not found in /usr/local/bin"
         return 1
     fi
 
