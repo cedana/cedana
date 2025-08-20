@@ -104,7 +104,8 @@ restore_pod() {
             --arg cluster_id "$cluster_id" \
             '{
                 "action_id": $action_id,
-                "cluster_id": $cluster_id
+                "cluster_id": $cluster_id,
+                "reason": "manual"
             }')
     else
         payload=$(jq -n \

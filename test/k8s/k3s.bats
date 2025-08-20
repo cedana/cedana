@@ -36,7 +36,9 @@ teardown_file() {
 }
 
 teardown() {
-    error all_logs "$CEDANA_NAMESPACE" 120 1000
+    if [ "$DEBUG" != '1' ]; then
+        error all_logs "$CEDANA_NAMESPACE" 120 1000
+    fi
 }
 
 @test "Verify cluster and helm installation" {
