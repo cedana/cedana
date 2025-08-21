@@ -74,7 +74,7 @@ jobs:
 
   gpu-job:
     needs: setup-runner
-    runs-on: [self-hosted, cedana, ${{ env.CEDANA_LABEL }}]
+    runs-on: ${{ env.CEDANA_LABEL }}
     steps:
       - uses: actions/checkout@v4
       - run: nvidia-smi || true
