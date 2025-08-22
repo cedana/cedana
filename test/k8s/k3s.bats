@@ -10,14 +10,12 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
-CLUSTER_NAME="test-$(unix_nano)"
+CLUSTER_NAME="test-k3s-$(unix_nano)"
 export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="test"
 export CEDANA_NAMESPACE="cedana-system"
 export RUNC_ROOT="/run/containerd/runc/k8s.io"
-
-trap 'teardown_file' SIGINT
 
 setup_file() {
     setup_cluster

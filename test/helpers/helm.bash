@@ -14,6 +14,9 @@ install_helm() {
 }
 
 helm_install_cedana() {
+    local cluster_id="$1"
+    local namespace="$2"
+
     if kubectl get pods -n "$namespace" --no-headers 2>/dev/null | grep -q .; then
         debug_log "Cleaning up old helm chart installation..."
         helm uninstall cedana -n "$namespace" --wait --timeout=2m || {
@@ -21,13 +24,8 @@ helm_install_cedana() {
             return 1
         }
         wait_for_cmd_fail 60 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
-        sleep 30
+        delete_namespace "$namespace" --wait
     fi
-
-    debug_log "Installing helm chart... (chart: $HELM_CHART)"
-
-    local cluster_id="$1"
-    local namespace="$2"
 
     debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
 

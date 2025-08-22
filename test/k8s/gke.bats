@@ -15,7 +15,7 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
-CLUSTER_NAME="test-$(unix_nano)"
+CLUSTER_NAME="test-gke-$(unix_nano)"
 export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="test"
@@ -25,20 +25,25 @@ export RUNC_ROOT="/run/containerd/runc/k8s.io"
 setup_file() {
     setup_cluster
     tail_all_logs $CEDANA_NAMESPACE 120 &
-    helm_install_cedana "$CLUSTER_NAME" $CEDANA_NAMESPACE
+    TAIL_PID=$!
+    CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
+    helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
     wait_for_ready "$CEDANA_NAMESPACE" 120
-    CLUSTER_ID=$(wait_for_cmd 120 cluster_id "$CLUSTER_NAME")
     create_namespace "$NAMESPACE"
 }
 
 teardown_file() {
     delete_namespace "$NAMESPACE" --force
     helm_uninstall_cedana $CEDANA_NAMESPACE
-    teardown_cluster
+    teardown_cluster &> /dev/null
+    deregister_cluster "$CLUSTER_ID"
+    kill "$TAIL_PID" || true
 }
 
 teardown() {
-    error all_logs "$CEDANA_NAMESPACE" 120 1000
+    if [ "$DEBUG" != '1' ]; then
+        error all_logs "$CEDANA_NAMESPACE" 120 1000
+    fi
 }
 
 @test "Verify cluster and helm installation" {
@@ -170,8 +175,6 @@ teardown() {
 
 # bats test_tags=restore
 @test "Restore a pod with original pod deleted (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
-    skip # FIXME: Skip until cgroups issue figured out
-
     local name
     name=$(unix_nano)
     local script
