@@ -115,7 +115,7 @@ func (p *pool) List() (free []*controller, busy []*controller, remaining []*cont
 				return true
 			}
 			if c.AttachedPID == 0 {
-				shmSizeMatches := c.ShmSize == config.Global.GPU.ShmSize
+				shmSizeMatches := c.ShmSize == uint64(config.Global.GPU.ShmSize)
 				credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
 				if shmSizeMatches && credentialsMatch {
 					free = append(free, c)

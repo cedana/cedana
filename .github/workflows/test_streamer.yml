@@ -78,7 +78,7 @@ jobs:
       matrix:
         compute:
           - CPU
-          # - CUDA # FIXME: Not sure why these run indefinitely (exact same tests in test_gpu.yml work fine)
+          - CUDA
         arch:
           - amd64
           - arm64
