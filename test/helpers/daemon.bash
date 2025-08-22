@@ -33,8 +33,8 @@ WAIT_TIMEOUT=30
 setup_file_daemon() {
     if env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        export CEDANA_CONFIG_DIR
         CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_CONFIG_DIR
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
@@ -49,8 +49,8 @@ teardown_file_daemon() {
 setup_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        export CEDANA_CONFIG_DIR
         CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_CONFIG_DIR
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
@@ -66,7 +66,9 @@ teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
     else
-        kill "$TAIL_PID"
+        if [ -n "$TAIL_PID" ]; then
+            kill "$TAIL_PID"
+        fi
     fi
 }
 
