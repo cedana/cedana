@@ -62,39 +62,28 @@ jobs:
       - name: Download cedana
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.cedana_version }}
+          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
           ARCH: ${{ matrix.arch }}
         run: |
           mkdir -p cedana
           cd cedana
-          if [ "$VERSION" = "release" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/cedana-$ARCH/versions/latest/cedana
-          elif [ "${VERSION#v}" != "$VERSION" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/cedana-$ARCH/versions/$VERSION/cedana
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/cedana-$ARCH/versions/$VERSION/cedana
           fi
+          echo $VERSION > cedana-version.txt
 
       - name: Download plugins
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.cedana_version }}
+          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
           ARCH: ${{ matrix.arch }}
         run: |
           mkdir -p plugins
           cd plugins
-          if [ "$VERSION" = "release" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-runc.so-$ARCH/versions/latest/libcedana-runc.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-containerd.so-$ARCH/versions/latest/libcedana-containerd.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-crio.so-$ARCH/versions/latest/libcedana-crio.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-k8s.so-$ARCH/versions/latest/libcedana-k8s.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-kata.so-$ARCH/versions/latest/libcedana-kata.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/latest/libcedana-cloud-hypervisor.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-cedana.so-$ARCH/versions/latest/libcedana-storage-cedana.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-s3.so-$ARCH/versions/latest/libcedana-storage-s3.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-gcs.so-$ARCH/versions/latest/libcedana-storage-gcs.so
-          elif [ "${VERSION#v}" != "$VERSION" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-runc.so-$ARCH/versions/$VERSION/libcedana-runc.so
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-containerd.so-$ARCH/versions/$VERSION/libcedana-containerd.so
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-crio.so-$ARCH/versions/$VERSION/libcedana-crio.so
@@ -116,6 +105,7 @@ jobs:
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-storage-s3.so-$ARCH/versions/$VERSION/libcedana-storage-s3.so
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$VERSION/libcedana-storage-gcs.so
           fi
+          echo $VERSION > plugins-version.txt
 
       - name: Upload cedana
         uses: actions/upload-artifact@v4
@@ -173,19 +163,18 @@ jobs:
       - name: Download CRIU
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.criu_version }}
+          VERSION: ${{ inputs.criu_version == 'release' && 'latest' || inputs.criu_version }}
           ARCH: ${{ matrix.arch }}
         run: |
           mkdir -p criu
           cd criu
-          if [ "$VERSION" = "release" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/names/criu-$ARCH/versions/latest/criu
-          elif [ "${VERSION#v}" != "$VERSION" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/names/criu-$ARCH/versions/$VERSION/criu
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu-alpha/raw/names/criu-$ARCH/versions/$VERSION/criu
           fi
+          echo $VERSION > criu-version.txt
 
       - name: Upload CRIU
         uses: actions/upload-artifact@v4
@@ -209,15 +198,12 @@ jobs:
       - name: Download binaries
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.gpu_version }}
+          VERSION: ${{ inputs.gpu_version == 'release' && 'latest' || inputs.gpu_version }}
           ARCH: ${{ matrix.arch }}
         run: |
           mkdir -p gpu
           cd gpu
-          if [ "$VERSION" = "release" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/cedana-gpu-controller-$ARCH/versions/latest/cedana-gpu-controller
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/libcedana-gpu.so-$ARCH/versions/latest/libcedana-gpu.so
-          elif [ "${VERSION#v}" != "$VERSION" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/cedana-gpu-controller-$ARCH/versions/$VERSION/cedana-gpu-controller
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/libcedana-gpu.so-$ARCH/versions/$VERSION/libcedana-gpu.so
           else
@@ -225,6 +211,7 @@ jobs:
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/names/cedana-gpu-controller-$ARCH/versions/$VERSION/cedana-gpu-controller
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/names/libcedana-gpu.so-$ARCH/versions/$VERSION/libcedana-gpu.so
           fi
+          echo $VERSION > gpu-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -248,19 +235,18 @@ jobs:
       - name: Download binaries
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.streamer_version }}
+          VERSION: ${{ inputs.streamer_version == 'release' && 'latest' || inputs.streamer_version }}
           ARCH: ${{ matrix.arch }}
         run: |
           mkdir -p streamer
           cd streamer
-          if [ "$VERSION" = "release" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/names/cedana-image-streamer-$ARCH/versions/latest/cedana-image-streamer
-          elif [ "${VERSION#v}" != "$VERSION" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/names/cedana-image-streamer-$ARCH/versions/$VERSION/cedana-image-streamer
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer-alpha/raw/names/cedana-image-streamer-$ARCH/versions/$VERSION/cedana-image-streamer
           fi
+          echo $VERSION > streamer-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -331,19 +317,18 @@ jobs:
       - name: Download binaries
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.runtime_shim_version }}
+          VERSION: ${{ inputs.runtime_shim_version == 'release' && 'latest' || inputs.runtime_shim_version }}
           ARCH: ${{ matrix.arch }}
         run: |
           mkdir -p runtime-shim
           cd runtime-shim
-          if [ "$VERSION" = "release" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim/raw/names/cedana-shim-runc-v2-$ARCH/versions/latest/cedana-shim-runc-v2
-          elif [ "${VERSION#v}" != "$VERSION" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim-alpha/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
           fi
+          echo $VERSION > runtime-shim-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

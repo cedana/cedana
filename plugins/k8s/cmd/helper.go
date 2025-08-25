@@ -35,11 +35,6 @@ import (
 	"google.golang.org/grpc"
 )
 
-var (
-	PROTOCOL = os.Getenv("CEDANA_PROTOCOL")
-	ADDRESS  = os.Getenv("CEDANA_ADDRESS")
-)
-
 const (
 	MAX_RETRIES         = 5
 	CLIENT_RETRY_PERIOD = time.Second
@@ -91,7 +86,7 @@ var HelperCmd = &cobra.Command{
 		startChroot, _ := cmd.Flags().GetBool("start-chroot")
 		startChroot = startChroot || setupHost
 
-		return startHelper(ctx, ADDRESS, PROTOCOL)
+		return startHelper(ctx, config.Global.Address, config.Global.Protocol)
 	},
 }
 
@@ -159,11 +154,10 @@ func startHelper(ctx context.Context, address string, protocol string) error {
 		}
 	}()
 
-	cedanaUrl := os.Getenv("CEDANA_URL")
-	log.Info().Msgf("cedanaURL: %v", cedanaUrl)
+	log.Info().Str("URL", config.Global.Connection.URL).Msgf("starting helper")
 	client := cedanagosdk.NewCedanaClient(
-		cedanaUrl,
-		os.Getenv("CEDANA_AUTH_TOKEN"),
+		config.Global.Connection.URL,
+		config.Global.Connection.AuthToken,
 	)
 	url, err := client.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
 	if err != nil {
@@ -174,7 +168,7 @@ func startHelper(ctx context.Context, address string, protocol string) error {
 		return err
 	}
 	go func() {
-		log.Info().Msg("Listening on rabbitmq stream for checkpoint requests")
+		log.Debug().Msg("listening on message stream for checkpoint requests")
 		consumer, err := stream.ConsumeCheckpointRequest(address, protocol)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
@@ -188,7 +182,7 @@ func startHelper(ctx context.Context, address string, protocol string) error {
 		defer w.Done()
 		file, err := os.Open("/host/var/log/cedana-daemon.log")
 		if err != nil {
-			fmt.Println("Failed to open cedana-daemon.log")
+			log.Error().Err(err).Msg("Failed to open cedana-daemon.log")
 			return
 		}
 		defer file.Close()
@@ -201,7 +195,7 @@ func startHelper(ctx context.Context, address string, protocol string) error {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				fmt.Println("Error reading cedana-daemon.log")
+				log.Error().Err(err).Msg("Error reading from cedana-daemon.log")
 				return
 			}
 			trimmed := strings.TrimSpace(line)
@@ -271,11 +265,11 @@ func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error
 	for _, result := range resp.Results {
 		for _, component := range result.Components {
 			for _, errs := range component.Errors {
-				log.Error().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check error: %v", errs)
+				log.Error().Str("name", component.Name).Str("data", component.Data).Msgf("health check: %v", errs)
 				errorsFound = true
 			}
 			for _, warning := range component.Warnings {
-				log.Warn().Str("name", component.Name).Str("data", component.Data).Msgf("cedana health check warning: %v", warning)
+				log.Warn().Str("name", component.Name).Str("data", component.Data).Msgf("health check: %v", warning)
 			}
 		}
 	}
@@ -416,7 +410,7 @@ func GetImageSecret() (*ImageSecret, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Add("Authorization", "Bearer "+os.Getenv("CEDANA_AUTH_TOKEN"))
+	req.Header.Add("Authorization", "Bearer "+config.Global.Connection.AuthToken)
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
@@ -534,7 +528,7 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		log.Error().Err(err).Msg("creation of publisher failed")
 		return err
 	}
-	log.Info().Msg("Published checkpoint sucessfully")
+	log.Info().Str("pod", pod_id).Str("path", resp.Path).Bool("GPU", ci.Gpu).Str("action_id", ci.ActionId).Msg("checkpoint published")
 	return err
 }
 
@@ -555,19 +549,19 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		}),
 	)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to connect to rabbitmq")
-		return nil, fmt.Errorf("Failed to connect to RabbitMQ: %v", err)
+		log.Error().Err(err).Msg("failed to connect to rabbitmq")
+		return nil, fmt.Errorf("failed to connect to RabbitMQ: %v", err)
 	}
 	err = consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
-		log.Info().Msg("Received Checkpoint Request over RabbitMQ")
+		log.Debug().Msg("received a checkpoint request")
 		var req CheckpointPodReq
 		if err := json.Unmarshal(msg.Body, &req); err != nil {
-			log.Error().Err(err).Msg("Failed to unmarshal message")
+			log.Error().Err(err).Msg("failed to unmarshal message")
 			return rabbitmq.Ack
 		}
 		containers, err := FindContainersForReq(req, address, protocol)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to find pod")
+			log.Error().Err(err).Msg("failed to find pod")
 			return rabbitmq.Ack
 		}
 		// if no containers found skip
@@ -581,7 +575,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 			checkpointId, err := cedanaClient.V2().Checkpoints().Post(context.Background(), nil)
 			if err != nil {
 				// if propagator is reachable we make the dump request otherwise we log error
-				log.Error().Err(err).Str("CedanaUrl", config.Global.Connection.URL).Msg("Failed to populate a remote checkpoint in cedana database")
+				log.Error().Err(err).Str("URL", config.Global.Connection.URL).Msg("failed to populate remote checkpoint")
 				continue
 			}
 			if req.Kind == "rootfs" || req.Kind == "rootfsonly" {
@@ -595,9 +589,8 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 					req.Kind == "rootfsonly",
 				)
 				if err != nil {
-					log.Error().Err(err).Msg("Failed to roofs checkpoint container in pod")
+					log.Error().Err(err).Msg("failed to roofs checkpoint container in pod")
 				} else {
-					log.Info().Msg("Publishing checkpoint...")
 					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp, true)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
@@ -613,9 +606,8 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 					protocol,
 				)
 				if err != nil {
-					log.Error().Err(err).Msg("Failed to checkpoint pod containers")
+					log.Error().Err(err).Msg("failed to checkpoint pod containers")
 				} else {
-					log.Info().Msg("Publishing checkpoint...")
 					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp, false)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
@@ -627,7 +619,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 		return rabbitmq.Ack
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to create checkpoint")
+		log.Error().Err(err).Msg("failed to create checkpoint")
 		return nil, err
 	}
 	return consumer, err

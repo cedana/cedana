@@ -63,6 +63,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
+  FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging
 
@@ -206,9 +207,9 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
         run: |
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           else
-            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
       - name: Setup node
@@ -327,9 +328,9 @@ jobs:
           # e.g. storage/cedana -> storage:cedana
           PLUGIN=$(echo $PLUGIN | sed 's/\//:/g')
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           else
-            make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
       - name: Set sanitized plugin
@@ -407,23 +408,59 @@ jobs:
       runner_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
-  k8s:
+  # XXX: Below kubernetes tests are split into separate workflows, instead of using matrix,
+  # because of Github Actions issue of using concurrency group together with matrix jobs
+  # within the same workflow file.
+  # https://github.com/orgs/community/discussions/26774
+
+  k3s:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
+      platform: K3s
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
+  eks:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    secrets: inherit
+    concurrency: test-k8s-eks # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: EKS
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner }}
+      runner_gpu_arm64: ${{ inputs.runner }}
+      post_summary: false # Will post consolidated summary instead
+
+  gke:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    secrets: inherit
+    concurrency: test-k8s-gke # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: GKE
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner }}
+      runner_gpu_arm64: ${{ inputs.runner }}
+      post_summary: false # Will post consolidated summary instead
+
   post-summary:
     name: Post Summary
     if: always()
-    needs: [basic, plugin, streamer, gpu, k8s]
+    needs: [basic, plugin, streamer, gpu, k3s, eks, gke]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

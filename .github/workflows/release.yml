@@ -28,7 +28,7 @@ on:
         default: false
 
 concurrency:
-  group: cedana-release-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.repository }}-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
