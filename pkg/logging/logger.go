@@ -66,13 +66,13 @@ func InitLogger(level string) {
 				log.Error().Err(err).Msg("failed to get host info")
 				return
 			}
-			clusterName, _ := os.LookupEnv("CEDANA_CLUSTER_NAME")
+			clusterId, _ := os.LookupEnv("CEDANA_CLUSTER_ID")
 			cedanaUrl := config.Global.Connection.URL
 			version := version.GetVersion()
 
 			resourceAttrs := map[string]string{
 				"host.name":          host.Hostname,
-				"cluster.name":       clusterName,
+				"cluster.name":       clusterId,
 				"cedana.service.url": cedanaUrl,
 				"version":            version,
 			}
