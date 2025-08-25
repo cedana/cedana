@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/cedana/cedana/internal/version"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/utils"
@@ -59,30 +60,35 @@ func InitLogger(level string) {
 		endpoint, headers, err := metrics.GetOtelCreds()
 		if err != nil {
 			log.Error().Err(err).Msg("failed to get otel creds")
-			return
+		} else {
+			host, err := utils.GetHost(context.Background())
+			if err != nil {
+				log.Error().Err(err).Msg("failed to get host info")
+				return
+			}
+			clusterName, _ := os.LookupEnv("CEDANA_CLUSTER_NAME")
+			cedanaUrl := config.Global.Connection.URL
+			version := version.GetVersion()
+
+			resourceAttrs := map[string]string{
+				"host.name":          host.Hostname,
+				"cluster.name":       clusterName,
+				"cedana.service.url": cedanaUrl,
+				"version":            version,
+			}
+
+			// Add SigNoz writer
+			globalSigNozWriter = NewSigNozJsonWriter(
+				"https://"+endpoint+":443/logs/json",
+				headers,
+				"cedana",
+				resourceAttrs,
+				DEFAULT_MAX_BATCH_SIZE_JSON,
+				DEFAULT_FLUSH_INTERVAL_MS_JSON,
+			)
+
+			writers = append(writers, globalSigNozWriter)
 		}
-
-		host, err := utils.GetHost(context.Background())
-		if err != nil {
-			log.Error().Err(err).Msg("failed to get host info")
-			return
-		}
-
-		resourceAttrs := map[string]string{
-			"host.name": host.Hostname,
-		}
-
-		// Add SigNoz writer
-		globalSigNozWriter = NewSigNozJsonWriter(
-			"https://"+endpoint+":443/logs/json",
-			headers,
-			"cedana",
-			resourceAttrs,
-			DEFAULT_MAX_BATCH_SIZE_JSON,
-			DEFAULT_FLUSH_INTERVAL_MS_JSON,
-		)
-
-		writers = append(writers, globalSigNozWriter)
 	}
 	multiWriter := io.MultiWriter(writers...)
 
