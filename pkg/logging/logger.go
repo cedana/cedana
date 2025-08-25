@@ -72,7 +72,7 @@ func InitLogger(level string) {
 
 			resourceAttrs := map[string]string{
 				"host.name":          host.Hostname,
-				"cluster.name":       clusterId,
+				"cluster.id":         clusterId,
 				"cedana.service.url": cedanaUrl,
 				"version":            version,
 			}
