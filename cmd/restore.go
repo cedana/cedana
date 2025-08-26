@@ -187,7 +187,6 @@ var restoreCmd = &cobra.Command{
 
 			code, err := cedana.Restore(req)
 			if err != nil {
-				cedana.Finalize()
 				cedana.Wait()
 				return utils.GRPCErrorColored(err)
 			}

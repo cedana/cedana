@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/rs/zerolog/log"
 )
 
 // Cedana implements all the capabilities that can be run without a server.
@@ -34,6 +35,13 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(ctx)
+
+	sigNozWriter, err := logging.NewSigNozWriter(ctx, wg)
+	if err != nil {
+		log.Warn().Err(err).Msg("logs will not be sent to SigNoz")
+	} else {
+		logging.AddLogger(sigNozWriter)
+	}
 
 	pluginManager := plugins.NewLocalManager()
 
@@ -64,19 +72,22 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	}, nil
 }
 
+func (c *Cedana) Wait() {
+	c.cancel()
+	c.WaitGroup.Wait()
+}
+
 func (c *Cedana) Finalize() *profiling.Data {
 	data, ok := c.lifetime.Value(keys.PROFILING_CONTEXT_KEY).(*profiling.Data)
 	if ok {
+		c.profilingShutdown()
 		profiling.CleanData(data)
 		profiling.FlattenData(data)
-		c.profilingShutdown()
 	}
 
 	if c.metricsShutdown != nil {
 		c.metricsShutdown(c.lifetime)
 	}
-
-	c.cancel()
 
 	return data
 }

@@ -517,4 +517,3 @@ jobs:
           TITLE: "Test results (${{ matrix.arch }})"
         run: |
           npx slack-ctrf results "report/**/*.json" --title "$TITLE" --prefix ${{ github.repository }}
-          npx slack-ctrf failed "report/**/*.json" --consolidated

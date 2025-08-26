@@ -53,9 +53,15 @@ type ServeOpts struct {
 }
 
 func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
-	ctx = log.With().Str("context", "server").Logger().WithContext(ctx)
 	var err error
 	wg := &sync.WaitGroup{}
+
+	sigNozWriter, err := logging.NewSigNozWriter(ctx, wg)
+	if err != nil {
+		log.Warn().Err(err).Msg("logs will not be sent to SigNoz")
+	} else {
+		logging.AddLogger(sigNozWriter)
+	}
 
 	host, err := utils.GetHost(ctx)
 	if err != nil {
@@ -163,8 +169,9 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 // Takes in a context that allows for cancellation from the cmdline
 func (s *Server) Launch(ctx context.Context) (err error) {
-	lifetime, cancel := context.WithCancelCause(ctx)
+	lifetime, cancel := context.WithCancel(ctx)
 	s.lifetime = lifetime
+	s.cancel = cancel
 
 	if config.Global.Metrics {
 		shutdown, _ := metrics.Init(ctx, version.GetVersion())
@@ -176,7 +183,7 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	go func() {
 		err := s.grpcServer.Serve(s.listener)
 		if err != nil {
-			cancel(err)
+			cancel()
 		}
 	}()
 

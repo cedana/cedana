@@ -2,12 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +24,7 @@ var checkCmd = &cobra.Command{
 		ctx := cmd.Context()
 		full, _ := cmd.Flags().GetBool(flags.FullFlag.Full)
 
-		logging.SetLogger(zerolog.Nop())
+		logging.SetLogger(io.Discard)
 
 		cedana, err := cedana.New(ctx, "run")
 		if err != nil {

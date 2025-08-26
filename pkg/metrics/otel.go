@@ -37,7 +37,7 @@ func Init(ctx context.Context, version string) (shutdown func(context.Context) e
 
 	handleErr := func(inErr error) {
 		err = errors.Join(inErr, shutdown(ctx))
-		log.Debug().Err(err).Msg("failed to set up otel, will use noop")
+		log.Debug().Err(err).Msg("failed to initialize metrics")
 	}
 
 	prop := newPropagator()

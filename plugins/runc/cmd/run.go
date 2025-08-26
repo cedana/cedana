@@ -12,7 +12,6 @@ import (
 	"github.com/cedana/cedana/pkg/style"
 	runc_flags "github.com/cedana/cedana/plugins/runc/pkg/flags"
 	runc_logging "github.com/cedana/cedana/plugins/runc/pkg/logging"
-	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 )
 
@@ -69,7 +68,7 @@ var RunCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to open log file %s: %v", logFile, err)
 			}
-			logging.SetLogger(zerolog.New(runc_logging.Writer(file, logFormat)).Level(logging.Level))
+			logging.SetLogger(runc_logging.Writer(file, logFormat))
 		} else if !daemonless {
 			if detach {
 				fmt.Println(
