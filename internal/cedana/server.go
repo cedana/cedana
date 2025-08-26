@@ -24,6 +24,8 @@ import (
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -31,8 +33,9 @@ import (
 type Server struct {
 	Cedana
 
-	grpcServer *grpc.Server
-	listener   net.Listener
+	grpcServer   *grpc.Server
+	healthServer *health.Server
+	listener     net.Listener
 
 	// fdStore stores a map of fds used for clh kata restores to persist network fds and send them
 	// to the appropriate clh vm api
@@ -112,13 +115,15 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 				profiling.UnaryProfiler(),
 			),
 		),
-		db:      database,
-		jobs:    jobManager,
-		host:    host,
-		version: opts.Version,
+		healthServer: health.NewServer(),
+		db:           database,
+		jobs:         jobManager,
+		host:         host,
+		version:      opts.Version,
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)
+	grpc_health_v1.RegisterHealthServer(server.grpcServer, server.healthServer)
 	reflection.Register(server.grpcServer)
 
 	var listener net.Listener
@@ -185,8 +190,10 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 		if err != nil {
 			cancel()
 		}
+		s.healthServer.Shutdown()
 	}()
 
+	s.healthServer.Resume()
 	log.Info().Str("address", s.listener.Addr().String()).Msg("server listening")
 
 	<-lifetime.Done()

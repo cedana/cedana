@@ -71,6 +71,8 @@ var checkDaemonCmd = &cobra.Command{
 	Use:   "check",
 	Short: "Health check the daemon",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+
 		client, err := client.New(config.Global.Address, config.Global.Protocol)
 		if err != nil {
 			return fmt.Errorf("Error creating client: %v", err)
@@ -78,7 +80,12 @@ var checkDaemonCmd = &cobra.Command{
 
 		full, _ := cmd.Flags().GetBool(flags.FullFlag.Full)
 
-		resp, err := client.HealthCheck(cmd.Context(), &daemon.HealthCheckReq{Full: full})
+		_, err = client.HealthCheckConnection(ctx)
+		if err != nil {
+			return fmt.Errorf("Error connecting to daemon: %v", err)
+		}
+
+		resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: full})
 		if err != nil {
 			return err
 		}
