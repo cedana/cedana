@@ -340,7 +340,7 @@ jobs:
           failed-folded-report: true
           summary: true
           pull-request: true
-          title: ${{ matrix.arch }}
+          title: ${{ matrix.platform }} (${{ matrix.arch }})
           update-comment: true
           overwrite-comment: true
           comment-tag: test-report-k8s-${{ matrix.arch }}-${{ matrix.platform }}
