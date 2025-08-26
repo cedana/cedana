@@ -92,7 +92,7 @@ jobs:
     name: Kubernetes
     runs-on:
       ${{ (inputs.platform == 'eks' || inputs.platform == 'gke') && 'ubuntu-latest' || format(
-      '{0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
+      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner,
       matrix.arch,
