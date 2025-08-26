@@ -72,6 +72,8 @@ teardown() {
 
     kubectl apply -f "$spec"
 
+    sleep 5
+
     # Check if pod is running
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
@@ -88,6 +90,8 @@ teardown() {
     spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
     kubectl apply -f "$spec"
+
+    sleep 5
 
     # Check if pod is running
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
@@ -118,6 +122,8 @@ teardown() {
     spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
     kubectl apply -f "$spec"
+
+    sleep 5
 
     # Check if pod is running
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
@@ -164,6 +170,8 @@ teardown() {
     spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
     kubectl apply -f "$spec"
+
+    sleep 5
 
     # Check if pod is running
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
