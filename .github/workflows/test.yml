@@ -25,6 +25,11 @@ on:
         description: "Run large tests"
         required: false
         default: false
+      kubernetes:
+        type: boolean
+        description: "Run kubernetes tests"
+        required: false
+        default: true
       parallelism:
         type: number
         description: "Parallelism for running tests"
@@ -416,6 +421,7 @@ jobs:
   k3s:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
@@ -430,6 +436,7 @@ jobs:
   eks:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
     secrets: inherit
     concurrency: test-k8s-eks # Since the cluster is reused
     with:
@@ -442,6 +449,7 @@ jobs:
   gke:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
     secrets: inherit
     concurrency: test-k8s-gke # Since the cluster is reused
     with:
