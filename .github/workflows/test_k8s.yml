@@ -343,8 +343,8 @@ jobs:
           title: ${{ matrix.arch }}
           update-comment: true
           overwrite-comment: true
-          comment-tag: test-report-k8s-${{ matrix.arch }}
+          comment-tag: test-report-k8s-${{ matrix.arch }}-${{ matrix.platform }}
           group-by: "suite"
           always-group-by: true
           upload-artifact: true
-          artifact-name: ctrf-report-k8s-${{ matrix.arch }}
+          artifact-name: ctrf-report-k8s-${{ matrix.arch }}-${{ matrix.platform }}
