@@ -26,19 +26,19 @@ PLUGINS="
     streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
 
 # if gpu driver present then add gpu plugin
-if [ -d /proc/driver/nvidia/gpus/ ]; then
+if [ -f /.dockerenv ]; then # For tests inside a container
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
+        echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
+        if /sbin/ldconfig -p | grep -q libcuda.so.1; then
+            echo "CUDA driver library found!"
+        fi
+    fi
+elif [ -d /proc/driver/nvidia/gpus/ ]; then
     if [ ! -d /run/driver/nvidia ]; then
         # Check if the NVIDIA driver is installed by checking the version
         # as nvidia-smi is not installed by GPU Operator
-        if [ -f /.dockerenv ]; then
-            if command -v nvidia-smi >/dev/null 2>&1; then
-                PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
-                echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
-                if /sbin/ldconfig -p | grep -q libcuda.so.1; then
-                    echo "CUDA driver library found!"
-                fi
-            fi
-        elif [ -r /proc/driver/nvidia/version ] || command -v nvidia-smi >/dev/null 2>&1; then
+        if [ -r /proc/driver/nvidia/version ] || command -v nvidia-smi >/dev/null 2>&1; then
             PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
             echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
             if command -v nvidia-smi >/dev/null 2>&1; then
