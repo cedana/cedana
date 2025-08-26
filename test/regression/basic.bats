@@ -47,6 +47,11 @@ teardown_file() {
 }
 
 @test "Health check (full)" {
+    run cedana check --full
+    assert_success
+}
+
+@test "Health check (full, daemon)" {
     run cedana daemon check --full
     assert_success
 }
