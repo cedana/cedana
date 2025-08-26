@@ -190,6 +190,7 @@ jobs:
           name: streamer-${{ matrix.arch }}
 
       - name: Pre-install runtime shim
+        if: matrix.platform == 'K3s' # k3s needs it pre-installed
         run: |
           chmod +x ./cedana*
           sudo -E ./cedana plugin install k8s/runtime-shim
