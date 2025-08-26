@@ -41,7 +41,7 @@ const (
 	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
-	RESTORE_NEW_PID_SIGNAL                 = syscall.SIGUSR1 // Signal to the restored process to notify it has a new PID
+	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1 // Signal to the restored process to notify it has a new PID
 
 	FREEZE_TIMEOUT   = 1 * time.Minute
 	UNFREEZE_TIMEOUT = 1 * time.Minute
@@ -484,7 +484,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 	// Signal the process so it knowns it may have a new PID (only useful for containers which get
 	// restore with a different host PID).
 	callback.PreResumeFunc = func(ctx context.Context) error {
-		return syscall.Kill(int(<-restoredPid), RESTORE_NEW_PID_SIGNAL)
+		return syscall.Kill(int(<-restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
 	}
 
 	return callback
