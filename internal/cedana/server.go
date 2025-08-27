@@ -14,7 +14,6 @@ import (
 	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/internal/db"
-	"github.com/cedana/cedana/internal/version"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
@@ -55,15 +54,14 @@ type ServeOpts struct {
 	Version  string
 }
 
-func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
-	var err error
+func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error) {
 	wg := &sync.WaitGroup{}
 
-	sigNozWriter, err := logging.NewSigNozWriter(ctx, wg)
-	if err != nil {
-		log.Warn().Err(err).Msg("logs will not be sent to SigNoz")
-	} else {
-		logging.AddLogger(sigNozWriter)
+	var metricsShutdown func(context.Context) error
+
+	if config.Global.Metrics {
+		metricsShutdown = metrics.InitSigNoz(ctx)
+		logging.InitSigNoz(ctx, wg)
 	}
 
 	host, err := utils.GetHost(ctx)
@@ -99,12 +97,13 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, fmt.Errorf("failed to create job manager: %w", err)
 	}
 
-	server := &Server{
+	server = &Server{
 		Cedana: Cedana{
-			gpus:      gpuManager,
-			plugins:   pluginManager,
-			WaitGroup: wg,
-			lifetime:  ctx,
+			gpus:            gpuManager,
+			plugins:         pluginManager,
+			WaitGroup:       wg,
+			lifetime:        ctx,
+			metricsShutdown: metricsShutdown,
 		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(
@@ -177,13 +176,6 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	lifetime, cancel := context.WithCancel(ctx)
 	s.lifetime = lifetime
 	s.cancel = cancel
-
-	if config.Global.Metrics {
-		shutdown, _ := metrics.Init(ctx, version.GetVersion())
-		defer func() {
-			err = shutdown(ctx)
-		}()
-	}
 
 	go func() {
 		err := s.grpcServer.Serve(s.listener)

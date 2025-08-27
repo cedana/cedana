@@ -6,14 +6,12 @@ import (
 	"sync"
 
 	"github.com/cedana/cedana/internal/cedana/gpu"
-	"github.com/cedana/cedana/internal/version"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
-	"github.com/rs/zerolog/log"
 )
 
 // Cedana implements all the capabilities that can be run without a server.
@@ -32,15 +30,19 @@ type Cedana struct {
 
 func New(ctx context.Context, description ...any) (*Cedana, error) {
 	logging.SetLevel(config.Global.LogLevelNoServer)
-
 	wg := &sync.WaitGroup{}
 	ctx, cancel := context.WithCancel(ctx)
 
-	sigNozWriter, err := logging.NewSigNozWriter(ctx, wg)
-	if err != nil {
-		log.Warn().Err(err).Msg("logs will not be sent to SigNoz")
-	} else {
-		logging.AddLogger(sigNozWriter)
+	var metricsShutdown func(context.Context) error
+	var profilingShutdown func()
+
+	if config.Global.Metrics {
+		metricsShutdown = metrics.InitSigNoz(ctx)
+		logging.InitSigNoz(ctx, wg)
+	}
+
+	if config.Global.Profiling.Enabled {
+		ctx, profilingShutdown = profiling.StartTiming(ctx, description...)
 	}
 
 	pluginManager := plugins.NewLocalManager()
@@ -48,17 +50,6 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	gpuManager, err := gpu.NewSimpleManager(ctx, wg, pluginManager)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
-	}
-
-	var metricsShutdown func(context.Context) error
-	var profilingShutdown func()
-
-	if config.Global.Metrics {
-		metricsShutdown, _ = metrics.Init(ctx, version.GetVersion())
-	}
-
-	if config.Global.Profiling.Enabled {
-		ctx, profilingShutdown = profiling.StartTiming(ctx, description...)
 	}
 
 	return &Cedana{

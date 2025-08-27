@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/version"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -21,9 +22,16 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
+type Creds struct {
+	Endpoint string `json:"OTEL_EXPORTER_OTLP_ENDPOINT"`
+	Headers  string `json:"OTEL_EXPORTER_OTLP_HEADERS"`
+}
+
+var Credentials *Creds
+
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func Init(ctx context.Context, version string) (shutdown func(context.Context) error, err error) {
+func InitSigNoz(ctx context.Context) (shutdown func(context.Context) error) {
 	var shutdownFuncs []func(context.Context) error
 
 	shutdown = func(ctx context.Context) error {
@@ -36,20 +44,20 @@ func Init(ctx context.Context, version string) (shutdown func(context.Context) e
 	}
 
 	handleErr := func(inErr error) {
-		err = errors.Join(inErr, shutdown(ctx))
-		log.Debug().Err(err).Msg("failed to initialize metrics")
+		err := errors.Join(inErr, shutdown(ctx))
+		log.Warn().Err(err).Msg("metrics will not be sent to SigNoz")
 	}
 
 	prop := newPropagator()
 	otel.SetTextMapPropagator(prop)
 
-	endpoint, headers, err := GetOtelCreds()
+	err := getOtelCreds()
 	if err != nil {
 		handleErr(err)
 		return
 	}
 
-	tracerProvider, err := newTracerProvider(ctx, version, endpoint, headers)
+	tracerProvider, err := newTracerProvider(ctx, version.GetVersion())
 	if err != nil {
 		handleErr(err)
 		return
@@ -58,45 +66,42 @@ func Init(ctx context.Context, version string) (shutdown func(context.Context) e
 	shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
 	otel.SetTracerProvider(tracerProvider)
 
-	log.Info().Str("endpoint", endpoint).Msg("otel initialized")
+	log.Debug().Str("endpoint", Credentials.Endpoint).Msg("metrics initialized")
 
 	return
 }
 
-func GetOtelCreds() (string, string, error) {
+func getOtelCreds() error {
 	url := config.Global.Connection.URL
 	authToken := config.Global.Connection.AuthToken
 	if url == "" || authToken == "" {
-		return "", "", fmt.Errorf("connection URL or AuthToken unset in config/env")
+		return fmt.Errorf("connection URL or AuthToken unset in config/env")
 	}
 
 	url = url + "/otel/credentials"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("failed to fetch otel credentials, status code: %d", resp.StatusCode)
+		return fmt.Errorf("failed to fetch otel credentials, status code: %d", resp.StatusCode)
 	}
 
-	var creds struct {
-		Endpoint string `json:"OTEL_EXPORTER_OTLP_ENDPOINT"`
-		Headers  string `json:"OTEL_EXPORTER_OTLP_HEADERS"`
+	Credentials = &Creds{}
+
+	if err := json.NewDecoder(resp.Body).Decode(&Credentials); err != nil {
+		return err
 	}
 
-	if err := json.NewDecoder(resp.Body).Decode(&creds); err != nil {
-		return "", "", err
-	}
-
-	return creds.Endpoint, creds.Headers, nil
+	return nil
 }
 
 func newPropagator() propagation.TextMapPropagator {
@@ -106,9 +111,9 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTracerProvider(ctx context.Context, version, endpoint, headers string) (*trace.TracerProvider, error) {
+func newTracerProvider(ctx context.Context, version string) (*trace.TracerProvider, error) {
 	// set headers env var
-	if err := os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "signoz-ingestion-key="+headers); err != nil {
+	if err := os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "signoz-ingestion-key="+Credentials.Headers); err != nil {
 		return nil, err
 	}
 
@@ -118,7 +123,7 @@ func newTracerProvider(ctx context.Context, version, endpoint, headers string) (
 		ctx,
 		otlptracegrpc.NewClient(
 			secureOption,
-			otlptracegrpc.WithEndpoint(endpoint),
+			otlptracegrpc.WithEndpoint(Credentials.Endpoint),
 		))
 	if err != nil {
 		return nil, err

@@ -12,11 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cedana/cedana/internal/version"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/cedana/cedana/pkg/version"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -77,15 +78,20 @@ type SigNozWriter struct {
 	wg            *sync.WaitGroup
 }
 
-func NewSigNozWriter(ctx context.Context, wg *sync.WaitGroup) (*SigNozWriter, error) {
-	endpoint, token, err := metrics.GetOtelCreds()
-	if err != nil {
-		return nil, err
+func InitSigNoz(ctx context.Context, wg *sync.WaitGroup) {
+	handleErr := func(err error) {
+		log.Warn().Err(err).Msg("logs will not be sent to SigNoz")
+	}
+
+	if metrics.Credentials == nil {
+		handleErr(fmt.Errorf("credentials not found"))
+		return
 	}
 
 	host, err := utils.GetHost(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get host info: %w", err)
+		handleErr(fmt.Errorf("failed to get host info: %w", err))
+		return
 	}
 	clusterId, _ := os.LookupEnv("CEDANA_CLUSTER_ID")
 	cedanaUrl := config.Global.Connection.URL
@@ -101,8 +107,8 @@ func NewSigNozWriter(ctx context.Context, wg *sync.WaitGroup) (*SigNozWriter, er
 
 	sw := &SigNozWriter{
 		httpClient:    &http.Client{Timeout: 15 * time.Second}, // Increased timeout slightly for batch
-		endpoint:      "https://" + endpoint + ":443/logs/json",
-		accessToken:   token,
+		endpoint:      "https://" + metrics.Credentials.Endpoint + ":443/logs/json",
+		accessToken:   metrics.Credentials.Headers,
 		resourceAttrs: resources,
 		logBuffer:     make([]SigNozLogEntry, 0, DEFAULT_MAX_BATCH_SIZE_JSON),
 		maxBatchSize:  DEFAULT_MAX_BATCH_SIZE_JSON,
@@ -112,14 +118,17 @@ func NewSigNozWriter(ctx context.Context, wg *sync.WaitGroup) (*SigNozWriter, er
 	}
 
 	if sw.endpoint == "" || sw.accessToken == "" {
-		return sw, fmt.Errorf("endpoint or access token missing")
+		handleErr(fmt.Errorf("endpoint or access token missing"))
+		return
 	}
+
+	AddLogger(sw)
 
 	sw.ticker = time.NewTicker(sw.flushInterval)
 	sw.wg.Add(1)
 	go sw.runSender()
 
-	return sw, nil
+	log.Debug().Str("endpoint", metrics.Credentials.Endpoint).Msg("logging initialized")
 }
 
 func (sw *SigNozWriter) Write(p []byte) (n int, err error) {

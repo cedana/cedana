@@ -38,7 +38,7 @@ func InitLogger(level string) {
 	var err error
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
-	Level, err := zerolog.ParseLevel(level)
+	Level, err = zerolog.ParseLevel(level)
 	if err != nil || level == "" { // allow turning off logging
 		Level = zerolog.Disabled
 	}
@@ -57,7 +57,11 @@ func InitLogger(level string) {
 }
 
 func AddLogger(writer io.Writer) {
-	log.Logger = zerolog.New(zerolog.MultiLevelWriter(GlobalWriter, writer))
+	log.Logger = zerolog.New(io.MultiWriter(GlobalWriter, writer)).
+		Level(Level).
+		With().
+		Timestamp().
+		Logger().Hook(LineInfoHook{})
 }
 
 func SetLogger(writer io.Writer) {
@@ -70,7 +74,8 @@ func SetLogger(writer io.Writer) {
 }
 
 func SetLevel(level string) {
-	Level, err := zerolog.ParseLevel(level)
+	var err error
+	Level, err = zerolog.ParseLevel(level)
 	if err != nil || level == "" { // allow turning off logging
 		Level = zerolog.Disabled
 	}
