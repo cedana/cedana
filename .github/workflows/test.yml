@@ -25,6 +25,11 @@ on:
         description: "Run large tests"
         required: false
         default: false
+      kubernetes:
+        type: boolean
+        description: "Run kubernetes tests"
+        required: false
+        default: true
       parallelism:
         type: number
         description: "Parallelism for running tests"
@@ -416,6 +421,7 @@ jobs:
   k3s:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
@@ -430,6 +436,7 @@ jobs:
   eks:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
     secrets: inherit
     concurrency: test-k8s-eks # Since the cluster is reused
     with:
@@ -437,14 +444,12 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: EKS
       large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
-      runner_gpu: ${{ inputs.runner }}
-      runner_gpu_arm64: ${{ inputs.runner }}
       post_summary: false # Will post consolidated summary instead
 
   gke:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
     secrets: inherit
     concurrency: test-k8s-gke # Since the cluster is reused
     with:
@@ -452,9 +457,6 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: GKE
       large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
-      runner_gpu: ${{ inputs.runner }}
-      runner_gpu_arm64: ${{ inputs.runner }}
       post_summary: false # Will post consolidated summary instead
 
   post-summary:
@@ -517,4 +519,3 @@ jobs:
           TITLE: "Test results (${{ matrix.arch }})"
         run: |
           npx slack-ctrf results "report/**/*.json" --title "$TITLE" --prefix ${{ github.repository }}
-          npx slack-ctrf failed "report/**/*.json" --consolidated

@@ -2,16 +2,20 @@ package logging
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"maps"
 	"net/http"
 	"os"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/metrics"
+	"github.com/cedana/cedana/pkg/utils"
+	"github.com/cedana/cedana/pkg/version"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -58,8 +62,8 @@ func mapZerologLevelToSigNoz(level zerolog.Level) (string, int32) {
 	}
 }
 
-// SigNozJsonWriter implements io.Writer to send logs to SigNoz /logs/json endpoint
-type SigNozJsonWriter struct {
+// SigNozWriter implements io.Writer to send logs to SigNoz /logs/json endpoint
+type SigNozWriter struct {
 	httpClient    *http.Client
 	endpoint      string
 	accessToken   string
@@ -70,45 +74,71 @@ type SigNozJsonWriter struct {
 	maxBatchSize  int
 	flushInterval time.Duration
 	ticker        *time.Ticker
-	doneChan      chan struct{}
-	wg            sync.WaitGroup
+	lifetime      context.Context
+	wg            *sync.WaitGroup
 }
 
-func NewSigNozJsonWriter(endpoint, token, serviceName string, otherResourceAttrs map[string]string, maxBatchSize int, flushIntervalMs int) *SigNozJsonWriter {
-	resources := make(map[string]string)
-	maps.Copy(resources, otherResourceAttrs)
-	resources["service.name"] = "cedana"
+func InitSigNoz(ctx context.Context, wg *sync.WaitGroup) {
+	handleErr := func(err error) {
+		log.Warn().Err(err).Msg("logs will not be sent to SigNoz")
+	}
 
-	sw := &SigNozJsonWriter{
+	if metrics.Credentials == nil {
+		handleErr(fmt.Errorf("credentials not found"))
+		return
+	}
+
+	host, err := utils.GetHost(ctx)
+	if err != nil {
+		handleErr(fmt.Errorf("failed to get host info: %w", err))
+		return
+	}
+	clusterId, _ := os.LookupEnv("CEDANA_CLUSTER_ID")
+	cedanaUrl := config.Global.Connection.URL
+	version := version.GetVersion()
+
+	resources := map[string]string{
+		"host.name":          host.Hostname,
+		"cluster.id":         clusterId,
+		"cedana.service.url": cedanaUrl,
+		"version":            version,
+		"service.name":       DEFAULT_SERVICE_NAME,
+	}
+
+	sw := &SigNozWriter{
 		httpClient:    &http.Client{Timeout: 15 * time.Second}, // Increased timeout slightly for batch
-		endpoint:      endpoint,
-		accessToken:   token,
+		endpoint:      "https://" + metrics.Credentials.Endpoint + ":443/logs/json",
+		accessToken:   metrics.Credentials.Headers,
 		resourceAttrs: resources,
-		logBuffer:     make([]SigNozLogEntry, 0, maxBatchSize),
-		maxBatchSize:  maxBatchSize,
-		flushInterval: time.Duration(flushIntervalMs) * time.Millisecond,
-		doneChan:      make(chan struct{}),
+		logBuffer:     make([]SigNozLogEntry, 0, DEFAULT_MAX_BATCH_SIZE_JSON),
+		maxBatchSize:  DEFAULT_MAX_BATCH_SIZE_JSON,
+		flushInterval: time.Duration(DEFAULT_FLUSH_INTERVAL_MS_JSON) * time.Millisecond,
+		lifetime:      ctx,
+		wg:            wg,
 	}
 
-	if sw.endpoint != "" && sw.accessToken != "" {
-		sw.ticker = time.NewTicker(sw.flushInterval)
-		sw.wg.Add(1)
-		go sw.runSender()
-	} else {
-		fmt.Fprintln(os.Stderr, "SigNozJsonWriter: Endpoint or Access Token not provided. SigNoz logging will be disabled for this writer.")
+	if sw.endpoint == "" || sw.accessToken == "" {
+		handleErr(fmt.Errorf("endpoint or access token missing"))
+		return
 	}
 
-	return sw
+	AddLogger(sw)
+
+	sw.ticker = time.NewTicker(sw.flushInterval)
+	sw.wg.Add(1)
+	go sw.runSender()
+
+	log.Debug().Str("endpoint", metrics.Credentials.Endpoint).Msg("logging initialized")
 }
 
-func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
+func (sw *SigNozWriter) Write(p []byte) (n int, err error) {
 	if sw.endpoint == "" || sw.accessToken == "" {
 		return len(p), nil
 	}
 
 	var zerologEntry map[string]any
 	if err := json.Unmarshal(p, &zerologEntry); err != nil {
-		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error unmarshalling zerolog entry: %v\nOriginal log: %s\n", err, string(p))
+		fmt.Fprintf(os.Stderr, "signoz: Error unmarshalling zerolog entry: %v\nOriginal log: %s\n", err, string(p))
 		return len(p), nil // Consume and drop
 	}
 
@@ -119,7 +149,7 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 		if err == nil {
 			tsNano = parsedTime.UnixNano()
 		} else {
-			fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error parsing timestamp: %v. Using current time.\n", err)
+			fmt.Fprintf(os.Stderr, "signoz: Error parsing timestamp: %v. Using current time.\n", err)
 		}
 	}
 
@@ -165,13 +195,13 @@ func (sw *SigNozJsonWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-func (sw *SigNozJsonWriter) runSender() {
+func (sw *SigNozWriter) runSender() {
 	defer sw.wg.Done()
 	for {
 		select {
 		case <-sw.ticker.C:
 			sw.flushBuffer()
-		case <-sw.doneChan:
+		case <-sw.lifetime.Done():
 			sw.ticker.Stop()
 			sw.flushBuffer() // Final flush
 			return
@@ -179,7 +209,7 @@ func (sw *SigNozJsonWriter) runSender() {
 	}
 }
 
-func (sw *SigNozJsonWriter) flushBuffer() {
+func (sw *SigNozWriter) flushBuffer() {
 	sw.mu.Lock()
 	if len(sw.logBuffer) == 0 {
 		sw.mu.Unlock()
@@ -196,13 +226,13 @@ func (sw *SigNozJsonWriter) flushBuffer() {
 
 	jsonData, err := json.Marshal(batchToSend)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error marshalling log batch: %v\n", err)
+		fmt.Fprintf(os.Stderr, "signoz: Error marshalling log batch: %v\n", err)
 		return
 	}
 
 	req, err := http.NewRequest("POST", sw.endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error creating HTTP request: %v\n", err)
+		fmt.Fprintf(os.Stderr, "signoz: Error creating HTTP request: %v\n", err)
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -211,33 +241,14 @@ func (sw *SigNozJsonWriter) flushBuffer() {
 	resp, err := sw.httpClient.Do(req)
 	if err != nil {
 		// TODO NR - add backoff?
-		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: Error sending log batch to SigNoz: %v\n", err)
+		fmt.Fprintf(os.Stderr, "signoz: Error sending log batch: %v\n", err)
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(os.Stderr, "SigNozJsonWriter: SigNoz returned non-2xx status: %d. Response: %s\n", resp.StatusCode, string(bodyBytes))
+		fmt.Fprintf(os.Stderr, "signoz: returned non-2xx status: %d. Response: %s\n", resp.StatusCode, string(bodyBytes))
 	} else {
 	}
-}
-
-func (sw *SigNozJsonWriter) Close() error {
-	if sw.endpoint == "" || sw.accessToken == "" { // If writer was disabled
-		return nil
-	}
-	fmt.Fprintln(os.Stdout, "SigNozJsonWriter: Close called, attempting to flush remaining logs...")
-	close(sw.doneChan)
-	sw.wg.Wait()
-	fmt.Fprintln(os.Stdout, "SigNozJsonWriter: Closed.")
-	return nil
-}
-
-func CloseLoggers() {
-	log.Info().Msg("Closing loggers...")
-	if globalSigNozWriter != nil {
-		globalSigNozWriter.Close()
-	}
-	log.Info().Msg("Loggers closed.")
 }

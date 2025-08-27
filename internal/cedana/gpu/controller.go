@@ -41,7 +41,8 @@ const (
 	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
-	RESTORE_NEW_PID_SIGNAL                 = syscall.SIGUSR1 // Signal to the restored process to notify it has a new PID
+	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1     // Signal to the restored process to notify it has a new PID
+	CONTROLLER_CHECK_SHM_SIZE              = 10 * utils.MEBIBYTE // Small size to run controller health check
 
 	FREEZE_TIMEOUT   = 1 * time.Minute
 	UNFREEZE_TIMEOUT = 1 * time.Minute
@@ -200,7 +201,7 @@ func (p *pool) Book() *controller {
 }
 
 // Spawns a GPU controller, and marks it as booked.
-func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err error) {
+func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *controller, err error) {
 	id := uuid.NewString()
 
 	observability := ""
@@ -248,6 +249,8 @@ func (p *pool) Spawn(ctx context.Context, binary string) (c *controller, err err
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 		"LD_LIBRARY_PATH="+ldPath,
 	)
+
+	cmd.Env = append(cmd.Env, env...)
 
 	c.Address = fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id)
 	c.Booking = flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR))
@@ -484,7 +487,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 	// Signal the process so it knowns it may have a new PID (only useful for containers which get
 	// restore with a different host PID).
 	callback.PreResumeFunc = func(ctx context.Context) error {
-		return syscall.Kill(int(<-restoredPid), RESTORE_NEW_PID_SIGNAL)
+		return syscall.Kill(int(<-restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
 	}
 
 	return callback
@@ -494,7 +497,7 @@ func (p *pool) Check(binary string) types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
 		component := &daemon.HealthCheckComponent{Name: "status"}
 
-		controller, err := p.Spawn(ctx, binary)
+		controller, err := p.Spawn(ctx, binary, fmt.Sprintf("CEDANA_GPU_SHM_SIZE=%d", CONTROLLER_CHECK_SHM_SIZE))
 		if err != nil {
 			component.Data = "failed"
 			component.Errors = append(component.Errors, err.Error())

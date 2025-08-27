@@ -48,15 +48,12 @@ teardown() {
     [[ "$output" == *"Ready"* ]]
 
     # Test that Cedana components are running
-    run kubectl get pods -n $CEDANA_NAMESPACE
-    [ "$status" -eq 0 ]
+    kubectl get pods -n $CEDANA_NAMESPACE
 
     # Check if all Cedana pods are actually ready
-    run kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=300s
-    [ "$status" -eq 0 ]
+    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=300s
 
-    run validate_propagator_connectivity
-    [ "$status" -eq 0 ]
+    validate_propagator_connectivity
 }
 
 # bats test_tags=deploy
@@ -68,15 +65,14 @@ teardown() {
     local spec
     spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
-    run kubectl apply -f "$spec"
-    [ "$status" -eq 0 ]
+    kubectl apply -f "$spec"
+
+    sleep 5
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
-    [ "$status" -eq 0 ]
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
-    [ "$status" -eq 0 ]
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
 }
 
 # bats test_tags=dump
@@ -88,29 +84,25 @@ teardown() {
     local spec
     spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
-    run kubectl apply -f "$spec"
-    [ "$status" -eq 0 ]
+    kubectl apply -f "$spec"
+
+    sleep 5
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
-    [ "$status" -eq 0 ]
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
     # Checkpoint the test pod
     run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE"
     [ "$status" -eq 0 ]
 
-    action_id=$output
-
     if [ $status -eq 0 ]; then
-        run validate_action_id "$action_id"
-        [ $status -eq 0 ]
+        action_id=$output
+        validate_action_id "$action_id"
 
-        run poll_action_status "$action_id" "checkpoint"
-        [ "$status" -eq 0 ]
+        poll_action_status "$action_id" "checkpoint"
     fi
 
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
-    [ "$status" -eq 0 ]
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
 }
 
 # bats test_tags=restore
@@ -122,50 +114,43 @@ teardown() {
     local spec
     spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
-    run kubectl apply -f "$spec"
-    [ "$status" -eq 0 ]
+    kubectl apply -f "$spec"
+
+    sleep 5
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
-    [ "$status" -eq 0 ]
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
     # Checkpoint the test pod
     run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE"
     [ "$status" -eq 0 ]
 
-    action_id=$output
-
     if [ $status -eq 0 ]; then
-        run validate_action_id "$action_id"
-        [ $status -eq 0 ]
+        action_id=$output
+        validate_action_id "$action_id"
 
-        run poll_action_status "$action_id" "checkpoint"
+        poll_action_status "$action_id" "checkpoint"
+
+        run restore_pod "$action_id" "$CLUSTER_ID"
         [ "$status" -eq 0 ]
-    fi
-
-    run restore_pod "$action_id" "$CLUSTER_ID"
-    [ $status -eq 0 ]
-
-    if [ $status -eq 0 ]; then
-        action_id="$output"
-        run validate_action_id "$action_id"
-        [ $status -eq 0 ]
-
-        run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
-        [ $status -eq 0 ]
 
         if [ $status -eq 0 ]; then
-            local restored_pod="$output"
-            run validate_pod "$NAMESPACE" "$restored_pod" 20s
-            [ $status -eq 0 ]
+            action_id="$output"
+            validate_action_id "$action_id"
 
-            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
             [ "$status" -eq 0 ]
+
+            if [ $status -eq 0 ]; then
+                local restored_pod="$output"
+                validate_pod "$NAMESPACE" "$restored_pod" 20s
+
+                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            fi
         fi
     fi
 
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
-    [ "$status" -eq 0 ]
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
 }
 
 # bats test_tags=restore
@@ -179,48 +164,41 @@ teardown() {
     local spec
     spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
 
-    run kubectl apply -f "$spec"
-    [ "$status" -eq 0 ]
+    kubectl apply -f "$spec"
+
+    sleep 5
 
     # Check if pod is running
-    run kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
-    [ "$status" -eq 0 ]
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
     # Checkpoint the test pod
     run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE"
     [ "$status" -eq 0 ]
 
-    action_id=$output
-
     if [ $status -eq 0 ]; then
-        run validate_action_id "$action_id"
-        [ $status -eq 0 ]
+        action_id=$output
+        validate_action_id "$action_id"
 
-        run poll_action_status "$action_id" "checkpoint"
+        poll_action_status "$action_id" "checkpoint"
+
+        kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+
+        run restore_pod "$action_id" "$CLUSTER_ID"
         [ "$status" -eq 0 ]
-    fi
-
-    run kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
-    [ "$status" -eq 0 ]
-
-    run restore_pod "$action_id" "$CLUSTER_ID"
-    [ $status -eq 0 ]
-
-    if [ $status -eq 0 ]; then
-        action_id="$output"
-        run validate_action_id "$action_id"
-        [ $status -eq 0 ]
-
-        run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
-        [ $status -eq 0 ]
 
         if [ $status -eq 0 ]; then
-            local restored_pod="$output"
-            run validate_pod "$NAMESPACE" "$restored_pod" 20s
-            [ $status -eq 0 ]
+            action_id="$output"
+            validate_action_id "$action_id"
 
-            run kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
             [ "$status" -eq 0 ]
+
+            if [ $status -eq 0 ]; then
+                local restored_pod="$output"
+                validate_pod "$NAMESPACE" "$restored_pod" 20s
+
+                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            fi
         fi
     fi
 }

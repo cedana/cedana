@@ -59,7 +59,7 @@ jobs:
       gpu_version: main
       streamer_version: main
       helm_chart_version: main
-      controller_version: staging
+      controller_version: main
       runtime_shim_version: cedana
 
   test:

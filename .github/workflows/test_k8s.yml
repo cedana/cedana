@@ -90,7 +90,16 @@ jobs:
 
   k8s:
     name: Kubernetes
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/tag=${{ matrix.cr }}-${{ matrix.storage }}/extras=s3-cache
+    runs-on:
+      ${{ (inputs.platform == 'eks' || inputs.platform == 'gke') && 'ubuntu-latest' || format(
+      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
+      github.run_id,
+      matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner,
+      matrix.arch,
+      matrix.compute == 'CUDA' && '-cuda-12-4' || '',
+      matrix.cr,
+      matrix.storage
+      ) }}
     timeout-minutes: 30
     needs: propagator-connectivity
     strategy:
@@ -190,6 +199,7 @@ jobs:
           name: streamer-${{ matrix.arch }}
 
       - name: Pre-install runtime shim
+        if: matrix.platform == 'K3s' # k3s needs it pre-installed
         run: |
           chmod +x ./cedana*
           sudo -E ./cedana plugin install k8s/runtime-shim
@@ -296,9 +306,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        platform:
+          - ${{ inputs.platform }}
         arch:
           - amd64
           - arm64
+        exclude: # XXX: Until github actions supports concurrency with matrix
+          - platform: EKS
+            arch: amd64
+          - platform: GKE
+            arch: arm64
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -310,7 +327,7 @@ jobs:
         id: download-report
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-k8s*
+          pattern: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}*
           path: report
 
       - name: Post report
@@ -323,11 +340,11 @@ jobs:
           failed-folded-report: true
           summary: true
           pull-request: true
-          title: ${{ matrix.arch }}
+          title: ${{ matrix.platform }} (${{ matrix.arch }})
           update-comment: true
           overwrite-comment: true
-          comment-tag: test-report-k8s-${{ matrix.arch }}
+          comment-tag: test-report-k8s-${{ matrix.arch }}-${{ matrix.platform }}
           group-by: "suite"
           always-group-by: true
           upload-artifact: true
-          artifact-name: ctrf-report-k8s-${{ matrix.arch }}
+          artifact-name: ctrf-report-k8s-${{ matrix.arch }}-${{ matrix.platform }}

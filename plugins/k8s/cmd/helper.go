@@ -256,27 +256,7 @@ func isDaemonRunning(ctx context.Context, address, protocol string) (bool, error
 		return false, err
 	}
 	defer client.Close()
-	// Wait for the daemon to be ready, and do health check
-	resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: false}, grpc.WaitForReady(true))
-	if err != nil {
-		return false, fmt.Errorf("cedana health check failed: %w", err)
-	}
-	errorsFound := false
-	for _, result := range resp.Results {
-		for _, component := range result.Components {
-			for _, errs := range component.Errors {
-				log.Error().Str("name", component.Name).Str("data", component.Data).Msgf("health check: %v", errs)
-				errorsFound = true
-			}
-			for _, warning := range component.Warnings {
-				log.Warn().Str("name", component.Name).Str("data", component.Data).Msgf("health check: %v", warning)
-			}
-		}
-	}
-	if errorsFound {
-		return false, fmt.Errorf("cedana health check failed")
-	}
-	return true, nil
+	return client.HealthCheckConnection(ctx, grpc.WaitForReady(true))
 }
 
 func runScript(ctx context.Context, script string, logOutput bool) error {
