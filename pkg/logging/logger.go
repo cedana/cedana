@@ -73,6 +73,10 @@ func SetLogger(writer io.Writer) {
 		Logger().Hook(LineInfoHook{})
 }
 
+func GetLogger() zerolog.Logger {
+	return log.Logger
+}
+
 func SetLevel(level string) {
 	var err error
 	Level, err = zerolog.ParseLevel(level)
