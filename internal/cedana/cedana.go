@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/pkg/version"
 )
 
 // Cedana implements all the capabilities that can be run without a server.
@@ -37,8 +38,8 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	var profilingShutdown func()
 
 	if config.Global.Metrics {
-		metricsShutdown = metrics.InitSigNoz(ctx)
-		logging.InitSigNoz(ctx, wg)
+		metricsShutdown = metrics.InitSigNoz(ctx, "cedana", version.Version)
+		logging.InitSigNoz(ctx, wg, "cedana", version.Version)
 	}
 
 	if config.Global.Profiling.Enabled {

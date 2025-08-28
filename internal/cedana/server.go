@@ -20,6 +20,7 @@ import (
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/cedana/cedana/pkg/version"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -60,8 +61,8 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 	var metricsShutdown func(context.Context) error
 
 	if config.Global.Metrics {
-		metricsShutdown = metrics.InitSigNoz(ctx)
-		logging.InitSigNoz(ctx, wg)
+		metricsShutdown = metrics.InitSigNoz(ctx, "cedana", version.Version)
+		logging.InitSigNoz(ctx, wg, "cedana", version.Version)
 	}
 
 	host, err := utils.GetHost(ctx)

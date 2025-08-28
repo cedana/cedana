@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/version"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -31,7 +30,7 @@ var Credentials *Creds
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func InitSigNoz(ctx context.Context) (shutdown func(context.Context) error) {
+func InitSigNoz(ctx context.Context, service, version string) (shutdown func(context.Context) error) {
 	var shutdownFuncs []func(context.Context) error
 
 	shutdown = func(ctx context.Context) error {
@@ -57,7 +56,7 @@ func InitSigNoz(ctx context.Context) (shutdown func(context.Context) error) {
 		return
 	}
 
-	tracerProvider, err := newTracerProvider(ctx, version.GetVersion())
+	tracerProvider, err := newTracerProvider(ctx, service, version)
 	if err != nil {
 		handleErr(err)
 		return
@@ -111,7 +110,7 @@ func newPropagator() propagation.TextMapPropagator {
 	)
 }
 
-func newTracerProvider(ctx context.Context, version string) (*trace.TracerProvider, error) {
+func newTracerProvider(ctx context.Context, service, version string) (*trace.TracerProvider, error) {
 	// set headers env var
 	if err := os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "signoz-ingestion-key="+Credentials.Headers); err != nil {
 		return nil, err
@@ -132,7 +131,7 @@ func newTracerProvider(ctx context.Context, version string) (*trace.TracerProvid
 	resources, err := resource.New(
 		ctx,
 		resource.WithAttributes(
-			semconv.ServiceNameKey.String("cedana"),
+			semconv.ServiceNameKey.String(service),
 			semconv.ServiceVersionKey.String(version),
 			attribute.KeyValue{
 				Key:   "cedana.service.url",

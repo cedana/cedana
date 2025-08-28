@@ -15,13 +15,11 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/cedana/cedana/pkg/version"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 const (
-	DEFAULT_SERVICE_NAME           = "cedana"
 	DEFAULT_MAX_BATCH_SIZE_JSON    = 100
 	DEFAULT_FLUSH_INTERVAL_MS_JSON = 5000 // 5 seconds
 )
@@ -78,7 +76,7 @@ type SigNozWriter struct {
 	wg            *sync.WaitGroup
 }
 
-func InitSigNoz(ctx context.Context, wg *sync.WaitGroup) {
+func InitSigNoz(ctx context.Context, wg *sync.WaitGroup, service, version string) {
 	handleErr := func(err error) {
 		log.Warn().Err(err).Msg("logs will not be sent to SigNoz")
 	}
@@ -95,14 +93,13 @@ func InitSigNoz(ctx context.Context, wg *sync.WaitGroup) {
 	}
 	clusterId, _ := os.LookupEnv("CEDANA_CLUSTER_ID")
 	cedanaUrl := config.Global.Connection.URL
-	version := version.GetVersion()
 
 	resources := map[string]string{
 		"host.name":          host.Hostname,
 		"cluster.id":         clusterId,
 		"cedana.service.url": cedanaUrl,
 		"version":            version,
-		"service.name":       DEFAULT_SERVICE_NAME,
+		"service.name":       service,
 	}
 
 	sw := &SigNozWriter{
