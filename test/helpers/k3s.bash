@@ -32,14 +32,14 @@ setup_cluster() {
     cat $KUBECONFIG > ~/.kube/config
 
     if [ -n "$CONTROLLER_DIGEST" ]; then
-        preload_images "cedana/cedana-controller@$CONTROLLER_DIGEST"
+        preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
     elif [ -n "$CONTROLLER_TAG" ]; then
-        preload_images "cedana/cedana-controller:$CONTROLLER_TAG"
+        preload_images "$CONTROLLER_REPO:$CONTROLLER_TAG"
     fi
     if [ -n "$HELPER_DIGEST" ]; then
-        preload_images "cedana/cedana-helper@$HELPER_DIGEST"
+        preload_images "$HELPER_REPO@$HELPER_DIGEST"
     elif [ -n "$HELPER_TAG" ]; then
-        preload_images "cedana/cedana-helper:$HELPER_TAG"
+        preload_images "$HELPER_REPO:$HELPER_TAG"
     fi
 
     debug_log "k3s cluster is ready"
