@@ -91,7 +91,7 @@ jobs:
   k8s:
     name: Kubernetes
     runs-on:
-      ${{ (inputs.platform == 'eks' || inputs.platform == 'gke') && 'ubuntu-latest' || format(
+      ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner,
@@ -176,6 +176,11 @@ jobs:
         with:
           name: cedana-${{ matrix.arch }}
 
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          name: plugins-${{ matrix.arch }}
+
       - name: Download CRIU
         uses: actions/download-artifact@v4
         with:
@@ -198,11 +203,31 @@ jobs:
         with:
           name: streamer-${{ matrix.arch }}
 
-      - name: Pre-install runtime shim
-        if: matrix.platform == 'K3s' # k3s needs it pre-installed
+      - name: Pre-install plugins
+        env:
+          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
+          STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
+        if: matrix.platform == 'K3s' # k3s will use pre-installed plugins
         run: |
           chmod +x ./cedana*
-          sudo -E ./cedana plugin install k8s/runtime-shim
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+          make install
+          sudo -E cedana plugin install \
+            runc \
+            containerd \
+            crio \
+            criu \
+            k8s/runtime-shim \
+            storage/cedana \
+            storage/s3 \
+            storage/gcs
+          if [ "$GPU" = "true" ]; then
+            sudo -E cedana plugin install gpu
+          fi
+          if [ "$STREAMER" = "true" ]; then
+            sudo -E cedana plugin install streamer
+          fi
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -217,6 +242,7 @@ jobs:
         env:
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci' }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
+          CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
@@ -231,7 +257,6 @@ jobs:
           CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
           HELM_CHART=/tmp/helm-chart
 
-          CEDANA_PLUGINS_BUILDS=alpha
           CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
           CEDANA_PLUGINS_RUNTIME_SHIM_VERSION=$(cat ./runtime-shim-version.txt)
           if [ "$GPU" = "true" ]; then

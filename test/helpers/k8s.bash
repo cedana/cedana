@@ -254,6 +254,8 @@ wait_for_ready() {
             kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
                 error_log "$line"
             done
+            error_log "Logs from pod $pod in namespace $namespace:"
+            error kubectl logs "$pod" -n "$namespace" --tail=1000 --
         done
         return 1
     }
