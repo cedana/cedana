@@ -194,9 +194,19 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 
 	if err := pushImage(context.WithoutCancel(ctx), client, ref, username, secret); err != nil {
 		log.Error().Msgf("failed to push image: %v", err)
+		return err
 	}
 
 	log.Info().Msgf("pushed image %s successful", ref)
+
+	// TODO: handle cases where the the push fails but snapshot is stored
+	go func() {
+		// max 10 minute
+		time.Sleep(10 * time.Minute)
+		if err := client.ImageService().Delete(context.WithoutCancel(ctx), img.Name); err != nil {
+			log.Warn().Msgf("Failed to delete image snapshot %s", img.Name)
+		}
+	}()
 
 	return nil
 }
