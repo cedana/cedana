@@ -43,6 +43,18 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 			continue
 		}
 
+		status, err := container.Status()
+		if err != nil {
+			resp.Messages = append(resp.Messages, fmt.Sprintf("Container %s: %v", id, err))
+			continue
+		}
+
+		if status != libcontainer.Running {
+			resp.Messages = append(resp.Messages,
+				fmt.Sprintf("Container %s is not running (status: %s)", id, status))
+			continue
+		}
+
 		var bundle string
 		for _, label := range state.Config.Labels {
 			if strings.HasPrefix(label, "bundle") {
