@@ -141,6 +141,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-runc.so to Cloudsmith
         id: push-libcedana-runc
@@ -156,6 +157,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-containerd.so to Cloudsmith
         id: push-libcedana-containerd
@@ -171,6 +173,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-crio.so to Cloudsmith
         id: push-libcedana-crio
@@ -186,6 +189,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-k8s.so to Cloudsmith
         id: push-libcedana-k8s
@@ -201,6 +205,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-cloud-hypervisor.so to Cloudsmith
         id: push-libcedana-cloud-hypervisor
@@ -216,6 +221,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-kata.so to Cloudsmith
         id: push-libcedana-kata
@@ -231,6 +237,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-storage-cedana.so to Cloudsmith
         id: push-libcedana-storage-cedana
@@ -246,6 +253,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-storage-s3.so to Cloudsmith
         id: push-libcedana-storage-s3
@@ -261,6 +269,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-storage-gcs.so to Cloudsmith
         id: push-libcedana-storage-gcs
@@ -276,6 +285,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
   dockerhub:
     name: DockerHub (multi-arch)

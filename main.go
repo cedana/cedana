@@ -7,7 +7,7 @@ import (
 	"syscall"
 
 	"github.com/cedana/cedana/cmd"
-	"github.com/cedana/cedana/internal/version"
+	"github.com/cedana/cedana/pkg/version"
 )
 
 // loaded from ldflag definitions

@@ -1,14 +1,11 @@
 package logging
 
 import (
-	"context"
 	"io"
 	"os"
 	"time"
 
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/metrics"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/rs/zerolog/pkgerrors"
@@ -21,8 +18,8 @@ const (
 )
 
 var (
-	Level              = zerolog.Disabled
-	globalSigNozWriter *SigNozJsonWriter
+	Level        = zerolog.Disabled
+	GlobalWriter io.Writer
 )
 
 type LineInfoHook struct{}
@@ -41,64 +38,48 @@ func InitLogger(level string) {
 	var err error
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
-	Level, err := zerolog.ParseLevel(level)
+	Level, err = zerolog.ParseLevel(level)
 	if err != nil || level == "" { // allow turning off logging
 		Level = zerolog.Disabled
 	}
 
-	var consoleWriter io.Writer = zerolog.ConsoleWriter{
+	GlobalWriter = zerolog.ConsoleWriter{
 		Out:          os.Stdout,
 		TimeFormat:   LOG_TIME_FORMAT,
 		TimeLocation: time.Local,
 	}
 
-	var writers []io.Writer
-	writers = append(writers, consoleWriter)
-
-	if config.Global.Metrics {
-		endpoint, headers, err := metrics.GetOtelCreds()
-		if err != nil {
-			log.Error().Err(err).Msg("failed to get otel creds")
-			return
-		}
-
-		host, err := utils.GetHost(context.Background())
-		if err != nil {
-			log.Error().Err(err).Msg("failed to get host info")
-			return
-		}
-
-		resourceAttrs := map[string]string{
-			"host.name": host.Hostname,
-		}
-
-		// Add SigNoz writer
-		globalSigNozWriter = NewSigNozJsonWriter(
-			"https://"+endpoint+":443/logs/json",
-			headers,
-			"cedana",
-			resourceAttrs,
-			DEFAULT_MAX_BATCH_SIZE_JSON,
-			DEFAULT_FLUSH_INTERVAL_MS_JSON,
-		)
-
-		writers = append(writers, globalSigNozWriter)
-	}
-	multiWriter := io.MultiWriter(writers...)
-
-	log.Logger = zerolog.New(multiWriter).
+	log.Logger = zerolog.New(GlobalWriter).
 		Level(Level).
 		With().
 		Timestamp().
 		Logger().Hook(LineInfoHook{})
 }
 
-func SetLogger(logger zerolog.Logger) {
-	log.Logger = logger
+func AddLogger(writer io.Writer) {
+	log.Logger = zerolog.New(io.MultiWriter(GlobalWriter, writer)).
+		Level(Level).
+		With().
+		Timestamp().
+		Logger().Hook(LineInfoHook{})
+}
+
+func SetLogger(writer io.Writer) {
+	GlobalWriter = writer
+	log.Logger = zerolog.New(GlobalWriter).
+		Level(Level).
+		With().
+		Timestamp().
+		Logger().Hook(LineInfoHook{})
+}
+
+func GetLogger() zerolog.Logger {
+	return log.Logger
 }
 
 func SetLevel(level string) {
-	Level, err := zerolog.ParseLevel(level)
+	var err error
+	Level, err = zerolog.ParseLevel(level)
 	if err != nil || level == "" { // allow turning off logging
 		Level = zerolog.Disabled
 	}

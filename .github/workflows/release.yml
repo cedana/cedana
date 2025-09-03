@@ -28,7 +28,7 @@ on:
         default: false
 
 concurrency:
-  group: cedana-release-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.repository }}-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -51,7 +51,7 @@ jobs:
       gpu_version: main
       streamer_version: main
       helm_chart_version: main
-      controller_version: staging
+      controller_version: main
       runtime_shim_version: release
 
   test:

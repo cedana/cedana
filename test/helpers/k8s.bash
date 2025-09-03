@@ -26,6 +26,7 @@ install_kubectl() {
     curl -Lo /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/$KC_ARCH/kubectl
     install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
     rm -f /tmp/kubectl
+    mkdir -p ~/.kube
     debug_log "kubectl installed"
 }
 
@@ -253,9 +254,43 @@ wait_for_ready() {
             kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
                 error_log "$line"
             done
+            error_log "Logs from pod $pod in namespace $namespace:"
+            error kubectl logs "$pod" -n "$namespace" --tail=1000 --
         done
         return 1
     }
 
     debug_log "All pods in namespace $namespace are Ready"
+}
+
+create_namespace() {
+    local namespace="$1"
+
+    if kubectl get namespace "$namespace" &>/dev/null; then
+        debug_log "Namespace $namespace already exists"
+        return 0
+    fi
+
+    debug_log "Creating namespace $namespace..."
+    kubectl create namespace "$namespace" || {
+        error_log "Failed to create namespace $namespace"
+        return 1
+    }
+    debug_log "Namespace $namespace created"
+}
+
+delete_namespace() {
+    local namespace="$1"
+
+    if ! kubectl get namespace "$namespace" &>/dev/null; then
+        debug_log "Namespace $namespace does not exist"
+        return 0
+    fi
+
+    debug_log "Deleting namespace $namespace"
+    kubectl delete namespace "$namespace" --wait=true "${@:2}" || {
+        error_log "Failed to delete namespace $namespace"
+        return 1
+    }
+    debug_log "Namespace $namespace deleted"
 }

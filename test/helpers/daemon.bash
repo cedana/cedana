@@ -10,6 +10,7 @@ export CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-false}
 export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-/tmp}
 export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
 export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
+export CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-alpha}
 export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1*GIBIBYTE))}"
 
 WAIT_TIMEOUT=30
@@ -33,8 +34,8 @@ WAIT_TIMEOUT=30
 setup_file_daemon() {
     if env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        export CEDANA_CONFIG_DIR
         CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_CONFIG_DIR
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
@@ -49,8 +50,8 @@ teardown_file_daemon() {
 setup_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
-        export CEDANA_CONFIG_DIR
         CEDANA_CONFIG_DIR="/tmp/cedana-$(basename "$SOCK")"
+        export CEDANA_CONFIG_DIR
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_ADDRESS="$SOCK"
@@ -66,7 +67,9 @@ teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
     else
-        kill "$TAIL_PID"
+        if [ -n "$TAIL_PID" ]; then
+            kill "$TAIL_PID"
+        fi
     fi
 }
 

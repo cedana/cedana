@@ -14,16 +14,18 @@ import (
 	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/internal/db"
-	"github.com/cedana/cedana/internal/version"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/cedana/cedana/pkg/version"
 	"github.com/mdlayher/vsock"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -31,8 +33,9 @@ import (
 type Server struct {
 	Cedana
 
-	grpcServer *grpc.Server
-	listener   net.Listener
+	grpcServer   *grpc.Server
+	healthServer *health.Server
+	listener     net.Listener
 
 	// fdStore stores a map of fds used for clh kata restores to persist network fds and send them
 	// to the appropriate clh vm api
@@ -52,10 +55,15 @@ type ServeOpts struct {
 	Version  string
 }
 
-func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
-	ctx = log.With().Str("context", "server").Logger().WithContext(ctx)
-	var err error
+func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error) {
 	wg := &sync.WaitGroup{}
+
+	var metricsShutdown func(context.Context) error
+
+	if config.Global.Metrics {
+		metricsShutdown = metrics.InitSigNoz(ctx, "cedana", version.Version)
+		logging.InitSigNoz(ctx, wg, "cedana", version.Version)
+	}
 
 	host, err := utils.GetHost(ctx)
 	if err != nil {
@@ -90,12 +98,13 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 		return nil, fmt.Errorf("failed to create job manager: %w", err)
 	}
 
-	server := &Server{
+	server = &Server{
 		Cedana: Cedana{
-			gpus:      gpuManager,
-			plugins:   pluginManager,
-			WaitGroup: wg,
-			lifetime:  ctx,
+			gpus:            gpuManager,
+			plugins:         pluginManager,
+			WaitGroup:       wg,
+			lifetime:        ctx,
+			metricsShutdown: metricsShutdown,
 		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(
@@ -106,13 +115,15 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 				profiling.UnaryProfiler(),
 			),
 		),
-		db:      database,
-		jobs:    jobManager,
-		host:    host,
-		version: opts.Version,
+		healthServer: health.NewServer(),
+		db:           database,
+		jobs:         jobManager,
+		host:         host,
+		version:      opts.Version,
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)
+	grpc_health_v1.RegisterHealthServer(server.grpcServer, server.healthServer)
 	reflection.Register(server.grpcServer)
 
 	var listener net.Listener
@@ -163,23 +174,19 @@ func NewServer(ctx context.Context, opts *ServeOpts) (*Server, error) {
 
 // Takes in a context that allows for cancellation from the cmdline
 func (s *Server) Launch(ctx context.Context) (err error) {
-	lifetime, cancel := context.WithCancelCause(ctx)
+	lifetime, cancel := context.WithCancel(ctx)
 	s.lifetime = lifetime
-
-	if config.Global.Metrics {
-		shutdown, _ := metrics.Init(ctx, version.GetVersion())
-		defer func() {
-			err = shutdown(ctx)
-		}()
-	}
+	s.cancel = cancel
 
 	go func() {
 		err := s.grpcServer.Serve(s.listener)
 		if err != nil {
-			cancel(err)
+			cancel()
 		}
+		s.healthServer.Shutdown()
 	}()
 
+	s.healthServer.Resume()
 	log.Info().Str("address", s.listener.Addr().String()).Msg("server listening")
 
 	<-lifetime.Done()
