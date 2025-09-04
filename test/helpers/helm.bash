@@ -89,7 +89,7 @@ helm_install_cedana() {
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
     fi
 
-    helm_cmd="$helm_cmd --wait --atomic --timeout=3m"
+    helm_cmd="$helm_cmd --wait --timeout=3m"
 
     $helm_cmd || {
         error_log "Failed to install helm chart"
