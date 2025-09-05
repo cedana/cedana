@@ -5,7 +5,7 @@
 ###################
 
 export KUBECONFIG=~/.kube/config
-export EKS_CLUSTER_NAME="${EKS_CLUSTER_NAME:-cedana-ci-amd64}"
+export EKS_CLUSTER_NAME="${EKS_CLUSTER_NAME:-cedana-ci-arm64}"
 
 install_aws_cli() {
     debug_log "Installing AWS CLI..."
