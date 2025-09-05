@@ -61,6 +61,7 @@ jobs:
           - arm64
     if: inputs.cedana
     steps:
+      - uses: runs-on/action@v1
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -117,6 +118,8 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -167,8 +170,9 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
-          submodules: recursive
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -251,8 +255,9 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
-          submodules: recursive
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
