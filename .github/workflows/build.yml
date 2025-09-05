@@ -68,6 +68,8 @@ jobs:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
