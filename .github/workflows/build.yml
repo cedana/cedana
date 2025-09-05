@@ -61,6 +61,11 @@ jobs:
           - arm64
     if: inputs.cedana
     steps:
+
+      - name: Rewrite SSH -> HTTPS for submodules
+        run: |
+          git config --global url."https://github.com/".insteadOf git@github.com:
+
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
         with:
