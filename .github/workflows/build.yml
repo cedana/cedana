@@ -61,12 +61,10 @@ jobs:
           - arm64
     if: inputs.cedana
     steps:
-
       - name: Rewrite SSH -> HTTPS for submodules
         run: |
           git config --global url."https://github.com/".insteadOf git@github.com:
 
-      - uses: runs-on/action@v1
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -74,7 +72,7 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           submodules: recursive
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
