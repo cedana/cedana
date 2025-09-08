@@ -61,7 +61,7 @@ jobs:
           - arm64
     if: inputs.cedana
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -111,7 +111,7 @@ jobs:
           - arm64
     if: inputs.plugins
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -164,7 +164,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - name: Checkout
         uses: actions/checkout@v4
         with:
@@ -249,7 +249,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - name: Checkout
         uses: actions/checkout@v4
         with:
