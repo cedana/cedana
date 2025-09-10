@@ -89,7 +89,7 @@ jobs:
       - name: Build
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make build VERSION=$VERSION
+          make build VERSION=$VERSION -j $(nproc)
           echo $VERSION > ./cedana-version.txt
 
       - name: Upload artifacts
@@ -139,7 +139,7 @@ jobs:
       - name: Build
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make plugins VERSION=$VERSION
+          make plugins VERSION=$VERSION -j $(nproc)
           echo $VERSION > ./plugins-version.txt
 
       - name: Upload artifacts
