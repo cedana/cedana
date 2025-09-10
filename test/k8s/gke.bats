@@ -33,11 +33,13 @@ setup_file() {
 }
 
 teardown_file() {
+    if [ -n "$TAIL_PID" ]; then
+        kill "$TAIL_PID"
+    fi
     delete_namespace "$NAMESPACE" --force
     helm_uninstall_cedana $CEDANA_NAMESPACE
     teardown_cluster &> /dev/null
     deregister_cluster "$CLUSTER_ID"
-    kill "$TAIL_PID" || true
 }
 
 teardown() {
@@ -112,8 +114,6 @@ teardown() {
 
 # bats test_tags=restore
 @test "Restore a pod with original pod running (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
-    skip # FIXME: Skip until cgroups issue figured out
-
     local name
     name=$(unix_nano)
     local script
@@ -162,8 +162,6 @@ teardown() {
 
 # bats test_tags=restore
 @test "Restore a pod with original pod deleted (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
-    skip # FIXME: Skip until cgroups issue figured out
-
     local name
     name=$(unix_nano)
     local script

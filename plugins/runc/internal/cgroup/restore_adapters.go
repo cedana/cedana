@@ -2,10 +2,7 @@ package cgroup
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -16,43 +13,16 @@ import (
 	runc_keys "github.com/cedana/cedana/plugins/runc/pkg/keys"
 	"github.com/opencontainers/cgroups"
 	"github.com/opencontainers/runc/libcontainer"
+	"github.com/opencontainers/runc/libcontainer/configs"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
-
-	specs "github.com/opencontainers/runtime-spec/specs-go"
 
 	// WARN: DO NOT REMOVE THIS IMPORT. Has side effects.
 	// See -> 'github.com/opencontainers/runc/libcontainer/cgroups/cgroups.go'
 	_ "github.com/opencontainers/cgroups/devices"
 )
-
-func GetNetworkPid(bundlePath string) (int, error) {
-	var spec specs.Spec
-	var pid int = 0
-	configPath := filepath.Join(bundlePath, "config.json")
-	if _, err := os.Stat(configPath); err == nil {
-		configFile, err := os.ReadFile(configPath)
-		if err != nil {
-			return 0, err
-		}
-		if err := json.Unmarshal(configFile, &spec); err != nil {
-			return 0, err
-		}
-		for _, ns := range spec.Linux.Namespaces {
-			if ns.Type == "network" && strings.Count(ns.Path, "/") > 1 {
-				path := ns.Path
-				splitPath := strings.Split(path, "/")
-				pid, err = strconv.Atoi(splitPath[2])
-				if err != nil {
-					return 0, err
-				}
-				break
-			}
-		}
-	}
-	return pid, nil
-}
 
 // Adds a initialize hook that applies cgroups to the CRIU process as soon as it is started.
 func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
@@ -71,48 +41,44 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 		}
 
 		config := container.Config()
-		var netpid int = 0
-		if req.Details.Runc != nil {
-			netpid, err = GetNetworkPid(req.Details.Runc.Bundle)
-			if err != nil {
-				return nil, err
+
+		var netPid int = 0
+		if config.Namespaces != nil {
+			for _, ns := range config.Namespaces {
+				if ns.Type == configs.NEWNET && strings.Count(ns.Path, "/") > 1 {
+					netpidStr := strings.Split(ns.Path, "/")[2]
+					netPid, err = strconv.Atoi(netpidStr)
+					if err != nil {
+						return nil, status.Errorf(codes.Internal, "failed to parse network namespace PID: %v", err)
+					}
+					break
+				}
 			}
 		}
 
 		callback := &criu.NotifyCallback{
-			InitializeFunc: func(ctx context.Context, criuPid int32) error {
-				if netpid != 0 {
-					targetCgroups, err := cgroups.ParseCgroupFile(fmt.Sprintf("/proc/%d/cgroup", netpid))
+			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
+				var paths map[string]string
+
+				if netPid != 0 { // Usually in k8s environments
+					log.Debug().Int("netPid", netPid).Msg("will apply cgroups based on the network namespace PID (assuming k8s environment)")
+					paths, err = cgroups.ParseCgroupFile(fmt.Sprintf("/proc/%d/cgroup", netPid))
 					if err != nil {
-						return err
+						return fmt.Errorf("failed to parse cgroup file for net PID %d: %v", netPid, err)
 					}
-
-					for controller, path := range targetCgroups {
-						cgroupPath := filepath.Join("/sys/fs/cgroup", controller, path, "cgroup.procs")
-						err := os.WriteFile(cgroupPath, []byte(strconv.Itoa(int(criuPid))), 0644)
-						if err != nil {
-							return err
-						}
+				} else { // Fallback
+					err = manager.Apply(int(criuPid))
+					if err != nil {
+						return fmt.Errorf("failed to apply cgroups: %v", err)
 					}
-					return nil
-				}
-				err := manager.Apply(int(criuPid))
-				if err != nil {
-					return fmt.Errorf("failed to apply cgroups: %v", err)
-				}
-				err = manager.Set(config.Cgroups.Resources)
-				if err != nil {
-					return fmt.Errorf("failed to set cgroup resources: %v", err)
+					err = manager.Set(config.Cgroups.Resources)
+					if err != nil {
+						return fmt.Errorf("failed to set cgroup resources: %v", err)
+					}
+					paths = manager.GetPaths()
 				}
 
-				// TODO Should we use c.cgroupManager.GetPaths()
-				// instead of reading /proc/pid/cgroup?
-				path := fmt.Sprintf("/proc/%d/cgroup", criuPid)
-				cgroupsPaths, err := cgroups.ParseCgroupFile(path)
-				if err != nil {
-					return err
-				}
-				for c, p := range cgroupsPaths {
+				for c, p := range paths {
 					cgroupRoot := &criu_proto.CgroupRoot{
 						Ctrl: proto.String(c),
 						Path: proto.String(p),

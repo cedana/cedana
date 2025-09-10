@@ -3,6 +3,7 @@ package defaults
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -33,29 +34,11 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 		}
 
 		// Only override if unset
-		// if req.Criu.ManageCgroupsMode == nil {
-		// 	var mode criu_proto.CriuCgMode
-		// 	switch strings.ToLower(config.Global.CRIU.ManageCgroups) {
-		// 	case "none":
-		// 		mode = criu_proto.CriuCgMode_CG_NONE
-		// 	case "props":
-		// 		mode = criu_proto.CriuCgMode_PROPS
-		// 	case "soft":
-		// 		mode = criu_proto.CriuCgMode_SOFT
-		// 	case "full":
-		// 		mode = criu_proto.CriuCgMode_FULL
-		// 	case "strict":
-		// 		mode = criu_proto.CriuCgMode_STRICT
-		// 	case "ignore":
-		// 		mode = criu_proto.CriuCgMode_IGNORE
-		// 	default:
-		// 		return nil, status.Errorf(codes.InvalidArgument, "invalid value for CRIU ManageCgroups: %s",
-		// 			config.Global.CRIU.ManageCgroups)
-		// 	}
-
-		// 	req.Criu.ManageCgroupsMode = &mode
-		// 	req.Criu.ManageCgroups = proto.Bool(true) // For backward compatibility
-		// }
+		if req.Criu.ManageCgroupsMode == nil {
+			mode := criu_proto.CriuCgMode(criu_proto.CriuCgMode_value[strings.ToUpper(config.Global.CRIU.ManageCgroups)])
+			req.Criu.ManageCgroupsMode = &mode
+			req.Criu.ManageCgroups = proto.Bool(true) // For backward compatibility
+		}
 
 		return next(ctx, opts, resp, req)
 	}
