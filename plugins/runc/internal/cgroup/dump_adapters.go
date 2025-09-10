@@ -68,7 +68,7 @@ func UseCgroupFreezerIfAvailableForDump(next types.Dump) types.Dump {
 			// If cached path doesn't work, try to find the current cgroup path dynamically
 			state, err := container.State()
 			if err != nil {
-				log.Debug().Err(err).Msg("failed to get container state, skipping cgroup freezer")
+				log.Warn().Err(err).Msg("failed to get container state, skipping cgroup freezer")
 				return next(ctx, opts, resp, req)
 			}
 

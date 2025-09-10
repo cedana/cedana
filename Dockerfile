@@ -35,8 +35,7 @@ ADD ./go.mod /app
 ADD ./go.sum /app
 RUN go mod download && rm -rf go.mod go.sum
 ADD . /app
-RUN make build
-RUN make plugins
+RUN make build plugins -j $(nproc)
 
 FROM ubuntu:22.04
 
