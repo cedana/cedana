@@ -222,10 +222,6 @@ jobs:
           - arm64
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download report
         id: download-report
