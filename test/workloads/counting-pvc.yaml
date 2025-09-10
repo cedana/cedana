@@ -1,0 +1,70 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: counting-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: "/tmp/counting-pv"
+  storageClassName: ""
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: counting-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: ""
+  volumeName: counting-pv
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: counting-pvc-pod
+spec:
+  initContainers:
+    - name: file-creator
+      image: alpine:latest
+      command:
+        - sh
+        - -c
+        - |
+          echo "Initial content from initContainer" > /mnt/pv/test.txt
+          echo "File created successfully in PVC"
+      volumeMounts:
+        - name: pv-storage
+          mountPath: /mnt/pv
+  containers:
+    - name: counting
+      image: cedana/cedana-samples:cpu
+      args:
+        - -c
+        - |
+          trap 'echo "Exiting..."; exit' SIGINT SIGTERM
+          COUNT=0
+          while true; do
+            echo "Loop iteration: $COUNT"
+            if [ -f /mnt/pv/test.txt ]; then
+              echo "Reading from PVC:"
+              cat /mnt/pv/test.txt
+            else
+              echo "No file found in PVC at /mnt/pv/test.txt"
+            fi
+            COUNT=$((COUNT + 1))
+            sleep 2
+          done
+      volumeMounts:
+        - name: pv-storage
+          mountPath: /mnt/pv
+          readOnly: true
+  volumes:
+    - name: pv-storage
+      persistentVolumeClaim:
+        claimName: counting-pvc

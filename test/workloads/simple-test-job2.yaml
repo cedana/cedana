@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: simple-test-job2
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: OnFailure
+      runtimeClassName: cedana
+      volumes:
+      - name: repo-data
+        emptyDir: {}
+
+      initContainers:
+      - name: clone-repo
+        image: alpine/git:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Cloning BusyBox repo into /workspace..."
+          git clone https://github.com/mirror/busybox.git /workspace || echo "Clone failed"
+        volumeMounts:
+        - name: repo-data
+          mountPath: /workspace
+
+      containers:
+      - name: runner
+        image: alpine:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "Starting loop..."
+          while true; do
+            date
+            sleep 5
+          done
+        volumeMounts:
+        - name: repo-data
+          mountPath: /workspace

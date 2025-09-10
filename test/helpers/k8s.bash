@@ -294,3 +294,28 @@ delete_namespace() {
     }
     debug_log "Namespace $namespace deleted"
 }
+
+# Get pod UID (unique identifier) from pod name and namespace
+# @param $1: Pod name
+# @param $2: Namespace
+# Returns: Pod UID
+get_pod_id() {
+    local pod_name="$1"
+    local namespace="$2"
+
+    if [ -z "$pod_name" ] || [ -z "$namespace" ]; then
+        error_log "get_pod_id requires pod_name and namespace"
+        return 1
+    fi
+
+    local pod_uid
+    pod_uid=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.metadata.uid}' 2>/dev/null)
+
+    if [ -z "$pod_uid" ]; then
+        error_log "Failed to get pod UID for pod '$pod_name' in namespace '$namespace'"
+        return 1
+    fi
+
+    echo "$pod_uid"
+    return 0
+}
