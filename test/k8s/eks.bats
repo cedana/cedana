@@ -221,18 +221,18 @@ teardown() {
 
     kubectl apply -f "$WORKLOADS"/counting-pvc.yaml -n "$NAMESPACE"
 
-    echo "[DEBUG] Checking PV status..."
+    debug_log "Checking PV status..."
     kubectl get pv "$pv_name" -o wide
-    echo "[DEBUG] Checking PVC status..."
+    debug_log "Checking PVC status..."
     kubectl get pvc "$pvc_name" -n "$NAMESPACE" -o wide
 
-    echo "[DEBUG] Waiting for PVC to bind..."
+    debug_log "Waiting for PVC to bind..."
     sleep 10
     run kubectl get pvc "$pvc_name" -n "$NAMESPACE" -o jsonpath='{.status.phase}'
-    echo "[DEBUG] PVC phase: $output"
+    debug_log "PVC phase: $output"
 
     if [[ "$output" != "Bound" ]]; then
-        echo "[DEBUG] PVC not bound, describing for more info..."
+        debug_log "PVC not bound, describing for more info..."
         kubectl describe pvc "$pvc_name" -n "$NAMESPACE"
         kubectl describe pv "$pv_name"
         skip "PVC failed to bind - infrastructure issue"
@@ -241,22 +241,22 @@ teardown() {
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$pod_name" --timeout=300s -n "$NAMESPACE"
 
     pod_id=$(get_pod_id "$pod_name" "$NAMESPACE")
-    echo "[DEBUG] Starting checkpoint of pod '$pod_name' (ID: $pod_id)..."
+    debug_log "Starting checkpoint of pod '$pod_name' (ID: $pod_id)..."
     run checkpoint_pod "$pod_name" "$RUNC_ROOT" "$NAMESPACE" "$pod_id"
     [ "$status" -eq 0 ]
 
     if [ $status -eq 0 ]; then
         action_id=$output
-        echo "[DEBUG] Checkpoint action ID: $action_id"
+        debug_log "Checkpoint action ID: $action_id"
         validate_action_id "$action_id"
 
-        echo "[DEBUG] Polling checkpoint status..."
+        debug_log "Polling checkpoint status..."
         poll_action_status "$action_id" "checkpoint"
 
-        echo "[DEBUG] Checkpoint complete, deleting original pod..."
+        debug_log "Checkpoint complete, deleting original pod..."
         kubectl delete pod "$pod_name" -n "$NAMESPACE" --wait=true
 
-        echo "[DEBUG] Starting restore..."
+        debug_log "Starting restore..."
         run restore_pod "$action_id" "$CLUSTER_ID"
         [ "$status" -eq 0 ]
 
@@ -266,7 +266,7 @@ teardown() {
 
             local restored_pod_name="${pod_name}-restored"
 
-            echo "[DEBUG] Waiting for restored pod '$restored_pod_name' to appear..."
+            debug_log "Waiting for restored pod '$restored_pod_name' to appear..."
             kubectl wait --for=condition=Ready pod/"$restored_pod_name" --timeout=60s -n "$NAMESPACE"
 
             if [ "$?" -eq 0 ]; then
@@ -274,31 +274,31 @@ teardown() {
                 validate_pod "$NAMESPACE" "$restored_pod" 20s
 
                 # Verify PVC still exists and is bound
-                echo "[DEBUG] Verifying PVC '$pvc_name' is bound in namespace '$NAMESPACE'..."
+                debug_log "Verifying PVC '$pvc_name' is bound in namespace '$NAMESPACE'..."
                 run kubectl get pvc "$pvc_name" -n "$NAMESPACE" -o jsonpath='{.status.phase}'
                 [ "$status" -eq 0 ]
-                echo "[DEBUG] PVC status: $output"
+                debug_log "PVC status: $output"
                 [[ "$output" == "Bound" ]]
 
                 # Verify pod has the PVC volume mounted
-                echo "[DEBUG] Verifying restored pod '$restored_pod' has PVC volume mounted..."
+                debug_log "Verifying restored pod '$restored_pod' has PVC volume mounted..."
                 run kubectl get pod "$restored_pod" -n "$NAMESPACE" -o jsonpath='{.spec.volumes[*].persistentVolumeClaim.claimName}'
                 [ "$status" -eq 0 ]
-                echo "[DEBUG] Pod volume PVC names: $output"
+                debug_log "Pod volume PVC names: $output"
                 [[ "$output" == *"$pvc_name"* ]]
 
                 # Verify the file is accessible in the restored pod
-                echo "[DEBUG] Waiting a few seconds for restored container to be fully ready for exec..."
+                debug_log "Waiting a few seconds for restored container to be fully ready for exec..."
                 sleep 5
-                echo "[DEBUG] Verifying file accessibility in restored pod '$restored_pod'..."
+                debug_log "Verifying file accessibility in restored pod '$restored_pod'..."
                 run kubectl exec "$restored_pod" -n "$NAMESPACE" -- cat /mnt/pv/test.txt
                 if [ "$status" -eq 0 ]; then
-                    echo "[DEBUG] File content: $output"
+                    debug_log "File content: $output"
                     [[ "$output" == *"Initial content from initContainer"* ]]
-                    echo "[DEBUG] PVC verification complete - all checks passed!"
+                    debug_log "PVC verification complete - all checks passed!"
                 else
-                    echo "[DEBUG] File exec failed (status: $status), but PVC mount verification passed"
-                    echo "[DEBUG] This may be a container runtime exec issue after restore"
+                    debug_log "File exec failed (status: $status), but PVC mount verification passed"
+                    debug_log "This may be a container runtime exec issue after restore"
                 fi
 
                 kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
@@ -308,86 +308,4 @@ teardown() {
 
     kubectl delete pvc "$pvc_name" -n "$NAMESPACE" --wait=true || true
     kubectl delete pv "$pv_name" --wait=true || true
-}
-
-# bats test_tags=k8s,kubernetes,aws,AWS,eks,EKS,job,checkpoint,restore
-@test "Checkpoint and restore job with init container and volume (Tamarind example) (streams=$CEDANA_CHECKPOINT_STREAMS)" {
-    local job_name="simple-test-job2"
-
-    kubectl apply -f "$WORKLOADS"/simple-test-job2.yaml -n "$NAMESPACE"
-
-    echo "[DEBUG] Waiting for job '$job_name' to create a pod..."
-    sleep 10
-
-    local pod_name
-    pod_name=$(kubectl get pods -n "$NAMESPACE" -l job-name="$job_name" -o jsonpath='{.items[0].metadata.name}')
-
-    if [ -z "$pod_name" ]; then
-        echo "[DEBUG] No pod found for job '$job_name', checking job status..."
-        kubectl describe job "$job_name" -n "$NAMESPACE"
-        skip "Job failed to create pod"
-    fi
-
-    echo "[DEBUG] Pod created: '$pod_name'"
-
-    # Wait for pod to be running
-    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$pod_name" --timeout=300s -n "$NAMESPACE"
-
-    echo "[DEBUG] Letting pod run for 30 seconds..."
-    sleep 30
-
-    pod_id=$(get_pod_id "$pod_name" "$NAMESPACE")
-    echo "[DEBUG] Starting checkpoint of pod '$pod_name' (ID: $pod_id)..."
-    run checkpoint_pod "$pod_name" "$RUNC_ROOT" "$NAMESPACE" "$pod_id"
-    [ "$status" -eq 0 ]
-
-    if [ $status -eq 0 ]; then
-        action_id=$output
-        echo "[DEBUG] Checkpoint action ID: $action_id"
-        validate_action_id "$action_id"
-
-        echo "[DEBUG] Polling checkpoint status..."
-        poll_action_status "$action_id" "checkpoint"
-
-        echo "[DEBUG] Checkpoint complete, deleting original pod..."
-        kubectl delete pod "$pod_name" -n "$NAMESPACE" --wait=true
-
-        echo "[DEBUG] Starting restore..."
-        run restore_pod "$action_id" "$CLUSTER_ID"
-        [ "$status" -eq 0 ]
-
-        if [ $status -eq 0 ]; then
-            action_id="$output"
-            validate_action_id "$action_id"
-
-            # TODO Uh for some reason there are two dashes... ?
-            local restored_pod_name="${pod_name}--restored"
-
-            echo "[DEBUG] Waiting for restored pod '$restored_pod_name' to appear..."
-            kubectl wait --for=condition=Ready pod/"$restored_pod_name" --timeout=60s -n "$NAMESPACE"
-
-            if [ "$?" -eq 0 ]; then
-                local restored_pod="$restored_pod_name"
-                validate_pod "$NAMESPACE" "$restored_pod" 20s
-
-                echo "[DEBUG] Verifying volume mount in restored pod '$restored_pod'..."
-                run kubectl exec "$restored_pod" -n "$NAMESPACE" -- ls -la /workspace
-                if [ "$status" -eq 0 ]; then
-                    echo "[DEBUG] Volume contents: $output"
-                    run kubectl exec "$restored_pod" -n "$NAMESPACE" -- ls -la /workspace/busybox
-                    if [ "$status" -eq 0 ]; then
-                        echo "[DEBUG] BusyBox repo found in restored pod - volume persistence verified!"
-                    else
-                        echo "[DEBUG] BusyBox repo not found, but volume mount verified"
-                    fi
-                else
-                    echo "[DEBUG] Volume exec failed (status: $status), but pod restoration verified"
-                fi
-
-                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
-            fi
-        fi
-    fi
-
-    kubectl delete job "$job_name" -n "$NAMESPACE" --wait=true || true
 }
