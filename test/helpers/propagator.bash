@@ -31,29 +31,32 @@ PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
 # @param $1: Pod name
 # @param $2: Runc root path
 # @param $3: Namespace
-# @param $4: Cluster ID
+# @param $4: Pod ID (UID)
 # Returns: Action ID for polling
 checkpoint_pod() {
     local pod_name="$1"
     local runc_root="$2"
     local namespace="$3"
+    local pod_id="$4"
 
-    if [ -z "$pod_name" ] || [ -z "$runc_root" ] || [ -z "$namespace" ]; then
-        error_log "checkpoint_pod requires pod_name, runc_root, namespace"
+    if [ -z "$pod_name" ] || [ -z "$runc_root" ] || [ -z "$namespace" ] || [ -z "$pod_id" ]; then
+        error_log "checkpoint_pod requires pod_name, runc_root, namespace, pod_id"
         return 1
     fi
 
-    debug_log "Checkpointing pod '$pod_name' in namespace '$namespace'..."
+    debug_log "Checkpointing pod '$pod_name' (ID: $pod_id) in namespace '$namespace'..."
 
     local payload
     payload=$(jq -n \
         --arg pod_name "$pod_name" \
         --arg runc_root "$runc_root" \
         --arg namespace "$namespace" \
+        --arg pod_id "$pod_id" \
         '{
             "pod_name": $pod_name,
             "runc_root": $runc_root,
-            "namespace": $namespace
+            "namespace": $namespace,
+            "pod_id": $pod_id
         }')
 
     local response
