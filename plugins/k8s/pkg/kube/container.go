@@ -114,7 +114,9 @@ func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string) 
 
 		spec, err = runc.LoadSpec(filepath.Join(bundle, "config.json"))
 		if err != nil {
-			return nil, err
+			// If we can't load the spec, skip this container
+			// This happens when cedana messes up and leaves a stale container behind
+			continue
 		}
 
 		var containerNameAnnotation, sandboxNameAnnotation string
