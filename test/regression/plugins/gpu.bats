@@ -208,6 +208,6 @@ teardown_file() {
 
     cedana restore process --path "$dump_file" --no-server &
 
-    run wait_for_pid "$pid"
-    kill -KILL "$pid"
+    wait_for_pid "$pid"
+    run kill -KILL "$pid"
 }

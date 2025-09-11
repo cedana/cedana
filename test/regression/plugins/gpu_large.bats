@@ -34,6 +34,31 @@ teardown_file() {
 
 # bats test_tags=dump,restore
 @test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
-    # Requires an HF token!
-    run_inference_test "stabilityai/stablelm-2-1_6b"
+    local model="stabilityai/stablelm-2-1_6b"
+
+    jid=$(unix_nano)
+    sleep_duration=$((RANDOM % 11 + 10))
+
+    run cedana run process -g --jid "$jid" -- python3 /cedana-samples/gpu_smr/pytorch/llm/transformers_inference.py --model "$model"
+    assert_success
+
+    sleep "$sleep_duration"
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    sleep 5
+
+    run cedana restore job "$jid"
+    assert_success
+
+    run cedana ps
+    assert_success
+    assert_output --partial "$jid"
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"
 }

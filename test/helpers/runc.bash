@@ -243,5 +243,7 @@ wait_for_container_status() {
         elapsed=$((elapsed + interval))
     done
 
+    error_log "Timeout waiting for container $cid to reach status $status"
+
     return 1
 }

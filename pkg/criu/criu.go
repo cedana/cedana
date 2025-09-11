@@ -44,8 +44,8 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	}
 
 	cln := os.NewFile(uintptr(fds[0]), "criu-xprt-cln")
+	defer cln.Close()
 	clnNet, err := net.FileConn(cln)
-	cln.Close()
 	if err != nil {
 		return err
 	}

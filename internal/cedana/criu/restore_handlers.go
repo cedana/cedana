@@ -45,9 +45,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
 	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
-	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
-	criuOpts.RstSibling = proto.Bool(true) // always restore as a child of the daemon
 
 	// Change ownership of the dump directory
 	uids := resp.GetState().GetUIDs()

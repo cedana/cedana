@@ -51,7 +51,6 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
-	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
 
 	// Change ownership of the dump directory

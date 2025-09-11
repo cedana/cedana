@@ -40,6 +40,9 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 			req.Criu.ManageCgroups = proto.Bool(true) // For backward compatibility
 		}
 
+		req.Criu.NotifyScripts = proto.Bool(true)
+		req.Criu.EvasiveDevices = proto.Bool(true)
+
 		return next(ctx, opts, resp, req)
 	}
 }

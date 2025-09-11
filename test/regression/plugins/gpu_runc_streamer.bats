@@ -104,7 +104,6 @@ teardown_file() {
     assert_success
 
     run cedana job kill "$jid"
-    run cedana job delete "$jid"
 }
 
 # bats test_tags=restore
@@ -130,7 +129,6 @@ teardown_file() {
     assert_success
 
     run cedana job kill "$jid"
-    run cedana job delete "$jid"
 }
 
 # bats test_tags=restore,daemonless
@@ -157,8 +155,7 @@ teardown_file() {
     run cedana restore runc --path "$dump_file" --id "$jid" --bundle "$bundle" --detach --no-server
     assert_success
 
-    run wait_for_container_status "$jid" "running"
-
+    wait_for_container_status "$jid" "running"
     runc kill "$jid" KILL
     wait_for_container_status "$jid" "stopped"
     runc delete "$jid"

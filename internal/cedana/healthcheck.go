@@ -49,7 +49,7 @@ func (s *Cedana) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 		checklist = append(checklist, s.pluginChecklist()...)
 	}
 
-	results := checklist.Run(ctx)
+	results := checklist.Run(s.lifetime)
 
 	return &daemon.HealthCheckResp{Results: results}, nil
 }

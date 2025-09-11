@@ -41,8 +41,8 @@ const (
 	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
-	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1     // Signal to the restored process to notify it has a new PID
-	CONTROLLER_CHECK_SHM_SIZE              = 10 * utils.MEBIBYTE // Small size to run controller health check
+	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1      // Signal to the restored process to notify it has a new PID
+	CONTROLLER_CHECK_SHM_SIZE              = 100 * utils.MEBIBYTE // Small size to run controller health check
 
 	FREEZE_TIMEOUT   = 1 * time.Minute
 	UNFREEZE_TIMEOUT = 1 * time.Minute
@@ -503,9 +503,7 @@ func (p *pool) Check(binary string) types.Check {
 			component.Errors = append(component.Errors, err.Error())
 			return []*daemon.HealthCheckComponent{component}
 		}
-		defer func() {
-			p.Terminate(controller.ID)
-		}()
+		defer p.Terminate(controller.ID)
 
 		components, err := controller.WaitForHealthCheck(ctx)
 		if components == nil && err != nil {

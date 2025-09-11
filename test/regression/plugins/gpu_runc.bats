@@ -193,9 +193,8 @@ teardown_file() {
     run cedana restore runc --path "$dump_file" --id "$jid" --bundle "$bundle" --detach --no-server
     assert_success
 
-    run wait_for_container_status "$jid" "running"
-
-    runc kill "$jid" KILL
+    wait_for_container_status "$jid" "running"
+    run runc kill "$jid" KILL
     wait_for_container_status "$jid" "stopped"
-    runc delete "$jid"
+    run runc delete "$jid"
 }
