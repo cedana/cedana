@@ -53,7 +53,7 @@ const (
 
 	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
 	PARALLEL_DUMP    = true
-	PARALLEL_RESTORE = false // XXX: Disabled until host mem handling is improved
+	PARALLEL_RESTORE = true
 )
 
 type controller struct {

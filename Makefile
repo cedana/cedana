@@ -22,7 +22,7 @@ all: build install plugins plugins-install ## Build and install (with all plugin
 
 BINARY=cedana
 BINARY_SOURCES=$(shell find . -path ./test -prune -o -type f -name '*.go' -not -path './plugins/*' -print)
-PKG_SOURCES=$(shell find pkg -name '*.go')
+PKG_SOURCES=$(sort $(shell find pkg -name '*.go'))
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
@@ -88,7 +88,7 @@ PLUGIN_BINARIES=$(patsubst %,$(OUT_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 PLUGIN_INSTALL_PATHS=$(patsubst %,$(INSTALL_LIB_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 
 plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
-$(OUT_DIR)/libcedana-%.so: $(shell find plugins/"$*" -type f) $(PKG_SOURCES)
+$(OUT_DIR)/libcedana-%.so: plugins/%/**/*.go plugins/%/*.go $(PKG_SOURCES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building plugin $* with debug symbols..." ;\
 		$(GOBUILD) -C plugins/"$*" -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\

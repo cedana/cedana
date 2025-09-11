@@ -106,7 +106,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 				return nil, err
 			}
 
-			job.SetDetails(req.Details) // Set again, in case they get modified later
+			job.SetDetails(req.Details) // Set again, in case they got modified
 			job.SetLog(req.Log)
 
 			err = jobs.Manage(opts.Lifetime, jid, resp.PID, code())

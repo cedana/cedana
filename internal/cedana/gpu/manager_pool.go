@@ -44,6 +44,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 		for {
 			select {
 			case <-lifetime.Done():
+				log.Info().Msg("syncing GPU manager before shutdown")
 				manager.poolSize = 0 // Reset it so all free controllers are terminated
 				err := manager.Sync(context.WithoutCancel(lifetime))
 				if err != nil {
