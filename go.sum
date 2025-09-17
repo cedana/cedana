@@ -6,10 +6,16 @@ buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-2025061
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250612023004-babcadcb96ee.1/go.mod h1:aBOGTWtzs/KK01BRrLRKUwkytDF2R6w9RGsFJY3zL/w=
 buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250715194101-6e81b5367634.2 h1:K9VTtFsFE/++pfBkzWr5HqFrUroMaec0Q7b1ll2EbEU=
 buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250715194101-6e81b5367634.2/go.mod h1:cPO3MZ6PYEVfitK7fSoc1BIaNyXRNiGeYp1MeLl/BbA=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250917144414-68e8d698f1d6.2 h1:wEtyyeEAG34aGgZ27uQzNR1yLofq2AEuvOKbW39OKco=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250917144414-68e8d698f1d6.2/go.mod h1:+i1yA+PwbRqIdYP5mz8hcmlLBjjOEu7Zlgxcv56u334=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250715194101-6e81b5367634.1 h1:EbRII2TwNeXib6WlYZYOIB1sMgIxcwFbHOiKLSd9AW0=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250715194101-6e81b5367634.1/go.mod h1:XbQWufyvioWtq06NgiPQlPRh9Tt7vmdG3xJ7kdpgLcc=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.9-20250917144414-68e8d698f1d6.1 h1:OCEigrDKgTNCgg1YTXEeQH0/8PJwGeWS2icN0izu2t4=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.9-20250917144414-68e8d698f1d6.1/go.mod h1:4nMrQRUdYUdT5VtwUPvUOJdSiE+b2XwjvEudMpGSlUk=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250715194101-730ceffc8abc.1 h1:UctUaJsbNnBikLmuXrxTxNQ5c99OeQ+FmhdXINHvLNk=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250715194101-730ceffc8abc.1/go.mod h1:TitVRewrbL1dt6BJSEMDRXbk5mOuJ1FZA4Iv7W0ERbY=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.9-20250917144414-ece12dbafa85.1 h1:/r7j3xIe1pq2VcMph/mXBTmlmPTbQXCUC9ZIwbHl52Y=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.9-20250917144414-ece12dbafa85.1/go.mod h1:QvBohWsDTVBHRQDhtNdaqOseN8fasdLUdP5ct7bhv7c=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 h1:bvDV9vkmnHYOMsOr4WLk+Vo07yKIzd94sVoIqshQ4bU=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24/go.mod h1:8o94RPi1/7XTJvwPpRSzSUedZrtlirdB3r9Z20bi2f8=
@@ -446,6 +452,8 @@ google.golang.org/protobuf v1.27.1/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQ
 google.golang.org/protobuf v1.28.1/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
 google.golang.org/protobuf v1.36.6 h1:z1NpPI8ku2WgiWnf+t9wTPsn6eP1L7ksHUlkfLvd9xY=
 google.golang.org/protobuf v1.36.6/go.mod h1:jduwjTPXsFjZGTmRluh+L6NjiWu7pchiJ2/5YcXBHnY=
+google.golang.org/protobuf v1.36.9 h1:w2gp2mA27hUeUzj9Ex9FBjsBm40zfaDtEWow293U7Iw=
+google.golang.org/protobuf v1.36.9/go.mod h1:fuxRtAxBytpl4zzqUh6/eyUujkJdNiuEkXntxiD/uRU=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=

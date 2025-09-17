@@ -8,9 +8,9 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250625172019-248562eac338.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250625172019-248562eac338.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250612023004-babcadcb96ee.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250715194101-6e81b5367634.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-20250715194101-6e81b5367634.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.6-20250715194101-730ceffc8abc.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20250917144414-68e8d698f1d6.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.9-20250917144414-68e8d698f1d6.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.9-20250917144414-ece12dbafa85.1
 	github.com/aws/aws-sdk-go-v2/config v1.30.2
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.2
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.18.2
@@ -57,7 +57,7 @@ require (
 	golang.org/x/net v0.40.0
 	golang.org/x/sys v0.33.0
 	google.golang.org/grpc v1.72.1
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.9
 	gopkg.in/yaml.v3 v3.0.1
 )
 

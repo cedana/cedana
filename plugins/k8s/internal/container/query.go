@@ -63,6 +63,7 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 				SandboxNamespace: container.SandboxNamespace,
 				SandboxUID:       container.SandboxUID,
 				Image:            container.Image,
+				Name:             container.Name,
 
 				Runc: &runc.Runc{
 					ID:     container.ID,

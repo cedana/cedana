@@ -466,9 +466,10 @@ type CheckpointInformation struct {
 	Gpu           bool          `json:"gpu"`
 	Platform      string        `json:"platform"`
 	ProfilingInfo ProfilingInfo `json:"profiling_info"`
+	ContainerName string        `json:"container_name"`
 }
 
-func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id string, profiling *profiling.Data, resp *daemon.DumpResp, rootfs bool) error {
+func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id, name string, profiling *profiling.Data, resp *daemon.DumpResp, rootfs bool) error {
 	publisher, err := rabbitmq.NewPublisher(
 		es.conn,
 	)
@@ -492,6 +493,7 @@ func (es *EventStream) PublishCheckpointSuccess(req CheckpointPodReq, pod_id, id
 		CheckpointId:  id,
 		Status:        "success",
 		ProfilingInfo: profilingInfo,
+		ContainerName: name,
 	}
 	if !rootfs {
 		ci.Gpu = resp.State.GPUEnabled
@@ -571,7 +573,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 				if err != nil {
 					log.Error().Err(err).Msg("failed to roofs checkpoint container in pod")
 				} else {
-					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp, true)
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, container.Name, profiling, resp, true)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
 					}
@@ -588,7 +590,7 @@ func (es *EventStream) ConsumeCheckpointRequest(address, protocol string) (*rabb
 				if err != nil {
 					log.Error().Err(err).Msg("failed to checkpoint pod containers")
 				} else {
-					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, profiling, resp, false)
+					err := es.PublishCheckpointSuccess(req, container.SandboxUID, *checkpointId, container.Name, profiling, resp, false)
 					if err != nil {
 						log.Error().Err(err).Msg("failed to publish checkpoint success")
 					}
