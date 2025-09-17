@@ -40,6 +40,7 @@ const (
 	CONTROLLER_HOSTMEM_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
 	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
+	CONTROLLER_DEFAULT_FREEZE_TYPE         = gpu.FreezeType_FREEZE_TYPE_IPC
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1      // Signal to the restored process to notify it has a new PID
 	CONTROLLER_CHECK_SHM_SIZE              = 100 * utils.MEBIBYTE // Small size to run controller health check
@@ -343,7 +344,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
 		controller.Termination.Lock()
 
-		freezeType = append(freezeType, gpu.FreezeType_FREEZE_TYPE_IPC) // Default to IPC freeze type if not provided
+		freezeType = append(freezeType, CONTROLLER_DEFAULT_FREEZE_TYPE) // Default to IPC freeze type if not provided
 
 		log.Debug().Str("ID", id).Uint32("PID", pid).Str("type", freezeType[0].String()).Msg("GPU freeze starting")
 

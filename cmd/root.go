@@ -30,6 +30,8 @@ func init() {
 	rootCmd.AddCommand(docGenCmd)
 	rootCmd.AddCommand(dumpVMCmd)
 	rootCmd.AddCommand(checkCmd)
+	rootCmd.AddCommand(freezeCmd)
+	rootCmd.AddCommand(unfreezeCmd)
 
 	// Add helper cmds from plugins
 	features.HelperCmds.IfAvailable(

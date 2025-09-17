@@ -2,18 +2,21 @@ package container
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
+	"github.com/cedana/cedana/plugins/containerd/pkg/utils"
 	"github.com/cedana/cedana/plugins/k8s/pkg/kube"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-// Implements the query handler for k8s
+const DEFAULT_CONTAINERD_ROOT = "/run/containerd/runc/k8s.io"
 
+// Implements the query handler for k8s
 type QueryHandler interface {
 	Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 }
@@ -29,49 +32,57 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 		return nil, status.Errorf(codes.InvalidArgument, "k8s query missing")
 	}
 	if query.Root == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "k8s root missing")
-	}
-	if query.Namespace == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "k8s namespace missing")
+		query.Root = DEFAULT_CONTAINERD_ROOT
 	}
 
 	resp := &daemon.QueryResp{K8S: &k8s.QueryResp{}}
 	kubeClient := &kube.DefaultKubeClient{}
+	containerdNamespace := utils.NamespaceFromRoot(query.Root)
 
 	fs := afero.NewOsFs()
-	containers, err := kubeClient.ListContainers(fs, query.Root, query.Namespace)
+	containers, err := kubeClient.ListContainers(fs, query.Root, query.Namespace, query.ContainerType)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list k8s containers: %v", err)
 	}
 
-	skipContainerNameMatch := len(query.ContainerNames) == 0
-	skipSandboxNameMatch := 0 == len(query.SandboxNames)
-	containerNameSet := make(map[string]bool)
+	skipEmptyNames := true
 	sandboxNameSet := make(map[string]bool)
-	for _, name := range query.ContainerNames {
-		containerNameSet[name] = true
-	}
-	for _, name := range query.SandboxNames {
+	for _, name := range query.Names {
+		skipEmptyNames = false
 		sandboxNameSet[name] = true
 	}
-	for _, container := range containers {
-		if (skipContainerNameMatch || containerNameSet[container.Name]) &&
-			(skipSandboxNameMatch || sandboxNameSet[container.SandboxName]) {
-			resp.K8S.Containers = append(resp.K8S.Containers, &k8s.Container{
-				SandboxID:        container.SandboxID,
-				SandboxName:      container.SandboxName,
-				SandboxNamespace: container.SandboxNamespace,
-				SandboxUID:       container.SandboxUID,
-				Image:            container.Image,
 
-				Runc: &runc.Runc{
-					ID:     container.ID,
-					Bundle: container.Bundle,
-					Root:   query.Root,
-				},
+	podMap := make(map[string]*k8s.Pod)
+
+	for _, container := range containers {
+		if skipEmptyNames || sandboxNameSet[container.SandboxName] {
+			pod, ok := podMap[container.SandboxID]
+			if !ok {
+				pod = &k8s.Pod{
+					ID:        container.SandboxID,
+					Name:      container.SandboxName,
+					Namespace: container.SandboxNamespace,
+					UID:       container.SandboxUID,
+				}
+				podMap[container.SandboxID] = pod
+			}
+			pod.Containerd = append(pod.Containerd, &containerd.Containerd{
+				ID:        container.ID,
+				Image:     &containerd.Image{Name: container.Image},
+				Namespace: containerdNamespace,
 			})
 		}
 	}
+
+	for _, pod := range podMap {
+		resp.K8S.Pods = append(resp.K8S.Pods, pod)
+	}
+
+	if len(resp.K8S.Pods) == 0 {
+		return nil, status.Errorf(codes.NotFound, "no pods found")
+	}
+
+	resp.Messages = append(resp.Messages, fmt.Sprintf("Found %d pod(s)", len(resp.K8S.Pods)))
 
 	return resp, nil
 }

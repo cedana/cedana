@@ -49,7 +49,7 @@ func CreateContainerForRun(next types.Run) types.Run {
 		switch req.Action {
 		case daemon.RunAction_START_NEW:
 
-			image, err := client.GetImage(ctx, details.Image)
+			image, err := client.GetImage(ctx, details.GetImage().GetName())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
 			}

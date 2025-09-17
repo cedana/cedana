@@ -128,7 +128,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.Internal, "failed to stream dump: %v", err)
 			}
 
-			resp.Path = path
+			resp.Paths = append(resp.Paths, path)
 
 			return code, nil
 		}

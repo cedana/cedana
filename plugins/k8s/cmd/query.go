@@ -18,9 +18,9 @@ import (
 
 func init() {
 	QueryCmd.Flags().StringP(runc_flags.RootFlag.Full, runc_flags.RootFlag.Short, "", "root")
-	QueryCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "namespace")
-	QueryCmd.Flags().StringSliceP(k8s_flags.NameFlag.Full, k8s_flags.NameFlag.Short, nil, "container name(s)")
-	QueryCmd.Flags().StringSliceP(k8s_flags.SandboxFlag.Full, k8s_flags.SandboxFlag.Short, nil, "sandbox name(s)")
+	QueryCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "pod namespace")
+	QueryCmd.Flags().StringSliceP(k8s_flags.NameFlag.Full, k8s_flags.NameFlag.Short, nil, "pod name(s)")
+	QueryCmd.Flags().StringP(k8s_flags.ContainerTypeFlag.Full, k8s_flags.ContainerTypeFlag.Short, "", "container type (container, sandbox)")
 }
 
 var QueryCmd = &cobra.Command{
@@ -36,15 +36,15 @@ var QueryCmd = &cobra.Command{
 		root, _ := cmd.Flags().GetString(runc_flags.RootFlag.Full)
 		namespace, _ := cmd.Flags().GetString(containerd_flags.NamespaceFlag.Full)
 		names, _ := cmd.Flags().GetStringSlice(k8s_flags.NameFlag.Full)
-		sandboxes, _ := cmd.Flags().GetStringSlice(k8s_flags.SandboxFlag.Full)
+		containerType, _ := cmd.Flags().GetString(k8s_flags.ContainerTypeFlag.Full)
 
 		req := &daemon.QueryReq{
 			Type: "k8s",
 			K8S: &k8s.QueryReq{
-				Root:           root,
-				Namespace:      namespace,
-				ContainerNames: names,
-				SandboxNames:   sandboxes,
+				Root:          root,
+				Namespace:     namespace,
+				Names:         names,
+				ContainerType: containerType,
 			},
 		}
 
@@ -55,8 +55,8 @@ var QueryCmd = &cobra.Command{
 
 		result := resp.K8S
 
-		if len(result.Containers) == 0 {
-			fmt.Println("No containers found")
+		if len(result.Pods) == 0 {
+			fmt.Println("No pods found")
 			return nil
 		}
 
@@ -66,30 +66,34 @@ var QueryCmd = &cobra.Command{
 
 		tableWriter.AppendHeader(table.Row{
 			"Sandbox ID",
-			"Sandbox Name",
-			"Sandbox Namespace",
-			"Sandbox UID",
-			"Image",
-			"Container ID",
-			"Bundle",
-			"Root",
+			"Name",
+			"Namespace",
+			"Containers",
+			"Container Type",
 		})
 
 		tableWriter.SortBy([]table.SortBy{
-			{Name: "Sandbox ID", Mode: table.Asc},
+			{Name: "ID", Mode: table.Asc},
 		})
 
-		for _, container := range result.Containers {
-			tableWriter.AppendRow(table.Row{
-				container.SandboxID,
-				container.SandboxName,
-				container.SandboxNamespace,
-				container.SandboxUID,
-				container.Image,
-				container.Runc.ID,
-				container.Runc.Bundle,
-				container.Runc.Root,
-			})
+		for _, pod := range result.Pods {
+			for i, container := range pod.Containerd {
+				if i == 0 {
+					tableWriter.AppendRow(table.Row{
+						pod.ID,
+						pod.Name,
+						pod.Namespace,
+						container.ID,
+					})
+				} else {
+					tableWriter.AppendRow(table.Row{
+						"",
+						"",
+						"",
+						container.ID,
+					})
+				}
+			}
 		}
 
 		tableWriter.Render()

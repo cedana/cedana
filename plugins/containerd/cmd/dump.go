@@ -42,11 +42,14 @@ var DumpCmd = &cobra.Command{
 		req.Type = "containerd"
 		req.Details = &daemon.Details{Containerd: &containerd.Containerd{
 			ID:         id,
-			Image:      image,
 			Address:    address,
 			Namespace:  namespace,
 			RootfsOnly: rootfsOnly,
 		}}
+
+		if image != "" {
+			req.Details.Containerd.Image = &containerd.Image{Name: image}
+		}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)
