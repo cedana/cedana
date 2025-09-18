@@ -37,7 +37,6 @@ jobs:
     secrets: inherit
     with:
       shell: true
-      pr_title: true
 
   build:
     name: Build

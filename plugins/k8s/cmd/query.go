@@ -96,11 +96,11 @@ var QueryCmd = &cobra.Command{
 			}
 		}
 
-		tableWriter.Render()
-
-		if len(resp.Messages) > 0 {
+		if len(result.Pods) > 0 {
+			tableWriter.Render()
 			fmt.Println()
 		}
+
 		for _, msg := range resp.Messages {
 			fmt.Println(msg)
 		}

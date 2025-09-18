@@ -78,10 +78,6 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 		resp.K8S.Pods = append(resp.K8S.Pods, pod)
 	}
 
-	if len(resp.K8S.Pods) == 0 {
-		return nil, status.Errorf(codes.NotFound, "no pods found")
-	}
-
 	resp.Messages = append(resp.Messages, fmt.Sprintf("Found %d pod(s)", len(resp.K8S.Pods)))
 
 	return resp, nil
