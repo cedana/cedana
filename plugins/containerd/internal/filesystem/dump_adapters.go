@@ -63,7 +63,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 
 		defer func() {
 			if err == nil {
-				resp.Paths = append(resp.Paths, image.Name)
+				resp.Messages = append(resp.Messages, "Dumped rootfs to "+image.Name)
 			}
 		}()
 
