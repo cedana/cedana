@@ -215,6 +215,8 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					Secret:   strings.Split(imageSecret.ImageSecret, ":")[1],
 				}
 				container.RootfsOnly = rootfsOnly
+			} else {
+				container.Image = nil // Ensure this is nil, so rootfs is not dumped
 			}
 		}
 
