@@ -27,6 +27,12 @@ type Manager interface {
 	// GetID returns the ID of the GPU controller for a given PID.
 	GetID(pid uint32) (string, error)
 
+	// Freeze the GPU for a given PID
+	Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error
+
+	// Unfreeze the GPU for a given PID
+	Unfreeze(ctx context.Context, pid uint32) error
+
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
 	CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback
 
@@ -63,6 +69,14 @@ func (ManagerMissing) GetID(pid uint32) (string, error) {
 
 func (ManagerMissing) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
 	return nil
+}
+
+func (ManagerMissing) Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error {
+	return fmt.Errorf("GPU manager missing")
+}
+
+func (ManagerMissing) Unfreeze(ctx context.Context, pid uint32) error {
+	return fmt.Errorf("GPU manager missing")
 }
 
 func (ManagerMissing) Sync(ctx context.Context) error {

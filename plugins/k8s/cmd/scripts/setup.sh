@@ -57,6 +57,8 @@ CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 
 CEDANA_CLUSTER_ID=${CEDANA_CLUSTER_ID:-""}
 
+CONTAINERD_ADDRESS=${CONTAINERD_ADDRESS:-"/run/containerd/containerd.sock"}
+
 rm -rf /host/root/.cedana/ # since this is a fresh install
 
 # Enter chroot environment on the host
@@ -86,5 +88,6 @@ env \
     CEDANA_PLUGINS_GPU_VERSION="$CEDANA_PLUGINS_GPU_VERSION" \
     CEDANA_PLUGINS_STREAMER_VERSION="$CEDANA_PLUGINS_STREAMER_VERSION" \
     CEDANA_CLUSTER_ID="$CEDANA_CLUSTER_ID" \
+    CONTAINERD_ADDRESS="$CONTAINERD_ADDRESS" \
     CONTAINERD_CONFIG_PATH="$CONTAINERD_CONFIG_PATH" \
     chroot /host /bin/bash /cedana/scripts/host/k8s-setup-host.sh

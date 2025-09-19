@@ -8,6 +8,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
+	"github.com/cedana/cedana/plugins/containerd/pkg/utils"
 	"github.com/containerd/containerd"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -26,7 +27,7 @@ func DumpMiddleware(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
 		}
 
-		plugin := PluginForRuntime(client.Runtime())
+		plugin := utils.PluginForRuntime(client.Runtime())
 
 		err = features.DumpMiddleware.IfAvailable(func(_ string, runtimeMiddleware types.Middleware[types.Dump]) error {
 			next = next.With(runtimeMiddleware...)
@@ -42,7 +43,7 @@ func DumpMiddleware(next types.Dump) types.Dump {
 		case "runc":
 			details.Runc = &runc.Runc{
 				ID:   id,
-				Root: RootFromPlugin(plugin, namespace),
+				Root: utils.RootFromPlugin(plugin, namespace),
 			}
 		default:
 			return nil, status.Errorf(codes.Unimplemented, "unsupported plugin %s", plugin)

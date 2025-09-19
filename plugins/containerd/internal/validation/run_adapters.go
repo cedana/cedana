@@ -23,7 +23,7 @@ func ValidateRunRequest(next types.Run) types.Run {
 		if req.GetDetails().GetContainerd().GetID() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd id")
 		}
-		if req.Action == daemon.RunAction_START_NEW && req.GetDetails().GetContainerd().GetImage() == "" {
+		if req.Action == daemon.RunAction_START_NEW && req.GetDetails().GetContainerd().GetImage().GetName() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd image")
 		}
 

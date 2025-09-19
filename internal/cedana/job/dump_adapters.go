@@ -52,7 +52,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 
 			job.Sync(resp.GetState())
 
-			jobs.AddCheckpoint(jid, resp.GetPath())
+			jobs.AddCheckpoint(jid, resp.GetPaths())
 
 			return code, nil
 		}

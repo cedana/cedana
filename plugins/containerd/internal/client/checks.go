@@ -10,7 +10,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/containerd/internal/defaults"
-	"github.com/cedana/cedana/plugins/containerd/internal/runtime"
+	"github.com/cedana/cedana/plugins/containerd/pkg/utils"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/namespaces"
 )
@@ -68,7 +68,7 @@ func CheckRuntime() types.Check {
 		}
 		defer client.Close()
 
-		plugin := runtime.PluginForRuntime(client.Runtime())
+		plugin := utils.PluginForRuntime(client.Runtime())
 
 		dumpSupported, _ := features.DumpMiddleware.IsAvailable(plugin)
 		restoreSupported, _ := features.RestoreMiddleware.IsAvailable(plugin)

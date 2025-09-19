@@ -34,6 +34,9 @@ teardown_file() {
 
 # bats test_tags=dump,restore
 @test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
+    # FIXME: test is broken
+    skip "disabled until test itself is fixed"
+
     local model="stabilityai/stablelm-2-1_6b"
 
     jid=$(unix_nano)

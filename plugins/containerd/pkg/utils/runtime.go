@@ -1,4 +1,4 @@
-package runtime
+package utils
 
 import (
 	"path/filepath"
@@ -22,4 +22,11 @@ func PluginForRuntime(runtime string) string {
 // E.g. /run/containerd/runc/default
 func RootFromPlugin(plugin, namespace string) string {
 	return filepath.Join(defaults.BASE_RUNTIME_DIR, plugin, namespace)
+}
+
+// Extract the namespace from the root path
+// E.g. /run/containerd/runc/default -> default
+func NamespaceFromRoot(root string) string {
+	parts := strings.Split(root, "/")
+	return parts[len(parts)-1]
 }

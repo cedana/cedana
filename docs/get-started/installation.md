@@ -15,7 +15,7 @@ apt-get install -y python3-protobuf libnet1 libnftables1 libnl-3-200 libprotobuf
 To build:
 
 ```sh
-make build
+make cedana
 ```
 
 To install:
@@ -66,7 +66,7 @@ You can directly start the daemon with:
 sudo cedana daemon start
 ```
 
-The daemon requires root privileges for checkpoint/restore operations.  Check the [CLI reference](../references/cli/cedana.md) for all options.
+The daemon requires root privileges for checkpoint/restore operations. Check the [CLI reference](../references/cli/cedana.md) for all options.
 
 If you're a _systemd_ user, you may also install it as a service (if built from source):
 

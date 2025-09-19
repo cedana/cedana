@@ -51,7 +51,7 @@ type Manager interface {
 	/////////////////////
 
 	// AddCheckpoint adds a checkpoint path to the job.
-	AddCheckpoint(jid string, path string)
+	AddCheckpoint(jid string, paths []string)
 
 	// Get a specific checkpoint.
 	GetCheckpoint(id string) *daemon.Checkpoint

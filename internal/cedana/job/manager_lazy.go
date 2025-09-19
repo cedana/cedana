@@ -274,10 +274,13 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 
 		// Check if a clean up handler is available for the job type
 
-		features.Cleanup.IfAvailable(func(_ string, cleanup func(*daemon.Details) error) error {
+		err := features.Cleanup.IfAvailable(func(_ string, cleanup func(*daemon.Details) error) error {
 			log.Debug().Str("JID", jid).Str("type", job.GetType()).Msg("using custom cleanup from plugin")
 			return cleanup(job.GetDetails())
 		}, job.GetType())
+		if err != nil {
+			log.Warn().Err(err).Str("JID", jid).Str("type", job.GetType()).Msg("custom cleanup from plugin failed")
+		}
 	}()
 
 	return nil
@@ -328,23 +331,25 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	return fmt.Errorf("job %s is not running, PID %d is not valid", jid, pid)
 }
 
-func (m *ManagerLazy) AddCheckpoint(jid string, path string) {
+func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
 	job := m.Get(jid)
 	if job == nil {
 		return
 	}
 
-	size, _ := utils.SizeFromPath(path)
-	checkpoint := &daemon.Checkpoint{
-		ID:   uuid.New().String(),
-		JID:  jid,
-		Path: path,
-		Time: time.Now().UnixMilli(),
-		Size: size,
-	}
-	m.checkpoints.Store(checkpoint.ID, checkpoint)
+	for _, path := range paths {
+		size, _ := utils.SizeFromPath(path)
+		checkpoint := &daemon.Checkpoint{
+			ID:   uuid.New().String(),
+			JID:  jid,
+			Path: path,
+			Time: time.Now().UnixMilli(),
+			Size: size,
+		}
+		m.checkpoints.Store(checkpoint.ID, checkpoint)
 
-	m.pending <- action{putCheckpoint, checkpoint.ID}
+		m.pending <- action{putCheckpoint, checkpoint.ID}
+	}
 }
 
 func (m *ManagerLazy) GetCheckpoint(id string) *daemon.Checkpoint {

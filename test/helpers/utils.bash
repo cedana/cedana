@@ -8,6 +8,9 @@ export KIBIBYTE=1024
 export MEBIBYTE=$(( KIBIBYTE * 1024 ))
 export GIBIBYTE=$(( MEBIBYTE * 1024 ))
 
+export RED='\033[0;31m'
+export NC='\033[0m' # No Color
+
 load_lib() {
     load /usr/lib/bats/bats-"$1"/load
 }
@@ -187,7 +190,7 @@ wait_for_cmd_fail() {
             ((elapsed += interval))
         done
     fi
-    debug_log "'$*' failed after $elapsed seconds"
+    debug_log "'$*' failed (as expected) after $elapsed seconds"
 
     return 0
 }
@@ -203,9 +206,9 @@ debug_log() {
 error_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
-        echo "[ERROR] $message" >&3
+        echo -e "${RED}[ERROR] $message${NC}" >&3
     else
-        echo "[ERROR] $message" >&2
+        echo -e "${RED}[ERROR] $message${NC}" >&2
     fi
 }
 

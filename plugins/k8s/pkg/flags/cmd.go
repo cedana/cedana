@@ -5,6 +5,6 @@ package flags
 import "github.com/cedana/cedana/pkg/flags"
 
 var (
-	NameFlag    = flags.Flag{Full: "name"}
-	SandboxFlag = flags.Flag{Full: "sandbox"}
+	NameFlag          = flags.Flag{Full: "name"}
+	ContainerTypeFlag = flags.Flag{Full: "container-type"}
 )
