@@ -3,6 +3,7 @@ package eventstream
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -133,6 +134,7 @@ type checkpointInfo struct {
 	GPU           bool          `json:"gpu"`
 	Platform      string        `json:"platform"`
 	ProfilingInfo profilingInfo `json:"profiling_info"`
+	ContainerHash string        `json:"container_hash"`
 }
 
 type profilingInfo struct {
@@ -182,6 +184,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		log.Info().Str("action_id", req.ActionId).Str("kind", req.Kind).Str("pod", req.PodName).Str("namespace", req.Namespace).Msgf("found %d containers in pod to checkpoint", len(containers))
 
 		checkpointIdMap := make(map[int]string)
+		imageMap := make(map[int]string)
 
 		// Initialize checkpoints for all containers
 		for i := range containers {
@@ -206,6 +209,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		}
 
 		for i, container := range containers {
+			imageMap[i] = container.Image.GetName()
 			container.Address = es.containerdAddress
 			if rootfs {
 				// NOTE: Currently we store all containers in the same image repository (with separate tags)
@@ -266,14 +270,11 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
 				var path string
 				var state *daemon.ProcessState
-				if err != nil {
-					path = ""
-					state = &daemon.ProcessState{}
-				} else {
+				if err == nil {
 					path = dumpResp.Paths[0]
 					state = dumpResp.State
 				}
-				es.publishCheckpoint(req.PodName, req.ActionId, checkpointIdMap[i], profiling, path, state, err)
+				es.publishCheckpoint(req.PodName, req.ActionId, checkpointIdMap[i], profiling, path, state, imageMap[i], err)
 				wg.Done()
 			}()
 		}
@@ -284,7 +285,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 	}
 }
 
-func (es *EventStream) publishCheckpoint(podId string, actionId string, checkpointId string, profiling *profiling.Data, path string, state *daemon.ProcessState, dumpErr error) error {
+func (es *EventStream) publishCheckpoint(podId string, actionId string, checkpointId string, profiling *profiling.Data, path string, state *daemon.ProcessState, image string, dumpErr error) error {
 	ci := checkpointInfo{
 		ActionId:     actionId,
 		PodId:        podId,
@@ -295,9 +296,16 @@ func (es *EventStream) publishCheckpoint(podId string, actionId string, checkpoi
 	} else {
 		ci.Status = "success"
 	}
-	ci.GPU = state.GetGPUEnabled()
-	ci.Platform = state.GetHost().GetPlatform()
-	ci.Path = path
+
+	if state != nil {
+		ci.GPU = state.GetGPUEnabled()
+		ci.Platform = state.GetHost().GetPlatform()
+		ci.Path = path
+		combinedString := image + state.GetCmdline()
+		hash := sha256.Sum256([]byte(combinedString))
+		ci.ContainerHash = fmt.Sprintf("%x", hash)
+	}
+
 	if profiling != nil {
 		totalDuration := profiling.Duration
 		for _, component := range profiling.Components {
