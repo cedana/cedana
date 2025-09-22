@@ -58,8 +58,8 @@ jobs:
       gpu_version: main
       streamer_version: main
       helm_chart_version: feature/ced-1505-handle-multi-container-checkpoints-for-pods
-      controller_version: main
-      runtime_shim_version: cedana
+      controller_version: feature/ced-1507-improve-k8s-restore-design-remove-controller-requirement
+      runtime_shim_version: feature/ced-1507-improve-k8s-restore-design-remove-controller-requirement
 
   test:
     name: Test
