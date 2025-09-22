@@ -39,7 +39,7 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 
 	if config.Global.Metrics {
 		metricsShutdown = metrics.InitSigNoz(ctx, "cedana", version.Version)
-		logging.InitSigNoz(ctx, wg, "cedana", version.Version)
+		logging.AddSigNozLogger(ctx, wg, "cedana", version.Version)
 	}
 
 	if config.Global.Profiling.Enabled {

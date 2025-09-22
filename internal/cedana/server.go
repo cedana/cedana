@@ -62,7 +62,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 
 	if config.Global.Metrics {
 		metricsShutdown = metrics.InitSigNoz(ctx, "cedana", version.Version)
-		logging.InitSigNoz(ctx, wg, "cedana", version.Version)
+		logging.AddSigNozLogger(ctx, wg, "cedana", version.Version)
 	}
 
 	host, err := utils.GetHost(ctx)

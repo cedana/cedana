@@ -18,8 +18,13 @@ const (
 )
 
 var (
-	Level        = zerolog.Disabled
-	GlobalWriter io.Writer
+	Level         = zerolog.Disabled
+	GlobalWriter  io.Writer
+	ConsoleWriter = zerolog.ConsoleWriter{
+		Out:          os.Stdout,
+		TimeFormat:   LOG_TIME_FORMAT,
+		TimeLocation: time.Local,
+	}
 )
 
 type LineInfoHook struct{}
@@ -31,10 +36,10 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 }
 
 func init() {
-	InitLogger(config.Global.LogLevel)
+	InitLogger(config.Global.LogLevel, ConsoleWriter)
 }
 
-func InitLogger(level string) {
+func InitLogger(level string, writers ...io.Writer) {
 	var err error
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
@@ -43,20 +48,16 @@ func InitLogger(level string) {
 		Level = zerolog.Disabled
 	}
 
-	GlobalWriter = zerolog.ConsoleWriter{
-		Out:          os.Stdout,
-		TimeFormat:   LOG_TIME_FORMAT,
-		TimeLocation: time.Local,
+	for _, w := range writers {
+		AddLogger(w)
 	}
-
-	log.Logger = zerolog.New(GlobalWriter).
-		Level(Level).
-		With().
-		Timestamp().
-		Logger().Hook(LineInfoHook{})
 }
 
 func AddLogger(writer io.Writer) {
+	if GlobalWriter == nil {
+		SetLogger(writer)
+		return
+	}
 	log.Logger = zerolog.New(io.MultiWriter(GlobalWriter, writer)).
 		Level(Level).
 		With().

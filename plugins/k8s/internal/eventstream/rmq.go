@@ -267,6 +267,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		for i, dumpReq := range dumpReqs {
 			wg.Add(1)
 			go func() {
+        defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
 				var path string
 				var state *daemon.ProcessState
@@ -275,7 +276,6 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					state = dumpResp.State
 				}
 				es.publishCheckpoint(req.PodName, req.ActionId, checkpointIdMap[i], profiling, path, state, imageMap[i], err)
-				wg.Done()
 			}()
 		}
 

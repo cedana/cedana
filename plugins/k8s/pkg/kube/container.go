@@ -69,7 +69,6 @@ type DefaultKubeClient struct{}
 
 func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string, containerType ...string) ([]*Container, error) {
 	var containers []*Container
-	containerType = append(containerType, CONTAINER_TYPE_CONTAINER)
 
 	entries, err := afero.ReadDir(fs, root)
 	if err != nil {
@@ -135,8 +134,8 @@ func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string, 
 			Annotations: spec.Annotations,
 		}
 
-		if spec.Annotations[CONTAINER_TYPE] == containerType[0] || spec.Annotations[CRIO_CONTAINER_TYPE] == containerType[0] {
-			container.Type = containerType[0]
+		if len(containerType) == 0 || spec.Annotations[CONTAINER_TYPE] == containerType[0] || spec.Annotations[CRIO_CONTAINER_TYPE] == containerType[0] {
+			container.Type = getFirstNonEmptyAnnotation(spec.Annotations, CONTAINER_TYPE, CRIO_CONTAINER_TYPE)
 			container.Name = spec.Annotations[containerNameAnnotation]
 			container.Image = getFirstNonEmptyAnnotation(spec.Annotations, IMAGE_NAME, CRIO_IMAGE_NAME, SANDBOX_IMAGE_NAME)
 			container.SandboxID = getFirstNonEmptyAnnotation(spec.Annotations, SANDBOX_ID, CRIO_SANDBOX_ID)

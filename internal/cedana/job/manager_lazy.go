@@ -274,13 +274,10 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 
 		// Check if a clean up handler is available for the job type
 
-		err := features.Cleanup.IfAvailable(func(_ string, cleanup func(*daemon.Details) error) error {
+		features.Cleanup.IfAvailable(func(_ string, cleanup func(*daemon.Details) error) error {
 			log.Debug().Str("JID", jid).Str("type", job.GetType()).Msg("using custom cleanup from plugin")
 			return cleanup(job.GetDetails())
 		}, job.GetType())
-		if err != nil {
-			log.Warn().Err(err).Str("JID", jid).Str("type", job.GetType()).Msg("custom cleanup from plugin failed")
-		}
 	}()
 
 	return nil
