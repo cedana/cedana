@@ -76,7 +76,7 @@ type SigNozWriter struct {
 	wg            *sync.WaitGroup
 }
 
-func AddSigNozLogger(ctx context.Context, wg *sync.WaitGroup, service, version string) {
+func InitSigNoz(ctx context.Context, wg *sync.WaitGroup, service, version string) {
 	handleErr := func(err error) {
 		log.Warn().Err(err).Msg("logs will not be sent to SigNoz")
 	}
