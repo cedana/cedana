@@ -36,7 +36,7 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 }
 
 func init() {
-	InitLogger(config.Global.LogLevel, ConsoleWriter)
+	InitLogger(config.Global.LogLevel)
 }
 
 func InitLogger(level string, writers ...io.Writer) {
