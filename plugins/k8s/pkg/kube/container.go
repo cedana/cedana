@@ -53,6 +53,7 @@ type Container struct {
 	Name             string
 	Bundle           string
 	Type             string
+	Env              []string
 	Annotations      map[string]string
 	Image            string
 	SandboxID        string
@@ -132,6 +133,7 @@ func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string, 
 			ID:          id,
 			Bundle:      bundle,
 			Annotations: spec.Annotations,
+			Env:         spec.Process.Env,
 		}
 
 		if len(containerType) == 0 || spec.Annotations[CONTAINER_TYPE] == containerType[0] || spec.Annotations[CRIO_CONTAINER_TYPE] == containerType[0] {

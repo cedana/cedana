@@ -194,7 +194,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 
 		// Initialize spec, checkpoints for all containers
 		for i, container := range containers {
-			spec, err := runc.LoadSpec(filepath.Join(container.Runc.Bundle, "config.json"))
+			spec, err := runc.LoadSpec(filepath.Join("/host", container.Runc.Bundle, "config.json"))
 			if err != nil {
 				log.Error().Err(err).Msg("failed to load spec for container")
 				return rabbitmq.Ack
