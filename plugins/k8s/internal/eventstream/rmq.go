@@ -3,12 +3,12 @@ package eventstream
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -21,7 +21,9 @@ import (
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/gogo/protobuf/proto"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -127,15 +129,16 @@ type checkpointReq struct {
 }
 
 type checkpointInfo struct {
-	ActionId      string        `json:"action_id"`
-	PodId         string        `json:"pod_id"`
-	CheckpointId  string        `json:"checkpoint_id"`
-	Status        string        `json:"status"`
-	Path          string        `json:"path"`
-	GPU           bool          `json:"gpu"`
-	Platform      string        `json:"platform"`
-	ProfilingInfo profilingInfo `json:"profiling_info"`
-	ContainerHash string        `json:"container_hash"`
+	ActionId       string        `json:"action_id"`
+	PodId          string        `json:"pod_id"`
+	CheckpointId   string        `json:"checkpoint_id"`
+	CheckpointName string        `json:"checkpoint_name"`
+	Status         string        `json:"status"`
+	Path           string        `json:"path"`
+	GPU            bool          `json:"gpu"`
+	Platform       string        `json:"platform"`
+	ProfilingInfo  profilingInfo `json:"profiling_info"`
+	ContainerOrder int           `json:"container_order"`
 }
 
 type profilingInfo struct {
@@ -186,10 +189,18 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		log.Info().Int("containers", len(containers)).Msg("found container(s) in pod to checkpoint")
 
 		checkpointIdMap := make(map[int]string)
+		specMap := make(map[int]*specs.Spec)
 		imageMap := make(map[int]string)
 
-		// Initialize checkpoints for all containers
-		for i := range containers {
+		// Initialize spec, checkpoints for all containers
+		for i, container := range containers {
+			spec, err := runc.LoadSpec(filepath.Join(container.Runc.Bundle, "config.json"))
+			if err != nil {
+				log.Error().Err(err).Msg("failed to load spec for container")
+				return rabbitmq.Ack
+			}
+			specMap[i] = spec
+
 			checkpointId, err := es.propagator.V2().Checkpoints().Post(ctx, nil)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to create checkpoint in propagator")
@@ -277,7 +288,18 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					path = dumpResp.Paths[0]
 					state = dumpResp.State
 				}
-				es.publishCheckpoint(log, req.PodName, req.ActionId, checkpointIdMap[i], profiling, path, state, imageMap[i], err)
+				es.publishCheckpoint(
+					log,
+					req.PodName,
+					req.ActionId,
+					checkpointIdMap[i],
+					profiling,
+					path,
+					state,
+					i,
+					specMap[i],
+					err,
+				)
 			}()
 		}
 
@@ -287,11 +309,23 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 	}
 }
 
-func (es *EventStream) publishCheckpoint(log zerolog.Logger, podId string, actionId string, checkpointId string, profiling *profiling.Data, path string, state *daemon.ProcessState, image string, dumpErr error) error {
+func (es *EventStream) publishCheckpoint(
+	log zerolog.Logger,
+	podId string,
+	actionId string,
+	checkpointId string,
+	profiling *profiling.Data,
+	path string,
+	state *daemon.ProcessState,
+	containerOrder int,
+	containerSpec *specs.Spec,
+	dumpErr error,
+) error {
 	ci := checkpointInfo{
-		ActionId:     actionId,
-		PodId:        podId,
-		CheckpointId: checkpointId,
+		ActionId:       actionId,
+		PodId:          podId,
+		CheckpointId:   checkpointId,
+		ContainerOrder: containerOrder,
 	}
 	if dumpErr != nil {
 		ci.Status = "error"
@@ -299,13 +333,17 @@ func (es *EventStream) publishCheckpoint(log zerolog.Logger, podId string, actio
 		ci.Status = "success"
 	}
 
+	for _, env := range containerSpec.Process.Env {
+		if name, ok := strings.CutPrefix(env, "CEDANA_CHECKPOINT="); ok {
+			ci.CheckpointName = name
+			log = log.With().Str("checkpoint_name", name).Logger()
+		}
+	}
+
 	if state != nil {
 		ci.GPU = state.GetGPUEnabled()
 		ci.Platform = state.GetHost().GetPlatform()
 		ci.Path = path
-		combinedString := image + state.GetCmdline()
-		hash := sha256.Sum256([]byte(combinedString))
-		ci.ContainerHash = fmt.Sprintf("%x", hash)
 	}
 
 	if profiling != nil {

@@ -7,6 +7,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/plugins/containerd/pkg/utils"
 	"github.com/cedana/cedana/plugins/k8s/pkg/kube"
 	"github.com/spf13/afero"
@@ -27,20 +28,21 @@ type DefaultQueryHandler struct {
 
 func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error) {
 	query := req.K8S
+	root := DEFAULT_CONTAINERD_ROOT
 
 	if query == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "k8s query missing")
 	}
-	if query.Root == "" {
-		query.Root = DEFAULT_CONTAINERD_ROOT
+	if query.Root != "" {
+		root = query.Root
 	}
 
 	resp := &daemon.QueryResp{K8S: &k8s.QueryResp{}}
 	kubeClient := &kube.DefaultKubeClient{}
-	containerdNamespace := utils.NamespaceFromRoot(query.Root)
+	containerdNamespace := utils.NamespaceFromRoot(root)
 
 	fs := afero.NewOsFs()
-	containers, err := kubeClient.ListContainers(fs, query.Root, query.Namespace, query.ContainerType)
+	containers, err := kubeClient.ListContainers(fs, root, query.Namespace, query.ContainerType)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to list k8s containers: %v", err)
 	}
@@ -70,6 +72,11 @@ func (h *DefaultQueryHandler) Query(ctx context.Context, req *daemon.QueryReq) (
 				ID:        container.ID,
 				Image:     &containerd.Image{Name: container.Image},
 				Namespace: containerdNamespace,
+				Runc: &runc.Runc{
+					ID:     container.ID,
+					Bundle: container.Bundle,
+					Root:   root,
+				},
 			})
 		}
 	}
