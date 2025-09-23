@@ -68,6 +68,10 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
     "$APP_PATH" plugin install $PLUGINS
 fi
 
+# Improve streaming performance
+echo 0 > /proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
+echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
+
 # install the shim configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
 if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
     PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl

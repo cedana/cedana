@@ -23,6 +23,7 @@ import (
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/gogo/protobuf/proto"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
 )
@@ -157,6 +158,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			log.Error().Err(err).Msg("failed to unmarshal message")
 			return rabbitmq.Ack
 		}
+		log := log.With().Str("action_id", req.ActionId).Str("kind", req.Kind).Str("pod", req.PodName).Str("namespace", req.Namespace).Logger()
 
 		query := &daemon.QueryReq{
 			Type: "k8s",
@@ -173,15 +175,15 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			return rabbitmq.Ack
 		}
 		if len(queryResp.K8S.Pods) == 0 {
-			log.Trace().Str("pod", req.PodName).Str("namespace", req.Namespace).Msg("no pods found for checkpoint request")
+			log.Trace().Msg("no pods found for checkpoint request")
 			return rabbitmq.Ack
 		}
 		containers := queryResp.K8S.Pods[0].Containerd
 		if len(containers) == 0 {
-			log.Trace().Str("pod", req.PodName).Str("namespace", req.Namespace).Msg("no containers found in pod for checkpoint request")
+			log.Trace().Msg("no containers found in pod for checkpoint request")
 			return rabbitmq.Ack
 		}
-		log.Info().Str("action_id", req.ActionId).Str("kind", req.Kind).Str("pod", req.PodName).Str("namespace", req.Namespace).Msgf("found %d containers in pod to checkpoint", len(containers))
+		log.Info().Int("containers", len(containers)).Msg("found container(s) in pod to checkpoint")
 
 		checkpointIdMap := make(map[int]string)
 		imageMap := make(map[int]string)
@@ -267,7 +269,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		for i, dumpReq := range dumpReqs {
 			wg.Add(1)
 			go func() {
-        defer wg.Done()
+				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
 				var path string
 				var state *daemon.ProcessState
@@ -275,7 +277,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					path = dumpResp.Paths[0]
 					state = dumpResp.State
 				}
-				es.publishCheckpoint(req.PodName, req.ActionId, checkpointIdMap[i], profiling, path, state, imageMap[i], err)
+				es.publishCheckpoint(log, req.PodName, req.ActionId, checkpointIdMap[i], profiling, path, state, imageMap[i], err)
 			}()
 		}
 
@@ -285,7 +287,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 	}
 }
 
-func (es *EventStream) publishCheckpoint(podId string, actionId string, checkpointId string, profiling *profiling.Data, path string, state *daemon.ProcessState, image string, dumpErr error) error {
+func (es *EventStream) publishCheckpoint(log zerolog.Logger, podId string, actionId string, checkpointId string, profiling *profiling.Data, path string, state *daemon.ProcessState, image string, dumpErr error) error {
 	ci := checkpointInfo{
 		ActionId:     actionId,
 		PodId:        podId,
@@ -326,9 +328,9 @@ func (es *EventStream) publishCheckpoint(podId string, actionId string, checkpoi
 		return err
 	}
 	if dumpErr != nil {
-		log.Error().Err(dumpErr).Str("pod_id", podId).Str("action_id", actionId).Msg("checkpoint published with error")
+		log.Error().Err(dumpErr).Msg("checkpoint published with error")
 	} else {
-		log.Info().Str("pod_id", podId).Str("action_id", actionId).Str("path", path).Bool("GPU", ci.GPU).Msg("checkpoint published")
+		log.Info().Str("path", path).Bool("GPU", ci.GPU).Msg("checkpoint published")
 	}
 	return nil
 }
