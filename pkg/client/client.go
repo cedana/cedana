@@ -24,12 +24,14 @@ import (
 )
 
 const (
-	DEFAULT_DUMP_TIMEOUT    = 5 * time.Minute
-	DEFAULT_RESTORE_TIMEOUT = 5 * time.Minute
-	DEFAULT_RUN_TIMEOUT     = 1 * time.Minute
-	DEFAULT_MANAGE_TIMEOUT  = 1 * time.Minute
-	DEFAULT_DB_TIMEOUT      = 20 * time.Second
-	DEFAULT_HEALTH_TIMEOUT  = 1 * time.Minute
+	DEFAULT_DUMP_TIMEOUT     = 5 * time.Minute
+	DEFAULT_FREEZE_TIMEOUT   = 1 * time.Minute
+	DEFAULT_UNFREEZE_TIMEOUT = 1 * time.Minute
+	DEFAULT_RESTORE_TIMEOUT  = 5 * time.Minute
+	DEFAULT_RUN_TIMEOUT      = 1 * time.Minute
+	DEFAULT_MANAGE_TIMEOUT   = 1 * time.Minute
+	DEFAULT_DB_TIMEOUT       = 20 * time.Second
+	DEFAULT_HEALTH_TIMEOUT   = 1 * time.Minute
 )
 
 type Client struct {
@@ -147,6 +149,48 @@ func (c *Client) Restore(
 	opts = append(opts, grpc.Trailer(&trailer))
 
 	resp, err := c.daemonClient.Restore(ctx, args, opts...)
+	if err != nil {
+		return resp, nil, utils.GRPCErrorColored(err)
+	}
+
+	data, err := profiling.FromTrailer(trailer)
+	if err != nil {
+		return resp, nil, err
+	}
+
+	return resp, data, nil
+}
+
+func (c *Client) Freeze(ctx context.Context, args *daemon.DumpReq, opts ...grpc.CallOption) (*daemon.DumpResp, *profiling.Data, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_FREEZE_TIMEOUT)
+	defer cancel()
+	opts = addDefaultOptions(opts)
+
+	var trailer metadata.MD
+	opts = append(opts, grpc.Trailer(&trailer))
+
+	resp, err := c.daemonClient.Freeze(ctx, args, opts...)
+	if err != nil {
+		return resp, nil, utils.GRPCErrorColored(err)
+	}
+
+	data, err := profiling.FromTrailer(trailer)
+	if err != nil {
+		return resp, nil, err
+	}
+
+	return resp, data, nil
+}
+
+func (c *Client) Unfreeze(ctx context.Context, args *daemon.DumpReq, opts ...grpc.CallOption) (*daemon.DumpResp, *profiling.Data, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_UNFREEZE_TIMEOUT)
+	defer cancel()
+	opts = addDefaultOptions(opts)
+
+	var trailer metadata.MD
+	opts = append(opts, grpc.Trailer(&trailer))
+
+	resp, err := c.daemonClient.Unfreeze(ctx, args, opts...)
 	if err != nil {
 		return resp, nil, utils.GRPCErrorColored(err)
 	}

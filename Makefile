@@ -14,7 +14,7 @@ ifndef VERBOSE
 .SILENT:
 endif
 
-all: build install plugins plugins-install ## Build and install (with all plugins)
+all: cedana install plugins plugins-install ## Build and install (with all plugins)
 
 ##########
 ##@ Cedana
@@ -23,12 +23,13 @@ all: build install plugins plugins-install ## Build and install (with all plugin
 BINARY=cedana
 BINARY_SOURCES=$(shell find . -path ./test -prune -o -type f -name '*.go' -not -path './plugins/*' -print)
 PKG_SOURCES=$(sort $(shell find pkg -name '*.go'))
+GO_MOD_FILES=go.sum go.mod
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
 
-build: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
-$(OUT_DIR)/$(BINARY): $(BINARY_SOURCES)
+cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
+$(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
 	$(GOCMD) mod tidy ;\
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building $(BINARY) with debug symbols..." ;\
@@ -88,7 +89,7 @@ PLUGIN_BINARIES=$(patsubst %,$(OUT_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 PLUGIN_INSTALL_PATHS=$(patsubst %,$(INSTALL_LIB_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 
 plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
-$(OUT_DIR)/libcedana-%.so: plugins/%/**/*.go plugins/%/*.go $(PKG_SOURCES)
+$(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building plugin $* with debug symbols..." ;\
 		$(GOBUILD) -C plugins/"$*" -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
@@ -116,10 +117,10 @@ TAGS?=
 ARGS?=
 TIMEOUT?=600
 RETRIES?=0
-HELPER_REPO?=cedana/cedana-helper
+HELPER_REPO?=
 HELPER_TAG?=""
 HELPER_DIGEST?=""
-CONTROLLER_REPO?=cedana/cedana-controller
+CONTROLLER_REPO?=
 CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
@@ -312,7 +313,9 @@ HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_
 
 DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --name=$(DOCKER_TEST_CONTAINER_NAME) \
 						-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
-				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) -e HF_TOKEN=$(HF_TOKEN) \
+				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
+				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \
+				-e HF_TOKEN=$(HF_TOKEN) \
 				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
 				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
 				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) \

@@ -228,6 +228,11 @@ container_status() {
     runc list | awk -v id="$cid" 'NR>1 && $1==id {print $3}'
 }
 
+container_pid() {
+    local cid="$1"
+    runc list | awk -v id="$cid" 'NR>1 && $1==id {print $2}'
+}
+
 wait_for_container_status() {
     local cid="$1"
     local status="$2"

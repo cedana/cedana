@@ -17,14 +17,16 @@ import (
 
 var (
 	// Commands
-	CmdTheme   = plugins.Feature[text.Colors]{Symbol: "CmdTheme", Description: "Theme for commands"}
-	DumpCmd    = plugins.Feature[*cobra.Command]{Symbol: "DumpCmd", Description: "Dump command"}
-	DumpVMCmd  = plugins.Feature[*cobra.Command]{Symbol: "DumpVMCmd", Description: "Dump VM command"}
-	RestoreCmd = plugins.Feature[*cobra.Command]{Symbol: "RestoreCmd", Description: "Restore command"}
-	RunCmd     = plugins.Feature[*cobra.Command]{Symbol: "RunCmd", Description: "Run command"}
-	ManageCmd  = plugins.Feature[*cobra.Command]{Symbol: "ManageCmd", Description: "Manage command"}
-	QueryCmd   = plugins.Feature[*cobra.Command]{Symbol: "QueryCmd", Description: "Query command"}
-	HelperCmds = plugins.Feature[[]*cobra.Command]{Symbol: "HelperCmds", Description: "Helper command(s)"}
+	CmdTheme    = plugins.Feature[text.Colors]{Symbol: "CmdTheme", Description: "Theme for commands"}
+	DumpCmd     = plugins.Feature[*cobra.Command]{Symbol: "DumpCmd", Description: "Dump command"}
+	DumpVMCmd   = plugins.Feature[*cobra.Command]{Symbol: "DumpVMCmd", Description: "Dump VM command"}
+	RestoreCmd  = plugins.Feature[*cobra.Command]{Symbol: "RestoreCmd", Description: "Restore command"}
+	FreezeCmd   = plugins.Feature[*cobra.Command]{Symbol: "FreezeCmd", Description: "Freeze command"}
+	UnfreezeCmd = plugins.Feature[*cobra.Command]{Symbol: "UnfreezeCmd", Description: "Unfreeze command"}
+	RunCmd      = plugins.Feature[*cobra.Command]{Symbol: "RunCmd", Description: "Run command"}
+	ManageCmd   = plugins.Feature[*cobra.Command]{Symbol: "ManageCmd", Description: "Manage command"}
+	QueryCmd    = plugins.Feature[*cobra.Command]{Symbol: "QueryCmd", Description: "Query command"}
+	HelperCmds  = plugins.Feature[[]*cobra.Command]{Symbol: "HelperCmds", Description: "Helper command(s)"}
 
 	// Dump/Restore
 	DumpMiddleware      = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
@@ -33,6 +35,8 @@ var (
 	RestoreMiddleware   = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
 	RestoreVMMiddleware = plugins.Feature[types.Middleware[types.RestoreVM]]{Symbol: "RestoreVMMiddleware", Description: "Restore VM middleware"}
 	RestoreVMHandler    = plugins.Feature[types.RestoreVM]{Symbol: "RestoreVMHandler", Description: "Restore VM handler"}
+	FreezeHandler       = plugins.Feature[types.Freeze]{Symbol: "FreezeHandler", Description: "Freeze handler"}
+	UnfreezeHandler     = plugins.Feature[types.Unfreeze]{Symbol: "UnfreezeHandler", Description: "Unfreeze handler"}
 
 	// Run
 	RunHandler           = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}

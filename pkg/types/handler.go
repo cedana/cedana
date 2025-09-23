@@ -29,6 +29,8 @@ type (
 
 	Dump      = Handler[daemon.DumpReq, daemon.DumpResp]
 	Restore   = Handler[daemon.RestoreReq, daemon.RestoreResp]
+	Freeze    = Handler[daemon.DumpReq, daemon.DumpResp]
+	Unfreeze  = Handler[daemon.DumpReq, daemon.DumpResp]
 	Run       = Handler[daemon.RunReq, daemon.RunResp]
 	DumpVM    = Handler[daemon.DumpVMReq, daemon.DumpVMResp]
 	RestoreVM = Handler[daemon.RestoreVMReq, daemon.RestoreVMResp]

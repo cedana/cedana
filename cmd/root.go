@@ -30,6 +30,8 @@ func init() {
 	rootCmd.AddCommand(docGenCmd)
 	rootCmd.AddCommand(dumpVMCmd)
 	rootCmd.AddCommand(checkCmd)
+	rootCmd.AddCommand(freezeCmd)
+	rootCmd.AddCommand(unfreezeCmd)
 
 	// Add helper cmds from plugins
 	features.HelperCmds.IfAvailable(
@@ -89,7 +91,7 @@ var rootCmd = &cobra.Command{
 			return fmt.Errorf("Failed to initialize config: %w", err)
 		}
 
-		logging.InitLogger(config.Global.LogLevel)
+		logging.SetLogger(logging.ConsoleWriter)
 
 		return nil
 	},

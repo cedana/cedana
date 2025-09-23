@@ -10,7 +10,7 @@ INSTALL_K3S_EXEC="server \
         --disable=traefik \
         --snapshotter=native"
 CONTAINERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
-CONTAINERD_SOCK_PATH="/run/k3s/containerd/containerd.sock"
+export CONTAINERD_ADDRESS="/run/k3s/containerd/containerd.sock"
 CONTAINERD_NAMESPACE="k8s.io"
 
 # Function to set up k3s cluster
@@ -169,10 +169,10 @@ preload_images() {
       return 0
     fi
 
-    ctr -n $CONTAINERD_NAMESPACE --address $CONTAINERD_SOCK_PATH images import "$tar"
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import "$tar"
     rm -f "$tar"
 
-    ctr -n $CONTAINERD_NAMESPACE --address $CONTAINERD_SOCK_PATH images tag docker.io/"$image" docker.io/"$digest_ref"
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"
 
     debug_log "Preloaded image $image into k3s"
 }
