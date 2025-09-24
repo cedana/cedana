@@ -92,8 +92,8 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 
 	if len(free) < m.poolSize {
 		log.Debug().Int("target", m.poolSize).Int("free", len(free)).Msg("maintaining GPU pool size")
+		wg := &sync.WaitGroup{}
 		for i := len(free); i < m.poolSize; i++ {
-			wg := &sync.WaitGroup{}
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -102,20 +102,25 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 					log.Debug().Err(err).Msg("failed to spawn GPU controller to maintain pool size")
 					return
 				}
-				log.Debug().Str("ID", controller.ID).Msg("spawned GPU controller to maintain pool size")
 				controller.Booking.Unlock()
 			}()
-			wg.Wait()
 		}
+		wg.Wait()
 	} else if len(free) > m.poolSize {
 		log.Debug().Int("target", m.poolSize).Int("free", len(free)).Msg("reducing GPU pool size")
+		wg := &sync.WaitGroup{}
 		for _, controller := range free[m.poolSize:] {
 			// Ensure we only terminate controllers that are still free
 			if acquired, _ := controller.Booking.TryLock(); acquired {
-				log.Debug().Str("ID", controller.ID).Msg("terminating GPU controller to reduce pool size")
-				m.controllers.Terminate(ctx, controller.ID)
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					m.controllers.Terminate(ctx, controller.ID)
+				}()
 			}
 		}
+		wg.Wait()
 	}
+
 	return nil
 }

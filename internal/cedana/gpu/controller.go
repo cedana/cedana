@@ -177,6 +177,8 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			err := c.Connect(ctx, false)
 			if err == nil {
 				p.Store(id, c)
+			} else {
+				log.Trace().Err(err).Str("ID", id).Msg("failed to connect to GPU controller")
 			}
 			wg.Done()
 		}()
@@ -568,6 +570,11 @@ func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
 	c.ShmName = info.GetShmName()
 	c.Version = info.GetVersion()
 	c.PID = info.GetPID()
+
+	log.Trace().Str("ID", c.ID).
+		Uint32("PID", info.GetPID()).
+		Uint32("AttachedPID", info.GetAttachedPID()).
+		Msg("connected to GPU controller")
 
 	return err
 }
