@@ -269,7 +269,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 		log.Info().Str("JID", jid).Str("type", job.GetType()).Int("code", exitCode).Uint32("PID", pid).Msg("job exited")
 
 		if m.gpus.IsAttached(pid) {
-			m.gpus.Detach(pid)
+			m.gpus.Detach(lifetime, pid)
 		}
 
 		// Check if a clean up handler is available for the job type

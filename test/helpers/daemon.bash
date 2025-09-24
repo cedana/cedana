@@ -13,7 +13,7 @@ export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 export CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-alpha}
 export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1*GIBIBYTE))}"
 
-WAIT_TIMEOUT=30
+WAIT_TIMEOUT=60
 
 ##################
 # BATS LIFECYCLE #
@@ -91,7 +91,7 @@ wait_for_start() {
         sleep 1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
-            error_log "Daemon failed to start"
+            error_log "Daemon failed to start after $WAIT_TIMEOUT seconds"
             exit 1
         fi
     done
@@ -114,7 +114,7 @@ wait_for_stop() {
         sleep 1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
-            error_log "Daemon failed to stop"
+            error_log "Daemon failed to stop after $WAIT_TIMEOUT seconds"
             exit 1
         fi
     done

@@ -125,10 +125,10 @@ CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
-BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
 

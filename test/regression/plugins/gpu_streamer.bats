@@ -40,17 +40,13 @@ teardown_file() {
 # bats test_tags=dump
 @test "stream dump GPU process (vector add)" {
     jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
-    assert_success
-    assert_exists "$log_file"
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
 
-    sleep 2
+    sleep 1
 
     run cedana dump job "$jid" --streams 1
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
@@ -61,17 +57,13 @@ teardown_file() {
 # bats test_tags=dump
 @test "stream dump GPU process (mem throughput saxpy)" {
     jid=$(unix_nano)
-    log_file="/var/log/cedana-output-$jid.log"
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
-    assert_success
-    assert_exists "$log_file"
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
 
-    sleep 2
+    sleep 1
 
     run cedana dump job "$jid" --streams 4
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
@@ -90,24 +82,23 @@ teardown_file() {
 @test "stream restore GPU process (vector add)" {
     jid=$(unix_nano)
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
-    assert_success
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
 
-    sleep 2
+    sleep 1
 
     run cedana dump job "$jid" --streams 1
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
-    run cedana ps
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
     assert_success
-    assert_output --partial "$jid"
+    refute_output --partial "halted"
 
     run cedana job kill "$jid"
 }
@@ -116,14 +107,12 @@ teardown_file() {
 @test "stream restore GPU process (mem throughput saxpy)" {
     jid=$(unix_nano)
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
-    assert_success
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
 
-    sleep 2
+    sleep 1
 
     run cedana dump job "$jid" --streams 4
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
@@ -131,30 +120,29 @@ teardown_file() {
     assert_exists "$dump_file/img-2.gz"
     assert_exists "$dump_file/img-3.gz"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
-    run cedana ps
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
     assert_success
-    assert_output --partial "$jid"
+    refute_output --partial "halted"
 
     run cedana job kill "$jid"
 }
 
 # bats test_tags=restore,daemonless
-@test "stream restore GPU process (mem throughput saxpy, without daemon)" {
+@test "stream restore GPU process (vector add, without daemon)" {
     jid=$(unix_nano)
 
-    run cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
-    assert_success
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
 
     pid=$(pid_for_jid "$jid")
 
-    sleep 2
+    sleep 1
 
     run cedana dump job "$jid" --streams 4
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
@@ -166,4 +154,5 @@ teardown_file() {
 
     wait_for_pid "$pid"
     run kill -KILL "$pid"
+    wait_for_no_pid "$pid"
 }

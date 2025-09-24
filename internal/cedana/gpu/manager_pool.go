@@ -85,7 +85,7 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 
 	for _, controller := range remaining {
 		log.Debug().Str("ID", controller.ID).Msg("clearing stale GPU controller in pool")
-		m.controllers.Terminate(controller.ID)
+		m.controllers.Terminate(ctx, controller.ID)
 	}
 
 	// Maintain the pool size
@@ -113,7 +113,7 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 			// Ensure we only terminate controllers that are still free
 			if acquired, _ := controller.Booking.TryLock(); acquired {
 				log.Debug().Str("ID", controller.ID).Msg("terminating GPU controller to reduce pool size")
-				m.controllers.Terminate(controller.ID)
+				m.controllers.Terminate(ctx, controller.ID)
 			}
 		}
 	}

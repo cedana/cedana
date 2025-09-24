@@ -131,7 +131,7 @@ func (p *pool) List() (free []*controller, busy []*controller, remaining []*cont
 		remaining = append(remaining, c)
 		return true
 	})
-	return
+	return free, busy, remaining
 }
 
 // Sync with all existing GPU controllers in the system
@@ -264,7 +264,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 
 	defer func() {
 		if err != nil {
-			p.Terminate(id)
+			p.Terminate(ctx, id)
 		}
 	}()
 
@@ -284,14 +284,16 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		return nil, fmt.Errorf("failed to connect to GPU controller: %w", err)
 	}
 
-	return
+	return c, err
 }
 
-func (p *pool) Terminate(id string) {
+func (p *pool) Terminate(ctx context.Context, id string) {
 	c := p.Get(id)
 	if c == nil {
 		return
 	}
+
+	log.Debug().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Msg("terminating GPU controller")
 
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
@@ -310,7 +312,7 @@ func (p *pool) Terminate(id string) {
 		c.ClientConn = nil
 		c.ControllerClient = nil
 	}
-	if int(c.ParentPID) == os.Getpid() {
+	if int(c.ParentPID) == os.Getpid() { // If we spawned it, then reap it
 		process, err := os.FindProcess(int(c.PID))
 		if err != nil {
 			return
@@ -319,7 +321,12 @@ func (p *pool) Terminate(id string) {
 		if err != nil {
 			log.Trace().Err(err).Str("ID", id).Uint32("PID", c.PID).Msg("GPU controller Wait()")
 		}
-		log.Trace().Str("ID", id).Uint32("PID", c.PID).Int("status", state.ExitCode()).Msg("GPU controller exited")
+		log.Debug().Str("ID", id).Uint32("PID", c.PID).Int("status", state.ExitCode()).Msg("GPU controller exited")
+	} else { // Otherwise, just wait for it to exit
+		waitCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+		<-utils.WaitForPidCtx(waitCtx, c.PID)
+		log.Debug().Str("ID", id).Uint32("PID", c.PID).Str("status", "unknown").Msg("GPU controller exited")
 	}
 }
 
@@ -504,7 +511,7 @@ func (p *pool) Check(binary string) types.Check {
 			component.Errors = append(component.Errors, err.Error())
 			return []*daemon.HealthCheckComponent{component}
 		}
-		defer p.Terminate(controller.ID)
+		defer p.Terminate(ctx, controller.ID)
 
 		components, err := controller.WaitForHealthCheck(ctx)
 		if components == nil && err != nil {
@@ -562,7 +569,7 @@ func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
 	c.Version = info.GetVersion()
 	c.PID = info.GetPID()
 
-	return
+	return err
 }
 
 // Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.

@@ -89,9 +89,8 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 
 		if !ok {
-			log.Debug().Err(ctx.Err()).Str("ID", controller.ID).Msg("terminating GPU controller")
 			if spawnedNew {
-				m.controllers.Terminate(controller.ID)
+				m.controllers.Terminate(context.WithoutCancel(ctx), controller.ID)
 			}
 		} else {
 			log.Debug().Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("attached GPU controller to process")
@@ -101,14 +100,12 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 	return controller.ID, nil
 }
 
-func (m *ManagerSimple) Detach(pid uint32) error {
-	log.Debug().Uint32("PID", pid).Msg("detaching GPU controller from process")
+func (m *ManagerSimple) Detach(ctx context.Context, pid uint32) error {
 	controller := m.controllers.Find(pid)
 	if controller == nil {
-		log.Debug().Uint32("PID", pid).Msg("no GPU controller found attached to process")
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
 	}
-	m.controllers.Terminate(controller.ID)
+	m.controllers.Terminate(ctx, controller.ID)
 	return nil
 }
 
