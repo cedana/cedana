@@ -110,7 +110,7 @@ stop_daemon_at() {
 wait_for_stop() {
     local sock=$1
     local i=0
-    while cedana ps &>/dev/null; do
+    while [ -S "$sock" ]; do
         sleep 1
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
