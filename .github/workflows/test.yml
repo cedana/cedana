@@ -59,7 +59,7 @@ on:
         type: string
         description: "Cedana-managed runner for large tests"
         required: false
-        default ""
+        default: ""
       post_summary_slack:
         type: string
         description: "Webhook URL for posting summary to Slack"
