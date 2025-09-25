@@ -31,11 +31,7 @@ jobs:
     - name: Create runner
       id: create_runner
       run: |
-        FULL_URL="${{ secrets.CEDANA_GA_RUNNER_URL }}/v1/runners/create"
-        echo "Attempting to contact URL: $FULL_URL"
-
         GPU_TYPE="A100"
-        echo "gpu_type=$GPU_TYPE" >> $GITHUB_OUTPUT
         echo '{
           "owner": "${{ github.repository_owner }}",
           "repo": "${{ github.event.repository.name }}",
@@ -59,37 +55,6 @@ jobs:
       - ${{ needs.create-runner.outputs.gpu_type }}
     timeout-minutes: 40
     steps:
-    - name: Validate runner
-      run: |
-        for i in {1..5}; do
-          cat <<EOF > validate_request.json
-          {
-            "instance_id": "${{ needs.create-runner.outputs.instance_id }}",
-            "owner": "${{ github.repository_owner }}",
-            "repo": "${{ github.event.repository.name }}",
-            "labels": ["self-hosted", "${{ needs.create-runner.outputs.gpu_type }}"]
-          }
-          EOF
-
-          response=$(curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -d @validate_request.json \
-            ${{ secrets.CEDANA_GA_RUNNER_URL }}/v1/runners/validate)
-
-          valid=$(echo $response | jq -r .valid)
-          if [ "$valid" == "true" ]; then
-            echo "Runner is valid!"
-            break
-          fi
-
-          if [ "$i" == "5" ]; then
-            echo "Runner is not valid after 5 attempts!"
-            exit 1
-          fi
-
-          echo "Attempt $i failed. Retrying in 30 seconds..."
-          sleep 30
-        done
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Run a test
