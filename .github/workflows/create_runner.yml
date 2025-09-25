@@ -31,6 +31,9 @@ jobs:
     - name: Create runner
       id: create_runner
       run: |
+        FULL_URL="${{ secrets.CEDANA_GA_RUNNER_URL }}/v1/runners/create"
+        echo "Attempting to contact URL: $FULL_URL"
+
         GPU_TYPE="A100"
         echo "gpu_type=$GPU_TYPE" >> $GITHUB_OUTPUT
         echo '{
