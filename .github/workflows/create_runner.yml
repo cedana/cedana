@@ -43,7 +43,7 @@ jobs:
 
   validate-runner:
     needs: create-runner
-    runs-on: [self-hosted, ${{ needs.create-runner.outputs.gpu_type }}]
+    runs-on: [self-hosted, '${{ needs.create-runner.outputs.gpu_type }}']
     timeout-minutes: 40
     steps:
     - name: Validate runner
