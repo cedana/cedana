@@ -1,5 +1,13 @@
 name: GetRunner
 
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
 on:
   workflow_call:
     # Add this section to expose job outputs as workflow outputs
@@ -43,7 +51,9 @@ jobs:
 
   validate-runner:
     needs: create-runner
-    runs-on: [self-hosted, '${{ needs.create-runner.outputs.gpu_type }}']
+    runs-on:
+      - self-hosted
+      - ${{ needs.create-runner.outputs.gpu_type }}
     timeout-minutes: 40
     steps:
     - name: Validate runner
