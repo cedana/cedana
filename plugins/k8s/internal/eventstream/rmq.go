@@ -237,26 +237,6 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			}
 		}
 
-		freezeReq := &daemon.DumpReq{
-			Type: "containerd",
-			Details: &daemon.Details{
-				Containerd: containers[0], // Freeze any container in the pod, they share the NET PID namespace
-			},
-		}
-
-		_, _, err = es.cedana.Freeze(ctx, freezeReq)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to freeze pod")
-			return rabbitmq.Ack
-		}
-
-		defer func() {
-			_, _, err = es.cedana.Unfreeze(ctx, freezeReq)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to unfreeze pod")
-			}
-		}()
-
 		var dumpReqs []*daemon.DumpReq
 
 		for i, container := range containers {
@@ -276,6 +256,40 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		}
 
 		wg := sync.WaitGroup{}
+		errs := make(chan error, len(dumpReqs))
+
+		// First freeze all containers
+
+		for i, dumpReq := range dumpReqs {
+			log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
+			wg.Add(1)
+			go func() {
+				_, _, err = es.cedana.Freeze(ctx, dumpReq)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to freeze container")
+					errs <- err
+				} else {
+					log.Debug().Msg("frozen container")
+				}
+				wg.Done()
+			}()
+
+			defer func() {
+				_, _, err = es.cedana.Unfreeze(ctx, dumpReq)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to unfreeze container")
+				}
+			}()
+		}
+		close(errs)
+		wg.Wait()
+
+		for err := range errs {
+			if err != nil {
+				log.Error().Msg("errors during freezing containers, aborting checkpoint")
+				return rabbitmq.Ack
+			}
+		}
 
 		for i, dumpReq := range dumpReqs {
 			wg.Add(1)

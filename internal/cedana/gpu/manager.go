@@ -25,7 +25,7 @@ type Manager interface {
 	Checks() types.Checks
 
 	// GetID returns the ID of the GPU controller for a given PID.
-	GetID(pid uint32) (string, error)
+	GetID(pid uint32) string
 
 	// Freeze the GPU for a given PID
 	Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error
@@ -63,8 +63,8 @@ func (ManagerMissing) Checks() types.Checks {
 	return types.Checks{}
 }
 
-func (ManagerMissing) GetID(pid uint32) (string, error) {
-	return "", fmt.Errorf("GPU manager missing")
+func (ManagerMissing) GetID(pid uint32) string {
+	return ""
 }
 
 func (ManagerMissing) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {

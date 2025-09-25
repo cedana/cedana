@@ -168,8 +168,6 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 				UID:     fileInfo.Sys().(*syscall.Stat_t).Uid,
 				GID:     fileInfo.Sys().(*syscall.Stat_t).Gid,
 			}
-		} else if c.Booking.Locked() {
-			continue
 		}
 
 		wg.Add(1)

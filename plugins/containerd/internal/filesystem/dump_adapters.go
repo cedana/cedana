@@ -34,7 +34,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 		details := req.GetDetails().GetContainerd()
 
 		// Skip rootfs if image ref is not provided
-		if details.Image == nil {
+		if details.Image == nil || req.Action != daemon.DumpAction_DUMP {
 			return next(ctx, opts, resp, req)
 		}
 

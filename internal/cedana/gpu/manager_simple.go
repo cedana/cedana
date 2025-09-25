@@ -113,12 +113,12 @@ func (m *ManagerSimple) IsAttached(pid uint32) bool {
 	return m.controllers.Find(pid) != nil
 }
 
-func (m *ManagerSimple) GetID(pid uint32) (string, error) {
+func (m *ManagerSimple) GetID(pid uint32) string {
 	controller := m.controllers.Find(pid)
 	if controller == nil {
-		return "", fmt.Errorf("no GPU controller found attached to PID %d", pid)
+		return ""
 	}
-	return controller.ID, nil
+	return controller.ID
 }
 
 func (m *ManagerSimple) Sync(ctx context.Context) error {

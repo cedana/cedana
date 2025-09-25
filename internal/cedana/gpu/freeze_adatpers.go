@@ -7,6 +7,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -34,6 +35,15 @@ func Freeze(gpus Manager) types.Adapter[types.Freeze] {
 				return next(ctx, opts, resp, req)
 			}
 
+			if !opts.Plugins.IsInstalled("gpu") {
+				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
+			}
+
+			id := gpus.GetID(pid)
+
+			state.GPUID = id
+			state.GPUEnabled = true
+
 			var freezeType gpu.FreezeType
 
 			freezeTypeStr := req.GPUFreezeType
@@ -48,7 +58,9 @@ func Freeze(gpus Manager) types.Adapter[types.Freeze] {
 				freezeType = gpu.FreezeType_FREEZE_TYPE_NCCL
 			}
 
+			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Freeze)
 			err = gpus.Freeze(ctx, pid, freezeType)
+			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to freeze GPU state: %v", err)
 			}

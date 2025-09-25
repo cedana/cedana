@@ -39,10 +39,7 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
 			}
 
-			id, err := gpus.GetID(pid)
-			if err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
-			}
+			id := gpus.GetID(pid)
 
 			state.GPUID = id
 			state.GPUEnabled = true
