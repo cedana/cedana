@@ -40,6 +40,11 @@ on:
         description: "Runner machine for tests (arm64)"
         required: false
         default: 8cpu-16g-1xT4G
+      large_dynamic_runner:
+        type: string
+        description: "Cedana-managed runner for large tests - used if provided instead of runner"
+        required: false
+        default: ""
       post_summary:
         type: boolean
         description: "Post test summary"
@@ -61,7 +66,9 @@ env:
 jobs:
   cuda:
     name: CUDA
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.arch == 'amd64' && inputs.runner || inputs.runner_arm64 }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/tag=${{ matrix.cr }}/extras=s3-cache
+    runs-on: ${{
+      (inputs.dynamic_runner_label != '' && fromJSON(format('["self-hosted", "{0}"]', inputs.dynamic_runner_label))) ||
+      format('runs-on={0}/runner={1}-{2}-cuda-{3}/tag={4}/extras=s3-cache', github.run_id, (matrix.arch == 'amd64' && inputs.runner || inputs.runner_arm64), matrix.arch, matrix.cuda_version, matrix.cr) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false

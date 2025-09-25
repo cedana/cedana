@@ -1,7 +1,16 @@
-name: CI
+name: GetRunner
 
 on:
   workflow_call:
+    # Add this section to expose job outputs as workflow outputs
+    outputs:
+      gpu_type:
+        description: "The GPU type label for the dynamic runner."
+        value: ${{ jobs.create-runner.outputs.gpu_type }}
+      instance_id:
+        description: "The instance ID of the created runner."
+        value: ${{ jobs.create-runner.outputs.instance_id }}
+
 
 jobs:
   create-runner:
