@@ -98,8 +98,8 @@ teardown() {
     # Check if pod is running
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
-    # Checkpoint the test pod
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE"
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$pod_id"
     [ "$status" -eq 0 ]
 
     if [ $status -eq 0 ]; then
@@ -128,8 +128,8 @@ teardown() {
     # Check if pod is running
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
-    # Checkpoint the test pod
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE"
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$pod_id"
     [ "$status" -eq 0 ]
 
     if [ $status -eq 0 ]; then
@@ -176,8 +176,8 @@ teardown() {
     # Check if pod is running
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
-    # Checkpoint the test pod
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE"
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$pod_id"
     [ "$status" -eq 0 ]
 
     if [ $status -eq 0 ]; then
