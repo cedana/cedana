@@ -50,15 +50,6 @@ func DumpRootfs(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", details.ID, err)
 		}
 
-		info, err := container.Info(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get container info: %v", err)
-		}
-
-		if info.Image == image.Name {
-			return nil, status.Errorf(codes.InvalidArgument, "dump image cannot be the same as the container image, current image: %s, dump image: %s", info.Image, details.Image)
-		}
-
 		// When doing a rootfs dump only, we can return early after dumping the rootfs
 
 		defer func() {

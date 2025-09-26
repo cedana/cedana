@@ -27,7 +27,6 @@ func SetupForRun(next types.Run) types.Run {
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create containerd client: %v", err)
 		}
-		defer client.Close()
 
 		ctx = context.WithValue(ctx, containerd_keys.CLIENT_CONTEXT_KEY, client)
 
@@ -45,13 +44,22 @@ func CreateContainerForRun(next types.Run) types.Run {
 		}
 
 		var container containerd.Container
+		var image containerd.Image
 
 		switch req.Action {
 		case daemon.RunAction_START_NEW:
 
-			image, err := client.GetImage(ctx, details.GetImage().GetName())
+			image, err = client.GetImage(ctx, details.GetImage().GetName())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
+			}
+
+			specOpts := []oci.SpecOpts{
+				oci.WithImageConfig(image),
+			}
+
+			if len(details.GetArgs()) > 0 {
+				specOpts = append(specOpts, oci.WithProcessArgs(details.GetArgs()...))
 			}
 
 			container, err = client.NewContainer(
@@ -59,14 +67,14 @@ func CreateContainerForRun(next types.Run) types.Run {
 				details.ID,
 				containerd.WithImage(image),
 				containerd.WithNewSnapshot(details.ID+"-snapshot", image),
-				containerd.WithNewSpec(oci.WithImageConfig(image)),
+				containerd.WithNewSpec(specOpts...),
 			)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create container for run: %v", err)
 			}
 			defer func() {
 				if err != nil {
-					container.Delete(ctx)
+					container.Delete(ctx, containerd.WithSnapshotCleanup)
 				}
 			}()
 

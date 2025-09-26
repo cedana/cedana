@@ -245,13 +245,15 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
 	}
 
+	log := log.With().Str("JID", jid).Str("type", m.Get(jid).GetType()).Uint32("PID", pid).Logger()
+
 	job := m.Get(jid)
 	job.SetPID(pid)
 	job.SyncDeep()
 
 	m.pending <- action{putJob, jid}
 
-	log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("managing job")
+	log.Info().Msg("managing job")
 
 	m.wg.Add(1)
 	go func() {
@@ -266,15 +268,19 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 		case exitCode = <-code:
 		}
 
-		log.Info().Str("JID", jid).Str("type", job.GetType()).Int("code", exitCode).Uint32("PID", pid).Msg("job exited")
+		log.Info().Int("code", exitCode).Msg("job exited")
 
 		m.gpus.Detach(lifetime, pid)
 
 		// Check if a clean up handler is available for the job type
 
-		features.Cleanup.IfAvailable(func(_ string, cleanup func(*daemon.Details) error) error {
-			log.Debug().Str("JID", jid).Str("type", job.GetType()).Msg("using custom cleanup from plugin")
-			return cleanup(job.GetDetails())
+		features.Cleanup.IfAvailable(func(_ string, cleanup func(context.Context, *daemon.Details) error) error {
+			log.Debug().Msg("using custom cleanup from plugin")
+			err := cleanup(context.WithoutCancel(lifetime), job.GetDetails())
+			if err != nil {
+				log.Debug().Err(err).Msg("custom cleanup from plugin failed")
+			}
+			return err
 		}, job.GetType())
 	}()
 

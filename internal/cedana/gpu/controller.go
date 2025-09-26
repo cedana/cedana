@@ -571,11 +571,6 @@ func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
 	c.Version = info.GetVersion()
 	c.PID = info.GetPID()
 
-	log.Trace().Str("ID", c.ID).
-		Uint32("PID", info.GetPID()).
-		Uint32("AttachedPID", info.GetAttachedPID()).
-		Msg("connected to GPU controller")
-
 	return err
 }
 

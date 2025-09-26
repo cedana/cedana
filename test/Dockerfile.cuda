@@ -2,7 +2,7 @@
 
 FROM cedana/cedana-samples:cuda12.8-torch2.7 AS cedana-samples
 
-FROM nvidia/cuda:12.6.3-base-ubuntu24.04
+FROM nvidia/cuda:12.8.0-base-ubuntu24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
 ARG GO_VERSION=1.24.3
