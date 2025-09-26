@@ -118,7 +118,5 @@ VOLUME ["/src"]
 WORKDIR /src
 ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
-CMD ["/entrypoint.sh"]
+CMD []
