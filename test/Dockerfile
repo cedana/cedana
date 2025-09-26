@@ -108,5 +108,8 @@ WORKDIR /src
 ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
 
+# because github actions forces it on us
+RUN sed -i '2iumount /run/docker.sock || true' /usr/local/bin/entrypoint.sh
+
 ENTRYPOINT ["entrypoint.sh"]
 CMD []
