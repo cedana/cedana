@@ -31,10 +31,16 @@ jobs:
       controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
       runtime_shim_version: ${{ vars.NIGHTLY_RUNTIME_SHIM_VERSION }}
 
+  create_runner:
+    name: CreateRunner
+    uses: ./.github/workflows/create_runner.yml
+    needs: download
+    secrets: inherit
+
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: download
+    needs: create_runner
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
@@ -42,6 +48,7 @@ jobs:
       runner: 16cpu-64g # use larger runner
       runner_gpu: 8cpu-64g-1xL40S # use larger runner
       runner_gpu_arm64: 32cpu-64g-1xT4G # use larger runner
+      large_dynamic_runner_gpu: ${{ needs.create_runner.outputs.gpu_type }}
       parallelism: 8
       parallelism_gpu: 4
       post_summary_slack: nightly
