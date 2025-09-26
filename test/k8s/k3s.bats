@@ -18,6 +18,7 @@ export CEDANA_NAMESPACE="cedana-system"
 export RUNC_ROOT="/run/containerd/runc/k8s.io"
 
 setup_file() {
+    do_once start_containerd
     setup_cluster
     tail_all_logs $CEDANA_NAMESPACE 300 &
     TAIL_PID=$!
@@ -35,6 +36,7 @@ teardown_file() {
     helm_uninstall_cedana $CEDANA_NAMESPACE
     teardown_cluster &> /dev/null
     deregister_cluster "$CLUSTER_ID"
+    do_once stop_containerd
 }
 
 teardown() {

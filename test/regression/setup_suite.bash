@@ -7,9 +7,4 @@ source "${BATS_TEST_DIRNAME}"/../helpers/containerd.bash
 
 setup_suite() {
     cedana plugin install criu
-    start_containerd
-}
-
-teardown_suite() {
-    stop_containerd
 }

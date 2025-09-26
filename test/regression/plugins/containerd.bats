@@ -12,6 +12,7 @@ load_lib assert
 load_lib file
 
 setup_file() {
+    do_once start_containerd
     do_once pull_images
     setup_file_daemon
 }
@@ -26,6 +27,7 @@ teardown() {
 
 teardown_file() {
     teardown_file_daemon
+    do_once stop_containerd
 }
 
 ###########

@@ -14,8 +14,8 @@ pull_images() {
 }
 
 start_containerd() {
-    if cmd_exists entrypoint.sh; then
-        entrypoint.sh # XXX: use docker-in-docker, if available, from the container image
+    if cmd_exists start-docker.sh; then
+        start-docker.sh # XXX: use docker-in-docker, if available, from the container image
     elif cmd_exists containerd; then
         containerd > /dev/null &
     else
@@ -25,7 +25,7 @@ start_containerd() {
 }
 
 stop_containerd() {
-    if cmd_exists entrypoint.sh; then
+    if cmd_exists start-docker.sh; then
         pkill supervisord
     elif pid=$(pidof containerd); then
         kill "$pid"
