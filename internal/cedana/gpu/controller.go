@@ -391,6 +391,10 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
+	callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		return utils.GRPCError(<-dumpErr)
+	}
+
 	callback.FinalizeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
 		defer cancel()
@@ -405,7 +409,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		defer controller.Termination.Unlock()
 
-		dumpErr := <-dumpErr
+		dumpErr := <-dumpErr // If error was not already received, wait for dump to finish
 
 		log.Debug().Msg("GPU unfreeze starting")
 

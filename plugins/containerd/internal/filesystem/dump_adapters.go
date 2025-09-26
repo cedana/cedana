@@ -93,8 +93,12 @@ func DumpRootfs(next types.Dump) types.Dump {
 				log.Debug().Str("container", details.ID).Msg("dumping rootfs")
 				go func() {
 					rootfsErr <- dumpRootfs(ctx, client, container, image.Name, image.Username, image.Secret)
+					close(rootfsErr)
 				}()
 				return nil
+			},
+			PostDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+				return <-rootfsErr
 			},
 			FinalizeDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 				return <-rootfsErr
