@@ -14,17 +14,19 @@ pull_images() {
 }
 
 start_containerd() {
-    if ! cmd_exists containerd; then
+    if cmd_exists entrypoint.sh; then
+        entrypoint.sh # XXX: use docker-in-docker, if available, from the container image
+    elif cmd_exists containerd; then
+        containerd > /dev/null &
+    else
         error_log "containerd is not installed. Please install it first."
         exit 1
     fi
-
-    containerd > /dev/null &
 }
 
 stop_containerd() {
     if pid=$(pidof containerd); then
-        kill -9 "$pid"
+        kill "$pid"
     else
         debug_log "containerd is not running."
     fi
