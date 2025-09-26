@@ -311,7 +311,7 @@ PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gp
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --name=$(DOCKER_TEST_CONTAINER_NAME) \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --name=$(DOCKER_TEST_CONTAINER_NAME) \
 						-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
 				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \

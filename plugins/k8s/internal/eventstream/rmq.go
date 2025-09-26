@@ -25,7 +25,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
 )
@@ -258,12 +257,11 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		wg := sync.WaitGroup{}
 		errs := make(chan error, len(dumpReqs))
 
-		// First freeze all containers
-
 		for i, dumpReq := range dumpReqs {
 			log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
 			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				_, _, err = es.cedana.Freeze(ctx, dumpReq)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to freeze container")
@@ -271,7 +269,6 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				} else {
 					log.Debug().Msg("frozen container")
 				}
-				wg.Done()
 			}()
 
 			defer func() {
@@ -281,8 +278,8 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				}
 			}()
 		}
-		close(errs)
 		wg.Wait()
+		close(errs)
 
 		for err := range errs {
 			if err != nil {
@@ -303,7 +300,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					state = dumpResp.State
 				}
 				es.publishCheckpoint(
-					log,
+					log.WithContext(ctx),
 					req.PodName,
 					req.ActionId,
 					checkpointIdMap[i],
@@ -324,7 +321,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 }
 
 func (es *EventStream) publishCheckpoint(
-	log zerolog.Logger,
+	ctx context.Context,
 	podId string,
 	actionId string,
 	checkpointId string,
@@ -335,6 +332,7 @@ func (es *EventStream) publishCheckpoint(
 	containerSpec *specs.Spec,
 	dumpErr error,
 ) error {
+	log := *log.Ctx(ctx)
 	ci := checkpointInfo{
 		ActionId:       actionId,
 		PodId:          podId,

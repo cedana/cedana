@@ -115,7 +115,7 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 		return nil, 0, nil, 0, err
 	}
 
-	return
+	return respB, n, oobB, oobn, err
 }
 
 func (c *Criu) doSwrk(

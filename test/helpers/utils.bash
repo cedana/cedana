@@ -214,6 +214,23 @@ wait_for_cmd_fail() {
     return 0
 }
 
+# Wait for a file to exist, with a timeout (default 60 seconds)
+wait_for_file() {
+    local file=$1
+    local timeout=${2:-60}
+    local interval=1
+    local elapsed=0
+
+    while [ ! -e "$file" ]; do
+        if (( elapsed >= timeout )); then
+            return 1
+        fi
+        sleep "$interval"
+        ((elapsed += interval))
+    done
+
+    return 0
+}
 
 debug_log() {
     local message="$1"

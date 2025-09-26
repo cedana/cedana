@@ -4,33 +4,27 @@ package logging
 
 import (
 	"bytes"
-	"io"
+	"context"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 type LogWriter struct {
-	context string
-	id      string
-	logger  zerolog.Logger
-	level   zerolog.Level
-
-	io.Writer
+	logger *zerolog.Logger
+	level  zerolog.Level
 }
 
-func Writer(context string, id string, level zerolog.Level) *LogWriter {
+func Writer(ctx context.Context, level zerolog.Level) *LogWriter {
 	return &LogWriter{
-		context: context,
-		id:      id,
-		level:   level,
-		logger:  log.Logger.With().Str("context", context).Str("id", id).Logger(),
+		level:  level,
+		logger: log.Ctx(ctx),
 	}
 }
 
 func (w *LogWriter) Write(p []byte) (n int, err error) {
-	lines := bytes.Split(p, []byte("\n"))
-	for _, line := range lines {
+	lines := bytes.SplitSeq(p, []byte("\n"))
+	for line := range lines {
 		if len(line) == 0 {
 			continue
 		}

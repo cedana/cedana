@@ -112,10 +112,9 @@ teardown_file() {
 # bats test_tags=restore,daemonless
 @test "remote stream restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
+    pid_file=$(mktemp)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
-
-    pid=$(pid_for_jid "$jid")
 
     sleep 1
 
@@ -123,9 +122,10 @@ teardown_file() {
     assert_success
     dump_file=$(echo "$output" | awk '{print $NF}')
 
-    cedana restore process --path "$dump_file" --no-server &
+    cedana restore process --path "$dump_file" --pid-file "$pid_file" --no-server &
 
-    wait_for_pid "$pid"
+    wait_for_file "$pid_file"
+    pid=$(cat "$pid_file")
     run kill -KILL "$pid"
     wait_for_no_pid "$pid"
 }
