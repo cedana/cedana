@@ -12,8 +12,8 @@ load_lib assert
 load_lib file
 
 setup_file() {
-    setup_file_daemon
     do_once pull_images
+    setup_file_daemon
 }
 
 setup() {
@@ -151,7 +151,7 @@ teardown_file() {
 
     cedana run containerd --image "$image" --jid "$jid"
 
-    sleep 2
+    sleep 3
 
     run cedana dump job "$jid" --image "$new_image"
     assert_success
@@ -169,7 +169,7 @@ teardown_file() {
 
     cedana run containerd --image "$image" --jid "$jid" --attach &
 
-    sleep 2
+    sleep 3
 
     run cedana dump job "$jid" --image "$new_image"
     assert_success

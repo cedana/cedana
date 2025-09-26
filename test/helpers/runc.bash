@@ -3,7 +3,7 @@
 # This is a helper file assumes its users are in the same directory as the Makefile
 
 export ROOTFS_URL="https://dl-cdn.alpinelinux.org/alpine/v3.10/releases/$(uname -m)/alpine-minirootfs-3.10.1-$(uname -m).tar.gz"
-export ROOTFS_CUDA_IMAGE="cedana/cedana-test:cuda"
+export ROOTFS_CUDA_IMAGE="docker.io/library/cedana/cedana-test:cuda"
 
 ROOTFS="/tmp/_rootfs"
 ROOTFS_CUDA="/tmp/_rootfs_cuda"
@@ -18,10 +18,12 @@ setup_rootfs() {
 }
 
 setup_rootfs_cuda() {
-    mkdir -p "$ROOTFS_CUDA"
-    cid=$(docker create "$ROOTFS_CUDA_IMAGE")
-    docker export "$cid" | tar -C "$ROOTFS_CUDA" -xf -
-    docker rm "$cid"
+    debug mkdir -p "$ROOTFS_CUDA"
+    local temp_tar="/tmp/rootfs_cuda.tar"
+    debug ctr image pull "$ROOTFS_CUDA_IMAGE"
+    debug ctr image export "$temp_tar" "$ROOTFS_CUDA_IMAGE"
+    debug tar -C "$ROOTFS_CUDA" -xf "$temp_tar"
+    debug rm "$temp_tar"
 }
 
 create_workload_bundle() {

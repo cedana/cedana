@@ -25,7 +25,9 @@ start_containerd() {
 }
 
 stop_containerd() {
-    if pid=$(pidof containerd); then
+    if cmd_exists entrypoint.sh; then
+        pkill supervisord
+    elif pid=$(pidof containerd); then
         kill "$pid"
     else
         debug_log "containerd is not running."
