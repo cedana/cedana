@@ -255,19 +255,16 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		}
 
 		wg := sync.WaitGroup{}
-		errs := make(chan error, len(dumpReqs))
+		errMap := make(map[int]error)
+		wg.Add(len(dumpReqs))
 
 		for i, dumpReq := range dumpReqs {
 			log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
-			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				_, _, err = es.cedana.Freeze(ctx, dumpReq)
 				if err != nil {
-					log.Error().Err(err).Msg("failed to freeze container")
-					errs <- err
-				} else {
-					log.Debug().Msg("frozen container")
+					errMap[i] = err
 				}
 			}()
 
@@ -278,18 +275,36 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				}
 			}()
 		}
-		wg.Wait()
-		close(errs)
 
-		for err := range errs {
-			if err != nil {
-				log.Error().Msg("errors during freezing containers, aborting checkpoint")
-				return rabbitmq.Ack
+		wg.Wait()
+
+		if len(errMap) > 0 {
+			for i, err := range errMap {
+				log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
+				if err != nil {
+					log.Error().Err(err).Msg("failed to freeze container")
+				}
+				es.publishCheckpoint(
+					log.WithContext(ctx),
+					req.PodName,
+					req.ActionId,
+					checkpointIdMap[i],
+					nil,
+					"",
+					nil,
+					i,
+					specMap[i],
+					err,
+				)
 			}
+			return rabbitmq.Ack
 		}
 
+		log.Info().Msg("all containers frozen, starting dump")
+
+		wg.Add(len(dumpReqs))
+
 		for i, dumpReq := range dumpReqs {
-			wg.Add(1)
 			go func() {
 				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
