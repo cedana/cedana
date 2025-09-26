@@ -11,7 +11,10 @@ import (
 
 type NotifyCallback struct {
 	InitializeFunc          InitializeFunc
+	InitializeDumpFunc      NotifyFuncOpts
 	InitializeRestoreFunc   NotifyFuncOpts
+	FinalizeDumpFunc        NotifyFuncOpts
+	FinalizeRestoreFunc     NotifyFuncOpts
 	PreDumpFunc             NotifyFuncOpts
 	PostDumpFunc            NotifyFuncOpts
 	PreRestoreFunc          NotifyFuncOpts
@@ -23,8 +26,6 @@ type NotifyCallback struct {
 	PreResumeFunc           NotifyFunc
 	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
-	OnRestoreErrorFunc      NotifyFuncOptsNoError
-	OnDumpErrorFunc         NotifyFuncOptsNoError
 
 	Name string // to give some context to this callback
 }
@@ -51,12 +52,51 @@ func (n NotifyCallback) Initialize(ctx context.Context, criuPid int32) error {
 	return nil
 }
 
+func (n NotifyCallback) InitializeDump(ctx context.Context, opts *criu.CriuOpts) error {
+	if n.InitializeDumpFunc != nil {
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		err := n.InitializeDumpFunc(ctx, opts)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (n NotifyCallback) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error {
 	if n.InitializeRestoreFunc != nil {
 		var end func()
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
 		err := n.InitializeRestoreFunc(ctx, opts)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallback) FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error {
+	if n.FinalizeDumpFunc != nil {
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		err := n.FinalizeDumpFunc(ctx, opts)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallback) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+	if n.FinalizeRestoreFunc != nil {
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		err := n.FinalizeRestoreFunc(ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -205,22 +245,4 @@ func (n NotifyCallback) OrphanPtsMaster(ctx context.Context, fd int32) error {
 		}
 	}
 	return nil
-}
-
-func (n NotifyCallback) OnRestoreError(ctx context.Context, opts *criu.CriuOpts) {
-	if n.OnRestoreErrorFunc != nil {
-		var end func()
-		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
-		defer end()
-		n.OnRestoreErrorFunc(ctx, opts)
-	}
-}
-
-func (n NotifyCallback) OnDumpError(ctx context.Context, opts *criu.CriuOpts) {
-	if n.OnDumpErrorFunc != nil {
-		var end func()
-		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
-		defer end()
-		n.OnDumpErrorFunc(ctx, opts)
-	}
 }

@@ -6,6 +6,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -41,12 +42,16 @@ func Unfreeze(gpus Manager) types.Adapter[types.Freeze] {
 			state.GPUID = id
 			state.GPUEnabled = true
 
+			log.Debug().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze starting")
+
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Unfreeze)
 			err = gpus.Unfreeze(ctx, pid)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to unfreeze GPU state: %v", err)
 			}
+
+			log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU unfreeze completed")
 
 			return next(ctx, opts, resp, req)
 		}

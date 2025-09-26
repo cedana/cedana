@@ -297,7 +297,6 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 
 	log.Debug().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Msg("terminating GPU controller")
 
-	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
 
 	c.Termination.Lock()
@@ -334,6 +333,7 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 
 func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
+	log := log.With().Str("plugin", "gpu").Str("ID", id).Logger()
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
 	// do the GPU dump in parallel to CRIU dump.
@@ -343,6 +343,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		defer cancel()
 
 		pid := uint32(opts.GetPid())
+		log := log.With().Uint32("PID", pid).Logger()
 
 		controller := p.Get(id)
 		if controller == nil {
@@ -355,15 +356,15 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		freezeType = append(freezeType, CONTROLLER_DEFAULT_FREEZE_TYPE) // Default to IPC freeze type if not provided
 
-		log.Debug().Str("ID", id).Uint32("PID", pid).Str("type", freezeType[0].String()).Msg("GPU freeze starting")
+		log.Debug().Str("type", freezeType[0].String()).Msg("GPU freeze starting")
 
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{Type: freezeType[0]})
 		if err != nil {
-			log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to freeze GPU")
+			log.Error().Err(err).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
 
-		log.Info().Str("ID", id).Uint32("PID", pid).Str("type", freezeType[0].String()).Msg("GPU freeze complete")
+		log.Info().Str("type", freezeType[0].String()).Msg("GPU freeze complete")
 
 		// Begin GPU dump in parallel to CRIU dump
 
@@ -373,15 +374,15 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
-			log.Debug().Str("ID", id).Uint32("PID", pid).Msg("GPU dump starting")
+			log.Debug().Msg("GPU dump starting")
 
 			_, err := controller.Dump(waitCtx, &gpu.DumpReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream(), LeaveRunning: opts.GetLeaveRunning()})
 			if err != nil {
-				log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to dump GPU")
+				log.Error().Err(err).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
 				return
 			}
-			log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU dump complete")
+			log.Info().Msg("GPU dump complete")
 		}()
 		if PARALLEL_DUMP {
 			return nil
@@ -390,11 +391,12 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
-	callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+	callback.FinalizeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
 		defer cancel()
 
 		pid := uint32(opts.GetPid())
+		log := log.With().Uint32("PID", pid).Logger()
 
 		controller := p.Get(id)
 		if controller == nil {
@@ -403,42 +405,18 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		defer controller.Termination.Unlock()
 
-		log.Debug().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU unfreeze starting")
+		dumpErr := <-dumpErr
+
+		log.Debug().Msg("GPU unfreeze starting")
 
 		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
 		if err != nil {
-			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU")
+			log.Error().Err(err).Msg("failed to unfreeze GPU")
 		} else {
-			log.Info().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU unfreeze completed")
+			log.Info().Msg("GPU unfreeze completed")
 		}
 
-		return errors.Join(err, utils.GRPCError(<-dumpErr))
-	}
-
-	// Unfreeze on dump failure as well
-	callback.OnDumpErrorFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) {
-		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
-		defer cancel()
-
-		pid := uint32(opts.GetPid())
-
-		controller := p.Get(id)
-		if controller == nil {
-			log.Error().Uint32("PID", pid).Msg("GPU controller not found, is the process still running?")
-			return
-		}
-
-		controller.Termination.TryLock() // Might be already locked, so ensure we don't deadlock
-		defer controller.Termination.Unlock()
-
-		log.Debug().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU unfreeze starting")
-
-		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
-		if err != nil {
-			log.Error().Err(err).Str("ID", controller.ID).Uint32("PID", pid).Msg("failed to unfreeze GPU")
-		} else {
-			log.Info().Str("ID", controller.ID).Uint32("PID", pid).Msg("GPU unfreeze completed")
-		}
+		return errors.Join(err, utils.GRPCError(dumpErr))
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
@@ -457,18 +435,15 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 				return
 			}
 
-			controller.Termination.Lock() // Required to ensure the controller does not get terminated while restoring
-			defer controller.Termination.Unlock()
-
-			log.Debug().Str("ID", controller.ID).Msg("GPU restore starting")
+			log.Debug().Msg("GPU restore starting")
 
 			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
-				log.Error().Err(err).Str("ID", controller.ID).Msg("failed to restore GPU")
+				log.Error().Err(err).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
 				return
 			}
-			log.Info().Str("ID", controller.ID).Msg("GPU restore complete")
+			log.Info().Msg("GPU restore complete")
 
 			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
 			// the restore happens inside a goroutine, the timing components belong to the restore goroutine (concurrent).

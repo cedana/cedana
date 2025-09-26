@@ -9,6 +9,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -58,12 +59,16 @@ func Freeze(gpus Manager) types.Adapter[types.Freeze] {
 				freezeType = gpu.FreezeType_FREEZE_TYPE_NCCL
 			}
 
+			log.Debug().Str("ID", id).Uint32("PID", pid).Str("type", freezeType.String()).Msg("GPU freeze starting")
+
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Freeze)
 			err = gpus.Freeze(ctx, pid, freezeType)
 			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to freeze GPU state: %v", err)
 			}
+
+			log.Info().Str("ID", id).Uint32("PID", pid).Str("type", freezeType.String()).Msg("GPU freeze complete")
 
 			return next(ctx, opts, resp, req)
 		}
