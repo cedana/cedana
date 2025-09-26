@@ -35,18 +35,18 @@ teardown_file() {
     assert_output --partial "$jid"
 }
 
-@test "Health check" {
+@test "health check" {
     cedana check
 }
 
-@test "Health check (daemon)" {
+@test "health check (daemon)" {
     cedana daemon check
 }
 
-@test "Health check (full)" {
+@test "health check (full)" {
     cedana check --full
 }
 
-@test "Health check (full, daemon)" {
+@test "health check (full, daemon)" {
     cedana daemon check --full
 }
