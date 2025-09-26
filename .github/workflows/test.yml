@@ -166,7 +166,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+      options: --privileged --init --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -278,7 +278,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+      options: --privileged --init --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
