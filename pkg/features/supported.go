@@ -43,7 +43,7 @@ var (
 	RunDaemonlessSupport = plugins.Feature[bool]{Symbol: "RunDaemonlessSupport", Description: "Run handler (daemonless)"}
 	RunMiddleware        = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddleware", Description: "Run middleware"}
 	KillSignal           = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
-	Cleanup              = plugins.Feature[func(details *daemon.Details) error]{Symbol: "Cleanup", Description: "Custom cleanup"}
+	Cleanup              = plugins.Feature[func(ctx context.Context, details *daemon.Details) error]{Symbol: "Cleanup", Description: "Custom cleanup"}
 	Reaper               = plugins.Feature[bool]{Symbol: "Reaper", Description: "Custom reaper"}
 
 	// Manage

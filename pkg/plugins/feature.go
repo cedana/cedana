@@ -46,7 +46,7 @@ func (feature Feature[T]) IfAvailable(
 					name, feature, reflect.TypeOf(sym).String(), reflect.TypeOf(symUntyped).String()))
 				continue
 			}
-			if sym == nil {
+			if sym == nil || (reflect.TypeOf(*sym).Kind() == reflect.Pointer && reflect.ValueOf(*sym).IsNil()) {
 				errs = append(errs, fmt.Errorf("plugin '%s' exports no '%s'", name, feature))
 				continue
 			}
@@ -88,7 +88,7 @@ func (feature Feature[T]) IsAvailable(filter ...string) (bool, error) {
 					name, feature, reflect.TypeOf(sym).String(), reflect.TypeOf(symUntyped).String()))
 				continue
 			}
-			if sym == nil {
+			if sym == nil || (reflect.TypeOf(*sym).Kind() == reflect.Pointer && reflect.ValueOf(*sym).IsNil()) {
 				errs = append(errs, fmt.Errorf("plugin '%s' exports no '%s", name, feature))
 				continue
 			}

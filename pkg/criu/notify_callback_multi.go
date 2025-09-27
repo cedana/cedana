@@ -40,9 +40,39 @@ func (n NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int32) erro
 	return nil
 }
 
+func (n NotifyCallbackMulti) InitializeDump(ctx context.Context, opts *criu.CriuOpts) error {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		err := n.callbacks[i].InitializeDump(ctx, opts)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (n NotifyCallbackMulti) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
 		err := n.callbacks[i].InitializeRestore(ctx, opts)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallbackMulti) FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		err := n.callbacks[i].FinalizeDump(ctx, opts)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallbackMulti) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		err := n.callbacks[i].FinalizeRestore(ctx, opts)
 		if err != nil {
 			return err
 		}
@@ -158,16 +188,4 @@ func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) erro
 		}
 	}
 	return nil
-}
-
-func (n NotifyCallbackMulti) OnRestoreError(ctx context.Context, opts *criu.CriuOpts) {
-	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		n.callbacks[i].OnRestoreError(ctx, opts)
-	}
-}
-
-func (n NotifyCallbackMulti) OnDumpError(ctx context.Context, opts *criu.CriuOpts) {
-	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		n.callbacks[i].OnDumpError(ctx, opts)
-	}
 }

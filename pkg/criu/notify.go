@@ -9,7 +9,10 @@ import (
 // Notify interface
 type Notify interface {
 	Initialize(ctx context.Context, criuPid int32) error
+	InitializeDump(ctx context.Context, opts *criu.CriuOpts) error
 	InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error
+	FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error
+	FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error
 	PreDump(ctx context.Context, opts *criu.CriuOpts) error
 	PostDump(ctx context.Context, opts *criu.CriuOpts) error
 	PreRestore(ctx context.Context, opts *criu.CriuOpts) error
@@ -21,8 +24,6 @@ type Notify interface {
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
-	OnRestoreError(ctx context.Context, opts *criu.CriuOpts)
-	OnDumpError(ctx context.Context, opts *criu.CriuOpts)
 }
 
 // NoNotify struct
@@ -33,8 +34,23 @@ func (c NoNotify) Initialize(ctx context.Context, criuPid int) error {
 	return nil
 }
 
+// InitializeDump NoNotify
+func (c NoNotify) InitializeDump(ctx context.Context, opts *criu.CriuOpts) error {
+	return nil
+}
+
 // InitializeRestore NoNotify
 func (c NoNotify) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+	return nil
+}
+
+// FinalizeDump NoNotify
+func (c NoNotify) FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error {
+	return nil
+}
+
+// FinalizeRestore NoNotify
+func (c NoNotify) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error {
 	return nil
 }
 
@@ -90,10 +106,4 @@ func (c NoNotify) PostResume(ctx context.Context) error {
 
 func (c NoNotify) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	return nil
-}
-
-func (c NoNotify) OnRestoreError(ctx context.Context, opts *criu.CriuOpts) {
-}
-
-func (c NoNotify) OnDumpError(ctx context.Context, opts *criu.CriuOpts) {
 }

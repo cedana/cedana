@@ -1,4 +1,4 @@
-package utils
+package logging
 
 // Defines all the log utility functions used by the server
 
@@ -6,20 +6,17 @@ import (
 	"bufio"
 	"context"
 	"os"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
-const waitTime = 200 * time.Millisecond
-
 // Log messages from a file.
 // Can provide an arbitrary format function to format the log message.
 // Noop if the current log level is higher than the provided level
-func LogFromFile(ctx context.Context, logfile string, level zerolog.Level, format ...func([]byte) (string, error)) (lastMsg string) {
+func FromFile(ctx context.Context, logfile string, level zerolog.Level, format ...func([]byte) (string, error)) (lastMsg string) {
 	if log.Logger.GetLevel() > level {
-		return
+		return lastMsg
 	}
 
 	log := log.Ctx(ctx)
@@ -27,7 +24,7 @@ func LogFromFile(ctx context.Context, logfile string, level zerolog.Level, forma
 
 	file, err := os.Open(logfile)
 	if err != nil {
-		return
+		return lastMsg
 	}
 	defer file.Close()
 
@@ -37,7 +34,7 @@ func LogFromFile(ctx context.Context, logfile string, level zerolog.Level, forma
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			return
+			return lastMsg
 		default:
 			if len(format) > 0 {
 				bytes := scanner.Bytes()
@@ -54,7 +51,7 @@ func LogFromFile(ctx context.Context, logfile string, level zerolog.Level, forma
 		}
 	}
 
-	return
+	return lastMsg
 }
 
 func LastMsgFromFile(logfile string, format ...func([]byte) (string, error)) (lastMsg string, err error) {

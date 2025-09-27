@@ -75,6 +75,8 @@ func NewStreamingFs(
 		compression = compressions[0]
 	}
 
+	log := log.With().Str("plugin", "streamer").Str("path", storagePath).Int32("streams", streams).Str("mode", mode.String()).Logger()
+
 	// Create pipes for reading and writing data to/from the streamer to dir
 	var readFds, writeFds []*os.File
 	var shardFds []string
@@ -192,7 +194,7 @@ func NewStreamingFs(
 			if lastMsg == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			log.Trace().Str("context", "streamer").Str("dir", imagesDir).Msg(lastMsg)
+			log.Trace().Msg(lastMsg)
 		}
 	}()
 
@@ -213,7 +215,7 @@ func NewStreamingFs(
 		if err != nil {
 			log.Trace().Err(err).Msg("streamer Wait()")
 		}
-		log.Debug().Str("dir", imagesDir).Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
+		log.Debug().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
 
 		// FIXME: Remove socket files. Should be cleaned up by the streamer itself
 		matches, err := filepath.Glob(filepath.Join(imagesDir, "*.sock"))
@@ -245,7 +247,7 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("failed to connect to streamer: %w: %s", err, lastMsg)
 	}
 	fs.conn = conn.(*net.UnixConn)
-	log.Debug().Str("dir", imagesDir).Msg("streamer connected")
+	log.Debug().Msg("streamer connected")
 
 	wait = func() error {
 		// Stop the listener, and wait for all IO to finish
@@ -332,6 +334,17 @@ func (fs *Fs) Name() string {
 ////////////////////
 // Helper Methods //
 ////////////////////
+
+func (m Mode) String() string {
+	switch m {
+	case READ_ONLY:
+		return "read-only"
+	case WRITE_ONLY:
+		return "write-only"
+	default:
+		return "unknown"
+	}
+}
 
 // Opens a pair of file descriptors for reading and writing through the streamer
 func (fs *Fs) openFd(name string) (int, error) {

@@ -115,7 +115,7 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 		return nil, 0, nil, 0, err
 	}
 
-	return
+	return respB, n, oobB, oobn, err
 }
 
 func (c *Criu) doSwrk(
@@ -180,11 +180,29 @@ func (c *Criu) doSwrkWithResp(
 		if err != nil {
 			return nil, fmt.Errorf("initialize failed: %w", err)
 		}
-		if reqType == criu.CriuReqType_RESTORE {
+		switch reqType {
+		case criu.CriuReqType_RESTORE:
 			err := nfy.InitializeRestore(ctx, opts)
 			if err != nil {
 				return nil, fmt.Errorf("initialize-restore failed: %w", err)
 			}
+			defer func() {
+				err := nfy.FinalizeRestore(ctx, opts)
+				if err != nil {
+					retErr = errors.Join(retErr, err)
+				}
+			}()
+		case criu.CriuReqType_DUMP:
+			err := nfy.InitializeDump(ctx, opts)
+			if err != nil {
+				return nil, fmt.Errorf("initialize-dump failed: %w", err)
+			}
+			defer func() {
+				err := nfy.FinalizeDump(ctx, opts)
+				if err != nil {
+					retErr = errors.Join(retErr, err)
+				}
+			}()
 		}
 	}
 
@@ -206,11 +224,6 @@ func (c *Criu) doSwrkWithResp(
 		}
 
 		if !resp.GetSuccess() {
-			if resp.GetType() == criu.CriuReqType_RESTORE {
-				nfy.OnRestoreError(ctx, opts)
-			} else if resp.GetType() == criu.CriuReqType_DUMP {
-				nfy.OnDumpError(ctx, opts)
-			}
 			return resp, fmt.Errorf("operation failed (msg:%s err:%d)",
 				resp.GetCrErrmsg(), resp.GetCrErrno())
 		}

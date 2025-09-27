@@ -32,7 +32,6 @@ teardown_file() {
     jid=$(unix_nano)
 
     run cedana run process echo hello --jid "$jid"
-
     assert_success
     assert_output --partial "total"
 }
@@ -41,7 +40,24 @@ teardown_file() {
     jid=$(unix_nano)
 
     run cedana run process echo hello --jid "$jid" --profiling=false
+    assert_success
+    refute_output --partial "total"
+}
 
+# bats test_tags=daemonless
+@test "run process (profiling, without daemon)" {
+    jid=$(unix_nano)
+
+    run cedana run process echo hello --jid "$jid" --no-server
+    assert_success
+    assert_output --partial "total"
+}
+
+# bats test_tags=daemonless
+@test "run process (profiling output off, without daemon)" {
+    jid=$(unix_nano)
+
+    run cedana run process echo hello --jid "$jid" --profiling=false --no-server
     assert_success
     refute_output --partial "total"
 }
@@ -52,7 +68,6 @@ teardown_file() {
     pid=$!
 
     run cedana dump process $pid
-
     assert_success
     assert_output --partial "total"
 
@@ -65,7 +80,6 @@ teardown_file() {
     pid=$!
 
     run cedana dump process $pid --profiling=false
-
     assert_success
     refute_output --partial "total"
 
@@ -78,14 +92,12 @@ teardown_file() {
     pid=$!
 
     run cedana dump process $pid
-
     assert_success
     assert_output --partial "total"
 
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
 
     run cedana restore process --path "$dump_file"
-
     assert_success
     assert_output --partial "total"
 
@@ -98,14 +110,48 @@ teardown_file() {
     pid=$!
 
     run cedana dump process $pid --profiling=false
-
     assert_success
     refute_output --partial "total"
 
     dump_file=$(echo "$output" | awk '{print $NF}')
 
     run cedana restore process --path "$dump_file" --profiling=false
+    assert_success
+    refute_output --partial "total"
 
+    run kill $pid
+}
+
+# bats test_tags=restore,daemonless
+@test "restore process (profiling, without daemon)" {
+    "$WORKLOADS"/date-loop.sh 3 &
+    pid=$!
+
+    run cedana dump process $pid
+    assert_success
+    assert_output --partial "total"
+
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+
+    run cedana restore process --path "$dump_file" --no-server
+    assert_success
+    assert_output --partial "total"
+
+    run kill $pid
+}
+
+# bats test_tags=restore,daemonless
+@test "restore process (profiling output off, without daemon)" {
+    "$WORKLOADS"/date-loop.sh 3 &
+    pid=$!
+
+    run cedana dump process $pid --profiling=false
+    assert_success
+    refute_output --partial "total"
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+
+    run cedana restore process --path "$dump_file" --profiling=false --no-server
     assert_success
     refute_output --partial "total"
 

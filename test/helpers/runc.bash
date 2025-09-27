@@ -19,7 +19,7 @@ setup_rootfs() {
 
 setup_rootfs_cuda() {
     mkdir -p "$ROOTFS_CUDA"
-    cid=$(docker create "$ROOTFS_CUDA_IMAGE")
+    cid=$(docker create "$ROOTFS_CUDA_IMAGE" tail)
     docker export "$cid" | tar -C "$ROOTFS_CUDA" -xf -
     docker rm "$cid"
 }
