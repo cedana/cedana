@@ -115,7 +115,6 @@ reset-plugins: ## Reset & uninstall plugins
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-TIMEOUT?=600
 RETRIES?=0
 HELPER_REPO?=
 HELPER_TAG?=""
@@ -125,20 +124,20 @@ CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
-BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
 
-test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -178,7 +177,6 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) ;\
@@ -191,14 +189,13 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				PARALLELISM=$(PARALLELISM) \
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
 	if [ -f /.dockerenv ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -230,7 +227,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -250,7 +246,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				PARALLELISM=$(PARALLELISM) \
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \

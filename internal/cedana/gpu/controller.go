@@ -307,7 +307,7 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 	if c.PID == 0 {
 		return
 	}
-	syscall.Kill(-int(c.PID), CONTROLLER_TERMINATE_SIGNAL) // To process group so even its workers are killed
+	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
 	if c.ClientConn != nil {
 		c.ClientConn.Close()
 		c.ClientConn = nil
@@ -338,6 +338,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
 	// do the GPU dump in parallel to CRIU dump.
 	dumpErr := make(chan error, 1)
+	frozen := false
 	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
 		defer cancel()
@@ -363,6 +364,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			log.Error().Err(err).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
+
+		frozen = true
 
 		log.Info().Str("type", freezeType[0].String()).Msg("GPU freeze complete")
 
@@ -408,6 +411,10 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		}
 
 		defer controller.Termination.Unlock()
+
+		if !frozen {
+			return nil // If not frozen, nothing to do
+		}
 
 		dumpErr := <-dumpErr // If error was not already received, wait for dump to finish
 
