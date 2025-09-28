@@ -349,8 +349,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
 	// do the GPU dump in parallel to CRIU dump.
-	dumpErr := make(chan error, 1)
-	frozen := false
+	var dumpErr chan error
 	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
 		defer cancel()
@@ -377,11 +376,11 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
 
-		frozen = true
-
 		log.Info().Str("type", freezeType[0].String()).Msg("GPU freeze complete")
 
 		// Begin GPU dump in parallel to CRIU dump
+
+		dumpErr = make(chan error, 1)
 
 		go func() {
 			defer close(dumpErr)
@@ -411,6 +410,9 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 	// Wait for GPU dump to finish before finalizing the dump
 	callback.PostDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		if dumpErr == nil { // Dump was never started
+			return nil
+		}
 		return utils.GRPCError(<-dumpErr)
 	}
 
@@ -423,11 +425,13 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
 
-		controller.Termination.Unlock()
+		defer controller.Termination.Unlock()
 
-		if !frozen || !opts.GetLeaveRunning() {
+		if dumpErr == nil { // Dump was never started
 			return nil
 		}
+
+		<-dumpErr // Ensure GPU dump has finished before unfreezing
 
 		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
 		defer cancel()
@@ -446,8 +450,9 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
 	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
-	restoreErr := make(chan error, 1)
+	var restoreErr chan error
 	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		restoreErr = make(chan error, 1)
 		go func() {
 			defer close(restoreErr)
 
@@ -484,20 +489,31 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 		return utils.GRPCError(<-restoreErr)
 	}
 
-	restoredPid := make(chan int32, 1)
-
 	// Wait for GPU restore to finish before resuming the process
+	var restoredPid *int32
 	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
-		restoredPid <- pid
-		close(restoredPid)
-
+		restoredPid = &pid
+		if restoreErr == nil { // Restore was never started
+			return nil
+		}
 		return utils.GRPCError(<-restoreErr)
 	}
 
 	// Signal the process so it knowns it may have a new PID (only useful for containers which get
 	// restore with a different host PID).
 	callback.PreResumeFunc = func(ctx context.Context) error {
-		return syscall.Kill(int(<-restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
+		if restoredPid == nil {
+			return nil
+		}
+		return syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
+	}
+
+	// Ensure we always wait for GPU restore to finish before finalizing the restore
+	callback.FinalizeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		if restoreErr == nil {
+			return nil
+		}
+		return utils.GRPCError(<-restoreErr)
 	}
 
 	return callback
