@@ -25,6 +25,7 @@ type ManagerSimple struct {
 
 	plugins plugins.Manager
 	sync    sync.Mutex // Used to prevent concurrent syncs
+	syncs   sync.WaitGroup
 	wg      *sync.WaitGroup
 }
 
@@ -60,20 +61,16 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 	controller := m.controllers.Book()
 
 	if controller == nil {
-		log.Debug().Msg("spawning a new GPU controller")
 		controller, err = m.controllers.Spawn(ctx, binary)
 		if err != nil {
 			return "", err
 		}
 		spawnedNew = true
-	} else {
-		log.Debug().Str("ID", controller.ID).Msg("booking free GPU controller")
 	}
 
 	m.wg.Add(1)
 	go func() {
 		defer m.wg.Done()
-		defer controller.Booking.Unlock()
 		ok := false
 		select {
 		case <-ctx.Done():
@@ -95,6 +92,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 			}
 		} else {
 			log.Debug().Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("attached GPU controller to process")
+			controller.Booking.Unlock()
 		}
 	}()
 
@@ -126,7 +124,13 @@ func (m *ManagerSimple) GetID(pid uint32) string {
 }
 
 func (m *ManagerSimple) Sync(ctx context.Context) error {
-	m.sync.Lock()
+	m.syncs.Add(1)
+	if !m.sync.TryLock() {
+		m.syncs.Done()
+		m.syncs.Wait() // Instead of stacking up syncs, just wait for the current one to finish
+		return nil
+	}
+	defer m.syncs.Done()
 	defer m.sync.Unlock()
 
 	return m.controllers.Sync(ctx)

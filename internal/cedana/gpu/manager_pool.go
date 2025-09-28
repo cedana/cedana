@@ -64,7 +64,13 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 }
 
 func (m *ManagerPool) Sync(ctx context.Context) error {
-	m.sync.Lock()
+	m.syncs.Add(1)
+	if !m.sync.TryLock() {
+		m.syncs.Done()
+		m.syncs.Wait() // Instead of stacking up syncs, just wait for the current one to finish
+		return nil
+	}
+	defer m.syncs.Done()
 	defer m.sync.Unlock()
 
 	err := m.controllers.Sync(ctx)
@@ -123,6 +129,8 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 				// Ensure we only terminate controllers that are still free
 				if acquired, _ := controller.Booking.TryLock(); acquired {
 					m.controllers.Terminate(ctx, controller.ID)
+				} else {
+					log.Debug().Str("ID", controller.ID).Msg("skipping termination of busy GPU controller")
 				}
 			}()
 		}

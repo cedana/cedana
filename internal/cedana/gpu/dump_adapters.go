@@ -18,10 +18,11 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 			state := resp.GetState()
 			if state == nil {
-				return nil, status.Errorf(
-					codes.InvalidArgument,
-					"missing state. at least PID is required in resp.state",
-				)
+				return nil, status.Errorf(codes.InvalidArgument, "missing state. at least PID is required in resp.state")
+			}
+
+			if !opts.Plugins.IsInstalled("gpu") {
+				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
 			}
 
 			pid := state.GetPID()
@@ -33,10 +34,6 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			if !gpus.IsAttached(pid) {
 				return next(ctx, opts, resp, req)
-			}
-
-			if !opts.Plugins.IsInstalled("gpu") {
-				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
 			}
 
 			id := gpus.GetID(pid)

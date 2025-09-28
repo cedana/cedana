@@ -180,6 +180,12 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			}
 		}
 
+		if c.Booking.Locked() {
+			// To avoid a race where an external controller is spawned and immediately booked by another process
+			// but the AttachedPID is not yet set, and we would incorrectly assume the controller is free.
+			continue
+		}
+
 		wg.Add(1)
 		go func() {
 			err := c.Connect(ctx, false)
@@ -200,11 +206,9 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 // Books a free GPU controller, and marks it as booked.
 func (p *pool) Book() *controller {
 	free, _, _, _ := p.List()
-	if len(free) == 0 {
-		return nil
-	}
 	for _, c := range free {
 		if acquired, _ := c.Booking.TryLock(); acquired {
+			log.Debug().Str("ID", c.ID).Msg("booking free GPU controller")
 			return c
 		}
 	}
@@ -214,6 +218,8 @@ func (p *pool) Book() *controller {
 // Spawns a GPU controller, and marks it as booked.
 func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *controller, err error) {
 	id := uuid.NewString()
+
+	log.Debug().Str("ID", id).Msg("spawning new GPU controller")
 
 	observability := ""
 	if config.Global.GPU.Observability {
@@ -267,6 +273,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	c.Booking = flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR))
 	locked, _ := c.Booking.TryLock() // Locked until whoever spawned us sets us free
 	if !locked {
+		os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
 		return nil, fmt.Errorf("failed to lock GPU controller booking")
 	}
 
@@ -514,7 +521,7 @@ func (p *pool) Check(binary string) types.Check {
 		}
 		defer p.Terminate(ctx, controller.ID)
 
-		components, err := controller.WaitForHealthCheck(ctx)
+		components, err := controller.WaitForHealthCheck(ctx, &gpu.HealthCheckReq{})
 		if components == nil && err != nil {
 			component.Data = "failed"
 			component.Errors = append(component.Errors, fmt.Sprintf("Failed health check: %v", err))
@@ -554,7 +561,7 @@ func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
 	var info *gpu.InfoResp
 
 	if wait {
-		info, err = c.WaitForInfo(ctx)
+		info, err = c.WaitForInfo(ctx, &gpu.InfoReq{})
 	} else {
 		info, err = c.Info(ctx, &gpu.InfoReq{})
 	}
@@ -562,7 +569,7 @@ func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
 		return err
 	}
 
-	if c.AttachedPID == 0 {
+	if info.GetAttachedPID() != 0 {
 		c.AttachedPID = info.GetAttachedPID()
 	}
 	c.ShmSize = info.GetShmSize()
@@ -579,24 +586,24 @@ func (c *controller) Attach(ctx context.Context, pid uint32) (err error) {
 	if err != nil {
 		return utils.GRPCErrorShort(err, c.ErrBuf.String())
 	}
+	c.AttachedPID = pid
 
 	return nil
 }
 
 // WaitForInfo gets info from the GPU controller, blocking on connection until ready.
 // This can be used as a proxy to wait for the controller to be ready.
-func (c *controller) WaitForInfo(ctx context.Context) (*gpu.InfoResp, error) {
+func (c *controller) WaitForInfo(ctx context.Context, req *gpu.InfoReq) (*gpu.InfoResp, error) {
 	waitCtx, cancel := context.WithTimeout(ctx, INFO_TIMEOUT)
 	defer cancel()
 
-	if c.PID != 0 {
-		go func() {
-			<-utils.WaitForPidCtx(waitCtx, c.PID)
-			cancel()
-		}()
-	}
+	// Cancel on early termination
+	go func() {
+		<-utils.WaitForPidCtx(waitCtx, c.PID)
+		cancel()
+	}()
 
-	resp, err := c.Info(waitCtx, &gpu.InfoReq{}, grpc.WaitForReady(true))
+	resp, err := c.Info(waitCtx, req, grpc.WaitForReady(true))
 	if err != nil {
 		return nil, utils.GRPCErrorShort(err, c.ErrBuf.String())
 	}
@@ -606,19 +613,17 @@ func (c *controller) WaitForInfo(ctx context.Context) (*gpu.InfoResp, error) {
 
 // Health checks the GPU controller, blocking on connection until ready.
 // This can be used as a proxy to wait for the controller to be ready.
-func (c *controller) WaitForHealthCheck(ctx context.Context) ([]*daemon.HealthCheckComponent, error) {
+func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthCheckReq) ([]*daemon.HealthCheckComponent, error) {
 	waitCtx, cancel := context.WithTimeout(ctx, HEALTH_TIMEOUT)
 	defer cancel()
 
-	// Wait for early controller exit, and cancel the blocking health check
-	if c.PID != 0 {
-		go func() {
-			<-utils.WaitForPidCtx(waitCtx, c.PID)
-			cancel()
-		}()
-	}
+	// Cancel on early termination
+	go func() {
+		<-utils.WaitForPidCtx(waitCtx, c.PID)
+		cancel()
+	}()
 
-	resp, err := c.HealthCheck(waitCtx, &gpu.HealthCheckReq{}, grpc.WaitForReady(true))
+	resp, err := c.HealthCheck(waitCtx, req, grpc.WaitForReady(true))
 	var components []*daemon.HealthCheckComponent
 	if resp != nil {
 		l := log.Debug()
