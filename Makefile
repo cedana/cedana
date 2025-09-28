@@ -67,7 +67,7 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana/*
+	rm -rf ~/.cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
@@ -107,6 +107,7 @@ reset-plugins: ## Reset & uninstall plugins
 	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
 	$(SUDO) rm -rf $(INSTALL_LIB_DIR)/*cedana*
+	$(SUDO) rm -rf $(INSTALL_BIN_DIR)/*cedana*
 
 ###########
 ##@ Testing
@@ -141,7 +142,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		echo "Using unique instance of daemon per test..." ;\
+		echo "\nUsing unique instance of daemon per test...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
 		else \
@@ -150,7 +151,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-isolated.xml ;\
 		fi ;\
-		echo "Using a persistent instance of daemon across tests..." ;\
+		echo "\nUsing a persistent instance of daemon across tests...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
 		else \

@@ -97,7 +97,8 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		}
 	}
 
-	log.Debug().Interface("opts", criuOpts).Msg("CRIU restore starting")
+	log.Info().Msg("CRIU restore starting")
+	log.Debug().Interface("opts", criuOpts).Msg("CRIU restore options")
 
 	ctx, end := profiling.StartTimingCategory(ctx, "criu", opts.CRIU.Restore)
 
@@ -145,7 +146,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		}()
 	}
 
-	log.Debug().Uint32("PID", resp.PID).Msg("CRIU restore complete")
+	log.Info().Uint32("PID", resp.PID).Msg("CRIU restore complete")
 
 	return code, err
 }

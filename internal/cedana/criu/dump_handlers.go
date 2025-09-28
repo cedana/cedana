@@ -67,7 +67,8 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
 	}
 
-	log.Debug().Interface("opts", criuOpts).Msg("CRIU dump starting")
+	log.Info().Msg("CRIU dump starting")
+	log.Debug().Interface("opts", criuOpts).Msg("CRIU dump options")
 
 	ctx, end := profiling.StartTimingCategory(ctx, "criu", opts.CRIU.Dump)
 
@@ -87,7 +88,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
 
-	log.Debug().Msg("CRIU dump complete")
+	log.Info().Msg("CRIU dump complete")
 
 	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.State.PID)), nil
 }

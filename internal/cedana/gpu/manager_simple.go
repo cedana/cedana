@@ -89,6 +89,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 
 		if !ok {
+			log.Debug().Str("ID", controller.ID).Msg("GPU attach cancelled")
 			if spawnedNew {
 				m.controllers.Terminate(context.WithoutCancel(ctx), controller.ID)
 			}
@@ -104,6 +105,9 @@ func (m *ManagerSimple) Detach(ctx context.Context, pid uint32) error {
 	controller := m.controllers.Find(pid)
 	if controller == nil {
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
+	}
+	if acquired, _ := controller.Booking.TryLock(); !acquired {
+		return fmt.Errorf("GPU controller attached to PID %d is busy", pid)
 	}
 	m.controllers.Terminate(ctx, controller.ID)
 	return nil
