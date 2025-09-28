@@ -58,6 +58,7 @@ reset-systemd: ## Reset the systemd daemon
 
 reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
+	$(SUDO) pkill $(BINARY) || true
 	rm -f $(OUT_DIR)/$(BINARY)
 	$(SUDO) rm -f $(INSTALL_BIN_DIR)/$(BINARY)
 
