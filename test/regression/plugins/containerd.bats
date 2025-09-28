@@ -74,7 +74,7 @@ teardown_file() {
 
     ctr run --detach "$image" "$id"
 
-    sleep 1
+    sleep 2
 
     cedana manage containerd "$id" --jid "$id"
 
@@ -92,11 +92,11 @@ teardown_file() {
 
     run cedana manage containerd "$id" --jid "$id" --upcoming &
 
-    sleep 1
+    sleep 2
 
     ctr run --detach "$image" "$id"
 
-    sleep 1
+    sleep 2
 
     run cedana ps
     assert_success
@@ -209,7 +209,7 @@ teardown_file() {
 
     run cedana manage containerd "$id" --jid "$jid" --upcoming &
 
-    sleep 1
+    sleep 2
 
     ctr run --detach "$image" "$id"
 

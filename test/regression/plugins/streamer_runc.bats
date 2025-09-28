@@ -39,7 +39,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id" --streams 1 --compression none
     assert_success
@@ -93,7 +93,7 @@ teardown_file() {
 
     cedana run runc --bundle "$bundle" --jid "$jid" --attach &
 
-    sleep 1
+    sleep 2
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
@@ -116,7 +116,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id" --streams 1 --compression none
     assert_success
@@ -150,12 +150,13 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "restore container (new job, attached)" {
+@test "stream restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
     cedana run runc --bundle "$bundle" --jid "$jid" --attach &
-    sleep 1
+
+    sleep 2
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
@@ -170,14 +171,14 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "restore container (manage existing job)" {
+@test "stream restore container (manage existing job)" {
     id=$(unix_nano)
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 

@@ -168,11 +168,11 @@ teardown_file() {
 
     run cedana manage runc "$id" --bundle "$bundle" --jid "$id" --upcoming &
 
-    sleep 1
+    sleep 2
 
     runc run --detach --bundle "$bundle" "$id"
 
-    sleep 1
+    sleep 2
 
     run cedana ps
     assert_success
@@ -192,7 +192,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id"
     assert_success
@@ -241,7 +241,7 @@ teardown_file() {
 
     cedana run runc --bundle "$bundle" --jid "$jid" --attach &
 
-    sleep 1
+    sleep 2
 
     run cedana dump job "$jid"
     assert_success
@@ -259,7 +259,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -280,11 +280,11 @@ teardown_file() {
 
     run cedana manage runc "$id" --jid "$jid" --bundle "$bundle" --upcoming &
 
-    sleep 1
+    sleep 2
 
     runc run --detach --bundle "$bundle" "$id"
 
-    sleep 1
+    sleep 2
 
     run cedana dump job "$jid"
     assert_success
@@ -305,7 +305,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -328,7 +328,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -351,7 +351,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -374,7 +374,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -397,7 +397,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -424,7 +424,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -448,7 +448,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -477,7 +477,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -501,7 +501,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id"
     assert_success
@@ -522,7 +522,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id"
     assert_success
@@ -544,7 +544,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id"
     assert_success
@@ -565,7 +565,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id"
     assert_success
@@ -587,7 +587,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id"
     assert_success
@@ -694,7 +694,7 @@ teardown_file() {
 
     cedana run runc --bundle "$bundle" --jid "$jid" --attach &
 
-    sleep 1
+    sleep 2
 
     run cedana dump job "$jid"
     assert_success
@@ -714,7 +714,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -739,7 +739,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -764,7 +764,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -789,7 +789,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -814,7 +814,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -839,7 +839,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -869,7 +869,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -895,7 +895,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
@@ -925,7 +925,7 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
