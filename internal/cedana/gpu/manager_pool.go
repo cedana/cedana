@@ -11,13 +11,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const SYNC_INTERVAL = 10 * time.Second
+const (
+	SYNC_INTERVAL         = 10 * time.Second
+	SYNC_SHUTDOWN_TIMEOUT = 45 * time.Second
+)
 
 // Implements a GPU manager pool that is capable of maintaining a pool of GPU controllers
 type ManagerPool struct {
 	*ManagerSimple // Embed simple manager implements most of what we need
 
 	poolSize int
+	free     int
+	busy     int
+	stale    int
 }
 
 func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize int, plugins plugins.Manager) (*ManagerPool, error) {
@@ -45,12 +51,24 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 			select {
 			case <-lifetime.Done():
 				log.Info().Msg("syncing GPU manager before shutdown")
-				manager.poolSize = 0 // Reset it so all free controllers are terminated
-				err := manager.Sync(context.WithoutCancel(lifetime))
-				if err != nil {
-					log.Error().Err(err).Msg("failed to sync GPU controllers on shutdown")
+				ctx, cancel := context.WithTimeout(context.WithoutCancel(lifetime), SYNC_SHUTDOWN_TIMEOUT)
+				defer cancel()
+				for {
+					select {
+					case <-ctx.Done():
+						log.Warn().Msg("timeout reached while syncing GPU manager on shutdown")
+						return
+					case <-time.After(2 * time.Second):
+						manager.poolSize = 0 // Reset it so all free controllers are terminated
+						err := manager.Sync(ctx)
+						if err != nil {
+							log.Error().Err(err).Msg("failed to sync GPU controllers on shutdown")
+						}
+						if manager.free == 0 && manager.stale == 0 {
+							return
+						}
+					}
 				}
-				return
 			case <-time.After(SYNC_INTERVAL):
 				err := manager.Sync(lifetime)
 				if err != nil {
@@ -80,11 +98,15 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 
 	free, busy, remaining, remainingReason := m.controllers.List()
 
+	m.free = len(free)
+	m.busy = len(busy)
+	m.stale = len(remaining)
+
 	log.Debug().
-		Int("free", len(free)).
-		Int("busy", len(busy)).
+		Int("free", m.free).
+		Int("busy", m.busy).
 		Int("target", m.poolSize).
-		Int("stale", len(remaining)).
+		Int("stale", m.stale).
 		Msg("GPU controller pool")
 
 	if config.Global.GPU.Debug {
