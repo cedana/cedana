@@ -126,8 +126,7 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				// Ensure we only terminate controllers that are still free
-				if acquired, _ := controller.Booking.TryLock(); acquired {
+				if controller.Book() { // Only terminate if controller is still free
 					m.controllers.Terminate(ctx, controller.ID)
 				} else {
 					log.Debug().Str("ID", controller.ID).Msg("skipping termination of busy GPU controller")

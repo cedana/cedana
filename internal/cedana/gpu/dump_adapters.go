@@ -21,10 +21,6 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.InvalidArgument, "missing state. at least PID is required in resp.state")
 			}
 
-			if !opts.Plugins.IsInstalled("gpu") {
-				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
-			}
-
 			pid := state.GetPID()
 
 			err = gpus.Sync(ctx)
@@ -34,6 +30,10 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			if !gpus.IsAttached(pid) {
 				return next(ctx, opts, resp, req)
+			}
+
+			if !opts.Plugins.IsInstalled("gpu") {
+				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
 			}
 
 			id := gpus.GetID(pid)

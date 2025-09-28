@@ -76,6 +76,14 @@ type controller struct {
 	*grpc.ClientConn
 }
 
+type controllerStatus int
+
+const (
+	CONTROLLER_STALE controllerStatus = iota
+	CONTROLLER_FREE
+	CONTROLLER_BUSY
+)
+
 ///////////////////////
 /// CONTROLLER POOL ///
 ///////////////////////
@@ -107,41 +115,27 @@ func (p *pool) Find(attachedPID uint32) *controller {
 	return found
 }
 
-// Returns a list of all GPU controllers grouped by free, pending, and busy states
-func (p *pool) List() (free []*controller, busy []*controller, remaining []*controller, remainingReason []string) {
+// Returns a list of all GPU controllers grouped by free, busy, and remaining.
+func (p *pool) List() (free []*controller, busy []*controller, stale []*controller, staleReason []string) {
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
-		var reason string
-		if utils.PidRunning(c.PID) {
-			if c.Booking.Locked() {
-				busy = append(busy, c)
-				return true
-			}
-			if c.AttachedPID == 0 {
-				shmSizeMatches := c.ShmSize == uint64(config.Global.GPU.ShmSize)
-				credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
-				if shmSizeMatches && credentialsMatch {
-					free = append(free, c)
-					return true
-				} else if !shmSizeMatches {
-					reason = fmt.Sprintf("controller shm size mismatch (expected %d, got %d)", config.Global.GPU.ShmSize, c.ShmSize)
-				} else if !credentialsMatch {
-					reason = fmt.Sprintf("controller credentials mismatch (expected %d:%d, got %d:%d)", os.Getuid(), os.Getgid(), c.UID, c.GID)
-				}
-			} else if utils.PidRunning(c.AttachedPID) {
-				busy = append(busy, c)
-				return true
-			} else {
-				reason = fmt.Sprintf("attached PID %d no longer running", c.AttachedPID)
-			}
-		} else {
-			reason = "controller process not running"
+		if c.Booking.Locked() {
+			busy = append(busy, c)
+			return true
 		}
-		remainingReason = append(remainingReason, reason)
-		remaining = append(remaining, c)
+		status, reason := c.Status()
+		switch status {
+		case CONTROLLER_FREE:
+			free = append(free, c)
+		case CONTROLLER_BUSY:
+			busy = append(busy, c)
+		case CONTROLLER_STALE:
+			staleReason = append(staleReason, reason)
+			stale = append(stale, c)
+		}
 		return true
 	})
-	return free, busy, remaining, remainingReason
+	return free, busy, stale, staleReason
 }
 
 // Sync with all existing GPU controllers in the system
@@ -188,11 +182,11 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 
 		wg.Add(1)
 		go func() {
-			err := c.Connect(ctx, false)
+			err := c.Sync(ctx, false)
 			if err == nil {
 				p.Store(id, c)
 			} else {
-				log.Trace().Err(err).Str("ID", id).Msg("failed to connect to GPU controller")
+				log.Trace().Err(err).Str("ID", id).Msg("failed to sync with GPU controller")
 			}
 			wg.Done()
 		}()
@@ -207,7 +201,7 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 func (p *pool) Book() *controller {
 	free, _, _, _ := p.List()
 	for _, c := range free {
-		if acquired, _ := c.Booking.TryLock(); acquired {
+		if c.Book() {
 			log.Debug().Str("ID", c.ID).Msg("booking free GPU controller")
 			return c
 		}
@@ -296,7 +290,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	c.PID = uint32(cmd.Process.Pid)
 	c.ParentPID = uint32(os.Getpid())
 
-	err = c.Connect(ctx, true)
+	err = c.Sync(ctx, true)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to GPU controller: %w", err)
 	}
@@ -538,8 +532,43 @@ func (p *pool) Check(binary string) types.Check {
 /// CONTROLLER ///
 //////////////////
 
-// Connect connects to the GPU controller. If already connected, it will refresh the controller info.
-func (c *controller) Connect(ctx context.Context, wait bool) (err error) {
+func (c *controller) Book() bool {
+	acquired, _ := c.Booking.TryLock()
+	if !acquired {
+		return false
+	}
+	if status, _ := c.Status(); status != CONTROLLER_FREE { // Check it's still free
+		c.Booking.Unlock()
+		return false
+	}
+	return true
+}
+
+func (c *controller) Status() (status controllerStatus, reason string) {
+	if utils.PidRunning(c.PID) {
+		if c.AttachedPID == 0 {
+			shmSizeMatches := c.ShmSize == uint64(config.Global.GPU.ShmSize)
+			credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
+			if shmSizeMatches && credentialsMatch {
+				return CONTROLLER_FREE, "controller free and compatible"
+			} else if !shmSizeMatches {
+				reason = fmt.Sprintf("controller shm size mismatch (expected %d, got %d)", config.Global.GPU.ShmSize, c.ShmSize)
+			} else if !credentialsMatch {
+				reason = fmt.Sprintf("controller credentials mismatch (expected %d:%d, got %d:%d)", os.Getuid(), os.Getgid(), c.UID, c.GID)
+			}
+		} else if utils.PidRunning(c.AttachedPID) {
+			return CONTROLLER_BUSY, "attached process is running"
+		} else {
+			reason = "attached process not running"
+		}
+	} else {
+		reason = "controller process not running"
+	}
+	return CONTROLLER_STALE, reason
+}
+
+// Sync connects to the GPU controller. If already connected, it will refresh the controller info.
+func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 	if c.Address == "" {
 		return fmt.Errorf("controller address is not set")
 	}

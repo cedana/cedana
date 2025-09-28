@@ -56,8 +56,6 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		return "", err
 	}
 
-	var spawnedNew bool
-
 	controller := m.controllers.Book()
 
 	if controller == nil {
@@ -65,7 +63,6 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		if err != nil {
 			return "", err
 		}
-		spawnedNew = true
 	}
 
 	m.wg.Add(1)
@@ -87,9 +84,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 
 		if !ok {
 			log.Debug().Str("ID", controller.ID).Msg("GPU attach cancelled")
-			if spawnedNew {
-				m.controllers.Terminate(context.WithoutCancel(ctx), controller.ID)
-			}
+			m.controllers.Terminate(context.WithoutCancel(ctx), controller.ID)
 		} else {
 			log.Debug().Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("attached GPU controller to process")
 			controller.Booking.Unlock()

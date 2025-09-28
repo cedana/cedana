@@ -22,10 +22,6 @@ func Unfreeze(gpus Manager) types.Adapter[types.Freeze] {
 				)
 			}
 
-			if !opts.Plugins.IsInstalled("gpu") {
-				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
-			}
-
 			pid := state.GetPID()
 
 			err = gpus.Sync(ctx)
@@ -35,6 +31,10 @@ func Unfreeze(gpus Manager) types.Adapter[types.Freeze] {
 
 			if !gpus.IsAttached(pid) {
 				return next(ctx, opts, resp, req)
+			}
+
+			if !opts.Plugins.IsInstalled("gpu") {
+				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
 			}
 
 			id := gpus.GetID(pid)
