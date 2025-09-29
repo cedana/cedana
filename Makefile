@@ -47,7 +47,7 @@ $(INSTALL_BIN_DIR)/$(BINARY): $(OUT_DIR)/$(BINARY)
 start: $(INSTALL_BIN_DIR)/$(BINARY) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
-install-systemd: install ## Install the systemd daemon
+install-systemd: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the systemd daemon
 	@echo "Installing systemd service..."
 	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
 
