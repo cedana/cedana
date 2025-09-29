@@ -119,18 +119,22 @@ jobs:
         arch:
           - amd64
           - arm64
-        exclude: # XXX: Until github actions supports concurrency with matrix
+        exclude: # XXX: To reduce overusage of CI minutes
           - platform: EKS
             arch: amd64
           - platform: GKE
             arch: arm64
+          - platform: EKS
+            cr: streamer
+          - platform: GKE
+            cr: default
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
       - uses: runs-on/action@v1
 
@@ -343,10 +347,6 @@ jobs:
             arch: arm64
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download report
         id: download-report

@@ -10,7 +10,7 @@ INSTALL_K3S_EXEC="server \
         --disable=traefik \
         --snapshotter=native"
 CONTAINERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
-CONTAINERD_SOCK_PATH="/run/k3s/containerd/containerd.sock"
+export CONTAINERD_ADDRESS="/run/k3s/containerd/containerd.sock"
 CONTAINERD_NAMESPACE="k8s.io"
 
 # Function to set up k3s cluster
@@ -51,7 +51,7 @@ start_cluster() {
     # XXX: Pre-install the runtime shim so we won't have to restart k3s otherwise it needs to
     # be restarted after Cedana installs the new runtime shim.
 
-    install_runtime_shim
+    preinstall_runtime_shim
 
     if ! command -v k3s &> /dev/null; then
         error_log "k3s binary not found"
@@ -118,12 +118,16 @@ teardown_cluster() {
     debug_log "k3s teardown complete"
 }
 
-install_runtime_shim() {
-    debug_log "Installing runtime shim for k3s..."
+preinstall_runtime_shim() {
+    debug_log "Pre-installing runtime shim for k3s..."
 
     if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
-        error_log "Shim not found in /usr/local/bin"
-        return 1
+        if [ "$CEDANA_PLUGINS_BUILDS" = "local" ]; then
+            error_log "Shim not found in /usr/local/bin"
+            return 1
+        else
+            cedana plugin install k8s/runtime-shim
+        fi
     fi
 
     if ! path_exists $CONTAINERD_CONFIG_PATH; then
@@ -141,7 +145,7 @@ install_runtime_shim() {
 END_CAT
     fi
 
-    debug_log "Installed runtime shim for k3s"
+    debug_log "Pre-installed runtime shim for k3s"
 }
 
 # Pre-load an image into k3s from docker if available locally
@@ -165,10 +169,10 @@ preload_images() {
       return 0
     fi
 
-    ctr -n $CONTAINERD_NAMESPACE --address $CONTAINERD_SOCK_PATH images import "$tar"
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import "$tar"
     rm -f "$tar"
 
-    ctr -n $CONTAINERD_NAMESPACE --address $CONTAINERD_SOCK_PATH images tag docker.io/"$image" docker.io/"$digest_ref"
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"
 
     debug_log "Preloaded image $image into k3s"
 }

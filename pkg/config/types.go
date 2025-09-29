@@ -83,7 +83,7 @@ type (
 		BinaryPath string `json:"binary_path" key:"binary_path" yaml:"binary_path" mapstructure:"binary_path"`
 		// LeaveRunning sets whether to leave the process running after checkpoint
 		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
-		// ManageCgroups sets the default cgroup C/R mode for CRIU (none, props, soft, full, strict, ignore)
+		// ManageCgroups sets the default cgroup C/R mode for CRIU (default, cg_none, props, soft, full, strict, ignore)
 		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
 	}
 

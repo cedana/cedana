@@ -34,7 +34,7 @@ var checkCmd = &cobra.Command{
 		defer cedana.Wait()
 		defer cedana.Finalize()
 
-		resp, err := cedana.HealthCheck(cmd.Context(), &daemon.HealthCheckReq{Full: full})
+		resp, err := cedana.HealthCheck(ctx, &daemon.HealthCheckReq{Full: full})
 		if err != nil {
 			return err
 		}

@@ -34,6 +34,11 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to restore GPU support")
 			}
 
+			err = gpus.Sync(ctx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to sync GPU manager: %v", err)
+			}
+
 			pid := make(chan uint32, 1)
 			defer close(pid)
 

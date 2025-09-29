@@ -19,7 +19,7 @@ setup_rootfs() {
 
 setup_rootfs_cuda() {
     mkdir -p "$ROOTFS_CUDA"
-    cid=$(docker create "$ROOTFS_CUDA_IMAGE")
+    cid=$(docker create "$ROOTFS_CUDA_IMAGE" tail)
     docker export "$cid" | tar -C "$ROOTFS_CUDA" -xf -
     docker rm "$cid"
 }
@@ -228,6 +228,11 @@ container_status() {
     runc list | awk -v id="$cid" 'NR>1 && $1==id {print $3}'
 }
 
+container_pid() {
+    local cid="$1"
+    runc list | awk -v id="$cid" 'NR>1 && $1==id {print $2}'
+}
+
 wait_for_container_status() {
     local cid="$1"
     local status="$2"
@@ -242,6 +247,8 @@ wait_for_container_status() {
         sleep "$interval"
         elapsed=$((elapsed + interval))
     done
+
+    error_log "Timeout waiting for container $cid to reach status $status"
 
     return 1
 }

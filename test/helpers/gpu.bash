@@ -33,33 +33,3 @@ download_hf_models() {
         python3 /cedana-samples/gpu_smr/pytorch/llm/download_hf_model.py --model "$model" &>/dev/null
     done
 }
-
-run_inference_test() {
-    local model="$1"
-
-    jid=$(unix_nano)
-    sleep_duration=$((RANDOM % 11 + 10))
-
-    run cedana run process -g --jid "$jid" -- python3 /cedana-samples/gpu_smr/pytorch/llm/transformers_inference.py --model "$model"
-    assert_success
-
-    sleep "$sleep_duration"
-
-    run cedana dump job "$jid"
-    assert_success
-
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
-
-    sleep 5
-
-    run cedana restore job "$jid"
-    assert_success
-
-    run cedana ps
-    assert_success
-    assert_output --partial "$jid"
-
-    run cedana job kill "$jid"
-    rm -rf "$dump_file"
-}

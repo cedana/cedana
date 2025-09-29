@@ -63,7 +63,7 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 				return nil, err
 			}
 
-			job.SetDetails(req.Details) // Set again, in case they get modified later
+			job.SetDetails(req.Details) // Set again, in case they got modified
 
 			err = jobs.Manage(opts.Lifetime, job.JID, resp.PID, code())
 			if err != nil {

@@ -61,13 +61,15 @@ jobs:
           - arm64
     if: inputs.cedana
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -87,7 +89,7 @@ jobs:
       - name: Build
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make build VERSION=$VERSION
+          make cedana VERSION=$VERSION -j $(nproc)
           echo $VERSION > ./cedana-version.txt
 
       - name: Upload artifacts
@@ -109,13 +111,15 @@ jobs:
           - arm64
     if: inputs.plugins
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -135,7 +139,7 @@ jobs:
       - name: Build
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make plugins VERSION=$VERSION
+          make plugins VERSION=$VERSION -j $(nproc)
           echo $VERSION > ./plugins-version.txt
 
       - name: Upload artifacts
@@ -160,14 +164,15 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
-          submodules: recursive
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -244,14 +249,15 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
-          submodules: recursive
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

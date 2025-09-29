@@ -121,7 +121,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
 
 				os.RemoveAll(imagesDirectory)
-				resp.Path = path
+				resp.Paths = append(resp.Paths, path)
 				return nil
 			}
 
@@ -144,7 +144,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			}
 		} else {
 			// Nothing else to do, just set the path
-			resp.Path = imagesDirectory
+			resp.Paths = append(resp.Paths, imagesDirectory)
 		}
 
 		return next(ctx, opts, resp, req)

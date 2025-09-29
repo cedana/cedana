@@ -59,4 +59,12 @@ Looks good, with 2 warning(s).
 
 ```
 
+### Daemon-less
+
+You can also run the health check directly, without the daemon:
+
+```sh
+cedana check --full
+```
+
 Warnings are shown in yellow and are usually related to system configuration or performance. They are not critical but can affect the performance of the daemon.

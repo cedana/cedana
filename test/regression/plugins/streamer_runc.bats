@@ -39,11 +39,10 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id" --streams 1 --compression none
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
@@ -61,7 +60,6 @@ teardown_file() {
 
     run cedana dump runc "$jid" --streams 2 --compression none
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
@@ -76,12 +74,10 @@ teardown_file() {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid"
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid"
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
@@ -96,11 +92,11 @@ teardown_file() {
     bundle="$(create_workload_bundle "date-loop.sh")"
 
     cedana run runc --bundle "$bundle" --jid "$jid" --attach &
-    sleep 1
+
+    sleep 2
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
@@ -120,17 +116,15 @@ teardown_file() {
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
     run cedana dump runc "$id" --streams 1 --compression none
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
 
-    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
-    assert_success
+    cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
 
     run runc kill "$id" KILL
     run runc delete "$id"
@@ -141,66 +135,59 @@ teardown_file() {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid"
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid"
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana kill "$jid"
 }
 
 # bats test_tags=restore
-@test "restore container (new job, attached)" {
+@test "stream restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
     cedana run runc --bundle "$bundle" --jid "$jid" --attach &
-    sleep 1
+
+    sleep 2
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana kill "$jid"
 }
 
 # bats test_tags=restore
-@test "restore container (manage existing job)" {
+@test "stream restore container (manage existing job)" {
     id=$(unix_nano)
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
 
     runc run --bundle "$bundle" "$id" &
 
-    sleep 1
+    sleep 2
 
-    run cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
-    assert_success
+    cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run runc kill "$id" KILL
     run runc delete "$id"

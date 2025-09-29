@@ -53,7 +53,7 @@ jobs:
       streamer_version: main
       helm_chart_version: main
       controller_version: main
-      runtime_shim_version: release
+      runtime_shim_version: cedana
 
   test:
     name: Test

@@ -1,5 +1,7 @@
 PWD=$(shell pwd)
 OUT_DIR=$(PWD)
+INSTALL_BIN_DIR=/usr/local/bin
+INSTALL_LIB_DIR=/usr/local/lib
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
@@ -12,7 +14,7 @@ ifndef VERBOSE
 .SILENT:
 endif
 
-all: build install plugins plugins-install ## Build and install (with all plugins)
+all: cedana install plugins plugins-install ## Build and install (with all plugins)
 
 ##########
 ##@ Cedana
@@ -20,29 +22,29 @@ all: build install plugins plugins-install ## Build and install (with all plugin
 
 BINARY=cedana
 BINARY_SOURCES=$(shell find . -path ./test -prune -o -type f -name '*.go' -not -path './plugins/*' -print)
-INSTALL_PATH=/usr/local/bin/cedana
+PKG_SOURCES=$(sort $(shell find pkg -name '*.go'))
+GO_MOD_FILES=go.sum go.mod
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
+DEBUG?=0
 
-build: $(BINARY)
+cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
+$(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
+	$(GOCMD) mod tidy ;\
+	if [ "$(DEBUG)" = "1" ]; then \
+		echo "Building $(BINARY) with debug symbols..." ;\
+		$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $@ ;\
+	else \
+		echo "Building $(BINARY)..." ;\
+		$(GOBUILD) -buildvcs=true -ldflags "$(LDFLAGS)" -o $@ ;\
+	fi
 
-$(BINARY): $(BINARY_SOURCES) ## Build the binary
-	@echo "Building $(BINARY)..."
-	$(GOCMD) mod tidy
-	$(GOBUILD) -buildvcs=true -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
-
-debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizations
-	@echo "Building $(BINARY) with debug symbols..."
-	$(GOCMD) mod tidy
-	$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
-
-install: $(INSTALL_PATH) ## Install the binary
-
-$(INSTALL_PATH): $(BINARY) ## Install the binary
+install: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the binary
+$(INSTALL_BIN_DIR)/$(BINARY): $(OUT_DIR)/$(BINARY)
 	@echo "Installing $(BINARY)..."
-	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
+	$(SUDO) cp $(OUT_DIR)/$(BINARY) $@
 
-start: $(INSTALL_PATH) ## Start the daemon
+start: $(INSTALL_BIN_DIR)/$(BINARY) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
 install-systemd: install ## Install the systemd daemon
@@ -56,8 +58,9 @@ reset-systemd: ## Reset the systemd daemon
 
 reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
+	$(SUDO) pkill $(BINARY) || true
 	rm -f $(OUT_DIR)/$(BINARY)
-	$(SUDO) rm -f $(INSTALL_PATH)
+	$(SUDO) rm -f $(INSTALL_BIN_DIR)/$(BINARY)
 
 reset-db: ## Reset the local database
 	@echo "Resetting database..."
@@ -65,7 +68,7 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana/*
+	rm -rf ~/.cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
@@ -82,62 +85,30 @@ reset-logs: ## Reset logs
 ##@ Plugins
 ###########
 
-PLUGIN_SOURCES=$(shell find plugins -name '*.go')
-PLUGIN_BINARIES=$(shell ls plugins | sed 's/^/.\/libcedana-/g' | sed 's/$$/.so/g')
-PKG_SOURCES=$(shell find pkg plugins -name '*.go')
-PLUGIN_INSTALL_PATHS=$(shell ls plugins | sed 's/^/\/usr\/local\/lib\/libcedana-/g' | sed 's/$$/.so/g')
+PLUGIN_NAMES=$(shell ls plugins)
+PLUGIN_BINARIES=$(patsubst %,$(OUT_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
+PLUGIN_INSTALL_PATHS=$(patsubst %,$(INSTALL_LIB_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 
-plugin: ## Build a plugin (PLUGIN=<plugin>)
-	@echo "Building plugin $$PLUGIN..."
-	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
-
-plugin-debug: ## Build a plugin with debug symbols and no optimizations (PLUGIN=<plugin>)
-	@echo "Building plugin $$PLUGIN with debug symbols..."
-	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
-
-plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
-	@echo "Installing plugin $$PLUGIN..."
-	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
-
-plugins: $(PLUGIN_BINARIES) ## Build all plugins
-
-plugins-debug: ## Build all plugins with debug symbols
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Building plugin $$name with debug symbols..."; \
-			$(GOBUILD) -C $$path -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
-		fi ;\
-	done ;\
-
-$(PLUGIN_BINARIES): $(PLUGIN_SOURCES) $(PKG_SOURCES)
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Building plugin $$name..."; \
-			$(GOBUILD) -C $$path -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
-		fi ;\
-	done ;\
+plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
+$(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
+	if [ "$(DEBUG)" = "1" ]; then \
+		echo "Building plugin $* with debug symbols..." ;\
+		$(GOBUILD) -C plugins/"$*" -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
+	else \
+		echo "Building plugin $*..." ;\
+		$(GOBUILD) -C plugins/"$*" -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
+	fi
 
 plugins-install: $(PLUGIN_INSTALL_PATHS) ## Install all plugins
-
-$(PLUGIN_INSTALL_PATHS): $(PLUGIN_BINARIES)
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Installing plugin $$name..."; \
-			$(SUDO) cp $(OUT_DIR)/libcedana-$$name.so /usr/local/lib ;\
-		fi ;\
-	done ;\
+$(INSTALL_LIB_DIR)/libcedana-%.so: $(OUT_DIR)/libcedana-%.so
+	@echo "Installing plugin $*..."
+	$(SUDO) cp $< $@
 
 reset-plugins: ## Reset & uninstall plugins
 	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
-	$(SUDO) rm -rf /usr/local/lib/*cedana*
-	$(SUDO) rm -rf /usr/local/bin/*cedana*
-
-# All-in-one debug target
-all-debug: debug install plugins-debug plugins-install ## Build and install with debug symbols (all components)
+	$(SUDO) rm -rf $(INSTALL_LIB_DIR)/*cedana*
+	$(SUDO) rm -rf $(INSTALL_BIN_DIR)/*cedana*
 
 ###########
 ##@ Testing
@@ -146,35 +117,33 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-TIMEOUT?=600
 RETRIES?=0
-DEBUG?=0
-HELPER_REPO?=cedana/cedana-helper
+HELPER_REPO?=
 HELPER_TAG?=""
 HELPER_DIGEST?=""
-CONTROLLER_REPO?=cedana/cedana-controller
+CONTROLLER_REPO?=
 CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
-BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
 
-test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		echo "Using unique instance of daemon per test..." ;\
+		echo "\nUsing unique instance of daemon per test...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
 		else \
@@ -183,7 +152,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-isolated.xml ;\
 		fi ;\
-		echo "Using a persistent instance of daemon across tests..." ;\
+		echo "\nUsing a persistent instance of daemon across tests...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
 		else \
@@ -210,7 +179,6 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) ;\
@@ -223,14 +191,13 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				PARALLELISM=$(PARALLELISM) \
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
 	if [ -f /.dockerenv ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -262,7 +229,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -282,7 +248,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				PARALLELISM=$(PARALLELISM) \
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -343,9 +308,11 @@ PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gp
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --name=$(DOCKER_TEST_CONTAINER_NAME) \
-						-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
-				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) -e HF_TOKEN=$(HF_TOKEN) \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --name=$(DOCKER_TEST_CONTAINER_NAME) \
+				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
+				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
+				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \
+				-e HF_TOKEN=$(HF_TOKEN) \
 				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
 				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
 				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) \

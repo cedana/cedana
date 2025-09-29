@@ -8,6 +8,9 @@ export KIBIBYTE=1024
 export MEBIBYTE=$(( KIBIBYTE * 1024 ))
 export GIBIBYTE=$(( MEBIBYTE * 1024 ))
 
+export RED='\033[0;31m'
+export NC='\033[0m' # No Color
+
 load_lib() {
     load /usr/lib/bats/bats-"$1"/load
 }
@@ -109,6 +112,7 @@ pid_exists() {
     kill -0 "$pid" 2>/dev/null
 }
 
+# Wait for a PID to exist, with a timeout (default 60 seconds)
 wait_for_pid() {
     local pid=$1
     local timeout=${2:-60}
@@ -116,6 +120,24 @@ wait_for_pid() {
     local elapsed=0
 
     while ! kill -0 "$pid" 2>/dev/null; do
+        if (( elapsed >= timeout )); then
+            return 1
+        fi
+        sleep "$interval"
+        ((elapsed += interval))
+    done
+
+    return 0
+}
+
+# Wait for a PID to not exist, with a timeout (default 60 seconds)
+wait_for_no_pid() {
+    local pid=$1
+    local timeout=${2:-60}
+    local interval=1
+    local elapsed=0
+
+    while kill -0 "$pid" 2>/dev/null; do
         if (( elapsed >= timeout )); then
             return 1
         fi
@@ -187,11 +209,28 @@ wait_for_cmd_fail() {
             ((elapsed += interval))
         done
     fi
-    debug_log "'$*' failed after $elapsed seconds"
+    debug_log "'$*' failed (as expected) after $elapsed seconds"
 
     return 0
 }
 
+# Wait for a file to exist, with a timeout (default 60 seconds)
+wait_for_file() {
+    local file=$1
+    local timeout=${2:-60}
+    local interval=1
+    local elapsed=0
+
+    while [ ! -e "$file" ]; do
+        if (( elapsed >= timeout )); then
+            return 1
+        fi
+        sleep "$interval"
+        ((elapsed += interval))
+    done
+
+    return 0
+}
 
 debug_log() {
     local message="$1"
@@ -203,9 +242,9 @@ debug_log() {
 error_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
-        echo "[ERROR] $message" >&3
+        echo -e "${RED}[ERROR] $message${NC}" >&3
     else
-        echo "[ERROR] $message" >&2
+        echo -e "${RED}[ERROR] $message${NC}" >&2
     fi
 }
 

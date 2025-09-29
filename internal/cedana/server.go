@@ -93,7 +93,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}
 
-	jobManager, err := job.NewManagerLazy(ctx, wg, pluginManager, gpuManager, database)
+	jobManager, err := job.NewManagerLazy(ctx, wg, host, pluginManager, gpuManager, database)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create job manager: %w", err)
 	}

@@ -108,6 +108,7 @@ var dumpCmd = &cobra.Command{
 				ShellJob:        proto.Bool(shellJob),
 				LinkRemap:       proto.Bool(linkRemap),
 			},
+			Action:        daemon.DumpAction_DUMP,
 			GPUFreezeType: gpuFreezeType,
 		}
 
