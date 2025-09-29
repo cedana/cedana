@@ -72,10 +72,10 @@ reset-config: ## Reset configuration files
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
-	$(SUDO) rm -rf /tmp/cedana*
-	$(SUDO) rm -rf /tmp/dump*
-	$(SUDO) rm -rf /dev/shm/cedana*
-	$(SUDO) rm -rf /run/cedana*
+	$(SUDO) rm -rf /tmp/*cedana*
+	$(SUDO) rm -rf /tmp/*dump*
+	$(SUDO) rm -rf /dev/shm/*cedana*
+	$(SUDO) rm -rf /run/*cedana*
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."
