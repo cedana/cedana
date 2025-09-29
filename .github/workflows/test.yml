@@ -166,7 +166,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+      options: --privileged --init --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -278,7 +278,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+      options: --privileged --init --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -312,7 +312,7 @@ jobs:
       - name: Install
         run: |
           make install
-          sudo -E cedana plugin install ${{ matrix.plugin }} criu storage/cedana storage/s3 storage/gcs
+          sudo -E cedana plugin install ${{ matrix.plugin }} criu runc storage/cedana storage/s3 storage/gcs
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"

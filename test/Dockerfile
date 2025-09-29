@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1.6
 
-FROM cedana/cedana-samples:cuda12.4-torch2.4 AS cedana-samples
+FROM cedana/cedana-samples:cpu AS cedana-samples
 
-FROM ubuntu:24.04
+FROM cruizba/ubuntu-dind:noble-latest
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
 ARG GO_VERSION=1.24.3
@@ -13,7 +13,7 @@ ARG K9S_VERSION=latest
 RUN <<EOT
 set -eux
 APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lsof psmisc \
-    pkg-config libbsd-dev containerd runc libcap-dev libgpgme-dev iptables iproute2 \
+    pkg-config libbsd-dev libcap-dev libgpgme-dev iptables iproute2 \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
     zip jq
@@ -30,7 +30,7 @@ set -eux
 apt-get install -y bats bats-assert bats-support bats-file
 EOT
 
-# Setup go
+# install go
 RUN <<EOT
 set -eux
 if [ $(uname -m) = "aarch64" ]; then
@@ -46,20 +46,6 @@ rm -rf /usr/local/go
 tar -C /usr/local -xzf go${GO_VERSION}.linux-${ARCH}.tar.gz
 ln -s /usr/local/go/bin/go /usr/local/bin/go
 rm go${GO_VERSION}.linux-${ARCH}.tar.gz
-EOT
-
-# Install Docker (CLI only)
-RUN <<EOT
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-chmod a+r /etc/apt/keyrings/docker.asc
-echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
-    https://download.docker.com/linux/ubuntu \
-    $(. /etc/os-release && echo "$UBUNTU_CODENAME") stable" | \
-tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update
-apt-get install -y docker-ce docker-ce-cli
 EOT
 
 # install kubectl
@@ -110,6 +96,10 @@ apt install -y /tmp/k9s.deb
 rm -f /tmp/k9s.deb
 EOT
 
+# configure containerd
+RUN rm -rf /run/containerd
+RUN ln -s /run/docker/containerd /run/containerd
+
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples
 
@@ -117,7 +107,8 @@ VOLUME ["/src"]
 WORKDIR /src
 ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
 
-CMD ["/entrypoint.sh"]
+# because github actions forces it on us
+RUN sed -i '2iumount /var/run/docker.sock || true' /usr/local/bin/start-docker.sh
+
+CMD []

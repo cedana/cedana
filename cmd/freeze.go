@@ -59,6 +59,7 @@ var freezeCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
+			Action:        daemon.DumpAction_FREEZE_ONLY,
 			GPUFreezeType: gpuFreezeType,
 		}
 

@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -44,6 +45,8 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 		return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 	}
 
+	log := log.With().Str("plugin", "CRIU").Int("version", version).Str("operation", "dump").Uint32("PID", resp.State.PID).Logger()
+
 	criuOpts := req.GetCriu()
 
 	// Set CRIU server
@@ -64,11 +67,8 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
 	}
 
-	// TODO: Add support for pre-dump
-	// TODO: Add support for lazy migration
-
-	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU dump starting")
-	// utils.LogProtoMessage(criuOpts, "CRIU option", zerolog.DebugLevel)
+	log.Info().Msg("CRIU dump starting")
+	log.Debug().Interface("opts", criuOpts).Msg("CRIU dump options")
 
 	ctx, end := profiling.StartTimingCategory(ctx, "criu", opts.CRIU.Dump)
 
@@ -76,9 +76,8 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	end()
 
-	// Capture internal logs from CRIU
-	utils.LogFromFile(
-		log.With().Int("CRIU", version).Logger().WithContext(ctx),
+	logging.FromFile(
+		log.WithContext(ctx),
 		filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE),
 		zerolog.TraceLevel,
 	)
@@ -89,7 +88,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
 
-	log.Debug().Int("CRIU", version).Uint32("PID", resp.State.PID).Msg("CRIU dump complete")
+	log.Info().Msg("CRIU dump complete")
 
 	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.State.PID)), nil
 }

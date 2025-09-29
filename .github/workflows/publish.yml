@@ -413,7 +413,7 @@ jobs:
           tags: |
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ github.head_ref || github.ref_name }}
-            ${{ inputs.dockerhub_latest && 'type=raw,value=latest' || '' }}
+            ${{ inputs.dockerhub_latest && 'type=raw,value=cuda' || '' }}
 
       - name: Create manifest list and push (test, CUDA)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'

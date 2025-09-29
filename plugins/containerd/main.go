@@ -1,6 +1,8 @@
 package main
 
 import (
+	"syscall"
+
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/containerd/cmd"
@@ -47,6 +49,9 @@ var (
 		client.CreateContainerForRun,
 	}
 	ManageHandler types.Run = client.Manage
+
+	KillSignal = syscall.SIGKILL
+	Cleanup    = client.Cleanup
 
 	GPUInterception types.Adapter[types.Run] = gpu.Interception
 

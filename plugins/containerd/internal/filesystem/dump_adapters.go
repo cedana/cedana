@@ -34,7 +34,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 		details := req.GetDetails().GetContainerd()
 
 		// Skip rootfs if image ref is not provided
-		if details.Image == nil {
+		if details.Image == nil || req.Action != daemon.DumpAction_DUMP {
 			return next(ctx, opts, resp, req)
 		}
 
@@ -48,15 +48,6 @@ func DumpRootfs(next types.Dump) types.Dump {
 		container, err := client.LoadContainer(ctx, details.ID)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", details.ID, err)
-		}
-
-		info, err := container.Info(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get container info: %v", err)
-		}
-
-		if info.Image == image.Name {
-			return nil, status.Errorf(codes.InvalidArgument, "dump image cannot be the same as the container image, current image: %s, dump image: %s", info.Image, details.Image)
 		}
 
 		// When doing a rootfs dump only, we can return early after dumping the rootfs
@@ -102,14 +93,15 @@ func DumpRootfs(next types.Dump) types.Dump {
 				log.Debug().Str("container", details.ID).Msg("dumping rootfs")
 				go func() {
 					rootfsErr <- dumpRootfs(ctx, client, container, image.Name, image.Username, image.Secret)
+					close(rootfsErr)
 				}()
 				return nil
 			},
 			PostDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 				return <-rootfsErr
 			},
-			OnDumpErrorFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) {
-				<-rootfsErr
+			FinalizeDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+				return <-rootfsErr
 			},
 		})
 

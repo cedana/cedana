@@ -58,6 +58,7 @@ reset-systemd: ## Reset the systemd daemon
 
 reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
+	$(SUDO) pkill $(BINARY) || true
 	rm -f $(OUT_DIR)/$(BINARY)
 	$(SUDO) rm -f $(INSTALL_BIN_DIR)/$(BINARY)
 
@@ -67,7 +68,7 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana/*
+	rm -rf ~/.cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
@@ -107,6 +108,7 @@ reset-plugins: ## Reset & uninstall plugins
 	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
 	$(SUDO) rm -rf $(INSTALL_LIB_DIR)/*cedana*
+	$(SUDO) rm -rf $(INSTALL_BIN_DIR)/*cedana*
 
 ###########
 ##@ Testing
@@ -115,7 +117,6 @@ reset-plugins: ## Reset & uninstall plugins
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-TIMEOUT?=600
 RETRIES?=0
 HELPER_REPO?=
 HELPER_TAG?=""
@@ -125,24 +126,24 @@ CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
-BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
 
-test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		echo "Using unique instance of daemon per test..." ;\
+		echo "\nUsing unique instance of daemon per test...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
 		else \
@@ -151,7 +152,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-isolated.xml ;\
 		fi ;\
-		echo "Using a persistent instance of daemon across tests..." ;\
+		echo "\nUsing a persistent instance of daemon across tests...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
 		else \
@@ -178,7 +179,6 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) ;\
@@ -191,14 +191,13 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				PARALLELISM=$(PARALLELISM) \
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
 	if [ -f /.dockerenv ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -230,7 +229,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -250,7 +248,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				PARALLELISM=$(PARALLELISM) \
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -311,8 +308,8 @@ PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gp
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --name=$(DOCKER_TEST_CONTAINER_NAME) \
-						-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --name=$(DOCKER_TEST_CONTAINER_NAME) \
+				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
 				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \
 				-e HF_TOKEN=$(HF_TOKEN) \

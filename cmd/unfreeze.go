@@ -51,7 +51,9 @@ var unfreezeCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Create half-baked request
-		req := &daemon.DumpReq{}
+		req := &daemon.DumpReq{
+			Action: daemon.DumpAction_UNFREEZE_ONLY,
+		}
 
 		ctx := context.WithValue(cmd.Context(), keys.UNFREEZE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

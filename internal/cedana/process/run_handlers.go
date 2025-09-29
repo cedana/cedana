@@ -122,5 +122,5 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 
 	resp.PID = details.PID
 
-	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, details.PID)), nil
+	return channel.Broadcaster(utils.WaitForPid(details.PID)), nil
 }
