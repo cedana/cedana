@@ -89,7 +89,7 @@ func (feature Feature[T]) IsAvailable(filter ...string) (bool, error) {
 				continue
 			}
 			if sym == nil || (reflect.TypeOf(*sym).Kind() == reflect.Pointer && reflect.ValueOf(*sym).IsNil()) {
-				errs = append(errs, fmt.Errorf("plugin '%s' exports no '%s", name, feature))
+				errs = append(errs, fmt.Errorf("plugin '%s' exports no '%s'", name, feature))
 				continue
 			}
 			available = true

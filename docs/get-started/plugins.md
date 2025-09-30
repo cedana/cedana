@@ -62,7 +62,7 @@ streamer    1 MiB   available                       v0.0.6             9 days ag
 
 Notice the `LATEST VERSION` column shows `local` for locally built plugins.
 
-Instead of depending on current directory, you can also specify the paths to search for locally built plugins by setting the `CEDANA_PLUGINS_LOCAL_SEARCH_PATH` (paths are colon-separated just like the `PATH` env var). This convenient for developers who are working on multiple plugins at once.
+Instead of depending on current directory, you can also specify the paths to search for locally built plugins by setting the `CEDANA_PLUGINS_LOCAL_SEARCH_PATH` (paths are colon-separated just like the `PATH` env var). This is convenient for developers who are working on multiple plugins at once.
 
 {% hint style="info" %}
 Check out the guide on [writing plugins](../developer-guides/writing_plugins.md) if you're interested in building your own plugins.
@@ -84,10 +84,6 @@ To uninstall a plugin, use:
 sudo cedana plugin remove <plugin> <plugin> ...
 ```
 
-{% hint style="info" %}
-Check out the [CLI reference](../references/cli/cedana_plugin.md) for all plugin-related subcommands.
-{% endhint %}
-
 ## Features
 
 To see which features are supported by the installed plugins, use:
@@ -103,3 +99,7 @@ See [features](features.md) for more information.
 ## Health check
 
 The full health check command will also check the health of all installed plugins. See [health checks](health.md).
+
+{% hint style="info" %}
+Check out the [CLI reference](../references/cli/cedana_plugin.md) for all plugin-related subcommands.
+{% endhint %}
