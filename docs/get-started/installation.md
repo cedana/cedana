@@ -4,7 +4,7 @@ For now, you can either install the daemon from source, or use the released bina
 
 ## Prerequisites
 
-Since Cedana depends on [CRIU](https://criu.org), you will need to ensure it's dependencies are installed.
+Since Cedana depends on [CRIU](https://criu.org), you will need to ensure its dependencies are installed.
 
 #### Using apt (Debian/Ubuntu)
 
@@ -32,12 +32,6 @@ make cedana
 
 ```sh
 make install
-```
-
-#### Build and install (with all plugins)
-
-```sh
-make all
 ```
 
 Try `make help` to see all available targets.
