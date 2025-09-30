@@ -34,7 +34,9 @@ make cedana
 make install
 ```
 
+{% hint style="info" %}
 Try `make help` to see all available targets.
+{% endhint %}
 
 ## Download latest
 
