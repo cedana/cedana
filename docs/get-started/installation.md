@@ -20,6 +20,8 @@ yum install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev li
 
 ## Build from source
 
+Clone the [cedana repository](https://github.com/cedana/cedana) and navigate into it.
+
 #### Build
 
 ```sh
@@ -40,16 +42,38 @@ make all
 
 Try `make help` to see all available targets.
 
-## Download from releases
+## Download latest
 
-Download the latest release from the [releases](https://github.com/cedana/cedana/releases).
+{% hint style="info" %}
+You can find the latest binaries at [releases](https://github.com/cedana/cedana/releases). Ensure `/usr/local/bin` is in your `PATH`.
+{% endhint %}
+
+#### AMD64
 
 ```sh
-curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/v0.9.245/cedana-amd64.tar.gz
+platform=amd64
+version=$(curl -s https://api.github.com/repos/cedana/cedana/releases/latest | grep tag_name | cut -d '"' -f 4)
+curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/$version/cedana-$platform.tar.gz
 tar -xzvf cedana.tar.gz
 chmod +x cedana
 mv cedana /usr/local/bin/cedana
 rm cedana.tar.gz
+
+cedana --version
+```
+
+#### ARM64
+
+```sh
+platform=arm64
+version=$(curl -s https://api.github.com/repos/cedana/cedana/releases/latest | grep tag_name | cut -d '"' -f 4)
+curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/v0.9.245/cedana-$platform.tar.gz
+tar -xzvf cedana.tar.gz
+chmod +x cedana
+mv cedana /usr/local/bin/cedana
+rm cedana.tar.gz
+
+cedana --version
 ```
 
 ## Install CRIU
