@@ -87,4 +87,9 @@ var Registry = []Plugin{
 		Libraries: []Binary{},
 		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},
 	},
+	{
+		Name:      "slurm",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-slurm.so", InstallDir: "/usr/lib64/slurm"}},
+	},
 }
