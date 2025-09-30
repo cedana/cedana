@@ -28,7 +28,7 @@ For detailed documentation on our managed Kubernetes or the larger Cedana system
 
 First, ensure that you have Cedana installed on your machine, and the daemon is running. See [installation](get-started/installation.md).
 
-### Run a new job
+#### Run a new job
 
 ```sh
 cedana run process --attach test/workloads/date-loop.sh
@@ -45,7 +45,7 @@ JOB               TYPE       PID  STATUS  GPU  CHECKPOINT  SIZE  LOG
 personal_hopper9  process  32646  sleep   no                     [Attachable]
 ```
 
-### Checkpoint the job
+#### Checkpoint the job
 
 ```sh
 cedana dump job personal_hopper9
@@ -58,7 +58,7 @@ JOB               TYPE       PID  STATUS  GPU  CHECKPOINT     SIZE     LOG
 personal_hopper9  process  32646  halted  no   2 seconds ago  644 KiB
 ```
 
-### Restore the job
+#### Restore the job
 
 ```sh
 cedana restore job --attach personal_hopper9
