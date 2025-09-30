@@ -1,6 +1,8 @@
 # Checkpoint/restore with GPUs
 
+{% hint style="warning" %}
 Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
+{% endhint %}
 
 ## Prerequisites
 
