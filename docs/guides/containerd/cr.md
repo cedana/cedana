@@ -4,7 +4,7 @@
 
 1. Create an account with Cedana, to get access to the containerd plugin. See [authentication](../../get-started/authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
-3. Install the containerd plugin with `sudo cedana plugin install containerd`.
+3. Install the **containerd** plugin with `sudo cedana plugin install containerd`.
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
 
@@ -72,4 +72,6 @@ For checkpoint _only_ the rootfs, set the `--rootfs-only` flag. For example:
 cedana dump containerd <container_id> --dir <dump-dir> --image <new-image-name> --rootfs-only
 ```
 
+{% hint style="info" %}
 For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+{% endhint %}

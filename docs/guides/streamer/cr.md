@@ -1,8 +1,10 @@
 # Checkpoint/restore streamer
 
-The Cedana daemon supports checkpoint/restore via low-overhead streaming. It's powered by the [streamer plugin](https://github.com/cedana/cedana-image-streamer), which is a fork of CRIU's [image streamer](https://github.com/checkpoint-restore/criu-image-streamer).&#x20;
+The Cedana daemon supports checkpoint/restore via high-performance low-overhead streaming. It's powered by the [streamer plugin](https://github.com/cedana/cedana-image-streamer), which is a fork of CRIU's [image streamer](https://github.com/checkpoint-restore/criu-image-streamer).&#x20;
 
-Real benefit of streaming is realized when checkpointing and restoring to/from a remote location. See [#remoting](cr.md#remoting "mention").
+{% hint style="info" %}
+Real benefits of streaming are realized only when checkpointing and restoring to/from a remote location. See [remote storage](#remote-storage).
+{% endhint %}
 
 ## Prerequisites
 
@@ -31,26 +33,32 @@ This will directly stream the checkpoint to a directory, using 4 parallel stream
 
 ## Restore
 
-Similarly, the `cedana restore` subcommand supports a `--stream <n>` flag, where `n` is the number of parallel streams to use. For example:
+The `cedana restore` will automatically detect if the checkpoint was taken with streaming, and will use the same number of streams to restore. For example:
 
 ```sh
-cedana restore process --stream 4 --path <path-to-dump>
+cedana restore process --path <path-to-dump>
 ```
-
-Note that, here you _must_ pass in 4 as the number of parallel streams, as the checkpoint directory contains 4 separate image files, since the checkpoint was taken with 4 parallel streams.
 
 ## Compression
 
 All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../cr.md#compression) for more information.
 
-## Remoting
+## Remote storage
 
-The daemon simply reads/writes from the filesystem. This is also the case for streaming, with the additional requirement that the underlying filesystem must be [POSIX-compliant](https://grimoire.carcano.ch/blog/posix-compliant-filesystems/).
+Cedana supports streaming to/from remote storage, through storage plugins. Check out the following guides for specific remote storage:
 
-To checkpoint/restore to/from a remote directory, you can use a FUSE-based filesystem mount backed by your network storage. For Amazon's S3, check out [s3fs-fuse](https://github.com/s3fs-fuse/s3fs-fuse).
+- [Amazon S3](../storage/s3.md)
+- [Google Cloud Storage](../storage/gcs.md)
+- [Cedana Storage](../storage/cedana.md)
+
+{% hint style="info" %}
+The daemon simply reads/writes from the filesystem. This is also the case for streaming, with the additional requirement that the underlying filesystem must be [POSIX-compliant](https://grimoire.carcano.ch/blog/posix-compliant-filesystems/). To checkpoint/restore to/from a remote directory, you can also use a FUSE-based filesystem mount backed by your network storage. For Amazon's S3, check out [s3fs-fuse](https://github.com/s3fs-fuse/s3fs-fuse).
+{% endhint %}
 
 ## Enable by default
 
 To enable streaming by default, set the `Checkpoint.Stream` field in the [configuration](../../get-started/configuration.md) to the desired number of parallel streams. Zero means no streaming.
 
+{% hint style="info" %}
 For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+{% endhint %}
