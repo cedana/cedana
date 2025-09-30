@@ -11,7 +11,7 @@
 * [Plugins](get-started/plugins.md)
 * [Features](get-started/features.md)
 
-## Checkpoint/restore guides
+## Checkpoint/restore
 
 * [Managed process/container](guides/managed.md)
 * [Checkpoint/restore basics](guides/cr.md)
@@ -21,7 +21,7 @@
 * [Checkpoint/restore streamer](guides/streamer/cr.md)
 * [Checkpoint/restore kubernetes](guides/k8s/cr.md)
 
-## Storage guides
+## Storage
 
 * [Amazon S3](guides/storage/s3.md)
 * [Google Cloud Storage](guides/storage/gcs.md)
