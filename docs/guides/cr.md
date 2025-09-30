@@ -10,7 +10,7 @@ To checkpoint:
 cedana dump <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`,  `job`, etc. See [feature matrix](../get-started/features.md) for all plugins that support checkpointing.
+Where `<type>` can be `process`, `containerd`, `runc`, `job`, etc. See [feature matrix](../get-started/features.md) for all plugins that support checkpointing.
 
 For example, to checkpoint a process:
 
@@ -24,7 +24,7 @@ See [CLI reference](../references/cli/cedana_dump_process.md) for all available 
 
 ## Restore
 
-To restore:
+### Using daemon
 
 ```sh
 cedana restore <type> ...
@@ -39,6 +39,20 @@ cedana restore process --path <path-to-dump>
 ```
 
 Notice that for restore the flag is called `--path` instead of `--dir` (as in dump), this is because it can be a path to a compressed file, or to a directory if not compressed.
+
+### Without daemon
+
+{% hint style="warning" %}
+Not all plugins support restoring without the daemon. Please check the [feature matrix](../get-started/features.md) for details.
+{% endhint %}
+
+It's also possible to restore directly as a child of the current shell command without the daemon:
+
+```sh
+cedana restore process --path <path-to-dump> --no-server
+```
+
+This is useful for scenarios where you want to restore a process as a child of the current shell, for example, to restore a shell process and interact with it directly.
 
 See [CLI reference](../references/cli/cedana_restore_process.md) for all available options for process restore.
 
@@ -83,10 +97,19 @@ Supported values for `--compression` are `none`, `tar`, `gzip`, `lz4`, `zlib`.
 
 You may also specify the default compression algorithm in the [configuration](../get-started/configuration.md).
 
+## Remote storage
+
+Cedana supports checkpointing/restoring to/from remote storage, through storage plugins. Check out the following guides for specific remote storage:
+
+- [Amazon S3](storage/s3.md)
+- [Google Cloud Storage](storage/gcs.md)
+- [Cedana Storage](storage/cedana.md)
+
 ## Advanced
 
-* [Checkpoint/restore with GPUs](gpu/cr.md)
-* [Checkpoint/restore runc](runc/cr.md)
-* [Checkpoint/restore containerd](runc/cr.md)
-* [Checkpoint/restore kata](kata/kata.md)
-* [Checkpoint/restore streamer](streamer/cr.md)
+- [Checkpoint/restore with GPUs](gpu/cr.md)
+- [Checkpoint/restore runc](runc/cr.md)
+- [Checkpoint/restore containerd](runc/cr.md)
+- [Checkpoint/restore kata](kata/kata.md)
+- [Checkpoint/restore streamer](streamer/cr.md)
+- [Checkpoint/restore kubernetes](k8s/cr.md)

@@ -28,35 +28,38 @@ test
 
 Tests are grouped by functionality, and each plugin has its own test file.
 
-### CLI
+### Running tests
 
 Running `make help` you'll see the following test commands:
 
 ```sh
 Testing
-  test                      Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
+  test                      Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
   test-unit                 Run unit tests (with benchmarks)
-  test-regression           Run all regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
+  test-regression           Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+  test-k8s                  Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], ...)
   test-enter                Enter the test environment
   test-enter-cuda           Enter the test environment (CUDA)
+  test-k9s                  Enter k9s in the test environment
+
 ```
 
-When running any of the test commands locally, the tests are automatically run inside a Docker container using `cedana/cedana-test:latest` or `cedana/cedana-test:cuda` if `GPU=1`. The CI is also configured to use these Docker images.
+When running any of the test commands locally, the tests are automatically run inside a Docker container using `cedana/cedana-test:latest` or `cedana/cedana-test:cuda` if `GPU=1`. GPU tests are skipped by default, unless `GPU=1` is set.
 
-### GPU tests
+### Running GPU tests
 
-Use `GPU=1` to run in a CUDA container. If `GPU=0`, any tests that require GPU-support will automatically be skipped. You may want to specify a low `PARALLELISM` value when running GPU tests, as each test requires a significant amount of RAM.
+Use `GPU=1` to include all GPU tests. If `GPU=0`, any tests that require GPU-support automatically get skipped. You may want to specify a low `PARALLELISM` value when running GPU tests, as each test requires a significant amount of RAM.
 
-### Filtering tests
+### Running specific tests
 
 Use `TAGS` to filter tests by tags. For example, `make test-regression TAGS=runc` will run all tests tagged with `runc`. `make test-regression TAGS=runc,gpu` will run all tests tagged with `runc` and `gpu`. If `gpu` tag is included, you must set `GPU=1` to run the tests, otherwise they will be skipped.
 
 ### Test modes
 
-Each test command above runs the test file **two times**, in different modes:
+Each test command above runs the test suite **two times**, in different modes:
 
 1. Unique daemon & DB instance for each test.
-2. Single persistent daemon & DB instance across a test file.
+2. Single persistent daemon & DB instance across a test suite.
 
 This is to allow catching bugs that may arise due to the daemon's state being persisted across tests.
 

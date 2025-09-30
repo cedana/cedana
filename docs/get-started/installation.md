@@ -4,27 +4,35 @@ For now, you can either install the daemon from source, or use the released bina
 
 ## Prerequisites
 
-Since Cedana depends on [CRIU](https://criu.org), you will need to ensure it's dependencies are installed. For Ubuntu, you can install them with:
+Since Cedana depends on [CRIU](https://criu.org), you will need to ensure it's dependencies are installed.
+
+### Using apt (Debian/Ubuntu):
 
 ```sh
-apt-get install -y python3-protobuf libnet1 libnftables1 libnl-3-200 libprotobuf-c1 iptables
+apt-get install -y libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel
+```
+
+### Using dnf/yum (Fedora/CentOS):
+
+```sh
+yum install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1
 ```
 
 ## Build from source
 
-To build:
+### Build
 
 ```sh
 make cedana
 ```
 
-To install:
+### Install
 
 ```sh
 make install
 ```
 
-To build and install (with all plugins):
+### Build and install (with all plugins)
 
 ```sh
 make all
@@ -46,6 +54,10 @@ rm cedana.tar.gz
 
 ## Install CRIU
 
+{% hint style="success" %}
+To install a plugin from the online registry, you need to be [authenticated](authentication.md). See [plugins](plugins.md) for more information.
+{% endhint %}
+
 A modified version of CRIU is shipped as a plugin for Cedana, so you don't need to install it separately. You can simply do:
 
 ```sh
@@ -54,19 +66,19 @@ sudo cedana plugin install criu
 
 This version of CRIU is not a requirement for Cedana, but it is recommended for certain features, such as [checkpoint/restore streamer](../guides/streamer/cr.md).
 
-Note that, to install a plugin from the online registry, you need to be [authenticated](authentication.md). See [plugins](plugins.md) for more information.
-
 To install CRIU independently, see the [CRIU installation guide](https://criu.org/Installation).
 
 ## Start the daemon
+
+{% hint style="warning" %}
+The daemon requires root privileges for checkpoint/restore operations. Check the [CLI reference](../references/cli/cedana.md) for all options.
+{% endhint %}
 
 You can directly start the daemon with:
 
 ```sh
 sudo cedana daemon start
 ```
-
-The daemon requires root privileges for checkpoint/restore operations. Check the [CLI reference](../references/cli/cedana.md) for all options.
 
 If you're a _systemd_ user, you may also install it as a service (if built from source):
 

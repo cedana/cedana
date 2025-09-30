@@ -2,6 +2,7 @@
 
 Cedana configuration lives in your home directory, specifically in `~/.cedana/config.json`. This file is automatically created the first time you use a Cedana command. You can also create it manually.
 
+## Environment variables
 You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
 
 ## [Config](../../pkg/config/types.go#L10-L36)
@@ -36,8 +37,8 @@ type Config struct {
     // Plugin settings
     Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
 
-		// AWS settings
-		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+    // AWS settings
+    AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
 }
 ```
 

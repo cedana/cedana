@@ -43,11 +43,17 @@ Note that, here you _must_ pass in 4 as the number of parallel streams, as the c
 
 All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../cr.md#compression) for more information.
 
-## Remoting
+## Remote storage
 
-The daemon simply reads/writes from the filesystem. This is also the case for streaming, with the additional requirement that the underlying filesystem must be [POSIX-compliant](https://grimoire.carcano.ch/blog/posix-compliant-filesystems/).
+Cedana supports streaming to/from remote storage, through storage plugins. Check out the following guides for specific remote storage:
 
-To checkpoint/restore to/from a remote directory, you can use a FUSE-based filesystem mount backed by your network storage. For Amazon's S3, check out [s3fs-fuse](https://github.com/s3fs-fuse/s3fs-fuse).
+- [Amazon S3](storage/s3.md)
+- [Google Cloud Storage](storage/gcs.md)
+- [Cedana Storage](storage/cedana.md)
+
+{% hint style="info" %}
+The daemon simply reads/writes from the filesystem. This is also the case for streaming, with the additional requirement that the underlying filesystem must be [POSIX-compliant](https://grimoire.carcano.ch/blog/posix-compliant-filesystems/). To checkpoint/restore to/from a remote directory, you can also use a FUSE-based filesystem mount backed by your network storage. For Amazon's S3, check out [s3fs-fuse](https://github.com/s3fs-fuse/s3fs-fuse).
+{% endhint %}
 
 ## Enable by default
 

@@ -38,7 +38,7 @@ Not showing external plugins: criu, criu/cuda, gpu, streamer, k8s/runtime-shim
 
 ```
 
-When developing a new plugin, or adding a feature to a plugin, it's helpful to see if there are any compatibility errors. Use `cedana features --errors` to see any incompatibility errors.
+When developing a new plugin, or adding a feature to a plugin, it's helpful to see more information on any compatibility issues. Use `cedana features --errors` to see any incompatibility errors.
 
 Check out the guide on [writing plugins](../developer-guides/writing_plugins.md) for more information.
 
