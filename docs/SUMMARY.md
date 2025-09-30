@@ -9,7 +9,7 @@
 * [Configuration](get-started/configuration.md)
 * [Health checks](get-started/health.md)
 * [Plugins](get-started/plugins.md)
-* [Feature matrix](get-started/features.md)
+* [Features](get-started/features.md)
 
 ## Checkpoint/restore guides
 

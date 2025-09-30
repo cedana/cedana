@@ -20,6 +20,8 @@ Symbols that can be exported by a plugin are well-typed and are defined in `pkg/
 
 A useful helper command is `cedana features` (alias of `cedana plugin features`), which lists all the features supported by all the plugins. This is useful for debugging, when implementing a new feature, or when you want to know what a plugin supports. Use the `--errors` flag to also output all errors encountered while loading the plugins.
 
-See [feature matrix](../get-started/features.md) for more info.
+{% hint style="info" %}
+See [features](../get-started/features.md) for more info.
+{% endhint %}
 
 ![Output from cedana plugin features](https://github.com/user-attachments/assets/90578e51-c7f1-44b9-b056-dc1cbdd89785)
