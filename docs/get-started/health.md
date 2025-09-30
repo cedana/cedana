@@ -59,7 +59,7 @@ Looks good, with 2 warning(s).
 
 ```
 
-### Daemon-less
+### Without daemon
 
 You can also run the health check directly, without the daemon:
 

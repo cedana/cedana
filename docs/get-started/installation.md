@@ -6,13 +6,13 @@ For now, you can either install the daemon from source, or use the released bina
 
 Since Cedana depends on [CRIU](https://criu.org), you will need to ensure it's dependencies are installed.
 
-### Using apt (Debian/Ubuntu):
+### Using apt (Debian/Ubuntu)
 
 ```sh
 apt-get install -y libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel
 ```
 
-### Using dnf/yum (Fedora/CentOS):
+### Using dnf/yum (Fedora/CentOS)
 
 ```sh
 yum install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1
