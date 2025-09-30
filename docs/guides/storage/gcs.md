@@ -4,5 +4,5 @@ Checkpoint/restoring to/from Google Cloud Storage is currently WIP.
 
 ## See also
 
-- [Amazon S3](storage/s3.md)
-- [Cedana Storage](storage/cedana.md)
+- [Amazon S3](s3.md)
+- [Cedana Storage](cedana.md)

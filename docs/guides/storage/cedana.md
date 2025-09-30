@@ -3,7 +3,7 @@
 Cedana Storage is a global storage for checkpoints that is backed by multiple cloud providers, providing low latency and high availability. This is the fastest way to get started with remote checkpoint/restore, as you only need to be [authenticated](../../get-started/authentication.md) with Cedana.
 
 {% hint style="warning" %}
-If you're using Cedana on an Amazon EKS cluster, you'll likely get higher performance using [Amazon S3](../storage/s3.md). Similarly, if you're using Cedana on a GKE cluster, you'll likely get higher performance using [Google Cloud Storage](../storage/gcs.md).
+If you're using Cedana on an Amazon EKS cluster, you'll likely get higher performance using [Amazon S3](s3.md). Similarly, if you're using Cedana on a GKE cluster, you'll likely get higher performance using [Google Cloud Storage](gcs.md).
 {% endhint %}
 
 ## Prerequisites
@@ -69,5 +69,5 @@ To enable streaming by default, set the `Checkpoint.Dir` field in the [configura
 
 ## See also
 
-- [Amazon S3](storage/s3.md)
-- [Google Cloud Storage](storage/gcs.md)
+- [Amazon S3](s3.md)
+- [Google Cloud Storage](gcs.md)
