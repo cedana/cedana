@@ -3,7 +3,7 @@
 Cedana Storage is a global storage for checkpoints that is backed by multiple cloud providers, providing low latency and high availability. This is the fastest way to get started with remote checkpoint/restore, as you only need to be [authenticated](../../get-started/authentication.md) with Cedana.
 
 {% hint style="warning" %}
-If you're using Cedana on an Amazon EKS cluster, you'll likely get higher performance using [Amazon S3](storage/s3.md). Similarly, if you're using Cedana on a GKE cluster, you'll likely get higher performance using [Google Cloud Storage](storage/gcs.md).
+If you're using Cedana on an Amazon EKS cluster, you'll likely get higher performance using [Amazon S3](../storage/s3.md). Similarly, if you're using Cedana on a GKE cluster, you'll likely get higher performance using [Google Cloud Storage](../storage/gcs.md).
 {% endhint %}
 
 ## Prerequisites
@@ -51,9 +51,21 @@ cedana restore job --attach my-job-1
 
 This will automatically restore from the latest checkpoint for `my-job-1`, which is stored in Cedana Storage.
 
+## Compression
+
+All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../cr.md#compression) for more information.
+
+{% hint style="info" %}
+For better performance when remote checkpointing/restoring large processes/containers, especially when using [checkpoint/restore with GPUs](../gpu/cr.md), always use compression. The `lz4` compression algorithm is a good compromise between speed and compression ratio.
+{% endhint %}
+
 ## Streaming
 
 High-performance low-overhead streaming of checkpoints is also supported by the `storage/cedana` plugin. Follow instructions on [checkpoint/restore streamer](../cr.md#checkpoint-restore-streamer) to use streaming with this plugin.
+
+## Enable by default
+
+To enable streaming by default, set the `Checkpoint.Dir` field in the [configuration](../../get-started/configuration.md) to a path that starts with `cedana://`.
 
 ## See also
 
