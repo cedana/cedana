@@ -1,6 +1,6 @@
 # Google Cloud Storage (GCS)
 
-Checkpoint/restoring to/from Google Cloud Storage is currently WIP.
+Checkpoint/restore to/from Google Cloud Storage is currently WIP.
 
 ## See also
 
