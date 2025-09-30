@@ -1,6 +1,6 @@
 ## Health checks
 
-The daemon can be health checked to ensure it fully supports the system and is ready to accept requests.
+Cedana can be health checked to ensure it fully supports the system and is ready to accept requests.
 
 ### Basic
 
@@ -10,7 +10,7 @@ To do a simple health check, ensure the daemon is running, and then run:
 cedana daemon check
 ```
 
-This just checks for basic C/R capabilities on the host.
+This just checks for basic checkpoint/restore capabilities on the host.
 
 ### Complete
 
@@ -59,7 +59,7 @@ Looks good, with 2 warning(s).
 
 ```
 
-### Daemon-less
+### Without daemon
 
 You can also run the health check directly, without the daemon:
 
@@ -67,4 +67,4 @@ You can also run the health check directly, without the daemon:
 cedana check --full
 ```
 
-Warnings are shown in yellow and are usually related to system configuration or performance. They are not critical but can affect the performance of the daemon.
+Warnings are shown in yellow and are usually related to system configuration or performance. They are not critical but may affect the performance of Cedana.

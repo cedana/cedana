@@ -1,11 +1,15 @@
 ## API reference
 
-The Cedana daemon exposes a gRPC interface. Please check [daemon.proto](https://github.com/cedana/cedana-api/blob/940a0bdb105caa782d8151741065aa808c3e4b30/cedana/daemon/daemon.proto).
+### gRPC
 
-The API is under development and currently unstable. 
+The Cedana daemon exposes a gRPC interface. Please check [daemon.proto](https://github.com/cedana/cedana-api/blob/main/cedana/daemon/daemon.proto). The CLI is simply a client of the daemon and uses this API.
 
 ### SDK
 
-For Go, we export a friendly [client package](https://github.com/cedana/cedana/tree/d618239b6052cda14f2117123414f8054f2d47ba/pkg/client), which has good defaults.
+#### Golang
 
-For other languages, you can directly import generated SDKs from our [Buf respository](https://buf.build/cedana/cedana/sdks/main:protobuf).
+For Go, we export a friendly [client package](https://github.com/cedana/cedana/tree/main/pkg/client), which has good defaults.
+
+#### Other languages
+
+For other languages, you can directly import SDKs from our [Buf respository](https://buf.build/cedana/cedana/sdks/main:protobuf).
