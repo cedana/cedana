@@ -81,4 +81,6 @@ You can checkpoint/restore normally as you do for CPU workloads. See [checkpoint
 
 This is currently not supported. You should use the Cedana GPU plugin for multi-process/node workloads.
 
+{% hint style="info" %}
 For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+{% endhint %}

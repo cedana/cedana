@@ -72,4 +72,6 @@ For checkpoint _only_ the rootfs, set the `--rootfs-only` flag. For example:
 cedana dump containerd <container_id> --dir <dump-dir> --image <new-image-name> --rootfs-only
 ```
 
+{% hint style="info" %}
 For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+{% endhint %}

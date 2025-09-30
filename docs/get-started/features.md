@@ -1,4 +1,4 @@
-# Feature matrix
+# Features
 
 Run `cedana features` (shorthand for `cedana plugin features`) to see the features currently supported by each plugin.
 
@@ -40,6 +40,10 @@ Not showing external plugins: criu, criu/cuda, gpu, streamer, k8s/runtime-shim
 
 When developing a new plugin, or adding a feature to a plugin, it's helpful to see more information on any compatibility issues. Use `cedana features --errors` to see any incompatibility errors.
 
+{% hint style="info" %}
 Check out the guide on [writing plugins](../developer-guides/writing_plugins.md) for more information.
+{% endhint %}
 
+{% hint style="info" %}
 Check out the [CLI reference](../references/cli/cedana_plugin.md) for all plugin-related subcommands.
+{% endhint %}

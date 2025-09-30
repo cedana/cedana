@@ -6,13 +6,13 @@ For now, you can either install the daemon from source, or use the released bina
 
 Since Cedana depends on [CRIU](https://criu.org), you will need to ensure it's dependencies are installed.
 
-### Using apt (Debian/Ubuntu)
+#### Using apt (Debian/Ubuntu)
 
 ```sh
 apt-get install -y libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel
 ```
 
-### Using dnf/yum (Fedora/CentOS)
+#### Using dnf/yum (Fedora/CentOS)
 
 ```sh
 yum install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1
@@ -20,19 +20,19 @@ yum install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev li
 
 ## Build from source
 
-### Build
+#### Build
 
 ```sh
 make cedana
 ```
 
-### Install
+#### Install
 
 ```sh
 make install
 ```
 
-### Build and install (with all plugins)
+#### Build and install (with all plugins)
 
 ```sh
 make all
@@ -66,7 +66,9 @@ sudo cedana plugin install criu
 
 This version of CRIU is not a requirement for Cedana, but it is recommended for certain features, such as [checkpoint/restore streamer](../guides/streamer/cr.md).
 
+{% hint style="info" %}
 To install CRIU independently, see the [CRIU installation guide](https://criu.org/Installation).
+{% endhint %}
 
 ## Start the daemon
 
@@ -74,11 +76,15 @@ To install CRIU independently, see the [CRIU installation guide](https://criu.or
 The daemon requires root privileges for checkpoint/restore operations. Check the [CLI reference](../references/cli/cedana.md) for all options.
 {% endhint %}
 
+#### Direct
+
 You can directly start the daemon with:
 
 ```sh
 sudo cedana daemon start
 ```
+
+#### Systemd
 
 If you're a _systemd_ user, you may also install it as a service (if built from source):
 
@@ -86,7 +92,9 @@ If you're a _systemd_ user, you may also install it as a service (if built from 
 make install-systemd
 ```
 
+{% hint style="info" %}
 Try `make help` to see all available targets.
+{% endhint %}
 
 ## Health check the daemon
 

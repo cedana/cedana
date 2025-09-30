@@ -34,6 +34,7 @@ You can also list specific plugins by name & version:
 ```sh
 cedana plugin list gpu@v0.5.0 streamer@v0.0.5
 ```
+
 ```sh
 PLUGIN    SIZE    STATUS     INSTALLED VERSION  AVAILABLE VERSION  PUBLISHED
 gpu       48 MiB  available                     v0.5.0             one day ago
@@ -63,7 +64,9 @@ Notice the `LATEST VERSION` column shows `local` for locally built plugins.
 
 Instead of depending on current directory, you can also specify the paths to search for locally built plugins by setting the `CEDANA_PLUGINS_LOCAL_SEARCH_PATH` (paths are colon-separated just like the `PATH` env var). This convenient for developers who are working on multiple plugins at once.
 
+{% hint style="info" %}
 Check out the guide on [writing plugins](../developer-guides/writing_plugins.md) if you're interested in building your own plugins.
+{% endhint %}
 
 ## Install
 
@@ -81,18 +84,21 @@ To uninstall a plugin, use:
 sudo cedana plugin remove <plugin> <plugin> ...
 ```
 
+{% hint style="info" %}
 Check out the [CLI reference](../references/cli/cedana_plugin.md) for all plugin-related subcommands.
+{% endhint %}
 
 ## Features
+
 To see which features are supported by the installed plugins, use:
 
 ```sh
 cedana plugin features
 ```
 
-See [feature matrix](features.md) for more information.
-
-```
+{% hint style="info" %}
+See [features](features.md) for more information.
+{% endhint %}
 
 ## Health check
 

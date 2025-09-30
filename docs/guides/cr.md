@@ -10,7 +10,7 @@ To checkpoint:
 cedana dump <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, `job`, etc. See [feature matrix](../get-started/features.md) for all plugins that support checkpointing.
+Where `<type>` can be `process`, `containerd`, `runc`, `job`, etc. See [features](../get-started/features.md) for all plugins that support checkpointing.
 
 For example, to checkpoint a process:
 
@@ -20,7 +20,9 @@ cedana dump process <PID> --dir /tmp
 
 A `--dir` flag can be used to specify the _parent_ directory where the checkpoint will be stored. If not provided, the checkpoint will be stored in the default checkpoint directory as specified in the [configuration](../get-started/configuration.md), or in `/tmp` if not set. You may also specify a `--name` flag to give a custom name to the checkpoint file.
 
+{% hint style="info" %}
 See [CLI reference](../references/cli/cedana_dump_process.md) for all available options for process checkpoint.
+{% endhint %}
 
 ## Restore
 
@@ -30,7 +32,7 @@ See [CLI reference](../references/cli/cedana_dump_process.md) for all available 
 cedana restore <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, `job`, etc. See [feature matrix](../get-started/features.md) for all plugins that support restoring.
+Where `<type>` can be `process`, `containerd`, `runc`, `job`, etc. See [features](../get-started/features.md) for all plugins that support restoring.
 
 For example, to restore a process:
 
@@ -43,7 +45,7 @@ Notice that for restore the flag is called `--path` instead of `--dir` (as in du
 ### Without daemon
 
 {% hint style="warning" %}
-Not all plugins support restoring without the daemon. Please check the [feature matrix](../get-started/features.md) for details.
+Not all plugins support restoring without the daemon. Please check [features](../get-started/features.md) for details.
 {% endhint %}
 
 It's also possible to restore directly as a child of the current shell command without the daemon:
@@ -54,7 +56,9 @@ cedana restore process --path <path-to-dump> --no-server
 
 This is useful for scenarios where you want to restore a process as a child of the current shell, for example, to restore a shell process and interact with it directly.
 
+{% hint style="info" %}
 See [CLI reference](../references/cli/cedana_restore_process.md) for all available options for process restore.
+{% endhint %}
 
 ## Managed checkpoint/restore
 
@@ -95,7 +99,9 @@ cedana restore process --path /tmp/xyz.tar.gz
 
 Supported values for `--compression` are `none`, `tar`, `gzip`, `lz4`, `zlib`.
 
+{% hint style="info" %}
 You may also specify the default compression algorithm in the [configuration](../get-started/configuration.md).
+{% endhint %}
 
 ## Remote storage
 
@@ -110,6 +116,5 @@ Cedana supports checkpointing/restoring to/from remote storage, through storage 
 - [Checkpoint/restore with GPUs](gpu/cr.md)
 - [Checkpoint/restore runc](runc/cr.md)
 - [Checkpoint/restore containerd](runc/cr.md)
-- [Checkpoint/restore kata](kata/kata.md)
 - [Checkpoint/restore streamer](streamer/cr.md)
 - [Checkpoint/restore kubernetes](k8s/cr.md)

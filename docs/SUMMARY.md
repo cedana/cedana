@@ -20,13 +20,6 @@
 - [Checkpoint/restore containerd](guides/containerd/cr.md)
 - [Checkpoint/restore streamer](guides/streamer/cr.md)
 - [Checkpoint/restore kubernetes](guides/k8s/cr.md)
-- [Checkpoint/restore kata](guides/kata/README.md)
-  - [how-to-create-custom-busybox-image](guides/kata/how-to-create-custom-busybox-image.md)
-  - [how-to-install-criu-in-guest](guides/kata/how-to-install-criu-in-guest.md)
-  - [how-to-install-on-aws](guides/kata/how-to-install-on-aws.md)
-  - [how-to-make-kernel-criu-compatible](guides/kata/how-to-make-kernel-criu-compatible.md)
-  - [how-to-make-rootfs-criu-compatible](guides/kata/how-to-make-rootfs-criu-compatible.md)
-  - [Checkpoint/Restore kata containers](guides/kata/kata.md)
 
 ### Storage guides
 
