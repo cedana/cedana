@@ -47,7 +47,7 @@ $(INSTALL_BIN_DIR)/$(BINARY): $(OUT_DIR)/$(BINARY)
 start: $(INSTALL_BIN_DIR)/$(BINARY) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
-install-systemd: install ## Install the systemd daemon
+install-systemd: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the systemd daemon
 	@echo "Installing systemd service..."
 	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
 
@@ -72,10 +72,10 @@ reset-config: ## Reset configuration files
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
-	$(SUDO) rm -rf /tmp/cedana*
-	$(SUDO) rm -rf /tmp/dump*
-	$(SUDO) rm -rf /dev/shm/cedana*
-	$(SUDO) rm -rf /run/cedana*
+	$(SUDO) rm -rf /tmp/*cedana*
+	$(SUDO) rm -rf /tmp/*dump*
+	$(SUDO) rm -rf /dev/shm/*cedana*
+	$(SUDO) rm -rf /run/*cedana*
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."

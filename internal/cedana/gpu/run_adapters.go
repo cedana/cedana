@@ -9,6 +9,8 @@ package gpu
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/features"
@@ -112,8 +114,26 @@ func ProcessInterception(next types.Run) types.Run {
 		}
 
 		env := req.GetEnv()
+		libPath := gpu.LibraryPaths()[0]
 
-		env = append(env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
+		// Create a temporary symlink names libcuda.so.1 pointing to libPath
+		tmpDir, err := os.MkdirTemp(os.TempDir(), "libcedana-gpu-")
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create temp directory for GPU library symlink: %s", err)
+		}
+
+		err = os.Chown(tmpDir, int(req.GetUID()), int(req.GetGID()))
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to chown temp directory for GPU library symlink: %s", err)
+		}
+
+		libSymlink := filepath.Join(tmpDir, "libcuda.so.1")
+		err = os.Symlink(libPath, libSymlink)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create symlink for GPU library: %s", err)
+		}
+
+		env = append(env, "LD_PRELOAD="+libSymlink)
 		env = append(env, "NCCL_SHM_DISABLE=1") // Disable for now to avoid conflicts with NCCL's shm usage
 		env = append(env, "CEDANA_GPU_ID="+id)
 
