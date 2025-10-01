@@ -533,3 +533,33 @@ teardown_file() {
     run cedana restore job 999999999
     assert_failure
 }
+
+
+# bats test_tags=restore
+@test "c/r mpi_pi_loop job w/ available cores" {
+    jid=$(unix_nano)
+
+    num_cpus=$(nproc)
+    echo "Num CPUs: $num_cpus"
+    run cedana run process -a --jid "$jid" -- mpirun --allow-run-as-root -np "$num_cpus" /cedana-samples/cpu_smr/mpi/mpi_pi_loop 100000000
+    assert_success
+
+    sleep 2
+
+    run cedana dump job "$jid"
+    assert_success
+
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    sleep 1
+
+    run cedana restore job "$jid"
+    assert_success
+
+    run cedana ps
+    assert_success
+    assert_output --partial "$jid"
+
+    run cedana job kill "$jid"
+}

@@ -382,12 +382,21 @@ func GetCmd(ctx context.Context, pid uint32) (string, []string, error) {
 	return name, args, nil
 }
 
-func IsTTY(path string) (bool, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return false, err
+func IsTTY(path string) (isTTY bool, err error) {
+	statInfo, _ := os.Stat(path)
+	pathFromProc, _ := os.Readlink(path)
+
+	if statInfo.Mode()&os.ModeDevice != 0 && statInfo.Mode()&os.ModeCharDevice != 0 {
+		actualPath := pathFromProc
+
+		tempFile, openErr := os.OpenFile(actualPath, os.O_RDONLY|syscall.O_NOCTTY|syscall.O_NONBLOCK, 0)
+		if openErr == nil {
+			defer tempFile.Close()
+			isTTY = isatty.IsTerminal(tempFile.Fd())
+		}
 	}
-	return isatty.IsTerminal(file.Fd()), nil
+
+	return isTTY, err
 }
 
 func Getenv(env []string, key string) string {
