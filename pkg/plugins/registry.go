@@ -89,7 +89,7 @@ var Registry = []Plugin{
 	},
 	{
 		Name:      "slurm",
-		Type:      SUPPORTED,
+		Type:      EXTERNAL,
 		Libraries: []Binary{{Name: "libcedana-slurm.so", InstallDir: "/usr/lib64/slurm"}},
 	},
 }
