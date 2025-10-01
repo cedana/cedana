@@ -1,6 +1,5 @@
 name: GetRunner
 
-
 permissions:
   contents: read
   packages: read
@@ -10,7 +9,6 @@ permissions:
 
 on:
   workflow_call:
-    # Add this section to expose job outputs as workflow outputs
     outputs:
       gpu_type:
         description: "The GPU type label for the dynamic runner."
@@ -18,7 +16,6 @@ on:
       instance_id:
         description: "The instance ID of the created runner."
         value: ${{ jobs.create-runner.outputs.instance_id }}
-
 
 jobs:
   create-runner:
@@ -28,34 +25,42 @@ jobs:
       instance_id: ${{ steps.create_runner.outputs.instance_id }}
       gpu_type: ${{ steps.create_runner.outputs.gpu_type }}
     steps:
-    - name: Create runner
-      id: create_runner
-      run: |
-        GPU_TYPE="A100"
-        echo '{
-          "owner": "${{ github.repository_owner }}",
-          "repo": "${{ github.event.repository.name }}",
-          "labels": ["self-hosted", "'$GPU_TYPE'"],
-          "num_gpus": 1,
-          "gpu_type": "'$GPU_TYPE'"
-        }' > request.json
+      - name: Create runner
+        id: create_runner
+        run: |
+          set -euo pipefail
+          GPU_TYPE="A100"
 
-        response=$(curl --fail -s -X POST \
-          -H "Content-Type: application/json" \
-          -d @request.json \
-          ${{ secrets.CEDANA_GA_RUNNER_URL }}/v1/runners/create)
+          # build JSON safely
+          request=$(jq -n \
+            --arg owner "${{ github.repository_owner }}" \
+            --arg repo "${{ github.repository }}" \
+            --arg gpu "$GPU_TYPE" \
+            '{owner:$owner, repo:$repo, labels:["self-hosted",$gpu], num_gpus:1, gpu_type:$gpu}')
+          echo "$request" > request.json
 
-        instance_id=$(echo $response | jq -r .instance_id)
-        echo "instance_id=$instance_id" >> $GITHUB_OUTPUT
+          response=$(curl --fail -s -X POST \
+            -H "Content-Type: application/json" \
+            -d @request.json \
+            "${{ secrets.CEDANA_GA_RUNNER_URL }}/v1/runners/create")
+
+          # parse response (adjust jq paths if your API uses different field names)
+          instance_id=$(echo "$response" | jq -r '.instance_id // empty')
+          runner_name=$(echo "$response" | jq -r '.runner_name // empty')
+          gpu_type=$(echo "$response" | jq -r '.gpu_type // empty')
+
+          echo "instance_id=$instance_id" >> "$GITHUB_OUTPUT"
+          echo "runner_name=$runner_name" >> "$GITHUB_OUTPUT"
+          echo "gpu_type=$gpu_type" >> "$GITHUB_OUTPUT"
 
   validate-runner:
     needs: create-runner
-    runs-on: ${{ fromJSON(format('["self-hosted","{0}"]', needs.create-runner.outputs.gpu_type)) }}
+    runs-on: ["self-hosted", "${{ needs.create-runner.outputs.gpu_type }}"]
     timeout-minutes: 40
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
-    - name: Run a test
-      run: |
-        echo "Hello from the new runner!"
-        ls -la
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Run a test
+        run: |
+          echo "Hello from the new runner!"
+          ls -la
