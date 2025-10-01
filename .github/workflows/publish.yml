@@ -1,5 +1,9 @@
 name: Publish
 
+permissions:
+  contents: write
+  packages: write
+
 on:
   workflow_call:
     inputs:
@@ -25,14 +29,14 @@ on:
         default: cedana
       dockerhub:
         type: boolean
-        description: "Publish images to Docker Hub"
+        description: "Publish images to DockerHub"
         required: false
         default: false
-      image_name:
-        type: string
-        description: "Name of the image to publish"
+      dockerhub_latest:
+        type: boolean
+        description: "Publish latest tag(s) to DockerHub"
         required: false
-        default: cedana/cedana-helper
+        default: false
       post_summary:
         type: boolean
         description: "Post summary to Slack"
@@ -137,6 +141,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-runc.so to Cloudsmith
         id: push-libcedana-runc
@@ -152,6 +157,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-containerd.so to Cloudsmith
         id: push-libcedana-containerd
@@ -167,6 +173,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-crio.so to Cloudsmith
         id: push-libcedana-crio
@@ -182,6 +189,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-k8s.so to Cloudsmith
         id: push-libcedana-k8s
@@ -197,6 +205,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-cloud-hypervisor.so to Cloudsmith
         id: push-libcedana-cloud-hypervisor
@@ -212,6 +221,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-kata.so to Cloudsmith
         id: push-libcedana-kata
@@ -227,6 +237,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-storage-cedana.so to Cloudsmith
         id: push-libcedana-storage-cedana
@@ -242,6 +253,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-storage-s3.so to Cloudsmith
         id: push-libcedana-storage-s3
@@ -257,6 +269,7 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
       - name: Push libcedana-storage-gcs.so to Cloudsmith
         id: push-libcedana-storage-gcs
@@ -272,21 +285,67 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+          no-wait-for-sync: true
 
   dockerhub:
     name: DockerHub (multi-arch)
     if: inputs.dockerhub
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - name: Download digests
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           path: /tmp/digests
           pattern: digests-*
           merge-multiple: true
+
+      - name: Download image name
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: /tmp/image-name
+          name: image-name
+          merge-multiple: true
+
+      - name: Download digests (test, latest)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: /tmp/test-digests-latest
+          pattern: test-digests-latest-*
+          merge-multiple: true
+
+      - name: Download digests (test, CUDA)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: /tmp/test-digests-cuda
+          pattern: test-digests-cuda-*
+          merge-multiple: true
+
+      - name: Download image name (test)
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          path: /tmp/test-image-name
+          name: test-image-name
+
+      - name: Check directories and set variables
+        id: check_dirs
+        run: |
+          if [ -d /tmp/digests ]; then
+            echo "DIGESTS_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "IMAGE_NAME=$(cat /tmp/image-name/name.txt)" >> $GITHUB_OUTPUT
+          else
+            echo "DIGESTS_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
+          if [ -d /tmp/test-digests-latest ] && [ -d /tmp/test-digests-cuda ]; then
+            echo "TEST_DIGESTS_EXISTS=true" >> $GITHUB_OUTPUT
+            echo "TEST_IMAGE_NAME=$(cat /tmp/test-image-name/name.txt)" >> $GITHUB_OUTPUT
+          else
+            echo "TEST_DIGESTS_EXISTS=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -298,43 +357,81 @@ jobs:
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Docker meta
+        if: steps.check_dirs.outputs.DIGESTS_EXISTS == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ inputs.image_name }}
+            ${{ steps.check_dirs.outputs.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ github.sha }}
             type=raw,value=${{ github.head_ref || github.ref_name }}
+            ${{ inputs.dockerhub_latest && 'type=raw,value=latest' || '' }}
 
       - name: Create manifest list and push
+        if: steps.check_dirs.outputs.DIGESTS_EXISTS == 'true'
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf '${{ inputs.image_name }}@sha256:%s ' *)
+            $(printf '${{ steps.check_dirs.outputs.IMAGE_NAME }}@sha256:%s ' *)
 
       - name: Inspect image
+        if: steps.check_dirs.outputs.DIGESTS_EXISTS == 'true'
         run: |
           # check if push was successful
-          docker buildx imagetools inspect ${{ inputs.image_name }}:${{ steps.meta.outputs.version }}
+          docker buildx imagetools inspect ${{ steps.check_dirs.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
           # check if commit sha matches with the latest commit sha
           # we only match docker hub image as both images should be the same
-          echo $(docker run -i --rm ${{ inputs.image_name }}:${{ steps.meta.outputs.version }} -c "cedana -v")
+          echo $(docker run -i --rm ${{ steps.check_dirs.outputs.IMAGE_NAME }}:${{ steps.meta.outputs.version }} -c "cedana -v")
+
+      - name: Docker meta (test, latest)
+        if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
+        id: meta-test-latest
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ github.sha }}
+            type=raw,value=${{ github.head_ref || github.ref_name }}
+            ${{ inputs.dockerhub_latest && 'type=raw,value=latest' || '' }}
+
+      - name: Create manifest list and push (test, latest)
+        if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
+        working-directory: /tmp/test-digests-latest
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Docker meta (test, CUDA)
+        if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
+        id: meta-test-cuda
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ github.sha }}
+            type=raw,value=${{ github.head_ref || github.ref_name }}
+            ${{ inputs.dockerhub_latest && 'type=raw,value=cuda' || '' }}
+
+      - name: Create manifest list and push (test, CUDA)
+        if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
+        working-directory: /tmp/test-digests-cuda
+        run: |
+          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}@sha256:%s ' *)
 
   post-summary:
     name: Post Summary
     runs-on: ubuntu-latest
     needs: ["github", "cloudsmith", "dockerhub"]
     if: inputs.post_summary
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          submodules: recursive
           fetch-tags: true
 
       - name: Get tag

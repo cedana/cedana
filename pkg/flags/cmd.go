@@ -19,7 +19,7 @@ var (
 	PathFlag          = Flag{Full: "path", Short: "p"}
 	PidFileFlag       = Flag{Full: "pid-file"}
 	NoServerFlag      = Flag{Full: "no-server"}
-	StreamFlag        = Flag{Full: "stream"}
+	StreamsFlag       = Flag{Full: "streams"}
 	WorkingDirFlag    = Flag{Full: "working-dir", Short: "w"}
 	JidFlag           = Flag{Full: "jid", Short: "j"}
 	GpuEnabledFlag    = Flag{Full: "gpu-enabled", Short: "g"}
@@ -27,7 +27,7 @@ var (
 	AttachFlag        = Flag{Full: "attach", Short: "a"}
 	AttachableFlag    = Flag{Full: "attachable"}
 	AllFlag           = Flag{Full: "all", Short: "a"}
-	LogFlag           = Flag{Full: "log"}
+	OutFlag           = Flag{Full: "out", Short: "o"}
 	ExternalFlag      = Flag{Full: "external"}
 	FileLocksFlag     = Flag{Full: "file-locks"}
 	TypeFlag          = Flag{Full: "type", Short: "t"}
@@ -47,11 +47,10 @@ var (
 	LinkRemapFlag       = Flag{Full: "link-remap"}
 
 	// Parent flags
-	AddressFlag    = Flag{Full: "address"}
-	ProtocolFlag   = Flag{Full: "protocol"}
-	ConfigFlag     = Flag{Full: "config"}
-	ConfigDirFlag  = Flag{Full: "config-dir"}
-	DBFlag         = Flag{Full: "db"}
-	MetricsASRFlag = Flag{Full: "metrics-asr"}
-	ProfilingFlag  = Flag{Full: "profiling"}
+	AddressFlag   = Flag{Full: "address"}
+	ProtocolFlag  = Flag{Full: "protocol"}
+	ConfigFlag    = Flag{Full: "config"}
+	ConfigDirFlag = Flag{Full: "config-dir"}
+	DBFlag        = Flag{Full: "db"}
+	ProfilingFlag = Flag{Full: "profiling"}
 )

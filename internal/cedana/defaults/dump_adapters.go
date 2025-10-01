@@ -3,6 +3,7 @@ package defaults
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -31,6 +32,16 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 		if req.Criu.GetLeaveRunning() == false {
 			req.Criu.LeaveRunning = proto.Bool(config.Global.CRIU.LeaveRunning)
 		}
+
+		// Only override if unset
+		if req.Criu.ManageCgroupsMode == nil {
+			mode := criu_proto.CriuCgMode(criu_proto.CriuCgMode_value[strings.ToUpper(config.Global.CRIU.ManageCgroups)])
+			req.Criu.ManageCgroupsMode = &mode
+			req.Criu.ManageCgroups = proto.Bool(true) // For backward compatibility
+		}
+
+		req.Criu.NotifyScripts = proto.Bool(true)
+		req.Criu.EvasiveDevices = proto.Bool(true)
 
 		return next(ctx, opts, resp, req)
 	}

@@ -34,7 +34,7 @@ func init() {
 	dumpCmd.PersistentFlags().
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
 	dumpCmd.PersistentFlags().
-		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the dump (using <n> parallel streams)")
+		Int32P(flags.StreamsFlag.Full, flags.StreamsFlag.Short, 0, "number of streams to use for dump (0 for no streaming)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.LeaveRunningFlag.Full, flags.LeaveRunningFlag.Short, false, "leave the process running after dump")
 	dumpCmd.PersistentFlags().
@@ -83,7 +83,7 @@ var dumpCmd = &cobra.Command{
 		dir, _ := cmd.Flags().GetString(flags.DirFlag.Full)
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression, _ := cmd.Flags().GetString(flags.CompressionFlag.Full)
-		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
+		streams, _ := cmd.Flags().GetInt32(flags.StreamsFlag.Full)
 		leaveRunning, _ := cmd.Flags().GetBool(flags.LeaveRunningFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
@@ -98,7 +98,7 @@ var dumpCmd = &cobra.Command{
 			Dir:         dir,
 			Name:        name,
 			Compression: compression,
-			Stream:      int32(stream),
+			Streams:     int32(streams),
 			Criu: &criu.CriuOpts{
 				LeaveRunning:    proto.Bool(leaveRunning),
 				TcpEstablished:  proto.Bool(tcpEstablished),
@@ -108,6 +108,7 @@ var dumpCmd = &cobra.Command{
 				ShellJob:        proto.Bool(shellJob),
 				LinkRemap:       proto.Bool(linkRemap),
 			},
+			Action:        daemon.DumpAction_DUMP,
 			GPUFreezeType: gpuFreezeType,
 		}
 

@@ -1,0 +1,81 @@
+name: Manual (publish)
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_image:
+        type: boolean
+        description: "Build Docker image"
+        required: false
+        default: false
+      image_name:
+        type: string
+        description: "Name of the Docker image to build"
+        required: false
+        default: "cedana/cedana-helper-test"
+      build_test_image:
+        type: boolean
+        description: "Build test Docker image"
+        required: false
+        default: false
+      test_image_name:
+        type: string
+        description: "Name of the test Docker image to build"
+        required: false
+        default: "cedana/cedana-test"
+      github:
+        type: boolean
+        description: "Publish to GitHub releases"
+        required: false
+        default: false
+      cloudsmith:
+        type: boolean
+        description: "Publish to Cloudsmith"
+        required: false
+        default: false
+      cloudsmith_repo:
+        type: string
+        description: "Cloudsmith repository to publish to"
+        required: false
+        default: cedana-alpha
+      dockerhub:
+        type: boolean
+        description: "Publish images to DockerHub"
+        required: false
+        default: false
+      dockerhub_latest:
+        type: boolean
+        description: "Publish latest tag(s) to DockerHub"
+        required: false
+        default: false
+      post_summary:
+        type: boolean
+        description: "Post summary to Slack"
+        required: false
+        default: false
+
+jobs:
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      cedana: true
+      plugins: true
+      image: ${{ inputs.build_image }}
+      image_name: ${{ inputs.image_name }}
+      test_image: ${{ inputs.build_test_image }}
+      test_image_name: ${{ inputs.test_image_name }}
+
+  publish:
+    name: Publish
+    uses: ./.github/workflows/publish.yml
+    needs: build
+    secrets: inherit
+    with:
+      github: ${{ inputs.github }}
+      cloudsmith: ${{ inputs.cloudsmith }}
+      cloudsmith_repo: ${{ inputs.cloudsmith_repo }}
+      dockerhub: ${{ inputs.dockerhub }}
+      dockerhub_latest: ${{ inputs.dockerhub_latest }}
+      post_summary: ${{ inputs.post_summary }}

@@ -8,7 +8,7 @@ Welcome to Cedana! This repository is the home of the Cedana daemon and the low-
 
 We build on top of and leverage [CRIU](https://github.com/checkpoint-restore/criu) to provide userspace checkpoint/restore of processes and the many different abstraction levels that lie above. We also provide the ability to checkpoint/restore rootfs in both containerd and CRIO interfaces for full container checkpoint/restores.
 
-For a list of supported container runtimes, see our [feature matrix](https://docs.cedana.ai/daemon/get-started/features).
+For a list of supported container runtimes, see [features](https://docs.cedana.ai/daemon/get-started/features).
 
 We can monitor, migrate and automate checkpoints across a real-time network and compute configuration enabling ephemeral and hardware agnostic compute. See [our website](https://cedana.ai) for more information about our managed product.
 

@@ -167,3 +167,47 @@ func ListLeaves(i interface{}, tag ...string) []string {
 
 	return fields
 }
+
+// WalkTree recursively walks a tree-structured struct using reflection,
+// calling fn for every element in the specified valuesField slice.
+// If fn returns false, the walk stops immediately. If true, it continues.
+// childrenField specifies which struct field contains the slice of child nodes.
+// The field names should match exactly (including capitalization).
+func WalkTree[T any](
+	node any,
+	valuesField string,
+	childrenField string,
+	fn func(T) bool,
+) bool {
+	v := reflect.ValueOf(node)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return true // continue
+	}
+
+	// Process values field
+	values := v.FieldByName(valuesField)
+	if values.IsValid() && values.Kind() == reflect.Slice {
+		for i := 0; i < values.Len(); i++ {
+			if !fn(values.Index(i).Interface().(T)) {
+				return false // stop
+			}
+		}
+	}
+
+	// Process children field
+	children := v.FieldByName(childrenField)
+	if children.IsValid() && children.Kind() == reflect.Slice {
+		for i := 0; i < children.Len(); i++ {
+			child := children.Index(i)
+			if child.Kind() == reflect.Ptr || child.Kind() == reflect.Struct {
+				if !WalkTree(child.Interface(), valuesField, childrenField, fn) {
+					return false // stop
+				}
+			}
+		}
+	}
+	return true // continue
+}

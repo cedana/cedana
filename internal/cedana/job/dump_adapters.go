@@ -29,7 +29,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			}
 
 			if !job.IsRunning() {
-				return nil, status.Errorf(codes.FailedPrecondition, "job %s is not running", jid)
+				return nil, status.Errorf(codes.FailedPrecondition, "job %s is not running (status: %s)", jid, job.Status())
 			}
 
 			// Fill in dump request details based on saved job info
@@ -50,9 +50,9 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 				return code, err
 			}
 
-			job.SetState(resp.GetState())
+			job.Sync(resp.GetState())
 
-			jobs.AddCheckpoint(jid, resp.GetPath())
+			jobs.AddCheckpoint(jid, resp.GetPaths())
 
 			return code, nil
 		}

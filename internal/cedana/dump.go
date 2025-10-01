@@ -30,24 +30,17 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
 
-	setupDumpFS := filesystem.SetupDumpFS
-	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		setupDumpFS = streamer.SetupDumpFS
-	}
-
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
-		pluginDumpStorage,
-		setupDumpFS,
 
+		pluginDumpStorage,    // detects and plugs in the storage to use
 		pluginDumpMiddleware, // middleware from plugins
 
-		// Process state-dependent adapters
+		// By now we should have the PID
 		process.FillProcessStateForDump,
 		process.DetectIOUringForDump,
 		process.AddExternalFilesForDump,
-		process.CloseCommonFilesForDump,
 		network.DetectNetworkOptionsForDump,
 		gpu.Dump(s.gpus),
 
@@ -64,7 +57,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 	}
 	resp := &daemon.DumpResp{}
 
@@ -72,11 +65,14 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 
 	_, err := criu(dump)(ctx, opts, resp, req)
 	if err != nil {
+		log.Error().Err(err).Str("type", req.Type).Msg("dump failed")
 		return nil, err
 	}
 
-	log.Info().Str("path", resp.Path).Str("type", req.Type).Msg("dump successful")
-	resp.Messages = append(resp.Messages, "Dumped to "+resp.Path)
+	log.Info().Strs("paths", resp.Paths).Str("type", req.Type).Msg("dump successful")
+	for _, path := range resp.Paths {
+		resp.Messages = append(resp.Messages, "Dumped to "+path)
+	}
 
 	return resp, nil
 }
@@ -139,6 +135,16 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 
 		opts.Storage = storage
 
-		return next(ctx, opts, resp, req)
+		streams := req.Streams
+		if streams == 0 {
+			streams = config.Global.Checkpoint.Streams
+		}
+
+		filesystem := filesystem.DumpFilesystem
+		if streams > 0 {
+			filesystem = streamer.DumpFilesystem(streams)
+		}
+
+		return next.With(filesystem)(ctx, opts, resp, req)
 	}
 }

@@ -5,7 +5,7 @@ package config
 type (
 	// Cedana configuration. Each of the below fields can also be set
 	// through an environment variable with the same name, prefixed, and in uppercase. E.g.
-	// `Metrics.ASR` can be set with `CEDANA_METRICS_ASR`. The `env_aliases` tag below specifies
+	// `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. The `env_aliases` tag below specifies
 	// alternative (alias) environment variable names (comma-separated).
 	Config struct {
 		// Address to use for incoming/outgoing connections
@@ -16,6 +16,8 @@ type (
 		LogLevel string `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
 		// LogLevelNoServer is the log level used when direct --no-server run/restore is used. This is separate from LogLevel so as to avoid cluttering the process output.
 		LogLevelNoServer string `json:"log_level_no_server" key:"log_level_no_server" yaml:"log_level_no_server" mapstructure:"log_level_no_server"`
+		// Metrics is whether to enable metrics collection and observability
+		Metrics bool `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
 
 		// Connection settings
 		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`
@@ -25,8 +27,6 @@ type (
 		DB DB `json:"db" key:"db" yaml:"db" mapstructure:"db"`
 		// Profiling settings
 		Profiling Profiling `json:"profiling" key:"profiling" yaml:"profiling" mapstructure:"profiling"`
-		// Metrics settings
-		Metrics Metrics `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
 		// Client settings
 		Client Client `json:"client" key:"client" yaml:"client" mapstructure:"client"`
 		// CRIU settings and defaults
@@ -35,6 +35,9 @@ type (
 		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
+
+		// AWS settings
+		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
 	}
 
 	Connection struct {
@@ -46,12 +49,14 @@ type (
 
 	Checkpoint struct {
 		// Dir is the default directory to store checkpoints
+		// - "cedana://<path>" for Cedana-managed global storage (recommended)
+		// - "s3://<path>" for your S3 storage
+		// - "<path>" for node-local storage
 		Dir string `json:"dir" key:"dir" yaml:"dir" mapstructure:"dir"`
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
-		// Stream (for streaming checkpoints) specifies the number of parallel streams to use.
-		// 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.
-		Stream int32 `json:"stream" key:"stream" yaml:"stream" mapstructure:"stream"`
+		// Streams specifies the number of parallel streams to use when checkpointing.
+		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
 	}
 
 	DB struct {
@@ -68,13 +73,6 @@ type (
 		Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
 	}
 
-	Metrics struct {
-		// ASR sets whether to enable ASR metrics
-		ASR bool `json:"asr" key:"asr" yaml:"asr" mapstructure:"asr"`
-		// Otel sets whether to enable OpenTelemetry metrics
-		Otel bool `json:"otel" key:"otel" yaml:"otel" mapstructure:"otel" env_aliases:"CEDANA_OTEL_ENABLED"`
-	}
-
 	Client struct {
 		// Wait for ready ensures client requests block if the daemon is not up yet
 		WaitForReady bool `json:"wait_for_ready" key:"wait_for_ready" yaml:"wait_for_ready" mapstructure:"wait_for_ready" env_aliases:"CEDANA_WAIT_FOR_READY"`
@@ -85,6 +83,8 @@ type (
 		BinaryPath string `json:"binary_path" key:"binary_path" yaml:"binary_path" mapstructure:"binary_path"`
 		// LeaveRunning sets whether to leave the process running after checkpoint
 		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
+		// ManageCgroups sets the default cgroup C/R mode for CRIU (default, cg_none, props, soft, full, strict, ignore)
+		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
 	}
 
 	GPU struct {
@@ -99,7 +99,11 @@ type (
 		// FreezeType is the type of freeze to use for GPU processes (IPC, NCCL)
 		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
-		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		// LdLibPath holds any additional directories to search for GPU libraries
+		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
+		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
+		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 	}
 
 	Plugins struct {
@@ -109,5 +113,14 @@ type (
 		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
 		// Builds is the build versions to list/download for plugins (release, alpha)
 		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds"`
+	}
+
+	AWS struct {
+		// AccessKeyID is the AWS access key ID
+		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
+		// SecretAccessKey is the AWS secret access key
+		SecretAccessKey string `json:"secret_access_key" key:"secret_access_key" yaml:"secret_access_key" mapstructure:"secret_access_key" env_aliases:"AWS_SECRET_ACCESS_KEY"`
+		// Region is the AWS region to use (uses default region if not set)
+		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
 	}
 )

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 # get the directory of the script
 SOURCE="${BASH_SOURCE[0]}"
@@ -13,19 +13,44 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 
 source "$DIR"/utils.sh
 
-# NOTE: Assuming Go plugins like k8s, runc, containerd, etc are already built with the image
-PLUGINS="criu k8s/runtime-shim" # bare minimum plugins required for k8s
+CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
+CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
+CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION:-"latest"}
+CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
+CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
+
+# NOTE: Native plugins like k8s, runc, containerd, are already installed in the image
+PLUGINS="
+    criu@$CEDANA_PLUGINS_CRIU_VERSION \
+    k8s/runtime-shim@$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION \
+    streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
 
 # if gpu driver present then add gpu plugin
-if [ -d /proc/driver/nvidia/gpus/ ]; then
-    PLUGINS="$PLUGINS gpu"
-    echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
-    if [ ! -d /run/driver/nvidia ]; then
+if [ -f /.dockerenv ]; then # For tests inside a container
+    if command -v nvidia-smi >/dev/null 2>&1; then
+        PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
         echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
         if /sbin/ldconfig -p | grep -q libcuda.so.1; then
             echo "CUDA driver library found!"
         fi
+    fi
+elif [ -d /proc/driver/nvidia/gpus/ ]; then
+    if [ ! -d /run/driver/nvidia ]; then
+        # Check if the NVIDIA driver is installed by checking the version
+        # as nvidia-smi is not installed by GPU Operator
+        if [ -r /proc/driver/nvidia/version ] || command -v nvidia-smi >/dev/null 2>&1; then
+            PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
+            echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
+            if command -v nvidia-smi >/dev/null 2>&1; then
+                echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
+            fi
+            if /sbin/ldconfig -p | grep -q libcuda.so.1; then
+                echo "CUDA driver library found!"
+            fi
+        fi
     else
+        PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
+        echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
         # Bind mount /dev/shm to /run/nvidia/driver/dev/shm
         # This is required for the gpu-controller to work when chrooted into /run/nvidia/driver path
         mount --rbind /dev/shm /run/nvidia/driver/dev/shm
@@ -39,9 +64,13 @@ END_CHROOT
 fi
 
 # Install all plugins
-if [[ -n $PLUGINS ]]; then
+if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
     "$APP_PATH" plugin install $PLUGINS
 fi
+
+# Improve streaming performance
+echo 0 > /proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
+echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
 
 # install the shim configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
 if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
@@ -59,7 +88,7 @@ else
     PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
     if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
         echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
-        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
+        cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"

@@ -1,5 +1,8 @@
 name: Check
 
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
@@ -8,9 +11,6 @@ on:
         description: "Check shell scripts"
         required: false
         default: false
-
-permissions:
-  contents: read
 
 jobs:
   shell:

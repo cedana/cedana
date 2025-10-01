@@ -27,7 +27,7 @@ on:
         default: false
 
 concurrency:
-  group: cedana-pr-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.repository }}-pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -57,6 +57,9 @@ jobs:
       criu_version: release
       gpu_version: main
       streamer_version: main
+      helm_chart_version: main
+      controller_version: main
+      runtime_shim_version: cedana
 
   test:
     name: Test
@@ -75,10 +78,10 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
       samples: 1
       push_results: false
+      results_dataset: cedana_alpha
       post_summary_pr: true
-      post_summary_slack: false
-      comparison_patch: true
-      comparison_native: false
+      comparison_previous: true
+      comparison_runtime: false
 
   publish:
     name: Publish
@@ -90,5 +93,4 @@ jobs:
       cloudsmith: true
       cloudsmith_repo: cedana-alpha
       dockerhub: true
-      image_name: cedana/cedana-helper-test
       post_summary: false

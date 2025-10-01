@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -33,15 +34,14 @@ const (
 )
 
 const (
-	CAPTURE_SOCK        = "streamer-capture.sock"
-	SERVE_SOCK          = "streamer-serve.sock"
-	INIT_PROGRESS_MSG   = "socket-init"
-	STOP_LISTENER_MSG   = "stop-listener"
-	IMG_FILE_PATTERN    = "^img-*"
-	IMG_FILE_FORMATTER  = "img-%d"
-	CONNECTION_TIMEOUT  = 1 * time.Minute
-	DEFAULT_PARALLELISM = 4
-	PIPE_SIZE           = 4 * utils.MEBIBYTE
+	CAPTURE_SOCK       = "streamer-capture.sock"
+	SERVE_SOCK         = "streamer-serve.sock"
+	INIT_PROGRESS_MSG  = "socket-init"
+	STOP_LISTENER_MSG  = "stop-listener"
+	IMG_FILE_PATTERN   = "^img-*"
+	IMG_FILE_FORMATTER = "img-%d"
+	CONNECTION_TIMEOUT = 5 * time.Minute
+	PIPE_SIZE          = 4 * utils.MEBIBYTE
 )
 
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
@@ -63,22 +63,24 @@ func NewStreamingFs(
 	imagesDir string,
 	storage cedana_io.Storage,
 	storagePath string,
-	parallelism int32,
+	streams int32,
 	mode Mode,
 	compressions ...string,
 ) (fs *Fs, wait func() error, err error) {
-	if parallelism < 1 {
-		parallelism = DEFAULT_PARALLELISM
+	if streams < 1 {
+		return nil, nil, fmt.Errorf("invalid number of streams: %d", streams)
 	}
 	var compression string
 	if len(compressions) > 0 {
 		compression = compressions[0]
 	}
 
+	log := log.With().Str("plugin", "streamer").Str("path", storagePath).Int32("streams", streams).Str("mode", mode.String()).Logger()
+
 	// Create pipes for reading and writing data to/from the streamer to dir
 	var readFds, writeFds []*os.File
 	var shardFds []string
-	for i := range parallelism {
+	for i := range streams {
 		r, w, err := os.Pipe()
 		unix.FcntlInt(r.Fd(), unix.F_SETPIPE_SZ, PIPE_SIZE) // ignore if fails
 		if err != nil {
@@ -92,12 +94,12 @@ func NewStreamingFs(
 	// Start IO on the pipes from the dir
 	wg := &sync.WaitGroup{}
 	io := &sync.WaitGroup{}
-	ioErr := make(chan error, parallelism)
-	paths, err := imgPaths(storage, storagePath, mode, parallelism)
+	ioErr := make(chan error, streams)
+	paths, err := imgPaths(storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
 	}
-	for i := range parallelism {
+	for i := range streams {
 		switch mode {
 		case READ_ONLY:
 			defer readFds[i].Close()
@@ -192,7 +194,7 @@ func NewStreamingFs(
 			if lastMsg == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			log.Trace().Str("context", "streamer").Str("dir", imagesDir).Msg(lastMsg)
+			log.Trace().Msg(lastMsg)
 		}
 	}()
 
@@ -213,7 +215,7 @@ func NewStreamingFs(
 		if err != nil {
 			log.Trace().Err(err).Msg("streamer Wait()")
 		}
-		log.Debug().Str("dir", imagesDir).Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
+		log.Debug().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
 
 		// FIXME: Remove socket files. Should be cleaned up by the streamer itself
 		matches, err := filepath.Glob(filepath.Join(imagesDir, "*.sock"))
@@ -245,7 +247,7 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("failed to connect to streamer: %w: %s", err, lastMsg)
 	}
 	fs.conn = conn.(*net.UnixConn)
-	log.Debug().Str("dir", imagesDir).Msg("streamer connected")
+	log.Debug().Msg("streamer connected")
 
 	wait = func() error {
 		// Stop the listener, and wait for all IO to finish
@@ -256,7 +258,11 @@ func NewStreamingFs(
 		cmd.Process.Signal(syscall.SIGTERM)
 		wg.Wait()
 		close(ioErr)
-		return <-ioErr
+		var err error
+		for e := range ioErr {
+			err = errors.Join(err, e)
+		}
+		return err
 	}
 
 	return fs, wait, nil
@@ -328,6 +334,17 @@ func (fs *Fs) Name() string {
 ////////////////////
 // Helper Methods //
 ////////////////////
+
+func (m Mode) String() string {
+	switch m {
+	case READ_ONLY:
+		return "read-only"
+	case WRITE_ONLY:
+		return "write-only"
+	default:
+		return "unknown"
+	}
+}
 
 // Opens a pair of file descriptors for reading and writing through the streamer
 func (fs *Fs) openFd(name string) (int, error) {
@@ -402,6 +419,9 @@ func (fs *Fs) openFd(name string) (int, error) {
 	}
 
 	sock, err := fs.conn.File()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get file from connection: %w", err)
+	}
 	defer sock.Close()
 	rights := syscall.UnixRights(streamerFd)
 	err = syscall.Sendmsg(int(sock.Fd()), nil, rights, nil, 0)
@@ -433,8 +453,8 @@ func (fs *Fs) stopListener() error {
 }
 
 // Returns a list of image paths found in the image directory.
-// Returns an error if the number of images found is not equal to the parallelism.
-func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int32) ([]string, error) {
+// Returns an error if the number of images found is not equal to the number of streams specified.
+func imgPaths(storage cedana_io.Storage, dir string, mode Mode, streams int32) ([]string, error) {
 	switch mode {
 	case READ_ONLY:
 		list, err := storage.ReadDir(dir)
@@ -450,18 +470,48 @@ func imgPaths(storage cedana_io.Storage, dir string, mode Mode, parallelism int3
 			}
 		}
 
-		if len(matches) != int(parallelism) {
-			return nil, fmt.Errorf("expected %d images, got %d. please specify correct parallelism", parallelism, len(matches))
+		if len(matches) != int(streams) {
+			return nil, fmt.Errorf("expected %d images, got %d. please specify correct number of streams", streams, len(matches))
 		}
 
 		return matches, nil
 	case WRITE_ONLY:
-		paths := make([]string, parallelism)
-		for i := range parallelism {
+		paths := make([]string, streams)
+		for i := range streams {
 			paths[i] = dir + "/" + fmt.Sprintf(IMG_FILE_FORMATTER, i)
 		}
 		return paths, nil
 	default:
 		return nil, fmt.Errorf("invalid mode: %d", mode)
 	}
+}
+
+func IsStreamable(storage cedana_io.Storage, dir string) (streams int32, err error) {
+	if storage == nil {
+		return 0, fmt.Errorf("storage is nil")
+	}
+
+	isDir, err := storage.IsDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to check if path is a directory: %w", err)
+	}
+
+	if !isDir {
+		return 0, nil
+	}
+
+	list, err := storage.ReadDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read dir: %w", err)
+	}
+
+	matches := 0
+	for _, entry := range list {
+		entry := filepath.Base(entry)
+		if regexp.MustCompile(IMG_FILE_PATTERN).MatchString(entry) {
+			matches++
+		}
+	}
+
+	return int32(matches), nil
 }

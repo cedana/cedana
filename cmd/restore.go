@@ -18,7 +18,6 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 
@@ -39,8 +38,6 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
-		Int32P(flags.StreamFlag.Full, flags.StreamFlag.Short, 0, "stream the restore (using <n> parallel streams)")
-	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "allow listening TCP sockets to exist on restore")
@@ -51,7 +48,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringSliceP(flags.ExternalFlag.Full, flags.ExternalFlag.Short, nil, "resources from external namespaces (can be multiple)")
 	restoreCmd.PersistentFlags().
-		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
+		StringP(flags.OutFlag.Full, flags.OutFlag.Short, "", "log path to forward stdout/err")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	restoreCmd.PersistentFlags().
@@ -62,7 +59,7 @@ func init() {
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
-		flags.LogFlag.Full,
+		flags.OutFlag.Full,
 	) // only one of these can be set
 
 	///////////////////////////////////////////
@@ -94,14 +91,13 @@ var restoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
-		stream, _ := cmd.Flags().GetInt32(flags.StreamFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
 		leaveStopped, _ := cmd.Flags().GetBool(flags.LeaveStoppedFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
-		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
+		log, _ := cmd.Flags().GetString(flags.OutFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
@@ -113,7 +109,7 @@ var restoreCmd = &cobra.Command{
 				style.WarningColors.Sprintf(
 					"When using `--%s`, flags `--%s`, `--%s`, and `--%s` are ignored as the standard output is copied to the caller.",
 					flags.NoServerFlag.Full,
-					flags.LogFlag.Full,
+					flags.OutFlag.Full,
 					flags.AttachFlag.Full,
 					flags.AttachableFlag.Full,
 				))
@@ -129,7 +125,6 @@ var restoreCmd = &cobra.Command{
 		req := &daemon.RestoreReq{
 			Path:       path,
 			PidFile:    pidFile,
-			Stream:     stream,
 			Log:        log,
 			Attachable: attach || attachable,
 			Criu: &criu.CriuOpts{
@@ -184,23 +179,25 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		var resp *daemon.RestoreResp
-		var profiling *profiling.Data
-
 		if noServer {
-			cedana, err := cedana.New(ctx)
+			cedana, err := cedana.New(ctx, "restore")
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
 			code, err := cedana.Restore(req)
 			if err != nil {
-				cedana.Shutdown()
+				cedana.Wait()
 				return utils.GRPCErrorColored(err)
 			}
-			cedana.Shutdown()
 
-			os.Exit(<-code())
+			profiling := cedana.Finalize()
+			if config.Global.Profiling.Enabled && profiling != nil {
+				printProfilingData(profiling)
+			}
+			cedana.Wait()
+
+			os.Exit(<-code)
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
@@ -209,7 +206,7 @@ var restoreCmd = &cobra.Command{
 			defer client.Close()
 
 			// Assuming request is now ready to be sent to the server
-			resp, profiling, err = client.Restore(cmd.Context(), req)
+			resp, profiling, err := client.Restore(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
@@ -222,10 +219,10 @@ var restoreCmd = &cobra.Command{
 			if attach {
 				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 			}
-		}
 
-		for _, message := range resp.GetMessages() {
-			fmt.Println(message)
+			for _, message := range resp.GetMessages() {
+				fmt.Println(message)
+			}
 		}
 
 		return nil

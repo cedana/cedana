@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -17,10 +18,7 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 			state := resp.GetState()
 			if state == nil {
-				return nil, status.Errorf(
-					codes.InvalidArgument,
-					"missing state. at least PID is required in resp.state",
-				)
+				return nil, status.Errorf(codes.InvalidArgument, "missing state. at least PID is required in resp.state")
 			}
 
 			pid := state.GetPID()
@@ -38,17 +36,19 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to dump with GPU support")
 			}
 
-			id, err := gpus.GetID(pid)
-			if err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
-			}
+			id := gpus.GetID(pid)
 
 			state.GPUID = id
 			state.GPUEnabled = true
 
 			var freezeType gpu.FreezeType
 
-			switch strings.ToUpper(req.GPUFreezeType) {
+			freezeTypeStr := req.GPUFreezeType
+			if freezeTypeStr == "" {
+				freezeTypeStr = config.Global.GPU.FreezeType
+			}
+
+			switch strings.ToUpper(freezeTypeStr) {
 			case "IPC":
 				freezeType = gpu.FreezeType_FREEZE_TYPE_IPC
 			case "NCCL":

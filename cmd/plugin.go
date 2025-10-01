@@ -52,10 +52,11 @@ var pluginCmd = &cobra.Command{
 ////////////////////
 
 var pluginListCmd = &cobra.Command{
-	Use:     "list [plugin]...",
-	Short:   "List plugins (specify plugin <name>@<version> to filter)",
-	Aliases: []string{"ls"},
-	Args:    cobra.ArbitraryArgs,
+	Use:               "list [plugin]...",
+	Short:             "List plugins (specify plugin <name>@<version> to filter)",
+	Aliases:           []string{"ls"},
+	Args:              cobra.ArbitraryArgs,
+	ValidArgsFunction: ValidPlugins,
 	RunE: func(cmd *cobra.Command, names []string) error {
 		manager, ok := cmd.Context().Value(keys.PLUGIN_MANAGER_CONTEXT_KEY).(plugins.Manager)
 		if !ok {
@@ -305,6 +306,8 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.RestoreCmd, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunCmd, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.ManageCmd, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.FreezeCmd, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.UnfreezeCmd, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.QueryCmd, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.HelperCmds, pluginNames, &errs))
 			tableWriter.AppendSeparator()
@@ -314,6 +317,8 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.DumpVMHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RestoreVMMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RestoreVMHandler, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.FreezeHandler, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.UnfreezeHandler, pluginNames, &errs))
 
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames, &errs))

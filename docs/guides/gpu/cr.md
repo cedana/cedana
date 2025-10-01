@@ -1,6 +1,8 @@
 # Checkpoint/restore with GPUs
 
+{% hint style="warning" %}
 Checkpoint/restore with GPUs is currently only supported for NVIDIA GPUs.
+{% endhint %}
 
 ## Prerequisites
 
@@ -38,7 +40,9 @@ Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.
 
 ### Single process
 
-**NOTE**: Cedana GPU checkpoint/restore is only possible for managed processes/containers, i.e., those that are spawned using `cedana run --gpu-enabled` or managed using `cedana manage --gpu-enabled` (see [managed process/container](../managed.md)).
+{% hint style="info" %}
+Cedana GPU checkpoint/restore is only possible for managed processes/containers, i.e., those that are spawned using `cedana run --gpu-enabled` or managed using `cedana manage --gpu-enabled` (see [managed process/container](../managed.md)).
+{% endhint %}
 
 1. You may clone the [cedana-samples repository](https://github.com/cedana/cedana-samples) for some example GPU workloads.
 2. Run a process with GPU support:
@@ -75,8 +79,10 @@ You can then restore as usual. You may also set the default GPU freeze type in t
 
 You can checkpoint/restore normally as you do for CPU workloads. See [checkpoint/restore basics](../cr.md).
 
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
-
 ### Multi-process/node
 
 This is currently not supported. You should use the Cedana GPU plugin for multi-process/node workloads.
+
+{% hint style="info" %}
+For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+{% endhint %}

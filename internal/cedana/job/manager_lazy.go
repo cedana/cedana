@@ -33,6 +33,7 @@ type ManagerLazy struct {
 	deletedJobs        sync.Map // to keep track of deleted jobs
 	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
 
+	host    *daemon.Host
 	plugins plugins.Manager
 	gpus    gpu.Manager
 	db      db.DB
@@ -60,6 +61,7 @@ type action struct {
 func NewManagerLazy(
 	lifetime context.Context,
 	serverWg *sync.WaitGroup,
+	host *daemon.Host,
 	plugins plugins.Manager,
 	gpus gpu.Manager,
 	db db.DB,
@@ -73,6 +75,7 @@ func NewManagerLazy(
 		jobs:    sync.Map{},
 		pending: make(chan action, 64),
 		wg:      &sync.WaitGroup{},
+		host:    host,
 		plugins: plugins,
 		gpus:    gpuManager,
 		db:      db,
@@ -144,7 +147,7 @@ func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 		return nil, fmt.Errorf("job %s already exists", jid)
 	}
 
-	job := newJob(jid, jobType)
+	job := newJob(jid, jobType, m.host)
 	m.jobs.Store(jid, job)
 
 	return job, nil
@@ -156,7 +159,8 @@ func (m *ManagerLazy) Get(jid string) *Job {
 		return nil
 	}
 
-	job.(*Job).SetState(job.(*Job).latestState())
+	job.(*Job).SyncDeep()
+
 	if !job.(*Job).GPUEnabled() {
 		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(job.(*Job).GetPID()))
 	}
@@ -195,7 +199,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		if _, ok := jidSet[jid]; len(jids) > 0 && !ok {
 			return true
 		}
-		job.SetState(job.latestState())
+		job.Sync()
 		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
 		}
@@ -217,11 +221,10 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 	m.jobs.Range(func(key any, val any) bool {
 		job := val.(*Job)
 		hostID := job.GetState().GetHost().GetID()
-
 		if _, ok := hostIDSet[hostID]; len(hostIDs) > 0 && !ok {
 			return true
 		}
-		job.SetState(job.latestState())
+		job.Sync()
 		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
 		}
@@ -242,15 +245,15 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
 	}
 
-	job := m.Get(jid)
+	log := log.With().Str("JID", jid).Str("type", m.Get(jid).GetType()).Uint32("PID", pid).Logger()
 
-	// Try to update the process state with the latest information,
-	// Only possible if process is still running.
-	job.FillState(lifetime, pid)
+	job := m.Get(jid)
+	job.SetPID(pid)
+	job.SyncDeep()
 
 	m.pending <- action{putJob, jid}
 
-	log.Info().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Msg("managing job")
+	log.Info().Msg("managing job")
 
 	m.wg.Add(1)
 	go func() {
@@ -265,17 +268,19 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 		case exitCode = <-code:
 		}
 
-		log.Info().Str("JID", jid).Str("type", job.GetType()).Int("code", exitCode).Uint32("PID", pid).Msg("job exited")
+		log.Info().Int("code", exitCode).Msg("job exited")
 
-		if m.gpus.IsAttached(pid) {
-			m.gpus.Detach(pid)
-		}
+		m.gpus.Detach(lifetime, pid)
 
 		// Check if a clean up handler is available for the job type
 
-		features.Cleanup.IfAvailable(func(_ string, cleanup func(*daemon.Details) error) error {
-			log.Debug().Str("JID", jid).Str("type", job.GetType()).Msg("using custom cleanup from plugin")
-			return cleanup(job.GetDetails())
+		features.Cleanup.IfAvailable(func(_ string, cleanup func(context.Context, *daemon.Details) error) error {
+			log.Debug().Msg("using custom cleanup from plugin")
+			err := cleanup(context.WithoutCancel(lifetime), job.GetDetails())
+			if err != nil {
+				log.Debug().Err(err).Msg("custom cleanup from plugin failed")
+			}
+			return err
 		}, job.GetType())
 	}()
 
@@ -327,23 +332,25 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	return fmt.Errorf("job %s is not running, PID %d is not valid", jid, pid)
 }
 
-func (m *ManagerLazy) AddCheckpoint(jid string, path string) {
+func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
 	job := m.Get(jid)
 	if job == nil {
 		return
 	}
 
-	size, _ := utils.SizeFromPath(path)
-	checkpoint := &daemon.Checkpoint{
-		ID:   uuid.New().String(),
-		JID:  jid,
-		Path: path,
-		Time: time.Now().UnixMilli(),
-		Size: size,
-	}
-	m.checkpoints.Store(checkpoint.ID, checkpoint)
+	for _, path := range paths {
+		size, _ := utils.SizeFromPath(path)
+		checkpoint := &daemon.Checkpoint{
+			ID:   uuid.New().String(),
+			JID:  jid,
+			Path: path,
+			Time: time.Now().UnixMilli(),
+			Size: size,
+		}
+		m.checkpoints.Store(checkpoint.ID, checkpoint)
 
-	m.pending <- action{putCheckpoint, checkpoint.ID}
+		m.pending <- action{putCheckpoint, checkpoint.ID}
+	}
 }
 
 func (m *ManagerLazy) GetCheckpoint(id string) *daemon.Checkpoint {

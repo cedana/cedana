@@ -38,6 +38,16 @@ on:
         description: "Name of the Docker image to build"
         required: false
         default: "cedana/cedana-helper"
+      test_image:
+        type: boolean
+        description: "Build test Docker image"
+        required: false
+        default: false
+      test_image_name:
+        type: string
+        description: "Name of the test Docker image to build"
+        required: false
+        default: "cedana/cedana-test"
 
 jobs:
   cedana:
@@ -51,13 +61,15 @@ jobs:
           - arm64
     if: inputs.cedana
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -75,13 +87,18 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Build
-        run: make build VERSION=${{ github.head_ref || github.ref_name }}
+        run: |
+          VERSION=${{ github.head_ref || github.ref_name }}
+          make cedana VERSION=$VERSION -j $(nproc)
+          echo $VERSION > ./cedana-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: cedana-${{ matrix.arch }}
-          path: ./cedana
+          path: |
+            ./cedana
+            ./cedana-version.txt
 
   plugins:
     name: Plugins
@@ -94,13 +111,15 @@ jobs:
           - arm64
     if: inputs.plugins
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -118,13 +137,18 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Build
-        run: make plugins VERSION=${{ github.head_ref || github.ref_name }}
+        run: |
+          VERSION=${{ github.head_ref || github.ref_name }}
+          make plugins VERSION=$VERSION -j $(nproc)
+          echo $VERSION > ./plugins-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: plugins-${{ matrix.arch }}
-          path: ./libcedana-*.so
+          path: |
+            ./libcedana-*.so
+            ./plugins-version.txt
 
   image:
     name: Image
@@ -140,14 +164,15 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
-          submodules: recursive
           fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -187,8 +212,10 @@ jobs:
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
+          mkdir -p /tmp/image-name
           digest="${{ steps.build.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
+          echo "${{ inputs.image_name }}" > /tmp/image-name/name.txt
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
@@ -196,4 +223,97 @@ jobs:
           name: digests-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
-          retention-days: 1
+
+      - name: Upload image name
+        if: ${{ matrix.arch == 'amd64' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-name
+          path: /tmp/image-name/*
+          if-no-files-found: error
+
+  test_image:
+    name: Test Image
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/tag=${{ matrix.tag }}/extras=s3-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        tag:
+          - latest
+          - cuda
+        arch:
+          - amd64
+          - arm64
+    if: inputs.test_image
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: runs-on/action@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+          fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: |
+            ${{ inputs.test_image_name }}
+
+      - name: Login to Docker hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Build and generate manifest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./test
+          file: ./test/Dockerfile${{ matrix.tag == 'cuda' && '.cuda' || '' }}
+          push: true
+          platforms: linux/${{ matrix.arch }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: |
+            type=image,name=${{ inputs.test_image_name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=s3,blobs_prefix=cache/${{ github.repository }}/,manifests_prefix=cache/${{ github.repository }}/test-${{ matrix.tag }}-${{ matrix.arch }},region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
+          cache-to: type=s3,blobs_prefix=cache/${{ github.repository }}/,manifests_prefix=cache/${{ github.repository }}/test-${{ matrix.tag }}-${{ matrix.arch }},region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          mkdir -p /tmp/image-name
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+          echo "${{ inputs.test_image_name }}" > /tmp/image-name/name.txt
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-digests-${{ matrix.tag }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+
+      - name: Upload image name
+        if: ${{ matrix.arch == 'amd64' && matrix.tag == 'latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-image-name
+          path: /tmp/image-name/*
+          if-no-files-found: error

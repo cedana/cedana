@@ -23,8 +23,6 @@ func (s *Server) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 				criu.CheckFeatures(s.plugins, CRIU_EXPERIMENTAL_CHECKS),
 			},
 		},
-
-		// TODO: add more kernel feature checks
 	}
 
 	if req.Full {
@@ -36,7 +34,27 @@ func (s *Server) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 	return &daemon.HealthCheckResp{Results: results}, nil
 }
 
-func (s *Server) pluginChecklist() types.Checklist {
+func (s *Cedana) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*daemon.HealthCheckResp, error) {
+	checklist := types.Checklist{
+		{
+			Name: "criu",
+			List: []types.Check{
+				criu.CheckVersion(s.plugins),
+				criu.CheckFeatures(s.plugins, CRIU_EXPERIMENTAL_CHECKS),
+			},
+		},
+	}
+
+	if req.Full {
+		checklist = append(checklist, s.pluginChecklist()...)
+	}
+
+	results := checklist.Run(s.lifetime)
+
+	return &daemon.HealthCheckResp{Results: results}, nil
+}
+
+func (s *Cedana) pluginChecklist() types.Checklist {
 	checklist := []types.Checks{}
 
 	// Add a criu/cuda health check if plugin is installed

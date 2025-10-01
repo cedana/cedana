@@ -27,13 +27,16 @@ type Job struct {
 func newJob(
 	jid string,
 	jobType string,
+	host *daemon.Host,
 ) *Job {
 	return &Job{
 		JID: jid,
 		proto: daemon.Job{
-			JID:   jid,
-			State: &daemon.ProcessState{},
-			Type:  jobType,
+			JID: jid,
+			State: &daemon.ProcessState{
+				Host: proto.CloneOf(host),
+			},
+			Type: jobType,
 		},
 	}
 }
@@ -49,6 +52,43 @@ func fromProto(j *daemon.Job) *Job {
 			Log:     j.GetLog(),
 		},
 	}
+}
+
+func (j *Job) Sync(state ...*daemon.ProcessState) {
+	j.Lock()
+	defer j.Unlock()
+
+	if len(state) > 0 {
+		j.proto.State = proto.CloneOf(state[0])
+	} else {
+		j.proto.State = j.latestState(false)
+	}
+
+	j.proto.Log = j.latestLog()
+}
+
+func (j *Job) SyncDeep(state ...*daemon.ProcessState) {
+	j.Lock()
+	defer j.Unlock()
+
+	if len(state) > 0 {
+		j.proto.State = proto.CloneOf(state[0])
+	} else {
+		j.proto.State = j.latestState(true)
+	}
+
+	j.proto.Log = j.latestLog()
+}
+
+func (j *Job) SetPID(pid uint32) {
+	j.Lock()
+	defer j.Unlock()
+
+	if j.proto.State == nil {
+		j.proto.State = &daemon.ProcessState{}
+	}
+
+	j.proto.State.PID = pid
 }
 
 func (j *Job) GetPID() uint32 {
@@ -79,10 +119,6 @@ func (j *Job) GetProto() *daemon.Job {
 	j.RLock()
 	defer j.RUnlock()
 
-	// Get all latest info
-	j.proto.State = j.latestState()
-	j.proto.Log = j.latestLog()
-
 	return proto.CloneOf(&j.proto)
 }
 
@@ -96,20 +132,7 @@ func (j *Job) GetState() *daemon.ProcessState {
 	j.RLock()
 	defer j.RUnlock()
 
-	return j.latestState()
-}
-
-func (j *Job) SetState(state *daemon.ProcessState) {
-	j.Lock()
-	defer j.Unlock()
-	j.proto.State = proto.CloneOf(state)
-}
-
-func (j *Job) FillState(ctx context.Context, pid uint32) error {
-	j.Lock()
-	defer j.Unlock()
-
-	return utils.FillProcessState(ctx, pid, j.proto.State)
+	return proto.CloneOf(j.proto.State)
 }
 
 func (j *Job) GetDetails() *daemon.Details {
@@ -129,7 +152,7 @@ func (j *Job) GetLog() string {
 	j.RLock()
 	defer j.RUnlock()
 
-	return j.latestLog()
+	return j.proto.Log
 }
 
 func (j *Job) SetLog(log string) {
@@ -141,13 +164,19 @@ func (j *Job) SetLog(log string) {
 func (j *Job) IsRunning() bool {
 	j.RLock()
 	defer j.RUnlock()
-	return j.latestState().GetIsRunning()
+	return j.proto.GetState().GetIsRunning()
 }
 
 func (j *Job) IsRemote() bool {
 	j.RLock()
 	defer j.RUnlock()
-	return j.latestState().GetStatus() == "remote"
+	return j.proto.GetState().GetStatus() == "remote"
+}
+
+func (j *Job) Status() string {
+	j.RLock()
+	defer j.RUnlock()
+	return j.proto.GetState().GetStatus()
 }
 
 func (j *Job) GPUEnabled() bool {
@@ -172,23 +201,19 @@ func (j *Job) SetGPUEnabled(enabled bool) {
 
 // Functions below don't use locks, so they could be called with locks held.
 
-// WARN: Writes, so call with write lock.
-func (j *Job) latestState() (state *daemon.ProcessState) {
+func (j *Job) latestState(deep bool) (state *daemon.ProcessState) {
 	if j.proto.State == nil {
-		return nil
+		return &daemon.ProcessState{
+			Status:    "unknown",
+			IsRunning: false,
+		}
 	}
 	state = proto.CloneOf(j.proto.State)
 
 	// Check if job belongs to this machine
 
-	if state.GetHost() == nil {
-		state.Status = "unknown"
-		state.IsRunning = false
-		return
-	}
-
-	hostId, _ := host.HostID()
-	if state.GetHost().GetID() != hostId {
+	hostId, err := host.HostID()
+	if err == nil && state.GetHost().GetID() != "" && (state.GetHost().GetID() != hostId) {
 		state.Status = "remote"
 		state.IsRunning = false
 		return
@@ -197,27 +222,29 @@ func (j *Job) latestState() (state *daemon.ProcessState) {
 	state.Status = "halted"
 	state.IsRunning = false
 
-	// Get latest process info
+	// Quick check if the process still exists
 
 	p, err := process.NewProcess(int32(state.PID))
 	if err != nil {
 		return
 	}
 
+	state.Status = "stale"
+	state.IsRunning = true
+
 	// Now check if this exact process is running on this
 	// machine. Because, you could simply have another process
 	// running right now with this saved job PID.
 
-	createTime, err := p.CreateTime()
-	if err != nil {
-		return
-	}
-	if state.StartTime != uint64(createTime) {
-		return
+	if state.Cmdline != "" {
+		cmdline, err := p.Cmdline()
+		if err != nil || state.Cmdline != cmdline {
+			return
+		}
 	}
 
 	// Try to fill rest as much as possible, let it error
-	utils.FillProcessState(context.TODO(), state.PID, state)
+	utils.FillProcessState(context.TODO(), state.PID, state, deep)
 
 	return
 }

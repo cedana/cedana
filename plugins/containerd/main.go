@@ -1,6 +1,8 @@
 package main
 
 import (
+	"syscall"
+
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/containerd/cmd"
@@ -22,11 +24,13 @@ import (
 var Version string = "dev"
 
 var (
-	DumpCmd    *cobra.Command = cmd.DumpCmd
-	RestoreCmd *cobra.Command = cmd.RestoreCmd
-	RunCmd     *cobra.Command = cmd.RunCmd
-	ManageCmd  *cobra.Command = cmd.ManageCmd
-	CmdTheme   text.Colors    = style.HighLevelRuntimeColors
+	DumpCmd     *cobra.Command = cmd.DumpCmd
+	RestoreCmd  *cobra.Command = cmd.RestoreCmd
+	FreezeCmd   *cobra.Command = cmd.FreezeCmd
+	UnfreezeCmd *cobra.Command = cmd.UnfreezeCmd
+	RunCmd      *cobra.Command = cmd.RunCmd
+	ManageCmd   *cobra.Command = cmd.ManageCmd
+	CmdTheme    text.Colors    = style.HighLevelRuntimeColors
 )
 
 var HealthChecks types.Checks = types.Checks{
@@ -44,9 +48,15 @@ var (
 		client.SetupForRun,
 		client.CreateContainerForRun,
 	}
+	ManageHandler types.Run = client.Manage
+
+	KillSignal = syscall.SIGKILL
+	Cleanup    = client.Cleanup
+
 	GPUInterception types.Adapter[types.Run] = gpu.Interception
 
-	ManageHandler types.Run = client.Manage
+	FreezeHandler   types.Freeze   = runtime.Freeze
+	UnfreezeHandler types.Unfreeze = runtime.Unfreeze
 
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,

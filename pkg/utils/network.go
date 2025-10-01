@@ -11,7 +11,7 @@ import (
 )
 
 // Checks if the given process has any active tcp connections
-func HasActiveTCPConnections(pid int32) (bool, error) {
+func HasActiveTCPConnections(pid uint32) (bool, error) {
 	tcpFile := filepath.Join("/proc", fmt.Sprintf("%d", pid), "net/tcp")
 
 	file, err := os.Open(tcpFile)

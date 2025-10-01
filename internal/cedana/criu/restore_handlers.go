@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -39,15 +40,15 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		return nil, status.Errorf(codes.Internal, "failed to get CRIU version: %v", err)
 	}
 
+	log := log.With().Str("plugin", "CRIU").Int("version", version).Str("operation", "restore").Logger()
+
 	criuOpts := req.GetCriu()
 
 	// Set CRIU server
 	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
 	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
-	criuOpts.NotifyScripts = proto.Bool(true)
 	criuOpts.LogToStderr = proto.Bool(false)
-	criuOpts.RstSibling = proto.Bool(true) // always restore as a child of the daemon
 
 	// Change ownership of the dump directory
 	uids := resp.GetState().GetUIDs()
@@ -59,8 +60,6 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
 	}
-
-	log.Debug().Int("CRIU", version).Interface("opts", criuOpts).Msg("CRIU restore starting")
 
 	// NOTE: We don't handle reaping if the plugin has indicated that it's a 'reaper', assuming it will
 	// handle it when and how it wants to.
@@ -92,11 +91,14 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, code())
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 	} else {
-		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
+		outFile, ok := ctx.Value(keys.OUT_FILE_CONTEXT_KEY).(*os.File)
 		if ok {
-			stdout, stderr = logFile, logFile
+			stdout, stderr = outFile, outFile
 		}
 	}
+
+	log.Info().Msg("CRIU restore starting")
+	log.Debug().Interface("opts", criuOpts).Msg("CRIU restore options")
 
 	ctx, end := profiling.StartTimingCategory(ctx, "criu", opts.CRIU.Restore)
 
@@ -111,9 +113,8 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	end()
 
-	// Capture internal logs from CRIU
-	utils.LogFromFile(
-		log.With().Int("CRIU", version).Logger().WithContext(ctx),
+	logging.FromFile(
+		log.WithContext(ctx),
 		filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE),
 		zerolog.TraceLevel,
 	)
@@ -122,8 +123,9 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		// NOTE: It's possible that after the restore failed, the process
 		// exists as a zombie process. We need to reap it.
 		if pid := resp.GetState().GetPID(); pid != 0 {
-			p, _ := os.FindProcess(int(pid))
-			p.Wait()
+			if p, err := os.FindProcess(int(pid)); err == nil {
+				p.Wait()
+			}
 		}
 
 		return nil, status.Errorf(codes.Internal, "failed CRIU restore: %v", err)
@@ -144,7 +146,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		}()
 	}
 
-	log.Debug().Int("CRIU", version).Uint32("PID", resp.PID).Msg("CRIU restore complete")
+	log.Info().Uint32("PID", resp.PID).Msg("CRIU restore complete")
 
 	return code, err
 }

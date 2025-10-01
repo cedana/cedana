@@ -70,7 +70,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		cmd.Stdout = stdOut
 		cmd.Stderr = stdErr
 	} else {
-		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
+		logFile, ok := ctx.Value(keys.OUT_FILE_CONTEXT_KEY).(*os.File)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get log file from context")
 		}
@@ -122,5 +122,5 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 
 	resp.PID = details.PID
 
-	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, details.PID)), nil
+	return channel.Broadcaster(utils.WaitForPid(details.PID)), nil
 }

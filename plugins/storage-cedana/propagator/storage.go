@@ -30,12 +30,10 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 }
 
 func (s *Storage) Open(path string) (io.ReadCloser, error) {
-	if !strings.HasPrefix(path, PATH_PREFIX) {
-		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
+	path, err := s.sanitizePath(path)
+	if err != nil {
+		return nil, err
 	}
-
-	path = strings.TrimPrefix(path, PATH_PREFIX)
-	path = strings.TrimPrefix(path, "/")
 
 	downloadUrl, err := s.Files().ByPath(path).Get(s.ctx, nil)
 	if err != nil {
@@ -47,16 +45,14 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 		}
 	}
 
-	return NewFile(*downloadUrl, ""), nil
+	return NewDownloadableFile(s.ctx, *downloadUrl), nil
 }
 
 func (s *Storage) Create(path string) (io.WriteCloser, error) {
-	if !strings.HasPrefix(path, PATH_PREFIX) {
-		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
+	path, err := s.sanitizePath(path)
+	if err != nil {
+		return nil, err
 	}
-
-	path = strings.TrimPrefix(path, PATH_PREFIX)
-	path = strings.TrimPrefix(path, "/")
 
 	uploadUrl, err := s.Files().ByPath(path).Put(s.ctx, nil)
 	if err != nil {
@@ -68,23 +64,32 @@ func (s *Storage) Create(path string) (io.WriteCloser, error) {
 		}
 	}
 
-	return NewFile("", *uploadUrl), nil
+	return NewUploadableFile(s.ctx, *uploadUrl), nil
 }
 
 func (s *Storage) Delete(path string) error {
-	path = strings.TrimPrefix(path, PATH_PREFIX)
-	path = strings.TrimPrefix(path, "/")
+	path, err := s.sanitizePath(path)
+	if err != nil {
+		return err
+	}
 
 	return fmt.Errorf("this operation is currently not supported for cedana storage")
 }
 
-func (s *Storage) ReadDir(path string) ([]string, error) {
-	if !strings.HasPrefix(path, PATH_PREFIX) {
-		return nil, fmt.Errorf("path must start with %s", PATH_PREFIX)
+func (s *Storage) IsDir(path string) (bool, error) {
+	path, err := s.sanitizePath(path)
+	if err != nil {
+		return false, err
 	}
 
-	path = strings.TrimPrefix(path, PATH_PREFIX)
-	path = strings.TrimPrefix(path, "/")
+	return true, nil // Cedana storage does not differentiate between files and directories
+}
+
+func (s *Storage) ReadDir(path string) ([]string, error) {
+	path, err := s.sanitizePath(path)
+	if err != nil {
+		return nil, err
+	}
 
 	list, err := s.Files().Dir().ByPath(path).Get(s.ctx, nil)
 	if err != nil {
@@ -100,4 +105,23 @@ func (s *Storage) ReadDir(path string) ([]string, error) {
 
 func (s *Storage) IsRemote() bool {
 	return true
+}
+
+/////////////
+// Helpers //
+/////////////
+
+func (s *Storage) sanitizePath(path string) (string, error) {
+	if !strings.HasPrefix(path, PATH_PREFIX) {
+		return "", fmt.Errorf("path must start with %s", PATH_PREFIX)
+	}
+
+	path = strings.TrimPrefix(path, PATH_PREFIX)
+	path = strings.TrimPrefix(path, "/")
+
+	if path == "" {
+		return "", fmt.Errorf("path cannot be empty")
+	}
+
+	return path, nil
 }

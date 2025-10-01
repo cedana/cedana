@@ -27,16 +27,8 @@ on:
         required: false
         default: false
 
-permissions:
-  contents: write
-  packages: write
-  actions: read
-  id-token: write
-  pull-requests: write
-
-# Cancel any preceding run on the pull request.
 concurrency:
-  group: cedana-release-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.repository }}-release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -58,6 +50,9 @@ jobs:
       criu_version: release
       gpu_version: main
       streamer_version: main
+      helm_chart_version: main
+      controller_version: main
+      runtime_shim_version: cedana
 
   test:
     name: Test
@@ -75,11 +70,11 @@ jobs:
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
       samples: 2
-      push_results: true
       post_summary_pr: false
-      post_summary_slack: true
-      comparison_patch: true
-      comparison_native: true
+      post_summary_slack: default
+      comparison_previous: true
+      comparison_runtime: true
+      push_results: true
       results_dataset: cedana
 
   publish:
@@ -92,4 +87,5 @@ jobs:
       github: true
       cloudsmith: true
       dockerhub: true
+      dockerhub_latest: true
       post_summary: true

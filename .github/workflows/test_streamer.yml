@@ -1,4 +1,4 @@
-name: Test / Streamer
+name: Test
 
 permissions:
   contents: read
@@ -18,11 +18,6 @@ on:
       debug:
         type: boolean
         description: "Run with debugging enabled"
-        required: false
-        default: false
-      gpu:
-        type: boolean
-        description: "Run including GPU tests"
         required: false
         default: false
       large:
@@ -54,34 +49,45 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 4
+        default: 2
       post_summary:
         type: boolean
         description: "Post test summary"
         required: false
         default: false
 
+env:
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  FORMATTER: junit
+  RETRIES: 1
+  DEBUG: 0 # bats debug logging
+
 jobs:
   streamer:
     name: Streamer
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.gpu && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ inputs.gpu && '-cuda-12-4' || '' }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/extras=s3-cache
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
+        compute:
+          - CPU
+          # - CUDA # FIXME: Not sure why these run indefinitely (exact same tests in test_gpu.yml work fine)
         arch:
           - amd64
           - arm64
     container:
-      image: ${{ inputs.gpu && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ inputs.gpu && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -102,14 +108,12 @@ jobs:
           name: plugins-${{ matrix.arch }}
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        if: inputs.gpu
-        continue-on-error: true
+        if: matrix.compute == 'CUDA'
         uses: actions/download-artifact@v4
         with:
           name: gpu-${{ matrix.arch }}
@@ -123,17 +127,17 @@ jobs:
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
-          chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install plugins
+      - name: Install
         env:
-          GPU: ${{ inputs.gpu }}
+          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
         run: |
-          sudo -E ./cedana plugin install runc containerd crio criu storage/cedana
-          sudo -E ./cedana plugin install streamer  # automatically installs the downloaded binary if available instead
+          make install
+          sudo -E cedana plugin install runc containerd crio criu storage/cedana storage/s3 storage/gcs
+          sudo -E cedana plugin install streamer  # automatically installs the downloaded binary if available instead
           if [ "$GPU" = "true" ]; then
-            sudo -E ./cedana plugin install gpu # automatically installs the downloaded binary if available instead
+            sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
           fi
 
       - name: Mark git dir as safe
@@ -147,34 +151,63 @@ jobs:
 
       - name: Run regression tests
         env:
-          GPU: ${{ inputs.gpu }}
+          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PARALLELISM_GPU: ${{ inputs.parallelism_gpu }}
-          RETRIES: 1
         run: |
           if [ "$GPU" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=streamer,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES
+              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM_GPU RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-regression TAGS=streamer,!gpu PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+              make test-regression TAGS=streamer,!gpu,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
+
+      - name: Setup node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate report (isolated)
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="streamer (${{ matrix.compute }}, ${{ matrix.arch }})"
+
+      - name: Generate report (persistent)
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="streamer (${{ matrix.compute }}, ${{ matrix.arch }})"
 
       - name: Upload report
         if: always()
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-streamer
+          name: test-report-${{ matrix.arch }}-streamer-${{ matrix.compute }}
           path: |
-            /tmp/report*.xml
+            /tmp/report*.json
 
   post-summary:
     name: Post Summary
@@ -189,27 +222,20 @@ jobs:
           - arm64
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download report
         id: download-report
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-streamer
+          pattern: test-report-${{ matrix.arch }}-streamer-*
           path: report
-
-      - name: Generate consolidated report
-        run: npx junit-to-ctrf "report/**/*.xml" -o ctrf/report.json
 
       - name: Post report
         uses: ctrf-io/github-test-reporter@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          report-path: ctrf/*.json
+          report-path: report/**/*.json
           github-report: true
           failed-folded-report: true
           summary: true

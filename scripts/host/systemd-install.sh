@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 # get the directory of the script
 SOURCE="${BASH_SOURCE[0]}"
@@ -13,8 +13,6 @@ DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
-CEDANA_METRICS_ASR=${CEDANA_METRICS_ASR:-false}
-CEDANA_METRICS_OTEL=${CEDANA_METRICS_OTEL:true}
 DAEMON_ARGS=""
 
 if ! test -f "$APP_PATH"; then
@@ -34,8 +32,8 @@ for arg in "$@"; do
         echo "Daemon args: $value"
         DAEMON_ARGS="$value"
     fi
-    if [ "$CEDANA_METRICS_OTEL" == "true" ]; then
-        echo "Otel enabled..."
+    if [ "$CEDANA_METRICS" == "true" ]; then
+        echo "Metrics enabled..."
     fi
 done
 
@@ -49,16 +47,27 @@ cat <<EOF | $SUDO_USE tee "$SERVICE_FILE" >/dev/null
 Description=Cedana Checkpointing Daemon
 [Service]
 Environment=USER=$USER
-Environment=CEDANA_METRICS_ASR=$CEDANA_METRICS_ASR
-Environment=CEDANA_METRICS_OTEL=$CEDANA_METRICS_OTEL
-Environment=CEDANA_LOG_LEVEL=$CEDANA_LOG_LEVEL
-Environment=CEDANA_URL=$CEDANA_URL
-Environment=CEDANA_AUTH_TOKEN=$CEDANA_AUTH_TOKEN
-Environment=CEDANA_ADDRESS=$CEDANA_ADDRESS
-Environment=CEDANA_WAIT_FOR_READY=$CEDANA_WAIT_FOR_READY
-Environment=CEDANA_PROTOCOL=$CEDANA_PROTOCOL
-Environment=CONTAINERS_HELPER_BINARY_DIR=/cedana/bin
-Environment="PATH=/cedana/bin:${PATH}"
+Environment=PATH=/cedana/bin:$PATH
+Environment=CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL"
+Environment=CEDANA_LOG_LEVEL_NO_SERVER="$CEDANA_LOG_LEVEL_NO_SERVER"
+Environment=CEDANA_URL="$CEDANA_URL"
+Environment=CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN"
+Environment=CEDANA_ADDRESS="$CEDANA_ADDRESS"
+Environment=CEDANA_PROTOCOL="$CEDANA_PROTOCOL"
+Environment=CEDANA_DB_REMOTE="$CEDANA_DB_REMOTE"
+Environment=CEDANA_CLIENT_WAIT_FOR_READY="$CEDANA_CLIENT_WAIT_FOR_READY"
+Environment=CEDANA_PROFILING_ENABLED="$CEDANA_PROFILING_ENABLED"
+Environment=CEDANA_METRICS="$CEDANA_METRICS"
+Environment=CEDANA_CHECKPOINT_DIR="$CEDANA_CHECKPOINT_DIR"
+Environment=CEDANA_CHECKPOINT_STREAMS="$CEDANA_CHECKPOINT_STREAMS"
+Environment=CEDANA_CHECKPOINT_COMPRESSION="$CEDANA_CHECKPOINT_COMPRESSION"
+Environment=CEDANA_GPU_POOL_SIZE="$CEDANA_GPU_POOL_SIZE"
+Environment=CEDANA_GPU_FREEZE_TYPE="$CEDANA_GPU_FREEZE_TYPE"
+Environment=CEDANA_GPU_SHM_SIZE="$CEDANA_GPU_SHM_SIZE"
+Environment=CEDANA_GPU_LD_LIB_PATH="$CEDANA_GPU_LD_LIB_PATH"
+Environment=CEDANA_CRIU_MANAGE_CGROUPS="$CEDANA_CRIU_MANAGE_CGROUPS"
+Environment=CEDANA_CLUSTER_ID="$CEDANA_CLUSTER_ID"
+Environment=CONTAINERD_ADDRESS="$CONTAINERD_ADDRESS"
 ExecStart=$APP_PATH daemon start $DAEMON_ARGS
 User=root
 Group=root

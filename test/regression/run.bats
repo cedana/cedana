@@ -3,8 +3,8 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=base,run
 
-load helpers/utils
-load helpers/daemon
+load ../helpers/utils
+load ../helpers/daemon
 
 load_lib support
 load_lib assert
@@ -30,14 +30,12 @@ teardown_file() {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
-    run cedana run process echo hello --jid "$jid"
+    cedana run process echo hello --jid "$jid"
 
-    assert_success
     assert_exists "$log_file"
     assert_file_contains "$log_file" "hello"
 
     run cedana ps
-
     assert_success
     assert_output --partial "$jid"
 }
@@ -45,7 +43,6 @@ teardown_file() {
 # bats test_tags=daemonless
 @test "run process (without daemon)" {
     run cedana run --no-server process echo hello
-
     assert_success
     assert_output --partial "hello"
 }
@@ -53,8 +50,8 @@ teardown_file() {
 # bats test_tags=daemonless
 @test "run process (without daemon, exit code)" {
     code=42
-    run cedana run --no-server process "$WORKLOADS"/exit-code.sh "$code"
 
+    run cedana run --no-server process "$WORKLOADS"/exit-code.sh "$code"
     assert_equal $status $code
 }
 
@@ -63,7 +60,6 @@ teardown_file() {
     pid_file=/tmp/$(unix_nano).pid
 
     run cedana run --no-server process echo hello --pid-file "$pid_file"
-
     assert_success
     assert_output --partial "hello"
 
@@ -74,11 +70,9 @@ teardown_file() {
     jid=$(unix_nano)
 
     run cedana run process non-existent --jid "$jid"
-
     assert_failure
 
     run cedana ps
-
     assert_success
     refute_output --partial "$jid"
 }
@@ -87,21 +81,18 @@ teardown_file() {
     jid=$(unix_nano)
     log_file="/tmp/$jid.log"
 
-    run cedana run process echo hello --jid "$jid" --log "$log_file"
+    cedana run process echo hello --jid "$jid" --out "$log_file"
 
-    assert_success
     assert_exists "$log_file"
     assert_file_contains "$log_file" "hello"
 }
 
 @test "exec (run process alias)" {
     jid=$(unix_nano)
-
-    run cedana exec echo hello --jid "$jid"
-
     log_file="/var/log/cedana-output-$jid.log"
 
-    assert_success
+    cedana exec echo hello --jid "$jid"
+
     assert_exists "$log_file"
     assert_file_contains "$log_file" "hello"
 }
@@ -111,7 +102,6 @@ teardown_file() {
     jid=$(unix_nano)
 
     run cedana run process echo hello --jid "$jid" --attach
-
     assert_success
     assert_output --partial "hello"
 }
@@ -122,7 +112,6 @@ teardown_file() {
     code=42
 
     run cedana run process "$WORKLOADS"/exit-code.sh "$code" --jid "$jid" --attach
-
     assert_equal $status $code
 }
 
@@ -131,13 +120,11 @@ teardown_file() {
     jid=$(unix_nano)
     code=42
 
-    run cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
-    assert_success
+    cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
 
     pid=$(pid_for_jid "$jid")
 
     run cedana attach "$pid"
-
     assert_equal $status $code
 }
 
@@ -149,6 +136,5 @@ teardown_file() {
     cedana run process "$WORKLOADS"/date-loop.sh 3 "$code" --jid "$jid" --attachable
 
     run cedana job attach "$jid"
-
     assert_equal $status $code
 }

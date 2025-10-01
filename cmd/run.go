@@ -13,7 +13,6 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
@@ -34,10 +33,10 @@ func init() {
 	runCmd.PersistentFlags().
 		BoolP(flags.AttachableFlag.Full, flags.AttachableFlag.Short, false, "make it attachable, but don't attach")
 	runCmd.PersistentFlags().
-		StringP(flags.LogFlag.Full, flags.LogFlag.Short, "", "log path to forward stdout/err")
+		StringP(flags.OutFlag.Full, flags.OutFlag.Short, "", "file to forward stdout/err")
 	runCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
-		flags.LogFlag.Full,
+		flags.OutFlag.Full,
 	) // only one of these can be set
 
 	processRunCmd.PersistentFlags().
@@ -66,18 +65,18 @@ var runCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
-		log, _ := cmd.Flags().GetString(flags.LogFlag.Full)
+		out, _ := cmd.Flags().GetString(flags.OutFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
 		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
-		if noServer && (log != "" || attach || attachable) {
+		if noServer && (out != "" || attach || attachable) {
 			fmt.Println(
 				style.WarningColors.Sprintf(
 					"When using `--%s`, flags `--%s`, `--%s`, and `--%s` are ignored as the standard output is copied to the caller.",
 					flags.NoServerFlag.Full,
-					flags.LogFlag.Full,
+					flags.OutFlag.Full,
 					flags.AttachFlag.Full,
 					flags.AttachableFlag.Full,
 				))
@@ -92,7 +91,7 @@ var runCmd = &cobra.Command{
 		// Create initial request
 		req := &daemon.RunReq{
 			JID:        jid,
-			Log:        log,
+			Log:        out,
 			PidFile:    pidFile,
 			GPUEnabled: gpuEnabled,
 			Attachable: attach || attachable,
@@ -140,23 +139,25 @@ var runCmd = &cobra.Command{
 			return fmt.Errorf("invalid request in context")
 		}
 
-		var resp *daemon.RunResp
-		var profiling *profiling.Data
-
 		if noServer {
-			cedana, err := cedana.New(ctx)
+			cedana, err := cedana.New(ctx, "run")
 			if err != nil {
 				return fmt.Errorf("Error: failed to create cedana root: %v", err)
 			}
 
 			code, err := cedana.Run(req)
 			if err != nil {
-				cedana.Shutdown()
+				cedana.Wait()
 				return utils.GRPCErrorColored(err)
 			}
-			cedana.Shutdown()
 
-			os.Exit(<-code())
+			profiling := cedana.Finalize()
+			if config.Global.Profiling.Enabled && profiling != nil {
+				printProfilingData(profiling)
+			}
+			cedana.Wait()
+
+			os.Exit(<-code)
 		} else {
 			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
@@ -165,7 +166,7 @@ var runCmd = &cobra.Command{
 			defer client.Close()
 
 			// Assuming request is now ready to be sent to the server
-			resp, profiling, err = client.Run(cmd.Context(), req)
+			resp, profiling, err := client.Run(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
@@ -178,10 +179,10 @@ var runCmd = &cobra.Command{
 			if attach {
 				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
 			}
-		}
 
-		for _, message := range resp.GetMessages() {
-			fmt.Println(message)
+			for _, message := range resp.GetMessages() {
+				fmt.Println(message)
+			}
 		}
 
 		return nil

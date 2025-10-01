@@ -3,8 +3,8 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=base,basic
 
-load helpers/utils
-load helpers/daemon
+load ../helpers/utils
+load ../helpers/daemon
 
 load_lib support
 load_lib assert
@@ -28,20 +28,25 @@ teardown_file() {
 
 @test "cedana ps" {
     jid=$(unix_nano)
-    run cedana exec echo hello --jid "$jid"
-    assert_success
+    cedana exec echo hello --jid "$jid"
 
     run cedana ps
     assert_success
     assert_output --partial "$jid"
 }
 
-@test "Health check" {
-    run cedana daemon check
-    assert_success
+@test "health check" {
+    cedana check
 }
 
-@test "Health check (full)" {
-    run cedana daemon check --full
-    assert_success
+@test "health check (daemon)" {
+    cedana daemon check
+}
+
+@test "health check (full)" {
+    cedana check --full
+}
+
+@test "health check (full, daemon)" {
+    cedana daemon check --full
 }

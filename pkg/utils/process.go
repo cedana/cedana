@@ -21,15 +21,17 @@ type FdInfo struct {
 	Inode uint64
 }
 
-func GetProcessState(ctx context.Context, pid uint32) (*daemon.ProcessState, error) {
+func GetProcessState(ctx context.Context, pid uint32, tree ...bool) (*daemon.ProcessState, error) {
 	state := &daemon.ProcessState{}
-	err := FillProcessState(ctx, pid, state)
+	err := FillProcessState(ctx, pid, state, tree...)
 	return state, err
 }
 
 // Tries to fill as much as possible of the process state.
 // Only returns early if the process does not exist at all.
-func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessState) error {
+func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessState, tree ...bool) error {
+	tree = append(tree, false)
+
 	if state == nil {
 		return fmt.Errorf("state is nil")
 	}
@@ -38,8 +40,11 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	var err error
 	errs := []error{}
 
-	state.Host, err = GetHost(ctx)
+	host, err := GetHost(ctx)
 	errs = append(errs, err)
+	if err == nil {
+		state.Host = host
+	}
 
 	p, err := process.NewProcessWithContext(ctx, int32(pid))
 	if err != nil {
@@ -49,10 +54,10 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 	state.IsRunning = true
 
 	cmdline, err := p.CmdlineWithContext(ctx)
-	if err != nil {
-		errs = append(errs, err)
+	errs = append(errs, err)
+	if err == nil {
+		state.Cmdline = cmdline
 	}
-	state.Cmdline = cmdline
 
 	startTime, err := p.CreateTime()
 	errs = append(errs, err)
@@ -67,26 +72,25 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 	// get process uids, gids, and groups
 	uids, err := p.UidsWithContext(ctx)
-	if err != nil {
-		errs = append(errs, err)
+	errs = append(errs, err)
+	if err == nil {
+		state.UIDs = uids
 	}
 	gids, err := p.GidsWithContext(ctx)
-	if err != nil {
-		errs = append(errs, err)
+	errs = append(errs, err)
+	if err == nil {
+		state.GIDs = gids
 	}
 	groups, err := p.GroupsWithContext(ctx)
-	if err != nil {
-		errs = append(errs, err)
+	errs = append(errs, err)
+	if err == nil {
+		state.Groups = groups
 	}
-	state.UIDs = uids
-	state.GIDs = gids
-	state.Groups = groups
 
 	var openFiles []*daemon.File
 	of, err := p.OpenFilesWithContext(ctx)
-	if err != nil {
-		errs = append(errs, err)
-	} else {
+	errs = append(errs, err)
+	if err == nil {
 		for _, f := range of {
 			file := &daemon.File{
 				Fd:   f.Fd,
@@ -116,16 +120,15 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 			openFiles = append(openFiles, file)
 		}
+		state.OpenFiles = openFiles
 	}
 
 	mountinfoFile, err := os.Open(fmt.Sprintf("/proc/%d/mountinfo", pid))
-	if err != nil {
-		errs = append(errs, err)
-	} else {
+	errs = append(errs, err)
+	if err == nil {
 		mounts, err := mountinfo.GetMountsFromReader(mountinfoFile, nil)
-		if err != nil {
-			errs = append(errs, err)
-		} else {
+		errs = append(errs, err)
+		if err == nil {
 			for _, m := range mounts {
 				state.Mounts = append(state.Mounts, &daemon.Mount{
 					ID:         uint64(m.ID),
@@ -143,9 +146,8 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 	var openConnections []*daemon.Connection
 	conns, err := p.ConnectionsWithContext(ctx)
-	if err != nil {
-		errs = append(errs, err)
-	} else {
+	errs = append(errs, err)
+	if err == nil {
 		for _, conn := range conns {
 			Laddr := &daemon.Addr{
 				IP:   conn.Laddr.IP,
@@ -166,18 +168,42 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 				UIDs:   Int32ToUint32Slice(conn.Uids),
 			})
 		}
+		state.OpenConnections = openConnections
 	}
 
-	errs = append(errs, err)
 	proccessStatus, err := p.StatusWithContext(ctx)
 	errs = append(errs, err)
+	if err == nil {
+		state.Status = proccessStatus[0]
+	}
+
 	cwd, err := p.CwdWithContext(ctx)
 	errs = append(errs, err)
+	if err == nil {
+		state.WorkingDir = cwd
+	}
 
-	state.OpenFiles = openFiles
-	state.OpenConnections = openConnections
-	state.WorkingDir = cwd
-	state.Status = proccessStatus[0]
+	if tree[0] {
+		state.Children = []*daemon.ProcessState{}
+
+		var children []*process.Process
+		children, err = p.ChildrenWithContext(ctx)
+
+		if err == nil {
+			childErrs := []error{}
+			for _, child := range children {
+				childState, err := GetProcessState(ctx, uint32(child.Pid), tree...)
+				if err != nil {
+					childErrs = append(childErrs, err)
+					continue
+				}
+
+				state.Children = append(state.Children, childState)
+			}
+
+			errs = append(errs, childErrs...)
+		}
+	}
 
 	return errors.Join(errs...)
 }
@@ -313,8 +339,8 @@ func GetFdInfo(pid uint32, fd int) (*FdInfo, error) {
 
 	// Parse the fdinfo file
 	var info FdInfo
-	lines := strings.Split(string(contents), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(contents), "\n")
+	for line := range lines {
 		parts := strings.Split(line, ":")
 		if len(parts) != 2 {
 			continue
@@ -375,8 +401,8 @@ func IsTTY(path string) (isTTY bool, err error) {
 
 func Getenv(env []string, key string) string {
 	for _, e := range env {
-		if strings.HasPrefix(e, key+"=") {
-			return strings.TrimPrefix(e, key+"=")
+		if after, ok := strings.CutPrefix(e, key+"="); ok {
+			return after
 		}
 	}
 	return ""

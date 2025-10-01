@@ -13,39 +13,37 @@ on:
         description: Version for GPU binaries (branch name or "release" for latest release)
         required: false
         default: "main"
-      streamer_version:
+      criu_version:
         type: string
-        description: Version for streamer binaries (branch name or "release" for latest release)
+        description: Version for CRIU binaries (branch name or "release" for latest release)
         required: false
-        default: "main"
-      runtime:
-        type: choice
-        description: Runtime to run benchmark on
+        default: "release"
+      runtimes:
+        type: string
+        description: Runtimes to run benchmarks for (comma-separated)
         required: true
-        options:
-          - native
-          - cedana
+        default: cedana, native, criu
       bench_samples:
         type: number
         description: Number of samples to run for each metric
         required: false
         default: 2
+      bench_comparison_previous:
+        type: boolean
+        description: Compare benchmark results with previous
+        required: false
+        default: true
+      bench_comparison_runtime:
+        type: boolean
+        description: Compare benchmark results with other runtimes
+        required: false
+        default: true
       bench_push_results:
         type: boolean
-        description: Push benchmark results to storage
+        description: "Push benchmark results to storage"
         required: false
         default: false
-      bench_comparison_patch:
-        type: boolean
-        description: Compare benchmark results with last patch
-        required: false
-        default: false
-      bench_comparison_native:
-        type: boolean
-        description: Compare benchmark results with native
-        required: false
-        default: false
-      bench_result_dataset:
+      bench_results_dataset:
         type: string
         description: "BigQuery dataset to push results to"
         required: false
@@ -54,31 +52,28 @@ on:
         type: string
         description: "Runner machine for benchmarks"
         required: false
-        default: "16cpu-64g-1xL4"
+        default: "8cpu-32g-1xL4"
 
 jobs:
   download:
     name: Download
     uses: ./.github/workflows/download.yml
     secrets: inherit
-    if: inputs.runtime == 'cedana'
     with:
       cedana_version: ${{ inputs.cedana_version }}
       gpu_version: ${{ inputs.gpu_version }}
-      streamer_version: ${{ inputs.streamer_version }}
+      criu_version: ${{ inputs.criu_version }}
 
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    if: ${{ !cancalled() }}
-    needs: [build, download]
+    needs: download
     secrets: inherit
     with:
-      cedana: ${{ inputs.runtime == 'cedana' }}
-      native: ${{ inputs.runtime == 'native' }}
+      runtimes: ${{ inputs.runtimes }}
       samples: ${{ inputs.bench_samples }}
+      comparison_previous: ${{ inputs.bench_comparison_previous }}
+      comparison_runtime: ${{ inputs.bench_comparison_runtime }}
       push_results: ${{ inputs.bench_push_results }}
-      comparison_patch: ${{ inputs.bench_comparison_patch }}
-      comparison_native: ${{ inputs.bench_comparison_native }}
-      result_dataset: ${{ inputs.bench_result_dataset }}
+      results_dataset: ${{ inputs.bench_results_dataset }}
       runner: ${{ inputs.runner }}

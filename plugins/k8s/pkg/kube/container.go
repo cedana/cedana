@@ -33,8 +33,9 @@ const (
 	LOG_DIRECTORY     = "io.kubernetes.cri.sandbox-log-directory"
 
 	// Kube container only annotation keys
-	CONTAINER_NAME = "io.kubernetes.cri.container-name"
-	IMAGE_NAME     = "io.kubernetes.cri.image-name"
+	CONTAINER_NAME     = "io.kubernetes.cri.container-name"
+	IMAGE_NAME         = "io.kubernetes.cri.image-name"
+	SANDBOX_IMAGE_NAME = "io.kubernetes.cri.podsandbox.image-name"
 )
 
 const (
@@ -51,6 +52,8 @@ type Container struct {
 	ID               string
 	Name             string
 	Bundle           string
+	Type             string
+	Env              []string
 	Annotations      map[string]string
 	Image            string
 	SandboxID        string
@@ -65,7 +68,7 @@ type KubeClient interface {
 
 type DefaultKubeClient struct{}
 
-func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string) ([]*Container, error) {
+func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string, containerType ...string) ([]*Container, error) {
 	var containers []*Container
 
 	entries, err := afero.ReadDir(fs, root)
@@ -114,7 +117,9 @@ func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string) 
 
 		spec, err = runc.LoadSpec(filepath.Join(bundle, "config.json"))
 		if err != nil {
-			return nil, err
+			// If we can't load the spec, skip this container
+			// This happens when cedana messes up and leaves a stale container behind
+			continue
 		}
 
 		var containerNameAnnotation, sandboxNameAnnotation string
@@ -128,15 +133,18 @@ func (c *DefaultKubeClient) ListContainers(fs afero.Fs, root, namespace string) 
 			ID:          id,
 			Bundle:      bundle,
 			Annotations: spec.Annotations,
+			Env:         spec.Process.Env,
 		}
 
-		if spec.Annotations[CONTAINER_TYPE] == CONTAINER_TYPE_CONTAINER || spec.Annotations[CRIO_CONTAINER_TYPE] == CONTAINER_TYPE_CONTAINER {
+		if len(containerType) == 0 || spec.Annotations[CONTAINER_TYPE] == containerType[0] || spec.Annotations[CRIO_CONTAINER_TYPE] == containerType[0] {
+			container.Type = getFirstNonEmptyAnnotation(spec.Annotations, CONTAINER_TYPE, CRIO_CONTAINER_TYPE)
 			container.Name = spec.Annotations[containerNameAnnotation]
-			container.Image = getFirstNonEmptyAnnotation(spec.Annotations, IMAGE_NAME, CRIO_IMAGE_NAME)
+			container.Image = getFirstNonEmptyAnnotation(spec.Annotations, IMAGE_NAME, CRIO_IMAGE_NAME, SANDBOX_IMAGE_NAME)
 			container.SandboxID = getFirstNonEmptyAnnotation(spec.Annotations, SANDBOX_ID, CRIO_SANDBOX_ID)
 			container.SandboxName = spec.Annotations[sandboxNameAnnotation]
 			container.SandboxUID = spec.Annotations[SANDBOX_UID]
 			container.SandboxNamespace = getFirstNonEmptyAnnotation(spec.Annotations, SANDBOX_NAMESPACE, CRIO_SANDBOX_NAMESPACE)
+
 			if (namespace == "" || container.SandboxNamespace == namespace) && container.Image != "" {
 				containers = append(containers, &container)
 			}

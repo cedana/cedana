@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
@@ -32,9 +34,11 @@ func DumpRootfs(next types.Dump) types.Dump {
 		details := req.GetDetails().GetContainerd()
 
 		// Skip rootfs if image ref is not provided
-		if details.Image == "" {
+		if details.Image == nil || req.Action != daemon.DumpAction_DUMP {
 			return next(ctx, opts, resp, req)
 		}
+
+		image := details.Image
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
 		if !ok {
@@ -46,41 +50,32 @@ func DumpRootfs(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", details.ID, err)
 		}
 
-		info, err := container.Info(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get container info: %v", err)
-		}
-
-		if info.Image == details.Image {
-			return nil, status.Errorf(codes.InvalidArgument, "dump image cannot be the same as the container image, current image: %s, dump image: %s", info.Image, details.Image)
-		}
-
-		task, err := container.Task(ctx, nil)
-		err = task.Pause(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to pause container %s: %v", details.ID, err)
-		}
-		defer func() {
-			err := task.Resume(context.WithoutCancel(ctx))
-			if err != nil {
-				log.Error().Str("container", details.ID).Msg("failed to resume container")
-			}
-		}()
-
 		// When doing a rootfs dump only, we can return early after dumping the rootfs
 
 		defer func() {
 			if err == nil {
-				resp.Messages = append(resp.Messages, fmt.Sprintf("Dumped rootfs to image %s", details.Image))
+				resp.Messages = append(resp.Messages, "Dumped rootfs to "+image.Name)
 			}
 		}()
 
 		if details.RootfsOnly {
+			task, err := container.Task(ctx, nil)
+			err = task.Pause(ctx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to pause container %s: %v", details.ID, err)
+			}
+			defer func() {
+				err := task.Resume(context.WithoutCancel(ctx))
+				if err != nil {
+					log.Error().Str("container", details.ID).Msg("failed to resume container")
+				}
+			}()
+
 			log.Debug().Str("container", details.ID).Msg("dumping rootfs only")
 
 			_, end := profiling.StartTimingCategory(ctx, "rootfs", dumpRootfs)
 			defer end()
-			err = dumpRootfs(ctx, client, container, details.Image, details.Username, details.Secret)
+			err = dumpRootfs(ctx, client, container, image.Name, image.Username, image.Secret)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)
 			}
@@ -88,36 +83,33 @@ func DumpRootfs(next types.Dump) types.Dump {
 			return nil, nil // return early without calling next handler
 		}
 
-		// When doing a full dump, we instead start a rootfs dump async and wait for it to finish
+		// When doing a full dump, we instead start a rootfs dump async with CRIU and wait for it to finish
 
 		rootfsErr := make(chan error, 1)
 
-		go func() {
-			rootfsErr <- dumpRootfs(ctx, client, container, details.Image, details.Username, details.Secret)
-		}()
+		opts.CRIUCallback.Include(&criu.NotifyCallback{
+			Name: "rootfs",
+			PreDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+				log.Debug().Str("container", details.ID).Msg("dumping rootfs")
+				go func() {
+					rootfsErr <- dumpRootfs(ctx, client, container, image.Name, image.Username, image.Secret)
+					close(rootfsErr)
+				}()
+				return nil
+			},
+			PostDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+				return <-rootfsErr
+			},
+			FinalizeDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+				return <-rootfsErr
+			},
+		})
 
-		code, err = next(ctx, opts, resp, req)
-		if err != nil {
-			<-rootfsErr // wait for rootfs dump cleanup
-			return nil, err
-		}
-
-		// Since we are waiting on the rootfs dump, can add a component for it
-		_, end := profiling.StartTimingCategory(ctx, "rootfs", dumpRootfs)
-		err = <-rootfsErr
-		end()
-
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to dump rootfs: %v", err)
-		}
-
-		return code, nil
+		return next(ctx, opts, resp, req)
 	}
 }
 
 func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) error {
-	id := container.ID()
-
 	info, err := container.Info(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get container info: %v", err)
@@ -148,15 +140,7 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 		contentStore = client.ContentStore()
 	)
 
-	// TODO BS - the id+"-snapshot" is a hack right now. We should have proper sha256 hashes
-	// ex:
-	// KEY                                                                     PARENT                                                                  KIND
-	// sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a                                                                         Committed
-	// this is bad:
-	// test-snapshot                                                           sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
-	// test1-snapshot                                                          sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
-	// test2-snapshot                                                          sha256:068f50152bbc6e10c9d223150c9fbd30d11bcfd7789c432152aa0a99703bd03a Active
-	diffLayerDesc, diffID, err := createDiff(ctx, id+"-snapshot", contentStore, snapshotter, differ)
+	diffLayerDesc, diffID, err := createDiff(ctx, info.SnapshotKey, contentStore, snapshotter, differ)
 	if err != nil {
 		return fmt.Errorf("failed to export layer: %w", err)
 	}

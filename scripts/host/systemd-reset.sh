@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -eo pipefail
 
 # get the directory of the script
 SOURCE="${BASH_SOURCE[0]}"

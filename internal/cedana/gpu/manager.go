@@ -19,13 +19,19 @@ type Manager interface {
 	IsAttached(pid uint32) bool
 
 	// Detach detaches the GPU controller from a process with the given and PID.
-	Detach(pid uint32) error
+	Detach(ctx context.Context, pid uint32) error
 
 	// Returns server-compatible health checks.
 	Checks() types.Checks
 
 	// GetID returns the ID of the GPU controller for a given PID.
-	GetID(pid uint32) (string, error)
+	GetID(pid uint32) string
+
+	// Freeze the GPU for a given PID
+	Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error
+
+	// Unfreeze the GPU for a given PID
+	Unfreeze(ctx context.Context, pid uint32) error
 
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
 	CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback
@@ -49,7 +55,7 @@ func (ManagerMissing) IsAttached(pid uint32) bool {
 	return false
 }
 
-func (ManagerMissing) Detach(pid uint32) error {
+func (ManagerMissing) Detach(ctx context.Context, pid uint32) error {
 	return fmt.Errorf("GPU manager missing")
 }
 
@@ -57,12 +63,20 @@ func (ManagerMissing) Checks() types.Checks {
 	return types.Checks{}
 }
 
-func (ManagerMissing) GetID(pid uint32) (string, error) {
-	return "", fmt.Errorf("GPU manager missing")
+func (ManagerMissing) GetID(pid uint32) string {
+	return ""
 }
 
 func (ManagerMissing) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
 	return nil
+}
+
+func (ManagerMissing) Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error {
+	return fmt.Errorf("GPU manager missing")
+}
+
+func (ManagerMissing) Unfreeze(ctx context.Context, pid uint32) error {
+	return fmt.Errorf("GPU manager missing")
 }
 
 func (ManagerMissing) Sync(ctx context.Context) error {

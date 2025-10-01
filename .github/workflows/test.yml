@@ -20,21 +20,16 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      gpu:
-        type: boolean
-        description: "Run GPU tests"
-        required: false
-        default: true
-      streamer:
-        type: boolean
-        description: "Run streamer tests"
-        required: false
-        default: true
       large:
         type: boolean
         description: "Run large tests"
         required: false
         default: false
+      kubernetes:
+        type: boolean
+        description: "Run kubernetes tests"
+        required: false
+        default: true
       parallelism:
         type: number
         description: "Parallelism for running tests"
@@ -44,7 +39,7 @@ on:
         type: number
         description: "Parallelism for running GPU tests"
         required: false
-        default: 4
+        default: 2
       runner:
         type: string
         description: "Runner machine for CPU tests"
@@ -54,12 +49,28 @@ on:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 4cpu-16g-1xL4
+        default: 4cpu-16g-1xT4
       runner_gpu_arm64:
         type: string
         description: "Runner machine for GPU tests (arm64)"
         required: false
         default: 8cpu-16g-1xT4G
+      post_summary_slack:
+        type: string
+        description: "Webhook URL for posting summary to Slack"
+        required: false
+        default: ""
+
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  FORMATTER: junit
+  RETRIES: 1
+  DEBUG: 0 # bats debug logging
 
 jobs:
   unit:
@@ -119,9 +130,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -139,11 +147,11 @@ jobs:
         run: |
           sudo -E chmod +x ./cedana
           sudo -E cp ./cedana /usr/local/bin/
-          sudo -E mkdir -p /cedana/scripts
-          sudo -E cp -r ./scripts/host/* /cedana/scripts/
-          sudo -E /cedana/scripts/k8s-setup-host.sh
+          sudo -E mkdir -p /cedana/scripts/host
+          sudo -E cp -r ./scripts/host/* /cedana/scripts/host
+          sudo -E /cedana/scripts/host/k8s-setup-host.sh
 
-  regression:
+  basic:
     name: Basic
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
     timeout-minutes: 30
@@ -158,10 +166,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      options: --privileged --init --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -187,8 +192,10 @@ jobs:
           chmod +x ./criu
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install CRIU
-        run: sudo -E ./cedana plugin install criu
+      - name: Install
+        run: |
+          make install
+          sudo -E cedana plugin install criu
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -203,13 +210,42 @@ jobs:
         env:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
-          RETRIES: 1
         run: |
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           else
-            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
+
+      - name: Setup node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate report (isolated)
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Basic (${{ matrix.arch }})"
+
+      - name: Generate report (persistent)
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Basic (${{ matrix.arch }})"
 
       - name: Upload report
         if: always()
@@ -218,11 +254,11 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}
           path: |
-            /tmp/report*.xml
+            /tmp/report*.json
 
-  regression-plugins:
-    name: Plugins
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
+  plugin:
+    name: Plugin
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/tag=${{ matrix.plugin }}/extras=s3-cache
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -242,10 +278,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init -v /var/run/docker.sock:/var/run/docker.sock
-    env:
-      CEDANA_URL: ${{ vars.CEDANA_URL }}
-      CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+      options: --privileged --init --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -274,11 +307,12 @@ jobs:
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
-          chmod +x ./libcedana-*.so
           echo "$PWD" >> $GITHUB_PATH
 
-      - name: Install plugin
-        run: sudo -E ./cedana plugin install ${{ matrix.plugin }} criu storage/cedana
+      - name: Install
+        run: |
+          make install
+          sudo -E cedana plugin install ${{ matrix.plugin }} criu runc storage/cedana storage/s3 storage/gcs
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
@@ -294,15 +328,14 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PLUGIN: ${{ matrix.plugin }}
-          RETRIES: 1
         run: |
           # replace slash in plugin with colon so that the tag is namespaced correctly
           # e.g. storage/cedana -> storage:cedana
           PLUGIN=$(echo $PLUGIN | sed 's/\//:/g')
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=!gpu,!streamer,$PLUGIN PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           else
-            make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES
+            make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
       - name: Set sanitized plugin
@@ -313,26 +346,52 @@ jobs:
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
 
+      - name: Setup node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate report (isolated)
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="${{ matrix.plugin }} (${{ matrix.arch }})"
+
+      - name: Generate report (persistent)
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="${{ matrix.plugin }} (${{ matrix.arch }})"
+
       - name: Upload report
         if: always()
         id: upload-report
         uses: actions/upload-artifact@v4
-        env:
-          PLUGIN: ${{ env.PLUGIN }}
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
-            /tmp/report*.xml
+            /tmp/report*.json
 
-  regression-streamer:
+  streamer:
     name: Streamer
     uses: ./.github/workflows/test_streamer.yml
-    if: inputs.streamer
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      gpu: false # will be tested in the regression-gpu job already
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
       parallelism_gpu: ${{ inputs.parallelism_gpu }}
@@ -341,25 +400,69 @@ jobs:
       runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
-  regression-gpu:
+  gpu:
     name: GPU
     uses: ./.github/workflows/test_gpu.yml
-    if: inputs.gpu
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      streamer: ${{ inputs.streamer }}
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner_gpu }}
       runner_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
+  # XXX: Below kubernetes tests are split into separate workflows, instead of using matrix,
+  # because of Github Actions issue of using concurrency group together with matrix jobs
+  # within the same workflow file.
+  # https://github.com/orgs/community/discussions/26774
+
+  k3s:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: K3s
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner_gpu }}
+      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
+      post_summary: false # Will post consolidated summary instead
+
+  eks:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
+    secrets: inherit
+    concurrency: test-k8s-eks # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: EKS
+      large: ${{ inputs.large }}
+      post_summary: false # Will post consolidated summary instead
+
+  gke:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
+    secrets: inherit
+    concurrency: test-k8s-gke # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: GKE
+      large: ${{ inputs.large }}
+      post_summary: false # Will post consolidated summary instead
+
   post-summary:
     name: Post Summary
     if: always()
-    needs: [regression, regression-plugins, regression-streamer, regression-gpu]
+    needs: [basic, plugin, streamer, gpu, k3s, eks, gke]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -367,6 +470,7 @@ jobs:
         arch:
           - amd64
           - arm64
+      max-parallel: 1
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -376,9 +480,6 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Setup node
-        uses: actions/setup-node@v4
-
       - name: Download report
         id: download-report
         uses: actions/download-artifact@v4
@@ -386,17 +487,15 @@ jobs:
           pattern: test-report-${{ matrix.arch }}*
           path: report
 
-      - name: Generate consolidated report
-        run: npx junit-to-ctrf "report/**/*.xml" -o ctrf/report.json
-
       - name: Post report
         uses: ctrf-io/github-test-reporter@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          report-path: ctrf/*.json
+          report-path: report/**/*.json
           github-report: true
           failed-folded-report: true
+          flaky-report: true
           summary: true
           pull-request: true
           title: ${{ matrix.arch }}
@@ -407,3 +506,16 @@ jobs:
           always-group-by: true
           upload-artifact: true
           artifact-name: ctrf-report-${{ matrix.arch }}
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Post report to Slack
+        if: ${{ inputs.post_summary_slack != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || secrets.SLACK_WEBHOOK_URL_TESTS }}
+          TITLE: "Test results (${{ matrix.arch }})"
+        run: |
+          npx slack-ctrf results "report/**/*.json" --title "$TITLE" --prefix ${{ github.repository }}

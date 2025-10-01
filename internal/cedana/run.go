@@ -39,12 +39,13 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 	}
 	resp := &daemon.RunResp{}
 
 	_, err := run(ctx, opts, resp, req)
 	if err != nil {
+		log.Error().Err(err).Str("type", req.Type).Msg("run failed")
 		return nil, err
 	}
 
@@ -54,7 +55,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 	return resp, nil
 }
 
-func (s *Cedana) Run(req *daemon.RunReq) (code func() <-chan int, err error) {
+func (s *Cedana) Run(req *daemon.RunReq) (exitCode <-chan int, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler, which depends on the type of job being run, thus it will be
 	// inserted from a plugin or will be the built-in process run handler.
@@ -73,11 +74,17 @@ func (s *Cedana) Run(req *daemon.RunReq) (code func() <-chan int, err error) {
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 	}
 	resp := &daemon.RunResp{}
 
-	return run(s.lifetime, opts, resp, req)
+	code, err := run(s.lifetime, opts, resp, req)
+	if err != nil {
+		log.Error().Err(err).Str("type", req.Type).Msg("run failed")
+		return nil, err
+	}
+
+	return code(), err
 }
 
 //////////////////////////

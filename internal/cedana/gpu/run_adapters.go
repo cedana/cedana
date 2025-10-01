@@ -33,6 +33,11 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to enable GPU support")
 			}
 
+			err = gpus.Sync(ctx)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to sync GPU manager: %v", err)
+			}
+
 			pid := make(chan uint32, 1)
 			defer close(pid)
 
@@ -109,6 +114,7 @@ func ProcessInterception(next types.Run) types.Run {
 		env := req.GetEnv()
 
 		env = append(env, "LD_PRELOAD="+gpu.LibraryPaths()[0])
+		env = append(env, "NCCL_SHM_DISABLE=1") // Disable for now to avoid conflicts with NCCL's shm usage
 		env = append(env, "CEDANA_GPU_ID="+id)
 
 		req.Env = env

@@ -15,7 +15,6 @@ import (
 	"github.com/cedana/cedana/internal/cedana/process"
 	"github.com/cedana/cedana/internal/cedana/streamer"
 	"github.com/cedana/cedana/internal/cedana/validation"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/types"
@@ -28,25 +27,19 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
-	setupRestoreFS := filesystem.SetupRestoreFS
-	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		setupRestoreFS = streamer.SetupRestoreFS
-	}
-
 	middleware := types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
+
 		pluginRestoreStorage, // detects and plugs in the storage to use
-		setupRestoreFS,       // auto-detects compression
+
 		process.ReloadProcessStateForRestore,
+		process.InheritFilesForRestore,
+		network.DetectNetworkOptionsForRestore,
 		gpu.Restore(s.gpus),
 
 		pluginRestoreMiddleware, // middleware from plugins
-
-		// Process state-dependent adapters
-		process.InheritFilesForRestore,
-		network.DetectNetworkOptionsForRestore,
 
 		criu.CheckOptsForRestore,
 	}
@@ -63,7 +56,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 	}
 	resp := &daemon.RestoreResp{}
 
@@ -71,6 +64,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 
 	_, err := criu(restore)(ctx, opts, resp, req)
 	if err != nil {
+		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
 		return nil, err
 	}
 
@@ -81,21 +75,17 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 }
 
 // Restore for CedanaRoot struct which avoid the use of jobs and provides runc compatible cli usage
-func (s *Cedana) Restore(req *daemon.RestoreReq) (code func() <-chan int, err error) {
+func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
-
-	dumpDirAdapter := filesystem.SetupRestoreFS
-	if req.Stream > 0 || config.Global.Checkpoint.Stream > 0 {
-		dumpDirAdapter = streamer.SetupRestoreFS
-	}
 
 	middleware := types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
+
 		pluginRestoreStorage, // detects and plugs in the storage to use
-		dumpDirAdapter,       // auto-detects compression
+
 		process.ReloadProcessStateForRestore,
 		gpu.Restore(s.gpus),
 
@@ -113,13 +103,19 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (code func() <-chan int, err er
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.wg,
+		WG:       s.WaitGroup,
 	}
 	resp := &daemon.RestoreResp{}
 
 	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
 
-	return criu(restore)(s.lifetime, opts, resp, req)
+	code, err := criu(restore)(s.lifetime, opts, resp, req)
+	if err != nil {
+		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
+		return nil, err
+	}
+
+	return code(), nil
 }
 
 //////////////////////////
@@ -177,6 +173,16 @@ func pluginRestoreStorage(next types.Restore) types.Restore {
 
 		opts.Storage = storage
 
-		return next(ctx, opts, resp, req)
+		streams, err := streamer.IsStreamable(storage, dir)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to detect restore filesystem to use: %v", err))
+		}
+
+		filesystem := filesystem.RestoreFilesystem
+		if streams > 0 {
+			filesystem = streamer.RestoreFilesystem(streams)
+		}
+
+		return next.With(filesystem)(ctx, opts, resp, req)
 	}
 }

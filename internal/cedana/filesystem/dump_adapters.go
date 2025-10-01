@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
@@ -27,7 +29,7 @@ const DUMP_DIR_PERMS = 0o755
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
-func SetupDumpFS(next types.Dump) types.Dump {
+func DumpFilesystem(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
 		dir := req.Dir
@@ -89,9 +91,9 @@ func SetupDumpFS(next types.Dump) types.Dump {
 		// so that if we fail compression/upload, CRIU can still resume the process (only if leave-running is not set)
 
 		if storage.IsRemote() || (compression != "" && compression != "none") {
-			compress := func() error {
-				var path string
-				ext, err := io.ExtForCompression(compression)
+			compress := func() (err error) {
+				var path, ext string
+				ext, err = io.ExtForCompression(compression)
 				if err != nil {
 					return err
 				}
@@ -103,14 +105,14 @@ func SetupDumpFS(next types.Dump) types.Dump {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
 				defer func() {
-					if e := tarball.Close(); e != nil && err == nil {
-						err = e
-					}
+					err = errors.Join(err, tarball.Close())
 				}()
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
+				_, end := profiling.StartTimingCategory(ctx, "storage", io.Tar)
 				err = io.Tar(imagesDirectory, tarball, compression)
+				end()
 				if err != nil {
 					storage.Delete(path)
 					return fmt.Errorf("failed to create tarball: %w", err)
@@ -119,7 +121,7 @@ func SetupDumpFS(next types.Dump) types.Dump {
 				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
 
 				os.RemoveAll(imagesDirectory)
-				resp.Path = path
+				resp.Paths = append(resp.Paths, path)
 				return nil
 			}
 
@@ -130,13 +132,10 @@ func SetupDumpFS(next types.Dump) types.Dump {
 
 			if req.GetCriu().GetLeaveRunning() {
 				defer func() {
-					if err == nil {
-						err = compress()
-					}
+					err = errors.Join(err, compress())
 				}()
 			} else {
 				callback := &criu_client.NotifyCallback{
-					Name: "storage",
 					PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) (err error) {
 						return compress()
 					},
@@ -145,7 +144,7 @@ func SetupDumpFS(next types.Dump) types.Dump {
 			}
 		} else {
 			// Nothing else to do, just set the path
-			resp.Path = imagesDirectory
+			resp.Paths = append(resp.Paths, imagesDirectory)
 		}
 
 		return next(ctx, opts, resp, req)

@@ -1,11 +1,21 @@
 name: Nightly
-permissions:
-  contents: write
 
 # This workflow runs all the large tests and benchmarks nightly.
+
 on:
   schedule:
-    - cron: "0 0 * * *" # Every day at midnight
+    - cron: "8 0 * * *" # Every day at midnight (EST)
+  workflow_dispatch:
+    inputs:
+      debug:
+        type: boolean
+        description: "Run with debugging enabled"
+        required: false
+        default: false
+
+concurrency:
+  group: ${{ github.repository }}-nightly-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   download:
@@ -13,9 +23,13 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      cedana_version: main
-      gpu_version: main
-      streamer_version: main
+      cedana_version: ${{ vars.NIGHTLY_CEDANA_VERSION }}
+      criu_version: ${{ vars.NIGHTLY_CRIU_VERSION }}
+      gpu_version: ${{ vars.NIGHTLY_GPU_VERSION }}
+      streamer_version: ${{ vars.NIGHTLY_STREAMER_VERSION }}
+      helm_chart_version: ${{ vars.NIGHTLY_HELM_CHART_VERSION }}
+      controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
+      runtime_shim_version: ${{ vars.NIGHTLY_RUNTIME_SHIM_VERSION }}
 
   test:
     name: Test
@@ -23,30 +37,29 @@ jobs:
     needs: download
     secrets: inherit
     with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      cpu: true
-      gpu: true
-      streamer: true
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
       runner: 16cpu-64g # use larger runner
-      runner_gpu: 16cpu-64g-1xL40S # use larger runner
-      runner_gpu_arm: 32cpu-64g-1xT4G # use larger runner
+      runner_gpu: 8cpu-64g-1xL40S # use larger runner
+      runner_gpu_arm64: 32cpu-64g-1xT4G # use larger runner
       parallelism: 8
       parallelism_gpu: 4
+      post_summary_slack: nightly
 
-  bench:
-    name: Bench
-    uses: ./.github/workflows/bench.yml
-    needs: download
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      cedana: true
-      native: false
-      samples: 3
-      push_results: true
-      results_dataset: cedana_nightly
-      comparison_patch: true
-      comparison_native: true
-      post_summary_slack_nightly: true
-      runner: 16cpu-64g-1xL4 # use larger runner (bench will automatically run larger metrics)
+  # TODO: Enable once the larger GPU benchmarks are fixed
+
+  # bench:
+  #   name: Bench
+  #   uses: ./.github/workflows/bench.yml
+  #   needs: download
+  #   secrets: inherit
+  #   with:
+  #     debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
+  #     runtimes: cedana
+  #     samples: 2
+  #     push_results: true
+  #     results_dataset: cedana_nightly
+  #     comparison_previous: true
+  #     comparison_runtime: true
+  #     post_summary_slack: nightly
+  #     runner: 8cpu-64g-1xL40S # use larger runner (bench will automatically run larger metrics)

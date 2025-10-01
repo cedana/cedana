@@ -5,8 +5,8 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=base,remote
 
-load helpers/utils
-load helpers/daemon
+load ../helpers/utils
+load ../helpers/daemon
 
 load_lib support
 load_lib assert
@@ -39,8 +39,8 @@ teardown_file() {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
-    run cedana run process echo hello --jid "$jid"
-    assert_success
+    cedana run process echo hello --jid "$jid"
+
     assert_exists "$log_file"
     assert_file_contains "$log_file" "hello"
 
@@ -76,12 +76,10 @@ teardown_file() {
 @test "dump process (new job, remote)" {
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
@@ -104,12 +102,10 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana manage process $pid --jid "$jid"
-    assert_success
+    cedana manage process $pid --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
@@ -133,17 +129,14 @@ teardown_file() {
 @test "restore process (new job, remote)" {
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana ps
     assert_success
@@ -169,17 +162,14 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &> "$log" < /dev/null &
     pid=$!
 
-    run cedana manage process $pid --jid "$jid"
-    assert_success
+    cedana manage process $pid --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana ps
     assert_success

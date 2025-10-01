@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/rand/v2"
 	"os"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
@@ -25,6 +26,10 @@ var (
 )
 
 func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
+	client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
+	if !ok {
+		return nil, status.Errorf(codes.Internal, "failed to get client from context")
+	}
 	container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "failed to get container from context")
@@ -41,16 +46,16 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
 		io = cio.WithStreams(stdIn, stdOut, stdErr)
 	} else {
-		logFile, ok := ctx.Value(keys.LOG_FILE_CONTEXT_KEY).(*os.File)
+		outFile, ok := ctx.Value(keys.OUT_FILE_CONTEXT_KEY).(*os.File)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get log file from context")
 		}
-		io = cio.WithStreams(nil, logFile, logFile)
+		io = cio.WithStreams(nil, outFile, outFile)
 	}
 
 	task, err := container.NewTask(ctx, cio.NewCreator(io))
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get task: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to create new task: %v", err)
 	}
 
 	err = task.Start(ctx)
@@ -64,14 +69,14 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	opts.WG.Add(1)
 	go func() {
 		defer opts.WG.Done()
-
-		statusChan, err := task.Wait(context.WithoutCancel(ctx))
+		defer client.Close()
+		statusChan, _ := task.Wait(context.WithoutCancel(opts.Lifetime))
+		status := <-statusChan
+		err = status.Error()
 		if err != nil {
 			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("container Wait()")
 		}
-		status := <-statusChan
 		exitCode <- int(status.ExitCode())
-		container.Delete(ctx, containerd.WithSnapshotCleanup)
 		close(exitCode)
 	}()
 
@@ -86,9 +91,32 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 		return nil, status.Errorf(codes.FailedPrecondition, "failed to get containerd client from context")
 	}
 
-	container, err := client.LoadContainer(ctx, details.ID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to load container: %v", err)
+	var container containerd.Container
+
+	switch req.Action {
+	case daemon.RunAction_MANAGE_EXISTING:
+		container, err = client.LoadContainer(ctx, details.ID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to load container: %v", err)
+		}
+	case daemon.RunAction_MANAGE_UPCOMING:
+	loop:
+		for {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-opts.Lifetime.Done():
+				return nil, opts.Lifetime.Err()
+			case <-time.After(500 * time.Millisecond):
+				container, err = client.LoadContainer(ctx, details.ID)
+				if err == nil {
+					break loop
+				}
+				log.Trace().Msg("waiting for upcoming container to start managing")
+			case <-time.After(waitForManageUpcomingTimeout):
+				return nil, status.Errorf(codes.DeadlineExceeded, "timed out waiting for upcoming container %s", details.ID)
+			}
+		}
 	}
 
 	task, err := container.Task(ctx, nil)
@@ -98,5 +126,5 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 
 	resp.PID = uint32(task.Pid())
 
-	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.PID)), nil
+	return channel.Broadcaster(utils.WaitForPid(resp.PID)), nil
 }

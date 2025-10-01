@@ -1,26 +1,24 @@
 name: Bench
 
 permissions:
-  contents: read
+  contents: "read"
+  packages: "read"
+  id-token: "write"
+  pull-requests: "write"
 
 on:
   workflow_call:
     inputs:
-      cedana:
-        type: boolean
-        description: "Run Cedana benchmark"
-        required: false
-        default: true
-      native:
-        type: boolean
-        description: "Run native benchmark"
-        required: false
-        default: false
       debug:
         type: boolean
         description: "Run benchmark with debugging enabled"
         required: false
         default: false
+      runtimes:
+        type: string
+        description: "Runtimes to run benchmarks for (comma-separated)"
+        required: false
+        default: cedana
       samples:
         type: string
         description: "Number of samples to run for each metric"
@@ -36,14 +34,14 @@ on:
         description: "BigQuery dataset to push results to"
         required: false
         default: "cedana_alpha"
-      comparison_native:
+      comparison_runtime:
         type: boolean
-        description: "Plot comparison with native runtime"
+        description: "Plot comparison with other runtimes"
         required: false
         default: false
-      comparison_patch:
+      comparison_previous:
         type: boolean
-        description: "Plot comparison with last patch"
+        description: "Plot comparison with previous result"
         required: false
         default: false
       post_summary_pr:
@@ -52,37 +50,89 @@ on:
         required: false
         default: false
       post_summary_slack:
-        type: boolean
-        description: "Post benchmark summary to Slack"
+        type: string
+        description: "Webhook URL for posting summary to Slack"
         required: false
-        default: false
-      post_summary_slack_nightly:
-        type: boolean
-        description: "Post benchmark summary to Slack (nightly)"
-        required: false
-        default: false
+        default: ""
       runner:
         type: string
         description: "Runner machine for benchmark"
         required: false
-        default: "16cpu-64g-1xL4"
+        default: "8cpu-32g-1xL4"
+
+env:
+  CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  SAMPLES: ${{ inputs.samples }}
+  RETRIES: 2
 
 jobs:
-  cedana_runtime_1:
-    name: Cedana (runtime 1)
-    if: inputs.cedana
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
+  dry-run:
+    name: Dry Run
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-8/extras=s3-cache
+    container:
+      image: cedana/cedana-bench:slim
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --ipc=host --gpus all
+    outputs:
+      runtimes: ${{ steps.list-runtimes.outputs.runtimes }}
+      matrix: ${{ steps.dry-run.outputs.matrix }}
+    defaults:
+      run:
+        working-directory: /src
+    steps:
+      - name: List runtimes
+        id: list-runtimes
+        run: |
+          runtimes="[]"
+          for runtime in $(echo "${{ inputs.runtimes }}" | tr ', ' ' '); do
+            if jq -e ".runtimes.list[\"$runtime\"]" bench.json > /dev/null; then
+              runtimes=$(echo "$runtimes" | jq --arg runtime "$runtime" '. + [$runtime]')
+            else
+              echo "Error: Runtime '$runtime' not found in bench.json" >&2
+              exit 1
+            fi
+          done
+          runtimes=$(echo "$runtimes" | jq -c '.')
+          echo "runtimes=$runtimes" >> $GITHUB_OUTPUT
+
+      - name: Dry run
+        id: dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtimes=($(echo "${{ inputs.runtimes }}" | tr ', ' ' '))
+          for runtime in "${runtimes[@]}"; do
+            ./bench run $runtime --dry-run
+          done
+          jq -s 'flatten' results/dry-run-* > matrix.json
+          matrix=$(jq -c '.' matrix.json)
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
+
+  run:
+    name: Run
+    needs: dry-run
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-8/tag=${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}/extras=s3-cache
     container:
       image: cedana/cedana-bench:cuda
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --ipc=host --gpus all
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.dry-run.outputs.matrix) }}
     defaults:
       run:
         working-directory: /src
     steps:
       - uses: runs-on/action@v1
+
       - name: Download GPU binaries
         uses: actions/download-artifact@v4
         id: download-binaries-gpu
@@ -115,11 +165,14 @@ jobs:
           PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
         run: |
-          chmod +x $PATH_BINARIES_CRIU/*
           cp $PATH_BINARIES_GPU/* bin
           cp $PATH_BINARIES_CEDANA/* bin
           cp $PATH_BINARIES_PLUGINS/* bin
           cp $PATH_BINARIES_CRIU/* bin
+          chmod +x $PATH_BINARIES_GPU/*
+          chmod +x $PATH_BINARIES_CEDANA/*
+          chmod +x $PATH_BINARIES_CRIU/*
+
           jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
           mv temp.json bench.json
           jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
@@ -131,112 +184,8 @@ jobs:
           jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
           mv temp.json bench.json
 
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
-
-      - name: Run
-        env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
-        run: |
-          echo Using bench config:
-          cat bench.json
-          ./bench run cedana \
-          -m mem-throughput \
-          -m compute-throughput \
-          -m mem-throughput-d2h \
-          -m mem-throughput-h2d \
-          -m cuda-calls-cputime \
-          -m concurrent-kernels-exectime \
-          -m ml-training-itertime \
-          --save -n $SAMPLES
-
-      - name: Upload logs
-        if: always()
-        id: upload-logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench-logs-runtime-1
-          path: |
-            /src/*.log
-            /tmp/*.log
-
-      - name: Upload results
-        id: upload-results
-        uses: actions/upload-artifact@v4
-        with:
-          name: results-runtime-1
-          path: |
-            /src/results
-
-  cedana_runtime_2:
-    name: Cedana (runtime 2)
-    if: inputs.cedana
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
-    container:
-      image: cedana/cedana-bench:cuda
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --ipc=host --gpus all
-    defaults:
-      run:
-        working-directory: /src
-    steps:
-      - uses: runs-on/action@v1
-      - name: Download GPU binaries
-        uses: actions/download-artifact@v4
-        id: download-binaries-gpu
-        with:
-          name: gpu-amd64
-
-      - name: Download Cedana binary
-        uses: actions/download-artifact@v4
-        id: download-binaries-cedana
-        with:
-          name: cedana-amd64
-
-      - name: Download Cedana plugins
-        uses: actions/download-artifact@v4
-        id: download-binaries-plugins
-        with:
-          name: plugins-amd64
-
-      - name: Download CRIU binary
-        uses: actions/download-artifact@v4
-        id: download-binaries-criu
-        with:
-          name: criu-amd64
-
-      - name: Configure
-        env:
-          PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
-          PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
-          PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
-          PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
-          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
-        run: |
-          chmod +x $PATH_BINARIES_CRIU/*
-          cp $PATH_BINARIES_GPU/* bin
-          cp $PATH_BINARIES_CEDANA/* bin
-          cp $PATH_BINARIES_PLUGINS/* bin
-          cp $PATH_BINARIES_CRIU/* bin
-          jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
-          mv temp.json bench.json
-          jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
-          mv temp.json bench.json
-          jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
-          mv temp.json bench.json
-          jq 'del(.crtools.list."cedana".tag)' bench.json > temp.json
-          mv temp.json bench.json
-          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
-          mv temp.json bench.json
+          cd bin
+          ./cedana plugin install criu criu/cuda
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -246,307 +195,45 @@ jobs:
 
       - name: Run
         env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
+          RUNTIME: ${{ matrix.runtime }}
+          METRIC: ${{ matrix.metric }}
+          WORKLOAD: ${{ matrix.workload }}
         run: |
-          echo Using bench config:
-          cat bench.json
-          ./bench run cedana \
-          -m ml-training-time \
-          --save -n $SAMPLES
+          ./bench run $RUNTIME -m $METRIC -w $WORKLOAD -n $SAMPLES -r $RETRIES --save
 
       - name: Upload logs
         if: always()
         id: upload-logs
         uses: actions/upload-artifact@v4
         with:
-          name: bench-logs-runtime-2
+          name: bench-logs-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
             /src/*.log
             /tmp/*.log
 
       - name: Upload results
-        id: upload-results
-        uses: actions/upload-artifact@v4
-        with:
-          name: results-runtime-2
-          path: |
-            /src/results
-
-  cedana_cr_1:
-    name: Cedana (C/R 1)
-    if: inputs.cedana
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
-    container:
-      image: cedana/cedana-bench:cuda
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --ipc=host --gpus all
-    defaults:
-      run:
-        working-directory: /src
-    steps:
-      - uses: runs-on/action@v1
-      - name: Download GPU binaries
-        uses: actions/download-artifact@v4
-        id: download-binaries-gpu
-        with:
-          name: gpu-amd64
-
-      - name: Download Cedana binary
-        uses: actions/download-artifact@v4
-        id: download-binaries-cedana
-        with:
-          name: cedana-amd64
-
-      - name: Download Cedana plugins
-        uses: actions/download-artifact@v4
-        id: download-binaries-plugins
-        with:
-          name: plugins-amd64
-
-      - name: Download CRIU binary
-        uses: actions/download-artifact@v4
-        id: download-binaries-criu
-        with:
-          name: criu-amd64
-
-      - name: Configure
-        env:
-          PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
-          PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
-          PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
-          PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
-          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
-        run: |
-          chmod +x $PATH_BINARIES_CRIU/*
-          cp $PATH_BINARIES_GPU/* bin
-          cp $PATH_BINARIES_CEDANA/* bin
-          cp $PATH_BINARIES_PLUGINS/* bin
-          cp $PATH_BINARIES_CRIU/* bin
-          jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
-          mv temp.json bench.json
-          jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
-          mv temp.json bench.json
-          jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
-          mv temp.json bench.json
-          jq 'del(.crtools.list."cedana".tag)' bench.json > temp.json
-          mv temp.json bench.json
-          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
-          mv temp.json bench.json
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
-
-      - name: Run
-        env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
-        run: |
-          echo Using bench config:
-          cat bench.json
-          ./bench run cedana \
-          -m warm-checkpoint-time \
-          -m cold-start-time \
-          --save -n $SAMPLES
-
-      - name: Upload logs
         if: always()
-        id: upload-logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench-logs-cr-1
-          path: |
-            /src/*.log
-            /tmp/*.log
-
-      - name: Upload results
         id: upload-results
         uses: actions/upload-artifact@v4
         with:
-          name: results-cr-1
-          path: |
-            /src/results
-
-  cedana_cr_2:
-    name: Cedana (C/R 2)
-    if: inputs.cedana
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
-    container:
-      image: cedana/cedana-bench:cuda
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --ipc=host --gpus all
-    defaults:
-      run:
-        working-directory: /src
-    steps:
-      - uses: runs-on/action@v1
-      - name: Download GPU binaries
-        uses: actions/download-artifact@v4
-        id: download-binaries-gpu
-        with:
-          name: gpu-amd64
-
-      - name: Download Cedana binary
-        uses: actions/download-artifact@v4
-        id: download-binaries-cedana
-        with:
-          name: cedana-amd64
-
-      - name: Download Cedana plugins
-        uses: actions/download-artifact@v4
-        id: download-binaries-plugins
-        with:
-          name: plugins-amd64
-
-      - name: Download CRIU binary
-        uses: actions/download-artifact@v4
-        id: download-binaries-criu
-        with:
-          name: criu-amd64
-
-      - name: Configure
-        env:
-          PATH_BINARIES_GPU: ${{ steps.download-binaries-gpu.outputs.download-path }}
-          PATH_BINARIES_CEDANA: ${{ steps.download-binaries-cedana.outputs.download-path }}
-          PATH_BINARIES_PLUGINS: ${{ steps.download-binaries-plugins.outputs.download-path }}
-          PATH_BINARIES_CRIU: ${{ steps.download-binaries-criu.outputs.download-path }}
-          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
-        run: |
-          chmod +x $PATH_BINARIES_CRIU/*
-          cp $PATH_BINARIES_GPU/* bin
-          cp $PATH_BINARIES_CEDANA/* bin
-          cp $PATH_BINARIES_PLUGINS/* bin
-          cp $PATH_BINARIES_CRIU/* bin
-          jq '.runtimes.list."cedana".source = "local"' bench.json > temp.json
-          mv temp.json bench.json
-          jq 'del(.runtimes.list."cedana".tag)' bench.json > temp.json
-          mv temp.json bench.json
-          jq '.crtools.list."cedana".source = "local"' bench.json > temp.json
-          mv temp.json bench.json
-          jq 'del(.crtools.list."cedana".tag)' bench.json > temp.json
-          mv temp.json bench.json
-          jq '.plots.color_palette = "'$COLOR_PALETTE'"' bench.json > temp.json
-          mv temp.json bench.json
-
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
-
-      - name: Run
-        env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
-        run: |
-          echo Using bench config:
-          cat bench.json
-          ./bench run cedana \
-          -m save-migrate-resume \
-          --save -n $SAMPLES
-
-      - name: Upload logs
-        if: always()
-        id: upload-logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench-logs-cr-2
-          path: |
-            /src/*.log
-            /tmp/*.log
-
-      - name: Upload results
-        id: upload-results
-        uses: actions/upload-artifact@v4
-        with:
-          name: results-cr-2
-          path: |
-            /src/results
-
-  native:
-    name: Native (all)
-    if: inputs.native
-    permissions:
-      contents: read
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-4/extras=s3-cache
-    container:
-      image: cedana/cedana-bench:cuda
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --ipc=host --gpus all
-    defaults:
-      run:
-        working-directory: /src
-    steps:
-      - uses: runs-on/action@v1
-      - name: Setup debugging session
-        uses: mxschmitt/action-tmate@v3
-        if: inputs.debug
-        with:
-          limit-access-to-actor: true
-
-      - name: Run
-        env:
-          CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          CEDANA_URL: ${{ vars.CEDANA_URL }}
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          SAMPLES: ${{ inputs.samples }}
-        run: |
-          echo Using bench config:
-          cat bench.json
-          ./bench run native --save -n $SAMPLES
-
-      - name: Upload logs
-        if: always()
-        id: upload-logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: bench-logs-native
-          path: |
-            /src/*.log
-            /tmp/*.log
-
-      - name: Upload results
-        id: upload-results
-        uses: actions/upload-artifact@v4
-        with:
-          name: results-native
+          name: bench-results-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
             /src/results
 
   post-summary:
     name: Post Summary
     if: ${{ !cancelled() }}
-    needs: [cedana_runtime_1, cedana_runtime_2, cedana_cr_1, cedana_cr_2, native]
-    permissions:
-      contents: "read"
-      packages: "read"
-      id-token: "write"
-      pull-requests: "write"
+    needs: [dry-run, run]
     runs-on: ubuntu-latest
     container:
-      image: cedana/cedana-bench:ubuntu
+      image: cedana/cedana-bench:slim
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: ${{ fromJson(needs.dry-run.outputs.runtimes) }}
     defaults:
       run:
         working-directory: /src
@@ -557,75 +244,21 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Download results (runtime 1)
-        if: inputs.cedana
-        continue-on-error: true
+      - name: Download results
         uses: actions/download-artifact@v4
-        id: download-results-runtime-1
+        id: download-results
         with:
-          name: results-runtime-1
-          path: /src/results-runtime-1
-
-      - name: Download results (runtime 2)
-        if: inputs.cedana
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        id: download-results-runtime-2
-        with:
-          name: results-runtime-2
-          path: /src/results-runtime-2
-
-      - name: Download results (C/R 1)
-        if: inputs.cedana
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        id: download-results-cr-1
-        with:
-          name: results-cr-1
-          path: /src/results-cr-1
-
-      - name: Download results (C/R 2)
-        if: inputs.cedana
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        id: download-results-cr-2
-        with:
-          name: results-cr-2
-          path: /src/results-cr-2
-
-      - name: Download results (native)
-        if: inputs.native
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        id: download-results-native
-        with:
-          name: results-native
-          path: /src/results-native
-
-      - name: Collate results
-        run: |
-          mkdir -p /src/results
-          mv /src/results-runtime-1/run-summary.json /src/results-runtime-1/run-summary-runtime-1.json || true
-          mv /src/results-runtime-2/run-summary.json /src/results-runtime-2/run-summary-runtime-2.json || true
-          mv /src/results-cr-1/run-summary.json /src/results-cr-1/run-summary-cr-1.json || true
-          mv /src/results-cr-2/run-summary.json /src/results-cr-2/run-summary-cr-2.json || true
-          cp -Rf /src/results-runtime-1/* /src/results || true
-          cp -Rf /src/results-runtime-2/* /src/results || true
-          cp -Rf /src/results-cr-1/* /src/results || true
-          cp -Rf /src/results-cr-2/* /src/results || true
-          cp -Rf /src/results-native/* /src/results || true
-          if [ ! -d /src/results ] || [ -z "$(ls -A /src/results)" ]; then
-            echo "No results found, exiting."
-            exit 1
-          fi
+          pattern: bench-results-${{ matrix.runtime }}-*
+          merge-multiple: true
+          path: /src/results
 
       - id: auth
         name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v1
         env:
-          PROJECT_ID: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
-          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER }}
-          SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
+          WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER_BENCH }}
+          SERVICE_ACCOUNT: ${{ vars.GCLOUD_SERVICE_ACCOUNT_BENCH }}
         with:
           project_id: ${{ env.PROJECT_ID }}
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
@@ -634,181 +267,159 @@ jobs:
       - name: Push results
         if: inputs.push_results
         env:
-          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
         run: ./bench results push
 
       - name: Pull last results
         env:
-          GCLOUD_PROJECT: ${{ vars.GCLOUD_BENCHMARK_PROJECT_ID }}
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
           BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
-        run: ./bench results pull --runtime native:1 --runtime cedana:2
-
-      - name: Plot comparison w/ native
-        if: inputs.comparison_native
-        env:
-          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_NATIVE }}
-          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
         run: |
-          ./bench plot --runtime native --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
+          runtime_args=""
+          for runtime in $(jq -r '.runtimes.list | keys[]' bench.json); do
+            runtime_args="$runtime_args --runtime $runtime:2"
+          done
+          ./bench results pull $runtime_args -f
 
-      - name: Upload plots (comparison w/ native)
-        if: inputs.comparison_native
-        id: upload-plots-native
+      - name: Plot comparison (runtime)
+        if: inputs.comparison_runtime
+        env:
+          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_RUNTIME }}
+          FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
+          RUNTIME: ${{ matrix.runtime }}
+        run: |
+          runtime_args=""
+          for runtime in $(jq -r '.runtimes.list | keys[]' bench.json); do
+            if [ "$runtime" != $RUNTIME ]; then
+              runtime_args="$runtime_args --runtime $runtime"
+            fi
+          done
+          ./bench plot $runtime_args --runtime $RUNTIME --save $FLAGS --palette $COLOR_PALETTE
+
+      - name: Upload plots (runtime comparison)
+        if: inputs.comparison_runtime
+        id: upload-plots-runtime
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native-comparison
+          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/runtime-comparison
           glob: "**/*.png"
 
-      - name: Generate summary (comparison w/ native)
-        if: inputs.comparison_native
-        id: summary-native
+      - name: Generate summary (runtime comparison)
+        if: inputs.comparison_runtime
+        id: summary-runtime
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native-comparison/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison w/ native"
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/runtime-comparison/results
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime (rightmost) comparison with other runtimes
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
+          rm -f summary.md
           utils/results-summary > $GITHUB_STEP_SUMMARY
           utils/results-summary > summary.md
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
-      - name: Post summary to Slack (comparison w/ native)
-        if: inputs.post_summary_slack && inputs.comparison_native
-        id: slack-native
+      - name: Post summary to Slack (runtime comparison)
+        if: ${{ inputs.post_summary_slack != '' && inputs.comparison_runtime }}
+        id: slack-runtime
         uses: slackapi/slack-github-action@v1.26.0
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY || secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
-            ${{ steps.summary-native.outputs.slack_summary }}
+            ${{ steps.summary-runtime.outputs.slack_summary }}
 
-      - name: Post summary to PR (comparison w/ native)
-        if: inputs.post_summary_pr && inputs.comparison_native
+      - name: Post summary to PR (runtime comparison)
+        if: inputs.post_summary_pr && inputs.comparison_runtime
         uses: thollander/actions-comment-pull-request@v2
         with:
           filePath: /src/summary.md
-          comment_tag: comparison_native
+          comment_tag: comparison_runtime
 
-      - name: Plot comparison w/ last patch
-        if: inputs.comparison_patch
+      - name: Plot comparison (previous)
+        if: inputs.comparison_previous
         env:
-          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
+          COLOR_PALETTE: ${{ vars.BENCH_PALETTE_COMPARISON_PREVIOUS }}
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
+          RUNTIME: ${{ matrix.runtime }}
         run: |
           rm -rf results/*.png
-          ./bench plot --runtime cedana:2 --save $FLAGS --palette $COLOR_PALETTE
+          ./bench plot --runtime $RUNTIME:2 --save $FLAGS --palette $COLOR_PALETTE
 
-      - name: Upload plots (comparison w/ last patch)
-        if: inputs.comparison_patch
-        id: upload-plots-patch
+      - name: Upload plots (previous comparison)
+        if: inputs.comparison_previous
+        id: upload-plots-previous
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/patch-comparison
+          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/previous-comparison
           glob: "**/*.png"
 
-      - name: Generate summary (comparison w/ last patch)
-        if: inputs.comparison_patch
-        id: summary-patch
+      - name: Generate summary (previous comparison)
+        if: inputs.comparison_previous
+        id: summary-previous
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/patch-comparison/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "**${{ github.head_ref || github.ref_name }}** comparison w/ last patch"
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/previous-comparison/results
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime (rightmost) comparison with previous result(s)
           RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
+          rm -f summary.md
           utils/results-summary > $GITHUB_STEP_SUMMARY
           utils/results-summary > summary.md
           echo ::set-output name=slack_summary::$(utils/results-summary-slack)
 
-      - name: Post summary to PR (comparison w/ last patch)
-        if: inputs.post_summary_pr && inputs.comparison_patch
+      - name: Post summary to PR (previous comparison)
+        if: inputs.post_summary_pr && inputs.comparison_previous
         uses: thollander/actions-comment-pull-request@v2
         with:
           filePath: /src/summary.md
-          comment_tag: comparison_patch
+          comment_tag: comparison_previous
 
-      - name: Post summary to Slack (comparison w/ last patch)
-        if: inputs.post_summary_slack && inputs.comparison_patch
-        id: slack-patch
+      - name: Post summary to Slack (previous comparison)
+        if: ${{ inputs.post_summary_slack != '' && inputs.comparison_previous }}
+        id: slack-previous
         uses: slackapi/slack-github-action@v1.26.0
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY || secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
-            ${{ steps.summary-patch.outputs.slack_summary }}
+            ${{ steps.summary-previous.outputs.slack_summary }}
 
-      - name: Plot (nightly)
-        if: inputs.post_summary_slack_nightly
+      - name: Plot
+        if: ${{ ! inputs.comparison_runtime && !inputs.comparison_previous }}
         env:
           COLOR_PALETTE: ${{ vars.BENCH_PALETTE_BRANDED }}
-          FLAGS: ${{ vars.BENCH_PLOT_FLAGS_BRANDED }}
-        run: |
-          rm -rf results/*.png
-          ./bench plot --runtime native --runtime cedana --save $FLAGS --palette $COLOR_PALETTE
-
-      - name: Upload plots (nightly)
-        if: inputs.post_summary_slack_nightly
-        id: upload-plots-nightly
-        uses: google-github-actions/upload-cloud-storage@v2
-        with:
-          predefinedAcl: publicRead
-          project_id: ${{ steps.auth.outputs.project_id }}
-          path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/nightly
-          glob: "**/*.png"
-
-      - name: Generate summary (nightly)
-        if: inputs.post_summary_slack_nightly
-        id: summary-nightly
-        env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/nightly/results
-          RESULTS_TITLE: ${{ github.repository }}
-          RESULTS_DESCRIPTION: "Nightly performance results (comparison w/ native)"
-        run: |
-          utils/results-summary > $GITHUB_STEP_SUMMARY
-          echo ::set-output name=slack_summary::$(utils/results-summary-slack)
-
-      - name: Post summary (nightly)
-        if: inputs.post_summary_slack_nightly
-        id: slack-nightly
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        with:
-          payload: |
-            ${{ steps.summary-nightly.outputs.slack_summary }}
-
-      - name: Plot (native)
-        if: inputs.native
-        env:
           FLAGS: ${{ vars.BENCH_PLOT_FLAGS }}
-        run: ./bench plot --runtime native --save $FLAGS
+          RUNTIME: ${{ matrix.runtime }}
+        run: ./bench plot --runtime $RUNTIME --save $FLAGS --palette $COLOR_PALETTE
 
-      - name: Upload plots (native)
-        if: inputs.native
+      - name: Upload plots
+        if: ${{ ! inputs.comparison_runtime && !inputs.comparison_previous }}
         id: upload-plots
         uses: google-github-actions/upload-cloud-storage@v2
         with:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
           path: /src/results
-          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native
+          destination: ${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}
           glob: "**/*.png"
 
-      - name: Generate summary (native)
-        if: inputs.native
+      - name: Generate summary
+        if: ${{ ! inputs.comparison_runtime && !inputs.comparison_previous }}
         env:
-          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/native/results
-          RESULTS_DESCRIPTION: "> Native"
+          RESULTS_BASE_URL: https://storage.googleapis.com/${{ github.repository }}/${{ github.head_ref || github.ref_name }}/${{ github.run_id }}/results
+          RESULTS_TITLE: ${{ github.repository }} — ${{ github.head_ref || github.ref_name }}
+          RESULTS_DESCRIPTION: ${{ matrix.runtime }} runtime results
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ github.head_ref || github.ref_name }}
         run: |
-          utils/results-summary > summary.md
+          rm -f summary.md
           utils/results-summary > $GITHUB_STEP_SUMMARY
+          utils/results-summary > summary.md

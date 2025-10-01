@@ -61,16 +61,16 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 				if req.Log == "" {
 					req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, job.JID)
 				}
-				logFile, err := os.OpenFile(req.Log, LOG_FILE_FLAGS, LOG_FILE_PERMS)
+				outFile, err := os.OpenFile(req.Log, OUT_FILE_FLAGS, OUT_FILE_PERMS)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
 				}
-				defer logFile.Close()
+				defer outFile.Close()
 				err = os.Chown(req.Log, int(req.UID), int(req.GID))
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to change log file owner: %v", err)
 				}
-				ctx = context.WithValue(ctx, keys.LOG_FILE_CONTEXT_KEY, logFile)
+				ctx = context.WithValue(ctx, keys.OUT_FILE_CONTEXT_KEY, outFile)
 			}
 
 			// Use saved job details, but allow overriding from request
@@ -106,7 +106,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 				return nil, err
 			}
 
-			job.SetDetails(req.Details) // Set again, in case they get modified later
+			job.SetDetails(req.Details) // Set again, in case they got modified
 			job.SetLog(req.Log)
 
 			err = jobs.Manage(opts.Lifetime, jid, resp.PID, code())

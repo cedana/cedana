@@ -3,8 +3,8 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=remote,storage:cedana,streamer
 
-load ../helpers/utils
-load ../helpers/daemon
+load ../../helpers/utils
+load ../../helpers/daemon
 
 load_lib support
 load_lib assert
@@ -36,8 +36,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 4 --compression none
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 4 --compression none
 
     run kill $pid
 }
@@ -48,8 +47,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 8 --compression none
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 8 --compression none
 
     run kill $pid
 }
@@ -60,11 +58,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression tar
-    assert_success
-
-    # tar does no compression, but since the option is valid for non-stream dump,
-    # it just creates uncompressed files
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression tar
 
     run kill $pid
 }
@@ -75,8 +69,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression gzip
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression gzip
 
     run kill $pid
 }
@@ -87,8 +80,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression lz4
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression lz4
 
     run kill $pid
 }
@@ -99,8 +91,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression zlib
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression zlib
 
     run kill $pid
 }
@@ -112,15 +103,13 @@ teardown_file() {
     name=$(unix_nano)
     name2=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression none --leave-running
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression none --leave-running
 
     pid_exists $pid
 
     sleep 1
 
-    run cedana dump process $pid --name "$name2" --dir cedana://ci --stream 2 --compression none
-    assert_success
+    cedana dump process $pid --name "$name2" --dir cedana://ci --streams 2 --compression none
 
     run kill $pid
 }
@@ -132,15 +121,13 @@ teardown_file() {
     name=$(unix_nano)
     name2=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression gzip --leave-running
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression gzip --leave-running
 
     pid_exists $pid
 
     sleep 1
 
-    run cedana dump process $pid --name "$name2" --dir cedana://ci --stream 2 --compression gzip
-    assert_success
+    cedana dump process $pid --name "$name2" --dir cedana://ci --streams 2 --compression gzip
 
     run kill $pid
 }
@@ -155,13 +142,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 4 --compression none
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 4 --compression none
 
     dump_file="cedana://ci/$name"
 
-    run cedana restore process --path "$dump_file" --stream 4
-    assert_success
+    cedana restore process --path "$dump_file"
 
     run kill $pid
 }
@@ -172,30 +157,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 8 --compression none
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 8 --compression none
 
     dump_file="cedana://ci/$name"
 
-    run cedana restore process --path "$dump_file" --stream 8
-    assert_success
-
-    run kill $pid
-}
-
-# bats test_tags=restore
-@test "remote stream restore process (mismatched parallelism)" {
-    "$WORKLOADS"/date-loop.sh &
-    pid=$!
-    name=$(unix_nano)
-
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2
-    assert_success
-
-    dump_file="cedana://ci/$name"
-
-    run cedana restore process --path "$dump_file" --stream 3
-    assert_failure
+    cedana restore process --path "$dump_file"
 
     run kill $pid
 }
@@ -206,13 +172,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression tar
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression tar
 
     dump_file="cedana://ci/$name"
 
-    run cedana restore process --path "$dump_file" --stream 2
-    assert_success
+    cedana restore process --path "$dump_file"
 
     run kill $pid
 }
@@ -223,13 +187,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression gzip
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression gzip
 
     dump_file="cedana://ci/$name"
 
-    run cedana restore process --path "$dump_file" --stream 2
-    assert_success
+    cedana restore process --path "$dump_file"
 
     run kill $pid
 }
@@ -240,13 +202,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression lz4
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression lz4
 
     dump_file="cedana://ci/$name"
 
-    run cedana restore process --path "$dump_file" --stream 2
-    assert_success
+    cedana restore process --path "$dump_file"
 
     run kill $pid
 }
@@ -257,13 +217,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir cedana://ci --stream 2 --compression zlib
-    assert_success
+    cedana dump process $pid --name "$name" --dir cedana://ci --streams 2 --compression zlib
 
     dump_file="cedana://ci/$name"
 
-    run cedana restore process --path "$dump_file" --stream 2
-    assert_success
+    cedana restore process --path "$dump_file"
 
     run kill $pid
 }

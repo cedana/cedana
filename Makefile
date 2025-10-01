@@ -1,4 +1,7 @@
+PWD=$(shell pwd)
 OUT_DIR=$(PWD)
+INSTALL_BIN_DIR=/usr/local/bin
+INSTALL_LIB_DIR=/usr/local/lib
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
@@ -11,7 +14,7 @@ ifndef VERBOSE
 .SILENT:
 endif
 
-all: build install plugins plugins-install ## Build and install (with all plugins)
+all: cedana install plugins plugins-install ## Build and install (with all plugins)
 
 ##########
 ##@ Cedana
@@ -19,35 +22,30 @@ all: build install plugins plugins-install ## Build and install (with all plugin
 
 BINARY=cedana
 BINARY_SOURCES=$(shell find . -path ./test -prune -o -type f -name '*.go' -not -path './plugins/*' -print)
-INSTALL_PATH=/usr/local/bin/cedana
+PKG_SOURCES=$(sort $(shell find pkg -name '*.go'))
+GO_MOD_FILES=go.sum go.mod
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
+DEBUG?=0
 
-build: $(BINARY)
+cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
+$(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
+	$(GOCMD) mod tidy ;\
+	if [ "$(DEBUG)" = "1" ]; then \
+		echo "Building $(BINARY) with debug symbols..." ;\
+		$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $@ ;\
+	else \
+		echo "Building $(BINARY)..." ;\
+		$(GOBUILD) -buildvcs=true -ldflags "$(LDFLAGS)" -o $@ ;\
+	fi
 
-$(BINARY): $(BINARY_SOURCES) ## Build the binary
-	@echo "Building $(BINARY)..."
-	$(GOCMD) mod tidy
-	$(GOBUILD) -buildvcs=true -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
-
-debug: $(BINARY_SOURCES) ## Build the binary with debug symbols and no optimizations
-	@echo "Building $(BINARY) with debug symbols..."
-	$(GOCMD) mod tidy
-	$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $(OUT_DIR)/$(BINARY)
-
-install: $(INSTALL_PATH) ## Install the binary
-
-$(INSTALL_PATH): $(BINARY) ## Install the binary
+install: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the binary
+$(INSTALL_BIN_DIR)/$(BINARY): $(OUT_DIR)/$(BINARY)
 	@echo "Installing $(BINARY)..."
-	$(SUDO) cp $(OUT_DIR)/$(BINARY) $(INSTALL_PATH)
+	$(SUDO) cp $(OUT_DIR)/$(BINARY) $@
 
-start: $(INSTALL_PATH) ## Start the daemon
+start: $(INSTALL_BIN_DIR)/$(BINARY) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
-
-stop: ## Stop the daemon
-	@echo "Stopping cedana..."
-	pgrep $(BINARY) | xargs -r $(SUDO) kill -TERM
-	sleep 1
 
 install-systemd: install ## Install the systemd daemon
 	@echo "Installing systemd service..."
@@ -58,10 +56,11 @@ reset-systemd: ## Reset the systemd daemon
 	$(SUDO) $(SCRIPTS_DIR)/host/systemd-reset.sh ;\
 	sleep 1
 
-reset: reset-systemd stop reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
+reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
+	$(SUDO) pkill $(BINARY) || true
 	rm -f $(OUT_DIR)/$(BINARY)
-	$(SUDO) rm -f $(INSTALL_PATH)
+	$(SUDO) rm -f $(INSTALL_BIN_DIR)/$(BINARY)
 
 reset-db: ## Reset the local database
 	@echo "Resetting database..."
@@ -69,13 +68,14 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana/*
+	rm -rf ~/.cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
 	$(SUDO) rm -rf /tmp/cedana*
 	$(SUDO) rm -rf /tmp/dump*
 	$(SUDO) rm -rf /dev/shm/cedana*
+	$(SUDO) rm -rf /run/cedana*
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."
@@ -85,66 +85,30 @@ reset-logs: ## Reset logs
 ##@ Plugins
 ###########
 
-PLUGIN_SOURCES=$(shell find plugins -name '*.go')
-PLUGIN_BINARIES=$(shell ls plugins | sed 's/^/.\/libcedana-/g' | sed 's/$$/.so/g')
-PKG_SOURCES=$(shell find pkg plugins -name '*.go')
-PLUGIN_INSTALL_PATHS=$(shell ls plugins | sed 's/^/\/usr\/local\/lib\/libcedana-/g' | sed 's/$$/.so/g')
+PLUGIN_NAMES=$(shell ls plugins)
+PLUGIN_BINARIES=$(patsubst %,$(OUT_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
+PLUGIN_INSTALL_PATHS=$(patsubst %,$(INSTALL_LIB_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 
-plugin: ## Build a plugin (PLUGIN=<plugin>)
-	@echo "Building plugin $$PLUGIN..."
-	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
-
-plugin-debug: ## Build a plugin with debug symbols and no optimizations (PLUGIN=<plugin>)
-	@echo "Building plugin $$PLUGIN with debug symbols..."
-	$(GOBUILD) -C plugins/$$PLUGIN -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$PLUGIN.so
-
-plugin-install: plugin ## Install a plugin (PLUGIN=<plugin>)
-	@echo "Installing plugin $$PLUGIN..."
-	$(SUDO) cp $(OUT_DIR)/libcedana-$$PLUGIN.so /usr/local/lib
-
-plugins: $(PLUGIN_BINARIES) ## Build all plugins
-
-plugins-debug: ## Build all plugins with debug symbols
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Building plugin $$name with debug symbols..."; \
-			$(GOBUILD) -C $$path -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
-		fi ;\
-	done ;\
-
-$(PLUGIN_BINARIES): $(PLUGIN_SOURCES) $(PKG_SOURCES)
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Building plugin $$name..."; \
-			$(GOBUILD) -C $$path -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $(OUT_DIR)/libcedana-$$name.so ;\
-		fi ;\
-	done ;\
+plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
+$(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
+	if [ "$(DEBUG)" = "1" ]; then \
+		echo "Building plugin $* with debug symbols..." ;\
+		$(GOBUILD) -C plugins/"$*" -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
+	else \
+		echo "Building plugin $*..." ;\
+		$(GOBUILD) -C plugins/"$*" -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
+	fi
 
 plugins-install: $(PLUGIN_INSTALL_PATHS) ## Install all plugins
-
-$(PLUGIN_INSTALL_PATHS): $(PLUGIN_BINARIES)
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Installing plugin $$name..."; \
-			$(SUDO) cp $(OUT_DIR)/libcedana-$$name.so /usr/local/lib ;\
-		fi ;\
-	done ;\
+$(INSTALL_LIB_DIR)/libcedana-%.so: $(OUT_DIR)/libcedana-%.so
+	@echo "Installing plugin $*..."
+	$(SUDO) cp $< $@
 
 reset-plugins: ## Reset & uninstall plugins
+	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
-	for path in $(wildcard plugins/*); do \
-		if [ -f $$path/*.go ]; then \
-			name=$$(basename $$path); \
-			echo "Uninstalling plugin $$name..."; \
-			$(SUDO) rm -f /usr/local/lib/libcedana-$$name.so ;\
-		fi ;\
-	done ;\
-
-# All-in-one debug target
-all-debug: debug install plugins-debug plugins-install ## Build and install with debug symbols (all components)
+	$(SUDO) rm -rf $(INSTALL_LIB_DIR)/*cedana*
+	$(SUDO) rm -rf $(INSTALL_BIN_DIR)/*cedana*
 
 ###########
 ##@ Testing
@@ -153,70 +117,172 @@ all-debug: debug install plugins-debug plugins-install ## Build and install with
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-TIMEOUT?=300
 RETRIES?=0
-BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+HELPER_REPO?=
+HELPER_TAG?=""
+HELPER_DIGEST?=""
+CONTROLLER_REPO?=
+CONTROLLER_TAG?=""
+CONTROLLER_DIGEST?=""
+HELM_CHART?=""
+FORMATTER?=pretty
+BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
-				--output /tmp --report-formatter junit
-BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+				--output /tmp --report-formatter $(FORMATTER)
+BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
-				--output /tmp --report-formatter junit
+				--output /tmp --report-formatter $(FORMATTER)
 
-test: test-unit test-regression ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>)
+test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>)
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		echo "Using unique instance of daemon per test..." ;\
+		echo "\nUsing unique instance of daemon per test...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
-			$(BATS_CMD) -r test/regression ;\
+			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
 		else \
-			$(BATS_CMD_TAGS) -r test/regression ;\
+			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-isolated.xml ;\
 		fi ;\
-		echo "Using a persistent instance of daemon across tests..." ;\
+		echo "\nUsing a persistent instance of daemon across tests...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
-			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ;\
+			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
 		else \
-			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ;\
+			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persistent=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-persisted.xml ;\
+			mv /tmp/report.xml /tmp/report-persistent.xml ;\
+		fi ;\
+		if [ $$status_isolated -ne 0 ]; then \
+			echo "Isolated tests failed" ;\
+			exit $$status_isolated ;\
+		elif [ $$status_persistent -ne 0 ]; then \
+			echo "Persistent tests failed" ;\
+			exit $$status_persistent ;\
+		else \
+			echo "All tests passed!" ;\
 		fi ;\
 	else \
 		if [ "$(GPU)" = "1" ]; then \
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
 			$(DOCKER_TEST_CREATE_CUDA) ;\
-			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) ;\
-			$(DOCKER_TEST_REMOVE) >/dev/null ;\
+			$(DOCKER_TEST_START) ;\
+			$(DOCKER_TEST_EXEC) make test-regression \
+				ARGS=$(ARGS) \
+				PARALLELISM=$(PARALLELISM) \
+				TAGS=$(TAGS) \
+				RETRIES=$(RETRIES) \
+				DEBUG=$(DEBUG) ;\
+			$(DOCKER_TEST_REMOVE) ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
 			$(DOCKER_TEST_CREATE) ;\
-			$(DOCKER_TEST_START) >/dev/null ;\
-			$(DOCKER_TEST_EXEC) make test-regression ARGS=$(ARGS) PARALLELISM=$(PARALLELISM) GPU=$(GPU) TAGS=$(TAGS) TIMEOUT=$(TIMEOUT) RETRIES=$(RETRIES) ;\
-			$(DOCKER_TEST_REMOVE) >/dev/null ;\
+			$(DOCKER_TEST_START) ;\
+			$(DOCKER_TEST_EXEC) make test-regression \
+				ARGS=$(ARGS) \
+				PARALLELISM=$(PARALLELISM) \
+				GPU=$(GPU) \
+				TAGS=$(TAGS) \
+				RETRIES=$(RETRIES) \
+				DEBUG=$(DEBUG) ;\
+			$(DOCKER_TEST_REMOVE) ;\
+		fi ;\
+	fi
+
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
+	if [ -f /.dockerenv ]; then \
+		echo "Running kubernetes e2e tests..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		if [ "$(TAGS)" = "" ]; then \
+			$(BATS_CMD) -r test/k8s ; status=$$? ;\
+		else \
+			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
+		fi ;\
+		if [ $$status -ne 0 ]; then \
+			echo "Kubernetes e2e tests failed" ;\
+			exit $$status ;\
+		else \
+			echo "All kubernetes e2e tests passed!" ;\
+		fi ;\
+	else \
+        MAKE_ADDITIONAL_OPTS=""; \
+        if [ -n "$(HELM_CHART)" ]; then \
+			if echo "$(HELM_CHART)" | grep -q /; then \
+				MAKE_ADDITIONAL_OPTS="HELM_CHART=/helm-chart"; \
+			else \
+				MAKE_ADDITIONAL_OPTS="HELM_CHART=$(HELM_CHART)"; \
+			fi; \
+        fi; \
+		if [ "$(GPU)" = "1" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_CREATE_CUDA) ;\
+			$(DOCKER_TEST_START) ;\
+			$(DOCKER_TEST_EXEC) make test-k8s \
+				ARGS=$(ARGS) \
+				PARALLELISM=$(PARALLELISM) \
+				TAGS=$(TAGS) \
+				RETRIES=$(RETRIES) \
+				DEBUG=$(DEBUG) \
+				CONTROLLER_REPO=$(CONTROLLER_REPO) \
+				CONTROLLER_TAG=$(CONTROLLER_TAG) \
+				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
+				HELPER_REPO=$(HELPER_REPO) \
+				HELPER_TAG=$(HELPER_TAG) \
+				HELPER_DIGEST=$(HELPER_DIGEST) \
+				$$MAKE_ADDITIONAL_OPTS ;\
+			$(DOCKER_TEST_REMOVE) ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_CREATE) ;\
+			$(DOCKER_TEST_START) ;\
+			$(DOCKER_TEST_EXEC) make test-k8s \
+				ARGS=$(ARGS) \
+				PARALLELISM=$(PARALLELISM) \
+				GPU=$(GPU) \
+				TAGS=$(TAGS) \
+				RETRIES=$(RETRIES) \
+				DEBUG=$(DEBUG) \
+				CONTROLLER_REPO=$(CONTROLLER_REPO) \
+				CONTROLLER_TAG=$(CONTROLLER_TAG) \
+				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
+				HELPER_REPO=$(HELPER_REPO) \
+				HELPER_TAG=$(HELPER_TAG) \
+				HELPER_DIGEST=$(HELPER_DIGEST) \
+				$$MAKE_ADDITIONAL_OPTS ;\
+			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
 	fi
 
 test-enter: ## Enter the test environment
 	$(DOCKER_TEST_CREATE) ;\
-	$(DOCKER_TEST_START) >/dev/null ;\
-	$(DOCKER_TEST_EXEC) /bin/bash ;\
-	$(DOCKER_TEST_REMOVE) >/dev/null
+	if [ "$$?" -ne 0 ]; then \
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+	else \
+		$(DOCKER_TEST_START) ;\
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+		$(DOCKER_TEST_REMOVE) ;\
+	fi ;\
 
 test-enter-cuda: ## Enter the test environment (CUDA)
 	$(DOCKER_TEST_CREATE_CUDA) ;\
-	$(DOCKER_TEST_START) >/dev/null ;\
-	$(DOCKER_TEST_EXEC) /bin/bash ;\
-	$(DOCKER_TEST_REMOVE) >/dev/null
+	if [ "$$?" -ne 0 ]; then \
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+	else \
+		$(DOCKER_TEST_START) ;\
+		$(DOCKER_TEST_EXEC) /bin/bash ;\
+		$(DOCKER_TEST_REMOVE) ;\
+	fi ;\
+
+test-k9s: ## Enter k9s in the test environment
+	$(DOCKER_TEST_EXEC) k9s ;\
 
 ##########
 ##@ Docker
@@ -226,68 +292,64 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 # and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
 # the default).
 
-DOCKER_CONTAINER_NAME=cedana-test
+DOCKER_IMAGE=cedana/cedana-helper:latest
+DOCKER_TEST_CONTAINER_NAME=cedana-test
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
-DOCKER_TEST_START=docker start $(DOCKER_CONTAINER_NAME)
-DOCKER_TEST_EXEC=docker exec -it $(DOCKER_CONTAINER_NAME)
-DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_CONTAINER_NAME)
+DOCKER_TEST_START=docker start $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
+DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
+DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
+PLATFORM=linux/amd64,linux/arm64
 
-PLUGIN_LIB_MOUNTS=$(shell find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
-PLUGIN_BIN_MOUNTS=$(shell find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
-PLUGIN_LIB_MOUNTS_GPU=$(shell find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
-PLUGIN_BIN_MOUNTS_GPU=$(shell find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec printf '-v %s:%s ' {} {} \;)
-PLUGIN_BIN_MOUNTS_CRIU=$(shell find /usr/local/bin -type f -name 'criu' -exec printf '-v %s:%s ' {} {} \;)
+PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_CONTAINER_NAME):{} \; >/dev/null
-
-DOCKER_TEST_RUN_OPTS=--privileged --init --cgroupns=private --network=host -it --rm \
-				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
-				$(PLUGIN_LIB_MOUNTS) \
-				$(PLUGIN_BIN_MOUNTS) \
-				$(PLUGIN_BIN_MOUNTS_CRIU) \
-				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=private --network=host \
-				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock --name=$(DOCKER_CONTAINER_NAME) \
-				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) -e HF_TOKEN=$(HF_TOKEN)
-DOCKER_TEST_RUN=docker run $(DOCKER_TEST_RUN_OPTS) $(DOCKER_TEST_IMAGE)
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --name=$(DOCKER_TEST_CONTAINER_NAME) \
+				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
+				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
+				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \
+				-e HF_TOKEN=$(HF_TOKEN) \
+				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
+				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
+				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) \
+				$(DOCKER_ADDITIONAL_OPTS)
 DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
-						$(PLUGIN_BIN_COPY_CRIU)
-DOCKER_TEST_RUN_CUDA=docker run --gpus=all --ipc=host \
-					 $(DOCKER_TEST_RUN_OPTS) \
-					 $(PLUGIN_LIB_MOUNTS_GPU) \
-					 $(PLUGIN_BIN_MOUNTS_GPU) \
-					 $(DOCKER_TEST_IMAGE_CUDA)
+						$(PLUGIN_BIN_COPY_CRIU) && \
+						$(HELM_CHART_COPY) >/dev/null
 DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_LIB_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_GPU) && \
-						$(PLUGIN_BIN_COPY_CRIU)
+						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
 
-docker-test: ## Build the test Docker image
+docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
+	@echo "Building helper Docker image..."
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_IMAGE) --load . ;\
+
+docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test Docker image..."
 	cd test ;\
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE) --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE) --load . ;\
 	cd -
 
-docker-test-cuda: ## Build the test Docker image (CUDA)
+docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
-docker-test-push: ## Push the test Docker image
+docker-test-push: ## Push the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-cuda-push: ## Push the test Docker image (CUDA)
+docker-test-cuda-push: ## Push the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 
@@ -301,4 +363,4 @@ format: ## Format all code
 
 spacing=24
 help:  ## Display this help
-	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\033[36m\033[0m\n"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[34m%-$(spacing)s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*##"; printf "Usage:\033[36m\033[0m\n"} /^[a-zA-Z1-9_-]+:.*?##/ { printf "  \033[34m%-$(spacing)s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
