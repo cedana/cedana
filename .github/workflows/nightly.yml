@@ -4,7 +4,7 @@ name: Nightly
 
 on:
   schedule:
-    - cron: "8 0 * * *" # Every day at midnight (EST)
+    - cron: "0 4 * * *" # Every day at 1:30 AM (EST)
   workflow_dispatch:
     inputs:
       debug:
