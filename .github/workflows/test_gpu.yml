@@ -67,7 +67,7 @@ jobs:
   cuda:
     name: CUDA
     runs-on: ${{
-      (inputs.dynamic_runner_label != '' && fromJSON(format('["self-hosted", "{0}"]', inputs.dynamic_runner_label))) ||
+      (inputs.large_dynamic_runner_label != '' && fromJSON(format('["self-hosted", "{0}"]', inputs.large_dynamic_runner_label))) ||
       format('runs-on={0}/runner={1}-{2}-cuda-{3}/tag={4}/extras=s3-cache', github.run_id, (matrix.arch == 'amd64' && inputs.runner || inputs.runner_arm64), matrix.arch, matrix.cuda_version, matrix.cr) }}
     timeout-minutes: 30
     strategy:
