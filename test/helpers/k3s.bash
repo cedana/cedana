@@ -20,7 +20,7 @@ setup_cluster() {
     wget https://get.k3s.io -O /tmp/k3s-install.sh
     chmod +x /tmp/k3s-install.sh
 
-    if ! /tmp/k3s-install.sh &> /dev/null; then
+    if ! /tmp/k3s-install.sh &>/dev/null; then
         debug_log "Installer failed, will try the binary directly"
         start_cluster
     fi
@@ -29,7 +29,7 @@ setup_cluster() {
     rm /var/lib/rancher/k3s/data/current/bin/tar
 
     mkdir -p ~/.kube
-    cat $KUBECONFIG > ~/.kube/config
+    cat $KUBECONFIG >~/.kube/config
 
     if [ -n "$CONTROLLER_DIGEST" ]; then
         preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
@@ -53,13 +53,13 @@ start_cluster() {
 
     preinstall_runtime_shim
 
-    if ! command -v k3s &> /dev/null; then
+    if ! command -v k3s &>/dev/null; then
         error_log "k3s binary not found"
         return 1
     fi
 
     debug_log "k3s binary found, starting k3s..."
-    eval "k3s $INSTALL_K3S_EXEC" &> /dev/null &
+    eval "k3s $INSTALL_K3S_EXEC" &>/dev/null &
 
     debug_log "Waiting for k3s cluster to start..."
 
@@ -137,8 +137,8 @@ preinstall_runtime_shim() {
 
     local template=$CONTAINERD_CONFIG_PATH.tmpl
     if ! grep -q 'cedana' "$template"; then
-        echo '{{ template "base" . }}' > $template
-        cat >> $template <<'END_CAT'
+        echo '{{ template "base" . }}' >$template
+        cat >>$template <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
@@ -165,8 +165,8 @@ preload_images() {
     digest_ref=$(docker inspect --format='{{index .RepoDigests 0}}' "$image")
 
     if [ -z "${digest_ref}" ]; then
-      error_log "Failed to find digest for image ${image}. Skipping..."
-      return 0
+        error_log "Failed to find digest for image ${image}. Skipping..."
+        return 0
     fi
 
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import "$tar"
@@ -175,4 +175,30 @@ preload_images() {
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"
 
     debug_log "Preloaded image $image into k3s"
+}
+
+enable_dockerhub_pull() {
+    local ns="${1:-default}"
+
+    kubectl create secret docker-registry dockerhub-cred \
+        --docker-server=docker.io \
+        --docker-username="$DOCKERHUB_USER" \
+        --docker-password="$DOCKERHUB_PASS" \
+        --docker-email="test@example.com" \
+        -n "$ns" \
+        --dry-run=client -o yaml | kubectl apply -f -
+
+    kubectl patch serviceaccount default -n "$ns" \
+        -p '{"imagePullSecrets": [{"name": "dockerhub-cred"}]}' \
+        --type=merge
+}
+
+disable_dockerhub_pull() {
+    local ns="${1:-default}"
+
+    kubectl patch serviceaccount default -n "$ns" \
+        --type=json \
+        -p='[{"op": "remove", "path": "/imagePullSecrets"}]' || true
+
+    kubectl delete secret dockerhub-cred -n "$ns" --ignore-not-found
 }
