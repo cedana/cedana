@@ -58,7 +58,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 					case <-ctx.Done():
 						log.Warn().Msg("timeout reached while syncing GPU manager on shutdown")
 						return
-					case <-time.After(2 * time.Second):
+					default:
 						manager.poolSize = 0 // Reset it so all free controllers are terminated
 						err := manager.Sync(ctx)
 						if err != nil {
@@ -67,6 +67,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 						if manager.free == 0 && manager.stale == 0 {
 							return
 						}
+						time.Sleep(1 * time.Second) // Wait a bit before retrying
 					}
 				}
 			case <-time.After(SYNC_INTERVAL):
