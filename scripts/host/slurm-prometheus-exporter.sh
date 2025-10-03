@@ -6,12 +6,61 @@ set -eo pipefail
 GO_INSTALL_DIR="/usr/local"
 MIN_GO_VERSION="1.20.0"
 
+# Default configuration
+DEFAULT_PORT="9092"
+DEFAULT_LOG_LEVEL="info"
+DEFAULT_METRICS_PATH="/metrics"
+DEFAULT_COLLECT_DIAGS="false"
+DEFAULT_COLLECT_LICENSES="false"
+DEFAULT_COLLECT_LIMITS="false"
+
+# Configuration variables (can be overridden by command line)
+PORT="${DEFAULT_PORT}"
+LOG_LEVEL="${DEFAULT_LOG_LEVEL}"
+METRICS_PATH="${DEFAULT_METRICS_PATH}"
+COLLECT_DIAGS="${DEFAULT_COLLECT_DIAGS}"
+COLLECT_LICENSES="${DEFAULT_COLLECT_LICENSES}"
+COLLECT_LIMITS="${DEFAULT_COLLECT_LIMITS}"
+
+usage() {
+    cat << EOF
+Usage: $0 [OPTIONS]
+
+Install and configure prometheus-slurm-exporter with systemd integration.
+
+OPTIONS:
+    -p, --port PORT          Listen port (default: 9092)
+    -l, --log-level LEVEL    Log level: info, debug, error, warning (default: info)
+    -m, --metrics-path PATH  Metrics endpoint path (default: /metrics)
+    --collect-diags          Enable SLURM diagnostics collection
+    --collect-licenses       Enable SLURM license collection  
+    --collect-limits         Enable SLURM account limits collection
+    --uninstall             Completely remove installation
+    -h, --help              Show this help message
+
+EXAMPLES:
+    $0                                    # Install with default settings
+    $0 --port=9093 --log-level=debug     # Custom port and debug logging
+    $0 --collect-diags --collect-licenses # Enable additional collectors
+    $0 --uninstall                       # Remove everything
+
+EOF
+}
+
 get_latest_go_version() {
     local latest_version
     
     if command -v curl &>/dev/null; then
         latest_version=$(curl -s "https://go.dev/VERSION?m=text" 2>/dev/null | head -n1 | sed 's/go//')
-    elif command -v wget &>/dev/null; then
+    elif command -v wExecStart=$exporter_binary \\
+    -web.listen-address=":${PORT}" \\
+    -web.telemetry-path="${METRICS_PATH}" \\
+    -web.log-level="${LOG_LEVEL}" \\
+    -slurm.collect-diags=${COLLECT_DIAGS} \\
+    -slurm.collect-licenses=${COLLECT_LICENSES} \\
+    -slurm.collect-limits=${COLLECT_LIMITS} \\
+    -slurm.cli-fallback=true \\
+    -slurm.poll-limit=10.0v/null; then
         latest_version=$(wget -qO- "https://go.dev/VERSION?m=text" 2>/dev/null | head -n1 | sed 's/go//')
     fi
     
@@ -185,8 +234,8 @@ install_prometheus_slurm_exporter() {
 test_prometheus_slurm_exporter() {
     echo "Testing prometheus-slurm-exporter functionality..."
     
-    local listen_addr=":9092"
-    local metrics_path="/metrics"
+    local listen_addr=":${PORT}"
+    local metrics_path="${METRICS_PATH}"
     local test_url="http://localhost${listen_addr}${metrics_path}"
     local max_attempts=10
     local attempt=1
@@ -327,9 +376,9 @@ ExecStart=$exporter_binary \\
     -web.listen-address=":9092" \\
     -web.telemetry-path="/metrics" \\
     -web.log-level="info" \\
-    -slurm.collect-diags=true \\
-    -slurm.collect-licenses=true \\
-    -slurm.collect-limits=true \\
+    -slurm.collect-diags=false \\
+    -slurm.collect-licenses=false \\
+    -slurm.collect-limits=false \\
     -slurm.cli-fallback=true \\
     -slurm.poll-limit=10.0
 
@@ -414,6 +463,150 @@ check_systemd_service() {
 }
 
 
+
+uninstall() {
+    echo "Uninstalling prometheus-slurm-exporter..."
+    
+    if [ "$EUID" -ne 0 ]; then
+        echo "Uninstall requires root privileges. Please run with sudo." >&2
+        exit 1
+    fi
+    
+    if systemctl is-active --quiet prometheus-slurm-exporter 2>/dev/null; then
+        echo "Stopping prometheus-slurm-exporter service..."
+        systemctl stop prometheus-slurm-exporter
+    fi
+    
+    if systemctl is-enabled --quiet prometheus-slurm-exporter 2>/dev/null; then
+        echo "Disabling prometheus-slurm-exporter service..."
+        systemctl disable prometheus-slurm-exporter
+    fi
+    
+    if [ -f "/etc/systemd/system/prometheus-slurm-exporter.service" ]; then
+        echo "Removing systemd service file..."
+        rm -f /etc/systemd/system/prometheus-slurm-exporter.service
+        systemctl daemon-reload
+    fi
+    
+    if [ -f "/usr/local/bin/prometheus-slurm-exporter" ]; then
+        echo "Removing system binary..."
+        rm -f /usr/local/bin/prometheus-slurm-exporter
+    fi
+    
+    if id "prometheus" &>/dev/null; then
+        read -p "Remove prometheus user? [y/N]: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "Removing prometheus user..."
+            userdel -r prometheus 2>/dev/null || true
+        else
+            echo "Keeping prometheus user (may be used by other services)"
+        fi
+    fi
+    
+    local user_paths=(
+        "/home/ubuntu/go/bin/prometheus-slurm-exporter"
+        "/home/$USER/go/bin/prometheus-slurm-exporter"
+        "/root/go/bin/prometheus-slurm-exporter"
+        "$HOME/go/bin/prometheus-slurm-exporter"
+    )
+    
+    for path in "${user_paths[@]}"; do
+        if [ -f "$path" ]; then
+            echo "Removing user binary: $path"
+            rm -f "$path"
+        fi
+    done
+    
+    if pgrep -f prometheus-slurm-exporter >/dev/null 2>&1; then
+        echo "Stopping any running prometheus-slurm-exporter processes..."
+        pkill -f prometheus-slurm-exporter || true
+    fi
+    
+    read -p "Remove Go installation? [y/N]: " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Removing Go installation..."
+        rm -rf /usr/local/go
+        rm -f /etc/profile.d/go.sh
+        echo "Go removed. You may need to restart your shell or logout/login."
+    else
+        echo "Keeping Go installation"
+    fi
+    
+    echo "✅ Uninstall completed!"
+    exit 0
+}
+
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -p|--port)
+                PORT="$2"
+                shift 2
+                ;;
+            --port=*)
+                PORT="${1#*=}"
+                shift
+                ;;
+            -l|--log-level)
+                LOG_LEVEL="$2"
+                shift 2
+                ;;
+            --log-level=*)
+                LOG_LEVEL="${1#*=}"
+                shift
+                ;;
+            -m|--metrics-path)
+                METRICS_PATH="$2"
+                shift 2
+                ;;
+            --metrics-path=*)
+                METRICS_PATH="${1#*=}"
+                shift
+                ;;
+            --collect-diags)
+                COLLECT_DIAGS="true"
+                shift
+                ;;
+            --collect-licenses)
+                COLLECT_LICENSES="true"
+                shift
+                ;;
+            --collect-limits)
+                COLLECT_LIMITS="true"
+                shift
+                ;;
+            --uninstall)
+                uninstall
+                ;;
+            -h|--help)
+                usage
+                exit 0
+                ;;
+            *)
+                echo "Unknown option: $1" >&2
+                usage
+                exit 1
+                ;;
+        esac
+    done
+    
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+        echo "Error: Invalid port number: $PORT" >&2
+        exit 1
+    fi
+    
+    case "$LOG_LEVEL" in
+        info|debug|error|warning) ;;
+        *) echo "Error: Invalid log level: $LOG_LEVEL. Must be one of: info, debug, error, warning" >&2; exit 1 ;;
+    esac
+    
+    if [[ ! "$METRICS_PATH" =~ ^/ ]]; then
+        echo "Error: Metrics path must start with /: $METRICS_PATH" >&2
+        exit 1
+    fi
+}
 
 main() {
     echo "Checking system setup..."
@@ -586,7 +779,7 @@ main() {
     if [ "$service_exists" = false ] && [ "$EUID" -ne 0 ]; then
         echo ""
         echo "Checking for manually started exporter..."
-        if curl -s -f "http://localhost:9092/metrics" >/dev/null 2>&1 || wget -q -O /dev/null "http://localhost:9092/metrics" 2>/dev/null; then
+        if curl -s -f "http://localhost:${PORT}${METRICS_PATH}" >/dev/null 2>&1 || wget -q -O /dev/null "http://localhost:${PORT}${METRICS_PATH}" 2>/dev/null; then
             echo "✓ Found running exporter! Running full test..."
             echo ""
             test_prometheus_slurm_exporter
@@ -594,4 +787,18 @@ main() {
     fi
 }
 
-main "$@"
+# Parse command line arguments
+parse_arguments "$@"
+
+# Show configuration
+echo "📋 Configuration:"
+echo "   Port: ${PORT}"
+echo "   Log Level: ${LOG_LEVEL}"
+echo "   Metrics Path: ${METRICS_PATH}"
+echo "   Collect Diags: ${COLLECT_DIAGS}"
+echo "   Collect Licenses: ${COLLECT_LICENSES}"
+echo "   Collect Limits: ${COLLECT_LIMITS}"
+echo ""
+
+# Run main installation
+main
