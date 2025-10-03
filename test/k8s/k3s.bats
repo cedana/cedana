@@ -18,8 +18,6 @@ export CEDANA_NAMESPACE="cedana-system"
 export RUNC_ROOT="/run/containerd/runc/k8s.io"
 
 setup_file() {
-    skip "Currently skipped due to new image pull issue"
-
     setup_cluster
     tail_all_logs $CEDANA_NAMESPACE 300 &
     TAIL_PID=$!
@@ -30,8 +28,6 @@ setup_file() {
 }
 
 teardown_file() {
-    skip "Currently skipped due to new image pull issue"
-
     if [ -n "$TAIL_PID" ]; then
         kill "$TAIL_PID"
     fi
