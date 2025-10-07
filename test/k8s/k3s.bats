@@ -15,7 +15,6 @@ export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="test"
 export CEDANA_NAMESPACE="cedana-system"
-export RUNC_ROOT="/run/containerd/runc/k8s.io"
 
 setup_file() {
     setup_cluster
@@ -94,7 +93,7 @@ teardown() {
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$pod_id"
+    run checkpoint_pod "$pod_id"
     [ "$status" -eq 0 ]
 
     if [ $status -eq 0 ]; then
@@ -124,7 +123,7 @@ teardown() {
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$pod_id"
+    run checkpoint_pod "$pod_id"
     [ "$status" -eq 0 ]
 
     if [ $status -eq 0 ]; then
@@ -172,7 +171,7 @@ teardown() {
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
 
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
-    run checkpoint_pod "$name" "$RUNC_ROOT" "$NAMESPACE" "$pod_id"
+    run checkpoint_pod "$pod_id"
     [ "$status" -eq 0 ]
 
     if [ $status -eq 0 ]; then
@@ -201,4 +200,57 @@ teardown() {
             fi
         fi
     fi
+}
+
+# bats test_tags=restore,pvc
+@test "Checkpoint and restore pod with PVC (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
+    skip "Skipped until it supports running parallely with other tests"
+
+    local pv_name="counting-pv"
+    local pvc_name="counting-pvc"
+    local pod_name="counting-pvc-pod"
+
+    kubectl apply -f /cedana-samples/kubernetes/counting-persistent-volume.yaml -n "$NAMESPACE"
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$pod_name" --timeout=300s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$pod_name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+
+        kubectl delete pod "$pod_name" -n "$NAMESPACE" --wait=true
+
+        run restore_pod "$action_id" "$CLUSTER_ID"
+        [ "$status" -eq 0 ]
+
+        if [ $status -eq 0 ]; then
+            action_id="$output"
+            validate_action_id "$action_id"
+
+            run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
+            [ "$status" -eq 0 ]
+
+            if [ $status -eq 0 ]; then
+                local restored_pod="$output"
+                validate_pod "$NAMESPACE" "$restored_pod" 20s
+
+                kubectl get pvc "$pvc_name" -n "$NAMESPACE" -o jsonpath='{.status.phase}'
+
+                run kubectl get pod "$restored_pod" -n "$NAMESPACE" -o jsonpath='{.spec.volumes[*].persistentVolumeClaim.claimName}'
+                [ "$status" -eq 0 ]
+                [[ "$output" == *"$pvc_name"* ]]
+
+                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            fi
+        fi
+    fi
+
+    run kubectl delete pvc "$pvc_name" -n "$NAMESPACE" --wait=true
+    run kubectl delete pv "$pv_name" --wait=true
 }

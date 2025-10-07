@@ -55,10 +55,11 @@ install_k9s () {
     debug_log "k9s installed"
 }
 
-# Generate a new spec from an existing one with a new name.
+# Generate a new spec from an existing one with a new name and namespace.
 new_spec () {
     local spec="$1"
     local newname="$2"
+    local newnamespace="${3:-default}"
 
     local newspec="/tmp/${newname}.yaml"
 
@@ -66,8 +67,18 @@ new_spec () {
     local oldname
     oldname=$(grep -m1 '^[[:space:]]*name:' "$spec" | sed -E 's/^[[:space:]]*name:[[:space:]]*"?([^"]+)"?/\1/')
 
+    local oldnamespace
+    oldnamespace=$(grep -m1 '^[[:space:]]*namespace:' "$spec" | sed -E 's/^[[:space:]]*namespace:[[:space:]]*"?([^"]+)"?/\1/')
+
     # Replace all 'name: <oldname>' patterns with the quoted newname
     sed -E "s/^([[:space:]\-]*name:[[:space:]]*)\"?$oldname\"?/\1\"$newname\"/g" "$spec" > "$newspec"
+
+    # If oldnamespace is not empty, replace it; otherwise, add namespace under metadata
+    if [[ -n "$oldnamespace" ]]; then
+        sed -i -E "s/^([[:space:]]*namespace:[[:space:]]*)\"?$oldnamespace\"?/\1\"$newnamespace\"/g" "$newspec"
+    else
+        sed -i -E "/^metadata:/a\  namespace: \"$newnamespace\"" "$newspec"
+    fi
 
     echo "$newspec"
 }
