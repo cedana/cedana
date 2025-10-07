@@ -18,6 +18,7 @@ YUM_PACKAGES=(
     wget git make
     libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel # CRIU
     buildah
+    yq
 )
 
 APT_PACKAGES=(
@@ -25,6 +26,7 @@ APT_PACKAGES=(
     libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1 # CRIU
     buildah
     sysvinit-utils
+    yq
 )
 
 install_apt_packages() {
