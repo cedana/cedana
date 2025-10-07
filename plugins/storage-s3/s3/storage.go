@@ -58,11 +58,27 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 		return nil, err
 	}
 
+	// Sanity check: ensure the bucket exists
+	_, err = s.client.GetBucketEncryption(s.ctx, &s3.GetBucketEncryptionInput{
+		Bucket: &bucket,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return NewFile(s.ctx, s.client, bucket, key), nil
 }
 
 func (s *Storage) Create(path string) (io.WriteCloser, error) {
 	bucket, key, err := s.sanitizePath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	// Sanity check: ensure the bucket exists
+	_, err = s.client.GetBucketEncryption(s.ctx, &s3.GetBucketEncryptionInput{
+		Bucket: &bucket,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -150,5 +166,5 @@ func (s *Storage) sanitizePath(path string) (bucket string, key string, err erro
 	bucket = parts[0]
 	key = parts[1]
 
-	return
+	return bucket, key, err
 }

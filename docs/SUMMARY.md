@@ -9,9 +9,9 @@
 * [Configuration](get-started/configuration.md)
 * [Health checks](get-started/health.md)
 * [Plugins](get-started/plugins.md)
-* [Feature matrix](get-started/features.md)
+* [Features](get-started/features.md)
 
-## Guides
+## Checkpoint/restore
 
 * [Managed process/container](guides/managed.md)
 * [Checkpoint/restore basics](guides/cr.md)
@@ -19,13 +19,13 @@
 * [Checkpoint/restore runc](guides/runc/cr.md)
 * [Checkpoint/restore containerd](guides/containerd/cr.md)
 * [Checkpoint/restore streamer](guides/streamer/cr.md)
-* [Checkpoint/restore kata](guides/kata/README.md)
-  * [how-to-create-custom-busybox-image](guides/kata/how-to-create-custom-busybox-image.md)
-  * [how-to-install-criu-in-guest](guides/kata/how-to-install-criu-in-guest.md)
-  * [how-to-install-on-aws](guides/kata/how-to-install-on-aws.md)
-  * [how-to-make-kernel-criu-compatible](guides/kata/how-to-make-kernel-criu-compatible.md)
-  * [how-to-make-rootfs-criu-compatible](guides/kata/how-to-make-rootfs-criu-compatible.md)
-  * [Checkpoint/Restore kata containers](guides/kata/kata.md)
+* [Checkpoint/restore kubernetes](guides/k8s/cr.md)
+
+## Storage
+
+* [Amazon S3](guides/storage/s3.md)
+* [Google Cloud Storage](guides/storage/gcs.md)
+* [Cedana Storage](guides/storage/cedana.md)
 
 ## Developer guides
 
@@ -69,8 +69,8 @@
   * [cedana job kill](references/cli/cedana_job_kill.md)
   * [cedana job list](references/cli/cedana_job_list.md)
   * [cedana jobs](references/cli/cedana_jobs.md)
-  * [cedana k8s-helper](references/cli/cedana_k8s-helper.md)
-  * [cedana k8s-helper destroy](references/cli/cedana_k8s-helper_destroy.md)
+  * [cedana k8s-helper](references/cli/cedana-k8s-helper.md)
+  * [cedana k8s-helper destroy](references/cli/cedana-k8s-helper-destroy.md)
   * [cedana kill](references/cli/cedana_kill.md)
   * [cedana manage](references/cli/cedana_manage.md)
   * [cedana manage containerd](references/cli/cedana_manage_containerd.md)

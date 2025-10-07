@@ -4,7 +4,7 @@
 
 1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).
 2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
-3. Install the runc plugin with `sudo cedana plugin install runc`.
+3. Install the **runc** plugin with `sudo cedana plugin install runc`.
 4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
 5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
 
@@ -70,4 +70,6 @@ cedana dump job <job_id>
 cedana restore job --attach <job_id>
 ```
 
+{% hint style="info" %}
 For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+{% endhint %}
