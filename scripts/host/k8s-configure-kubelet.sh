@@ -36,19 +36,20 @@ if [ -d "${KUBELET_CONFIG_DIR_EKS}" ]; then
     echo "Detected EKS kubelet config directory '${KUBELET_CONFIG_DIR_EKS}'"
     if [ -f "${KUBELET_CONFIG_FILE_EKS}" ]; then
         echo "Removing existing kubelet config file '${KUBELET_CONFIG_FILE_EKS}'"
-        rm -f "${KUBELET_CONFIG_FILE_EKS}" || (echo "Failed to remove existing config file" >&2 && exit 1)
+        rm -f "${KUBELET_CONFIG_FILE_EKS}"
     else
         echo "Creating new kubelet config file '${KUBELET_CONFIG_FILE_EKS}'"
     fi
     echo "Using kubelet config:"
-    echo "${KUBELET_CONFIG_CONTENT}"
-    echo "${KUBELET_CONFIG_CONTENT}" > "${KUBELET_CONFIG_FILE_EKS}"
+    echo "${KUBELET_CONFIG_CONTENT_JSON}"
+    echo "${KUBELET_CONFIG_CONTENT_JSON}" > "${KUBELET_CONFIG_FILE_EKS}"
 elif [ -f "${KUBELET_CONFIG_FILE_GKE}" ]; then
     echo "Detected GKE kubelet config file '${KUBELET_CONFIG_FILE_GKE}'"
     echo "Backing up existing kubelet config file to '${KUBELET_CONFIG_FILE_GKE}.bak'"
     cp -f "${KUBELET_CONFIG_FILE_GKE}" "${KUBELET_CONFIG_FILE_GKE}.bak" || (echo "Failed to back up existing config file" >&2 && exit 1)
     echo "Modifying kubelet config file to set runtimeRequestTimeout to '$KUBELET_RUNTIME_REQUEST_TIMEOUT'"
-    yq eval ".runtimeRequestTimeout = \"$KUBELET_RUNTIME_REQUEST_TIMEOUT\"" -i "${KUBELET_CONFIG_FILE_GKE}" || (echo "Failed to modify kubelet config file" >&2 && exit 1)
+    yq ".runtimeRequestTimeout = \"$KUBELET_RUNTIME_REQUEST_TIMEOUT\"" "${KUBELET_CONFIG_FILE_GKE}" > /tmp/updated-kubelet-conf.yaml || (echo "Failed to modify kubelet config file" >&2 && exit 1)
+    mv /tmp/updated-kubelet-conf.yaml "${KUBELET_CONFIG_FILE_GKE}" || (echo "Failed to update kubelet config file" >&2 && exit 1)
 else
     echo "No known kubelet config file or directory found. Please configure kubelet manually to set runtimeRequestTimeout to '$KUBELET_RUNTIME_REQUEST_TIMEOUT'." >&2
     exit 0
