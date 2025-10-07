@@ -60,6 +60,8 @@ else
     exit 1
 fi
 
+"$DIR"/k8s-configure-kubelet.sh # configure kubelet
+
 "$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
 
 "$DIR"/shm-configure.sh # install the plugins (including shim)
