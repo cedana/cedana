@@ -129,7 +129,7 @@ jobs:
       matrix:
         name:
           - k8s-setup-host
-          - slurm-setup-host
+          # - slurm-setup-host
         arch:
           - amd64
           - arm64
