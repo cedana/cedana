@@ -158,7 +158,7 @@ jobs:
           PLUGIN: ${{ env.PLUGIN }}
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make ${PWD}/libcedana-${PLUGIN}.go VERSION=$VERSION -j $(nproc)
+          make ${PWD}/libcedana-${PLUGIN}.so VERSION=$VERSION -j $(nproc)
           echo $VERSION > ./plugin-version.txt
 
       - name: Upload artifacts
