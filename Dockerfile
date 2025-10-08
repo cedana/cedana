@@ -35,7 +35,7 @@ ADD ./go.mod /app
 ADD ./go.sum /app
 RUN go mod download && rm -rf go.mod go.sum
 ADD . /app
-RUN make cedana plugins -j $(nproc)
+RUN make cedana ${PWD}/libcedana-k8s.so -j $(nproc)
 
 FROM ubuntu:22.04
 

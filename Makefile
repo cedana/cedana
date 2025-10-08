@@ -292,7 +292,7 @@ test-k9s: ## Enter k9s in the test environment
 # and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
 # the default).
 
-DOCKER_IMAGE=cedana/cedana-helper:latest
+DOCKER_IMAGE=cedana/cedana-helper-test:$(shell git rev-parse HEAD)
 DOCKER_TEST_CONTAINER_NAME=cedana-test
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda

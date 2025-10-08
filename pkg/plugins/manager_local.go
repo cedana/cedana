@@ -56,10 +56,12 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 	list = make([]Plugin, 0)
 
 	set := make(map[string]any)
+	setVersion := make(map[string]string)
 	for _, name := range filter {
 		nameOnly := strings.TrimSpace(name)
 		if strings.Contains(name, "@") {
 			nameOnly = strings.Split(name, "@")[0]
+			setVersion[nameOnly] = strings.Split(name, "@")[1]
 		}
 		set[nameOnly] = nil
 	}
@@ -69,6 +71,9 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 			continue
 		}
 		if _, ok := set[p.Name]; len(set) > 0 && !ok {
+			continue
+		}
+		if v, ok := setVersion[p.Name]; ok && v != "local" {
 			continue
 		}
 
@@ -87,7 +92,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		files := append(p.Libraries, p.Binaries...)
 		totalSum := ""
 		for _, file := range files {
-			for _, path := range strings.Split(m.searchPath, ":") {
+			for path := range strings.SplitSeq(m.searchPath, ":") {
 				var stat os.FileInfo
 				if stat, err = os.Stat(filepath.Join(path, file.Name)); err != nil || stat.IsDir() {
 					continue
@@ -105,13 +110,14 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
 			p.AvailableVersion = "local"
-			if p.Status == INSTALLED || p.Status == OUTDATED {
+			switch p.Status {
+			case INSTALLED, OUTDATED:
 				if p.Checksum() != totalSum {
 					p.Status = OUTDATED
 				} else {
 					p.Status = INSTALLED
 				}
-			} else if p.Status == UNKNOWN {
+			case UNKNOWN:
 				p.Status = AVAILABLE
 			}
 			if p.Size == 0 {

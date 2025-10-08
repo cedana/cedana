@@ -124,13 +124,14 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 							list[i].Size = onlineList[j].Size
 							list[i].PublishedAt = onlineList[j].PublishedAt
 
-							if list[i].Status == INSTALLED || list[i].Status == OUTDATED {
+							switch list[i].Status {
+							case INSTALLED, OUTDATED:
 								if list[i].Checksum() != onlineList[j].Checksum() {
 									list[i].Status = OUTDATED
 								} else {
 									list[i].Status = INSTALLED
 								}
-							} else if list[i].Status == UNKNOWN {
+							case UNKNOWN:
 								list[i].Status = AVAILABLE
 							}
 						}

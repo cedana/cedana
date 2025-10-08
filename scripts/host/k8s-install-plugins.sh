@@ -14,16 +14,31 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 source "$DIR"/utils.sh
 
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
+CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 
-# NOTE: Native plugins like k8s, runc, containerd, are already installed in the image
-PLUGINS="
+PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
     k8s/runtime-shim@$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION \
-    streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
+    runc@$CEDANA_PLUGINS_NATIVE_VERSION \
+    containerd@$CEDANA_PLUGINS_NATIVE_VERSION"
+
+# check if a storage plugin is required
+if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
+    PLUGINS="$PLUGINS storage/cedana@$CEDANA_PLUGINS_NATIVE_VERSION"
+elif [[ "$CEDANA_CHECKPOINT_DIR" == s3://* ]]; then
+    PLUGINS="$PLUGINS storage/s3@$CEDANA_PLUGINS_NATIVE_VERSION"
+elif [[ "$CEDANA_CHECKPOINT_DIR" == gcs://* ]]; then
+    PLUGINS="$PLUGINS storage/gcs@$CEDANA_PLUGINS_NATIVE_VERSION"
+fi
+
+# check if streamer plugin is required
+if [ "$CEDANA_CHECKPOINT_STREAMS" -gt 0 ]; then
+    PLUGINS="$PLUGINS streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
+fi
 
 # if gpu driver present then add gpu plugin
 if [ -f /.dockerenv ]; then # For tests inside a container
