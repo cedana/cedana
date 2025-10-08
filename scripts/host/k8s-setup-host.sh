@@ -17,6 +17,7 @@ source "$DIR"/utils.sh
 YUM_PACKAGES=(
     wget git make
     libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel # CRIU
+    yq
 )
 
 APT_PACKAGES=(

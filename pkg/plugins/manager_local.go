@@ -55,15 +55,10 @@ func (m *LocalManager) IsInstalled(name string) bool {
 func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err error) {
 	list = make([]Plugin, 0)
 
-	set := make(map[string]any)
-	setVersion := make(map[string]string)
+	set := make(map[string]bool)
 	for _, name := range filter {
-		nameOnly := strings.TrimSpace(name)
-		if strings.Contains(name, "@") {
-			nameOnly = strings.Split(name, "@")[0]
-			setVersion[nameOnly] = strings.Split(name, "@")[1]
-		}
-		set[nameOnly] = nil
+		nameOnly := strings.Split(strings.TrimSpace(name), "@")[0]
+		set[nameOnly] = true
 	}
 
 	for _, p := range Registry {
@@ -71,9 +66,6 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 			continue
 		}
 		if _, ok := set[p.Name]; len(set) > 0 && !ok {
-			continue
-		}
-		if v, ok := setVersion[p.Name]; ok && v != "local" {
 			continue
 		}
 
@@ -158,6 +150,8 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			if name == "" {
 				continue
 			}
+			name = strings.Split(name, "@")[0] // ignore version specifier if any
+
 			var plugin *Plugin
 			var ok bool
 			if plugin, ok = availableSet[name]; !ok {
@@ -166,7 +160,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			}
 
 			if plugin.Status == INSTALLED {
-				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
+				msgs <- fmt.Sprintf("Plugin %s is already installed", name)
 				continue
 			} else if plugin.Status == AVAILABLE {
 				msgs <- fmt.Sprintf("Installing plugin %s...", name)

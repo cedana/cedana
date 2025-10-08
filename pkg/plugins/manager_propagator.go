@@ -106,10 +106,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				if resp.StatusCode == http.StatusPartialContent {
-					fmt.Println(style.WarningColors.Sprint(
-						"Some plugins have no compatible versions available in the registry or locally.\n",
-						"You may need to update Cedana. If this is a local build, you may ignore this warning.\n",
-					))
+					fmt.Println(style.WarningColors.Sprint("Some requested plugins have no compatible versions available in the registry or locally."))
 				}
 
 				onlineList := make([]Plugin, len(list))
@@ -178,9 +175,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 		defer close(errs)
 
 		for _, name := range names {
-			if strings.Contains(name, "@") {
-				name = strings.Split(name, "@")[0] // strip version
-			}
+			name := strings.Split(name, "@")[0]
 
 			if _, ok := availableSet[name]; !ok {
 				errs <- fmt.Errorf("Plugin %s is not available", name)
@@ -188,7 +183,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 			}
 
 			if availableSet[name].Status == INSTALLED {
-				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
+				msgs <- fmt.Sprintf("Plugin %s is already installed", name)
 				continue
 			}
 

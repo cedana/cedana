@@ -122,11 +122,14 @@ jobs:
         run: make test-unit
 
   script:
-    name: Scripts
+    name: Script
     runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
+        name:
+          - k8s-setup-host
+          - slurm-setup-host
         arch:
           - amd64
           - arm64
@@ -149,7 +152,7 @@ jobs:
           sudo -E cp ./cedana /usr/local/bin/
           sudo -E mkdir -p /cedana/scripts/host
           sudo -E cp -r ./scripts/host/* /cedana/scripts/host
-          sudo -E /cedana/scripts/host/k8s-setup-host.sh
+          sudo -E /cedana/scripts/host/${{ matrix.name }}.sh
 
   basic:
     name: Basic
