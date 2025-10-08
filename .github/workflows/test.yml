@@ -147,6 +147,8 @@ jobs:
           name: cedana-${{ matrix.arch }}
 
       - name: Run k8s setup host
+        env:
+          CEDANA_PLUGINS_BUILDS: local
         run: |
           sudo -E chmod +x ./cedana
           sudo -E cp ./cedana /usr/local/bin/
