@@ -100,7 +100,8 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
         if: ${{ matrix.cr == 'streamer' }}

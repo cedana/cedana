@@ -300,6 +300,7 @@ DOCKER_TEST_START=docker start $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
 DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 PLATFORM=linux/amd64,linux/arm64
+ALL_PLUGINS?=0
 
 PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
@@ -331,7 +332,7 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 
 docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building helper Docker image..."
-	docker buildx build --platform $(PLATFORM) -t $(DOCKER_IMAGE) --load . ;\
+	docker buildx build --platform $(PLATFORM) --build-arg ALL_PLUGINS=$(ALL_PLUGINS) -t $(DOCKER_IMAGE) --load . ;\
 
 docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test Docker image..."

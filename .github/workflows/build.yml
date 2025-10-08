@@ -100,12 +100,22 @@ jobs:
             ./cedana
             ./cedana-version.txt
 
-  plugins:
-    name: Plugins
+  plugin:
+    name: Plugin
     runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
+        plugin:
+          - runc
+          - containerd
+          - crio
+          - kata
+          - cloud-hypervisor
+          - k8s
+          - storage/cedana
+          - storage/s3
+          - storage/gcs
         arch:
           - amd64
           - arm64
@@ -130,6 +140,13 @@ jobs:
         with:
           limit-access-to-actor: true
 
+      - name: Set plugin name
+        env:
+          PLUGIN: ${{ matrix.plugin }}
+        run: |
+          PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
+          echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
+
       - name: Setup go
         uses: actions/setup-go@v5
         with:
@@ -137,18 +154,20 @@ jobs:
           cache-dependency-path: go.sum
 
       - name: Build
+        env:
+          PLUGIN: ${{ env.PLUGIN }}
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make plugins VERSION=$VERSION -j $(nproc)
-          echo $VERSION > ./plugins-version.txt
+          make ${PWD}/libcedana-${PLUGIN}.go VERSION=$VERSION -j $(nproc)
+          echo $VERSION > ./plugin-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
             ./libcedana-*.so
-            ./plugins-version.txt
+            ./plugin-version.txt
 
   image:
     name: Image

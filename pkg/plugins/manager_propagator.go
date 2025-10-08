@@ -17,6 +17,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/style"
+	"github.com/cedana/cedana/pkg/utils"
 )
 
 const (
@@ -135,7 +136,8 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 					}
 				}
 			} else {
-				err = fmt.Errorf("%s", resp.Status)
+				body, _ := utils.ParseHttpBody(resp.Body)
+				err = fmt.Errorf("%d: %s", resp.StatusCode, body)
 			}
 		}
 	}
@@ -265,8 +267,8 @@ func (m *PropagatorManager) downloadBinary(binary string, version string, arch s
 	if version == "" {
 		version = "latest"
 	}
-	version = strings.ReplaceAll(version, "/", "-")
-	url := fmt.Sprintf("%s/download/%s/%s?arch=%s&build=%s", m.URL, binary, version, arch, build)
+
+	url := fmt.Sprintf("%s/plugins/download/%s?version=%s&arch=%s&build=%s", m.URL, binary, version, arch, build)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("Failed to build request for %s: %v", binary, err)

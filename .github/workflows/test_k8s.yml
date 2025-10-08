@@ -122,12 +122,6 @@ jobs:
         exclude: # XXX: To reduce overusage of CI minutes
           - platform: K3s
             arch: arm64
-            cr: streamer
-          - platform: K3s
-            arch: amd64
-            cr: default
-          - platform: K3s
-            arch: arm64
             storage: storage/s3
           - platform: K3s
             arch: amd64
@@ -195,7 +189,8 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Download CRIU
         uses: actions/download-artifact@v4

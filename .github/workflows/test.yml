@@ -99,7 +99,8 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Make executable
         run: |
@@ -271,10 +272,8 @@ jobs:
         plugin:
           - runc
           - containerd
-          - crio
           - storage/cedana
           - storage/s3
-          - storage/gcs
         arch:
           - amd64
           - arm64
@@ -301,7 +300,8 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Download CRIU
         uses: actions/download-artifact@v4
@@ -343,7 +343,7 @@ jobs:
             make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
-      - name: Set sanitized plugin
+      - name: Set plugin name
         if: always()
         env:
           PLUGIN: ${{ matrix.plugin }}
