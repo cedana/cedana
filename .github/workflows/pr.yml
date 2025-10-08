@@ -64,7 +64,7 @@ jobs:
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: [build, download]
+    needs: [publish, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -72,7 +72,7 @@ jobs:
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    needs: [publish, download]
+    needs: [build, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
