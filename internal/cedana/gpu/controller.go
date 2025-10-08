@@ -433,7 +433,8 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		<-dumpErr // Ensure GPU dump has finished before unfreezing
 
-		waitCtx, cancel := context.WithTimeout(ctx, UNFREEZE_TIMEOUT)
+    // NOTE: Unfreeze must complete even if parent context is cancelled
+		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
 		defer cancel()
 
 		log.Info().Msg("GPU unfreeze starting")
