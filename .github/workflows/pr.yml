@@ -61,28 +61,6 @@ jobs:
       controller_version: main
       runtime_shim_version: cedana
 
-  test:
-    name: Test
-    uses: ./.github/workflows/test.yml
-    needs: [publish, download]
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-
-  bench:
-    name: Bench
-    uses: ./.github/workflows/bench.yml
-    needs: [build, download]
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
-      samples: 1
-      push_results: false
-      results_dataset: cedana_alpha
-      post_summary_pr: true
-      comparison_previous: true
-      comparison_runtime: false
-
   publish:
     name: Publish
     uses: ./.github/workflows/publish.yml
@@ -94,3 +72,25 @@ jobs:
       cloudsmith_repo: cedana-alpha
       dockerhub: true
       post_summary: false
+
+  test:
+    name: Test
+    uses: ./.github/workflows/test.yml
+    needs: [publish, download]
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+
+  bench:
+    name: Bench
+    uses: ./.github/workflows/bench.yml
+    needs: [publish, download]
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
+      samples: 1
+      push_results: false
+      results_dataset: cedana_alpha
+      post_summary_pr: true
+      comparison_previous: true
+      comparison_runtime: false

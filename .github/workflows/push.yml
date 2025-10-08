@@ -55,10 +55,22 @@ jobs:
       controller_version: main
       runtime_shim_version: cedana
 
+  publish:
+    name: Publish
+    uses: ./.github/workflows/publish.yml
+    needs: build
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
+      cloudsmith: true
+      cloudsmith_repo: cedana-alpha
+      dockerhub: true
+      post_summary: false
+
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: [build, download]
+    needs: [publish, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -74,15 +86,3 @@ jobs:
       push_results: true
       results_dataset: cedana_alpha
       post_summary_pr: false
-
-  publish:
-    name: Publish
-    uses: ./.github/workflows/publish.yml
-    needs: build
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      cloudsmith: true
-      cloudsmith_repo: cedana-alpha
-      dockerhub: true
-      post_summary: false
