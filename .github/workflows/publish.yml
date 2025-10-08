@@ -112,21 +112,14 @@ jobs:
         arch:
           - amd64
           - arm64
-      max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
       - uses: runs-on/action@v1
 
-      - name: Download Cedana binary
+      - name: Download binary
         uses: actions/download-artifact@v4
         id: download-binary
         with:
           name: cedana-${{ matrix.arch }}
-
-      - name: Download binary
-        uses: actions/download-artifact@v4
-        id: download-binaries-plugins
-        with:
-          name: plugins-${{ matrix.arch }}
 
       - name: Push cedana to Cloudsmith
         id: push-cedana
@@ -164,7 +157,6 @@ jobs:
         arch:
           - amd64
           - arm64
-      max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
       - uses: runs-on/action@v1
 
