@@ -272,8 +272,10 @@ jobs:
         plugin:
           - runc
           - containerd
+          - crio
           - storage/cedana
           - storage/s3
+          - storage/gcs
         arch:
           - amd64
           - arm64
