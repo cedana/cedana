@@ -29,7 +29,7 @@ on:
         type: string
         description: "Runner machine for CPU tests"
         required: false
-        default: 4cpu-16g
+        default: 4cpu
       runner_gpu:
         type: string
         description: "Runner machine for GPU tests"

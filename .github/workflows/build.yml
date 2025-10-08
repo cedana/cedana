@@ -52,7 +52,7 @@ on:
 jobs:
   cedana:
     name: Cedana
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: true
       matrix:
@@ -102,7 +102,7 @@ jobs:
 
   plugin:
     name: Plugin
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
@@ -171,7 +171,7 @@ jobs:
 
   image:
     name: Image
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
@@ -253,7 +253,7 @@ jobs:
 
   test_image:
     name: Test Image
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/tag=${{ matrix.tag }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/tag=${{ matrix.tag }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:

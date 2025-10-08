@@ -44,7 +44,7 @@ on:
         type: string
         description: "Runner machine for CPU tests"
         required: false
-        default: 4cpu-16g
+        default: 4cpu
       runner_gpu:
         type: string
         description: "Runner machine for GPU tests"
@@ -75,7 +75,7 @@ env:
 jobs:
   unit:
     name: Unit
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
@@ -124,7 +124,7 @@ jobs:
 
   script:
     name: Script
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
