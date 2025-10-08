@@ -120,6 +120,18 @@ jobs:
           - amd64
           - arm64
         exclude: # XXX: To reduce overusage of CI minutes
+          - platform: K3s
+            arch: arm64
+            cr: streamer
+          - platform: K3s
+            arch: amd64
+            cr: default
+          - platform: K3s
+            arch: arm64
+            storage: storage/s3
+          - platform: K3s
+            arch: amd64
+            storage: storage/cedana
           - platform: EKS
             arch: amd64
           - platform: GKE
