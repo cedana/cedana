@@ -30,7 +30,6 @@ DEBUG?=0
 
 cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
-	$(GOCMD) mod tidy ;\
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building $(BINARY) with debug symbols..." ;\
 		$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $@ ;\
@@ -91,7 +90,6 @@ PLUGIN_INSTALL_PATHS=$(patsubst %,$(INSTALL_LIB_DIR)/libcedana-%.so,$(PLUGIN_NAM
 
 plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
 $(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
-	$(GOCMD) mod -C plugins/"$*" tidy ;\
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building plugin $* with debug symbols..." ;\
 		$(GOBUILD) -C plugins/"$*" -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\

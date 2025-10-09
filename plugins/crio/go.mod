@@ -5,7 +5,7 @@ go 1.25
 replace github.com/cedana/cedana => ../..
 
 require (
-	github.com/cedana/cedana v0.0.0-00010101000000-000000000000
+	github.com/cedana/cedana v0.0.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
 )
 

@@ -2,9 +2,9 @@ module github.com/cedana/cedana/plugins/containerd
 
 go 1.25
 
-replace github.com/cedana/cedana v0.0.0 => ../..
+replace github.com/cedana/cedana => ../..
 
-replace github.com/cedana/cedana/plugins/runc v0.0.0 => ../runc
+replace github.com/cedana/cedana/plugins/runc => ../runc
 
 require (
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251009084235-3942f1f92d9c.1

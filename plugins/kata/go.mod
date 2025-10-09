@@ -6,7 +6,7 @@ replace github.com/cedana/cedana => ../..
 
 require (
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251009084235-3942f1f92d9c.1
-	github.com/cedana/cedana v0.0.0-00010101000000-000000000000
+	github.com/cedana/cedana v0.0.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
 	github.com/spf13/cobra v1.10.1
 )

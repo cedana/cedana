@@ -10,7 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.4
-	github.com/cedana/cedana v0.0.0-00010101000000-000000000000
+	github.com/cedana/cedana v0.0.0
 	github.com/rs/zerolog v1.34.0
 )
 

@@ -13,7 +13,7 @@ require (
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251009084235-2127b839c830.1
 	github.com/cedana/cedana v0.0.0
 	github.com/cedana/cedana-go-sdk v0.3.7
-	github.com/cedana/cedana/plugins/containerd v0.0.0-00010101000000-000000000000
+	github.com/cedana/cedana/plugins/containerd v0.0.0
 	github.com/cedana/cedana/plugins/runc v0.0.0
 	github.com/cyphar/filepath-securejoin v0.5.0
 	github.com/gogo/protobuf v1.3.2
