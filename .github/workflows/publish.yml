@@ -145,7 +145,7 @@ jobs:
         continue-on-error: true
 
       - name: Push cedana to Cloudsmith
-        id: push-cedana
+        id: push-cedana-2
         uses: cloudsmith-io/action@master
         continue-on-error: true
         with:
@@ -220,7 +220,7 @@ jobs:
         continue-on-error: true
 
       - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
-        id: push-plugin
+        id: push-plugin-2
         uses: cloudsmith-io/action@master
         continue-on-error: true
         with:
