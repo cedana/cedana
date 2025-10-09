@@ -149,7 +149,8 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
-          name: plugins-amd64
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Download CRIU binary
         uses: actions/download-artifact@v4

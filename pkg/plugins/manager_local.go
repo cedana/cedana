@@ -108,6 +108,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 					p.Status = OUTDATED
 				} else {
 					p.Status = INSTALLED
+					p.Version = p.AvailableVersion
 				}
 			case UNKNOWN:
 				p.Status = AVAILABLE
