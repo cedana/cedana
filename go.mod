@@ -1,6 +1,6 @@
 module github.com/cedana/cedana
 
-go 1.25.1
+go 1.25
 
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251009084235-8dc16543509d.2

@@ -1,6 +1,6 @@
 module github.com/cedana/cedana/plugins/containerd
 
-go 1.25.1
+go 1.25
 
 replace github.com/cedana/cedana v0.0.0 => ../..
 
