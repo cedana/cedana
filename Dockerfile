@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.6
-FROM golang:1.25rc3-bullseye as builder
+FROM golang:1.25.2-bullseye as builder
 
 ARG ALL_PLUGINS=0
 
