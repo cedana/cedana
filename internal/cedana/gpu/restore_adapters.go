@@ -82,10 +82,20 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.InvalidArgument, "missing state. it should have been set by the adapter")
 		}
 
-		extraFiles, ok := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-		if !ok {
-			extraFiles = []*os.File{}
+		extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
+		inheritFdMap, _ := ctx.Value(keys.INHERIT_FD_MAP_CONTEXT_KEY).(map[string]int32)
+
+		if req.Criu == nil {
+			req.Criu = &criu.CriuOpts{}
 		}
+
+		key := strings.TrimPrefix(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, state.GPUID), "/")
+		fd := int32(3 + len(extraFiles))
+
+		if _, ok := inheritFdMap[key]; ok {
+			return nil, status.Errorf(codes.FailedPrecondition, "controller shm file already inherited")
+		}
+		inheritFdMap[key] = fd
 
 		// Open new GPU shm file
 		shmFile, err := os.OpenFile(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id), os.O_RDWR, 0o777)
@@ -95,14 +105,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		defer shmFile.Close()
 
 		extraFiles = append(extraFiles, shmFile)
-
-		if req.Criu == nil {
-			req.Criu = &criu.CriuOpts{}
-		}
-
 		req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
-			Key: proto.String(strings.TrimPrefix(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, state.GPUID), "/")),
-			Fd:  proto.Int32(int32(2 + len(extraFiles))),
+			Fd:  proto.Int32(fd),
+			Key: proto.String(key),
 		})
 
 		var toClose []*os.File
@@ -128,12 +133,18 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				return false
 			}
 
+			key = strings.TrimPrefix(newPath, "/")
+			fd = int32(3 + len(extraFiles))
+
+			if _, ok := inheritFdMap[key]; ok {
+				return true // already inherited
+			}
+			inheritFdMap[key] = fd
 			extraFiles = append(extraFiles, newFile)
 			toClose = append(toClose, newFile)
-
 			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
-				Key: proto.String(strings.TrimPrefix(path, "/")),
-				Fd:  proto.Int32(int32(2 + len(extraFiles))),
+				Key: proto.String(key),
+				Fd:  proto.Int32(fd),
 			})
 
 			return true
@@ -148,6 +159,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
+		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, inheritFdMap)
 
 		return next(ctx, opts, resp, req)
 	}

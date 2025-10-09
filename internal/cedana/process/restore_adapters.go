@@ -121,6 +121,8 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 
 		daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
+		visitedStdioFds := make(map[uint64]bool)
+		inheritFdMap, _ := ctx.Value(keys.INHERIT_FD_MAP_CONTEXT_KEY).(map[string]int32)
 		extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 
 		// Set the inherited fds
@@ -135,36 +137,39 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return true
 		})
 
-		visited := make(map[string]bool)
-
 		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
 			_, internal := mountIds[f.MountID]
 
-			if visited[f.Path] {
-				return true
-			}
-			visited[f.Path] = true
+			var key string
+			var fd int32
+			var extraFile *os.File
 
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
 			if external {
+
+				// Inherit all external namespace files, expecting them to still exist
+
 				if f.IsTTY {
-					inheritFds = append(inheritFds, &criu_proto.InheritFd{
-						Fd:  proto.Int32(int32(f.Fd)),
-						Key: proto.String(fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev)),
-					})
+					key = fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev)
+					fd = int32(f.Fd)
 				} else {
-					inheritFds = append(inheritFds, &criu_proto.InheritFd{
-						Fd:  proto.Int32(int32(f.Fd)),
-						Key: proto.String(fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode)),
-					})
+					key = fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode)
+					fd = int32(f.Fd)
 				}
 				log.Warn().Msgf("inherited external file %s with fd %d. assuming it still exists", f.Path, f.Fd)
+
 			} else {
-				path := strings.TrimPrefix(f.Path, "/")
+
+				// Inherit stdio files that are not external
+
+				if visitedStdioFds[f.Fd] { // Stdio fds should only be inherited once
+					return true
+				}
+				visitedStdioFds[f.Fd] = true
 
 				if f.IsTTY || daemonless {
 					if !daemonless {
@@ -172,54 +177,60 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 							"found open file %s with fd %d which is a TTY and so restoring will fail because no TTY to inherit. Try --no-server restore", f.Path, f.Fd)
 						return false
 					}
+
 					switch f.Fd {
 					case 0:
-						extraFiles = append(extraFiles, os.Stdin)
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(int32(2 + len(extraFiles))),
-							Key: proto.String(path),
-						})
+						extraFile = os.Stdin
+						key = strings.TrimPrefix(f.Path, "/")
+						fd = int32(3 + len(extraFiles))
 					case 1:
-						extraFiles = append(extraFiles, os.Stdout)
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(int32(2 + len(extraFiles))),
-							Key: proto.String(path),
-						})
+						extraFile = os.Stdout
+						key = strings.TrimPrefix(f.Path, "/")
+						fd = int32(3 + len(extraFiles))
 					case 2:
-						extraFiles = append(extraFiles, os.Stderr)
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(int32(2 + len(extraFiles))),
-							Key: proto.String(path),
-						})
+						extraFile = os.Stderr
+						key = strings.TrimPrefix(f.Path, "/")
+						fd = int32(3 + len(extraFiles))
 					}
 				} else if f.Fd == 0 {
 					if req.Attachable {
-						log.Debug().Msgf("found open STDIN file %s with fd %d and req.Attachable is set so inheriting it", path, f.Fd)
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(int32(f.Fd)),
-							Key: proto.String(path),
-						})
+						key = strings.TrimPrefix(f.Path, "/")
+						fd = int32(f.Fd)
+						log.Debug().Msgf("found open STDIN file %s with fd %d and req.Attachable is set so inheriting it", f.Path, f.Fd)
 					} else {
-						log.Warn().Msgf("found open non-TTY STDIN file %s with fd %d and req.Attachable is not set so assuming it still exists", path, f.Fd)
+						log.Warn().Msgf("found open non-TTY STDIN file %s with fd %d and req.Attachable is not set so assuming it still exists", f.Path, f.Fd)
 					}
 				} else if f.Fd == 1 || f.Fd == 2 {
-					log.Debug().Msgf("found open STDOUT/STDERR file %s with fd %d and req.Log/Attachable is set so inheriting it", path, f.Fd)
+					log.Debug().Msgf("found open STDOUT/STDERR file %s with fd %d and req.Log/Attachable is set so inheriting it", f.Path, f.Fd)
 					if req.Attachable || req.Log != "" {
-						inheritFds = append(inheritFds, &criu_proto.InheritFd{
-							Fd:  proto.Int32(int32(f.Fd)),
-							Key: proto.String(path),
-						})
+						key = strings.TrimPrefix(f.Path, "/")
+						fd = int32(f.Fd)
 					} else {
-						log.Warn().Msgf("found open non-TTY STDOUT/STDERR file %s with fd %d and req.Log/Attachable is not set so assuming it still exists", path, f.Fd)
+						log.Warn().Msgf("found open non-TTY STDOUT/STDERR file %s with fd %d and req.Log/Attachable is not set so assuming it still exists", f.Path, f.Fd)
 					}
 				}
 			}
 
+			if _, ok := inheritFdMap[key]; key == "" || ok {
+				return true
+			}
+			inheritFdMap[key] = fd
+			extraFiles = append(extraFiles, extraFile)
+			inheritFds = append(inheritFds, &criu_proto.InheritFd{
+				Fd:  proto.Int32(fd),
+				Key: proto.String(key),
+			})
+
 			return true
 		})
 
+		if err != nil {
+			return nil, err
+		}
+
 		req.Criu.InheritFd = inheritFds
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
+		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, inheritFdMap)
 
 		return next(ctx, opts, resp, req)
 	}
