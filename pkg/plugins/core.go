@@ -49,7 +49,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 
 			p, err := plugin.Open(path)
 			if err != nil {
-				fmt.Printf("Error loading plugin: %s\n", t.Name)
+				fmt.Printf("%s: %v\n", t.Name, err)
 				continue
 			}
 
@@ -57,7 +57,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 		}
 	}
 
-	return
+	return loadedPlugins
 }
 
 // RecoverFromPanic is a helper function to recover from panics in plugins

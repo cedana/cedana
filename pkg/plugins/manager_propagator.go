@@ -107,7 +107,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				if resp.StatusCode == http.StatusPartialContent {
-					fmt.Println(style.WarningColors.Sprint("Some requested plugins have no compatible versions available in the registry or locally."))
+					fmt.Println(style.WarningColors.Sprint("Some requested plugins have no compatible versions available in the registry or locally.\n"))
 				}
 
 				onlineList := make([]Plugin, len(list))

@@ -150,8 +150,8 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v6
         with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+          go-version-file: plugins/${{ env.PLUGIN }}/go.mod
+          cache-dependency-path: plugins/${{ env.PLUGIN }}/go.sum
 
       - name: Build
         env:

@@ -145,6 +145,7 @@ jobs:
 
       - name: Push cedana to Cloudsmith
         id: push-cedana-2
+        if: steps.push-cedana.outcome == 'failure'
         uses: cloudsmith-io/action@master
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
@@ -220,7 +221,7 @@ jobs:
 
       - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
         id: push-plugin-2
-        if: steps.push-cedana.outcome == 'failure'
+        if: steps.push-plugin.outcome == 'failure'
         uses: cloudsmith-io/action@master
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
