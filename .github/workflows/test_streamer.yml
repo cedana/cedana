@@ -29,7 +29,7 @@ on:
         type: string
         description: "Runner machine for CPU tests"
         required: false
-        default: 4cpu
+        default: 2cpu
       runner_gpu:
         type: string
         description: "Runner machine for GPU tests"
@@ -44,7 +44,7 @@ on:
         type: number
         description: "Parallelism for running tests"
         required: false
-        default: 4
+        default: 2
       parallelism_gpu:
         type: number
         description: "Parallelism for running GPU tests"
