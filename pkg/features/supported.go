@@ -51,6 +51,7 @@ var (
 
 	// GPU
 	GPUInterception = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
+	GPUTracing      = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUTracing", Description: "GPU tracing"}
 
 	// Query
 	QueryHandler = plugins.Feature[types.Query]{Symbol: "QueryHandler", Description: "Query handler"}

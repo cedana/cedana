@@ -54,6 +54,7 @@ var (
 	Cleanup    = client.Cleanup
 
 	GPUInterception types.Adapter[types.Run] = gpu.Interception
+	GPUTracing      types.Adapter[types.Run] = gpu.Tracing
 
 	FreezeHandler   types.Freeze   = runtime.Freeze
 	UnfreezeHandler types.Unfreeze = runtime.Unfreeze

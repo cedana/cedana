@@ -156,6 +156,9 @@ func pluginRunHandler() types.Run {
 		if req.GPUEnabled {
 			handler = handler.With(gpu.Interception)
 		}
+		if req.GPUTracing {
+			handler = handler.With(gpu.Tracing)
+		}
 
 		return handler(ctx, opts, resp, req)
 	}

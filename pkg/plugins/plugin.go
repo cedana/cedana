@@ -233,5 +233,8 @@ func (p *Plugin) Checksum() string {
 }
 
 func (p *Plugin) IsInstalled() bool {
+	if p == nil {
+		return false
+	}
 	return p.Status == INSTALLED || p.Status == OUTDATED
 }
