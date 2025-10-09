@@ -34,12 +34,12 @@ on:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 4cpu-16g-1xL4
+        default: 2cpu-8g-1xT4
       runner_gpu_arm64:
         type: string
         description: "Runner machine for GPU tests (arm64)"
         required: false
-        default: 8cpu-16g-1xT4G
+        default: 4cpu-8g-1xT4G
       parallelism:
         type: number
         description: "Parallelism for running tests"
