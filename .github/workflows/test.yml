@@ -77,6 +77,11 @@ jobs:
         arch:
           - amd64
           - arm64
+    container:
+      image: golang:1.25rc3-bullseye
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -107,12 +112,6 @@ jobs:
         if: inputs.debug
         with:
           limit-access-to-actor: true
-
-      - name: Setup go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
 
       - name: Run unit tests
         run: make test-unit

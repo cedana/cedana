@@ -6,13 +6,6 @@ ARG VERSION
 
 WORKDIR /app
 
-RUN <<EOT
-set -eux
-DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y software-properties-common build-essential
-EOT
-
 ADD . /app
 RUN <<EOT
 if [ "$ALL_PLUGINS" -eq "1" ]; then

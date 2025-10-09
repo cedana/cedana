@@ -60,6 +60,11 @@ jobs:
           - amd64
           - arm64
     if: inputs.cedana
+    container:
+      image: golang:1.25rc3-bullseye
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
       - uses: actions/checkout@v4
@@ -79,12 +84,6 @@ jobs:
         if: inputs.debug
         with:
           limit-access-to-actor: true
-
-      - name: Setup go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
 
       - name: Build
         run: |
@@ -120,6 +119,11 @@ jobs:
           - amd64
           - arm64
     if: inputs.plugins
+    container:
+      image: golang:1.25rc3-bullseye
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
       - uses: actions/checkout@v4
@@ -146,12 +150,6 @@ jobs:
         run: |
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
-
-      - name: Setup go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: plugins/${{ env.PLUGIN }}/go.mod
-          cache-dependency-path: plugins/${{ env.PLUGIN }}/go.sum
 
       - name: Build
         env:
