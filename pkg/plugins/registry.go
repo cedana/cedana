@@ -71,6 +71,11 @@ var Registry = []Plugin{
 		Binaries:  []Binary{{Name: "cedana-gpu-controller"}},
 	},
 	{
+		Name:      "gpu/tracer",
+		Type:      EXTERNAL,
+		Libraries: []Binary{{Name: "libcedana-gpu-tracer.so"}},
+	},
+	{
 		Name:     "streamer",
 		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "cedana-image-streamer"}},

@@ -223,6 +223,9 @@ jobs:
           push: true
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            ALL_PLUGINS=0
+            VERSION=${{ github.head_ref || github.ref_name }}
           outputs: |
             type=image,name=${{ inputs.image_name }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=s3,blobs_prefix=cache/${{ github.repository }}/,manifests_prefix=cache/${{ github.repository }}/${{ matrix.arch }},region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}

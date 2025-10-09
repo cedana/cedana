@@ -333,7 +333,10 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 
 docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building helper Docker image..."
-	docker buildx build --platform $(PLATFORM) --build-arg ALL_PLUGINS=$(ALL_PLUGINS) -t $(DOCKER_IMAGE) --load . ;\
+	docker buildx build --platform $(PLATFORM) \
+		--build-arg ALL_PLUGINS=$(ALL_PLUGINS) \
+		--build-arg VERSION=$(VERSION) \
+		-t $(DOCKER_IMAGE) --load . ;\
 
 docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test Docker image..."

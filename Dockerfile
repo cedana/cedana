@@ -2,6 +2,7 @@
 FROM golang:1.25rc3-bullseye as builder
 
 ARG ALL_PLUGINS=0
+ARG VERSION
 
 WORKDIR /app
 
@@ -15,9 +16,9 @@ EOT
 ADD . /app
 RUN <<EOT
 if [ "$ALL_PLUGINS" -eq "1" ]; then
-  make cedana plugins -j $(nproc)
+  make cedana plugins -j $(nproc) VERSION=${VERSION}
 else
-  make cedana ${PWD}/libcedana-k8s.so -j $(nproc)
+  make cedana ${PWD}/libcedana-k8s.so -j $(nproc) VERSION=${VERSION}
 fi
 EOT
 
