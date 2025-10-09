@@ -121,6 +121,9 @@ jobs:
         with:
           name: cedana-${{ matrix.arch }}
 
+      - name: Wait before trying
+        run: sleep $((RANDOM % 6 + 5))
+
       - name: Push cedana to Cloudsmith
         id: push-cedana
         uses: cloudsmith-io/action@master
@@ -142,7 +145,7 @@ jobs:
 
       - name: Wait before retrying
         if: steps.push-cedana.outcome == 'failure'
-        run: sleep 5
+        run: sleep $((RANDOM % 6 + 5))
 
       - name: Push cedana to Cloudsmith
         id: push-cedana-2
@@ -195,6 +198,9 @@ jobs:
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
 
+      - name: Wait before trying
+        run: sleep $((RANDOM % 6 + 5))
+
       - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
         id: push-plugin
         uses: cloudsmith-io/action@master
@@ -215,8 +221,8 @@ jobs:
       # by retrying the whole job, we just wait a bit and try again once.
 
       - name: Wait before retrying
-        if: steps.push-cedana.outcome == 'failure'
-        run: sleep 5
+        if: steps.push-plugin.outcome == 'failure'
+        run: sleep $((RANDOM % 6 + 5))
 
       - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
         id: push-plugin-2

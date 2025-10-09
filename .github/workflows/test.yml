@@ -49,12 +49,7 @@ on:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 2cpu-8g-1xT4
-      runner_gpu_arm64:
-        type: string
-        description: "Runner machine for GPU tests (arm64)"
-        required: false
-        default: 4cpu-8g-1xT4G
+        default: 4cpu-1gpu
       post_summary_slack:
         type: string
         description: "Webhook URL for posting summary to Slack"
@@ -404,7 +399,6 @@ jobs:
       parallelism_gpu: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
-      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
   gpu:
@@ -417,7 +411,6 @@ jobs:
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner_gpu }}
-      runner_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
   # XXX: Below kubernetes tests are split into separate workflows, instead of using matrix,
@@ -437,7 +430,6 @@ jobs:
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
-      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
   eks:

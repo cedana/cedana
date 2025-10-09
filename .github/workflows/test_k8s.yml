@@ -39,12 +39,7 @@ on:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 2cpu-8g-1xT4
-      runner_gpu_arm64:
-        type: string
-        description: "Runner machine for GPU tests (arm64)"
-        required: false
-        default: 4cpu-8g-1xT4G
+        default: 4cpu-16g-1xT4
       parallelism:
         type: number
         description: "Parallelism for running tests"
@@ -94,7 +89,7 @@ jobs:
       ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
-      matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner,
+      matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
       matrix.compute == 'CUDA' && '-cuda-12-4' || '',
       matrix.cr,
