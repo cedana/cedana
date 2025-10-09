@@ -12,9 +12,6 @@ apt-get update
 apt-get install -y software-properties-common build-essential
 EOT
 
-ADD ./go.mod /app
-ADD ./go.sum /app
-RUN go mod download && rm -rf go.mod go.sum
 ADD . /app
 RUN <<EOT
 if [ "$ALL_PLUGINS" -eq "1" ]; then

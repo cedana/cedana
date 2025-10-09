@@ -144,7 +144,7 @@ jobs:
 
       - name: Run k8s setup host
         env:
-          CEDANA_PLUGINS_BUILDS: alpha
+          CEDANA_PLUGINS_BUILDS: local # change to alpha to test plugin downloads
         run: |
           sudo -E chmod +x ./cedana
           sudo -E cp ./cedana /usr/local/bin/
