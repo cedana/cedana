@@ -133,9 +133,8 @@ jobs:
           file: "cedana"
           name: "cedana-${{ matrix.arch }}"
           version: ${{ github.head_ref || github.ref_name }}
-          republish: true
+          republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: false
 
   cloudsmith-plugin:
     name: Cloudsmith
@@ -185,9 +184,8 @@ jobs:
           file: "libcedana-${{ env.PLUGIN }}.so"
           name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
           version: ${{ github.head_ref || github.ref_name }}
-          republish: true
+          republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: false
 
   dockerhub:
     name: DockerHub (multi-arch)
