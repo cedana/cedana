@@ -1,17 +1,21 @@
 # syntax=docker/dockerfile:1.6
 FROM golang:1.25rc3-bullseye as builder
 
+ARG PREBUILT_BINARIES=0
 ARG ALL_PLUGINS=0
 ARG VERSION
 
 WORKDIR /app
 
 ADD . /app
+
 RUN <<EOT
-if [ "$ALL_PLUGINS" -eq "1" ]; then
-  make cedana plugins -j $(nproc) VERSION=${VERSION}
-else
-  make cedana ${PWD}/libcedana-k8s.so -j $(nproc) VERSION=${VERSION}
+if [ "$PREBUILT_BINARIES" -ne "1" ]; then
+  if [ "$ALL_PLUGINS" -eq "1" ]; then
+    make cedana plugins -j $(nproc) VERSION=${VERSION}
+  else
+    make cedana ${PWD}/libcedana-k8s.so -j $(nproc) VERSION=${VERSION}
+  fi
 fi
 EOT
 
