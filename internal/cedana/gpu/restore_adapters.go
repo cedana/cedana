@@ -115,6 +115,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		// Inherit hostmem files as well, if any
 		utils.WalkTree(state, "OpenFiles", "Children", func(file *daemon.File) bool {
 			path := file.Path
+
 			re := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
 			matches := re.FindStringSubmatch(path)
 			if len(matches) != 3 {
@@ -158,8 +159,14 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return nil, err
 		}
 
+		logDir, err := EnsureLogDir(id, req.UID, req.GID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to ensure GPU log dir: %v", err)
+		}
+
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
 		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, inheritFdMap)
+		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
 
 		return next(ctx, opts, resp, req)
 	}

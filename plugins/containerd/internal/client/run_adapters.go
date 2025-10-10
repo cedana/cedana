@@ -60,15 +60,19 @@ func CreateContainerForRun(next types.Run) types.Run {
 				oci.WithImageConfig(image),
 			}
 
-			specOpts = append(specOpts, oci.WithProcessArgs(details.Args...))
+			if len(details.Args) > 0 {
+				specOpts = append(specOpts, oci.WithProcessArgs(details.Args...))
+			}
 
-			specOpts = append(
-				specOpts,
-				nvidia.WithGPUs(
-					nvidia.WithDevices(utils.Int32ToIntSlice(details.GPUs)...),
-					nvidia.WithAllCapabilities,
-				),
-			)
+			if len(details.GPUs) > 0 {
+				specOpts = append(
+					specOpts,
+					nvidia.WithGPUs(
+						nvidia.WithDevices(utils.Int32ToIntSlice(details.GPUs)...),
+						nvidia.WithAllCapabilities,
+					),
+				)
+			}
 
 			container, err = client.NewContainer(
 				ctx,

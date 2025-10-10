@@ -50,8 +50,8 @@ var (
 	ManageHandler = plugins.Feature[types.Run]{Symbol: "ManageHandler", Description: "Manage handler"}
 
 	// GPU
-	GPUInterception = plugins.Feature[func(id, libPath string, env ...string) types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
-	GPUTracing      = plugins.Feature[func(id, libPath string, env ...string) types.Adapter[types.Run]]{Symbol: "GPUTracing", Description: "GPU tracing"}
+	GPUInterception = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUInterception", Description: "GPU interception"}
+	GPUTracing      = plugins.Feature[types.Adapter[types.Run]]{Symbol: "GPUTracing", Description: "GPU tracing"}
 
 	// Query
 	QueryHandler = plugins.Feature[types.Query]{Symbol: "QueryHandler", Description: "Query handler"}

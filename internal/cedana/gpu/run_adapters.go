@@ -82,7 +82,6 @@ func Interception(next types.Run) types.Run {
 		}
 
 		plugin := opts.Plugins.Get("gpu")
-
 		if !plugin.IsInstalled() {
 			return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin for GPU C/R support")
 		}
@@ -92,21 +91,20 @@ func Interception(next types.Run) types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to ensure GPU log dir: %v", err)
 		}
 
-		env := []string{"NCCL_SHM_DISABLE=1"} // Disable for now to avoid conflicts with NCCL's shm usage
-		env = append(env, fmt.Sprintf("CEDANA_GPU_LOG_DIR=%s", logDir))
+		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
 
 		t := req.GetType()
 		var handler types.Run
 		switch t {
 		case "process":
-			handler = next.With(ProcessInterception(id, plugin.LibraryPaths()[0], env...))
+			handler = next.With(ProcessInterception)
 		default:
 			// Use plugin-specific handler
 			err := features.GPUInterception.IfAvailable(func(
 				name string,
-				pluginInterception func(string, string, ...string) types.Adapter[types.Run],
+				pluginInterception types.Adapter[types.Run],
 			) error {
-				handler = next.With(pluginInterception(id, plugin.LibraryPaths()[0], env...))
+				handler = next.With(pluginInterception)
 				return nil
 			}, t)
 			if err != nil {
@@ -114,7 +112,7 @@ func Interception(next types.Run) types.Run {
 			}
 		}
 
-		log.Info().Str("plugin", "gpu").Str("ID", id).Str("type", t).Str("log_dir", logDir).Msg("enabling GPU interception")
+		log.Info().Str("plugin", "gpu").Str("ID", id).Str("type", t).Msg("enabling GPU interception")
 
 		return handler(ctx, opts, resp, req)
 	}
@@ -127,12 +125,12 @@ func Tracing(next types.Run) types.Run {
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string) // Try to use existing ID
 		if !ok {
 			id = uuid.New().String()
+			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 		}
 
 		plugin := opts.Plugins.Get("gpu/tracer")
-
 		if !plugin.IsInstalled() {
-			return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin for GPU C/R support")
+			return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU/tracer plugin for GPU tracing support")
 		}
 
 		logDir, err := EnsureLogDir(id, req.UID, req.GID)
@@ -140,21 +138,20 @@ func Tracing(next types.Run) types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to ensure GPU log dir: %v", err)
 		}
 
-		env := []string{"NCCL_SHM_DISABLE=1"} // Disable for now to avoid conflicts with NCCL's shm usage
-		env = append(env, fmt.Sprintf("CEDANA_GPU_LOG_DIR=%s", logDir))
+		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
 
 		t := req.GetType()
 		var handler types.Run
 		switch t {
 		case "process":
-			handler = next.With(ProcessTracing(id, plugin.LibraryPaths()[0], env...))
+			handler = next.With(ProcessTracing)
 		default:
 			// Use plugin-specific handler
 			err := features.GPUTracing.IfAvailable(func(
 				name string,
-				pluginTracing func(string, string, ...string) types.Adapter[types.Run],
+				pluginTracing types.Adapter[types.Run],
 			) error {
-				handler = next.With(pluginTracing(id, plugin.LibraryPaths()[0], env...))
+				handler = next.With(pluginTracing)
 				return nil
 			}, t)
 			if err != nil {
@@ -162,46 +159,65 @@ func Tracing(next types.Run) types.Run {
 			}
 		}
 
-		log.Info().Str("plugin", "gpu/tracer").Str("ID", id).Str("type", t).Str("log_dir", logDir).Msg("enabling GPU tracing")
+		log.Info().Str("plugin", "gpu/tracer").Str("ID", id).Str("type", t).Msg("enabling GPU tracing")
 
 		return handler(ctx, opts, resp, req)
 	}
 }
 
 // Adapter that adds GPU interception to a process
-func ProcessInterception(id, libPath string, env ...string) types.Adapter[types.Run] {
-	return func(next types.Run) types.Run {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
-			libSymlink := filepath.Join(utils.Getenv(env, "CEDANA_GPU_LOG_DIR"), "libcuda.so.1")
-			err = os.Symlink(libPath, libSymlink)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to create symlink for GPU library: %s", err)
-			}
-
-			req.Env = append(req.Env, env...)
-			req.Env = append(req.Env, "CEDANA_GPU_ID="+id)
-			req.Env = append(req.Env, fmt.Sprintf("LD_PRELOAD=%s:%s", libSymlink, utils.Getenv(req.Env, "LD_PRELOAD")))
-
-			return next(ctx, opts, resp, req)
+func ProcessInterception(next types.Run) types.Run {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
+		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
 		}
+		logDir, ok := ctx.Value(keys.GPU_LOG_DIR_CONTEXT_KEY).(string)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU log dir from context")
+		}
+
+		plugin := opts.Plugins.Get("gpu")
+		if !plugin.IsInstalled() {
+			return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin for GPU C/R support")
+		}
+
+		libSymlink := filepath.Join(logDir, "libcuda.so.1")
+		err = os.Symlink(plugin.LibraryPaths()[0], libSymlink)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create symlink for GPU library: %s", err)
+		}
+
+		req.Env = append(req.Env, "NCCL_SHM_DISABLE=1") // Disable for now to avoid conflicts with NCCL's shm usage
+		req.Env = append(req.Env, "CEDANA_GPU_ID="+id)
+		req.Env = append(req.Env, "CEDANA_GPU_LOG_DIR="+logDir)
+		req.Env = append(req.Env, fmt.Sprintf("LD_PRELOAD=%s:%s", libSymlink, utils.Getenv(req.Env, "LD_PRELOAD")))
+
+		return next(ctx, opts, resp, req)
 	}
 }
 
 // Adapter that adds GPU tracing to a process
-func ProcessTracing(id, libPath string, env ...string) types.Adapter[types.Run] {
-	return func(next types.Run) types.Run {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
-			libSymlink := filepath.Join(utils.Getenv(env, "CEDANA_GPU_LOG_DIR"), "libcuda.so.1")
-			err = os.Symlink(libPath, libSymlink)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to create symlink for GPU library: %s", err)
-			}
-
-			req.Env = append(req.Env, env...)
-			req.Env = append(req.Env, "CEDANA_GPU_ID="+id)
-			req.Env = append(req.Env, fmt.Sprintf("LD_PRELOAD=%s:%s", libSymlink, utils.Getenv(req.Env, "LD_PRELOAD")))
-
-			return next(ctx, opts, resp, req)
+func ProcessTracing(next types.Run) types.Run {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
+		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
 		}
+		logDir, ok := ctx.Value(keys.GPU_LOG_DIR_CONTEXT_KEY).(string)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU log dir from context")
+		}
+
+		plugin := opts.Plugins.Get("gpu/tracer")
+		if !plugin.IsInstalled() {
+			return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU/tracer plugin for GPU tracing support")
+		}
+
+		req.Env = append(req.Env, "CEDANA_GPU_ID="+id)
+		req.Env = append(req.Env, "CEDANA_GPU_LOG_DIR="+logDir)
+		req.Env = append(req.Env, fmt.Sprintf("LD_PRELOAD=%s:%s", plugin.LibraryPaths()[0], utils.Getenv(req.Env, "LD_PRELOAD")))
+
+		return next(ctx, opts, resp, req)
 	}
 }
