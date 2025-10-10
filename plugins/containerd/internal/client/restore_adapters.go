@@ -69,15 +69,20 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			)
 		}
 
-		criuOptsBytes, err := json.Marshal(req.Criu)
+		criuOptsJson, err := json.Marshal(req.Criu)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to marshal CRIU options: %v", err)
 		}
 
+		configJson, err := json.Marshal(config.Global)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to marshal config: %v", err)
+		}
+
 		specOpts = append(specOpts, oci.WithEnv([]string{
-			"CEDANA_CONFIG_DIR=" + config.Dir,              // For the shim to call cedana with the current config
-			"CEDANA_CHECKPOINT_PATH=" + req.Path,           // For the shim to know this is a restore and not a run
-			"CEDANA_CRIU_OPTS=" + string(criuOptsBytes), // For the shim to pass to `cedana restore <low-level runtime> ...`
+			"CEDANA_CONFIG=" + string(configJson),      // For the shim to call cedana with the current config
+			"CEDANA_CHECKPOINT_PATH=" + req.Path,       // For the shim to know this is a restore and not a run
+			"CEDANA_CRIU_OPTS=" + string(criuOptsJson), // For the shim to pass to `cedana restore <low-level runtime> ...`
 		}))
 
 		// Read runtime from dump

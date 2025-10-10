@@ -309,7 +309,10 @@ teardown_file() {
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
-    run cedana dump job "$jid"
+    # TODO: remove manage-cgroups once runc plugin does not force a cgroupRoot
+    # on detecting a NET PID for k8s
+
+    run cedana dump job "$jid" --manage-cgroups default
     assert_success
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
@@ -428,7 +431,10 @@ teardown_file() {
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
-    run cedana dump job "$jid"
+    # TODO: remove manage-cgroups once runc plugin does not force a cgroupRoot
+    # on detecting a NET PID for k8s
+
+    run cedana dump job "$jid" --manage-cgroups default
     assert_success
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
@@ -743,12 +749,15 @@ teardown_file() {
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
-    run cedana dump job "$jid"
+    # TODO: remove manage-cgroups once runc plugin does not force a cgroupRoot
+    # on detecting a NET PID for k8s
+
+    run cedana dump job "$jid" --manage-cgroups default
     assert_success
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    cedana restore job "$jid"
+    cedana restore job "$jid" --manage-cgroups default
 
     run runc kill "$id" KILL
     run runc delete "$id"
@@ -873,12 +882,15 @@ teardown_file() {
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
-    run cedana dump job "$jid"
+    # TODO: remove manage-cgroups once runc plugin does not force a cgroupRoot
+    # on detecting a NET PID for k8s
+
+    run cedana dump job "$jid" --manage-cgroups default
     assert_success
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    cedana restore job "$jid"
+    cedana restore job "$jid" --manage-cgroups default
 
     run runc kill "$id" KILL
     run runc delete "$id"
