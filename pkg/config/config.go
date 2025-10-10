@@ -55,7 +55,7 @@ const (
 	DEFAULT_GPU_DEBUG       = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
-	DEFAULT_CRIU_MANAGE_CGROUPS = "default"
+	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
