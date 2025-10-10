@@ -332,7 +332,7 @@ jobs:
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
+            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim-alpha/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
           fi
           echo $VERSION > containerd-runtime-version.txt
           cd -
