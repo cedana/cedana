@@ -17,14 +17,12 @@ source "$DIR"/utils.sh
 YUM_PACKAGES=(
     wget git make
     libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel # CRIU
-    buildah
     yq
 )
 
 APT_PACKAGES=(
     wget git make
     libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1 # CRIU
-    buildah
     sysvinit-utils
     yq
 )
@@ -42,16 +40,16 @@ install_yum_packages() {
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     case "$ID" in
-    debian | ubuntu | pop)
-        install_apt_packages
-        ;;
-    rhel | centos | fedora | amzn)
-        install_yum_packages
-        ;;
-    *)
-        echo "Unknown distribution"
-        exit 1
-        ;;
+        debian | ubuntu | pop)
+            install_apt_packages
+            ;;
+        rhel | centos | fedora | amzn)
+            install_yum_packages
+            ;;
+        *)
+            echo "Unknown distribution"
+            exit 1
+            ;;
     esac
 elif [ -f /etc/debian_version ]; then
     install_apt_packages

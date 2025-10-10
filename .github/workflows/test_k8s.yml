@@ -34,22 +34,17 @@ on:
         type: string
         description: "Runner machine for CPU tests"
         required: false
-        default: 4cpu-16g
+        default: 2cpu
       runner_gpu:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 4cpu-16g-1xL4
-      runner_gpu_arm64:
-        type: string
-        description: "Runner machine for GPU tests (arm64)"
-        required: false
-        default: 8cpu-16g-1xT4G
+        default: 4cpu-16g-1xT4
       parallelism:
         type: number
         description: "Parallelism for running tests"
         required: false
-        default: 4
+        default: 2
       post_summary:
         type: boolean
         description: "Post test summary"
@@ -94,7 +89,7 @@ jobs:
       ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
-      matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner,
+      matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
       matrix.compute == 'CUDA' && '-cuda-12-4' || '',
       matrix.cr,
@@ -120,6 +115,12 @@ jobs:
           - amd64
           - arm64
         exclude: # XXX: To reduce overusage of CI minutes
+          - platform: K3s
+            arch: arm64
+            storage: storage/s3
+          - platform: K3s
+            arch: amd64
+            storage: storage/cedana
           - platform: EKS
             arch: amd64
           - platform: GKE
@@ -183,7 +184,8 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Download CRIU
         uses: actions/download-artifact@v4
@@ -350,8 +352,6 @@ jobs:
           - platform: GKE
             arch: arm64
     steps:
-      - uses: runs-on/action@v1
-
       - name: Download report
         id: download-report
         uses: actions/download-artifact@v4

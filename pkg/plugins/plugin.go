@@ -36,15 +36,15 @@ const (
 
 // Represents plugin information
 type Plugin struct {
-	Name          string    `json:"name"`
-	Type          Type      `json:"type"`
-	Status        Status    `json:"status"`
-	Version       string    `json:"version"`
+	Name             string    `json:"name"`
+	Type             Type      `json:"type"`
+	Status           Status    `json:"status"`
+	Version          string    `json:"version"`
 	AvailableVersion string    `json:"latest_version"`
-	Libraries     []Binary  `json:"libraries"`
-	Binaries      []Binary  `json:"binaries"`
-	Size          int64     `json:"size"` // in bytes
-	PublishedAt   time.Time `json:"published_at"`
+	Libraries        []Binary  `json:"libraries"`
+	Binaries         []Binary  `json:"binaries"`
+	Size             int64     `json:"size"` // in bytes
+	PublishedAt      time.Time `json:"published_at"`
 }
 
 type Binary struct {
@@ -233,5 +233,8 @@ func (p *Plugin) Checksum() string {
 }
 
 func (p *Plugin) IsInstalled() bool {
+	if p == nil {
+		return false
+	}
 	return p.Status == INSTALLED || p.Status == OUTDATED
 }

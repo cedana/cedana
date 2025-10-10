@@ -221,14 +221,18 @@ wait_for_file() {
     local interval=1
     local elapsed=0
 
+    debug_log "Waiting for file '$file' to exist (timeout: $timeout seconds)"
+
     while [ ! -e "$file" ]; do
         if (( elapsed >= timeout )); then
+            error_log "Timed out waiting for file '$file' to exist after $timeout seconds"
             return 1
         fi
         sleep "$interval"
         ((elapsed += interval))
     done
 
+    debug_log "File '$file' exists after $elapsed seconds"
     return 0
 }
 

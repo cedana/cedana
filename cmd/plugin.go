@@ -330,6 +330,7 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.Reaper, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.GPUTracing, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.Storage, pluginNames, &errs))
 			tableWriter.AppendSeparator()

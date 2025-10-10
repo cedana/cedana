@@ -88,9 +88,7 @@ func NewManagerLazy(
 
 	// Spawn a background routine that will keep the DB in sync
 	// with retry logic. Can extend to use a backoff strategy.
-	serverWg.Add(1)
-	go func() {
-		defer serverWg.Done()
+	serverWg.Go(func() {
 		for {
 			select {
 			case <-lifetime.Done():
@@ -129,7 +127,7 @@ func NewManagerLazy(
 				manager.pending <- action{initialize, ""} // periodically sync with DB
 			}
 		}
-	}()
+	})
 
 	return manager, nil
 }
@@ -161,8 +159,9 @@ func (m *ManagerLazy) Get(jid string) *Job {
 
 	job.(*Job).SyncDeep()
 
-	if !job.(*Job).GPUEnabled() {
-		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(job.(*Job).GetPID()))
+	if !job.(*Job).GPUEnabled() && m.gpus.IsAttached(job.(*Job).GetPID()) {
+		job.(*Job).SetGPUEnabled(true)
+		m.pending <- action{putJob, jid}
 	}
 
 	return job.(*Job)
@@ -200,8 +199,9 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 			return true
 		}
 		job.Sync()
-		if !job.GPUEnabled() {
-			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
+		if !job.GPUEnabled() && m.gpus.IsAttached(job.GetPID()) {
+			job.SetGPUEnabled(true)
+			m.pending <- action{putJob, jid}
 		}
 		jobs = append(jobs, job)
 		return true
@@ -219,14 +219,16 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 	}
 
 	m.jobs.Range(func(key any, val any) bool {
+		jid := key.(string)
 		job := val.(*Job)
 		hostID := job.GetState().GetHost().GetID()
 		if _, ok := hostIDSet[hostID]; len(hostIDs) > 0 && !ok {
 			return true
 		}
 		job.Sync()
-		if !job.GPUEnabled() {
-			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
+		if !job.GPUEnabled() && m.gpus.IsAttached(job.GetPID()) {
+			job.SetGPUEnabled(true)
+			m.pending <- action{putJob, jid}
 		}
 		jobs = append(jobs, job)
 		return true
@@ -255,10 +257,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 
 	log.Info().Msg("managing job")
 
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-
+	m.wg.Go(func() {
 		var exitCode int
 
 		select {
@@ -282,7 +281,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 			}
 			return err
 		}, job.GetType())
-	}()
+	})
 
 	return nil
 }

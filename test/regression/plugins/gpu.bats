@@ -214,7 +214,7 @@ teardown_file() {
 # bats test_tags=restore,daemonless
 @test "restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
-    pid_file=$(mktemp)
+    pid_file=/tmp/pid-$jid
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
 
@@ -227,10 +227,8 @@ teardown_file() {
 
     debug cedana restore process --path "$dump_file" --pid-file "$pid_file" --no-server &
 
-    sleep 5
-
     wait_for_file "$pid_file"
     pid=$(cat "$pid_file")
-    run kill -KILL "$pid"
+    kill -KILL "$pid"
     wait_for_no_pid "$pid"
 }

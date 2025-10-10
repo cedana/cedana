@@ -33,12 +33,15 @@ func DumpRootfs(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
-		// Skip rootfs if image ref is not provided
-		if details.Image == nil || req.Action != daemon.DumpAction_DUMP {
+		if !(details.Rootfs || details.RootfsOnly) || req.Action != daemon.DumpAction_DUMP {
 			return next(ctx, opts, resp, req)
 		}
 
 		image := details.Image
+
+		if image == nil || image.Name == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "image name must be provided for rootfs dump")
+		}
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
 		if !ok {
@@ -90,7 +93,6 @@ func DumpRootfs(next types.Dump) types.Dump {
 		opts.CRIUCallback.Include(&criu.NotifyCallback{
 			Name: "rootfs",
 			PreDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-				log.Debug().Str("container", details.ID).Msg("dumping rootfs")
 				go func() {
 					rootfsErr <- dumpRootfs(ctx, client, container, image.Name, image.Username, image.Secret)
 					close(rootfsErr)
@@ -109,7 +111,16 @@ func DumpRootfs(next types.Dump) types.Dump {
 	}
 }
 
-func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) error {
+func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) (err error) {
+	log.Info().Str("ref", ref).Str("container", container.ID()).Msg("rootfs dump started")
+	defer func() {
+		if err != nil {
+			log.Error().Err(err).Str("ref", ref).Str("container", container.ID()).Msg("rootfs dump failed")
+		} else {
+			log.Info().Str("ref", ref).Str("container", container.ID()).Msg("rootfs dump completed")
+		}
+	}()
+
 	info, err := container.Info(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get container info: %v", err)

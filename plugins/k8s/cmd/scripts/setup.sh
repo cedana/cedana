@@ -21,10 +21,6 @@ cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/lib/libcedana*.so /host/usr/local/lib/
 cp /Makefile /host/cedana/Makefile
 
-cp /usr/local/bin/buildah /host/cedana/bin/buildah
-cp /usr/local/bin/netavark /host/cedana/bin/netavark
-cp /usr/local/bin/netavark-dhcp-proxy-client /host/cedana/bin/netavark-dhcp-proxy-client
-
 CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-"info"}
 CEDANA_LOG_LEVEL_NO_SERVER=${CEDANA_LOG_LEVEL_NO_SERVER:-"info"}
 

@@ -23,6 +23,7 @@ var (
 	WorkingDirFlag    = Flag{Full: "working-dir", Short: "w"}
 	JidFlag           = Flag{Full: "jid", Short: "j"}
 	GpuEnabledFlag    = Flag{Full: "gpu-enabled", Short: "g"}
+	GpuTracingFlag    = Flag{Full: "gpu-tracing"}
 	GpuFreezeTypeFlag = Flag{Full: "gpu-freeze-type"}
 	AttachFlag        = Flag{Full: "attach", Short: "a"}
 	AttachableFlag    = Flag{Full: "attachable"}

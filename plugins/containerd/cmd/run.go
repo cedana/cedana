@@ -15,6 +15,7 @@ func init() {
 	RunCmd.Flags().StringP(containerd_flags.ImageFlag.Full, containerd_flags.ImageFlag.Short, "", "image to use")
 	RunCmd.Flags().StringP(containerd_flags.AddressFlag.Full, containerd_flags.AddressFlag.Short, "", "containerd socket address")
 	RunCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "containerd namespace")
+	RunCmd.Flags().Int32SliceP(containerd_flags.GPUsFlag.Full, containerd_flags.GPUsFlag.Short, []int32{}, "Add GPUs to the container (e.g. 0,1,2)")
 }
 
 var RunCmd = &cobra.Command{
@@ -38,12 +39,14 @@ var RunCmd = &cobra.Command{
 		image, _ := cmd.Flags().GetString(containerd_flags.ImageFlag.Full)
 		address, _ := cmd.Flags().GetString(containerd_flags.AddressFlag.Full)
 		namespace, _ := cmd.Flags().GetString(containerd_flags.NamespaceFlag.Full)
+		gpus, _ := cmd.Flags().GetInt32Slice(containerd_flags.GPUsFlag.Full)
 
 		req.Type = "containerd"
 		req.Details = &daemon.Details{Containerd: &containerd.Containerd{
 			ID:        id,
 			Address:   address,
 			Namespace: namespace,
+			GPUs:      gpus,
 			Args:      procArgs,
 		}}
 

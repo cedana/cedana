@@ -6,8 +6,10 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/rs/zerolog/log"
@@ -58,8 +60,18 @@ func CreateContainerForRun(next types.Run) types.Run {
 				oci.WithImageConfig(image),
 			}
 
-			if len(details.GetArgs()) > 0 {
-				specOpts = append(specOpts, oci.WithProcessArgs(details.GetArgs()...))
+			if len(details.Args) > 0 {
+				specOpts = append(specOpts, oci.WithProcessArgs(details.Args...))
+			}
+
+			if len(details.GPUs) > 0 {
+				specOpts = append(
+					specOpts,
+					nvidia.WithGPUs(
+						nvidia.WithDevices(utils.Int32ToIntSlice(details.GPUs)...),
+						nvidia.WithAllCapabilities,
+					),
+				)
 			}
 
 			container, err = client.NewContainer(

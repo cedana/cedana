@@ -56,19 +56,17 @@ jobs:
           - arm64
       max-parallel: 1 # DO NOT CHANGE: required to run in order
     steps:
-      - uses: runs-on/action@v1
-
-      - name: Download Cedana binary
+      - name: Download binary
         uses: actions/download-artifact@v4
         id: download-binaries-cedana
         with:
           name: cedana-${{ matrix.arch }}
 
-      - name: Download Cedana plugins
+      - name: Download plugins
         uses: actions/download-artifact@v4
-        id: download-binaries-plugins
         with:
-          name: plugins-${{ matrix.arch }}
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -112,23 +110,63 @@ jobs:
         arch:
           - amd64
           - arm64
-      max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
-      - uses: runs-on/action@v1
-      - name: Download Cedana binary
+      - name: Download binary
         uses: actions/download-artifact@v4
-        id: download-binaries-cedana
+        id: download-binary
         with:
           name: cedana-${{ matrix.arch }}
 
-      - name: Download Cedana plugins
-        uses: actions/download-artifact@v4
-        id: download-binaries-plugins
-        with:
-          name: plugins-${{ matrix.arch }}
+      - name: Wait before trying
+        run: sleep $((RANDOM % 6 + 5))
 
       - name: Push cedana to Cloudsmith
         id: push-cedana
+        uses: cloudsmith-io/action@master
+        continue-on-error: true
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: "${{ inputs.cloudsmith_repo }}"
+          file: "cedana"
+          name: "cedana-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
+          republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+
+      # XXX: Cloudsmith is very flaky with parallel uploads. Since we don't want to waste CI minutes
+      # by retrying the whole job, we just wait a bit and try again once.
+
+      - name: Wait before retrying
+        if: steps.push-cedana.outcome == 'failure'
+        run: sleep $((RANDOM % 6 + 5))
+
+      - name: Push cedana to Cloudsmith
+        id: push-cedana-2
+        if: steps.push-cedana.outcome == 'failure'
+        uses: cloudsmith-io/action@master
+        continue-on-error: true
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: "${{ inputs.cloudsmith_repo }}"
+          file: "cedana"
+          name: "cedana-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
+          republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+
+      - name: Wait before retrying
+        if: steps.push-cedana-2.outcome == 'failure'
+        run: sleep $((RANDOM % 6 + 5))
+
+      - name: Push cedana to Cloudsmith
+        id: push-cedana-3
+        if: steps.push-cedana.outcome == 'failure'
         uses: cloudsmith-io/action@master
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
@@ -141,10 +179,91 @@ jobs:
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
 
-      - name: Push libcedana-runc.so to Cloudsmith
-        id: push-libcedana-runc
+  cloudsmith-plugin:
+    name: Cloudsmith
+    if: inputs.cloudsmith
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        plugin:
+          - runc
+          - containerd
+          - crio
+          - kata
+          - cloud-hypervisor
+          - k8s
+          - storage/cedana
+          - storage/s3
+          - storage/gcs
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Set plugin name
+        env:
+          PLUGIN: ${{ matrix.plugin }}
+        run: |
+          PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
+          echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
+
+      - name: Download plugin
+        uses: actions/download-artifact@v4
+        id: download-plugin
+        with:
+          name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
+
+      - name: Wait before trying
+        run: sleep $((RANDOM % 6 + 5))
+
+      - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
+        id: push-plugin
+        uses: cloudsmith-io/action@master
+        continue-on-error: true
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: ${{ inputs.cloudsmith_repo }}
+          file: "libcedana-${{ env.PLUGIN }}.so"
+          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
+          republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+
+      # XXX: Cloudsmith is very flaky with parallel uploads. Since we don't want to waste CI minutes
+      # by retrying the whole job, we just wait a bit and try again once.
+
+      - name: Wait before retrying
+        if: steps.push-plugin.outcome == 'failure'
+        run: sleep $((RANDOM % 6 + 5))
+
+      - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
+        id: push-plugin-2
+        if: steps.push-plugin.outcome == 'failure'
+        uses: cloudsmith-io/action@master
+        continue-on-error: true
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          command: "push"
+          format: "raw"
+          owner: "cedana"
+          repo: ${{ inputs.cloudsmith_repo }}
+          file: "libcedana-${{ env.PLUGIN }}.so"
+          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
+          version: ${{ github.head_ref || github.ref_name }}
+          republish: "true"
+          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+
+      - name: Wait before retrying
+        if: steps.push-plugin-2.outcome == 'failure'
+        run: sleep $((RANDOM % 6 + 5))
+
+      - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
+        id: push-plugin-3
+        if: steps.push-plugin.outcome == 'failure'
         uses: cloudsmith-io/action@master
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
@@ -152,140 +271,11 @@ jobs:
           format: "raw"
           owner: "cedana"
           repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-runc.so"
-          name: "libcedana-runc.so-${{ matrix.arch }}"
+          file: "libcedana-${{ env.PLUGIN }}.so"
+          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
           version: ${{ github.head_ref || github.ref_name }}
           republish: "true"
           tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
-
-      - name: Push libcedana-containerd.so to Cloudsmith
-        id: push-libcedana-containerd
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-containerd.so"
-          name: "libcedana-containerd.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
-
-      - name: Push libcedana-crio.so to Cloudsmith
-        id: push-libcedana-crio
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-crio.so"
-          name: "libcedana-crio.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
-
-      - name: Push libcedana-k8s.so to Cloudsmith
-        id: push-libcedana-k8s
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-k8s.so"
-          name: "libcedana-k8s.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
-
-      - name: Push libcedana-cloud-hypervisor.so to Cloudsmith
-        id: push-libcedana-cloud-hypervisor
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-cloud-hypervisor.so"
-          name: "libcedana-cloud-hypervisor.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
-
-      - name: Push libcedana-kata.so to Cloudsmith
-        id: push-libcedana-kata
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-kata.so"
-          name: "libcedana-kata.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
-
-      - name: Push libcedana-storage-cedana.so to Cloudsmith
-        id: push-libcedana-storage-cedana
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-storage-cedana.so"
-          name: "libcedana-storage-cedana.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
-
-      - name: Push libcedana-storage-s3.so to Cloudsmith
-        id: push-libcedana-storage-s3
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-storage-s3.so"
-          name: "libcedana-storage-s3.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
-
-      - name: Push libcedana-storage-gcs.so to Cloudsmith
-        id: push-libcedana-storage-gcs
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-storage-gcs.so"
-          name: "libcedana-storage-gcs.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-          no-wait-for-sync: true
 
   dockerhub:
     name: DockerHub (multi-arch)
