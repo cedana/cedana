@@ -14,6 +14,16 @@ func IntToInt32Slice(slice []int) []int32 {
 	return ints
 }
 
+func Int32ToIntSlice(slice []int32) []int {
+	var ints []int
+
+	for _, v := range slice {
+		ints = append(ints, int(v))
+	}
+
+	return ints
+}
+
 func IntToUint32Slice(slice []int) []uint32 {
 	var ints []uint32
 

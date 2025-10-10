@@ -39,6 +39,7 @@ const (
 	CONTROLLER_HOSTMEM_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
 	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
+	CONTROLLER_LOG_DIR_FORMATTER           = "%s/cedana-gpu.%s"
 	CONTROLLER_DEFAULT_FREEZE_TYPE         = gpu.FreezeType_FREEZE_TYPE_IPC
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1      // Signal to the restored process to notify it has a new PID
@@ -180,16 +181,14 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			continue
 		}
 
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			err := c.Sync(ctx, false)
 			if err == nil {
 				p.Store(id, c)
 			} else {
 				log.Trace().Err(err).Str("ID", id).Msg("failed to sync with GPU controller")
 			}
-			wg.Done()
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -227,12 +226,17 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		GID:    uint32(os.Getgid()),
 	}
 
+	logDir, err := EnsureLogDir(id, c.UID, c.GID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
+	}
+
 	cmd := exec.Command(
 		binary,
 		id,
 		observability,
 		"--log-dir",
-		config.Global.GPU.LogDir,
+		logDir,
 		"--sock-dir",
 		config.Global.GPU.SockDir,
 	)
@@ -433,7 +437,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		<-dumpErr // Ensure GPU dump has finished before unfreezing
 
-    // NOTE: Unfreeze must complete even if parent context is cancelled
+		// NOTE: Unfreeze must complete even if parent context is cancelled
 		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
 		defer cancel()
 
@@ -696,4 +700,17 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 	}
 
 	return components, nil
+}
+
+///////////////
+/// HELPERS ///
+///////////////
+
+func EnsureLogDir(id string, uid, gid uint32) (string, error) {
+	dir := fmt.Sprintf(CONTROLLER_LOG_DIR_FORMATTER, config.Global.GPU.LogDir, id)
+	err := os.MkdirAll(dir, 0o755)
+	if err != nil {
+		return "", err
+	}
+	return dir, os.Chown(dir, int(uid), int(gid))
 }

@@ -223,17 +223,14 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		for i, container := range containers {
 			imageMap[i] = container.Image.GetName()
 			container.Address = es.containerdAddress
-			if rootfs {
-				// NOTE: Currently we store all containers in the same image repository (with separate tags)
-				container.Image = &containerd.Image{
-					Name:     imageSecret.ImageSource + ":" + checkpointIdMap[i],
-					Username: strings.Split(imageSecret.ImageSecret, ":")[0],
-					Secret:   strings.Split(imageSecret.ImageSecret, ":")[1],
-				}
-				container.RootfsOnly = rootfsOnly
-			} else {
-				container.Image = nil // Ensure this is nil, so rootfs is not dumped
+			// NOTE: Currently we store all containers in the same image repository (with separate tags)
+			container.Image = &containerd.Image{
+				Name:     imageSecret.ImageSource + ":" + checkpointIdMap[i],
+				Username: strings.Split(imageSecret.ImageSecret, ":")[0],
+				Secret:   strings.Split(imageSecret.ImageSecret, ":")[1],
 			}
+			container.Rootfs = rootfs
+			container.RootfsOnly = rootfsOnly
 		}
 
 		var dumpReqs []*daemon.DumpReq

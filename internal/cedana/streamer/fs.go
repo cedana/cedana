@@ -181,9 +181,7 @@ func NewStreamingFs(
 	defer close(ready)
 
 	// Mark ready when we read init progress message on stderr
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for {
 			if !scanner.Scan() || ctx.Err() != nil {
@@ -195,7 +193,7 @@ func NewStreamingFs(
 			}
 			log.Trace().Msg(lastMsg)
 		}
-	}()
+	})
 
 	err = cmd.Start()
 	if err != nil {
@@ -205,9 +203,7 @@ func NewStreamingFs(
 	fs = &Fs{mode, nil, imagesDir}
 
 	// Clean up on exit
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(exited)
 
 		err := cmd.Wait()
@@ -223,7 +219,7 @@ func NewStreamingFs(
 				os.Remove(match)
 			}
 		}
-	}()
+	})
 
 	select {
 	case <-ctx.Done():

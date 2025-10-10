@@ -88,9 +88,7 @@ func NewManagerLazy(
 
 	// Spawn a background routine that will keep the DB in sync
 	// with retry logic. Can extend to use a backoff strategy.
-	serverWg.Add(1)
-	go func() {
-		defer serverWg.Done()
+	serverWg.Go(func() {
 		for {
 			select {
 			case <-lifetime.Done():
@@ -129,7 +127,7 @@ func NewManagerLazy(
 				manager.pending <- action{initialize, ""} // periodically sync with DB
 			}
 		}
-	}()
+	})
 
 	return manager, nil
 }
@@ -255,10 +253,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 
 	log.Info().Msg("managing job")
 
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
-
+	m.wg.Go(func() {
 		var exitCode int
 
 		select {
@@ -282,7 +277,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 			}
 			return err
 		}, job.GetType())
-	}()
+	})
 
 	return nil
 }

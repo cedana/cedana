@@ -197,9 +197,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 				continue
 			}
 
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				plugin := availableSet[name]
 
 				msgs <- fmt.Sprintf("Downloading plugin %s...", name)
@@ -221,7 +219,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 					}
 				}
 				msgs <- fmt.Sprintf("Downloaded plugin %s", name)
-			}()
+			})
 		}
 
 		wg.Wait()

@@ -66,9 +66,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	resp.PID = uint32(task.Pid())
 
 	// Wait for the container to exit, send exit code
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
+	opts.WG.Go(func() {
 		defer client.Close()
 		statusChan, _ := task.Wait(context.WithoutCancel(opts.Lifetime))
 		status := <-statusChan
@@ -78,7 +76,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		}
 		exitCode <- int(status.ExitCode())
 		close(exitCode)
-	}()
+	})
 
 	return code, nil
 }
