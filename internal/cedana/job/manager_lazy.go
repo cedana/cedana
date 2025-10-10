@@ -159,8 +159,8 @@ func (m *ManagerLazy) Get(jid string) *Job {
 
 	job.(*Job).SyncDeep()
 
-	if !job.(*Job).GPUEnabled() {
-		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(job.(*Job).GetPID()))
+	if !job.(*Job).GPUEnabled() && m.gpus.IsAttached(job.(*Job).GetPID()) {
+		job.(*Job).SetGPUEnabled(true)
 		m.pending <- action{putJob, jid}
 	}
 
@@ -199,8 +199,8 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 			return true
 		}
 		job.Sync()
-		if !job.GPUEnabled() {
-			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
+		if !job.GPUEnabled() && m.gpus.IsAttached(job.GetPID()) {
+			job.SetGPUEnabled(true)
 			m.pending <- action{putJob, jid}
 		}
 		jobs = append(jobs, job)
@@ -226,8 +226,8 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 			return true
 		}
 		job.Sync()
-		if !job.GPUEnabled() {
-			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
+		if !job.GPUEnabled() && m.gpus.IsAttached(job.GetPID()) {
+			job.SetGPUEnabled(true)
 			m.pending <- action{putJob, jid}
 		}
 		jobs = append(jobs, job)
