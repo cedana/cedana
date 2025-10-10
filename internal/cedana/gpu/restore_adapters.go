@@ -10,6 +10,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -24,6 +25,8 @@ import (
 func Restore(gpus Manager) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+			next = next.With(InheritFilesForRestore)
+
 			state := resp.GetState()
 
 			if !state.GPUEnabled {
@@ -54,8 +57,6 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 
-			next = next.With(InheritFilesForRestore)
-
 			code, err = next(ctx, opts, resp, req)
 			if err != nil {
 				return nil, err
@@ -72,11 +73,6 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 func InheritFilesForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
-		}
-
 		state := resp.GetState()
 		if state == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing state. it should have been set by the adapter")
@@ -97,44 +93,87 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 		inheritFdMap[key] = fd
 
-		// Open new GPU shm file
-		shmFile, err := os.OpenFile(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id), os.O_RDWR, 0o777)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to open GPU shm file: %v", err)
-		}
-		defer shmFile.Close()
+		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
+		if ok {
+			// Open new GPU shm file
+			shmFile, err := os.OpenFile(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id), os.O_RDWR, 0o644)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to open GPU shm file: %v", err)
+			}
+			defer shmFile.Close()
 
-		extraFiles = append(extraFiles, shmFile)
-		req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
-			Fd:  proto.Int32(fd),
-			Key: proto.String(key),
-		})
+			extraFiles = append(extraFiles, shmFile)
+			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
+				Fd:  proto.Int32(fd),
+				Key: proto.String(key),
+			})
+		}
 
 		var toClose []*os.File
+		var logDir string
 
 		// Inherit hostmem files as well, if any
 		utils.WalkTree(state, "OpenFiles", "Children", func(file *daemon.File) bool {
 			path := file.Path
 
-			re := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
-			matches := re.FindStringSubmatch(path)
-			if len(matches) != 3 {
-				return true
+			var newPath string
+			var newFile *os.File
+			var pid int
+
+			hostmemRegex := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
+			interceptorLogRegex := regexp.MustCompile(fmt.Sprintf(INTERCEPTOR_LOG_FILE_PATTERN, config.Global.GPU.LogDir))
+			tracerLogRegex := regexp.MustCompile(fmt.Sprintf(TRACER_LOG_FILE_PATTERN, config.Global.GPU.LogDir))
+
+			if matches := hostmemRegex.FindStringSubmatch(path); id != "" && len(matches) == 3 {
+				pid, err = strconv.Atoi(matches[2])
+				if err != nil {
+					err = status.Errorf(codes.Internal, "failed to parse PID from hostmem file path %s: %v", path, err)
+					return false
+				}
+				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
+			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 3 {
+				oldId := matches[1]
+				pid, err = strconv.Atoi(matches[2])
+				if err != nil {
+					err = status.Errorf(codes.Internal, "failed to parse PID from interceptor log file path %s: %v", path, err)
+					return false
+				}
+				if id == "" {
+					id = oldId
+				}
+				logDir, err = EnsureLogDir(id, req.UID, req.GID)
+				if err != nil {
+					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+					return false
+				}
+				newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 3 {
+				oldId := matches[1]
+				pid, err = strconv.Atoi(matches[2])
+				if err != nil {
+					err = status.Errorf(codes.Internal, "failed to parse PID from tracer log file path %s: %v", path, err)
+					return false
+				}
+				if id == "" {
+					id = oldId
+				}
+				logDir, err = EnsureLogDir(id, req.UID, req.GID)
+				if err != nil {
+					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+					return false
+				}
+				newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+			} else {
+				return true // not a file we care about
 			}
-			pid, err := strconv.Atoi(matches[2])
+
+			newFile, err = os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o644)
 			if err != nil {
-				err = status.Errorf(codes.Internal, "failed to parse PID from hostmem file path %s: %v", path, err)
+				err = status.Errorf(codes.Internal, "failed to reopen file for inheriting FD %s: %v", newPath, err)
 				return false
 			}
 
-			newPath := fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
-			newFile, err := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o777)
-			if err != nil {
-				err = status.Errorf(codes.Internal, "failed to open hostmem file %s: %v", newPath, err)
-				return false
-			}
-
-			key = strings.TrimPrefix(newPath, "/")
+			key = strings.TrimPrefix(path, "/")
 			fd = int32(3 + len(extraFiles))
 
 			if _, ok := inheritFdMap[key]; ok {
@@ -157,11 +196,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 		if err != nil {
 			return nil, err
-		}
-
-		logDir, err := EnsureLogDir(id, req.UID, req.GID)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to ensure GPU log dir: %v", err)
 		}
 
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)

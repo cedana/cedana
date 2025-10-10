@@ -39,11 +39,17 @@ const (
 	CONTROLLER_HOSTMEM_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
 	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
-	CONTROLLER_LOG_DIR_FORMATTER           = "%s/cedana-gpu.%s"
 	CONTROLLER_DEFAULT_FREEZE_TYPE         = gpu.FreezeType_FREEZE_TYPE_IPC
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1      // Signal to the restored process to notify it has a new PID
 	CONTROLLER_CHECK_SHM_SIZE              = 100 * utils.MEBIBYTE // Small size to run controller health check
+
+	LOG_DIR_FORMATTER              = "%s/cedana-gpu.%s"
+	LOG_DIR_PATTERN                = "%s/cedana-gpu.(.*)"
+	INTERCEPTOR_LOG_FILE_PATTERN   = LOG_DIR_PATTERN + "/cedana-so-(\\d+).log"
+	INTERCEPTOR_LOG_FILE_FORMATTER = LOG_DIR_FORMATTER + "/cedana-so-%d.log"
+	TRACER_LOG_FILE_PATTERN        = LOG_DIR_PATTERN + "/cedana-tracer-(\\d+).log"
+	TRACER_LOG_FILE_FORMATTER      = LOG_DIR_FORMATTER + "/cedana-tracer-%d.log"
 
 	FREEZE_TIMEOUT    = 1 * time.Minute
 	UNFREEZE_TIMEOUT  = 1 * time.Minute
@@ -707,7 +713,7 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 ///////////////
 
 func EnsureLogDir(id string, uid, gid uint32) (string, error) {
-	dir := fmt.Sprintf(CONTROLLER_LOG_DIR_FORMATTER, config.Global.GPU.LogDir, id)
+	dir := fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, id)
 	err := os.MkdirAll(dir, 0o755)
 	if err != nil {
 		return "", err

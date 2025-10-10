@@ -161,6 +161,7 @@ func (m *ManagerLazy) Get(jid string) *Job {
 
 	if !job.(*Job).GPUEnabled() {
 		job.(*Job).SetGPUEnabled(m.gpus.IsAttached(job.(*Job).GetPID()))
+		m.pending <- action{putJob, jid}
 	}
 
 	return job.(*Job)
@@ -200,6 +201,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		job.Sync()
 		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
+			m.pending <- action{putJob, jid}
 		}
 		jobs = append(jobs, job)
 		return true
@@ -217,6 +219,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 	}
 
 	m.jobs.Range(func(key any, val any) bool {
+		jid := key.(string)
 		job := val.(*Job)
 		hostID := job.GetState().GetHost().GetID()
 		if _, ok := hostIDSet[hostID]; len(hostIDs) > 0 && !ok {
@@ -225,6 +228,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 		job.Sync()
 		if !job.GPUEnabled() {
 			job.SetGPUEnabled(m.gpus.IsAttached(job.GetPID()))
+			m.pending <- action{putJob, jid}
 		}
 		jobs = append(jobs, job)
 		return true

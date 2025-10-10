@@ -5,10 +5,8 @@ ARG PREBUILT_BINARIES=0
 ARG ALL_PLUGINS=0
 ARG VERSION
 
-WORKDIR /app
-
 ADD . /app
-
+WORKDIR /app
 RUN <<EOT
 if [ "$PREBUILT_BINARIES" -ne "1" ]; then
   if [ "$ALL_PLUGINS" -eq "1" ]; then
