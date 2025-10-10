@@ -16,16 +16,16 @@ source "$DIR"/utils.sh
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
-CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION:-"latest"}
+CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=${CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
 PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
-    k8s/runtime-shim@$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION \
-    runc@$CEDANA_PLUGINS_NATIVE_VERSION \
-    containerd@$CEDANA_PLUGINS_NATIVE_VERSION"
+    containerd/runtime-runc@$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION \
+    containerd@$CEDANA_PLUGINS_NATIVE_VERSION \
+    runc@$CEDANA_PLUGINS_NATIVE_VERSION"
 
 # check if a storage plugin is required
 if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
@@ -88,7 +88,7 @@ fi
 echo 0 > /proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
 echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
 
-# install the shim configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
+# install the runtime configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
 if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
     PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
@@ -97,7 +97,7 @@ if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
         cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+    runtime_path = "/usr/local/bin/containerd-shim-cedana-v2"
 END_CAT
     fi
 else
@@ -107,7 +107,7 @@ else
         cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+    runtime_path = "/usr/local/bin/containerd-shim-cedana-v2"
 END_CAT
     fi
     echo "Sending SIGHUP to containerd..."

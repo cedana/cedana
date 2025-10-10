@@ -39,6 +39,7 @@ var (
 	UpcomingFlag      = Flag{Full: "upcoming"}
 
 	// CRIU
+	CriuOptsFlag        = Flag{Full: "criu-opts"}
 	LeaveRunningFlag    = Flag{Full: "leave-running"}
 	LeaveStoppedFlag    = Flag{Full: "leave-stopped"}
 	TcpEstablishedFlag  = Flag{Full: "tcp-established"}

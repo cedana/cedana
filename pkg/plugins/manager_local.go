@@ -39,6 +39,10 @@ func (m *LocalManager) Get(name string) *Plugin {
 	return nil
 }
 
+func (m *LocalManager) Getf(format string, a ...any) *Plugin {
+	return m.Get(fmt.Sprintf(format, a...))
+}
+
 func (m *LocalManager) IsInstalled(name string) bool {
 	for _, p := range Registry {
 		if p.Name == name {

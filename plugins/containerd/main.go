@@ -61,12 +61,20 @@ var (
 
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
-		validation.ValidateDumpRequst,
+		validation.ValidateDumpRequest,
 		client.SetupForDump,
+		client.LoadContainerForDump,
 		filesystem.DumpRootfs,
+		filesystem.DumpImageName,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}
 
-	// TODO: add restore middleware
+	RestoreHandler    types.Restore                   = client.Restore
+	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{
+		defaults.FillMissingRestoreDefaults,
+		validation.ValidateRestoreRequest,
+		client.SetupForRestore,
+		client.CreateContainerForRestore,
+	}
 )

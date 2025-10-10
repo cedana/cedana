@@ -31,6 +31,7 @@ Custom cleanup            •                 ✔     ✔           •     • 
 Custom reaper             •                 ✔     •           •     •     •               •           •            •
 
 GPU interception          •                 ✔     ✔           •     •     •               •           •            •
+GPU tracing               •                 ✔     ✔           •     •     •               •           •            •
 
 Checkpoint storage        •                 •     •           •     •     ✔               ✔           •            •
 
@@ -39,7 +40,7 @@ Query handler             •                 ✔     •           •     • 
 Health checks             •                 ✔     ✔           •     ✔     ✔               ✔           •            •
 
 ✔ = implemented, • = unimplemented, — = not installed, ✖ = incompatible
-Not showing external plugins: criu, criu/cuda, gpu, streamer, k8s/runtime-shim
+Not showing external plugins: criu, criu/cuda, gpu, streamer, containerd/runtime-runc
 ```
 
 When developing a new plugin, or adding a feature to a plugin, it's helpful to see more information on any compatibility issues. Use `cedana features --errors` to see any incompatibility errors.

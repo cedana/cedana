@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -53,9 +52,6 @@ var DumpCmd = &cobra.Command{
 		if image != "" {
 			req.Details.Containerd.Image = &containerd.Image{Name: image}
 		}
-
-		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
 
 		return nil
 	},

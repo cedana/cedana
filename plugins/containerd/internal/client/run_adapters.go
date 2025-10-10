@@ -78,7 +78,7 @@ func CreateContainerForRun(next types.Run) types.Run {
 				ctx,
 				details.ID,
 				containerd.WithImage(image),
-				containerd.WithNewSnapshot(details.ID+"-snapshot", image),
+				containerd.WithNewSnapshot(details.ID, image),
 				containerd.WithNewSpec(specOpts...),
 			)
 			if err != nil {

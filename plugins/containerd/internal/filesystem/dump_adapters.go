@@ -48,9 +48,9 @@ func DumpRootfs(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
 		}
 
-		container, err := client.LoadContainer(ctx, details.ID)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", details.ID, err)
+		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get container from context")
 		}
 
 		// When doing a rootfs dump only, we can return early after dumping the rootfs
@@ -106,6 +106,31 @@ func DumpRootfs(next types.Dump) types.Dump {
 				return <-rootfsErr
 			},
 		})
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+func DumpImageName(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get container from context")
+		}
+		image, err := container.Image(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get image from container: %v", err)
+		}
+
+		file, err := opts.DumpFs.Create(containerd_keys.DUMP_IMAGE_NAME_KEY)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create dump image name file: %v", err)
+		}
+		defer file.Close()
+		_, err = file.WriteString(image.Name())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to write dump image name file: %v", err)
+		}
 
 		return next(ctx, opts, resp, req)
 	}

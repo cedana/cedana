@@ -30,9 +30,11 @@ var (
 
 	// Dump/Restore
 	DumpMiddleware      = plugins.Feature[types.Middleware[types.Dump]]{Symbol: "DumpMiddleware", Description: "Dump middleware"}
+	DumpHandler         = plugins.Feature[types.Dump]{Symbol: "DumpHandler", Description: "Dump handler"}
 	DumpVMMiddleware    = plugins.Feature[types.Middleware[types.DumpVM]]{Symbol: "DumpVMMiddleware", Description: "Dump VM middleware"}
 	DumpVMHandler       = plugins.Feature[types.DumpVM]{Symbol: "DumpVMHandler", Description: "Dump VM handler"}
 	RestoreMiddleware   = plugins.Feature[types.Middleware[types.Restore]]{Symbol: "RestoreMiddleware", Description: "Restore middleware"}
+	RestoreHandler      = plugins.Feature[types.Restore]{Symbol: "RestoreHandler", Description: "Restore handler"}
 	RestoreVMMiddleware = plugins.Feature[types.Middleware[types.RestoreVM]]{Symbol: "RestoreVMMiddleware", Description: "Restore VM middleware"}
 	RestoreVMHandler    = plugins.Feature[types.RestoreVM]{Symbol: "RestoreVMHandler", Description: "Restore VM handler"}
 	FreezeHandler       = plugins.Feature[types.Freeze]{Symbol: "FreezeHandler", Description: "Freeze handler"}

@@ -27,7 +27,20 @@ func DumpMiddleware(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
 		}
 
-		plugin := utils.PluginForRuntime(client.Runtime())
+		runtime := client.Runtime()
+
+		// Save runtime name in dump
+		file, err := opts.DumpFs.Create(containerd_keys.DUMP_RUNTIME_KEY)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create dump runtime file: %v", err)
+		}
+		defer file.Close()
+		_, err = file.WriteString(runtime)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to write dump runtime file: %v", err)
+		}
+
+		plugin := utils.PluginForRuntime(runtime)
 
 		err = features.DumpMiddleware.IfAvailable(func(_ string, runtimeMiddleware types.Middleware[types.Dump]) error {
 			next = next.With(runtimeMiddleware...)

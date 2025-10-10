@@ -10,10 +10,6 @@ import (
 	"strings"
 )
 
-var recognizedPackages = map[string]bool{
-	"gpu": true,
-}
-
 // FunctionName returns the name of the function pointed to by f
 func FunctionName(pc uintptr) string {
 	fullname := runtime.FuncForPC(pc).Name()
@@ -53,13 +49,6 @@ func SimplifyFuncName(f string) (category string, name string) {
 
 	trailPattern := regexp.MustCompile(`\.func\d+(\.\d+)?$`)
 	name = trailPattern.ReplaceAllString(name, "")
-
-	if strings.Contains(name, ".") {
-		parts := strings.SplitN(name, ".", 2)
-		if recognizedPackages[parts[0]] {
-			category = parts[0]
-		}
-	}
 
 	return category, name
 }

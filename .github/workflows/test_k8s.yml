@@ -192,10 +192,11 @@ jobs:
         with:
           name: criu-${{ matrix.arch }}
 
-      - name: Download runtime shim
+      - name: Download containerd runtime
         uses: actions/download-artifact@v4
         with:
-          name: shim-runc-v2-${{ matrix.arch }}
+          pattern: containerd-runtime-${{ matrix.arch }}-*
+          merge-multiple: true
 
       - name: Download GPU plugin
         if: ${{ matrix.compute == 'CUDA' }}
@@ -224,7 +225,7 @@ jobs:
             containerd \
             crio \
             criu \
-            k8s/runtime-shim \
+            containerd/runtime-v2 \
             storage/cedana \
             storage/s3 \
             storage/gcs
@@ -268,7 +269,7 @@ jobs:
           HELM_CHART=/tmp/helm-chart
 
           CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
-          CEDANA_PLUGINS_RUNTIME_SHIM_VERSION=$(cat ./runtime-shim-version.txt)
+          CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
           if [ "$GPU" = "true" ]; then
             CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
           fi

@@ -89,8 +89,8 @@ var pluginListCmd = &cobra.Command{
 		})
 
 		tableWriter.SortBy([]table.SortBy{
-			{Name: "Status", Mode: table.Asc},
 			{Name: "Plugin", Mode: table.Asc},
+			{Name: "Status", Mode: table.Asc},
 		})
 
 		for _, p := range list {
@@ -312,9 +312,11 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.HelperCmds, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames, &errs))
-			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.DumpHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.DumpVMMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.DumpVMHandler, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RestoreVMMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RestoreVMHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.FreezeHandler, pluginNames, &errs))

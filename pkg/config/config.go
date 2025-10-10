@@ -110,6 +110,9 @@ var Global Config = Config{
 	},
 }
 
+// The current config directory, set during Init
+var Dir string
+
 func init() {
 	setDefaults()
 	bindEnvVars()
@@ -127,30 +130,29 @@ func Init(args InitArgs) error {
 		return err
 	}
 
-	var configDir string
 	if args.ConfigDir == "" {
 		homeDir := user.HomeDir
-		configDir = filepath.Join(homeDir, DIR_NAME)
+		Dir = filepath.Join(homeDir, DIR_NAME)
 	} else {
-		configDir = args.ConfigDir
+		Dir = args.ConfigDir
 	}
 
-	viper.AddConfigPath(configDir)
+	viper.AddConfigPath(Dir)
 	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
 
 	// Create config directory if it does not exist
-	_, err = os.Stat(configDir)
+	_, err = os.Stat(Dir)
 	if os.IsNotExist(err) {
-		err = os.MkdirAll(configDir, DIR_PERM)
+		err = os.MkdirAll(Dir, DIR_PERM)
 		if err != nil {
 			return err
 		}
 	}
 	uid, _ := strconv.Atoi(user.Uid)
 	gid, _ := strconv.Atoi(user.Gid)
-	os.Chown(configDir, uid, gid)
+	os.Chown(Dir, uid, gid)
 
 	err = viper.ReadInConfig()
 	if err != nil {

@@ -239,9 +239,6 @@ var processRunCmd = &cobra.Command{
 			req.Groups = user.Groups
 		}
 
-		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
-
 		return nil
 	},
 }

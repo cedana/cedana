@@ -48,10 +48,10 @@ setup_cluster() {
 start_cluster() {
     debug_log "Starting k3s cluster..."
 
-    # XXX: Pre-install the runtime shim so we won't have to restart k3s otherwise it needs to
-    # be restarted after Cedana installs the new runtime shim.
+    # XXX: Pre-install the containerd v2 runtime so we won't have to restart k3s otherwise it needs to
+    # be restarted after we install the new runtime.
 
-    preinstall_runtime_shim
+    preinstall_containerd_runtime
 
     if ! command -v k3s &> /dev/null; then
         error_log "k3s binary not found"
@@ -86,7 +86,7 @@ stop_cluster() {
     debug_log "Stopping k3s processes..."
     pkill k3s || true
     pkill containerd-shim-runc-v2 || true
-    pkill cedana-shim-runc-v2 || true
+    pkill containerd-shim-cedana-v2 || true
     pkill kubectl || true
 
     sleep 2
@@ -106,7 +106,7 @@ teardown_cluster() {
     debug_log "Stopping k3s processes..."
     pkill k3s || true
     pkill -f containerd-shim-runc-v2 || true
-    pkill -f cedana-shim-runc-v2 || true
+    pkill -f containerd-shim-cedana-v2 || true
     pkill kubectl || true
 
     sleep 2
@@ -118,15 +118,15 @@ teardown_cluster() {
     debug_log "k3s teardown complete"
 }
 
-preinstall_runtime_shim() {
-    debug_log "Pre-installing runtime shim for k3s..."
+preinstall_containerd_runtime() {
+    debug_log "Pre-installing containerd runtime for k3s..."
 
-    if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
+    if ! path_exists /usr/local/bin/containerd-shim-cedana-v2; then
         if [ "$CEDANA_PLUGINS_BUILDS" = "local" ]; then
-            error_log "Shim not found in /usr/local/bin"
+            error_log "Runtime shim not found in /usr/local/bin"
             return 1
         else
-            cedana plugin install k8s/runtime-shim
+            cedana plugin install containerd/runtime-runc
         fi
     fi
 
@@ -141,11 +141,11 @@ preinstall_runtime_shim() {
         cat >> $template <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+    runtime_path = "/usr/local/bin/containerd-shim-cedana-v2"
 END_CAT
     fi
 
-    debug_log "Pre-installed runtime shim for k3s"
+    debug_log "Pre-installed containerd runtime for k3s"
 }
 
 # Pre-load an image into k3s from docker if available locally
@@ -165,8 +165,8 @@ preload_images() {
     digest_ref=$(docker inspect --format='{{index .RepoDigests 0}}' "$image")
 
     if [ -z "${digest_ref}" ]; then
-      error_log "Failed to find digest for image ${image}. Skipping..."
-      return 0
+        error_log "Failed to find digest for image ${image}. Skipping..."
+        return 0
     fi
 
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import "$tar"

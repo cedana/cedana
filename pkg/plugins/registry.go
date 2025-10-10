@@ -84,10 +84,10 @@ var Registry = []Plugin{
 		Name:      "k8s",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-k8s.so"}},
-		Binaries:  []Binary{}, // TODO: add containerd shim binary
+		Binaries:  []Binary{},
 	},
 	{
-		Name:      "k8s/runtime-shim",
+		Name:      "containerd/runtime-runc",
 		Type:      EXTERNAL,
 		Libraries: []Binary{},
 		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},
