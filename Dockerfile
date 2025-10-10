@@ -34,6 +34,7 @@ ADD ./scripts/ /scripts
 
 COPY --from=builder /app/libcedana*.so /usr/local/lib/
 COPY --from=builder /app/cedana /usr/local/bin/
+RUN chmod +x /usr/local/bin/cedana
 
 ENV USER="root"
 
