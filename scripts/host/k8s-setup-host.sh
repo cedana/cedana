@@ -31,11 +31,19 @@ APT_PACKAGES=(
 
 install_apt_packages() {
     apt-get update
-    apt-get install -y "${APT_PACKAGES[@]}" || echo "Failed to install APT packages" >&2
+    for pkg in "${APT_PACKAGES[@]}"; do
+        if ! apt-get install -y "$pkg"; then
+            echo "Skipping missing package: $pkg" >&2
+        fi
+    done
 }
 
 install_yum_packages() {
-    yum install -y --skip-broken "${YUM_PACKAGES[@]}" || echo "Failed to install YUM packages" >&2
+    for pkg in "${YUM_PACKAGES[@]}"; do
+        if ! yum install -y --skip-broken "$pkg"; then
+            echo "Skipping missing package: $pkg" >&2
+        fi
+    done
 }
 
 # Detect OS and install appropriate packages
@@ -70,7 +78,7 @@ fi
 
 if [ -f /.dockerenv ]; then # for tests
     pkill -f 'cedana daemon' || true
-    $APP_PATH daemon start &> /var/log/cedana-daemon.log &
+    $APP_PATH daemon start &>/var/log/cedana-daemon.log &
 else
     "$DIR"/systemd-reset.sh
     "$DIR"/systemd-install.sh
