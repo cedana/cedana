@@ -46,10 +46,6 @@ install_yum_packages() {
     done
 }
 
-# Hack - yq is needed to configure kubelet, but not available in all distros
-wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&
-    chmod +x /usr/local/bin/yq
-
 # Detect OS and install appropriate packages
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -73,6 +69,10 @@ else
     echo "Unknown distribution"
     exit 1
 fi
+
+# Hack - yq is needed to configure kubelet, but not available in all distros
+wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&
+    chmod +x /usr/local/bin/yq
 
 "$DIR"/k8s-configure-kubelet.sh # configure kubelet
 
