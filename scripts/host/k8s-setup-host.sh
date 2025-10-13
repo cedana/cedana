@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eo pipefail
+set -exo pipefail
 
 # get the directory of the script
 SOURCE="${BASH_SOURCE[0]}"
@@ -79,7 +79,7 @@ run_step() {
     shift
     echo "=== Running: $name ==="
     if ! "$@"; then
-        echo "!!! Step failed: $name !!!" >&2
+        echo "Step failed: $name " >&2
         exit 1
     fi
     echo "--- Completed: $name ---"
