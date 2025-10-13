@@ -13,13 +13,27 @@ DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
-# Configure runtimeRequestTimeout to tolerate longer restores
+# Ensure necessary tools are available
+check_tool() {
+    command -v "$1" >/dev/null 2>&1
+}
 
+if ! check_tool "jq"; then
+    echo "Error: 'jq' is not installed. Please install 'jq' to update JSON kubelet configurations." >&2
+    exit 1
+fi
+
+if ! check_tool "yq"; then
+    echo "Error: 'yq' is not installed. Please install 'yq' to update YAML kubelet configurations." >&2
+    echo "You can install it from https://github.com/mikefarah/yq#install" >&2
+    exit 1
+fi
+
+
+# Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
 
-# EKS
-KUBELET_CONFIG_DIR_EKS="/etc/kubernetes/kubelet/config.json.d"
-KUBELET_CONFIG_FILE_EKS="$KUBELET_CONFIG_DIR_EKS/99-cedana.conf"
+# The content to be added/updated in the kubelet configuration
 KUBELET_CONFIG_CONTENT_JSON=$(cat <<EOF
 {
     "apiVersion": "kubelet.config.k8s.io/v1beta1",
@@ -29,40 +43,52 @@ KUBELET_CONFIG_CONTENT_JSON=$(cat <<EOF
 EOF
 )
 
-# GKE
-KUBELET_CONFIG_FILE_GKE="/home/kubernetes/kubelet-config.yaml"
+# Function to get the value of a kubelet argument
+get_kubelet_arg_value() {
+    local arg_name="$1"
+    local args="$2"
+    # Try to find "--arg_name value" or "--arg_name=value"
+    echo "$args" | grep -oP "(?:^|\s)(?:${arg_name}|${arg_name}=)(\S+)" | head -n 1 | sed -E "s/^${arg_name}=?//"
+}
 
-if [ -d "${KUBELET_CONFIG_DIR_EKS}" ]; then
-    echo "Detected EKS kubelet config directory '${KUBELET_CONFIG_DIR_EKS}'"
-    if [ -f "${KUBELET_CONFIG_FILE_EKS}" ]; then
-        echo "Removing existing kubelet config file '${KUBELET_CONFIG_FILE_EKS}'"
-        rm -f "${KUBELET_CONFIG_FILE_EKS}"
-    else
-        echo "Creating new kubelet config file '${KUBELET_CONFIG_FILE_EKS}'"
-    fi
-    echo "Using kubelet config:"
-    echo "${KUBELET_CONFIG_CONTENT_JSON}"
-    echo "${KUBELET_CONFIG_CONTENT_JSON}" > "${KUBELET_CONFIG_FILE_EKS}"
-elif [ -f "${KUBELET_CONFIG_FILE_GKE}" ]; then
-    echo "Detected GKE kubelet config file '${KUBELET_CONFIG_FILE_GKE}'"
-    echo "Backing up existing kubelet config file to '${KUBELET_CONFIG_FILE_GKE}.bak'"
-    cp -f "${KUBELET_CONFIG_FILE_GKE}" "${KUBELET_CONFIG_FILE_GKE}.bak" || (echo "Failed to back up existing config file" >&2 && exit 1)
-    echo "Modifying kubelet config file to set runtimeRequestTimeout to '$KUBELET_RUNTIME_REQUEST_TIMEOUT'"
-    yq ".runtimeRequestTimeout = \"$KUBELET_RUNTIME_REQUEST_TIMEOUT\"" "${KUBELET_CONFIG_FILE_GKE}" > /tmp/updated-kubelet-conf.yaml || (echo "Failed to modify kubelet config file" >&2 && exit 1)
-    mv /tmp/updated-kubelet-conf.yaml "${KUBELET_CONFIG_FILE_GKE}" || (echo "Failed to update kubelet config file" >&2 && exit 1)
-else
-    echo "No known kubelet config file or directory found. Please configure kubelet manually to set runtimeRequestTimeout to '$KUBELET_RUNTIME_REQUEST_TIMEOUT'." >&2
-    exit 0
+# Get kubelet arguments
+KUBELET_ARGS=$(ps -o args= -p $(pidof kubelet))
+if [ -z "$KUBELET_ARGS" ]; then
+    echo "Could not get kubelet arguments. Is kubelet running?" >&2
+    exit 1
 fi
 
-# Restart kubelet to apply changes
-if command -v systemctl >/dev/null 2>&1; then
-    echo "Restarting kubelet service"
-    systemctl daemon-reload || (echo "Failed to reload systemd daemon" >&2 && exit 1)
-    systemctl restart kubelet || (echo "Failed to restart kubelet service" >&2 && exit 1)
-elif command -v service >/dev/null 2>&1; then
-    echo "Restarting kubelet service"
-    service kubelet restart || (echo "Failed to restart kubelet service" >&2 && exit 1)
+KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$KUBELET_ARGS")
+KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$KUBELET_ARGS")
+
+if [ -n "$KUBELET_CONFIG_DIR" ]; then
+    echo "Found --config-dir: $KUBELET_CONFIG_DIR"
+    # Create the directory if it doesn't exist
+    mkdir -p "$KUBELET_CONFIG_DIR"
+    # Write the kubelet configuration to 99-cedana.conf
+    echo "$KUBELET_CONFIG_CONTENT_JSON" > "$KUBELET_CONFIG_DIR/99-cedana.conf"
+elif [ -n "$KUBELET_CONFIG_FILE" ]; then
+    echo "Found --config: $KUBELET_CONFIG_FILE"
+    FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
+    TEMP_CONFIG=$(mktemp)
+
+    if [ "$FILE_EXTENSION" == "json" ]; then
+        # Merge JSON content using jq
+        jq --argjson new_config "$KUBELET_CONFIG_CONTENT_JSON" \
+            '. * $new_config' "$KUBELET_CONFIG_FILE" > "$TEMP_CONFIG"
+    elif [ "$FILE_EXTENSION" == "yaml" ] || [ "$FILE_EXTENSION" == "yml" ]; then
+        # Merge YAML content using yq
+        echo "$KUBELET_CONFIG_CONTENT_JSON" | yq eval -P - \
+            | yq eval-merge - "$KUBELET_CONFIG_FILE" > "$TEMP_CONFIG"
+    else
+        echo "Unsupported kubelet configuration file type: $FILE_EXTENSION" >&2
+        exit 0
+    fi
+
+    # Overwrite the original file with the updated content
+    mv "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE"
 else
-    echo "Neither systemctl nor service command found. Please restart kubelet manually to apply config changes." >&2
+    echo "Neither --config-dir nor --config argument found for kubelet." >&2
+    echo "Will not modify kubelet configuration." >&2
+    exit 0
 fi
