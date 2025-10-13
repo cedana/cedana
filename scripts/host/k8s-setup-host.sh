@@ -74,11 +74,20 @@ fi
 wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
 chmod +x /usr/local/bin/yq
 
-"$DIR"/k8s-configure-kubelet.sh # configure kubelet
+run_step() {
+    local name="$1"
+    shift
+    echo "=== Running: $name ==="
+    if ! "$@"; then
+        echo "!!! Step failed: $name !!!" >&2
+        exit 1
+    fi
+    echo "--- Completed: $name ---"
+}
 
-"$DIR"/k8s-install-plugins.sh # install the plugins (including shim)
-
-"$DIR"/shm-configure.sh # install the plugins (including shim)
+run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
+run_step "install plugins" "$DIR/k8s-install-plugins.sh"     # install the plugins (including shim)
+run_step "configure shm" "$DIR/shm-configure.sh"             # configure shm
 
 if [ -f /.dockerenv ]; then # for tests
     pkill -f 'cedana daemon' || true
