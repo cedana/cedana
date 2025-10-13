@@ -43,12 +43,23 @@ KUBELET_CONFIG_CONTENT_JSON=$(
 EOF
 )
 
-# Function to get the value of a kubelet argument
 get_kubelet_arg_value() {
-    local arg_name="$1"
-    local args="$2"
-    # Try to find "--arg_name value" or "--arg_name=value"
-    echo "$args" | grep -oP "(?:^|\s)(?:${arg_name}|${arg_name}=)(\S+)" | head -n 1 | sed -E "s/^${arg_name}=?//"
+    local arg="$1"
+    shift
+    local args=("$@")
+    for ((i = 0; i < ${#args[@]}; i++)); do
+        case "${args[i]}" in
+        $arg=*)
+            echo "${args[i]#*=}"
+            return
+            ;;
+        $arg)
+            ((i++))
+            echo "${args[i]}"
+            return
+            ;;
+        esac
+    done
 }
 
 if [ -n "$CI" ]; then
@@ -56,10 +67,16 @@ if [ -n "$CI" ]; then
     exit 0
 fi
 
+KUBELET_PID=$(pidof kubelet || true)
+if [ -z "$KUBELET_PID" ]; then
+    echo "kubelet is not running" >&2
+    exit 1
+fi
+
 # Get kubelet arguments
-KUBELET_ARGS=$(ps -o args= -p $(pidof kubelet))
-if [ -z "$KUBELET_ARGS" ]; then
-    echo "Could not get kubelet arguments. Is kubelet running?" >&2
+KUBELET_ARGS=($(ps -o args= -p "$KUBELET_PID"))
+if [ ${#KUBELET_ARGS[@]} -eq 0 ]; then
+    echo "Could not get kubelet arguments" >&2
     exit 1
 fi
 
@@ -69,7 +86,10 @@ KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$KUBELET_ARGS")
 if [ -n "$KUBELET_CONFIG_DIR" ]; then
     echo "Found --config-dir: $KUBELET_CONFIG_DIR"
     # Create the directory if it doesn't exist
-    mkdir -p "$KUBELET_CONFIG_DIR"
+    mkdir -p "$KUBELET_CONFIG_DIR" || {
+        echo "Failed to create config dir"
+        exit 1
+    }
     # Write the kubelet configuration to 99-cedana.conf
     echo "$KUBELET_CONFIG_CONTENT_JSON" >"$KUBELET_CONFIG_DIR/99-cedana.conf"
 elif [ -n "$KUBELET_CONFIG_FILE" ]; then
