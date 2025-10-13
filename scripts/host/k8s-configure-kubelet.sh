@@ -73,47 +73,53 @@ if [ -z "$KUBELET_PID" ]; then
     exit 1
 fi
 
-# Get kubelet arguments
-KUBELET_ARGS=($(ps -o args= -p "$KUBELET_PID"))
-if [ ${#KUBELET_ARGS[@]} -eq 0 ]; then
-    echo "Could not get kubelet arguments, please manually modify request timeout" >&2
+# Capture full kubelet args as a string
+KUBELET_ARGS=$(ps -o args= -p "$KUBELET_PID")
+if [ -z "$KUBELET_ARGS" ]; then
+    echo "WARNING: Could not get kubelet arguments, please manually modify request timeout" >&2
     exit 0
 fi
 
-KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$KUBELET_ARGS")
-KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$KUBELET_ARGS")
+# Split into proper positional parameters (preserves quoted arguments)
+eval "set -- $KUBELET_ARGS"
+
+KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$@")
+KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$@")
 
 if [ -n "$KUBELET_CONFIG_DIR" ]; then
     echo "Found --config-dir: $KUBELET_CONFIG_DIR"
-    # Create the directory if it doesn't exist
     mkdir -p "$KUBELET_CONFIG_DIR" || {
         echo "Failed to create config dir"
         exit 1
     }
-    # Write the kubelet configuration to 99-cedana.conf
     echo "$KUBELET_CONFIG_CONTENT_JSON" >"$KUBELET_CONFIG_DIR/99-cedana.conf"
+
 elif [ -n "$KUBELET_CONFIG_FILE" ]; then
     echo "Found --config: $KUBELET_CONFIG_FILE"
     FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
     TEMP_CONFIG=$(mktemp)
 
     if [ "$FILE_EXTENSION" == "json" ]; then
-        # Merge JSON content using jq
-        jq --argjson new_config "$KUBELET_CONFIG_CONTENT_JSON" \
-            '. * $new_config' "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
-    elif [ "$FILE_EXTENSION" == "yaml" ] || [ "$FILE_EXTENSION" == "yml" ]; then
-        # Merge YAML content using yq
-        echo "$KUBELET_CONFIG_CONTENT_JSON" | yq eval -P - |
-            yq eval-merge - "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
+        # Merge JSON content safely
+        jq ". + $KUBELET_CONFIG_CONTENT_JSON" "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
+
+    elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
+        # Merge YAML content safely (yq v4+)
+        yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' \
+            <(echo "$KUBELET_CONFIG_CONTENT_JSON") "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
+
     else
-        echo "Unsupported kubelet configuration file type: $FILE_EXTENSION" >&2
+        echo "WARNING: Unsupported kubelet configuration file type: $FILE_EXTENSION, skipping kubelet config update" >&2
         exit 0
     fi
 
     # Overwrite the original file with the updated content
-    mv "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE"
+    mv "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE" || {
+        echo "Failed to update kubelet config"
+        exit 0
+    }
+
 else
-    echo "Neither --config-dir nor --config argument found for kubelet." >&2
-    echo "Will not modify kubelet configuration." >&2
+    echo "WARNING: Neither --config-dir nor --config argument found for kubelet; skipping kubelet config update" >&2
     exit 0
 fi
