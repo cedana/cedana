@@ -46,6 +46,10 @@ install_yum_packages() {
     done
 }
 
+# Hack - wget yq
+wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&
+    chmod +x /usr/local/bin/yq
+
 # Detect OS and install appropriate packages
 if [ -f /etc/os-release ]; then
     . /etc/os-release
