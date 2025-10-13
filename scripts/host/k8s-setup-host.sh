@@ -46,7 +46,7 @@ install_yum_packages() {
     done
 }
 
-# Hack - wget yq
+# Hack - yq is needed to configure kubelet, but not available in all distros
 wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq &&
     chmod +x /usr/local/bin/yq
 
