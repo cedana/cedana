@@ -49,15 +49,15 @@ get_kubelet_arg_value() {
     local args=("$@")
     for ((i = 0; i < ${#args[@]}; i++)); do
         case "${args[i]}" in
-        $arg=*)
-            echo "${args[i]#*=}"
-            return
-            ;;
-        $arg)
-            ((i++))
-            echo "${args[i]}"
-            return
-            ;;
+            $arg=*)
+                echo "${args[i]#*=}"
+                return
+                ;;
+            $arg)
+                ((i++))
+                echo "${args[i]}"
+                return
+                ;;
         esac
     done
 }
@@ -118,6 +118,24 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
         echo "Failed to update kubelet config"
         exit 0
     }
+
+    # Restart kubelet to apply changes
+    if command -v systemctl >/dev/null 2>&1; then
+        echo "Restarting kubelet via systemctl"
+        sudo systemctl restart kubelet || {
+            echo "Failed to restart kubelet"
+            exit 1
+        }
+    elif command -v service >/dev/null 2>&1; then
+        echo "Restarting kubelet via service"
+        sudo service kubelet restart || {
+            echo "Failed to restart kubelet"
+            exit 1
+        }
+    else
+        echo "WARNING: Could not find systemctl or service command to restart kubelet; please restart kubelet manually" >&2
+        exit 0
+    fi
 
 else
     echo "WARNING: Neither --config-dir nor --config argument found for kubelet; skipping kubelet config update" >&2
