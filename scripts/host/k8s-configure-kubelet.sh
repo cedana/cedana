@@ -76,8 +76,8 @@ fi
 # Get kubelet arguments
 KUBELET_ARGS=($(ps -o args= -p "$KUBELET_PID"))
 if [ ${#KUBELET_ARGS[@]} -eq 0 ]; then
-    echo "Could not get kubelet arguments" >&2
-    exit 1
+    echo "Could not get kubelet arguments, please manually modify request timeout" >&2
+    exit 0
 fi
 
 KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$KUBELET_ARGS")
