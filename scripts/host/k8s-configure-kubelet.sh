@@ -29,12 +29,12 @@ if ! check_tool "yq"; then
     exit 1
 fi
 
-
 # Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
 
 # The content to be added/updated in the kubelet configuration
-KUBELET_CONFIG_CONTENT_JSON=$(cat <<EOF
+KUBELET_CONFIG_CONTENT_JSON=$(
+    cat <<EOF
 {
     "apiVersion": "kubelet.config.k8s.io/v1beta1",
     "kind": "KubeletConfiguration",
@@ -51,10 +51,20 @@ get_kubelet_arg_value() {
     echo "$args" | grep -oP "(?:^|\s)(?:${arg_name}|${arg_name}=)(\S+)" | head -n 1 | sed -E "s/^${arg_name}=?//"
 }
 
-# Get kubelet arguments
-KUBELET_ARGS=$(ps -o args= -p $(pidof kubelet))
+if [ -n "$CI" ]; then
+    echo "Running in CI; skipping kubelet detection"
+    exit 0
+fi
+
+PID=$(pidof kubelet 2>/dev/null || true)
+if [ -z "$PID" ]; then
+    echo "Kubelet process not found." >&2
+    exit 1
+fi
+
+KUBELET_ARGS=$(ps -o args= -p "$PID")
 if [ -z "$KUBELET_ARGS" ]; then
-    echo "Could not get kubelet arguments. Is kubelet running?" >&2
+    echo "Could not get kubelet arguments." >&2
     exit 1
 fi
 
@@ -66,7 +76,7 @@ if [ -n "$KUBELET_CONFIG_DIR" ]; then
     # Create the directory if it doesn't exist
     mkdir -p "$KUBELET_CONFIG_DIR"
     # Write the kubelet configuration to 99-cedana.conf
-    echo "$KUBELET_CONFIG_CONTENT_JSON" > "$KUBELET_CONFIG_DIR/99-cedana.conf"
+    echo "$KUBELET_CONFIG_CONTENT_JSON" >"$KUBELET_CONFIG_DIR/99-cedana.conf"
 elif [ -n "$KUBELET_CONFIG_FILE" ]; then
     echo "Found --config: $KUBELET_CONFIG_FILE"
     FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
@@ -75,11 +85,11 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
     if [ "$FILE_EXTENSION" == "json" ]; then
         # Merge JSON content using jq
         jq --argjson new_config "$KUBELET_CONFIG_CONTENT_JSON" \
-            '. * $new_config' "$KUBELET_CONFIG_FILE" > "$TEMP_CONFIG"
+            '. * $new_config' "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
     elif [ "$FILE_EXTENSION" == "yaml" ] || [ "$FILE_EXTENSION" == "yml" ]; then
         # Merge YAML content using yq
-        echo "$KUBELET_CONFIG_CONTENT_JSON" | yq eval -P - \
-            | yq eval-merge - "$KUBELET_CONFIG_FILE" > "$TEMP_CONFIG"
+        echo "$KUBELET_CONFIG_CONTENT_JSON" | yq eval -P - |
+            yq eval-merge - "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
     else
         echo "Unsupported kubelet configuration file type: $FILE_EXTENSION" >&2
         exit 0
