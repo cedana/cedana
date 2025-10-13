@@ -101,12 +101,12 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
 
     if [ "$FILE_EXTENSION" == "json" ]; then
         # Merge JSON content safely
-        jq ". + $KUBELET_CONFIG_CONTENT_JSON" "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
+        jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"
 
     elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
         # Merge YAML content safely (yq v4+)
         yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' \
-            <(echo "$KUBELET_CONFIG_CONTENT_JSON") "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
+            "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"
 
     else
         echo "WARNING: Unsupported kubelet configuration file type: $FILE_EXTENSION, skipping kubelet config update" >&2
