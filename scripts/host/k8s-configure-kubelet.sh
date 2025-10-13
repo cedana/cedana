@@ -43,6 +43,14 @@ KUBELET_CONFIG_CONTENT_JSON=$(
 EOF
 )
 
+KUBELET_CONFIG_CONTENT_YAML=$(
+    cat <<EOF
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT
+EOF
+)
+
 get_kubelet_arg_value() {
     local arg="$1"
     shift
@@ -108,8 +116,7 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
     elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
         # Merge YAML content safely (yq v4+)
         yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' \
-            "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"
-
+            "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_YAML") >"$TEMP_CONFIG"
     else
         echo "WARNING: Unsupported kubelet configuration file type: $FILE_EXTENSION, skipping kubelet config update" >&2
         exit 0
@@ -144,5 +151,23 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
 
 else
     echo "WARNING: Neither --config-dir nor --config argument found for kubelet; skipping kubelet config update" >&2
+    exit 0
+fi
+
+# Restart kubelet to apply changes
+if command -v systemctl >/dev/null 2>&1; then
+    echo "Restarting kubelet via systemctl"
+    sudo systemctl restart kubelet || {
+        echo "Failed to restart kubelet"
+        exit 1
+    }
+elif command -v service >/dev/null 2>&1; then
+    echo "Restarting kubelet via service"
+    sudo service kubelet restart || {
+        echo "Failed to restart kubelet"
+        exit 1
+    }
+else
+    echo "WARNING: Could not find systemctl or service command to restart kubelet; please restart kubelet manually" >&2
     exit 0
 fi
