@@ -56,15 +56,10 @@ if [ -n "$CI" ]; then
     exit 0
 fi
 
-PID=$(pidof kubelet 2>/dev/null || true)
-if [ -z "$PID" ]; then
-    echo "Kubelet process not found." >&2
-    exit 1
-fi
-
-KUBELET_ARGS=$(ps -o args= -p "$PID")
+# Get kubelet arguments
+KUBELET_ARGS=$(ps -o args= -p $(pidof kubelet))
 if [ -z "$KUBELET_ARGS" ]; then
-    echo "Could not get kubelet arguments." >&2
+    echo "Could not get kubelet arguments. Is kubelet running?" >&2
     exit 1
 fi
 
