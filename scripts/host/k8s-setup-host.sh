@@ -50,16 +50,16 @@ install_yum_packages() {
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     case "$ID" in
-    debian | ubuntu | pop)
-        install_apt_packages
-        ;;
-    rhel | centos | fedora | amzn)
-        install_yum_packages
-        ;;
-    *)
-        echo "Unknown distribution"
-        exit 1
-        ;;
+        debian | ubuntu | pop)
+            install_apt_packages
+            ;;
+        rhel | centos | fedora | amzn)
+            install_yum_packages
+            ;;
+        *)
+            echo "Unknown distribution"
+            exit 1
+            ;;
     esac
 elif [ -f /etc/debian_version ]; then
     install_apt_packages
@@ -71,7 +71,19 @@ else
 fi
 
 # Hack - yq is needed to configure kubelet, but not available in all distros
-wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+bash
+case "$(uname -m)" in
+    x86_64)
+        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+        ;;
+    arm64|aarch64)
+        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
+        ;;
+    *)
+        echo "Unsupported architecture: $(uname -m)"
+        exit 1
+        ;;
+esac
 chmod +x /usr/local/bin/yq
 
 run_step() {

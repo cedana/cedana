@@ -93,6 +93,8 @@ if [ -n "$KUBELET_CONFIG_DIR" ]; then
         exit 1
     }
     echo "$KUBELET_CONFIG_CONTENT_JSON" >"$KUBELET_CONFIG_DIR/99-cedana.conf"
+    cat "$KUBELET_CONFIG_DIR/99-cedana.conf"
+    echo "Wrote config to $KUBELET_CONFIG_DIR/99-cedana.conf"
 
 elif [ -n "$KUBELET_CONFIG_FILE" ]; then
     echo "Found --config: $KUBELET_CONFIG_FILE"
@@ -118,6 +120,9 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
         echo "Failed to update kubelet config"
         exit 0
     }
+
+    echo "Updated kubelet config at $KUBELET_CONFIG_FILE:"
+    cat "$KUBELET_CONFIG_FILE"
 
     # Restart kubelet to apply changes
     if command -v systemctl >/dev/null 2>&1; then
