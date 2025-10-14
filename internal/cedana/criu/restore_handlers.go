@@ -133,9 +133,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	resp.PID = uint32(*criuResp.Pid)
 
 	if !reaper || req.Type == "process" {
-		opts.WG.Add(1)
-		go func() {
-			defer opts.WG.Done()
+		opts.WG.Go(func() {
 			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
 			status, err := p.Wait()
 			if err != nil {
@@ -143,7 +141,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 			}
 			exitCode <- status.ExitCode()
 			close(exitCode)
-		}()
+		})
 	}
 
 	log.Info().Uint32("PID", resp.PID).Msg("CRIU restore complete")

@@ -17,6 +17,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/style"
+	"github.com/cedana/cedana/pkg/utils"
 )
 
 const (
@@ -106,10 +107,7 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 				if resp.StatusCode == http.StatusPartialContent {
-					fmt.Println(style.WarningColors.Sprint(
-						"Some plugins have no compatible versions available in the registry or locally.\n",
-						"You may need to update Cedana. If this is a local build, you may ignore this warning.\n",
-					))
+					fmt.Println(style.WarningColors.Sprint("Some requested plugins have no compatible versions available in the registry or locally.\n"))
 				}
 
 				onlineList := make([]Plugin, len(list))
@@ -124,20 +122,23 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 							list[i].Size = onlineList[j].Size
 							list[i].PublishedAt = onlineList[j].PublishedAt
 
-							if list[i].Status == INSTALLED || list[i].Status == OUTDATED {
+							switch list[i].Status {
+							case INSTALLED, OUTDATED:
 								if list[i].Checksum() != onlineList[j].Checksum() {
 									list[i].Status = OUTDATED
 								} else {
 									list[i].Status = INSTALLED
+									list[i].Version = list[i].AvailableVersion
 								}
-							} else if list[i].Status == UNKNOWN {
+							case UNKNOWN:
 								list[i].Status = AVAILABLE
 							}
 						}
 					}
 				}
 			} else {
-				err = fmt.Errorf("%s", resp.Status)
+				body, _ := utils.ParseHttpBody(resp.Body)
+				err = fmt.Errorf("%d: %s", resp.StatusCode, body)
 			}
 		}
 	}
@@ -177,9 +178,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 		defer close(errs)
 
 		for _, name := range names {
-			if strings.Contains(name, "@") {
-				name = strings.Split(name, "@")[0] // strip version
-			}
+			name := strings.Split(name, "@")[0]
 
 			if _, ok := availableSet[name]; !ok {
 				errs <- fmt.Errorf("Plugin %s is not available", name)
@@ -187,7 +186,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 			}
 
 			if availableSet[name].Status == INSTALLED {
-				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
+				msgs <- fmt.Sprintf("Plugin %s is already installed", name)
 				continue
 			}
 
@@ -198,9 +197,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 				continue
 			}
 
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				plugin := availableSet[name]
 
 				msgs <- fmt.Sprintf("Downloading plugin %s...", name)
@@ -222,7 +219,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 					}
 				}
 				msgs <- fmt.Sprintf("Downloaded plugin %s", name)
-			}()
+			})
 		}
 
 		wg.Wait()
@@ -269,8 +266,8 @@ func (m *PropagatorManager) downloadBinary(binary string, version string, arch s
 	if version == "" {
 		version = "latest"
 	}
-	version = strings.ReplaceAll(version, "/", "-")
-	url := fmt.Sprintf("%s/download/%s/%s?arch=%s&build=%s", m.URL, binary, version, arch, build)
+
+	url := fmt.Sprintf("%s/plugins/download/%s?version=%s&arch=%s&build=%s", m.URL, binary, version, arch, build)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("Failed to build request for %s: %v", binary, err)

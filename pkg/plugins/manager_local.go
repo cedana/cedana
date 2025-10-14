@@ -39,6 +39,10 @@ func (m *LocalManager) Get(name string) *Plugin {
 	return nil
 }
 
+func (m *LocalManager) Getf(format string, a ...any) *Plugin {
+	return m.Get(fmt.Sprintf(format, a...))
+}
+
 func (m *LocalManager) IsInstalled(name string) bool {
 	for _, p := range Registry {
 		if p.Name == name {
@@ -55,13 +59,10 @@ func (m *LocalManager) IsInstalled(name string) bool {
 func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err error) {
 	list = make([]Plugin, 0)
 
-	set := make(map[string]any)
+	set := make(map[string]bool)
 	for _, name := range filter {
-		nameOnly := strings.TrimSpace(name)
-		if strings.Contains(name, "@") {
-			nameOnly = strings.Split(name, "@")[0]
-		}
-		set[nameOnly] = nil
+		nameOnly := strings.Split(strings.TrimSpace(name), "@")[0]
+		set[nameOnly] = true
 	}
 
 	for _, p := range Registry {
@@ -87,7 +88,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		files := append(p.Libraries, p.Binaries...)
 		totalSum := ""
 		for _, file := range files {
-			for _, path := range strings.Split(m.searchPath, ":") {
+			for path := range strings.SplitSeq(m.searchPath, ":") {
 				var stat os.FileInfo
 				if stat, err = os.Stat(filepath.Join(path, file.Name)); err != nil || stat.IsDir() {
 					continue
@@ -105,13 +106,15 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		if found == len(files) {
 			m.srcDir[p.Name] = dir
 			p.AvailableVersion = "local"
-			if p.Status == INSTALLED || p.Status == OUTDATED {
+			switch p.Status {
+			case INSTALLED, OUTDATED:
 				if p.Checksum() != totalSum {
 					p.Status = OUTDATED
 				} else {
 					p.Status = INSTALLED
+					p.Version = p.AvailableVersion
 				}
-			} else if p.Status == UNKNOWN {
+			case UNKNOWN:
 				p.Status = AVAILABLE
 			}
 			if p.Size == 0 {
@@ -152,6 +155,8 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			if name == "" {
 				continue
 			}
+			name = strings.Split(name, "@")[0] // ignore version specifier if any
+
 			var plugin *Plugin
 			var ok bool
 			if plugin, ok = availableSet[name]; !ok {
@@ -160,7 +165,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			}
 
 			if plugin.Status == INSTALLED {
-				msgs <- fmt.Sprintf("Latest version of %s is already installed", name)
+				msgs <- fmt.Sprintf("Plugin %s is already installed", name)
 				continue
 			} else if plugin.Status == AVAILABLE {
 				msgs <- fmt.Sprintf("Installing plugin %s...", name)

@@ -65,9 +65,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 	}
 
-	m.wg.Add(1)
-	go func() {
-		defer m.wg.Done()
+	m.wg.Go(func() {
 		ok := false
 		select {
 		case <-ctx.Done():
@@ -89,7 +87,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 			log.Debug().Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("attached GPU controller to process")
 			controller.Booking.Unlock()
 		}
-	}()
+	})
 
 	return controller.ID, nil
 }

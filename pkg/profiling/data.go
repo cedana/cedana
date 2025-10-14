@@ -20,7 +20,7 @@ type Data struct {
 func FlattenData(data *Data) {
 	length := len(data.Components)
 
-	for i := 0; i < length; i++ {
+	for i := range length {
 		component := data.Components[i]
 
 		data.Duration -= component.Duration

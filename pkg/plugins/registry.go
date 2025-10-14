@@ -71,6 +71,11 @@ var Registry = []Plugin{
 		Binaries:  []Binary{{Name: "cedana-gpu-controller"}},
 	},
 	{
+		Name:      "gpu/tracer",
+		Type:      EXTERNAL,
+		Libraries: []Binary{{Name: "libcedana-gpu-tracer.so"}},
+	},
+	{
 		Name:     "streamer",
 		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "cedana-image-streamer"}},
@@ -79,10 +84,10 @@ var Registry = []Plugin{
 		Name:      "k8s",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-k8s.so"}},
-		Binaries:  []Binary{}, // TODO: add containerd shim binary
+		Binaries:  []Binary{},
 	},
 	{
-		Name:      "k8s/runtime-shim",
+		Name:      "containerd/runtime-runc",
 		Type:      EXTERNAL,
 		Libraries: []Binary{},
 		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},

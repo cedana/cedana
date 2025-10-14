@@ -21,6 +21,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 
 	"github.com/rs/zerolog/log"
@@ -48,11 +49,13 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		criu.CheckOptsForDump,
 	}
 
-	dump := criu.Dump.With(middleware...)
+	dump := pluginDumpHandler().With(middleware...)
 
 	if req.GetDetails().GetJID() != "" { // If using job dump
 		dump = dump.With(job.ManageDump(s.jobs))
 	}
+
+	dump = dump.With(criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins))
 
 	opts := types.Opts{
 		Lifetime: s.lifetime,
@@ -61,9 +64,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 	resp := &daemon.DumpResp{}
 
-	criu := criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins)
-
-	_, err := criu(dump)(ctx, opts, resp, req)
+	_, err := dump(ctx, opts, resp, req)
 	if err != nil {
 		log.Error().Err(err).Str("type", req.Type).Msg("dump failed")
 		return nil, err
@@ -146,5 +147,32 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 		}
 
 		return next.With(filesystem)(ctx, opts, resp, req)
+	}
+}
+
+// Detects and returns the plugin-specific dump handler, if implemented by the
+// plugin for the specified type. Otherwise, uses the default CRIU dump handler.
+func pluginDumpHandler() types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		t := req.Type
+		handler := criu.Dump
+
+		switch t {
+		case "process":
+			// Use default handler
+		default:
+			// Check if plugin-specific handler is available
+			features.DumpHandler.IfAvailable(func(name string, pluginHandler types.Dump) error {
+				handler = pluginHandler
+				return nil
+			}, t)
+
+			var end func()
+			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
+			defer end()
+
+		}
+
+		return handler(ctx, opts, resp, req)
 	}
 }

@@ -126,7 +126,7 @@ func NewStreamIOMaster(
 	stdOut = &StreamIOReader{bytes: out}
 	stdErr = &StreamIOReader{bytes: err}
 
-	return
+	return stdIn, stdOut, stdErr, exitCode, errors
 }
 
 func NewStreamIOSlave(
@@ -151,9 +151,7 @@ func NewStreamIOSlave(
 	SetIOSlave(pid, slave)
 
 	// Send out/err to master
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer DeleteIOSlave(&slave.PID)
 
 		masters := map[grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]]any{}
@@ -211,13 +209,13 @@ func NewStreamIOSlave(
 				&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(code)}},
 			)
 		}
-	}()
+	})
 
 	stdIn = &StreamIOReader{bytes: in}
 	stdOut = &StreamIOWriter{bytes: out}
 	stdErr = &StreamIOWriter{bytes: err}
 
-	return
+	return stdIn, stdOut, stdErr
 }
 
 // Attach attaches a master stream to the slave.
@@ -286,7 +284,7 @@ func (s *StreamIOReader) WriteTo(w io.Writer) (n int64, err error) {
 			return n, err
 		}
 	}
-	return
+	return n, err
 }
 
 func (s *StreamIOWriter) Write(p []byte) (n int, err error) {

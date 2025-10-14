@@ -50,7 +50,7 @@ func SimplifyFuncName(f string) (category string, name string) {
 	trailPattern := regexp.MustCompile(`\.func\d+(\.\d+)?$`)
 	name = trailPattern.ReplaceAllString(name, "")
 
-	return
+	return category, name
 }
 
 func IsCallerSameAsUs(caller string) bool {
@@ -65,16 +65,16 @@ func IsCallerSameAsUs(caller string) bool {
 // If the field does not exist, or is not set, the zero value for the field
 // type will be returned. Nested fields can be specified by separating them
 // with a period.
-func GetValue(i interface{}, field string) interface{} {
+func GetValue(i any, field string) any {
 	v := reflect.ValueOf(i)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
 		return nil
 	}
-	fields := strings.Split(field, ".")
-	for _, field := range fields {
+	fields := strings.SplitSeq(field, ".")
+	for field := range fields {
 		v = v.FieldByName(field)
 		if !v.IsValid() {
 			return nil
@@ -87,9 +87,9 @@ func GetValue(i interface{}, field string) interface{} {
 // Nested fields can be specified by separating them with a period, and the returned tag will also
 // be separated by periods.
 // If the field does not exist, or the tag does not exist, an empty string will be returned.
-func GetTag(i interface{}, field string, tag string) string {
+func GetTag(i any, field string, tag string) string {
 	t := reflect.TypeOf(i)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -113,9 +113,9 @@ func GetTag(i interface{}, field string, tag string) string {
 
 // ListFields returns a list of field names for the given struct.
 // If a tag is specified, it will use the tag value instead of the field name.
-func ListFields(i interface{}, tag ...string) []string {
+func ListFields(i any, tag ...string) []string {
 	t := reflect.TypeOf(i)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -137,9 +137,9 @@ func ListFields(i interface{}, tag ...string) []string {
 // If a field is a struct, it will recursively call itself to get the fields.
 // If a tag is specified, it will use the tag value instead of the field name.
 // Nested fields are separated by a period.
-func ListLeaves(i interface{}, tag ...string) []string {
+func ListLeaves(i any, tag ...string) []string {
 	t := reflect.TypeOf(i)
-	if t.Kind() == reflect.Ptr {
+	if t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if t.Kind() != reflect.Struct {
@@ -180,7 +180,7 @@ func WalkTree[T any](
 	fn func(T) bool,
 ) bool {
 	v := reflect.ValueOf(node)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 	if v.Kind() != reflect.Struct {
@@ -202,7 +202,7 @@ func WalkTree[T any](
 	if children.IsValid() && children.Kind() == reflect.Slice {
 		for i := 0; i < children.Len(); i++ {
 			child := children.Index(i)
-			if child.Kind() == reflect.Ptr || child.Kind() == reflect.Struct {
+			if child.Kind() == reflect.Pointer || child.Kind() == reflect.Struct {
 				if !WalkTree(child.Interface(), valuesField, childrenField, fn) {
 					return false // stop
 				}

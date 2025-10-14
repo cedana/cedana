@@ -230,6 +230,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					Username: strings.Split(imageSecret.ImageSecret, ":")[0],
 					Secret:   strings.Split(imageSecret.ImageSecret, ":")[1],
 				}
+				container.Rootfs = rootfs
 				container.RootfsOnly = rootfsOnly
 			} else {
 				container.Image = nil // Ensure this is nil, so rootfs is not dumped

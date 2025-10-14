@@ -44,9 +44,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 
 	// Spawn a background routine that will keep the DB in sync
 	// with retry logic. Can extend to use a backoff strategy.
-	serverWg.Add(1)
-	go func() {
-		defer serverWg.Done()
+	serverWg.Go(func() {
 		for {
 			select {
 			case <-lifetime.Done():
@@ -77,7 +75,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 				}
 			}
 		}
-	}()
+	})
 
 	return manager, nil
 }
@@ -130,31 +128,27 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 		log.Debug().Int("target", m.poolSize).Int("free", len(free)).Msg("maintaining GPU pool size")
 		wg := &sync.WaitGroup{}
 		for i := len(free); i < m.poolSize; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				controller, err := m.controllers.Spawn(ctx, m.plugins.Get("gpu").BinaryPaths()[0])
 				if err != nil {
 					log.Debug().Err(err).Msg("failed to spawn GPU controller to maintain pool size")
 					return
 				}
 				controller.Booking.Unlock()
-			}()
+			})
 		}
 		wg.Wait()
 	} else if len(free) > m.poolSize {
 		log.Debug().Int("target", m.poolSize).Int("free", len(free)).Msg("reducing GPU pool size")
 		wg := &sync.WaitGroup{}
 		for _, controller := range free[m.poolSize:] {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				if controller.Book() { // Only terminate if controller is still free
 					m.controllers.Terminate(ctx, controller.ID)
 				} else {
 					log.Debug().Str("ID", controller.ID).Msg("skipping termination of busy GPU controller")
 				}
-			}()
+			})
 		}
 		wg.Wait()
 	}

@@ -34,6 +34,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	if !ok {
 		return nil, status.Errorf(codes.Internal, "failed to get container from context")
 	}
+	noPivot := req.GetDetails().GetContainerd().GetNoPivot()
 
 	exitCode := make(chan int, 1)
 	code = channel.Broadcaster(exitCode)
@@ -53,7 +54,12 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		io = cio.WithStreams(nil, outFile, outFile)
 	}
 
-	task, err := container.NewTask(ctx, cio.NewCreator(io))
+	taskOptions := []containerd.NewTaskOpts{}
+	if noPivot {
+		taskOptions = append(taskOptions, containerd.WithNoPivotRoot)
+	}
+
+	task, err := container.NewTask(ctx, cio.NewCreator(io), taskOptions...)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to create new task: %v", err)
 	}
@@ -66,9 +72,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 	resp.PID = uint32(task.Pid())
 
 	// Wait for the container to exit, send exit code
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
+	opts.WG.Go(func() {
 		defer client.Close()
 		statusChan, _ := task.Wait(context.WithoutCancel(opts.Lifetime))
 		status := <-statusChan
@@ -78,7 +82,7 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		}
 		exitCode <- int(status.ExitCode())
 		close(exitCode)
-	}()
+	})
 
 	return code, nil
 }

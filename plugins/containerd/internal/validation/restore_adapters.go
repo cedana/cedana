@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func ValidateDumpRequest(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+func ValidateRestoreRequest(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
 		if details == nil {
@@ -25,8 +25,8 @@ func ValidateDumpRequest(next types.Dump) types.Dump {
 		if details.ID == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd id")
 		}
-		if details.RootfsOnly && details.Rootfs && details.GetImage().GetName() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "missing image ref for rootfs dump")
+		if details.GetImage().GetName() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing containerd image")
 		}
 
 		return next(ctx, opts, resp, req)

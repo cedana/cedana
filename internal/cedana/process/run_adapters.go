@@ -29,7 +29,7 @@ func WritePIDFile(next types.Run) types.Run {
 			resp.Messages = append(resp.Messages, fmt.Sprintf("Failed to create PID file %s: %s", pidFile, err.Error()))
 		}
 
-		_, err = file.WriteString(fmt.Sprintf("%d", resp.PID))
+		_, err = fmt.Fprintf(file, "%d", resp.PID)
 		if err != nil {
 			log.Warn().Err(err).Msgf("Failed to write PID to file %s", pidFile)
 			resp.Messages = append(resp.Messages, fmt.Sprintf("Failed to write PID to file %s: %s", pidFile, err.Error()))
