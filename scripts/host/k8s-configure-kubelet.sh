@@ -43,12 +43,31 @@ KUBELET_CONFIG_CONTENT_JSON=$(
 EOF
 )
 
-# Function to get the value of a kubelet argument
+KUBELET_CONFIG_CONTENT_YAML=$(
+    cat <<EOF
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT
+EOF
+)
+
 get_kubelet_arg_value() {
-    local arg_name="$1"
-    local args="$2"
-    # Try to find "--arg_name value" or "--arg_name=value"
-    echo "$args" | grep -oP "(?:^|\s)(?:${arg_name}|${arg_name}=)(\S+)" | head -n 1 | sed -E "s/^${arg_name}=?//"
+    local arg="$1"
+    shift
+    local args=("$@")
+    for ((i = 0; i < ${#args[@]}; i++)); do
+        case "${args[i]}" in
+            $arg=*)
+                echo "${args[i]#*=}"
+                return
+                ;;
+            $arg)
+                ((i++))
+                echo "${args[i]}"
+                return
+                ;;
+        esac
+    done
 }
 
 if [ -n "$CI" ]; then
@@ -56,49 +75,80 @@ if [ -n "$CI" ]; then
     exit 0
 fi
 
-PID=$(pidof kubelet 2>/dev/null || true)
-if [ -z "$PID" ]; then
-    echo "Kubelet process not found." >&2
+KUBELET_PID=$(pidof kubelet || true)
+if [ -z "$KUBELET_PID" ]; then
+    echo "kubelet is not running" >&2
     exit 1
 fi
 
-KUBELET_ARGS=$(ps -o args= -p "$PID")
+# Capture full kubelet args as a string
+KUBELET_ARGS=$(ps -o args= -p "$KUBELET_PID")
 if [ -z "$KUBELET_ARGS" ]; then
-    echo "Could not get kubelet arguments." >&2
-    exit 1
+    echo "WARNING: Could not get kubelet arguments, please manually modify request timeout" >&2
+    exit 0
 fi
 
-KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$KUBELET_ARGS")
-KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$KUBELET_ARGS")
+# Split into proper positional parameters (preserves quoted arguments)
+eval "set -- $KUBELET_ARGS"
+
+KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$@")
+KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$@")
 
 if [ -n "$KUBELET_CONFIG_DIR" ]; then
     echo "Found --config-dir: $KUBELET_CONFIG_DIR"
-    # Create the directory if it doesn't exist
-    mkdir -p "$KUBELET_CONFIG_DIR"
-    # Write the kubelet configuration to 99-cedana.conf
+    mkdir -p "$KUBELET_CONFIG_DIR" || {
+        echo "Failed to create config dir"
+        exit 1
+    }
     echo "$KUBELET_CONFIG_CONTENT_JSON" >"$KUBELET_CONFIG_DIR/99-cedana.conf"
+    cat "$KUBELET_CONFIG_DIR/99-cedana.conf"
+    echo "Wrote config to $KUBELET_CONFIG_DIR/99-cedana.conf"
+
 elif [ -n "$KUBELET_CONFIG_FILE" ]; then
     echo "Found --config: $KUBELET_CONFIG_FILE"
     FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
     TEMP_CONFIG=$(mktemp)
 
     if [ "$FILE_EXTENSION" == "json" ]; then
-        # Merge JSON content using jq
-        jq --argjson new_config "$KUBELET_CONFIG_CONTENT_JSON" \
-            '. * $new_config' "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
-    elif [ "$FILE_EXTENSION" == "yaml" ] || [ "$FILE_EXTENSION" == "yml" ]; then
-        # Merge YAML content using yq
-        echo "$KUBELET_CONFIG_CONTENT_JSON" | yq eval -P - |
-            yq eval-merge - "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
+        # Merge JSON content safely
+        jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"
+
+    elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
+        # Merge YAML content safely (yq v4+)
+        yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' \
+            "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_YAML") >"$TEMP_CONFIG"
     else
-        echo "Unsupported kubelet configuration file type: $FILE_EXTENSION" >&2
+        echo "WARNING: Unsupported kubelet configuration file type: $FILE_EXTENSION, skipping kubelet config update" >&2
         exit 0
     fi
 
     # Overwrite the original file with the updated content
-    mv "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE"
+    mv "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE" || {
+        echo "Failed to update kubelet config"
+        exit 0
+    }
+
+    echo "Updated kubelet config at $KUBELET_CONFIG_FILE:"
+    cat "$KUBELET_CONFIG_FILE"
 else
-    echo "Neither --config-dir nor --config argument found for kubelet." >&2
-    echo "Will not modify kubelet configuration." >&2
+    echo "WARNING: Neither --config-dir nor --config argument found for kubelet; skipping kubelet config update" >&2
+    exit 0
+fi
+
+# Restart kubelet to apply changes
+if command -v systemctl >/dev/null 2>&1; then
+    echo "Restarting kubelet via systemctl"
+    sudo systemctl restart kubelet || {
+        echo "Failed to restart kubelet"
+        exit 1
+    }
+elif command -v service >/dev/null 2>&1; then
+    echo "Restarting kubelet via service"
+    sudo service kubelet restart || {
+        echo "Failed to restart kubelet"
+        exit 1
+    }
+else
+    echo "WARNING: Could not find systemctl or service command to restart kubelet; please restart kubelet manually" >&2
     exit 0
 fi
