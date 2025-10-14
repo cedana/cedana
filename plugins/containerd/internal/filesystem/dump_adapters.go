@@ -113,7 +113,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 
 func DumpImageName(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
-		if req.Action != daemon.DumpAction_DUMP {
+		if req.Action != daemon.DumpAction_DUMP || opts.DumpFs == nil {
 			return next(ctx, opts, resp, req)
 		}
 

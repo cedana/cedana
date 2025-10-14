@@ -29,7 +29,7 @@ func DumpMiddleware(next types.Dump) types.Dump {
 
 		runtime := client.Runtime()
 
-		if req.Action == daemon.DumpAction_DUMP {
+		if req.Action == daemon.DumpAction_DUMP && opts.DumpFs != nil {
 			// Save runtime name in dump
 			file, err := opts.DumpFs.Create(containerd_keys.DUMP_RUNTIME_KEY)
 			if err != nil {
