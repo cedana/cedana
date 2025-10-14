@@ -24,22 +24,12 @@ import (
 var Version string = "dev"
 
 var (
-	DumpCmd  *cobra.Command = cmd.DumpCmd
-	CmdTheme text.Colors    = style.LowLevelRuntimeColors
+	RestoreCmd *cobra.Command = cmd.RestoreCmd
+	CmdTheme   text.Colors    = style.LowLevelRuntimeColors
 )
-
-// TODO: add health checks for slurmctld and slurmd daemons
-// var HealthChecks types.Checks = types.Checks{
-// 	List: []types.Check{},
-// }
-
-// TODO: implement query
-// var QueryHandler types.Query = slurm.Query
 
 var (
 	KillSignal = syscall.SIGKILL
-	// Cleanup    = slurm.Cleanup // TODO: maybe implement cleanup if slurm doesn't handle it properly
-	Reaper = true // we handle our reaping on our own
 
 	FreezeHandler   types.Freeze   = cgroup.Freeze
 	UnfreezeHandler types.Unfreeze = cgroup.Unfreeze

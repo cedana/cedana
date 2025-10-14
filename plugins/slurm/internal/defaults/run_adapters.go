@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/gen/plugins/slurm"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/slurm"
 	"github.com/cedana/cedana/pkg/types"
 )
 
@@ -21,11 +21,6 @@ func FillMissingRunDefaults(next types.Run) types.Run {
 		if req.GetDetails().GetSlurm().GetID() == "" {
 			req.Details.Runc.ID = req.JID
 		}
-
-		// daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
-		// if !daemonless {
-		// 	req.Details.Runc.NoSubreaper = false // we always reap when the daemon is managing
-		// }
 
 		return next(ctx, opts, resp, req)
 	}
