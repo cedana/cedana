@@ -29,15 +29,17 @@ func DumpMiddleware(next types.Dump) types.Dump {
 
 		runtime := client.Runtime()
 
-		// Save runtime name in dump
-		file, err := opts.DumpFs.Create(containerd_keys.DUMP_RUNTIME_KEY)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create dump runtime file: %v", err)
-		}
-		defer file.Close()
-		_, err = file.WriteString(runtime)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to write dump runtime file: %v", err)
+		if req.Action == daemon.DumpAction_DUMP {
+			// Save runtime name in dump
+			file, err := opts.DumpFs.Create(containerd_keys.DUMP_RUNTIME_KEY)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create dump runtime file: %v", err)
+			}
+			defer file.Close()
+			_, err = file.WriteString(runtime)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to write dump runtime file: %v", err)
+			}
 		}
 
 		plugin := utils.PluginForRuntime(runtime)

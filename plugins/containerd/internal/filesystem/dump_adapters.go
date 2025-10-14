@@ -113,6 +113,10 @@ func DumpRootfs(next types.Dump) types.Dump {
 
 func DumpImageName(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		if req.Action != daemon.DumpAction_DUMP {
+			return next(ctx, opts, resp, req)
+		}
+
 		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get container from context")
