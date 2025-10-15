@@ -38,7 +38,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 
 			// If remote storage, we instead use a temporary directory for CRIU
 			if storage.IsRemote() {
-				dir = os.TempDir()
+				dir = "/var/run/cedana"
 			}
 
 			// Check if the provided dir exists
