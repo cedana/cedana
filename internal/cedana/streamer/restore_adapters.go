@@ -2,10 +2,14 @@ package streamer
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"path/filepath"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/internal/cedana/filesystem"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -32,10 +36,11 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				}
 				imagesDirectory = path
 			} else {
-				// For remote storage, we create a temporary directory for CRIU
-				imagesDirectory, err = os.MkdirTemp("", "restore-\\*")
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to create temp restore dir: %v", err)
+				suffix := fmt.Sprintf("restore-%d", time.Now().UnixNano())
+				imagesDirectory = filepath.Join("/var/run/cedana", suffix)
+
+				if err := os.MkdirAll(imagesDirectory, filesystem.DUMP_DIR_PERMS); err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
 				}
 				defer os.RemoveAll(imagesDirectory)
 			}
