@@ -42,7 +42,6 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				if err := os.MkdirAll(imagesDirectory, filesystem.DUMP_DIR_PERMS); err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
 				}
-				defer os.RemoveAll(imagesDirectory)
 			}
 
 			// Streamer also requires Cedana's CRIU version until the Stream proto option
