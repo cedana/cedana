@@ -8,14 +8,14 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20250625172019-248562eac338.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.6-20250625172019-248562eac338.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.6-20250612023004-babcadcb96ee.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-82d4c4385e09.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-82d4c4385e09.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-e46e22895b83.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.6-00000000000000-e46e22895b83.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.9-00000000000000-0023fc7f829b.1
 	github.com/aws/aws-sdk-go-v2/config v1.30.2
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.2
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.18.2
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.85.1
-	github.com/cedana/cedana-go-sdk v0.3.1
+	github.com/cedana/cedana-go-sdk v0.3.8-0.20251010180345-d565aee08e59
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.5
 	github.com/containerd/containerd v1.7.27
