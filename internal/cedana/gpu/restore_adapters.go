@@ -133,7 +133,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				return false
 			}
 
-			key = strings.TrimPrefix(newPath, "/")
+			key = strings.TrimPrefix(path, "/")
 			fd = int32(3 + len(extraFiles))
 
 			if _, ok := inheritFdMap[key]; ok {
