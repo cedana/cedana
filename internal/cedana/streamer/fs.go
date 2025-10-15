@@ -94,6 +94,7 @@ func NewStreamingFs(
 	// Start IO on the pipes from the dir
 	wg := &sync.WaitGroup{}
 	io := &sync.WaitGroup{}
+	io.Add(int(streams))
 	ioErr := make(chan error, streams)
 	paths, err := imgPaths(storage, storagePath, mode, streams)
 	if err != nil {
@@ -111,7 +112,6 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
-			io.Add(1)
 			go func() {
 				defer io.Done()
 				defer func() {
@@ -135,7 +135,6 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
-			io.Add(1)
 			go func() {
 				defer io.Done()
 				defer func() {
@@ -255,9 +254,9 @@ func NewStreamingFs(
 		fs.stopListener()
 		fs.conn.Close()
 		io.Wait()
+		close(ioErr)
 		cmd.Process.Signal(syscall.SIGTERM)
 		wg.Wait()
-		close(ioErr)
 		var err error
 		for e := range ioErr {
 			err = errors.Join(err, e)

@@ -55,10 +55,11 @@ install_k9s () {
     debug_log "k9s installed"
 }
 
-# Generate a new spec from an existing one with a new name.
+# Generate a new spec from an existing one with a new name and namespace.
 new_spec () {
     local spec="$1"
     local newname="$2"
+    local newnamespace="${3:-default}"
 
     local newspec="/tmp/${newname}.yaml"
 
@@ -66,8 +67,18 @@ new_spec () {
     local oldname
     oldname=$(grep -m1 '^[[:space:]]*name:' "$spec" | sed -E 's/^[[:space:]]*name:[[:space:]]*"?([^"]+)"?/\1/')
 
+    local oldnamespace
+    oldnamespace=$(grep -m1 '^[[:space:]]*namespace:' "$spec" | sed -E 's/^[[:space:]]*namespace:[[:space:]]*"?([^"]+)"?/\1/')
+
     # Replace all 'name: <oldname>' patterns with the quoted newname
     sed -E "s/^([[:space:]\-]*name:[[:space:]]*)\"?$oldname\"?/\1\"$newname\"/g" "$spec" > "$newspec"
+
+    # If oldnamespace is not empty, replace it; otherwise, add namespace under metadata
+    if [[ -n "$oldnamespace" ]]; then
+        sed -i -E "s/^([[:space:]]*namespace:[[:space:]]*)\"?$oldnamespace\"?/\1\"$newnamespace\"/g" "$newspec"
+    else
+        sed -i -E "/^metadata:/a\  namespace: \"$newnamespace\"" "$newspec"
+    fi
 
     echo "$newspec"
 }
@@ -293,4 +304,29 @@ delete_namespace() {
         return 1
     }
     debug_log "Namespace $namespace deleted"
+}
+
+# Get pod UID (unique identifier) from pod name and namespace
+# @param $1: Pod name
+# @param $2: Namespace
+# Returns: Pod UID
+get_pod_id() {
+    local pod_name="$1"
+    local namespace="$2"
+
+    if [ -z "$pod_name" ] || [ -z "$namespace" ]; then
+        error_log "get_pod_id requires pod_name and namespace"
+        return 1
+    fi
+
+    local pod_uid
+    pod_uid=$(kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.metadata.uid}' 2>/dev/null)
+
+    if [ -z "$pod_uid" ]; then
+        error_log "Failed to get pod UID for pod '$pod_name' in namespace '$namespace'"
+        return 1
+    fi
+
+    echo "$pod_uid"
+    return 0
 }

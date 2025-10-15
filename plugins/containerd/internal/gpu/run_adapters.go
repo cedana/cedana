@@ -48,6 +48,11 @@ func Interception(next types.Run) types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}
 
+		err = container.Update(ctx, containerd.UpdateContainerOpts(containerd.WithSpec(spec)))
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to update container with new spec: %v", err)
+		}
+
 		return next(ctx, opts, resp, req)
 	}
 }

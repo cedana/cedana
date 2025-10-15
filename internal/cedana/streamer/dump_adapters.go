@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 
@@ -115,22 +116,19 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
 
-			code, err = next(ctx, opts, resp, req)
-			if err != nil {
-				return nil, err
-			}
+			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
+			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
+			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`.
 
-			// Wait for all the streaming to finish
-			_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
-			err = waitForIO()
-			end()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to stream dump: %v", err)
-			}
+			defer func() {
+				_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
+				err = errors.Join(err, waitForIO())
+				end()
+			}()
 
 			resp.Paths = append(resp.Paths, path)
 
-			return code, nil
+			return next(ctx, opts, resp, req)
 		}
 	}
 }

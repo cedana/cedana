@@ -28,39 +28,34 @@ fi
 PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
 
 # Checkpoint a pod via propagator API
-# @param $1: Pod name
+# @param $1: Pod ID (UID)
 # @param $2: Runc root path
-# @param $3: Namespace
-# @param $4: Cluster ID
 # Returns: Action ID for polling
 checkpoint_pod() {
-    local pod_name="$1"
-    local runc_root="$2"
-    local namespace="$3"
+    local pod_id="$1"
+    local runc_root=${2:-"/run/containerd/runc/k8s.io"}
 
-    if [ -z "$pod_name" ] || [ -z "$runc_root" ] || [ -z "$namespace" ]; then
-        error_log "checkpoint_pod requires pod_name, runc_root, namespace"
+    if [ -z "$pod_id" ] || [ -z "$runc_root" ]; then
+        error_log "checkpoint_pod requires pod_id and runc_root"
         return 1
     fi
 
-    debug_log "Checkpointing pod '$pod_name' in namespace '$namespace'..."
+    debug_log "Checkpointing pod '$pod_id' with runc root '$runc_root'..."
 
     local payload
     payload=$(jq -n \
-        --arg pod_name "$pod_name" \
-        --arg runc_root "$runc_root" \
-        --arg namespace "$namespace" \
-        '{
-            "pod_name": $pod_name,
-            "runc_root": $runc_root,
-            "namespace": $namespace
-        }')
+            --arg pod_id "$pod_id" \
+            --arg runc_root "$runc_root" \
+            '{
+            "pod_id": $pod_id,
+            "runc_root": $runc_root
+    }')
 
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/checkpoint/pod" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-        -d "$payload" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -d "$payload" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -100,26 +95,26 @@ restore_pod() {
     local payload
     if [ -n "$cluster_id" ]; then
         payload=$(jq -n \
-            --arg action_id "$action_id" \
-            --arg cluster_id "$cluster_id" \
-            '{
+                --arg action_id "$action_id" \
+                --arg cluster_id "$cluster_id" \
+                '{
                 "action_id": $action_id,
                 "cluster_id": $cluster_id,
                 "reason": "manual"
-            }')
+        }')
     else
         payload=$(jq -n \
-            --arg action_id "$action_id" \
-            '{
+                --arg action_id "$action_id" \
+                '{
                 "action_id": $action_id
-            }')
+        }')
     fi
 
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/restore/pod" \
-        -H "Content-Type: application/json" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-        -d "$payload" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -d "$payload" \
         -w "%{http_code}" 2>&1)
 
     local http_code="${response: -3}"
@@ -152,7 +147,7 @@ poll_action_status() {
     for i in $(seq 1 60); do  # 5 minute timeout
         local response
         response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/checkpoint/status/${action_id}" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+                -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -w "%{http_code}")
 
         local http_code="${response: -3}"
@@ -188,7 +183,7 @@ poll_action_status() {
             # Fallback to general actions endpoint
             local actions_response
             actions_response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
-                -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+                    -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
                 -w "%{http_code}")
 
             local actions_http_code="${actions_response: -3}"
@@ -251,7 +246,7 @@ get_checkpoint_id_from_action() {
 
     local response
     response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -289,7 +284,7 @@ cleanup_checkpoint() {
 
     local response
     response=$(curl -s -X PATCH "${PROPAGATOR_BASE_URL}/v2/checkpoints/deprecate/${checkpoint_id}" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -324,7 +319,7 @@ validate_propagator_connectivity() {
 
     local response
     response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/user" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -370,7 +365,7 @@ get_checkpoints() {
 
     local response
     response=$(curl -s -X GET "$url" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -430,7 +425,7 @@ get_latest_pod_action_id() {
 
     local response
     response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions/from_pod/${pod_id}" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -461,9 +456,9 @@ register_cluster() {
 
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/cluster" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-        -H "Content-Type: application/json" \
-        -d '{ "cluster_name": "'"${name}"'" }' \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{ "cluster_name": "'"${name}"'" }' \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -490,7 +485,7 @@ deregister_cluster() {
 
     local response
     response=$(curl -s -X DELETE "${PROPAGATOR_BASE_URL}/v2/cluster/${id}" \
-        -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"

@@ -35,12 +35,12 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		pluginRestoreStorage, // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
-		process.InheritFilesForRestore,
 		network.DetectNetworkOptionsForRestore,
 		gpu.Restore(s.gpus),
 
 		pluginRestoreMiddleware, // middleware from plugins
 
+		process.InheritFilesForRestore,
 		criu.CheckOptsForRestore,
 	}
 
