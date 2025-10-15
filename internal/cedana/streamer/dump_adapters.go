@@ -41,6 +41,11 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				dir = "/var/run/cedana"
 			}
 
+			// Ensure the base directory exists
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create base dump dir: %v", err)
+			}
+
 			// Check if the provided dir exists
 			if _, err := os.Stat(dir); os.IsNotExist(err) {
 				return nil, status.Errorf(codes.InvalidArgument, "dump dir does not exist: %s", dir)
