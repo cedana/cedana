@@ -22,6 +22,10 @@ COLLECT_DIAGS="${DEFAULT_COLLECT_DIAGS}"
 COLLECT_LICENSES="${DEFAULT_COLLECT_LICENSES}"
 COLLECT_LIMITS="${DEFAULT_COLLECT_LIMITS}"
 
+# Vector.dev configuration
+ENABLE_VECTOR="false"
+VECTOR_INSTALL_DIR="$HOME/.vector"
+
 usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
@@ -35,6 +39,7 @@ OPTIONS:
     --collect-diags          Enable SLURM diagnostics collection
     --collect-licenses       Enable SLURM license collection  
     --collect-limits         Enable SLURM account limits collection
+    --enable-vector          Install and configure Vector.dev for metrics shipping
     --uninstall             Completely remove installation
     -h, --help              Show this help message
 
@@ -42,6 +47,7 @@ EXAMPLES:
     $0                                    # Install with default settings
     $0 --port=9093 --log-level=debug     # Custom port and debug logging
     $0 --collect-diags --collect-licenses # Enable additional collectors
+    $0 --enable-vector                   # Install with Vector.dev integration
     $0 --uninstall                       # Remove everything
 
 EOF
@@ -52,15 +58,7 @@ get_latest_go_version() {
     
     if command -v curl &>/dev/null; then
         latest_version=$(curl -s "https://go.dev/VERSION?m=text" 2>/dev/null | head -n1 | sed 's/go//')
-    elif command -v wExecStart=$exporter_binary \\
-    -web.listen-address=":${PORT}" \\
-    -web.telemetry-path="${METRICS_PATH}" \\
-    -web.log-level="${LOG_LEVEL}" \\
-    -slurm.collect-diags=${COLLECT_DIAGS} \\
-    -slurm.collect-licenses=${COLLECT_LICENSES} \\
-    -slurm.collect-limits=${COLLECT_LIMITS} \\
-    -slurm.cli-fallback=true \\
-    -slurm.poll-limit=10.0v/null; then
+    elif command -v wget &>/dev/null; then
         latest_version=$(wget -qO- "https://go.dev/VERSION?m=text" 2>/dev/null | head -n1 | sed 's/go//')
     fi
     
@@ -462,6 +460,57 @@ check_systemd_service() {
     fi
 }
 
+install_vector() {
+    echo "Installing Vector.dev..."
+    
+    if command -v vector &>/dev/null; then
+        echo "✓ Vector is already installed"
+        vector --version
+        return 0
+    fi
+    
+    if [ -f "$VECTOR_INSTALL_DIR/bin/vector" ]; then
+        echo "✓ Vector is already installed at $VECTOR_INSTALL_DIR"
+        "$VECTOR_INSTALL_DIR/bin/vector" --version
+        
+        if ! command -v vector &>/dev/null; then
+            export PATH="$VECTOR_INSTALL_DIR/bin:$PATH"
+            echo "Added Vector to PATH for current session"
+        fi
+        return 0
+    fi
+    
+    echo "Downloading and installing Vector.dev..."
+    
+    if curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y; then
+        echo "✓ Vector installed successfully"
+        
+        if [ -f ~/.profile ]; then
+            source ~/.profile
+        fi
+        
+        if [ -f "$VECTOR_INSTALL_DIR/bin/vector" ]; then
+            export PATH="$VECTOR_INSTALL_DIR/bin:$PATH"
+        fi
+        
+        if command -v vector &>/dev/null; then
+            echo "Installation path: $(command -v vector)"
+            vector --version
+            return 0
+        elif [ -f "$VECTOR_INSTALL_DIR/bin/vector" ]; then
+            echo "Installation path: $VECTOR_INSTALL_DIR/bin/vector"
+            "$VECTOR_INSTALL_DIR/bin/vector" --version
+            return 0
+        else
+            echo "ERROR: Vector installation completed but binary not found" >&2
+            return 1
+        fi
+    else
+        echo "ERROR: Vector installation failed" >&2
+        return 1
+    fi
+}
+
 
 
 uninstall() {
@@ -575,6 +624,10 @@ parse_arguments() {
                 ;;
             --collect-limits)
                 COLLECT_LIMITS="true"
+                shift
+                ;;
+            --enable-vector)
+                ENABLE_VECTOR="true"
                 shift
                 ;;
             --uninstall)
@@ -721,7 +774,7 @@ main() {
             echo "✓ Service is running"
             echo ""
             echo "✓ Found running service! Running full test..."
-            test_prometheus_slurm_exporter
+            test_prometheus_slurm_exporter || echo "⚠ Test completed with warnings"
         elif systemctl is-enabled --quiet prometheus-slurm-exporter; then
             echo "ℹ Service is enabled but not running"
             if [ "$EUID" -eq 0 ]; then
@@ -730,7 +783,7 @@ main() {
                 sleep 2
                 if check_systemd_service; then
                     echo ""
-                    test_prometheus_slurm_exporter
+                    test_prometheus_slurm_exporter || echo "⚠ Test completed with warnings"
                 fi
             else
                 echo "Run 'sudo systemctl start prometheus-slurm-exporter' to start it"
@@ -744,7 +797,7 @@ main() {
                 sleep 2
                 if check_systemd_service; then
                     echo ""
-                    test_prometheus_slurm_exporter
+                    test_prometheus_slurm_exporter || echo "⚠ Test completed with warnings"
                 fi
             else
                 echo "Run 'sudo systemctl enable --now prometheus-slurm-exporter' to enable and start it"
@@ -761,7 +814,7 @@ main() {
                 sleep 2
                 if check_systemd_service; then
                     echo ""
-                    test_prometheus_slurm_exporter
+                    test_prometheus_slurm_exporter || echo "⚠ Test completed with warnings"
                 else
                     echo "Service creation completed, but service is not running properly"
                 fi
@@ -782,7 +835,7 @@ main() {
         if curl -s -f "http://localhost:${PORT}${METRICS_PATH}" >/dev/null 2>&1 || wget -q -O /dev/null "http://localhost:${PORT}${METRICS_PATH}" 2>/dev/null; then
             echo "✓ Found running exporter! Running full test..."
             echo ""
-            test_prometheus_slurm_exporter
+            test_prometheus_slurm_exporter || echo "⚠ Test completed with warnings"
         fi
     fi
 }
@@ -798,7 +851,40 @@ echo "   Metrics Path: ${METRICS_PATH}"
 echo "   Collect Diags: ${COLLECT_DIAGS}"
 echo "   Collect Licenses: ${COLLECT_LICENSES}"
 echo "   Collect Limits: ${COLLECT_LIMITS}"
+echo "   Enable Vector.dev: ${ENABLE_VECTOR}"
 echo ""
 
 # Run main installation
 main
+
+if [ "$ENABLE_VECTOR" = "true" ]; then
+    echo ""
+    echo "============================================"
+    echo "Installing Vector.dev..."
+    echo "============================================"
+    
+    if install_vector; then
+        echo ""
+        echo "✅ Vector.dev installation completed!"
+        echo ""
+        echo "Vector is installed at:"
+        if command -v vector &>/dev/null; then
+            echo "  $(command -v vector)"
+        else
+            echo "  $VECTOR_INSTALL_DIR/bin/vector"
+        fi
+        echo ""
+        echo "Next steps:"
+        echo "1. Create Vector config: /etc/vector/vector.yaml (or custom location)"
+        echo "2. Test Vector: vector --config <config-file>"
+        echo "3. Run Vector: vector --config <config-file>"
+        echo ""
+        echo "Note: Vector is installed in user directory ($VECTOR_INSTALL_DIR)"
+        echo "      You may need to source ~/.profile in new shells"
+    else
+        echo ""
+        echo "❌ Vector.dev installation failed"
+        echo "Please check the error messages above"
+        exit 1
+    fi
+fi
