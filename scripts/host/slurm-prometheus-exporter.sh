@@ -639,7 +639,7 @@ sinks:
       codec: "json"
     batch:
       max_bytes: 10485760    # 10MB per file (safety limit)
-      timeout_secs: 60       # 1 minute - matches scrape interval
+      timeout_secs: 120      # 2 minutes - exactly 2 scrapes per file
 EOF
 
     if [ -n "$VECTOR_ACCESS_KEY" ] && [ -n "$VECTOR_SECRET_KEY" ]; then
