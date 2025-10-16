@@ -22,9 +22,16 @@ COLLECT_DIAGS="${DEFAULT_COLLECT_DIAGS}"
 COLLECT_LICENSES="${DEFAULT_COLLECT_LICENSES}"
 COLLECT_LIMITS="${DEFAULT_COLLECT_LIMITS}"
 
-# Vector.dev configuration
-ENABLE_VECTOR="false"
 VECTOR_INSTALL_DIR="$HOME/.vector"
+VECTOR_CONFIG_DIR="/etc/vector"
+VECTOR_DATA_DIR="/var/lib/vector"
+
+# Vector S3/MinIO configuration
+VECTOR_BUCKET=""
+VECTOR_ENDPOINT=""
+VECTOR_ACCESS_KEY=""
+VECTOR_SECRET_KEY=""
+VECTOR_REGION="us-east-1"
 
 usage() {
     cat << EOF
@@ -39,15 +46,20 @@ OPTIONS:
     --collect-diags          Enable SLURM diagnostics collection
     --collect-licenses       Enable SLURM license collection  
     --collect-limits         Enable SLURM account limits collection
-    --enable-vector          Install and configure Vector.dev for metrics shipping
+    --vector-bucket BUCKET   S3/MinIO bucket name for metrics storage
+    --vector-endpoint URL    S3/MinIO endpoint URL (e.g., http://localhost:9000)
+    --vector-access-key KEY  S3/MinIO access key
+    --vector-secret-key KEY  S3/MinIO secret key
+    --vector-region REGION   S3/MinIO region (default: us-east-1)
     --uninstall             Completely remove installation
     -h, --help              Show this help message
 
 EXAMPLES:
-    $0                                    # Install with default settings
+    $0                                    # Install with default settings (includes Vector)
     $0 --port=9093 --log-level=debug     # Custom port and debug logging
     $0 --collect-diags --collect-licenses # Enable additional collectors
-    $0 --enable-vector                   # Install with Vector.dev integration
+    $0 --vector-bucket=slurm-metrics --vector-endpoint=http://localhost:9000 \\
+       --vector-access-key=admin --vector-secret-key=minioadmin123  # Configure Vector with MinIO
     $0 --uninstall                       # Remove everything
 
 EOF
@@ -511,6 +523,178 @@ install_vector() {
     fi
 }
 
+start_vector() {
+    echo "Starting Vector.dev..."
+    
+    local config_file="${VECTOR_CONFIG_DIR}/vector.yaml"
+    if [ "$EUID" -ne 0 ]; then
+        config_file="${HOME}/.vector/vector.yaml"
+    fi
+    
+    if [ ! -f "$config_file" ]; then
+        echo "ERROR: Vector configuration file not found: $config_file" >&2
+        return 1
+    fi
+    
+    if pgrep -f "vector --config.*vector.yaml" >/dev/null 2>&1; then
+        echo "✓ Vector is already running"
+        echo "Process info:"
+        ps aux | grep -E "[v]ector --config" | head -1
+        return 0
+    fi
+    
+    local vector_bin=""
+    if command -v vector &>/dev/null; then
+        vector_bin="vector"
+    elif [ -f "$VECTOR_INSTALL_DIR/bin/vector" ]; then
+        vector_bin="$VECTOR_INSTALL_DIR/bin/vector"
+    else
+        echo "ERROR: Vector binary not found" >&2
+        return 1
+    fi
+    
+    local log_file="${HOME}/vector.log"
+    if [ "$EUID" -eq 0 ]; then
+        log_file="/var/log/vector.log"
+    fi
+    
+    echo "Starting Vector with config: $config_file"
+    echo "Logs will be written to: $log_file"
+    
+    nohup "$vector_bin" --config "$config_file" > "$log_file" 2>&1 &
+    local vector_pid=$!
+    
+    sleep 2
+    
+    if ps -p $vector_pid > /dev/null 2>&1; then
+        echo "✓ Vector started successfully (PID: $vector_pid)"
+        echo "Monitor logs: tail -f $log_file"
+        return 0
+    else
+        echo "ERROR: Vector failed to start" >&2
+        echo "Check logs at: $log_file" >&2
+        return 1
+    fi
+}
+
+create_vector_config() {
+    echo "Creating Vector configuration..."
+    
+    local config_file="${VECTOR_CONFIG_DIR}/vector.yaml"
+    
+    if [ "$EUID" -eq 0 ]; then
+        mkdir -p "$VECTOR_CONFIG_DIR"
+        mkdir -p "$VECTOR_DATA_DIR"
+    else
+        echo "Note: Using user-level config directory"
+        config_file="${HOME}/.vector/vector.yaml"
+        mkdir -p "$(dirname "$config_file")"
+        mkdir -p "${HOME}/.vector/data"
+    fi
+    
+    local data_dir="$VECTOR_DATA_DIR"
+    if [ "$EUID" -ne 0 ]; then
+        data_dir="${HOME}/.vector/data"
+    fi
+    
+    cat > "$config_file" << EOF
+# Vector.dev configuration for SLURM Prometheus Exporter
+# Scrapes metrics every 1 minute and ships to S3-compatible storage
+
+# Data directory for Vector's state
+data_dir: "${data_dir}"
+
+# Source: Scrape Prometheus exporter every 1 minute
+sources:
+  slurm_prometheus:
+    type: "prometheus_scrape"
+    endpoints:
+      - "http://localhost:${PORT}${METRICS_PATH}"
+    scrape_interval_secs: 60  # 1 minute
+
+# Transform: Add metadata and prepare for storage
+transforms:
+  add_metadata:
+    type: "remap"
+    inputs:
+      - "slurm_prometheus"
+    source: |
+      .hostname = get_hostname!()
+      .timestamp = now()
+      .source = "slurm-prometheus-exporter"
+
+# Sink: Store to S3-compatible storage
+sinks:
+  s3_storage:
+    type: "aws_s3"
+    inputs:
+      - "add_metadata"
+    bucket: "${VECTOR_BUCKET:-slurm-metrics}"
+    region: "${VECTOR_REGION}"
+    key_prefix: "metrics/%Y/%m/%d/"
+    filename_time_format: "%Y%m%d-%H%M%S"
+    filename_extension: "json"
+    compression: "none"  # No compression for direct JSON access
+    encoding:
+      codec: "json"
+    batch:
+      max_bytes: 10485760    # 10MB per file (safety limit)
+      timeout_secs: 60       # 1 minute - matches scrape interval
+EOF
+
+    if [ -n "$VECTOR_ACCESS_KEY" ] && [ -n "$VECTOR_SECRET_KEY" ]; then
+        cat >> "$config_file" << EOF
+    
+    # Authentication
+    auth:
+      access_key_id: "${VECTOR_ACCESS_KEY}"
+      secret_access_key: "${VECTOR_SECRET_KEY}"
+EOF
+    else
+        cat >> "$config_file" << EOF
+    
+    # Authentication (PLACEHOLDER - update with your credentials)
+    auth:
+      access_key_id: "YOUR_ACCESS_KEY"
+      secret_access_key: "YOUR_SECRET_KEY"
+EOF
+    fi
+    
+    if [ -n "$VECTOR_ENDPOINT" ]; then
+        cat >> "$config_file" << EOF
+    
+    # S3-compatible endpoint (for MinIO, Ceph, etc.)
+    endpoint: "${VECTOR_ENDPOINT}"
+EOF
+    fi
+    
+    if [ "$EUID" -eq 0 ]; then
+        chown -R $(logname 2>/dev/null || echo $SUDO_USER):$(logname 2>/dev/null || echo $SUDO_USER) "$VECTOR_CONFIG_DIR" 2>/dev/null || true
+    fi
+    
+    echo "✓ Vector configuration created: $config_file"
+    
+    local vector_bin=""
+    if command -v vector &>/dev/null; then
+        vector_bin="vector"
+    elif [ -f "$VECTOR_INSTALL_DIR/bin/vector" ]; then
+        vector_bin="$VECTOR_INSTALL_DIR/bin/vector"
+    fi
+    
+    if [ -n "$vector_bin" ]; then
+        echo "Validating Vector configuration..."
+        if $vector_bin validate "$config_file"; then
+            echo "✓ Vector configuration is valid"
+            return 0
+        else
+            echo "✗ Vector configuration validation failed" >&2
+            return 1
+        fi
+    fi
+    
+    return 0
+}
+
 
 
 uninstall() {
@@ -626,8 +810,44 @@ parse_arguments() {
                 COLLECT_LIMITS="true"
                 shift
                 ;;
-            --enable-vector)
-                ENABLE_VECTOR="true"
+            --vector-bucket)
+                VECTOR_BUCKET="$2"
+                shift 2
+                ;;
+            --vector-bucket=*)
+                VECTOR_BUCKET="${1#*=}"
+                shift
+                ;;
+            --vector-endpoint)
+                VECTOR_ENDPOINT="$2"
+                shift 2
+                ;;
+            --vector-endpoint=*)
+                VECTOR_ENDPOINT="${1#*=}"
+                shift
+                ;;
+            --vector-access-key)
+                VECTOR_ACCESS_KEY="$2"
+                shift 2
+                ;;
+            --vector-access-key=*)
+                VECTOR_ACCESS_KEY="${1#*=}"
+                shift
+                ;;
+            --vector-secret-key)
+                VECTOR_SECRET_KEY="$2"
+                shift 2
+                ;;
+            --vector-secret-key=*)
+                VECTOR_SECRET_KEY="${1#*=}"
+                shift
+                ;;
+            --vector-region)
+                VECTOR_REGION="$2"
+                shift 2
+                ;;
+            --vector-region=*)
+                VECTOR_REGION="${1#*=}"
                 shift
                 ;;
             --uninstall)
@@ -851,40 +1071,130 @@ echo "   Metrics Path: ${METRICS_PATH}"
 echo "   Collect Diags: ${COLLECT_DIAGS}"
 echo "   Collect Licenses: ${COLLECT_LICENSES}"
 echo "   Collect Limits: ${COLLECT_LIMITS}"
-echo "   Enable Vector.dev: ${ENABLE_VECTOR}"
+echo ""
+echo "   Vector.dev Configuration:"
+echo "   Bucket: ${VECTOR_BUCKET:-<not configured>}"
+echo "   Endpoint: ${VECTOR_ENDPOINT:-<not configured>}"
+echo "   Region: ${VECTOR_REGION}"
 echo ""
 
 # Run main installation
 main
 
-if [ "$ENABLE_VECTOR" = "true" ]; then
+echo ""
+echo "============================================"
+echo "Installing Vector.dev..."
+echo "============================================"
+
+if install_vector; then
     echo ""
+    echo "✅ Vector.dev installation completed!"
+    echo ""
+    echo "Vector is installed at:"
+    if command -v vector &>/dev/null; then
+        echo "  $(command -v vector)"
+    else
+        echo "  $VECTOR_INSTALL_DIR/bin/vector"
+    fi
+    echo ""
+    
     echo "============================================"
-    echo "Installing Vector.dev..."
+    echo "Creating Vector configuration..."
     echo "============================================"
     
-    if install_vector; then
+    if create_vector_config; then
         echo ""
-        echo "✅ Vector.dev installation completed!"
+        echo "✅ Vector configuration created!"
         echo ""
-        echo "Vector is installed at:"
-        if command -v vector &>/dev/null; then
-            echo "  $(command -v vector)"
+        
+        if [ -z "$VECTOR_BUCKET" ] || [ -z "$VECTOR_ENDPOINT" ] || [ -z "$VECTOR_ACCESS_KEY" ] || [ -z "$VECTOR_SECRET_KEY" ]; then
+            echo "⚠️  Vector configuration created with placeholders"
+            echo ""
+            echo "To complete setup, update the configuration file with your S3 storage credentials:"
+            if [ "$EUID" -eq 0 ]; then
+                echo "   Edit: /etc/vector/vector.yaml"
+            else
+                echo "   Edit: $HOME/.vector/vector.yaml"
+            fi
+            echo ""
+            echo "Set the following values:"
+            echo "   - bucket: your-bucket-name"
+            echo "   - endpoint: your-s3-endpoint (for S3-compatible storage like MinIO)"
+            echo "   - auth.access_key_id: your-access-key"
+            echo "   - auth.secret_access_key: your-secret-key"
+            echo ""
+            echo "Vector will NOT be started automatically without credentials."
+            echo ""
+            echo "After configuring, start Vector manually:"
+            if command -v vector &>/dev/null; then
+                if [ "$EUID" -eq 0 ]; then
+                    echo "   vector --config /etc/vector/vector.yaml &"
+                else
+                    echo "   vector --config $HOME/.vector/vector.yaml &"
+                fi
+            else
+                if [ "$EUID" -eq 0 ]; then
+                    echo "   $VECTOR_INSTALL_DIR/bin/vector --config /etc/vector/vector.yaml &"
+                else
+                    echo "   $VECTOR_INSTALL_DIR/bin/vector --config $HOME/.vector/vector.yaml &"
+                fi
+            fi
         else
-            echo "  $VECTOR_INSTALL_DIR/bin/vector"
+            echo "✅ Vector is fully configured and ready to use!"
+            echo ""
+            echo "============================================"
+            echo "Starting Vector..."
+            echo "============================================"
+            
+            if start_vector; then
+                echo ""
+                echo "✅ Vector is now running and shipping metrics!"
+                echo ""
+                echo "Metrics will be scraped every 60 seconds and uploaded to:"
+                echo "  Bucket: $VECTOR_BUCKET"
+                echo "  Endpoint: $VECTOR_ENDPOINT"
+                echo "  Path: metrics/YYYY/MM/DD/YYYYMMDD-HHMMSS.json"
+                echo ""
+                echo "Check Vector logs:"
+                if [ "$EUID" -eq 0 ]; then
+                    echo "  tail -f /var/log/vector.log"
+                else
+                    echo "  tail -f $HOME/vector.log"
+                fi
+                echo ""
+                echo "Stop Vector:"
+                echo "  pkill -f 'vector --config'"
+            else
+                echo ""
+                echo "⚠️  Vector failed to start automatically"
+                echo "You can start it manually:"
+                if command -v vector &>/dev/null; then
+                    if [ "$EUID" -eq 0 ]; then
+                        echo "  nohup vector --config /etc/vector/vector.yaml > /var/log/vector.log 2>&1 &"
+                    else
+                        echo "  nohup vector --config $HOME/.vector/vector.yaml > $HOME/vector.log 2>&1 &"
+                    fi
+                else
+                    if [ "$EUID" -eq 0 ]; then
+                        echo "  nohup $VECTOR_INSTALL_DIR/bin/vector --config /etc/vector/vector.yaml > /var/log/vector.log 2>&1 &"
+                    else
+                        echo "  nohup $VECTOR_INSTALL_DIR/bin/vector --config $HOME/.vector/vector.yaml > $HOME/vector.log 2>&1 &"
+                    fi
+                fi
+            fi
         fi
-        echo ""
-        echo "Next steps:"
-        echo "1. Create Vector config: /etc/vector/vector.yaml (or custom location)"
-        echo "2. Test Vector: vector --config <config-file>"
-        echo "3. Run Vector: vector --config <config-file>"
-        echo ""
-        echo "Note: Vector is installed in user directory ($VECTOR_INSTALL_DIR)"
-        echo "      You may need to source ~/.profile in new shells"
     else
         echo ""
-        echo "❌ Vector.dev installation failed"
+        echo "❌ Vector configuration creation failed"
         echo "Please check the error messages above"
-        exit 1
     fi
+    
+    echo ""
+    echo "Note: Vector is installed in user directory ($VECTOR_INSTALL_DIR)"
+    echo "      You may need to source ~/.profile in new shells"
+else
+    echo ""
+    echo "❌ Vector.dev installation failed"
+    echo "Please check the error messages above"
+    exit 1
 fi
