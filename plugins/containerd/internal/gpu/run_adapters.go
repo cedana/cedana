@@ -43,7 +43,7 @@ func Interception(next types.Run) types.Run {
 
 		libraryPath := gpu.LibraryPaths()[0]
 
-		err = runc_gpu.AddGPUInterceptionToSpec(spec, libraryPath, id)
+		err = runc_gpu.AddInterception(spec, id, libraryPath, "/tmp")
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to add GPU interception to spec: %v", err)
 		}
