@@ -767,7 +767,7 @@ uninstall() {
         echo "Keeping Go installation"
     fi
     
-    echo "✅ Uninstall completed!"
+    echo "✓ Uninstall completed!"
     exit 0
 }
 
@@ -1064,7 +1064,7 @@ main() {
 parse_arguments "$@"
 
 # Show configuration
-echo "📋 Configuration:"
+echo "Configuration:"
 echo "   Port: ${PORT}"
 echo "   Log Level: ${LOG_LEVEL}"
 echo "   Metrics Path: ${METRICS_PATH}"
@@ -1088,7 +1088,7 @@ echo "============================================"
 
 if install_vector; then
     echo ""
-    echo "✅ Vector.dev installation completed!"
+    echo "✓ Vector.dev installation completed!"
     echo ""
     echo "Vector is installed at:"
     if command -v vector &>/dev/null; then
@@ -1104,11 +1104,11 @@ if install_vector; then
     
     if create_vector_config; then
         echo ""
-        echo "✅ Vector configuration created!"
+        echo "✓ Vector configuration created!"
         echo ""
         
         if [ -z "$VECTOR_BUCKET" ] || [ -z "$VECTOR_ENDPOINT" ] || [ -z "$VECTOR_ACCESS_KEY" ] || [ -z "$VECTOR_SECRET_KEY" ]; then
-            echo "⚠️  Vector configuration created with placeholders"
+            echo "⚠ Vector configuration created with placeholders"
             echo ""
             echo "To complete setup, update the configuration file with your S3 storage credentials:"
             if [ "$EUID" -eq 0 ]; then
@@ -1140,7 +1140,7 @@ if install_vector; then
                 fi
             fi
         else
-            echo "✅ Vector is fully configured and ready to use!"
+            echo "✓ Vector is fully configured and ready to use!"
             echo ""
             echo "============================================"
             echo "Starting Vector..."
@@ -1148,7 +1148,7 @@ if install_vector; then
             
             if start_vector; then
                 echo ""
-                echo "✅ Vector is now running and shipping metrics!"
+                echo "✓ Vector is now running and shipping metrics!"
                 echo ""
                 echo "Metrics will be scraped every 60 seconds and uploaded to:"
                 echo "  Bucket: $VECTOR_BUCKET"
@@ -1166,7 +1166,7 @@ if install_vector; then
                 echo "  pkill -f 'vector --config'"
             else
                 echo ""
-                echo "⚠️  Vector failed to start automatically"
+                echo "⚠ Vector failed to start automatically"
                 echo "You can start it manually:"
                 if command -v vector &>/dev/null; then
                     if [ "$EUID" -eq 0 ]; then
@@ -1185,7 +1185,7 @@ if install_vector; then
         fi
     else
         echo ""
-        echo "❌ Vector configuration creation failed"
+        echo "✗ Vector configuration creation failed"
         echo "Please check the error messages above"
     fi
     
@@ -1194,7 +1194,7 @@ if install_vector; then
     echo "      You may need to source ~/.profile in new shells"
 else
     echo ""
-    echo "❌ Vector.dev installation failed"
+    echo "✗ Vector.dev installation failed"
     echo "Please check the error messages above"
     exit 1
 fi
