@@ -143,8 +143,6 @@ jobs:
           VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
           ARCH: ${{ matrix.arch }}
         run: |
-          mkdir -p plugin
-          cd plugin
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-runc.so
           else
@@ -157,7 +155,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
-          path: ./plugin/*
+          path: |
+            ./libcedana-*.so
+            ./plugin-version.txt
 
   criu:
     name: CRIU
