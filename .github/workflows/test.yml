@@ -57,7 +57,7 @@ on:
         default: ""
 
 env:
-  CEDANA_URL: https://yash.cedana.ai/v1 # TODO: revert to CI URL
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
