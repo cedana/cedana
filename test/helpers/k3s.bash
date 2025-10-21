@@ -106,7 +106,7 @@ teardown_cluster() {
     debug_log "Stopping k3s processes..."
     pkill k3s || true
     pkill -f containerd-shim-runc-v2 || true
-    pkill -f cedana-shim-cedana-v2 || true
+    pkill -f cedana-shim-runc-v2 || true
     pkill kubectl || true
 
     sleep 2
