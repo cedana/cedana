@@ -148,7 +148,7 @@ jobs:
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-alpha/raw/names/libcedana-runc.so-$ARCH/versions/${VERSION}/libcedana-${PLUGIN}.so
+            curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-alpha/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so
           fi
           echo $VERSION > plugins-version.txt
 
