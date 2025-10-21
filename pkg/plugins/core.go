@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"plugin"
+	"strings"
 	"sync"
 
 	"github.com/cedana/cedana/pkg/config"
@@ -33,6 +34,12 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 	loadedPlugins = map[string]*plugin.Plugin{}
 
 	if _, err := os.Stat(LibDir); os.IsNotExist(err) {
+		return nil
+	}
+
+	if len(os.Args) > 0 && strings.HasPrefix(os.Args[1], "plugin") {
+		// Skip loading plugins when running plugin management commands
+		fmt.Println("Skipping plugin loading for plugin management command")
 		return nil
 	}
 

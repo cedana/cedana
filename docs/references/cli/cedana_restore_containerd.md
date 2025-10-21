@@ -1,21 +1,26 @@
-## cedana restore process
+## cedana restore containerd
 
-Restore a process
+Restore a containerd container
 
 ```
-cedana restore process [flags]
+cedana restore containerd [container-id] [args...] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help   help for process
+      --address string     containerd socket address
+      --gpus int32Slice    add GPUs to the container (e.g. 0,1,2) (default [])
+  -h, --help               help for containerd
+      --id string          new id
+      --image string       image to use
+      --namespace string   containerd namespace
+      --no-pivot           disable use of pivot-root
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --address string      address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)
   -a, --attach              attach stdin/out/err
       --attachable          make it attachable, but don't attach
       --config string       one-time config JSON string (merge with existing config)
