@@ -11,10 +11,12 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -201,6 +203,95 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
 		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, inheritFdMap)
 		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+///////////////////////////////////////
+//// Interception/Tracing Adapters ////
+///////////////////////////////////////
+
+// Adapter that restore GPU interception to the request based on the job type.
+// Each plugin must implement its own support for restoring GPU interception.
+func InterceptionRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
+		}
+
+		plugin := opts.Plugins.Get("gpu")
+		if !plugin.IsInstalled() {
+			return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin for GPU C/R support")
+		}
+
+		logDir, err := EnsureLogDir(id, req.UID, req.GID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to ensure GPU log dir: %v", err)
+		}
+
+		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
+
+		t := req.GetType()
+		switch t {
+		case "process":
+			// Nothing to do
+		default:
+			// Use plugin-specific handler, if available
+			features.GPUInterceptionRestore.IfAvailable(func(
+				name string,
+				pluginInterception types.Adapter[types.Restore],
+			) error {
+				next = next.With(pluginInterception)
+				return nil
+			}, t)
+		}
+
+		log.Info().Str("plugin", "gpu").Str("ID", id).Str("type", t).Msg("restoring GPU interception")
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+// Adapter that restores GPU tracing to the request based on the job type.
+// Each plugin must implement its own support for restoring GPU tracing.
+func TracingRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string) // Try to use existing ID
+		if !ok {
+			id = uuid.New().String()
+			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
+		}
+
+		plugin := opts.Plugins.Get("gpu/tracer")
+		if !plugin.IsInstalled() {
+			return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU/tracer plugin for GPU tracing support")
+		}
+
+		logDir, err := EnsureLogDir(id, req.UID, req.GID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to ensure GPU log dir: %v", err)
+		}
+
+		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
+
+		t := req.GetType()
+		switch t {
+		case "process":
+			// Nothing to do
+		default:
+			// Use plugin-specific handler
+			features.GPUTracingRestore.IfAvailable(func(
+				name string,
+				pluginTracing types.Adapter[types.Restore],
+			) error {
+				next = next.With(pluginTracing)
+				return nil
+			}, t)
+		}
+
+		log.Info().Str("plugin", "gpu/tracer").Str("ID", id).Str("type", t).Msg("restoring GPU tracing")
 
 		return next(ctx, opts, resp, req)
 	}

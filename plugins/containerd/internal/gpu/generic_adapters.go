@@ -3,7 +3,6 @@ package gpu
 import (
 	"context"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
@@ -15,8 +14,8 @@ import (
 
 // Adapter that adds Cedana GPU interception to the container.
 // Modifies the spec ephemeraly.
-func Interception(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (func() <-chan int, error) {
+func Interception[REQ, RESP any](next types.Handler[REQ, RESP]) types.Handler[REQ, RESP] {
+	return func(ctx context.Context, opts types.Opts, resp *RESP, req *REQ) (func() <-chan int, error) {
 		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get container from context")
@@ -55,8 +54,8 @@ func Interception(next types.Run) types.Run {
 
 // Adapter that adds Cedana GPU tracing to the container.
 // Modifies the spec ephemeraly.
-func Tracing(next types.Run) types.Run {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (func() <-chan int, error) {
+func Tracing[REQ, RESP any](next types.Handler[REQ, RESP]) types.Handler[REQ, RESP] {
+	return func(ctx context.Context, opts types.Opts, resp *RESP, req *REQ) (func() <-chan int, error) {
 		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get container from context")

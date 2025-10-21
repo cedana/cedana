@@ -94,17 +94,16 @@ func Interception(next types.Run) types.Run {
 		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
 
 		t := req.GetType()
-		var handler types.Run
 		switch t {
 		case "process":
-			handler = next.With(ProcessInterception)
+			next = next.With(ProcessInterception)
 		default:
 			// Use plugin-specific handler
 			err := features.GPUInterception.IfAvailable(func(
 				name string,
 				pluginInterception types.Adapter[types.Run],
 			) error {
-				handler = next.With(pluginInterception)
+				next = next.With(pluginInterception)
 				return nil
 			}, t)
 			if err != nil {
@@ -114,7 +113,7 @@ func Interception(next types.Run) types.Run {
 
 		log.Info().Str("plugin", "gpu").Str("ID", id).Str("type", t).Msg("enabling GPU interception")
 
-		return handler(ctx, opts, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 
@@ -141,17 +140,16 @@ func Tracing(next types.Run) types.Run {
 		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
 
 		t := req.GetType()
-		var handler types.Run
 		switch t {
 		case "process":
-			handler = next.With(ProcessTracing)
+			next = next.With(ProcessTracing)
 		default:
 			// Use plugin-specific handler
 			err := features.GPUTracing.IfAvailable(func(
 				name string,
 				pluginTracing types.Adapter[types.Run],
 			) error {
-				handler = next.With(pluginTracing)
+				next = next.With(pluginTracing)
 				return nil
 			}, t)
 			if err != nil {
@@ -161,7 +159,7 @@ func Tracing(next types.Run) types.Run {
 
 		log.Info().Str("plugin", "gpu/tracer").Str("ID", id).Str("type", t).Msg("enabling GPU tracing")
 
-		return handler(ctx, opts, resp, req)
+		return next(ctx, opts, resp, req)
 	}
 }
 

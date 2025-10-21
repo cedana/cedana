@@ -86,7 +86,7 @@ func CreateContainerForRun(next types.Run) types.Run {
 			}
 			defer func() {
 				if err != nil {
-					container.Delete(ctx, containerd.WithSnapshotCleanup)
+					Cleanup(context.WithoutCancel(ctx), req.Details)
 				}
 			}()
 

@@ -69,6 +69,8 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			)
 		}
 
+		req.Criu.InheritFd = nil // NOTE: Ignore previously set values as they will be added again by shim
+
 		criuOptsJson, err := json.Marshal(req.Criu)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to marshal CRIU options: %v", err)
@@ -128,7 +130,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		}
 		defer func() {
 			if err != nil {
-				container.Delete(ctx, containerd.WithSnapshotCleanup)
+				Cleanup(context.WithoutCancel(ctx), req.Details)
 			}
 		}()
 

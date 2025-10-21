@@ -197,15 +197,37 @@ func pluginRestoreHandler() types.Restore {
 			// Use default handler
 		default:
 			// Check if plugin-specific handler is available
-			features.RestoreHandler.IfAvailable(func(name string, pluginHandler types.Restore) error {
+			err = features.RestoreHandler.IfAvailable(func(name string, pluginHandler types.Restore) error {
 				handler = pluginHandler
 				return nil
 			}, t)
+			if err == nil {
+				var end func()
+				ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
+				defer end()
+			}
+		}
 
-			var end func()
-			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
-			defer end()
+		// Plugin any late restore middleware if found
 
+		switch t {
+		case "process":
+			// No late middleware for default process type
+		default:
+			// Insert plugin-specific late middleware
+			features.RestoreMiddlewareLate.IfAvailable(func(
+				name string,
+				pluginMiddleware types.Middleware[types.Restore],
+			) error {
+				handler = handler.With(pluginMiddleware...)
+				return nil
+			}, t)
+		}
+
+		// Plugin GPU adapters if required
+
+		if resp.GetState().GetGPUEnabled() {
+			handler = handler.With(gpu.InterceptionRestore)
 		}
 
 		return handler(ctx, opts, resp, req)

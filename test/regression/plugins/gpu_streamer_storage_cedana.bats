@@ -38,7 +38,7 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "remote stream dump GPU process (vector add)" {
+@test "[$GPU_INFO] remote stream dump GPU process (vector add)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
@@ -51,7 +51,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "remote stream dump GPU process (mem throughput saxpy)" {
+@test "[$GPU_INFO] remote stream dump GPU process (mem throughput saxpy)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
@@ -68,7 +68,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "remote stream restore GPU process (vector add)" {
+@test "[$GPU_INFO] remote stream restore GPU process (vector add)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
@@ -89,7 +89,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "remote stream restore GPU process (mem throughput saxpy)" {
+@test "[$GPU_INFO] remote stream restore GPU process (mem throughput saxpy)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
@@ -110,7 +110,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore,daemonless
-@test "remote stream restore GPU process (mem throughput saxpy, without daemon)" {
+@test "[$GPU_INFO] remote stream restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     pid_file=/tmp/pid-$jid
 
