@@ -97,7 +97,7 @@ if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
         cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/containerd-shim-cedana-v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
     fi
 else
@@ -107,7 +107,7 @@ else
         cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/containerd-shim-cedana-v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
     fi
     echo "Sending SIGHUP to containerd..."

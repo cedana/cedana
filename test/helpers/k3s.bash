@@ -86,7 +86,7 @@ stop_cluster() {
     debug_log "Stopping k3s processes..."
     pkill k3s || true
     pkill containerd-shim-runc-v2 || true
-    pkill containerd-shim-cedana-v2 || true
+    pkill cedana-shim-runc-v2 || true
     pkill kubectl || true
 
     sleep 2
@@ -106,7 +106,7 @@ teardown_cluster() {
     debug_log "Stopping k3s processes..."
     pkill k3s || true
     pkill -f containerd-shim-runc-v2 || true
-    pkill -f containerd-shim-cedana-v2 || true
+    pkill -f cedana-shim-cedana-v2 || true
     pkill kubectl || true
 
     sleep 2
@@ -121,7 +121,7 @@ teardown_cluster() {
 preinstall_containerd_runtime() {
     debug_log "Pre-installing containerd runtime for k3s..."
 
-    if ! path_exists /usr/local/bin/containerd-shim-cedana-v2; then
+    if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
         if [ "$CEDANA_PLUGINS_BUILDS" = "local" ]; then
             error_log "Runtime shim not found in /usr/local/bin"
             return 1
@@ -141,7 +141,7 @@ preinstall_containerd_runtime() {
         cat >> $template <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/containerd-shim-cedana-v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
     fi
 
