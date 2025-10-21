@@ -149,6 +149,7 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-binaries-plugins
         with:
+          path: .
           pattern: plugin-amd64*
           merge-multiple: true
 

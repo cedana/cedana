@@ -200,6 +200,7 @@ jobs:
       - name: Download k8s plugin
         uses: actions/download-artifact@v4
         with:
+          path: .
           pattern: plugin-${{ matrix.arch }}-k8s
           merge-multiple: true
 

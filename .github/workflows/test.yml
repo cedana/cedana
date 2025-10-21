@@ -99,6 +99,7 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
+          path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
@@ -296,6 +297,7 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
+          path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 

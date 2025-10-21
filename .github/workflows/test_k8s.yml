@@ -184,6 +184,7 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
+          path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
@@ -195,6 +196,7 @@ jobs:
       - name: Download containerd runtime
         uses: actions/download-artifact@v4
         with:
+          path: .
           pattern: containerd-runtime-${{ matrix.arch }}-*
           merge-multiple: true
 
