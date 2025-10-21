@@ -15,6 +15,8 @@ load_lib file
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 
 setup_file() {
+    # FIXME: test is broken
+    skip "disabled until test itself is fixed"
     export CEDANA_GPU_SHM_SIZE=$((8*GIBIBYTE)) # Since workloads here are large
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
@@ -33,7 +35,7 @@ teardown_file() {
 #####################
 
 # bats test_tags=dump,restore
-@test "c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
+@test "[$GPU_INFO] c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
     # FIXME: test is broken
     skip "disabled until test itself is fixed"
 

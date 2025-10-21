@@ -23,6 +23,7 @@ var (
 	WorkingDirFlag    = Flag{Full: "working-dir", Short: "w"}
 	JidFlag           = Flag{Full: "jid", Short: "j"}
 	GpuEnabledFlag    = Flag{Full: "gpu-enabled", Short: "g"}
+	GpuTracingFlag    = Flag{Full: "gpu-tracing"}
 	GpuFreezeTypeFlag = Flag{Full: "gpu-freeze-type"}
 	AttachFlag        = Flag{Full: "attach", Short: "a"}
 	AttachableFlag    = Flag{Full: "attachable"}
@@ -38,6 +39,7 @@ var (
 	UpcomingFlag      = Flag{Full: "upcoming"}
 
 	// CRIU
+	CriuOptsFlag        = Flag{Full: "criu-opts"}
 	LeaveRunningFlag    = Flag{Full: "leave-running"}
 	LeaveStoppedFlag    = Flag{Full: "leave-stopped"}
 	TcpEstablishedFlag  = Flag{Full: "tcp-established"}

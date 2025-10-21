@@ -52,14 +52,19 @@ on:
 jobs:
   cedana:
     name: Cedana
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: true
       matrix:
         arch:
           - amd64
           - arm64
-    if: inputs.cedana
+    if: inputs.cedana || inputs.image
+    container:
+      image: golang:1.25rc3-bullseye
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
       - uses: actions/checkout@v4
@@ -79,12 +84,6 @@ jobs:
         if: inputs.debug
         with:
           limit-access-to-actor: true
-
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
 
       - name: Build
         run: |
@@ -100,16 +99,31 @@ jobs:
             ./cedana
             ./cedana-version.txt
 
-  plugins:
-    name: Plugins
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+  plugin:
+    name: Plugin
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
+        plugin:
+          - runc
+          - containerd
+          - crio
+          - kata
+          - cloud-hypervisor
+          - k8s
+          - storage/cedana
+          - storage/s3
+          - storage/gcs
         arch:
           - amd64
           - arm64
-    if: inputs.plugins
+    if: inputs.plugins || inputs.image
+    container:
+      image: golang:1.25rc3-bullseye
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
       - uses: actions/checkout@v4
@@ -130,29 +144,32 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
+      - name: Set plugin name
+        env:
+          PLUGIN: ${{ matrix.plugin }}
+        run: |
+          PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
+          echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
 
       - name: Build
+        env:
+          PLUGIN: ${{ env.PLUGIN }}
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make plugins VERSION=$VERSION -j $(nproc)
-          echo $VERSION > ./plugins-version.txt
+          make ${PWD}/libcedana-${PLUGIN}.so VERSION=$VERSION -j $(nproc)
+          echo $VERSION > ./plugin-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
             ./libcedana-*.so
-            ./plugins-version.txt
+            ./plugin-version.txt
 
   image:
     name: Image
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
@@ -160,6 +177,7 @@ jobs:
           - amd64
           - arm64
     if: inputs.image
+    needs: [cedana, plugin]
     permissions:
       contents: read
       packages: write
@@ -173,6 +191,17 @@ jobs:
           fetch-tags: true
           submodules: recursive
           token: ${{ secrets.GIT_CI_PAT }}
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana-${{ matrix.arch }}
+
+      - name: Download k8s plugin
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plugin-${{ matrix.arch }}-k8s
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -196,6 +225,9 @@ jobs:
         with:
           limit-access-to-actor: true
 
+      # XXX: We simply build with PREBUILT_BINARIES=1 to avoid any build environment-related
+      # compatibility issues with Go plugins.
+
       - name: Build and generate manifest
         id: build
         uses: docker/build-push-action@v6
@@ -204,6 +236,10 @@ jobs:
           push: true
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PREBUILT_BINARIES=1
+            ALL_PLUGINS=0
+            VERSION=${{ github.head_ref || github.ref_name }}
           outputs: |
             type=image,name=${{ inputs.image_name }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=s3,blobs_prefix=cache/${{ github.repository }}/,manifests_prefix=cache/${{ github.repository }}/${{ matrix.arch }},region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
@@ -234,7 +270,7 @@ jobs:
 
   test_image:
     name: Test Image
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-16g-${{ matrix.arch }}/tag=${{ matrix.tag }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/tag=${{ matrix.tag }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:

@@ -12,6 +12,7 @@ load_lib assert
 load_lib file
 
 setup_file() {
+    cedana plugin install containerd/runtime-runc
     do_once pull_images
     setup_file_daemon
 }
@@ -37,7 +38,7 @@ teardown_file() {
     log_file="/var/log/cedana-output-$jid.log"
     image="docker.io/library/alpine:latest"
 
-    cedana run containerd --image "$image" --jid "$jid" -- "$jid" echo hello
+    cedana run containerd --jid "$jid" -- "$image" echo hello
 
     assert_exists "$log_file"
     assert_file_contains "$log_file" "hello"
@@ -52,7 +53,7 @@ teardown_file() {
     jid=$(unix_nano)
     image="docker.io/library/alpine:latest"
 
-    run cedana run containerd --image "$image" --jid "$jid" --attach -- "$jid" echo hello
+    run cedana run containerd --jid "$jid" --attach -- "$image" echo hello
     assert_success
     assert_output --partial "hello"
 }
@@ -63,7 +64,7 @@ teardown_file() {
     code=42
     image="docker.io/library/alpine:latest"
 
-    run cedana run containerd --image "$image" --jid "$jid" --attach -- "$jid" sh -c "exit $code"
+    run cedana run containerd --jid "$jid" --attach -- "$image" sh -c "exit $code"
     assert_equal $status $code
 }
 
@@ -149,7 +150,7 @@ teardown_file() {
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
 
-    cedana run containerd --image "$image" --jid "$jid"
+    cedana run containerd --jid "$jid" "$image"
 
     sleep 3
 
@@ -167,7 +168,7 @@ teardown_file() {
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
 
-    cedana run containerd --image "$image" --jid "$jid" --attach &
+    cedana run containerd --jid "$jid" --attach "$image" &
 
     sleep 3
 

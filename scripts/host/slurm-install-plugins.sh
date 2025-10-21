@@ -14,16 +14,30 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 source "$DIR"/utils.sh
 
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
+CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_PLUGINS_SLURM_VERSION=${CEDANA_PLUGINS_SLURM_VERSION:-"latest"}
+CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
-# NOTE: Native plugins like k8s, runc, containerd, are already installed in the image
-PLUGINS="
+PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
-    slurm@$CEDANA_PLUGINS_SLURM_VERSION \
-    streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
+    slurm@$CEDANA_PLUGINS_SLURM_VERSION"
+
+# check if a storage plugin is required
+if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
+    PLUGINS="$PLUGINS storage/cedana@$CEDANA_PLUGINS_NATIVE_VERSION"
+elif [[ "$CEDANA_CHECKPOINT_DIR" == s3://* ]]; then
+    PLUGINS="$PLUGINS storage/s3@$CEDANA_PLUGINS_NATIVE_VERSION"
+elif [[ "$CEDANA_CHECKPOINT_DIR" == gcs://* ]]; then
+    PLUGINS="$PLUGINS storage/gcs@$CEDANA_PLUGINS_NATIVE_VERSION"
+fi
+
+# check if streamer plugin is required
+if [ "$CEDANA_CHECKPOINT_STREAMS" -gt 0 ]; then
+    PLUGINS="$PLUGINS streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
+fi
 
 # if gpu driver present then add gpu plugin
 if [ -f /.dockerenv ]; then # For tests inside a container
@@ -75,8 +89,8 @@ echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
 # Add the slurm plugin to SLURM's plugin config
 echo "Configuring the Cedana SLURM plugin..."
 if ! grep -q "optional /usr/lib64/slurm/libcedana-slurm.so" /etc/slurm/plugstack.conf; then \
-    echo "Adding plugin to /etc/slurm/plugstack.conf"; \
-    echo "optional /usr/lib64/slurm/libcedana-slurm.so" | sudo tee -a /etc/slurm/plugstack.conf > /dev/null; \
-else \
-    echo "Plugin entry already exists in /etc/slurm/plugstack.conf"; \
-fi
+        echo "Adding plugin to /etc/slurm/plugstack.conf"; \
+        echo "optional /usr/lib64/slurm/libcedana-slurm.so" | sudo tee -a /etc/slurm/plugstack.conf > /dev/null; \
+    else \
+        echo "Plugin entry already exists in /etc/slurm/plugstack.conf"; \
+    fi

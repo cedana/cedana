@@ -34,12 +34,7 @@ on:
         type: string
         description: "Runner machine for tests"
         required: false
-        default: 4cpu-16g-1xT4
-      runner_arm64:
-        type: string
-        description: "Runner machine for tests (arm64)"
-        required: false
-        default: 8cpu-16g-1xT4G
+        default: 4cpu-1gpu
       post_summary:
         type: boolean
         description: "Post test summary"
@@ -47,13 +42,13 @@ on:
         default: false
 
 env:
-  HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
   FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging
@@ -61,7 +56,7 @@ env:
 jobs:
   cuda:
     name: CUDA
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.arch == 'amd64' && inputs.runner || inputs.runner_arm64 }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/tag=${{ matrix.cr }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{  inputs.runner }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/tag=${{ matrix.cr }}/extras=s3-cache
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -100,7 +95,8 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
         if: ${{ matrix.cr == 'streamer' }}
@@ -220,8 +216,6 @@ jobs:
           - amd64
           - arm64
     steps:
-      - uses: runs-on/action@v1
-
       - name: Download report
         id: download-report
         uses: actions/download-artifact@v4

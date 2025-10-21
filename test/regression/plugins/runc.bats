@@ -12,6 +12,10 @@ load_lib assert
 load_lib file
 
 setup_file() {
+    # TODO: remove manage-cgroups once runc plugin does not force a cgroupRoot
+    # on detecting a NET PID for k8s
+    export CEDANA_CRIU_MANAGE_CGROUPS="default"
+
     setup_file_daemon
     do_once setup_rootfs
 }
