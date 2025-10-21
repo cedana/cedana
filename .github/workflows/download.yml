@@ -128,6 +128,7 @@ jobs:
         arch:
           - amd64
           - arm64
+      max-parallel: 2 # to avoid unknown cloudsmith failures
     steps:
       - name: Set plugin name
         env:
