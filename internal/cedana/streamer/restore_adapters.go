@@ -78,7 +78,7 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 			// Setup filesystem that can be used by future adapters to directly read files from the checkpoint
 
 			streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
-			var waitForIO func() error
+			var waitForIO func() (int64, error)
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
 				streamerCtx,
 				imgStreamer.BinaryPaths()[0],
@@ -99,9 +99,10 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 			}
 
 			// Wait for all the streaming to finish
-			_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
-			err = waitForIO()
+			ctx, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
+			n, err := waitForIO()
 			end()
+			profiling.AddIO(ctx, n)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)
 			}

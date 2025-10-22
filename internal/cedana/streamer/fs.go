@@ -66,7 +66,7 @@ func NewStreamingFs(
 	streams int32,
 	mode Mode,
 	compressions ...string,
-) (fs *Fs, wait func() error, err error) {
+) (fs *Fs, wait func() (int64, error), err error) {
 	if streams < 1 {
 		return nil, nil, fmt.Errorf("invalid number of streams: %d", streams)
 	}
@@ -96,6 +96,7 @@ func NewStreamingFs(
 	io := &sync.WaitGroup{}
 	io.Add(int(streams))
 	ioErr := make(chan error, streams)
+	ioBytes := make(chan int64, streams)
 	paths, err := imgPaths(storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
@@ -118,7 +119,8 @@ func NewStreamingFs(
 					ioErr <- file.Close()
 				}()
 
-				_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
+				n, err := cedana_io.ReadFrom(file, writeFds[i], compression)
+				ioBytes <- n
 				writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -141,7 +143,8 @@ func NewStreamingFs(
 					ioErr <- file.Close()
 				}()
 
-				_, err = cedana_io.WriteTo(readFds[i], file, compression)
+				n, err := cedana_io.WriteTo(readFds[i], file, compression)
+				ioBytes <- n
 				readFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -244,20 +247,25 @@ func NewStreamingFs(
 	fs.conn = conn.(*net.UnixConn)
 	log.Debug().Msg("streamer connected")
 
-	wait = func() error {
+	wait = func() (int64, error) {
 		// Stop the listener, and wait for all IO to finish
 		// NOTE: The order of below operations is important.
 		fs.stopListener()
 		fs.conn.Close()
 		io.Wait()
 		close(ioErr)
+		close(ioBytes)
 		cmd.Process.Signal(syscall.SIGTERM)
 		wg.Wait()
 		var err error
+		var totalBytes int64
 		for e := range ioErr {
 			err = errors.Join(err, e)
 		}
-		return err
+		for b := range ioBytes {
+			totalBytes += b
+		}
+		return totalBytes, err
 	}
 
 	return fs, wait, nil

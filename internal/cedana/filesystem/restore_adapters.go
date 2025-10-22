@@ -72,9 +72,9 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 
 			log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
 
-			_, end := profiling.StartTimingCategory(ctx, "storage", io.Untar)
+			tarball = profiling.IOCategory(ctx, tarball, "storage", io.Untar)
+
 			err = io.Untar(tarball, imagesDirectory, compression)
-			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
 			}

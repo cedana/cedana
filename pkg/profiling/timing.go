@@ -51,7 +51,7 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 
 	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, data)
 
-	return
+	return childCtx, end
 }
 
 // StartTimingComponent starts a timer and returns a function that should be called to end the timer.
@@ -92,7 +92,7 @@ func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Conte
 		log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
 	}
 
-	return
+	return childCtx, end
 }
 
 // AddTimingComponent is just like StartTimingComponent, but for adding a duration directly.
@@ -121,7 +121,7 @@ func AddTimingComponent(ctx context.Context, duration time.Duration, f ...any) (
 	childCtx = context.WithValue(ctx, keys.PROFILING_CONTEXT_KEY, component)
 	log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
 
-	return
+	return childCtx
 }
 
 // StartTimingCategory starts a timer and returns a function that should be called to end the timer.
@@ -180,7 +180,7 @@ func StartTimingCategory(ctx context.Context, category string, f ...any) (childC
 
 	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, childComponent)
 
-	return
+	return childCtx, end
 }
 
 // LogDuration logs the elapsed time since start.
