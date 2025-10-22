@@ -39,7 +39,6 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 
 	if len(os.Args) > 0 && strings.HasPrefix(os.Args[1], "plugin") {
 		// Skip loading plugins when running plugin management commands
-		fmt.Println("Skipping plugin loading for plugin management command")
 		return nil
 	}
 
