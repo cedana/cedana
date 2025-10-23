@@ -12,7 +12,6 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -99,10 +98,9 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 
 			path := req.Dir + "/" + req.Name // do not use filepath.Join as it removes a slash
 
-			streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
-			var waitForIO func() (int64, error)
+			var waitForIO func() error
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
-				streamerCtx,
+				ctx,
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
 				storage,
@@ -111,7 +109,6 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				WRITE_ONLY,
 				compression,
 			)
-			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
@@ -121,11 +118,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`.
 
 			defer func() {
-				ctx, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
-				n, ioErr := waitForIO()
-				end()
-				profiling.AddIO(ctx, n)
-				err = errors.Join(err, ioErr)
+				err = errors.Join(err, waitForIO())
 			}()
 
 			resp.Paths = append(resp.Paths, path)

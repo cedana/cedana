@@ -13,6 +13,8 @@ type Data struct {
 	Duration int64 `json:"duration,omitempty"`
 	IO       int64 `json:"io,omitempty"`
 	// add more othogonal fields here as needed
+
+	Parallel bool `json:"parallel,omitempty"`
 }
 
 // FlattenData flattens the profiling data into a single list of components.
@@ -24,7 +26,9 @@ func FlattenData(data *Data) {
 	for i := range length {
 		component := data.Components[i]
 
-		data.Duration -= component.Duration
+		if !component.Parallel { // only consider duration of serial components in calculating remainder
+			data.Duration -= component.Duration
+		}
 
 		FlattenData(component)
 

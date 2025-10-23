@@ -19,6 +19,7 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/gofrs/flock"
@@ -478,7 +479,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 			log.Debug().Msg("GPU restore starting")
 
-			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
+			resp, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
 				log.Error().Err(err).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
@@ -489,10 +490,11 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
 			// the restore happens inside a goroutine, the timing components belong to the restore goroutine (concurrent).
 
-			// copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
-			// replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond
-			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
-			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
+			copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
+			replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond
+			profiling.AddTimingParallelComponent(ctx, copyMemTime, "CopyMemory")
+			profiling.AddTimingParallelComponent(ctx, replayCallsTime, "ReplayCalls")
+      log.Error().Dur("CopyMemory", copyMemTime).Dur("ReplayCalls", replayCallsTime).Msg("GPU restore timings")
 		}()
 		if PARALLEL_RESTORE {
 			return nil

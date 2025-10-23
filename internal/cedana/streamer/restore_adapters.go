@@ -7,7 +7,6 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/plugins"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -77,10 +76,9 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 
 			// Setup filesystem that can be used by future adapters to directly read files from the checkpoint
 
-			streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
-			var waitForIO func() (int64, error)
+			var waitForIO func() error
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
-				streamerCtx,
+				ctx,
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
 				storage,
@@ -88,7 +86,6 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				streams,
 				READ_ONLY,
 			)
-			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
@@ -99,10 +96,7 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 			}
 
 			// Wait for all the streaming to finish
-			ctx, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
-			n, err := waitForIO()
-			end()
-			profiling.AddIO(ctx, n)
+			err = waitForIO()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)
 			}

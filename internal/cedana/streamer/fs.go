@@ -18,6 +18,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
@@ -66,7 +67,10 @@ func NewStreamingFs(
 	streams int32,
 	mode Mode,
 	compressions ...string,
-) (fs *Fs, wait func() (int64, error), err error) {
+) (fs *Fs, wait func() error, err error) {
+	ctx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
+	defer end()
+
 	if streams < 1 {
 		return nil, nil, fmt.Errorf("invalid number of streams: %d", streams)
 	}
@@ -96,7 +100,6 @@ func NewStreamingFs(
 	io := &sync.WaitGroup{}
 	io.Add(int(streams))
 	ioErr := make(chan error, streams)
-	ioBytes := make(chan int64, streams)
 	paths, err := imgPaths(storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
@@ -119,8 +122,15 @@ func NewStreamingFs(
 					ioErr <- file.Close()
 				}()
 
-				n, err := cedana_io.ReadFrom(file, writeFds[i], compression)
-				ioBytes <- n
+				file = profiling.IOParallelCategory(
+					ctx,
+					file,
+					"storage",
+					cedana_io.ReadFrom,
+					fmt.Sprintf("shard-%d", i),
+					compression,
+				)
+				_, err := cedana_io.ReadFrom(file, writeFds[i], compression)
 				writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -143,8 +153,15 @@ func NewStreamingFs(
 					ioErr <- file.Close()
 				}()
 
-				n, err := cedana_io.WriteTo(readFds[i], file, compression)
-				ioBytes <- n
+				file = profiling.IOParallelCategory(
+					ctx,
+					file,
+					"storage",
+					cedana_io.WriteTo,
+					fmt.Sprintf("shard-%d", i),
+					compression,
+				)
+				_, err := cedana_io.WriteTo(readFds[i], file, compression)
 				readFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -247,25 +264,20 @@ func NewStreamingFs(
 	fs.conn = conn.(*net.UnixConn)
 	log.Debug().Msg("streamer connected")
 
-	wait = func() (int64, error) {
+	wait = func() error {
 		// Stop the listener, and wait for all IO to finish
 		// NOTE: The order of below operations is important.
 		fs.stopListener()
 		fs.conn.Close()
 		io.Wait()
 		close(ioErr)
-		close(ioBytes)
 		cmd.Process.Signal(syscall.SIGTERM)
 		wg.Wait()
 		var err error
-		var totalBytes int64
 		for e := range ioErr {
 			err = errors.Join(err, e)
 		}
-		for b := range ioBytes {
-			totalBytes += b
-		}
-		return totalBytes, err
+		return err
 	}
 
 	return fs, wait, nil

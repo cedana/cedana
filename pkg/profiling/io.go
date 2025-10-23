@@ -3,13 +3,10 @@ package profiling
 import (
 	"context"
 	"io"
-	"reflect"
-	"runtime"
 	"time"
 
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/metrics"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 )
@@ -93,18 +90,7 @@ func IO[T any](ctx context.Context, w T, f ...any) T {
 		data = &Data{}
 	}
 
-	if data.Name == "" {
-		var pc uintptr
-		if len(f) == 0 {
-			pc, _, _, _ = runtime.Caller(1)
-			data.Name = utils.FunctionName(pc)
-		} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
-			pc = reflect.ValueOf(f[0]).Pointer()
-			data.Name = utils.FunctionName(pc)
-		} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
-			data.Name = f[0].(string)
-		}
-	}
+	data.Name = getName(f...)
 
 	start := time.Now()
 	_, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, data.Name)
@@ -145,19 +131,46 @@ func IOComponent[T any](ctx context.Context, w T, f ...any) T {
 		return w
 	}
 
-	var pc uintptr
-	var name string
-	if len(f) == 0 {
-		pc, _, _, _ = runtime.Caller(1)
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
-		pc = reflect.ValueOf(f[0]).Pointer()
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
-		name = f[0].(string)
+	component := &Data{Name: getName(f...)}
+	data.Components = append(data.Components, component)
+
+	start := time.Now()
+	_, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, component.Name)
+
+	end := func() {
+		duration := time.Since(start)
+		span.End()
+		component.Duration = duration.Nanoseconds()
+
+		log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
 	}
 
-	component := &Data{Name: name}
+	common := commonWrapper{
+		data: component,
+		end:  end,
+	}
+
+	switch v := any(w).(type) {
+	case io.ReadWriteCloser:
+		return any(&readWriteCloser{commonWrapper: common, w: v}).(T)
+	case io.ReadCloser:
+		return any(&readCloser{commonWrapper: common, rc: v}).(T)
+	case io.WriteCloser:
+		return any(&writeCloser{commonWrapper: common, wc: v}).(T)
+	default:
+		log.Trace().Str("in", component.Name).Msgf("unsupported io type %T", w)
+		return w
+	}
+}
+
+func IOParallelComponent[T any](ctx context.Context, w T, f ...any) T {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return w
+	}
+
+	component := &Data{Name: getName(f...), Parallel: true}
 	data.Components = append(data.Components, component)
 
 	start := time.Now()
@@ -214,19 +227,7 @@ func IOCategory[T any](ctx context.Context, w T, category string, f ...any) T {
 		data.Components = append(data.Components, categoryComponent)
 	}
 
-	var pc uintptr
-	var name string
-	if len(f) == 0 {
-		pc, _, _, _ = runtime.Caller(1)
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
-		pc = reflect.ValueOf(f[0]).Pointer()
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
-		name = f[0].(string)
-	}
-
-	childComponent := &Data{Name: name}
+	childComponent := &Data{Name: getName(f...)}
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	start := time.Now()
@@ -236,6 +237,61 @@ func IOCategory[T any](ctx context.Context, w T, category string, f ...any) T {
 		duration := time.Since(start)
 		span.End()
 		categoryComponent.Duration += duration.Nanoseconds()
+		childComponent.Duration = duration.Nanoseconds()
+
+		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
+	}
+
+	common := commonWrapper{
+		data: childComponent,
+		end:  end,
+	}
+
+	switch v := any(w).(type) {
+	case io.ReadWriteCloser:
+		return any(&readWriteCloser{commonWrapper: common, w: v}).(T)
+	case io.ReadCloser:
+		return any(&readCloser{commonWrapper: common, rc: v}).(T)
+	case io.WriteCloser:
+		return any(&writeCloser{commonWrapper: common, wc: v}).(T)
+	default:
+		log.Trace().Str("in", category).Msgf("unsupported io type %T", w)
+		return w
+	}
+}
+
+func IOParallelCategory[T any](ctx context.Context, w T, category string, f ...any) T {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return w
+	}
+
+	var categoryComponent *Data
+	// Add to existing category component if it exists
+	for _, component := range data.Components {
+		if component.Name == category {
+			categoryComponent = component
+			break
+		}
+	}
+	if categoryComponent == nil {
+		categoryComponent = &Data{
+			Name: category,
+		}
+		data.Components = append(data.Components, categoryComponent)
+	}
+
+	childComponent := &Data{Name: getName(f...), Parallel: true}
+	categoryComponent.Components = append(categoryComponent.Components, childComponent)
+
+	start := time.Now()
+	_, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, childComponent.Name)
+
+	end := func() {
+		duration := time.Since(start)
+		span.End()
+		// Don't count parallel durations towards the category total
 		childComponent.Duration = duration.Nanoseconds()
 
 		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
@@ -275,19 +331,7 @@ func AddIOComponent(ctx context.Context, n int64, f ...any) {
 		return
 	}
 
-	var pc uintptr
-	var name string
-	if len(f) == 0 {
-		pc, _, _, _ = runtime.Caller(1)
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
-		pc = reflect.ValueOf(f[0]).Pointer()
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
-		name = f[0].(string)
-	}
-
-	component := &Data{Name: name}
+	component := &Data{Name: getName(f...)}
 	data.Components = append(data.Components, component)
 	component.IO += n
 

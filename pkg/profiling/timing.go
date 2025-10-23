@@ -25,18 +25,7 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 		data = &Data{}
 	}
 
-	if data.Name == "" {
-		var pc uintptr
-		if len(f) == 0 {
-			pc, _, _, _ = runtime.Caller(1)
-			data.Name = utils.FunctionName(pc)
-		} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
-			pc = reflect.ValueOf(f[0]).Pointer()
-			data.Name = utils.FunctionName(pc)
-		} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
-			data.Name = f[0].(string)
-		}
-	}
+	data.Name = getName(f...)
 
 	start := time.Now()
 	childCtx, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, data.Name)
@@ -65,19 +54,7 @@ func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Conte
 		return ctx, func() {}
 	}
 
-	var pc uintptr
-	var name string
-	if len(f) == 0 {
-		pc, _, _, _ = runtime.Caller(1)
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
-		pc = reflect.ValueOf(f[0]).Pointer()
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
-		name = f[0].(string)
-	}
-
-	component := &Data{Name: name}
+	component := &Data{Name: getName(f...)}
 	data.Components = append(data.Components, component)
 
 	start := time.Now()
@@ -95,33 +72,29 @@ func StartTimingComponent(ctx context.Context, f ...any) (childCtx context.Conte
 	return childCtx, end
 }
 
-// AddTimingComponent is just like StartTimingComponent, but for adding a duration directly.
-func AddTimingComponent(ctx context.Context, duration time.Duration, f ...any) (childCtx context.Context) {
+func StartTimingParallelComponent(ctx context.Context, f ...any) (childCtx context.Context, end func()) {
 	var data *Data
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
 	if !ok {
-		return ctx
+		return ctx, func() {}
 	}
 
-	var pc uintptr
-	var name string
-	if len(f) == 0 {
-		pc, _, _, _ = runtime.Caller(1)
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
-		pc = reflect.ValueOf(f[0]).Pointer()
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
-		name = f[0].(string)
-	}
-
-	component := &Data{Name: name, Duration: duration.Nanoseconds()}
+	component := &Data{Name: getName(f...), Parallel: true}
 	data.Components = append(data.Components, component)
 
-	childCtx = context.WithValue(ctx, keys.PROFILING_CONTEXT_KEY, component)
-	log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
+	start := time.Now()
+	childCtx, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, component.Name)
+	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, component)
 
-	return childCtx
+	end = func() {
+		duration := time.Since(start)
+		span.End()
+		component.Duration = duration.Nanoseconds()
+
+		log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
+	}
+
+	return childCtx, end
 }
 
 // StartTimingCategory starts a timer and returns a function that should be called to end the timer.
@@ -151,19 +124,7 @@ func StartTimingCategory(ctx context.Context, category string, f ...any) (childC
 		data.Components = append(data.Components, categoryComponent)
 	}
 
-	var pc uintptr
-	var name string
-	if len(f) == 0 {
-		pc, _, _, _ = runtime.Caller(1)
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.Func {
-		pc = reflect.ValueOf(f[0]).Pointer()
-		name = utils.FunctionName(pc)
-	} else if reflect.TypeOf(f[0]).Kind() == reflect.String {
-		name = f[0].(string)
-	}
-
-	childComponent := &Data{Name: name}
+	childComponent := &Data{Name: getName(f...)}
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	start := time.Now()
@@ -181,6 +142,81 @@ func StartTimingCategory(ctx context.Context, category string, f ...any) (childC
 	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, childComponent)
 
 	return childCtx, end
+}
+
+func StartTimingParallelCategory(ctx context.Context, category string, f ...any) (childCtx context.Context, end func()) {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return ctx, func() {}
+	}
+
+	var categoryComponent *Data
+	// Add to existing category component if it exists
+	for _, component := range data.Components {
+		if component.Name == category {
+			categoryComponent = component
+			break
+		}
+	}
+	if categoryComponent == nil {
+		categoryComponent = &Data{
+			Name: category,
+		}
+		data.Components = append(data.Components, categoryComponent)
+	}
+
+	childComponent := &Data{Name: getName(f...), Parallel: true}
+	categoryComponent.Components = append(categoryComponent.Components, childComponent)
+
+	start := time.Now()
+	childCtx, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, childComponent.Name)
+
+	end = func() {
+		duration := time.Since(start)
+		span.End()
+		// Don't count parallel durations towards the category total
+		childComponent.Duration = duration.Nanoseconds()
+
+		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
+	}
+
+	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, childComponent)
+
+	return childCtx, end
+}
+
+// AddTimingComponent is just like StartTimingComponent, but for adding a duration directly.
+func AddTimingComponent(ctx context.Context, duration time.Duration, f ...any) (childCtx context.Context) {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return ctx
+	}
+
+	component := &Data{Name: getName(f...), Duration: duration.Nanoseconds()}
+	data.Components = append(data.Components, component)
+
+	childCtx = context.WithValue(ctx, keys.PROFILING_CONTEXT_KEY, component)
+	log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
+
+	return childCtx
+}
+
+func AddTimingParallelComponent(ctx context.Context, duration time.Duration, f ...any) (childCtx context.Context) {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return ctx
+	}
+
+	component := &Data{Name: getName(f...), Duration: duration.Nanoseconds(), Parallel: true}
+	data.Components = append(data.Components, component)
+
+	childCtx = context.WithValue(ctx, keys.PROFILING_CONTEXT_KEY, component)
+	log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
+
+	return childCtx
 }
 
 // LogDuration logs the elapsed time since start.
@@ -215,4 +251,31 @@ func DurationStr(d time.Duration, precision string) string {
 
 	// auto
 	return d.String()
+}
+
+///////////////
+/// HELPERS ///
+///////////////
+
+func getName(f ...any) string {
+	var name string
+	if len(f) == 0 {
+		pc, _, _, _ := runtime.Caller(2)
+		name = utils.FunctionName(pc)
+	} else {
+		var tags []string
+		for _, f := range f {
+			if reflect.TypeOf(f).Kind() == reflect.Func {
+				pc := reflect.ValueOf(f).Pointer()
+				tags = append(tags, utils.FunctionName(pc))
+			} else if reflect.TypeOf(f).Kind() == reflect.String {
+				tags = append(tags, f.(string))
+			}
+		}
+		name = tags[0]
+		if len(tags) > 1 {
+			name = fmt.Sprintf("%s (%s)", name, utils.StrList(tags[1:]))
+		}
+	}
+	return name
 }

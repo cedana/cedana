@@ -110,8 +110,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
-				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar)
-
+				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
 				err = io.Tar(imagesDirectory, tarball, compression)
 				if err != nil {
 					storage.Delete(path)

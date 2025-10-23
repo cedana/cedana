@@ -377,6 +377,9 @@ func (es *EventStream) publishCheckpoint(
 	if profiling != nil {
 		totalDuration := profiling.Duration
 		for _, component := range profiling.Components {
+			if component.Parallel {
+				continue
+			}
 			totalDuration += component.Duration
 		}
 		profilingInfo := profilingInfo{

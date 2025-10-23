@@ -56,7 +56,12 @@ func printProfilingData(data *profiling.Data) {
 		}, categoryName)
 
 		duration := time.Duration(p.Duration)
-		totalDuration += duration
+		durationStr := profiling.DurationStr(duration, precision)
+		if p.Parallel {
+			durationStr = style.DisabledColors.Sprint("├──" + durationStr)
+		} else {
+			totalDuration += duration // Don't count parallel durations towards total
+		}
 		totalIO += p.IO
 
 		if categoryName != "" {
@@ -68,7 +73,7 @@ func printProfilingData(data *profiling.Data) {
 		}
 
 		tableWriter.AppendRow([]any{
-			profiling.DurationStr(duration, precision),
+			durationStr,
 			category,
 			utils.SizeStr(p.IO),
 			style.DisabledColors.Sprint(name),
