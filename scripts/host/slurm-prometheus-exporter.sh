@@ -22,7 +22,7 @@ COLLECT_DIAGS="${DEFAULT_COLLECT_DIAGS}"
 COLLECT_LICENSES="${DEFAULT_COLLECT_LICENSES}"
 COLLECT_LIMITS="${DEFAULT_COLLECT_LIMITS}"
 
-VECTOR_INSTALL_DIR="$HOME/.vector"
+VECTOR_INSTALL_DIR="/usr/local"
 VECTOR_CONFIG_DIR="/etc/vector"
 VECTOR_DATA_DIR="/var/lib/vector"
 
@@ -494,7 +494,7 @@ install_vector() {
     
     echo "Downloading and installing Vector.dev..."
     
-    if curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y; then
+    if curl --proto '=https' --tlsv1.2 -sSfL https://sh.vector.dev | bash -s -- -y --prefix /usr/local; then
         echo "✓ Vector installed successfully"
         
         if [ -f ~/.profile ]; then
@@ -527,9 +527,6 @@ start_vector() {
     echo "Starting Vector.dev..."
     
     local config_file="${VECTOR_CONFIG_DIR}/vector.yaml"
-    if [ "$EUID" -ne 0 ]; then
-        config_file="${HOME}/.vector/vector.yaml"
-    fi
     
     if [ ! -f "$config_file" ]; then
         echo "ERROR: Vector configuration file not found: $config_file" >&2
@@ -553,10 +550,7 @@ start_vector() {
         return 1
     fi
     
-    local log_file="${HOME}/vector.log"
-    if [ "$EUID" -eq 0 ]; then
-        log_file="/var/log/vector.log"
-    fi
+    local log_file="/var/log/vector.log"
     
     echo "Starting Vector with config: $config_file"
     echo "Logs will be written to: $log_file"
@@ -586,16 +580,11 @@ create_vector_config() {
         mkdir -p "$VECTOR_CONFIG_DIR"
         mkdir -p "$VECTOR_DATA_DIR"
     else
-        echo "Note: Using user-level config directory"
-        config_file="${HOME}/.vector/vector.yaml"
-        mkdir -p "$(dirname "$config_file")"
-        mkdir -p "${HOME}/.vector/data"
+        echo "Creating Vector configuration requires root privileges. Please run with sudo." >&2
+        return 1
     fi
     
     local data_dir="$VECTOR_DATA_DIR"
-    if [ "$EUID" -ne 0 ]; then
-        data_dir="${HOME}/.vector/data"
-    fi
     
     cat > "$config_file" << EOF
 # Vector.dev configuration for SLURM Prometheus Exporter
@@ -669,7 +658,7 @@ EOF
     fi
     
     if [ "$EUID" -eq 0 ]; then
-        chown -R $(logname 2>/dev/null || echo $SUDO_USER):$(logname 2>/dev/null || echo $SUDO_USER) "$VECTOR_CONFIG_DIR" 2>/dev/null || true
+        chown -R root:root "$VECTOR_CONFIG_DIR" 2>/dev/null || true
     fi
     
     echo "✓ Vector configuration created: $config_file"
@@ -754,6 +743,25 @@ uninstall() {
     if pgrep -f prometheus-slurm-exporter >/dev/null 2>&1; then
         echo "Stopping any running prometheus-slurm-exporter processes..."
         pkill -f prometheus-slurm-exporter || true
+    fi
+    
+    if pgrep -f "vector --config" >/dev/null 2>&1; then
+        echo "Stopping Vector processes..."
+        pkill -f "vector --config" || true
+    fi
+    
+    read -p "Remove Vector installation? [y/N]: " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo "Removing Vector installation..."
+        rm -rf /usr/local/bin/vector
+        rm -rf /usr/local/share/vector
+        rm -rf /etc/vector
+        rm -rf /var/lib/vector
+        rm -f /var/log/vector.log
+        echo "Vector removed."
+    else
+        echo "Keeping Vector installation"
     fi
     
     read -p "Remove Go installation? [y/N]: " -n 1 -r
@@ -1107,15 +1115,11 @@ if install_vector; then
         echo "✓ Vector configuration created!"
         echo ""
         
-        if [ -z "$VECTOR_BUCKET" ] || [ -z "$VECTOR_ENDPOINT" ] || [ -z "$VECTOR_ACCESS_KEY" ] || [ -z "$VECTOR_SECRET_KEY" ]; then
+        if [ -z "$VECTOR_BUCKET" ] || [ -z "$VECTOR_ACCESS_KEY" ] || [ -z "$VECTOR_SECRET_KEY" ]; then
             echo "⚠ Vector configuration created with placeholders"
             echo ""
             echo "To complete setup, update the configuration file with your S3 storage credentials:"
-            if [ "$EUID" -eq 0 ]; then
-                echo "   Edit: /etc/vector/vector.yaml"
-            else
-                echo "   Edit: $HOME/.vector/vector.yaml"
-            fi
+            echo "   Edit: /etc/vector/vector.yaml"
             echo ""
             echo "Set the following values:"
             echo "   - bucket: your-bucket-name"
@@ -1127,17 +1131,9 @@ if install_vector; then
             echo ""
             echo "After configuring, start Vector manually:"
             if command -v vector &>/dev/null; then
-                if [ "$EUID" -eq 0 ]; then
-                    echo "   vector --config /etc/vector/vector.yaml &"
-                else
-                    echo "   vector --config $HOME/.vector/vector.yaml &"
-                fi
+                echo "   vector --config /etc/vector/vector.yaml &"
             else
-                if [ "$EUID" -eq 0 ]; then
-                    echo "   $VECTOR_INSTALL_DIR/bin/vector --config /etc/vector/vector.yaml &"
-                else
-                    echo "   $VECTOR_INSTALL_DIR/bin/vector --config $HOME/.vector/vector.yaml &"
-                fi
+                echo "   $VECTOR_INSTALL_DIR/bin/vector --config /etc/vector/vector.yaml &"
             fi
         else
             echo "✓ Vector is fully configured and ready to use!"
@@ -1152,15 +1148,16 @@ if install_vector; then
                 echo ""
                 echo "Metrics will be scraped every 60 seconds and uploaded to:"
                 echo "  Bucket: $VECTOR_BUCKET"
-                echo "  Endpoint: $VECTOR_ENDPOINT"
+                if [ -n "$VECTOR_ENDPOINT" ]; then
+                    echo "  Endpoint: $VECTOR_ENDPOINT"
+                else
+                    echo "  Endpoint: AWS S3 (auto-detected from region)"
+                fi
+                echo "  Region: $VECTOR_REGION"
                 echo "  Path: metrics/YYYY/MM/DD/YYYYMMDD-HHMMSS.json"
                 echo ""
                 echo "Check Vector logs:"
-                if [ "$EUID" -eq 0 ]; then
-                    echo "  tail -f /var/log/vector.log"
-                else
-                    echo "  tail -f $HOME/vector.log"
-                fi
+                echo "  tail -f /var/log/vector.log"
                 echo ""
                 echo "Stop Vector:"
                 echo "  pkill -f 'vector --config'"
@@ -1169,17 +1166,9 @@ if install_vector; then
                 echo "⚠ Vector failed to start automatically"
                 echo "You can start it manually:"
                 if command -v vector &>/dev/null; then
-                    if [ "$EUID" -eq 0 ]; then
-                        echo "  nohup vector --config /etc/vector/vector.yaml > /var/log/vector.log 2>&1 &"
-                    else
-                        echo "  nohup vector --config $HOME/.vector/vector.yaml > $HOME/vector.log 2>&1 &"
-                    fi
+                    echo "  nohup vector --config /etc/vector/vector.yaml > /var/log/vector.log 2>&1 &"
                 else
-                    if [ "$EUID" -eq 0 ]; then
-                        echo "  nohup $VECTOR_INSTALL_DIR/bin/vector --config /etc/vector/vector.yaml > /var/log/vector.log 2>&1 &"
-                    else
-                        echo "  nohup $VECTOR_INSTALL_DIR/bin/vector --config $HOME/.vector/vector.yaml > $HOME/vector.log 2>&1 &"
-                    fi
+                    echo "  nohup $VECTOR_INSTALL_DIR/bin/vector --config /etc/vector/vector.yaml > /var/log/vector.log 2>&1 &"
                 fi
             fi
         fi
@@ -1190,8 +1179,8 @@ if install_vector; then
     fi
     
     echo ""
-    echo "Note: Vector is installed in user directory ($VECTOR_INSTALL_DIR)"
-    echo "      You may need to source ~/.profile in new shells"
+    echo "Note: Vector is installed in $VECTOR_INSTALL_DIR"
+    echo "      The 'vector' command should be globally available"
 else
     echo ""
     echo "✗ Vector.dev installation failed"
