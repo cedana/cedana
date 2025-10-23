@@ -65,7 +65,9 @@ func printProfilingData(data *profiling.Data) {
 		totalIO += p.IO
 
 		if categoryName != "" {
-			categoryDuration[category] += duration
+			if !p.Parallel {
+				categoryDuration[category] += duration
+			}
 			categoryIO[category] += p.IO
 		} else {
 			categoryDuration[style.DisabledColors.Sprint("other")] += duration
