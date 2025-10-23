@@ -61,7 +61,7 @@ func CleanData(data *Data) {
 
 		CleanData(component)
 
-		if component.Duration == 0 && component.Name == "" {
+		if component.Duration == 0 && component.IO == 0 && component.Name == "" {
 			newComponents = append(newComponents, component.Components...)
 		} else {
 			newComponents = append(newComponents, component)

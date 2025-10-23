@@ -487,14 +487,10 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			}
 			log.Info().Msg("GPU restore complete")
 
-			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
-			// the restore happens inside a goroutine, the timing components belong to the restore goroutine (concurrent).
-
 			copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
 			replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond
 			profiling.AddTimingParallelComponent(ctx, copyMemTime, "CopyMemory")
 			profiling.AddTimingParallelComponent(ctx, replayCallsTime, "ReplayCalls")
-      log.Error().Dur("CopyMemory", copyMemTime).Dur("ReplayCalls", replayCallsTime).Msg("GPU restore timings")
 		}()
 		if PARALLEL_RESTORE {
 			return nil
