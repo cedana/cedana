@@ -12,6 +12,7 @@ import (
 	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -58,6 +59,9 @@ func CreateContainerForRun(next types.Run) types.Run {
 
 			specOpts := []oci.SpecOpts{
 				oci.WithImageConfig(image),
+				oci.WithHostNamespace(specs.NetworkNamespace),
+				oci.WithHostHostsFile,
+				oci.WithHostResolvconf,
 			}
 
 			if len(details.Args) > 0 {
@@ -81,6 +85,7 @@ func CreateContainerForRun(next types.Run) types.Run {
 				containerd.WithNewSnapshot(details.ID, image),
 				containerd.WithNewSpec(specOpts...),
 			)
+
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create container for run: %v", err)
 			}
