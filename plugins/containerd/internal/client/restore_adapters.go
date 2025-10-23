@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -57,6 +58,9 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 
 		specOpts := []oci.SpecOpts{
 			oci.WithImageConfig(image),
+			oci.WithHostNamespace(specs.NetworkNamespace),
+			oci.WithHostHostsFile,
+			oci.WithHostResolvconf,
 		}
 
 		if len(details.GPUs) > 0 {
