@@ -18,6 +18,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
@@ -67,6 +68,9 @@ func NewStreamingFs(
 	mode Mode,
 	compressions ...string,
 ) (fs *Fs, wait func() error, err error) {
+	ctx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
+	defer end()
+
 	if streams < 1 {
 		return nil, nil, fmt.Errorf("invalid number of streams: %d", streams)
 	}
@@ -118,7 +122,15 @@ func NewStreamingFs(
 					ioErr <- file.Close()
 				}()
 
-				_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
+				file = profiling.IOParallelCategory(
+					ctx,
+					file,
+					"storage",
+					cedana_io.ReadFrom,
+					fmt.Sprintf("shard-%d", i),
+					compression,
+				)
+				_, err := cedana_io.ReadFrom(file, writeFds[i], compression)
 				writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -141,7 +153,15 @@ func NewStreamingFs(
 					ioErr <- file.Close()
 				}()
 
-				_, err = cedana_io.WriteTo(readFds[i], file, compression)
+				file = profiling.IOParallelCategory(
+					ctx,
+					file,
+					"storage",
+					cedana_io.WriteTo,
+					fmt.Sprintf("shard-%d", i),
+					compression,
+				)
+				_, err := cedana_io.WriteTo(readFds[i], file, compression)
 				readFds[i].Close()
 				if err != nil {
 					ioErr <- err
