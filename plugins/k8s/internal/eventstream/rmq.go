@@ -376,6 +376,7 @@ func (es *EventStream) publishCheckpoint(
 	}
 
 	if profilingData != nil {
+		profiling.CleanData(profilingData)
 		profiling.FlattenData(profilingData)
 		totalDuration := profilingData.Duration
 		totalIO := profilingData.IO
