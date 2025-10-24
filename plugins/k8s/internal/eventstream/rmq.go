@@ -342,7 +342,7 @@ func (es *EventStream) publishCheckpoint(
 	podId string,
 	actionId string,
 	checkpointId string,
-	profiling *profiling.Data,
+	profilingData *profiling.Data,
 	path string,
 	state *daemon.ProcessState,
 	containerOrder int,
@@ -375,17 +375,18 @@ func (es *EventStream) publishCheckpoint(
 		ci.Path = path
 	}
 
-	if profiling != nil {
-		totalDuration := profiling.Duration
-		totalIO := profiling.IO
-		for _, component := range profiling.Components {
+	if profilingData != nil {
+		profiling.FlattenData(profilingData)
+		totalDuration := profilingData.Duration
+		totalIO := profilingData.IO
+		for _, component := range profilingData.Components {
 			if !component.Parallel {
 				totalIO += component.IO
 			}
 			totalDuration += component.Duration
 		}
 		profilingInfo := profilingInfo{
-			Raw:           profiling,
+			Raw:           profilingData,
 			TotalDuration: totalDuration,
 			TotalIO:       totalIO,
 		}
