@@ -143,6 +143,7 @@ type checkpointInfo struct {
 type profilingInfo struct {
 	Raw           *profiling.Data `json:"raw"`
 	TotalDuration int64           `json:"total_duration"`
+	TotalIO       int64           `json:"total_io"`
 }
 
 type imageSecret struct {
@@ -376,15 +377,17 @@ func (es *EventStream) publishCheckpoint(
 
 	if profiling != nil {
 		totalDuration := profiling.Duration
+		totalIO := profiling.IO
 		for _, component := range profiling.Components {
-			if component.Parallel {
-				continue
+			if !component.Parallel {
+				totalIO += component.IO
 			}
 			totalDuration += component.Duration
 		}
 		profilingInfo := profilingInfo{
 			Raw:           profiling,
 			TotalDuration: totalDuration,
+			TotalIO:       totalIO,
 		}
 		ci.ProfilingInfo = profilingInfo
 	}
