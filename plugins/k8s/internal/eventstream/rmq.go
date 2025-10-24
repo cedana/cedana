@@ -378,13 +378,12 @@ func (es *EventStream) publishCheckpoint(
 	if profilingData != nil {
 		profiling.CleanData(profilingData)
 		profiling.FlattenData(profilingData)
-		totalDuration := profilingData.Duration
-		totalIO := profilingData.IO
+		var totalDuration, totalIO int64
 		for _, component := range profilingData.Components {
 			if !component.Parallel {
-				totalIO += component.IO
+				totalDuration += component.Duration
 			}
-			totalDuration += component.Duration
+			totalIO += component.IO
 		}
 		profilingInfo := profilingInfo{
 			Raw:           profilingData,
