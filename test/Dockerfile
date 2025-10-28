@@ -5,7 +5,7 @@ FROM cedana/cedana-samples:cpu AS cedana-samples
 FROM cruizba/ubuntu-dind:noble-latest
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
-ARG GO_VERSION=1.25
+ARG GO_VERSION=1.25.1
 ARG KUBECTL_VERSION=1.33.0
 ARG K9S_VERSION=latest
 
