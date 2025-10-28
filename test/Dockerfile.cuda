@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-FROM cedana/cedana-samples:cuda12.8-torch2.7 AS cedana-samples
+FROM cedana/cedana-samples:cuda12.4-torch2.7 AS cedana-samples
 
 FROM nvidia/cuda:12.8.0-base-ubuntu24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
