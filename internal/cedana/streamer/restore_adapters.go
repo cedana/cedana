@@ -2,11 +2,13 @@ package streamer
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -90,18 +92,13 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
 
-			code, err = next(ctx, opts, resp, req)
-			if err != nil {
-				return nil, err
-			}
+			defer func() {
+				_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
+				err = errors.Join(err, waitForIO())
+				end()
+			}()
 
-			// Wait for all the streaming to finish
-			err = waitForIO()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)
-			}
-
-			return code, nil
+			return next(ctx, opts, resp, req)
 		}
 	}
 }

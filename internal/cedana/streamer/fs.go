@@ -68,7 +68,7 @@ func NewStreamingFs(
 	mode Mode,
 	compressions ...string,
 ) (fs *Fs, wait func() error, err error) {
-	ctx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
+	_, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs, "startup")
 	defer end()
 
 	if streams < 1 {
