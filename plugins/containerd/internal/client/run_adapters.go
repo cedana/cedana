@@ -85,7 +85,6 @@ func CreateContainerForRun(next types.Run) types.Run {
 				containerd.WithNewSnapshot(details.ID, image),
 				containerd.WithNewSpec(specOpts...),
 			)
-
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create container for run: %v", err)
 			}

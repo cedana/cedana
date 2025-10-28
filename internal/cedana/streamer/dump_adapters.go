@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -118,7 +119,9 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`.
 
 			defer func() {
+				_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
 				err = errors.Join(err, waitForIO())
+				end()
 			}()
 
 			resp.Paths = append(resp.Paths, path)

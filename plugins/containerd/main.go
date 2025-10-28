@@ -53,9 +53,9 @@ var (
 	KillSignal = syscall.SIGKILL
 	Cleanup    = client.Cleanup
 
-	GPUInterception        types.Adapter[types.Run]     = gpu.Interception
+	GPUInterception types.Adapter[types.Run] = gpu.Interception
 	// GPUInterceptionRestore types.Adapter[types.Restore] = nil // Handled by lower-level runtime plugin
-	GPUTracing             types.Adapter[types.Run]     = gpu.Tracing
+	GPUTracing types.Adapter[types.Run] = gpu.Tracing
 	// GPUTracingRestore      types.Adapter[types.Restore] = nil // Handled by lower-level runtime plugin
 
 	FreezeHandler   types.Freeze   = runtime.Freeze
