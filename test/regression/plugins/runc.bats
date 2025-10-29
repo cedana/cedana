@@ -944,7 +944,6 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# bats test_tags=bats:focus
 @test "run container (persistent mounts)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "while true; do date > /persistent/date.txt; sleep 1; done")"
