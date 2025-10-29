@@ -943,3 +943,24 @@ teardown_file() {
     run runc kill "$id" KILL
     run runc delete "$id"
 }
+
+# bats test_tags=bats:focus
+@test "run container (persistent mounts)" {
+    jid=$(unix_nano)
+    bundle="$(create_cmd_bundle "while true; do date > /persistent/date.txt; sleep 1; done")"
+
+    add_env_var "$bundle" "CEDANA_PERSISTENT_MOUNTS" "/persistent"
+
+    cedana run runc --bundle "$bundle" --jid "$jid"
+
+    sleep 2
+
+    run cedana dump job "$jid"
+    assert_success
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    cedana restore job "$jid"
+
+    run cedana kill "$jid"
+}
