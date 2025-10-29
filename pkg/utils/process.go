@@ -390,11 +390,11 @@ func IsTTY(path string) (bool, error) {
 	return isatty.IsTerminal(file.Fd()), nil
 }
 
-func Getenv(env []string, key string) string {
+func Getenv(env []string, key string, defaultValue ...string) string {
 	for _, e := range env {
 		if after, ok := strings.CutPrefix(e, key+"="); ok {
 			return after
 		}
 	}
-	return ""
+	return strings.Join(defaultValue, "")
 }
