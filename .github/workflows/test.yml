@@ -50,6 +50,11 @@ on:
         description: "Runner machine for GPU tests"
         required: false
         default: 4cpu-1gpu
+      large_dynamic_runner_gpu:
+        type: string
+        description: "Cedana-managed runner for large tests"
+        required: false
+        default: ""
       post_summary_slack:
         type: string
         description: "Webhook URL for posting summary to Slack"
@@ -412,6 +417,7 @@ jobs:
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner_gpu }}
+      large_dynamic_runner: ${{ inputs.large_dynamic_runner_gpu }}
       post_summary: false # Will post consolidated summary instead
 
   # XXX: Below kubernetes tests are split into separate workflows, instead of using matrix,
