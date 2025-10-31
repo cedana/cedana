@@ -123,6 +123,7 @@ func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq, opts ...grpc.Ca
 	var trailer metadata.MD
 	opts = append(opts, grpc.Trailer(&trailer))
 
+	args.Action = daemon.DumpAction_DUMP
 	resp, err := c.daemonClient.Dump(ctx, args, opts...)
 	if err != nil {
 		return resp, nil, utils.GRPCErrorColored(err)
@@ -169,6 +170,7 @@ func (c *Client) Freeze(ctx context.Context, args *daemon.DumpReq, opts ...grpc.
 	var trailer metadata.MD
 	opts = append(opts, grpc.Trailer(&trailer))
 
+	args.Action = daemon.DumpAction_FREEZE_ONLY
 	resp, err := c.daemonClient.Freeze(ctx, args, opts...)
 	if err != nil {
 		return resp, nil, utils.GRPCErrorColored(err)
@@ -190,6 +192,7 @@ func (c *Client) Unfreeze(ctx context.Context, args *daemon.DumpReq, opts ...grp
 	var trailer metadata.MD
 	opts = append(opts, grpc.Trailer(&trailer))
 
+	args.Action = daemon.DumpAction_UNFREEZE_ONLY
 	resp, err := c.daemonClient.Unfreeze(ctx, args, opts...)
 	if err != nil {
 		return resp, nil, utils.GRPCErrorColored(err)

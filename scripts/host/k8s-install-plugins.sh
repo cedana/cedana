@@ -14,16 +14,32 @@ DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
 source "$DIR"/utils.sh
 
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
+CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
-CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION=${CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION:-"latest"}
+CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=${CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
+CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
-# NOTE: Native plugins like k8s, runc, containerd, are already installed in the image
-PLUGINS="
+PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
-    k8s/runtime-shim@$CEDANA_PLUGINS_K8S_RUNTIME_SHIM_VERSION \
-    streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
+    containerd/runtime-runc@$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION \
+    containerd@$CEDANA_PLUGINS_NATIVE_VERSION \
+    runc@$CEDANA_PLUGINS_NATIVE_VERSION"
+
+# check if a storage plugin is required
+if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
+    PLUGINS="$PLUGINS storage/cedana@$CEDANA_PLUGINS_NATIVE_VERSION"
+elif [[ "$CEDANA_CHECKPOINT_DIR" == s3://* ]]; then
+    PLUGINS="$PLUGINS storage/s3@$CEDANA_PLUGINS_NATIVE_VERSION"
+elif [[ "$CEDANA_CHECKPOINT_DIR" == gcs://* ]]; then
+    PLUGINS="$PLUGINS storage/gcs@$CEDANA_PLUGINS_NATIVE_VERSION"
+fi
+
+# check if streamer plugin is required
+if [ "$CEDANA_CHECKPOINT_STREAMS" -gt 0 ]; then
+    PLUGINS="$PLUGINS streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
+fi
 
 # if gpu driver present then add gpu plugin
 if [ -f /.dockerenv ]; then # For tests inside a container
@@ -72,7 +88,7 @@ fi
 echo 0 > /proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
 echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
 
-# install the shim configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
+# install the runtime configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
 if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
     PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
     if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then

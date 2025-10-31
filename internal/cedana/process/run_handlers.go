@@ -86,16 +86,14 @@ func run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 
 	resp.PID = uint32(cmd.Process.Pid)
 
-	opts.WG.Add(1)
-	go func() {
-		defer opts.WG.Done()
+	opts.WG.Go(func() {
 		err := cmd.Wait()
 		if err != nil {
 			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
 		}
 		exitCode <- cmd.ProcessState.ExitCode()
 		close(exitCode)
-	}()
+	})
 
 	return code, nil
 }
@@ -122,5 +120,5 @@ func manage(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *dae
 
 	resp.PID = details.PID
 
-	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, details.PID)), nil
+	return channel.Broadcaster(utils.WaitForPid(details.PID)), nil
 }

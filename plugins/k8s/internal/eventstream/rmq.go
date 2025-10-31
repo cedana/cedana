@@ -25,7 +25,6 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
 )
@@ -144,6 +143,7 @@ type checkpointInfo struct {
 type profilingInfo struct {
 	Raw           *profiling.Data `json:"raw"`
 	TotalDuration int64           `json:"total_duration"`
+	TotalIO       int64           `json:"total_io"`
 }
 
 type imageSecret struct {
@@ -231,31 +231,12 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					Username: strings.Split(imageSecret.ImageSecret, ":")[0],
 					Secret:   strings.Split(imageSecret.ImageSecret, ":")[1],
 				}
+				container.Rootfs = rootfs
 				container.RootfsOnly = rootfsOnly
 			} else {
 				container.Image = nil // Ensure this is nil, so rootfs is not dumped
 			}
 		}
-
-		freezeReq := &daemon.DumpReq{
-			Type: "containerd",
-			Details: &daemon.Details{
-				Containerd: containers[0], // Freeze any container in the pod, they share the NET PID namespace
-			},
-		}
-
-		_, _, err = es.cedana.Freeze(ctx, freezeReq)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to freeze pod")
-			return rabbitmq.Ack
-		}
-
-		defer func() {
-			_, _, err = es.cedana.Unfreeze(ctx, freezeReq)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to unfreeze pod")
-			}
-		}()
 
 		var dumpReqs []*daemon.DumpReq
 
@@ -276,9 +257,56 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		}
 
 		wg := sync.WaitGroup{}
+		errMap := make(map[int]error)
+		wg.Add(len(dumpReqs))
 
 		for i, dumpReq := range dumpReqs {
-			wg.Add(1)
+			log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
+			go func() {
+				defer wg.Done()
+				_, _, err = es.cedana.Freeze(ctx, dumpReq)
+				if err != nil {
+					errMap[i] = err
+				}
+			}()
+
+			defer func() {
+				_, _, err = es.cedana.Unfreeze(ctx, dumpReq)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to unfreeze container")
+				}
+			}()
+		}
+
+		wg.Wait()
+
+		if len(errMap) > 0 {
+			for i, err := range errMap {
+				log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
+				if err != nil {
+					log.Error().Err(err).Msg("failed to freeze container")
+				}
+				es.publishCheckpoint(
+					log.WithContext(ctx),
+					req.PodName,
+					req.ActionId,
+					checkpointIdMap[i],
+					nil,
+					"",
+					nil,
+					i,
+					specMap[i],
+					err,
+				)
+			}
+			return rabbitmq.Ack
+		}
+
+		log.Info().Msg("all containers frozen, starting dump")
+
+		wg.Add(len(dumpReqs))
+
+		for i, dumpReq := range dumpReqs {
 			go func() {
 				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
@@ -289,7 +317,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					state = dumpResp.State
 				}
 				es.publishCheckpoint(
-					log,
+					log.WithContext(ctx),
 					req.PodName,
 					req.ActionId,
 					checkpointIdMap[i],
@@ -310,17 +338,18 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 }
 
 func (es *EventStream) publishCheckpoint(
-	log zerolog.Logger,
+	ctx context.Context,
 	podId string,
 	actionId string,
 	checkpointId string,
-	profiling *profiling.Data,
+	profilingData *profiling.Data,
 	path string,
 	state *daemon.ProcessState,
 	containerOrder int,
 	containerSpec *specs.Spec,
 	dumpErr error,
 ) error {
+	log := *log.Ctx(ctx)
 	ci := checkpointInfo{
 		ActionId:       actionId,
 		PodId:          podId,
@@ -346,14 +375,20 @@ func (es *EventStream) publishCheckpoint(
 		ci.Path = path
 	}
 
-	if profiling != nil {
-		totalDuration := profiling.Duration
-		for _, component := range profiling.Components {
-			totalDuration += component.Duration
+	if profilingData != nil {
+		profiling.CleanData(profilingData)
+		profiling.FlattenData(profilingData)
+		var totalDuration, totalIO int64
+		for _, component := range profilingData.Components {
+			if !component.Parallel {
+				totalDuration += component.Duration
+			}
+			totalIO += component.IO
 		}
 		profilingInfo := profilingInfo{
-			Raw:           profiling,
+			Raw:           profilingData,
 			TotalDuration: totalDuration,
+			TotalIO:       totalIO,
 		}
 		ci.ProfilingInfo = profilingInfo
 	}

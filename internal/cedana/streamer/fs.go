@@ -18,6 +18,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
@@ -67,6 +68,9 @@ func NewStreamingFs(
 	mode Mode,
 	compressions ...string,
 ) (fs *Fs, wait func() error, err error) {
+	_, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs, "startup")
+	defer end()
+
 	if streams < 1 {
 		return nil, nil, fmt.Errorf("invalid number of streams: %d", streams)
 	}
@@ -74,6 +78,8 @@ func NewStreamingFs(
 	if len(compressions) > 0 {
 		compression = compressions[0]
 	}
+
+	log := log.With().Str("plugin", "streamer").Str("path", storagePath).Int32("streams", streams).Str("mode", mode.String()).Logger()
 
 	// Create pipes for reading and writing data to/from the streamer to dir
 	var readFds, writeFds []*os.File
@@ -92,6 +98,7 @@ func NewStreamingFs(
 	// Start IO on the pipes from the dir
 	wg := &sync.WaitGroup{}
 	io := &sync.WaitGroup{}
+	io.Add(int(streams))
 	ioErr := make(chan error, streams)
 	paths, err := imgPaths(storage, storagePath, mode, streams)
 	if err != nil {
@@ -109,14 +116,21 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
-			io.Add(1)
 			go func() {
 				defer io.Done()
 				defer func() {
 					ioErr <- file.Close()
 				}()
 
-				_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
+				file = profiling.IOParallelCategory(
+					ctx,
+					file,
+					"storage",
+					cedana_io.ReadFrom,
+					fmt.Sprintf("shard-%d", i),
+					compression,
+				)
+				_, err := cedana_io.ReadFrom(file, writeFds[i], compression)
 				writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -133,14 +147,21 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
-			io.Add(1)
 			go func() {
 				defer io.Done()
 				defer func() {
 					ioErr <- file.Close()
 				}()
 
-				_, err = cedana_io.WriteTo(readFds[i], file, compression)
+				file = profiling.IOParallelCategory(
+					ctx,
+					file,
+					"storage",
+					cedana_io.WriteTo,
+					fmt.Sprintf("shard-%d", i),
+					compression,
+				)
+				_, err := cedana_io.WriteTo(readFds[i], file, compression)
 				readFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -180,9 +201,7 @@ func NewStreamingFs(
 	defer close(ready)
 
 	// Mark ready when we read init progress message on stderr
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		scanner := bufio.NewScanner(stderrPipe)
 		for {
 			if !scanner.Scan() || ctx.Err() != nil {
@@ -192,9 +211,9 @@ func NewStreamingFs(
 			if lastMsg == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			log.Trace().Str("context", "streamer").Str("dir", imagesDir).Msg(lastMsg)
+			log.Trace().Msg(lastMsg)
 		}
-	}()
+	})
 
 	err = cmd.Start()
 	if err != nil {
@@ -204,16 +223,14 @@ func NewStreamingFs(
 	fs = &Fs{mode, nil, imagesDir}
 
 	// Clean up on exit
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		defer close(exited)
 
 		err := cmd.Wait()
 		if err != nil {
 			log.Trace().Err(err).Msg("streamer Wait()")
 		}
-		log.Debug().Str("dir", imagesDir).Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
+		log.Debug().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
 
 		// FIXME: Remove socket files. Should be cleaned up by the streamer itself
 		matches, err := filepath.Glob(filepath.Join(imagesDir, "*.sock"))
@@ -222,7 +239,7 @@ func NewStreamingFs(
 				os.Remove(match)
 			}
 		}
-	}()
+	})
 
 	select {
 	case <-ctx.Done():
@@ -245,7 +262,7 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("failed to connect to streamer: %w: %s", err, lastMsg)
 	}
 	fs.conn = conn.(*net.UnixConn)
-	log.Debug().Str("dir", imagesDir).Msg("streamer connected")
+	log.Debug().Msg("streamer connected")
 
 	wait = func() error {
 		// Stop the listener, and wait for all IO to finish
@@ -253,9 +270,9 @@ func NewStreamingFs(
 		fs.stopListener()
 		fs.conn.Close()
 		io.Wait()
+		close(ioErr)
 		cmd.Process.Signal(syscall.SIGTERM)
 		wg.Wait()
-		close(ioErr)
 		var err error
 		for e := range ioErr {
 			err = errors.Join(err, e)
@@ -332,6 +349,17 @@ func (fs *Fs) Name() string {
 ////////////////////
 // Helper Methods //
 ////////////////////
+
+func (m Mode) String() string {
+	switch m {
+	case READ_ONLY:
+		return "read-only"
+	case WRITE_ONLY:
+		return "write-only"
+	default:
+		return "unknown"
+	}
+}
 
 // Opens a pair of file descriptors for reading and writing through the streamer
 func (fs *Fs) openFd(name string) (int, error) {

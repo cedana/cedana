@@ -6,10 +6,13 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/contrib/nvidia"
 	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -27,7 +30,6 @@ func SetupForRun(next types.Run) types.Run {
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create containerd client: %v", err)
 		}
-		defer client.Close()
 
 		ctx = context.WithValue(ctx, containerd_keys.CLIENT_CONTEXT_KEY, client)
 
@@ -45,28 +47,50 @@ func CreateContainerForRun(next types.Run) types.Run {
 		}
 
 		var container containerd.Container
+		var image containerd.Image
 
 		switch req.Action {
 		case daemon.RunAction_START_NEW:
 
-			image, err := client.GetImage(ctx, details.GetImage().GetName())
+			image, err = client.GetImage(ctx, details.GetImage().GetName())
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
+			}
+
+			specOpts := []oci.SpecOpts{
+				oci.WithImageConfig(image),
+				oci.WithHostNamespace(specs.NetworkNamespace),
+				oci.WithHostHostsFile,
+				oci.WithHostResolvconf,
+			}
+
+			if len(details.Args) > 0 {
+				specOpts = append(specOpts, oci.WithProcessArgs(details.Args...))
+			}
+
+			if len(details.GPUs) > 0 {
+				specOpts = append(
+					specOpts,
+					nvidia.WithGPUs(
+						nvidia.WithDevices(utils.Int32ToIntSlice(details.GPUs)...),
+						nvidia.WithAllCapabilities,
+					),
+				)
 			}
 
 			container, err = client.NewContainer(
 				ctx,
 				details.ID,
 				containerd.WithImage(image),
-				containerd.WithNewSnapshot(details.ID+"-snapshot", image),
-				containerd.WithNewSpec(oci.WithImageConfig(image)),
+				containerd.WithNewSnapshot(details.ID, image),
+				containerd.WithNewSpec(specOpts...),
 			)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create container for run: %v", err)
 			}
 			defer func() {
 				if err != nil {
-					container.Delete(ctx)
+					Cleanup(context.WithoutCancel(ctx), req.Details)
 				}
 			}()
 

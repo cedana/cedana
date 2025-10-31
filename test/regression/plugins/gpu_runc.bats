@@ -39,46 +39,41 @@ teardown_file() {
 ### Run ###
 ###########
 
-@test "run GPU container (non-GPU binary)" {
+@test "[$GPU_INFO] run GPU container (non-GPU binary)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_cmd_bundle_cuda "echo hello")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
-    assert_success
     assert_exists "$log_file"
 
     run cedana ps
-
     assert_success
     assert_output --partial "$jid"
 }
 
-@test "run GPU container (GPU binary)" {
+@test "[$GPU_INFO] run GPU container (GPU binary)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
-    assert_success
     assert_exists "$log_file"
 
     run cedana ps
-
     assert_success
     assert_output --partial "$jid"
 }
 
 # bats test_tags=daemonless
-@test "run GPU container (GPU binary, without daemon)" {
+@test "[$GPU_INFO] run GPU container (GPU binary, without daemon)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled --no-server
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled --no-server
 }
 
 ############
@@ -86,39 +81,43 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "dump GPU container (vector add)" {
+@test "[$GPU_INFO] dump GPU container (non-GPU binary)" {
     jid=$(unix_nano)
-    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
+    bundle="$(create_workload_bundle_cuda "date-loop.sh")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
     sleep 1
 
-    run cedana dump job "$jid"
-    assert_success
-
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
+    cedana dump job "$jid"
 
     run cedana job kill "$jid"
 }
 
 # bats test_tags=dump
-@test "dump GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] dump GPU container (vector add)" {
     jid=$(unix_nano)
-    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
     sleep 1
 
-    run cedana dump job "$jid"
-    assert_success
+    cedana dump job "$jid"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
+    run cedana job kill "$jid"
+}
+
+# bats test_tags=dump
+@test "[$GPU_INFO] dump GPU container (mem throughput saxpy)" {
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
+
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+
+    sleep 1
+
+    cedana dump job "$jid"
 
     run cedana job kill "$jid"
 }
@@ -128,70 +127,91 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "restore GPU container (vector add)" {
+@test "[$GPU_INFO] restore GPU container (non-GPU binary)" {
     jid=$(unix_nano)
-    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
+    bundle="$(create_workload_bundle_cuda "date-loop.sh")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
     sleep 1
 
-    run cedana dump job "$jid"
-    assert_success
+    cedana dump job "$jid"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
+    cedana restore job "$jid"
 
-    run cedana restore job "$jid"
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
     assert_success
+    refute_output --partial "halted"
 
     run cedana job kill "$jid"
     run cedana job delete "$jid"
 }
 
 # bats test_tags=restore
-@test "restore GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] restore GPU container (vector add)" {
     jid=$(unix_nano)
-    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
     sleep 1
 
-    run cedana dump job "$jid"
-    assert_success
+    cedana dump job "$jid"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    assert_exists "$dump_file"
+    cedana restore job "$jid"
 
-    run cedana restore job "$jid"
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
     assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+    run cedana job delete "$jid"
+}
+
+# bats test_tags=restore
+@test "[$GPU_INFO] restore GPU container (mem throughput saxpy)" {
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
+
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
 
     run cedana job kill "$jid"
     run cedana job delete "$jid"
 }
 
 # bats test_tags=restore,daemonless
-@test "restore GPU container (mem throughput saxpy, without daemon)" {
+@test "[$GPU_INFO] restore GPU container (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
-    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
-    cedana run runc --bundle "$bundle" --gpu-enabled --no-server --detach "$jid" > /dev/null 2>&1 < /dev/null
+    debug cedana run runc --bundle "$bundle" --gpu-enabled --no-server --detach "$jid" > /dev/null 2>&1 < /dev/null
 
     sleep 1
 
     run cedana dump runc "$jid"
     assert_success
-
-    runc delete "$jid"
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore runc --path "$dump_file" --id "$jid" --bundle "$bundle" --detach --no-server
-    assert_success
+    runc delete "$jid"
+
+    debug cedana restore runc --path "$dump_file" --id "$jid" --bundle "$bundle" --detach --no-server
 
     wait_for_container_status "$jid" "running"
     run runc kill "$jid" KILL

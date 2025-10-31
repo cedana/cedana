@@ -4,47 +4,79 @@ For now, you can either install the daemon from source, or use the released bina
 
 ## Prerequisites
 
-Since Cedana depends on [CRIU](https://criu.org), you will need to ensure it's dependencies are installed. For Ubuntu, you can install them with:
+Since Cedana depends on [CRIU](https://criu.org), you will need to ensure its dependencies are installed.
+
+#### Using apt (Ubuntu/Debian)&#x20;
 
 ```sh
-apt-get install -y python3-protobuf libnet1 libnftables1 libnl-3-200 libprotobuf-c1 iptables
+apt-get install -y libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel
+```
+
+#### Using dnf/yum (Fedora/CentOS)
+
+```sh
+yum install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1
 ```
 
 ## Build from source
 
-To build:
+Clone the [cedana repository](https://github.com/cedana/cedana) and navigate into it.
+
+#### Build
 
 ```sh
 make cedana
 ```
 
-To install:
+#### Install
 
 ```sh
 make install
 ```
 
-To build and install (with all plugins):
-
-```sh
-make all
-```
-
+{% hint style="info" %}
 Try `make help` to see all available targets.
+{% endhint %}
 
-## Download from releases
+## Download latest
 
-Download the latest release from the [releases](https://github.com/cedana/cedana/releases).
+{% hint style="info" %}
+You can find the latest binaries at [releases](https://github.com/cedana/cedana/releases). Ensure `/usr/local/bin` is in your `PATH`.
+{% endhint %}
+
+#### AMD64
 
 ```sh
-curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/v0.9.245/cedana-amd64.tar.gz
+platform=amd64
+version=$(curl -s https://api.github.com/repos/cedana/cedana/releases/latest | grep tag_name | cut -d '"' -f 4)
+curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/$version/cedana-$platform.tar.gz
 tar -xzvf cedana.tar.gz
 chmod +x cedana
 mv cedana /usr/local/bin/cedana
 rm cedana.tar.gz
+
+cedana --version
+```
+
+#### ARM64
+
+```sh
+platform=arm64
+version=$(curl -s https://api.github.com/repos/cedana/cedana/releases/latest | grep tag_name | cut -d '"' -f 4)
+curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/v0.9.245/cedana-$platform.tar.gz
+tar -xzvf cedana.tar.gz
+chmod +x cedana
+mv cedana /usr/local/bin/cedana
+rm cedana.tar.gz
+
+cedana --version
 ```
 
 ## Install CRIU
+
+{% hint style="success" %}
+To install a plugin from the online registry, you need to be [authenticated](authentication.md). See [plugins](plugins.md) for more information.
+{% endhint %}
 
 A modified version of CRIU is shipped as a plugin for Cedana, so you don't need to install it separately. You can simply do:
 
@@ -54,11 +86,17 @@ sudo cedana plugin install criu
 
 This version of CRIU is not a requirement for Cedana, but it is recommended for certain features, such as [checkpoint/restore streamer](../guides/streamer/cr.md).
 
-Note that, to install a plugin from the online registry, you need to be [authenticated](authentication.md). See [plugins](plugins.md) for more information.
-
+{% hint style="info" %}
 To install CRIU independently, see the [CRIU installation guide](https://criu.org/Installation).
+{% endhint %}
 
 ## Start the daemon
+
+{% hint style="warning" %}
+The daemon requires root privileges for checkpoint/restore operations. Check the [CLI reference](../references/cli/cedana.md) for all options.
+{% endhint %}
+
+#### Direct
 
 You can directly start the daemon with:
 
@@ -66,7 +104,7 @@ You can directly start the daemon with:
 sudo cedana daemon start
 ```
 
-The daemon requires root privileges for checkpoint/restore operations. Check the [CLI reference](../references/cli/cedana.md) for all options.
+#### Systemd
 
 If you're a _systemd_ user, you may also install it as a service (if built from source):
 
@@ -74,7 +112,9 @@ If you're a _systemd_ user, you may also install it as a service (if built from 
 make install-systemd
 ```
 
+{% hint style="info" %}
 Try `make help` to see all available targets.
+{% endhint %}
 
 ## Health check the daemon
 

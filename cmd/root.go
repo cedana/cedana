@@ -61,8 +61,9 @@ func init() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "cedana",
-	Short: "Root command for Cedana",
+	Use:               "cedana",
+	Short:             "Root command for Cedana",
+	DisableAutoGenTag: true,
 	Long: `
  ________  _______   ________  ________  ________   ________
 |\   ____\|\  ___ \ |\   ___ \|\   __  \|\   ___  \|\   __  \
@@ -73,8 +74,8 @@ var rootCmd = &cobra.Command{
     \|_______|\|_______|\|_______|\|__|\|__|\|__| \|__|\|__|\|__|
 
     ` +
-		"\n Instance Brokerage, Orchestration and Migration System." +
-		"\n Property of Cedana, Corp.\n",
+		"\nInstance Brokerage, Orchestration and Migration System." +
+		"\nProperty of Cedana, Corp.\n",
 
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		conf, _ := cmd.Flags().GetString(flags.ConfigFlag.Full)
@@ -108,7 +109,7 @@ func Execute(ctx context.Context, version string) error {
 	}
 	rootCmd.SetVersionTemplate(versionTemplate)
 
-	rootCmd.Long = rootCmd.Long + "\n " + version
+	rootCmd.Long = rootCmd.Long + "\n" + version
 	rootCmd.SilenceUsage = true // only show usage when true usage error
 
 	return rootCmd.ExecuteContext(ctx)

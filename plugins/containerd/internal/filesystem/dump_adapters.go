@@ -33,30 +33,24 @@ func DumpRootfs(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetContainerd()
 
-		// Skip rootfs if image ref is not provided
-		if details.Image == nil {
+		if !(details.Rootfs || details.RootfsOnly) || req.Action != daemon.DumpAction_DUMP {
 			return next(ctx, opts, resp, req)
 		}
 
 		image := details.Image
+
+		if image == nil || image.Name == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "image name must be provided for rootfs dump")
+		}
 
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
 		}
 
-		container, err := client.LoadContainer(ctx, details.ID)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to load container %s: %v", details.ID, err)
-		}
-
-		info, err := container.Info(ctx)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get container info: %v", err)
-		}
-
-		if info.Image == image.Name {
-			return nil, status.Errorf(codes.InvalidArgument, "dump image cannot be the same as the container image, current image: %s, dump image: %s", info.Image, details.Image)
+		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get container from context")
 		}
 
 		// When doing a rootfs dump only, we can return early after dumping the rootfs
@@ -99,17 +93,17 @@ func DumpRootfs(next types.Dump) types.Dump {
 		opts.CRIUCallback.Include(&criu.NotifyCallback{
 			Name: "rootfs",
 			PreDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-				log.Debug().Str("container", details.ID).Msg("dumping rootfs")
 				go func() {
 					rootfsErr <- dumpRootfs(ctx, client, container, image.Name, image.Username, image.Secret)
+					close(rootfsErr)
 				}()
 				return nil
 			},
 			PostDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 				return <-rootfsErr
 			},
-			OnDumpErrorFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) {
-				<-rootfsErr
+			FinalizeDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+				return <-rootfsErr
 			},
 		})
 
@@ -117,7 +111,45 @@ func DumpRootfs(next types.Dump) types.Dump {
 	}
 }
 
-func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) error {
+func DumpImageName(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		if req.Action != daemon.DumpAction_DUMP || opts.DumpFs == nil {
+			return next(ctx, opts, resp, req)
+		}
+
+		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get container from context")
+		}
+		image, err := container.Image(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get image from container: %v", err)
+		}
+
+		file, err := opts.DumpFs.Create(containerd_keys.DUMP_IMAGE_NAME_KEY)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create dump image name file: %v", err)
+		}
+		defer file.Close()
+		_, err = file.WriteString(image.Name())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to write dump image name file: %v", err)
+		}
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) (err error) {
+	log.Info().Str("ref", ref).Str("container", container.ID()).Msg("rootfs dump started")
+	defer func() {
+		if err != nil {
+			log.Error().Err(err).Str("ref", ref).Str("container", container.ID()).Msg("rootfs dump failed")
+		} else {
+			log.Info().Str("ref", ref).Str("container", container.ID()).Msg("rootfs dump completed")
+		}
+	}()
+
 	info, err := container.Info(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get container info: %v", err)

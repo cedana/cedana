@@ -112,6 +112,7 @@ pid_exists() {
     kill -0 "$pid" 2>/dev/null
 }
 
+# Wait for a PID to exist, with a timeout (default 60 seconds)
 wait_for_pid() {
     local pid=$1
     local timeout=${2:-60}
@@ -119,6 +120,24 @@ wait_for_pid() {
     local elapsed=0
 
     while ! kill -0 "$pid" 2>/dev/null; do
+        if (( elapsed >= timeout )); then
+            return 1
+        fi
+        sleep "$interval"
+        ((elapsed += interval))
+    done
+
+    return 0
+}
+
+# Wait for a PID to not exist, with a timeout (default 60 seconds)
+wait_for_no_pid() {
+    local pid=$1
+    local timeout=${2:-60}
+    local interval=1
+    local elapsed=0
+
+    while kill -0 "$pid" 2>/dev/null; do
         if (( elapsed >= timeout )); then
             return 1
         fi
@@ -195,6 +214,27 @@ wait_for_cmd_fail() {
     return 0
 }
 
+# Wait for a file to exist, with a timeout (default 60 seconds)
+wait_for_file() {
+    local file=$1
+    local timeout=${2:-60}
+    local interval=1
+    local elapsed=0
+
+    debug_log "Waiting for file '$file' to exist (timeout: $timeout seconds)"
+
+    while [ ! -e "$file" ]; do
+        if (( elapsed >= timeout )); then
+            error_log "Timed out waiting for file '$file' to exist after $timeout seconds"
+            return 1
+        fi
+        sleep "$interval"
+        ((elapsed += interval))
+    done
+
+    debug_log "File '$file' exists after $elapsed seconds"
+    return 0
+}
 
 debug_log() {
     local message="$1"

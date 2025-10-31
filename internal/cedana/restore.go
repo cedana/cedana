@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/internal/cedana/validation"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -35,16 +36,16 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		pluginRestoreStorage, // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
-		process.InheritFilesForRestore,
 		network.DetectNetworkOptionsForRestore,
 		gpu.Restore(s.gpus),
 
 		pluginRestoreMiddleware, // middleware from plugins
 
+		process.InheritFilesForRestore,
 		criu.CheckOptsForRestore,
 	}
 
-	restore := criu.Restore.With(middleware...)
+	restore := pluginRestoreHandler().With(middleware...)
 
 	// If using job restore, or restoring as attachable. If restoring as attachable, its necessary
 	// that we manage the restore job, as the IO is managed by the daemon.
@@ -53,6 +54,8 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		restore = restore.With(job.ManageRestore(s.jobs))
 	}
 
+	restore = restore.With(criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins))
+
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
@@ -60,9 +63,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 	resp := &daemon.RestoreResp{}
 
-	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
-
-	_, err := criu(restore)(ctx, opts, resp, req)
+	_, err := restore(ctx, opts, resp, req)
 	if err != nil {
 		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
 		return nil, err
@@ -87,18 +88,17 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		pluginRestoreStorage, // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
+		network.DetectNetworkOptionsForRestore,
 		gpu.Restore(s.gpus),
 
 		pluginRestoreMiddleware, // middleware from plugins
 
-		// Process state-dependent adapters
 		process.InheritFilesForRestore,
-		network.DetectNetworkOptionsForRestore,
-
 		criu.CheckOptsForRestore,
 	}
 
-	restore := criu.Restore.With(middleware...)
+	restore := pluginRestoreHandler().With(middleware...)
+	restore = restore.With(criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins))
 
 	opts := types.Opts{
 		Lifetime: s.lifetime,
@@ -107,9 +107,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 	}
 	resp := &daemon.RestoreResp{}
 
-	criu := criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins)
-
-	code, err := criu(restore)(s.lifetime, opts, resp, req)
+	code, err := restore(s.lifetime, opts, resp, req)
 	if err != nil {
 		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
 		return nil, err
@@ -184,5 +182,54 @@ func pluginRestoreStorage(next types.Restore) types.Restore {
 		}
 
 		return next.With(filesystem)(ctx, opts, resp, req)
+	}
+}
+
+// Detects and returns the plugin-specific restore handler, if implemented by the
+// plugin for the specified type. Otherwise, uses the default CRIU restore handler.
+func pluginRestoreHandler() types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		t := req.Type
+		handler := criu.Restore
+
+		switch t {
+		case "process":
+			// Use default handler
+		default:
+			// Check if plugin-specific handler is available
+			err = features.RestoreHandler.IfAvailable(func(name string, pluginHandler types.Restore) error {
+				handler = pluginHandler
+				return nil
+			}, t)
+			if err == nil {
+				var end func()
+				ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
+				defer end()
+			}
+		}
+
+		// Plugin any late restore middleware if found
+
+		switch t {
+		case "process":
+			// No late middleware for default process type
+		default:
+			// Insert plugin-specific late middleware
+			features.RestoreMiddlewareLate.IfAvailable(func(
+				name string,
+				pluginMiddleware types.Middleware[types.Restore],
+			) error {
+				handler = handler.With(pluginMiddleware...)
+				return nil
+			}, t)
+		}
+
+		// Plugin GPU adapters if required
+
+		if resp.GetState().GetGPUEnabled() {
+			handler = handler.With(gpu.InterceptionRestore)
+		}
+
+		return handler(ctx, opts, resp, req)
 	}
 }

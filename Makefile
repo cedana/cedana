@@ -30,7 +30,6 @@ DEBUG?=0
 
 cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
-	$(GOCMD) mod tidy ;\
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building $(BINARY) with debug symbols..." ;\
 		$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $@ ;\
@@ -47,7 +46,7 @@ $(INSTALL_BIN_DIR)/$(BINARY): $(OUT_DIR)/$(BINARY)
 start: $(INSTALL_BIN_DIR)/$(BINARY) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
-install-systemd: install ## Install the systemd daemon
+install-systemd: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the systemd daemon
 	@echo "Installing systemd service..."
 	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
 
@@ -58,6 +57,7 @@ reset-systemd: ## Reset the systemd daemon
 
 reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
+	$(SUDO) pkill $(BINARY) || true
 	rm -f $(OUT_DIR)/$(BINARY)
 	$(SUDO) rm -f $(INSTALL_BIN_DIR)/$(BINARY)
 
@@ -67,14 +67,14 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana/*
+	rm -rf ~/.cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
-	$(SUDO) rm -rf /tmp/cedana*
-	$(SUDO) rm -rf /tmp/dump*
-	$(SUDO) rm -rf /dev/shm/cedana*
-	$(SUDO) rm -rf /run/cedana*
+	$(SUDO) rm -rf /tmp/*cedana*
+	$(SUDO) rm -rf /tmp/*dump*
+	$(SUDO) rm -rf /dev/shm/*cedana*
+	$(SUDO) rm -rf /run/*cedana*
 
 reset-logs: ## Reset logs
 	@echo "Resetting logs..."
@@ -107,6 +107,7 @@ reset-plugins: ## Reset & uninstall plugins
 	@echo "Resetting plugins..."
 	rm -rf $(OUT_DIR)/libcedana-*.so
 	$(SUDO) rm -rf $(INSTALL_LIB_DIR)/*cedana*
+	$(SUDO) rm -rf $(INSTALL_BIN_DIR)/*cedana*
 
 ###########
 ##@ Testing
@@ -115,7 +116,6 @@ reset-plugins: ## Reset & uninstall plugins
 PARALLELISM?=8
 TAGS?=
 ARGS?=
-TIMEOUT?=600
 RETRIES?=0
 HELPER_REPO?=
 HELPER_TAG?=""
@@ -125,24 +125,24 @@ CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
-BATS_CMD=BATS_TEST_TIMEOUT=$(TIMEOUT) BATS_TEST_RETRIES=$(RETRIES) bats --timing \
+BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
 				--output /tmp --report-formatter $(FORMATTER)
 
-test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1])
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		echo "Using unique instance of daemon per test..." ;\
+		echo "\nUsing unique instance of daemon per test...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
 		else \
@@ -151,7 +151,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		if [ -f /tmp/report.xml ]; then \
 			mv /tmp/report.xml /tmp/report-isolated.xml ;\
 		fi ;\
-		echo "Using a persistent instance of daemon across tests..." ;\
+		echo "\nUsing a persistent instance of daemon across tests...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
 		else \
@@ -178,7 +178,6 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) ;\
@@ -191,14 +190,13 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				PARALLELISM=$(PARALLELISM) \
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, TIMEOUT=<timeout>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
 	if [ -f /.dockerenv ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
@@ -230,7 +228,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -250,7 +247,6 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				PARALLELISM=$(PARALLELISM) \
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
-				TIMEOUT=$(TIMEOUT) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -295,7 +291,7 @@ test-k9s: ## Enter k9s in the test environment
 # and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
 # the default).
 
-DOCKER_IMAGE=cedana/cedana-helper:latest
+DOCKER_IMAGE=cedana/cedana-helper-test:$(shell git rev-parse HEAD)
 DOCKER_TEST_CONTAINER_NAME=cedana-test
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
@@ -303,6 +299,8 @@ DOCKER_TEST_START=docker start $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
 DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 PLATFORM=linux/amd64,linux/arm64
+ALL_PLUGINS?=0
+PREBUILT_BINARIES?=0
 
 PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
@@ -311,8 +309,8 @@ PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gp
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --name=$(DOCKER_TEST_CONTAINER_NAME) \
-						-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --name=$(DOCKER_TEST_CONTAINER_NAME) \
+				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
 				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \
 				-e HF_TOKEN=$(HF_TOKEN) \
@@ -334,7 +332,11 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 
 docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building helper Docker image..."
-	docker buildx build --platform $(PLATFORM) -t $(DOCKER_IMAGE) --load . ;\
+	docker buildx build --platform $(PLATFORM) \
+		--build-arg PREBUILT_BINARIES=$(PREBUILT_BINARIES) \
+		--build-arg ALL_PLUGINS=$(ALL_PLUGINS) \
+		--build-arg VERSION=$(VERSION) \
+		-t $(DOCKER_IMAGE) --load . ;\
 
 docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64)
 	@echo "Building test Docker image..."

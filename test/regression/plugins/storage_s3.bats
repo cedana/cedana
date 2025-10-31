@@ -37,17 +37,11 @@ teardown_file() {
 @test "remote (S3) dump process (new job)" {
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
 
     sleep 1
 
-    run cedana dump job "$jid" --dir s3://checkpoints-ci
-    assert_success
-
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    run echo "$dump_file"
-    assert_output --partial "s3://checkpoints-ci"
+    cedana dump job "$jid" --dir s3://checkpoints-ci
 
     run cedana job kill "$jid"
 }
@@ -60,8 +54,7 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump process $pid --name "$name" --compression tar --dir s3://checkpoints-ci
-    assert_success
+    cedana dump process $pid --name "$name" --compression tar --dir s3://checkpoints-ci
 
     run kill $pid
 }
@@ -74,8 +67,7 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump process $pid --name "$name" --compression gzip --dir s3://checkpoints-ci
-    assert_success
+    cedana dump process $pid --name "$name" --compression gzip --dir s3://checkpoints-ci
 
     run kill $pid
 }
@@ -88,8 +80,7 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump process $pid --name "$name" --compression lz4 --dir s3://checkpoints-ci
-    assert_success
+    cedana dump process $pid --name "$name" --compression lz4 --dir s3://checkpoints-ci
 
     run kill $pid
 }
@@ -102,8 +93,7 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump process $pid --name "$name" --compression zlib --dir s3://checkpoints-ci
-    assert_success
+    cedana dump process $pid --name "$name" --compression zlib --dir s3://checkpoints-ci
 
     run kill $pid
 }
@@ -115,15 +105,13 @@ teardown_file() {
     name=$(unix_nano)
     name2=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir s3://checkpoints-ci --compression none --leave-running
-    assert_success
+    cedana dump process $pid --name "$name" --dir s3://checkpoints-ci --compression none --leave-running
 
     pid_exists $pid
 
     sleep 1
 
-    run cedana dump process $pid --name "$name2" --dir s3://checkpoints-ci --compression none
-    assert_success
+    cedana dump process $pid --name "$name2" --dir s3://checkpoints-ci --compression none
 
     run kill $pid
 }
@@ -135,15 +123,13 @@ teardown_file() {
     name=$(unix_nano)
     name2=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir s3://checkpoints-ci --compression gzip --leave-running
-    assert_success
+    cedana dump process $pid --name "$name" --dir s3://checkpoints-ci --compression gzip --leave-running
 
     pid_exists $pid
 
     sleep 1
 
-    run cedana dump process $pid --name "$name2" --dir s3://checkpoints-ci --compression gzip
-    assert_success
+    cedana dump process $pid --name "$name2" --dir s3://checkpoints-ci --compression gzip
 
     run kill $pid
 }
@@ -156,20 +142,13 @@ teardown_file() {
 @test "remote (S3) restore process (new job)" {
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
 
     sleep 1
 
-    run cedana dump job "$jid" --dir s3://checkpoints-ci
-    assert_success
+    cedana dump job "$jid" --dir s3://checkpoints-ci
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    run echo "$dump_file"
-    assert_output --partial "s3://checkpoints-ci"
-
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana job kill "$jid"
 }
@@ -179,20 +158,14 @@ teardown_file() {
     jid=$(unix_nano)
     code=42
 
-    run cedana run process "$WORKLOADS/date-loop.sh" 7 $code --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" 7 $code --jid "$jid"
 
     sleep 1
 
-    run cedana dump job "$jid" --dir s3://checkpoints-ci
-    assert_success
+    cedana dump job "$jid" --dir s3://checkpoints-ci --name "$jid"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
-    run echo "$dump_file"
-    assert_output --partial "s3://checkpoints-ci"
-
-    run cedana restore process --path "$dump_file" --no-server
-    assert_equal "$status" "$code"
+    run cedana restore process --path "s3://checkpoints-ci/$jid.tar" --no-server
+    assert_equal $status $code
 }
 
 # bats test_tags=restore
@@ -203,11 +176,9 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump process $pid --name "$name" --compression tar --dir s3://checkpoints-ci
-    assert_success
+    cedana dump process $pid --name "$name" --compression tar --dir s3://checkpoints-ci
 
-    run cedana restore process --path "s3://checkpoints-ci/$name.tar"
-    assert_success
+    cedana restore process --path "s3://checkpoints-ci/$name.tar"
 
     run ps --pid $pid
     assert_success
@@ -224,11 +195,9 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump process $pid --name "$name" --compression gzip --dir s3://checkpoints-ci
-    assert_success
+    cedana dump process $pid --name "$name" --compression gzip --dir s3://checkpoints-ci
 
-    run cedana restore process --path "s3://checkpoints-ci/$name.tar.gz"
-    assert_success
+    cedana restore process --path "s3://checkpoints-ci/$name.tar.gz"
 
     run ps --pid $pid
     assert_success
@@ -245,11 +214,9 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump process $pid --name "$name" --compression lz4 --dir s3://checkpoints-ci
-    assert_success
+    cedana dump process $pid --name "$name" --compression lz4 --dir s3://checkpoints-ci
 
-    run cedana restore process --path "s3://checkpoints-ci/$name.tar.lz4"
-    assert_success
+    cedana restore process --path "s3://checkpoints-ci/$name.tar.lz4"
 
     run ps --pid $pid
     assert_success
@@ -266,11 +233,9 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump process $pid --name "$name" --compression zlib --dir s3://checkpoints-ci
-    assert_success
+    cedana dump process $pid --name "$name" --compression zlib --dir s3://checkpoints-ci
 
-    run cedana restore process --path "s3://checkpoints-ci/$name.tar.zlib"
-    assert_success
+    cedana restore process --path "s3://checkpoints-ci/$name.tar.zlib"
 
     run ps --pid $pid
     assert_success

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"syscall"
+
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/containerd/cmd"
@@ -48,19 +50,33 @@ var (
 	}
 	ManageHandler types.Run = client.Manage
 
+	KillSignal = syscall.SIGKILL
+	Cleanup    = client.Cleanup
+
 	GPUInterception types.Adapter[types.Run] = gpu.Interception
+	// GPUInterceptionRestore types.Adapter[types.Restore] = nil // Handled by lower-level runtime plugin
+	GPUTracing types.Adapter[types.Run] = gpu.Tracing
+	// GPUTracingRestore      types.Adapter[types.Restore] = nil // Handled by lower-level runtime plugin
 
 	FreezeHandler   types.Freeze   = runtime.Freeze
 	UnfreezeHandler types.Unfreeze = runtime.Unfreeze
 
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
-		validation.ValidateDumpRequst,
+		validation.ValidateDumpRequest,
 		client.SetupForDump,
+		client.LoadContainerForDump,
 		filesystem.DumpRootfs,
+		filesystem.DumpImageName,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}
 
-	// TODO: add restore middleware
+	RestoreHandler    types.Restore                   = client.Restore
+	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{
+		defaults.FillMissingRestoreDefaults,
+		validation.ValidateRestoreRequest,
+		client.SetupForRestore,
+		client.CreateContainerForRestore,
+	}
 )

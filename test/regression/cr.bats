@@ -37,7 +37,6 @@ teardown_file() {
 
     run cedana dump process $pid
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
@@ -50,8 +49,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression none
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression none
 
     assert_exists "/tmp/$name"
 
@@ -66,8 +64,7 @@ teardown_file() {
 
     mkdir -p /tmp/"$name"
 
-    run cedana dump process $pid --name "$name" --dir /tmp/"$name" --compression none
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp/"$name" --compression none
 
     assert_exists "/tmp/$name/$name"
 
@@ -80,8 +77,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression tar
 
     assert_exists "/tmp/$name.tar"
 
@@ -94,8 +90,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression gzip
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression gzip
 
     assert_exists "/tmp/$name.tar.gz"
 
@@ -108,8 +103,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression lz4
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression lz4
 
     assert_exists "/tmp/$name.tar.lz4"
 
@@ -122,8 +116,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression zlib
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression zlib
 
     assert_exists "/tmp/$name.tar.zlib"
 
@@ -154,16 +147,14 @@ teardown_file() {
     name=$(unix_nano)
     name2=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression none --leave-running
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression none --leave-running
 
     pid_exists $pid
     assert_exists "/tmp/$name"
 
     sleep 1
 
-    run cedana dump process $pid --name "$name2" --dir /tmp --compression none
-    assert_success
+    cedana dump process $pid --name "$name2" --dir /tmp --compression none
 
     assert_exists "/tmp/$name2"
 
@@ -177,16 +168,14 @@ teardown_file() {
     name=$(unix_nano)
     name2=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression gzip --leave-running
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression gzip --leave-running
 
     pid_exists $pid
     assert_exists "/tmp/$name.tar.gz"
 
     sleep 1
 
-    run cedana dump process $pid --name "$name2" --dir /tmp --compression gzip
-    assert_success
+    cedana dump process $pid --name "$name2" --dir /tmp --compression gzip
 
     assert_exists "/tmp/$name2.tar.gz"
 
@@ -197,12 +186,10 @@ teardown_file() {
 @test "dump process (new job)" {
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
@@ -216,12 +203,10 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana manage process $pid --jid "$jid"
-    assert_success
+    cedana manage process $pid --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
@@ -234,7 +219,6 @@ teardown_file() {
     mkdir -p /tmp/dump-"$id"
 
     run cedana dump process 999999999 --dir /tmp
-
     assert_failure
 
     # check that there are no files inside the dump dir
@@ -246,7 +230,6 @@ teardown_file() {
 # bats test_tags=dump
 @test "dump non-existent job" {
     run cedana dump job 999999999
-
     assert_failure
 }
 
@@ -261,12 +244,10 @@ teardown_file() {
 
     run cedana dump process $pid
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore process --path "$dump_file"
-    assert_success
+    cedana restore process --path "$dump_file"
 
     run ps --pid $pid
     assert_success
@@ -281,13 +262,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression tar
 
     assert_exists "/tmp/$name.tar"
 
-    run cedana restore process --path "/tmp/$name.tar"
-    assert_success
+    cedana restore process --path "/tmp/$name.tar"
 
     run ps --pid $pid
     assert_success
@@ -302,13 +281,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression gzip
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression gzip
 
     assert_exists "/tmp/$name.tar.gz"
 
-    run cedana restore process --path "/tmp/$name.tar.gz"
-    assert_success
+    cedana restore process --path "/tmp/$name.tar.gz"
 
     run ps --pid $pid
     assert_success
@@ -323,13 +300,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression lz4
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression lz4
 
     assert_exists "/tmp/$name.tar.lz4"
 
-    run cedana restore process --path "/tmp/$name.tar.lz4"
-    assert_success
+    cedana restore process --path "/tmp/$name.tar.lz4"
 
     run ps --pid $pid
     assert_success
@@ -344,13 +319,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression zlib
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression zlib
 
     assert_exists "/tmp/$name.tar.zlib"
 
-    run cedana restore process --path "/tmp/$name.tar.zlib"
-    assert_success
+    cedana restore process --path "/tmp/$name.tar.zlib"
 
     run ps --pid $pid
     assert_success
@@ -365,8 +338,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression tar
 
     mv "/tmp/$name.tar" "/tmp/$name.tar.jibberish"
 
@@ -380,17 +352,14 @@ teardown_file() {
 @test "restore process (new job)" {
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana ps
     assert_success
@@ -407,17 +376,14 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &> "$log" < /dev/null &
     pid=$!
 
-    run cedana manage process $pid --jid "$jid"
-    assert_success
+    cedana manage process $pid --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana ps
     assert_success
@@ -432,11 +398,9 @@ teardown_file() {
     name=$(unix_nano)
     pid_file="/tmp/$name.pid"
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression tar
 
-    run cedana restore process --path "/tmp/$name.tar" --pid-file "$pid_file"
-    assert_success
+    cedana restore process --path "/tmp/$name.tar" --pid-file "$pid_file"
 
     assert_exists "$pid_file"
 
@@ -449,11 +413,9 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression tar
 
-    run cedana restore process --path "/tmp/$name.tar" --no-server
-    assert_success
+    cedana restore process --path "/tmp/$name.tar" --no-server
 }
 
 # bats test_tags=restore,daemonless
@@ -463,8 +425,7 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression tar
 
     run cedana restore process --path "/tmp/$name.tar" --no-server
     assert_equal $status $code
@@ -477,11 +438,9 @@ teardown_file() {
     name=$(unix_nano)
     pid_file="/tmp/$name.pid"
 
-    run cedana dump process $pid --name "$name" --dir /tmp --compression tar
-    assert_success
+    cedana dump process $pid --name "$name" --dir /tmp --compression tar
 
-    run cedana restore process --path "/tmp/$name.tar" --no-server --pid-file "$pid_file"
-    assert_success
+    cedana restore process --path "/tmp/$name.tar" --no-server --pid-file "$pid_file"
 
     assert_exists "$pid_file"
 }
@@ -491,12 +450,10 @@ teardown_file() {
     code=42
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid"
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
@@ -509,11 +466,9 @@ teardown_file() {
     code=42
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid"
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid"
 
-    run cedana dump job "$jid"
-    assert_success
+    cedana dump job "$jid"
 
     run cedana restore job "$jid" --attach
     assert_equal $status $code
@@ -524,11 +479,9 @@ teardown_file() {
     code=42
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
 
-    run cedana dump job "$jid"
-    assert_success
+    cedana dump job "$jid"
 
     run cedana restore job "$jid" --attach
     assert_equal $status $code
@@ -540,14 +493,11 @@ teardown_file() {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
-    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
 
-    run cedana dump job "$jid"
-    assert_success
+    cedana dump job "$jid"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     sleep 3
     assert_file_contains "$log_file" "$code"
@@ -558,12 +508,10 @@ teardown_file() {
     code=42
     jid=$(unix_nano)
 
-    run cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
-    assert_success
+    cedana run process "$WORKLOADS/date-loop.sh" 3 "$code" --jid "$jid" --attachable
 
     run cedana dump job "$jid"
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
 
@@ -574,7 +522,6 @@ teardown_file() {
 # bats test_tags=restore
 @test "restore non-existent process" {
     run cedana restore process --path /tmp/non-existent
-
     assert_failure
 
     run ps --pid 999999999
@@ -584,6 +531,5 @@ teardown_file() {
 # bats test_tags=restore
 @test "restore non-existent job" {
     run cedana restore job 999999999
-
     assert_failure
 }

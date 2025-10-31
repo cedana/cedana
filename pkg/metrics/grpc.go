@@ -13,7 +13,10 @@ import (
 	"google.golang.org/grpc"
 )
 
-const TRACER_NAME = "cedana/daemon"
+const (
+	TRACER_NAME = "cedana/daemon"
+	METER_NAME  = "cedana/daemon"
+)
 
 func UnaryTracer(host *daemon.Host) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

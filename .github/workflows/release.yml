@@ -52,12 +52,25 @@ jobs:
       streamer_version: main
       helm_chart_version: main
       controller_version: main
-      runtime_shim_version: cedana
+      containerd_runtime_version: cedana
+
+  publish:
+    name: Publish
+    uses: ./.github/workflows/publish.yml
+    needs: build
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
+      github: true
+      cloudsmith: true
+      dockerhub: true
+      dockerhub_latest: true
+      post_summary: true
 
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: [build, download]
+    needs: [publish, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -65,7 +78,7 @@ jobs:
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    needs: [build, download]
+    needs: [publish, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
@@ -76,16 +89,3 @@ jobs:
       comparison_runtime: true
       push_results: true
       results_dataset: cedana
-
-  publish:
-    name: Publish
-    uses: ./.github/workflows/publish.yml
-    needs: [test, bench]
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      github: true
-      cloudsmith: true
-      dockerhub: true
-      dockerhub_latest: true
-      post_summary: true

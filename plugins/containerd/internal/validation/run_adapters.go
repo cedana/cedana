@@ -11,19 +11,21 @@ import (
 
 func ValidateRunRequest(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
-		if req.GetDetails().GetContainerd() == nil {
+		details := req.GetDetails().GetContainerd()
+
+		if details == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd details")
 		}
-		if req.GetDetails().GetContainerd().GetAddress() == "" {
+		if details.Address == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd address")
 		}
-		if req.GetDetails().GetContainerd().GetNamespace() == "" {
+		if details.Namespace == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd namespace")
 		}
-		if req.GetDetails().GetContainerd().GetID() == "" {
+		if details.ID == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd id")
 		}
-		if req.Action == daemon.RunAction_START_NEW && req.GetDetails().GetContainerd().GetImage().GetName() == "" {
+		if req.Action == daemon.RunAction_START_NEW && details.GetImage().GetName() == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd image")
 		}
 

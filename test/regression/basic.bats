@@ -28,30 +28,25 @@ teardown_file() {
 
 @test "cedana ps" {
     jid=$(unix_nano)
-    run cedana exec echo hello --jid "$jid"
-    assert_success
+    cedana exec echo hello --jid "$jid"
 
     run cedana ps
     assert_success
     assert_output --partial "$jid"
 }
 
-@test "Health check" {
-    run cedana check
-    assert_success
+@test "health check" {
+    cedana check
 }
 
-@test "Health check (daemon)" {
-    run cedana daemon check
-    assert_success
+@test "health check (daemon)" {
+    cedana daemon check
 }
 
-@test "Health check (full)" {
-    run cedana check --full
-    assert_success
+@test "health check (full)" {
+    cedana check --full
 }
 
-@test "Health check (full, daemon)" {
-    run cedana daemon check --full
-    assert_success
+@test "health check (full, daemon)" {
+    cedana daemon check --full
 }

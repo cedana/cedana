@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 
@@ -35,6 +36,8 @@ func init() {
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
 	dumpCmd.PersistentFlags().
 		Int32P(flags.StreamsFlag.Full, flags.StreamsFlag.Short, 0, "number of streams to use for dump (0 for no streaming)")
+	dumpCmd.PersistentFlags().
+		StringP(flags.CriuOptsFlag.Full, flags.CriuOptsFlag.Short, "", "criu options JSON (overriddes individual CRIU flags)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.LeaveRunningFlag.Full, flags.LeaveRunningFlag.Short, false, "leave the process running after dump")
 	dumpCmd.PersistentFlags().
@@ -66,7 +69,9 @@ func init() {
 
 			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
 				newFlag := *f
-				jobDumpCmd.Flags().AddFlag(&newFlag)
+				if jobDumpCmd.Flags().Lookup(newFlag.Name) == nil {
+					jobDumpCmd.Flags().AddFlag(&newFlag)
+				}
 				newFlag.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
 			})
 			return nil
@@ -84,30 +89,41 @@ var dumpCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression, _ := cmd.Flags().GetString(flags.CompressionFlag.Full)
 		streams, _ := cmd.Flags().GetInt32(flags.StreamsFlag.Full)
+		gpuFreezeType, _ := cmd.Flags().GetString(flags.GpuFreezeTypeFlag.Full)
+
+		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
+		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
+		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
 		leaveRunning, _ := cmd.Flags().GetBool(flags.LeaveRunningFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpSkipInFlight, _ := cmd.Flags().GetBool(flags.TcpSkipInFlightFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
-		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
-		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
-		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
-		gpuFreezeType, _ := cmd.Flags().GetString(flags.GpuFreezeTypeFlag.Full)
+		criuOptsJSON, _ := cmd.Flags().GetString(flags.CriuOptsFlag.Full)
+
+		criuOpts := &criu.CriuOpts{
+			TcpEstablished:  proto.Bool(tcpEstablished),
+			TcpSkipInFlight: proto.Bool(tcpSkipInFlight),
+			LeaveRunning:    proto.Bool(leaveRunning),
+			FileLocks:       proto.Bool(fileLocks),
+			ShellJob:        proto.Bool(shellJob),
+			LinkRemap:       proto.Bool(linkRemap),
+			External:        external,
+		}
+		if criuOptsJSON != "" {
+			err := json.Unmarshal([]byte(criuOptsJSON), criuOpts)
+			if err != nil {
+				return fmt.Errorf("Error parsing CRIU options JSON: %v", err)
+			}
+		}
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
-			Dir:         dir,
-			Name:        name,
-			Compression: compression,
-			Streams:     int32(streams),
-			Criu: &criu.CriuOpts{
-				LeaveRunning:    proto.Bool(leaveRunning),
-				TcpEstablished:  proto.Bool(tcpEstablished),
-				TcpSkipInFlight: proto.Bool(tcpSkipInFlight),
-				FileLocks:       proto.Bool(fileLocks),
-				External:        external,
-				ShellJob:        proto.Bool(shellJob),
-				LinkRemap:       proto.Bool(linkRemap),
-			},
+			Dir:           dir,
+			Name:          name,
+			Compression:   compression,
+			Streams:       int32(streams),
+			Criu:          criuOpts,
+			Action:        daemon.DumpAction_DUMP,
 			GPUFreezeType: gpuFreezeType,
 		}
 
@@ -185,9 +201,6 @@ var processDumpCmd = &cobra.Command{
 		req.Type = "process"
 		req.Details = &daemon.Details{Process: &daemon.Process{PID: uint32(pid)}}
 
-		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
-
 		return nil
 	},
 }
@@ -234,9 +247,6 @@ var jobDumpCmd = &cobra.Command{
 			req.Details = &daemon.Details{}
 		}
 		req.Details.JID = proto.String(jid)
-
-		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
 
 		return nil
 	},

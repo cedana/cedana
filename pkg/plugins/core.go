@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"plugin"
+	"strings"
 	"sync"
 
 	"github.com/cedana/cedana/pkg/config"
@@ -36,6 +37,11 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 		return nil
 	}
 
+	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "plugin") {
+		// Skip loading plugins when running plugin management commands
+		return nil
+	}
+
 	for _, t := range Registry {
 		if t.Type != SUPPORTED && t.Type != EXPERIMENTAL {
 			continue
@@ -49,7 +55,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 
 			p, err := plugin.Open(path)
 			if err != nil {
-				fmt.Printf("Error loading plugin: %s\n", t.Name)
+				fmt.Printf("%s: %v\n", t.Name, err)
 				continue
 			}
 
@@ -57,7 +63,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 		}
 	}
 
-	return
+	return loadedPlugins
 }
 
 // RecoverFromPanic is a helper function to recover from panics in plugins

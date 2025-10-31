@@ -89,8 +89,8 @@ var pluginListCmd = &cobra.Command{
 		})
 
 		tableWriter.SortBy([]table.SortBy{
-			{Name: "Status", Mode: table.Asc},
 			{Name: "Plugin", Mode: table.Asc},
+			{Name: "Status", Mode: table.Asc},
 		})
 
 		for _, p := range list {
@@ -312,9 +312,12 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.HelperCmds, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.DumpMiddleware, pluginNames, &errs))
-			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.DumpHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.DumpVMMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.DumpVMHandler, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddleware, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreMiddlewareLate, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RestoreHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RestoreVMMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RestoreVMHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.FreezeHandler, pluginNames, &errs))
@@ -324,12 +327,16 @@ var pluginFeaturesCmd = &cobra.Command{
 			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunDaemonlessSupport, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RunMiddlewareLate, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.ManageHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.Cleanup, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.Reaper, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.GPUInterceptionRestore, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.GPUTracing, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.GPUTracingRestore, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.Storage, pluginNames, &errs))
 			tableWriter.AppendSeparator()

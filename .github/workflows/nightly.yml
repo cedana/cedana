@@ -4,7 +4,7 @@ name: Nightly
 
 on:
   schedule:
-    - cron: "8 0 * * *" # Every day at midnight (EST)
+    - cron: "0 4 * * *" # Every day at 1:30 AM (EST)
   workflow_dispatch:
     inputs:
       debug:
@@ -29,7 +29,7 @@ jobs:
       streamer_version: ${{ vars.NIGHTLY_STREAMER_VERSION }}
       helm_chart_version: ${{ vars.NIGHTLY_HELM_CHART_VERSION }}
       controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
-      runtime_shim_version: ${{ vars.NIGHTLY_RUNTIME_SHIM_VERSION }}
+      containerd_runtime_version: ${{ vars.NIGHTLY_RUNTIME_SHIM_VERSION }}
 
   create_runner:
     name: CreateRunner
@@ -45,10 +45,9 @@ jobs:
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
-      runner: 16cpu-64g # use larger runner
-      runner_gpu: 8cpu-64g-1xL40S # use larger runner
-      runner_gpu_arm64: 32cpu-64g-1xT4G # use larger runner
-      large_dynamic_runner_gpu: ${{ needs.create_runner.outputs.gpu_type }}
+      runner: 16cpu # use larger runner
+      runner_gpu: 16cpu-1gpu # use larger runner
+      large_dynamic_runner_gpu: ${{ needs.create_runner.outputs.gpu_type }} # use dynamic runner
       parallelism: 8
       parallelism_gpu: 4
       post_summary_slack: nightly

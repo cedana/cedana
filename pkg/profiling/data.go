@@ -7,11 +7,14 @@ import (
 
 // Data is a struct that represents a profiling data tree.
 type Data struct {
-	Name       string
-	Components []*Data
+	Name       string  `json:"name"`
+	Components []*Data `json:"components,omitempty"`
 
-	Duration int64
+	Duration int64 `json:"duration,omitempty"`
+	IO       int64 `json:"io,omitempty"`
 	// add more othogonal fields here as needed
+
+	Parallel bool `json:"parallel,omitempty"`
 }
 
 // FlattenData flattens the profiling data into a single list of components.
@@ -20,19 +23,20 @@ type Data struct {
 func FlattenData(data *Data) {
 	length := len(data.Components)
 
-	for i := 0; i < length; i++ {
+	for i := range length {
 		component := data.Components[i]
 
-		data.Duration -= component.Duration
+		if !component.Parallel { // only consider duration of serial components in calculating remainder
+			data.Duration -= component.Duration
+		}
 
 		FlattenData(component)
 
 		data.Components = append(data.Components, component.Components...)
 		component.Components = nil
-
 	}
 
-	// If the data has exactly 0 duration now, then it was just a category wrapper for its components.
+	// If the data has exactly 0 duration, then it was just a category wrapper for its components.
 	// so we append its name to the name of its children.
 
 	if data.Duration == 0 && data.Name != "" {
@@ -43,7 +47,7 @@ func FlattenData(data *Data) {
 }
 
 // CleanData collapses any empty wrappers in the profiling data.
-// Empty wrappers are those that have no duration, no name, and only components.
+// Empty wrappers are those that have no duration, no IO, no name, and only components.
 func CleanData(data *Data) {
 	length := len(data.Components)
 	if length == 0 {
@@ -52,12 +56,12 @@ func CleanData(data *Data) {
 
 	newComponents := make([]*Data, 0, length)
 
-	for i := 0; i < length; i++ {
+	for i := range length {
 		component := data.Components[i]
 
 		CleanData(component)
 
-		if component.Duration == 0 && component.Name == "" {
+		if component.Duration == 0 && component.IO == 0 && component.Name == "" {
 			newComponents = append(newComponents, component.Components...)
 		} else {
 			newComponents = append(newComponents, component)

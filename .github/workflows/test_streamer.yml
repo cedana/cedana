@@ -29,22 +29,17 @@ on:
         type: string
         description: "Runner machine for CPU tests"
         required: false
-        default: 4cpu-16g
+        default: 2cpu
       runner_gpu:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 4cpu-16g-1xL4
-      runner_gpu_arm64:
-        type: string
-        description: "Runner machine for GPU tests (arm64)"
-        required: false
-        default: 8cpu-16g-1xT4G
+        default: 4cpu-1gpu
       parallelism:
         type: number
         description: "Parallelism for running tests"
         required: false
-        default: 4
+        default: 2
       parallelism_gpu:
         type: number
         description: "Parallelism for running GPU tests"
@@ -57,13 +52,13 @@ on:
         default: false
 
 env:
-  HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
   FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging
@@ -71,7 +66,7 @@ env:
 jobs:
   streamer:
     name: Streamer
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && (matrix.arch == 'amd64' && inputs.runner_gpu || inputs.runner_gpu_arm64) || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/extras=s3-cache
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -87,7 +82,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} -v /var/run/docker.sock:/var/run/docker.sock --cgroupns=host
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -105,7 +100,9 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          path: .
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
         uses: actions/download-artifact@v4
@@ -221,8 +218,6 @@ jobs:
           - amd64
           - arm64
     steps:
-      - uses: runs-on/action@v1
-
       - name: Download report
         id: download-report
         uses: actions/download-artifact@v4

@@ -17,6 +17,9 @@ type Manager interface {
 	// Get a plugin by name
 	Get(name string) *Plugin
 
+	//  Get by formatted name
+	Getf(format string, a ...any) *Plugin
+
 	// Check if a plugin is installed
 	IsInstalled(name string) bool
 }
@@ -42,6 +45,10 @@ func (m *ManagerUnimplemented) Remove(_ []string) (chan int, chan string, chan e
 }
 
 func (m *ManagerUnimplemented) Get(_ string) *Plugin {
+	return nil
+}
+
+func (m *ManagerUnimplemented) Getf(format string, a ...any) *Plugin {
 	return nil
 }
 

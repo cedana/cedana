@@ -19,7 +19,7 @@ setup_rootfs() {
 
 setup_rootfs_cuda() {
     mkdir -p "$ROOTFS_CUDA"
-    cid=$(docker create "$ROOTFS_CUDA_IMAGE")
+    cid=$(docker create "$ROOTFS_CUDA_IMAGE" tail)
     docker export "$cid" | tar -C "$ROOTFS_CUDA" -xf -
     docker rm "$cid"
 }
@@ -219,6 +219,17 @@ add_bind_mount() {
 
     # add a new item to the mounts array, with the provided source and destination
     jq ".mounts += [{\"source\":\"$src\",\"destination\":\"$dest\",\"type\":\"bind\",\"options\":[\"rbind\",\"rw\"]}]" "$bundle/config.json" > "$bundle/config.json.tmp"
+
+    mv "$bundle/config.json.tmp" "$bundle/config.json"
+}
+
+add_env_var() {
+    local bundle="$1"
+    local name="$2"
+    local value="$3"
+
+    # add a new item to the env array, with the provided name and value
+    jq ".process.env += [\"$name=$value\"]" "$bundle/config.json" > "$bundle/config.json.tmp"
 
     mv "$bundle/config.json.tmp" "$bundle/config.json"
 }

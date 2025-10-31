@@ -59,6 +59,7 @@ var freezeCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
+			Action:        daemon.DumpAction_FREEZE_ONLY,
 			GPUFreezeType: gpuFreezeType,
 		}
 
@@ -136,9 +137,6 @@ var processFreezeCmd = &cobra.Command{
 		req.Type = "process"
 		req.Details = &daemon.Details{Process: &daemon.Process{PID: uint32(pid)}}
 
-		ctx := context.WithValue(cmd.Context(), keys.FREEZE_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
-
 		return nil
 	},
 }
@@ -185,9 +183,6 @@ var jobFreezeCmd = &cobra.Command{
 			req.Details = &daemon.Details{}
 		}
 		req.Details.JID = proto.String(jid)
-
-		ctx := context.WithValue(cmd.Context(), keys.FREEZE_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
 
 		return nil
 	},

@@ -5,7 +5,7 @@
       "uid": 0,
       "gid": 0
     },
-    "args": ["/bin/sh", "-c", "while true; do date; sleep 1; done"],
+    "args": ["/cedana-samples/gpu_smr/vector_add"],
     "env": [
       "PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
       "NVARCH=x86_64",

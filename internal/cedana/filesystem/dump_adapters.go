@@ -91,7 +91,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 		// so that if we fail compression/upload, CRIU can still resume the process (only if leave-running is not set)
 
 		if storage.IsRemote() || (compression != "" && compression != "none") {
-			compress := func() (err error) {
+			compress := func(ctx context.Context) (err error) {
 				var path, ext string
 				ext, err = io.ExtForCompression(compression)
 				if err != nil {
@@ -110,9 +110,8 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
-				_, end := profiling.StartTimingCategory(ctx, "storage", io.Tar)
+				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
 				err = io.Tar(imagesDirectory, tarball, compression)
-				end()
 				if err != nil {
 					storage.Delete(path)
 					return fmt.Errorf("failed to create tarball: %w", err)
@@ -132,12 +131,12 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 			if req.GetCriu().GetLeaveRunning() {
 				defer func() {
-					err = errors.Join(err, compress())
+					err = errors.Join(err, compress(ctx))
 				}()
 			} else {
 				callback := &criu_client.NotifyCallback{
-					PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) (err error) {
-						return compress()
+					PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) (err error) {
+						return compress(ctx)
 					},
 				}
 				opts.CRIUCallback.Include(callback)

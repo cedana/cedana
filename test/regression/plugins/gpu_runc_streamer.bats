@@ -40,18 +40,16 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "stream dump GPU container (vector add)" {
+@test "[$GPU_INFO] stream dump GPU container (vector add)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
     sleep 1
 
     run cedana dump job "$jid" --streams 1
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
 
@@ -59,18 +57,16 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "stream dump GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] stream dump GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
     sleep 1
 
     run cedana dump job "$jid" --streams 4
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
@@ -85,66 +81,57 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "stream restore GPU container (vector add)" {
+@test "[$GPU_INFO] stream restore GPU container (vector add)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
     sleep 1
 
     run cedana dump job "$jid" --streams 1
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana job kill "$jid"
 }
 
 # bats test_tags=restore
-@test "stream restore GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] stream restore GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
-    run cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
-    assert_success
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
 
     sleep 1
 
     run cedana dump job "$jid" --streams 4
     assert_success
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
     assert_exists "$dump_file/img-2.gz"
     assert_exists "$dump_file/img-3.gz"
 
-    run cedana restore job "$jid"
-    assert_success
+    cedana restore job "$jid"
 
     run cedana job kill "$jid"
 }
 
 # bats test_tags=restore,daemonless
-@test "stream restore GPU container (mem throughput saxpy, without daemon)" {
+@test "[$GPU_INFO] stream restore GPU container (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
-    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
-    cedana run runc --bundle "$bundle" --gpu-enabled --no-server --detach "$jid" > /dev/null 2>&1 < /dev/null
+    debug cedana run runc --bundle "$bundle" --gpu-enabled --no-server --detach "$jid" > /dev/null 2>&1 < /dev/null
 
     sleep 1
 
     run cedana dump runc "$jid" --streams 4
     assert_success
-
-    runc delete "$jid"
-
     dump_file=$(echo "$output" | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
@@ -152,8 +139,9 @@ teardown_file() {
     assert_exists "$dump_file/img-2.gz"
     assert_exists "$dump_file/img-3.gz"
 
-    run cedana restore runc --path "$dump_file" --id "$jid" --bundle "$bundle" --detach --no-server
-    assert_success
+    runc delete "$jid"
+
+    debug cedana restore runc --path "$dump_file" --id "$jid" --bundle "$bundle" --detach --no-server
 
     wait_for_container_status "$jid" "running"
     runc kill "$jid" KILL

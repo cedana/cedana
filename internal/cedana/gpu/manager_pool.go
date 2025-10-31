@@ -11,13 +11,19 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const SYNC_INTERVAL = 10 * time.Second
+const (
+	SYNC_INTERVAL         = 10 * time.Second
+	SYNC_SHUTDOWN_TIMEOUT = 45 * time.Second
+)
 
 // Implements a GPU manager pool that is capable of maintaining a pool of GPU controllers
 type ManagerPool struct {
 	*ManagerSimple // Embed simple manager implements most of what we need
 
 	poolSize int
+	free     int
+	busy     int
+	stale    int
 }
 
 func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize int, plugins plugins.Manager) (*ManagerPool, error) {
@@ -38,19 +44,30 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 
 	// Spawn a background routine that will keep the DB in sync
 	// with retry logic. Can extend to use a backoff strategy.
-	serverWg.Add(1)
-	go func() {
-		defer serverWg.Done()
+	serverWg.Go(func() {
 		for {
 			select {
 			case <-lifetime.Done():
 				log.Info().Msg("syncing GPU manager before shutdown")
-				manager.poolSize = 0 // Reset it so all free controllers are terminated
-				err := manager.Sync(context.WithoutCancel(lifetime))
-				if err != nil {
-					log.Error().Err(err).Msg("failed to sync GPU controllers on shutdown")
+				ctx, cancel := context.WithTimeout(context.WithoutCancel(lifetime), SYNC_SHUTDOWN_TIMEOUT)
+				defer cancel()
+				for {
+					select {
+					case <-ctx.Done():
+						log.Warn().Msg("timeout reached while syncing GPU manager on shutdown")
+						return
+					default:
+						manager.poolSize = 0 // Reset it so all free controllers are terminated
+						err := manager.Sync(ctx)
+						if err != nil {
+							log.Error().Err(err).Msg("failed to sync GPU controllers on shutdown")
+						}
+						if manager.free == 0 && manager.stale == 0 {
+							return
+						}
+						time.Sleep(1 * time.Second) // Wait a bit before retrying
+					}
 				}
-				return
 			case <-time.After(SYNC_INTERVAL):
 				err := manager.Sync(lifetime)
 				if err != nil {
@@ -58,13 +75,19 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 				}
 			}
 		}
-	}()
+	})
 
 	return manager, nil
 }
 
 func (m *ManagerPool) Sync(ctx context.Context) error {
-	m.sync.Lock()
+	m.syncs.Add(1)
+	if !m.sync.TryLock() {
+		m.syncs.Done()
+		m.syncs.Wait() // Instead of stacking up syncs, just wait for the current one to finish
+		return nil
+	}
+	defer m.syncs.Done()
 	defer m.sync.Unlock()
 
 	err := m.controllers.Sync(ctx)
@@ -72,9 +95,18 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 		return fmt.Errorf("failed to sync GPU controllers: %w", err)
 	}
 
-	free, busy, remaining := m.controllers.List()
+	free, busy, remaining, remainingReason := m.controllers.List()
 
-	log.Debug().Int("free", len(free)).Int("busy", len(busy)).Int("target", m.poolSize).Msg("GPU controller pool")
+	m.free = len(free)
+	m.busy = len(busy)
+	m.stale = len(remaining)
+
+	log.Debug().
+		Int("free", m.free).
+		Int("busy", m.busy).
+		Int("target", m.poolSize).
+		Int("stale", m.stale).
+		Msg("GPU controller pool")
 
 	if config.Global.GPU.Debug {
 		log.Warn().Msg("GPU controller pool is in debug mode, not maintaining pool size")
@@ -83,39 +115,43 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 
 	// Remove controllers not in either free or busy list
 
-	for _, controller := range remaining {
-		log.Debug().Str("ID", controller.ID).Msg("clearing stale GPU controller in pool")
-		m.controllers.Terminate(controller.ID)
+	for i, controller := range remaining {
+		if acquired, _ := controller.Booking.TryLock(); acquired {
+			log.Debug().Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("clearing stale GPU controller in pool")
+			m.controllers.Terminate(ctx, controller.ID)
+		}
 	}
 
 	// Maintain the pool size
 
 	if len(free) < m.poolSize {
 		log.Debug().Int("target", m.poolSize).Int("free", len(free)).Msg("maintaining GPU pool size")
+		wg := &sync.WaitGroup{}
 		for i := len(free); i < m.poolSize; i++ {
-			wg := &sync.WaitGroup{}
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				controller, err := m.controllers.Spawn(ctx, m.plugins.Get("gpu").BinaryPaths()[0])
 				if err != nil {
 					log.Debug().Err(err).Msg("failed to spawn GPU controller to maintain pool size")
 					return
 				}
-				log.Debug().Str("ID", controller.ID).Msg("spawned GPU controller to maintain pool size")
 				controller.Booking.Unlock()
-			}()
-			wg.Wait()
+			})
 		}
+		wg.Wait()
 	} else if len(free) > m.poolSize {
 		log.Debug().Int("target", m.poolSize).Int("free", len(free)).Msg("reducing GPU pool size")
+		wg := &sync.WaitGroup{}
 		for _, controller := range free[m.poolSize:] {
-			// Ensure we only terminate controllers that are still free
-			if acquired, _ := controller.Booking.TryLock(); acquired {
-				log.Debug().Str("ID", controller.ID).Msg("terminating GPU controller to reduce pool size")
-				m.controllers.Terminate(controller.ID)
-			}
+			wg.Go(func() {
+				if controller.Book() { // Only terminate if controller is still free
+					m.controllers.Terminate(ctx, controller.ID)
+				} else {
+					log.Debug().Str("ID", controller.ID).Msg("skipping termination of busy GPU controller")
+				}
+			})
 		}
+		wg.Wait()
 	}
+
 	return nil
 }

@@ -1,0 +1,31 @@
+## cedana freeze job
+
+Freeze a managed process/container (job)
+
+```
+cedana freeze job <JID> [flags]
+```
+
+### Options
+
+```
+      --address string     (containerd) containerd socket address
+  -h, --help               help for job
+      --namespace string   (containerd) containerd namespace
+      --root string        (runc) root
+```
+
+### Options inherited from parent commands
+
+```
+      --config string            one-time config JSON string (merge with existing config)
+      --config-dir string        custom config directory
+      --gpu-freeze-type string   GPU freeze type (IPC, NCCL)
+      --profiling                enable profiling/show profiling data
+      --protocol string          protocol to use (TCP, UNIX, VSOCK)
+```
+
+### SEE ALSO
+
+* [cedana freeze](cedana_freeze.md)	 - Freeze a container/process
+

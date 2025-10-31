@@ -9,22 +9,24 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func ValidateDumpRequst(next types.Dump) types.Dump {
+func ValidateDumpRequest(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
-		if req.GetDetails().GetContainerd() == nil {
+		details := req.GetDetails().GetContainerd()
+
+		if details == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd details")
 		}
-		if req.GetDetails().GetContainerd().GetAddress() == "" {
+		if details.Address == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd address")
 		}
-		if req.GetDetails().GetContainerd().GetNamespace() == "" {
+		if details.Namespace == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd namespace")
 		}
-		if req.GetDetails().GetContainerd().GetID() == "" {
+		if details.ID == "" {
 			return nil, status.Errorf(codes.InvalidArgument, "missing containerd id")
 		}
-		if req.GetDetails().GetContainerd().GetRootfsOnly() && req.GetDetails().GetContainerd().GetImage().GetName() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "missing image ref for rootfs-only dump")
+		if details.RootfsOnly && details.Rootfs && details.GetImage().GetName() == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing image ref for rootfs dump")
 		}
 
 		return next(ctx, opts, resp, req)
