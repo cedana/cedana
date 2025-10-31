@@ -66,7 +66,7 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 
 func (s *Storage) Open(path string) (io.ReadCloser, error) {
 	bucket, key, err := s.sanitizePath(path)
-	log.Info().Str("bucket", bucket).Str("key", key).Msg("Using S3 storage path")
+	log.Info().Str("bucket", bucket).Str("key", key).Msg("using S3 storage path")
 	if err != nil {
 		return nil, err
 	}
