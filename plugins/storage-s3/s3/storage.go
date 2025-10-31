@@ -89,11 +89,11 @@ func (s *Storage) Create(path string) (io.WriteCloser, error) {
 	}
 
 	// Sanity check: ensure the bucket exists
-	_, err = s.client.GetBucketEncryption(s.ctx, &s3.GetBucketEncryptionInput{
+	_, err = s.client.HeadBucket(s.ctx, &s3.HeadBucketInput{
 		Bucket: &bucket,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to access bucket %q: %w", bucket, err)
 	}
 
 	return NewFile(s.ctx, s.client, bucket, key), nil
