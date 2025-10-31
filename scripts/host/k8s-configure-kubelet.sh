@@ -136,18 +136,38 @@ else
 fi
 
 # Restart kubelet to apply changes
+success_method=""
+
 if command -v systemctl >/dev/null 2>&1; then
     echo "Attempting to restart kubelet via systemctl..."
-    sudo systemctl restart kubelet || echo "systemctl restart failed, moving on"
-elif command -v service >/dev/null 2>&1; then
-    echo "Attempting to restart kubelet via service..."
-    sudo service kubelet restart || echo "service restart failed, moving on"
-elif command -v snap >/dev/null 2>&1; then
-    echo "Attempting to restart kubelet via snap..."
-    sudo snap restart kubelet-eks || echo "snap restart failed, moving on"
-else
-    echo "ERROR: Could not find systemctl, service, or snap; please restart kubelet manually" >&2
-    exit 1
+    if sudo systemctl restart kubelet; then
+        success_method="systemctl"
+    else
+        echo "systemctl restart failed, trying service and snap"
+    fi
 fi
 
-echo "Restart attempts finished; check kubelet status manually if needed"
+if [ -z "$success_method" ] && command -v service >/dev/null 2>&1; then
+    echo "Attempting to restart kubelet via service..."
+    if sudo service kubelet restart; then
+        success_method="service"
+    else
+        echo "service restart failed, trying snap"
+    fi
+fi
+
+if [ -z "$success_method" ] && command -v snap >/dev/null 2>&1; then
+    echo "Attempting to restart kubelet via snap..."
+    if sudo snap restart kubelet-eks; then
+        success_method="snap"
+    else
+        echo "snap restart failed, moving on"
+    fi
+fi
+
+if [ -z "$success_method" ]; then
+    echo "ERROR: Could not restart kubelet via systemctl, service, or snap; please restart manually" >&2
+    exit 1
+else
+    echo "Restart attempts finished; kubelet successfully restarted via $success_method"
+fi
