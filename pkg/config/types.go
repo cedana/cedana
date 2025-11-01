@@ -122,5 +122,7 @@ type (
 		SecretAccessKey string `json:"secret_access_key" key:"secret_access_key" yaml:"secret_access_key" mapstructure:"secret_access_key" env_aliases:"AWS_SECRET_ACCESS_KEY"`
 		// Region is the AWS region to use (uses default region if not set)
 		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
+		// Endpoint is a custom AWS endpoint to use (e.g. for S3-compatible storage)
+		Endpoint string `json:"endpoint" key:"endpoint" yaml:"endpoint" mapstructure:"endpoint" env_aliases:"AWS_ENDPOINT"`
 	}
 )

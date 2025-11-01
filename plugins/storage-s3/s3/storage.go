@@ -30,6 +30,10 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 		log.Warn().Str("storage", "S3").Msg("AWS Region is not set in the configuration")
 	}
 
+	if cedana_config.Global.AWS.Endpoint != "" {
+		log.Info().Str("storage", "S3").Msgf("Using custom S3 endpoint: %s", cedana_config.Global.AWS.Endpoint)
+	}
+
 	credProvider := credentials.NewStaticCredentialsProvider(
 		cedana_config.Global.AWS.AccessKeyID,
 		cedana_config.Global.AWS.SecretAccessKey,
@@ -40,13 +44,21 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 		config.WithCredentialsProvider(credProvider),
 		config.WithRegion(cedana_config.Global.AWS.Region),
 	)
+
 	if err != nil {
 		return nil, err
 	}
 
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+		if endpoint := cedana_config.Global.AWS.Endpoint; endpoint != "" {
+			o.BaseEndpoint = &endpoint
+			o.UsePathStyle = true
+		}
+	})
+
 	storage := &Storage{
 		ctx:    ctx,
-		client: s3.NewFromConfig(cfg),
+		client: client,
 	}
 
 	return storage, nil
@@ -54,16 +66,17 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 
 func (s *Storage) Open(path string) (io.ReadCloser, error) {
 	bucket, key, err := s.sanitizePath(path)
+	log.Info().Str("bucket", bucket).Str("key", key).Msg("using S3 storage path")
 	if err != nil {
 		return nil, err
 	}
 
 	// Sanity check: ensure the bucket exists
-	_, err = s.client.GetBucketEncryption(s.ctx, &s3.GetBucketEncryptionInput{
+	_, err = s.client.HeadBucket(s.ctx, &s3.HeadBucketInput{
 		Bucket: &bucket,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to access bucket %q: %w", bucket, err)
 	}
 
 	return NewFile(s.ctx, s.client, bucket, key), nil
@@ -76,11 +89,11 @@ func (s *Storage) Create(path string) (io.WriteCloser, error) {
 	}
 
 	// Sanity check: ensure the bucket exists
-	_, err = s.client.GetBucketEncryption(s.ctx, &s3.GetBucketEncryptionInput{
+	_, err = s.client.HeadBucket(s.ctx, &s3.HeadBucketInput{
 		Bucket: &bucket,
 	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to access bucket %q: %w", bucket, err)
 	}
 
 	return NewFile(s.ctx, s.client, bucket, key), nil
