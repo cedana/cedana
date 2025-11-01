@@ -57,15 +57,15 @@ get_kubelet_arg_value() {
     local args=("$@")
     for ((i = 0; i < ${#args[@]}; i++)); do
         case "${args[i]}" in
-            $arg=*)
-                echo "${args[i]#*=}"
-                return
-                ;;
-            $arg)
-                ((i++))
-                echo "${args[i]}"
-                return
-                ;;
+        $arg=*)
+            echo "${args[i]#*=}"
+            return
+            ;;
+        $arg)
+            ((i++))
+            echo "${args[i]}"
+            return
+            ;;
         esac
     done
 }
@@ -136,19 +136,38 @@ else
 fi
 
 # Restart kubelet to apply changes
+success_method=""
+
 if command -v systemctl >/dev/null 2>&1; then
-    echo "Restarting kubelet via systemctl"
-    sudo systemctl restart kubelet || {
-        echo "Failed to restart kubelet"
-        exit 1
-    }
-elif command -v service >/dev/null 2>&1; then
-    echo "Restarting kubelet via service"
-    sudo service kubelet restart || {
-        echo "Failed to restart kubelet"
-        exit 1
-    }
+    echo "Attempting to restart kubelet via systemctl..."
+    if sudo systemctl restart kubelet; then
+        success_method="systemctl"
+    else
+        echo "systemctl restart failed, trying service and snap"
+    fi
+fi
+
+if [ -z "$success_method" ] && command -v service >/dev/null 2>&1; then
+    echo "Attempting to restart kubelet via service..."
+    if sudo service kubelet restart; then
+        success_method="service"
+    else
+        echo "service restart failed, trying snap"
+    fi
+fi
+
+if [ -z "$success_method" ] && command -v snap >/dev/null 2>&1; then
+    echo "Attempting to restart kubelet via snap..."
+    if sudo snap restart kubelet-eks; then
+        success_method="snap"
+    else
+        echo "snap restart failed, moving on"
+    fi
+fi
+
+if [ -z "$success_method" ]; then
+    echo "ERROR: Could not restart kubelet via systemctl, service, or snap; please restart manually" >&2
+    exit 1
 else
-    echo "WARNING: Could not find systemctl or service command to restart kubelet; please restart kubelet manually" >&2
-    exit 0
+    echo "Restart attempts finished; kubelet successfully restarted via $success_method"
 fi
