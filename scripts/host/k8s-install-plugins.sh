@@ -103,12 +103,25 @@ END_CAT
 else
     PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
     if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
-        echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
-        cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
+        # if it's not version = 3 then we assume it's version = 2, as containerd config version = 1 is not used any more, largely that's considered deprecated
+        if ! grep -q 'version = 3' "$PATH_CONTAINERD_CONFIG"; then
+            echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
+            cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
+        else
+            # TODO: move to python to handle edge cases (this works with AWS from local tests)
+            # ideally we should pick up the config for runc and mimic it, cause it might not be default config
+            # hence may break compat in some clusters AL2023 and others seem to not have any such issues so can be shipped with just a version check for now
+            echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
+            cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
+    runtime_type = "io.containerd.runc.v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+END_CAT
+        fi
     fi
     echo "Sending SIGHUP to containerd..."
     (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
