@@ -35,6 +35,11 @@ on:
         description: "Runner machine for tests"
         required: false
         default: 4cpu-1gpu
+      large_dynamic_runner:
+        type: string
+        description: "Cedana-managed runner for large tests - used if provided instead of runner"
+        required: false
+        default: ""
       post_summary:
         type: boolean
         description: "Post test summary"

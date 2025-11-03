@@ -31,16 +31,23 @@ jobs:
       controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
       containerd_runtime_version: ${{ vars.NIGHTLY_RUNTIME_SHIM_VERSION }}
 
+  create_runner:
+    name: CreateRunner
+    uses: ./.github/workflows/create_runner.yml
+    needs: download
+    secrets: inherit
+
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: download
+    needs: create_runner
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
       runner: 16cpu # use larger runner
       runner_gpu: 16cpu-1gpu # use larger runner
+      large_dynamic_runner_gpu: ${{ needs.create_runner.outputs.gpu_type }} # use dynamic runner
       parallelism: 8
       parallelism_gpu: 4
       post_summary_slack: nightly
