@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
@@ -99,9 +98,10 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			"CEDANA_EXECUTABLE_PATH=" + executablePath, // For the shim to call cedana
 		}
 
-		if len(details.PersistentMounts) > 0 {
-			persistentMountsStr := strings.Join(details.PersistentMounts, ",")
-			envVars = append(envVars, "CEDANA_PERSISTENT_MOUNTS="+persistentMountsStr)
+		if len(details.Env) > 0 {
+			for _, envVar := range details.Env {
+				specOpts = append(specOpts, oci.WithEnv([]string{envVar}))
+			}
 		}
 
 		specOpts = append(specOpts, oci.WithEnv(envVars))

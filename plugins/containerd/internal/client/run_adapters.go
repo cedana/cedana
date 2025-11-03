@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -79,9 +78,10 @@ func CreateContainerForRun(next types.Run) types.Run {
 				)
 			}
 
-			if len(details.PersistentMounts) > 0 {
-				persistentMountsStr := strings.Join(details.PersistentMounts, ",")
-				specOpts = append(specOpts, oci.WithEnv([]string{"CEDANA_PERSISTENT_MOUNTS=" + persistentMountsStr}))
+			if len(details.Env) > 0 {
+				for _, envVar := range details.Env {
+					specOpts = append(specOpts, oci.WithEnv([]string{envVar}))
+				}
 			}
 
 			container, err = client.NewContainer(

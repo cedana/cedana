@@ -5,11 +5,11 @@ package flags
 import "github.com/cedana/cedana/pkg/flags"
 
 var (
-	NamespaceFlag       = flags.Flag{Full: "namespace"}
-	AddressFlag         = flags.Flag{Full: "address"}
-	ImageFlag           = flags.Flag{Full: "image"}
-	RootfsFlag          = flags.Flag{Full: "rootfs"}
-	RootfsOnlyFlag      = flags.Flag{Full: "rootfs-only"}
-	GPUsFlag            = flags.Flag{Full: "gpus"}
-	PersistentMountsFlag = flags.Flag{Full: "persistent-mounts"}
+	NamespaceFlag  = flags.Flag{Full: "namespace"}
+	AddressFlag    = flags.Flag{Full: "address"}
+	ImageFlag      = flags.Flag{Full: "image"}
+	RootfsFlag     = flags.Flag{Full: "rootfs"}
+	RootfsOnlyFlag = flags.Flag{Full: "rootfs-only"}
+	GPUsFlag       = flags.Flag{Full: "gpus"}
+	EnvFlag        = flags.Flag{Full: "env"}
 )
