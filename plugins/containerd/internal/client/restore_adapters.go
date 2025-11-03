@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
@@ -91,12 +92,19 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.Internal, "failed to get executable path: %v", err)
 		}
 
-		specOpts = append(specOpts, oci.WithEnv([]string{
+		envVars := []string{
 			"CEDANA_CONFIG=" + string(configJson),      // For the shim to call cedana with the current config
 			"CEDANA_CHECKPOINT_PATH=" + req.Path,       // For the shim to know this is a restore and not a run
 			"CEDANA_CRIU_OPTS=" + string(criuOptsJson), // For the shim to pass to `cedana restore <low-level runtime> ...`
 			"CEDANA_EXECUTABLE_PATH=" + executablePath, // For the shim to call cedana
-		}))
+		}
+
+		if len(details.PersistentMounts) > 0 {
+			persistentMountsStr := strings.Join(details.PersistentMounts, ",")
+			envVars = append(envVars, "CEDANA_PERSISTENT_MOUNTS="+persistentMountsStr)
+		}
+
+		specOpts = append(specOpts, oci.WithEnv(envVars))
 
 		// Read runtime from dump
 

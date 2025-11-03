@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -76,6 +77,11 @@ func CreateContainerForRun(next types.Run) types.Run {
 						nvidia.WithAllCapabilities,
 					),
 				)
+			}
+
+			if len(details.PersistentMounts) > 0 {
+				persistentMountsStr := strings.Join(details.PersistentMounts, ",")
+				specOpts = append(specOpts, oci.WithEnv([]string{"CEDANA_PERSISTENT_MOUNTS=" + persistentMountsStr}))
 			}
 
 			container, err = client.NewContainer(

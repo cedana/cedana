@@ -18,6 +18,7 @@ func init() {
 	RestoreCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "containerd namespace")
 	RestoreCmd.Flags().Int32SliceP(containerd_flags.GPUsFlag.Full, containerd_flags.GPUsFlag.Short, []int32{}, "add GPUs to the container (e.g. 0,1,2)")
 	RestoreCmd.Flags().BoolP(runc_flags.NoPivotFlag.Full, runc_flags.NoPivotFlag.Short, false, "disable use of pivot-root")
+	RestoreCmd.Flags().StringSliceP(containerd_flags.PersistentMountsFlag.Full, containerd_flags.PersistentMountsFlag.Short, []string{}, "comma-separated list of persistent mount points (e.g. /data,/tmp/cache)")
 }
 
 var RestoreCmd = &cobra.Command{
@@ -36,14 +37,16 @@ var RestoreCmd = &cobra.Command{
 		namespace, _ := cmd.Flags().GetString(containerd_flags.NamespaceFlag.Full)
 		gpus, _ := cmd.Flags().GetInt32Slice(containerd_flags.GPUsFlag.Full)
 		noPivot, _ := cmd.Flags().GetBool(runc_flags.NoPivotFlag.Full)
+		persistentMounts, _ := cmd.Flags().GetStringSlice(containerd_flags.PersistentMountsFlag.Full)
 
 		req.Type = "containerd"
 		req.Details = &daemon.Details{Containerd: &containerd.Containerd{
-			ID:        id,
-			Address:   address,
-			Namespace: namespace,
-			GPUs:      gpus,
-			NoPivot:   noPivot,
+			ID:              id,
+			Address:         address,
+			Namespace:       namespace,
+			GPUs:            gpus,
+			NoPivot:         noPivot,
+			PersistentMounts: persistentMounts,
 		}}
 
 		if image != "" {
