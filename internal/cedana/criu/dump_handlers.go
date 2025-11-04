@@ -91,8 +91,7 @@ func logLevel() int32 {
 	level := 1 // error statements
 	if log.Logger.GetLevel() <= zerolog.TraceLevel {
 		level = 3 // debug statements
-	}
-	if log.Logger.GetLevel() <= zerolog.DebugLevel {
+	} else if log.Logger.GetLevel() <= zerolog.DebugLevel {
 		level = 2 // warning statements
 	}
 	return int32(level)
