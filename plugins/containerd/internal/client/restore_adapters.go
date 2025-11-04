@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
@@ -98,11 +99,36 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			"CEDANA_EXECUTABLE_PATH=" + executablePath, // For the shim to call cedana
 		}
 
+		tmpfsMounts := []specs.Mount{}
 		if len(details.Env) > 0 {
 			for _, envVar := range details.Env {
+				mountsStr, foundPersistEnv := strings.CutPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=")
+				if foundPersistEnv {
+					existingDests := map[string]bool{}
+					for dest := range strings.SplitSeq(mountsStr, ",") {
+						if dest == "" {
+							continue
+						}
+						if existingDests[dest] {
+							return nil, status.Errorf(codes.InvalidArgument, "cannot add persistent mount at %q: mount already exists", dest)
+						}
+
+						mount := specs.Mount{
+							Destination: dest,
+							Type:        "tmpfs",
+							Source:      "tmpfs",
+							Options:     []string{"nosuid", "strictatime", "mode=1777"},
+						}
+						tmpfsMounts = append(tmpfsMounts, mount)
+						log.Debug().Str("destination", dest).Msg("added persistent tmpfs mount")
+						existingDests[dest] = true
+					}
+				}
 				specOpts = append(specOpts, oci.WithEnv([]string{envVar}))
 			}
 		}
+
+		specOpts = append(specOpts, oci.WithMounts(tmpfsMounts))
 
 		specOpts = append(specOpts, oci.WithEnv(envVars))
 
