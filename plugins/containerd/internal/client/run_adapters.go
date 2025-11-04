@@ -82,9 +82,8 @@ func CreateContainerForRun(next types.Run) types.Run {
 			tmpfsMounts := []specs.Mount{}
 			if len(details.Env) > 0 {
 				for _, envVar := range details.Env {
-					_, foundPersistEnv := strings.CutPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=")
+					mountsStr, foundPersistEnv := strings.CutPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=")
 					if foundPersistEnv {
-						mountsStr := strings.TrimPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=")
 						existingDests := map[string]bool{}
 						for dest := range strings.SplitSeq(mountsStr, ",") {
 							if dest == "" {
