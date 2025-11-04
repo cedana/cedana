@@ -82,10 +82,11 @@ func CreateContainerForRun(next types.Run) types.Run {
 			tmpfsMounts := []specs.Mount{}
 			if len(details.Env) > 0 {
 				for _, envVar := range details.Env {
-					if strings.HasPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=") {
+					_, foundPersistEnv := strings.CutPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=")
+					if foundPersistEnv {
 						mountsStr := strings.TrimPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=")
 						existingDests := map[string]bool{}
-						for _, dest := range strings.Split(mountsStr, ",") {
+						for dest := range strings.SplitSeq(mountsStr, ",") {
 							if dest == "" {
 								continue
 							}
@@ -103,9 +104,8 @@ func CreateContainerForRun(next types.Run) types.Run {
 							log.Debug().Str("destination", dest).Msg("added persistent tmpfs mount")
 							existingDests[dest] = true
 						}
-
-						specOpts = append(specOpts, oci.WithEnv([]string{envVar}))
 					}
+					specOpts = append(specOpts, oci.WithEnv([]string{envVar}))
 				}
 			}
 			specOpts = append(specOpts, oci.WithMounts(tmpfsMounts))
