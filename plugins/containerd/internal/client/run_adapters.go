@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -78,11 +79,36 @@ func CreateContainerForRun(next types.Run) types.Run {
 				)
 			}
 
+			tmpfsMounts := []specs.Mount{}
 			if len(details.Env) > 0 {
 				for _, envVar := range details.Env {
-					specOpts = append(specOpts, oci.WithEnv([]string{envVar}))
+					if strings.HasPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=") {
+						mountsStr := strings.TrimPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=")
+						existingDests := map[string]bool{}
+						for _, dest := range strings.Split(mountsStr, ",") {
+							if dest == "" {
+								continue
+							}
+							if existingDests[dest] {
+								return nil, status.Errorf(codes.InvalidArgument, "cannot add persistent mount at %q: mount already exists", dest)
+							}
+
+							mount := specs.Mount{
+								Destination: dest,
+								Type:        "tmpfs",
+								Source:      "tmpfs",
+								Options:     []string{"nosuid", "strictatime", "mode=1777"},
+							}
+							tmpfsMounts = append(tmpfsMounts, mount)
+							log.Debug().Str("destination", dest).Msg("added persistent tmpfs mount")
+							existingDests[dest] = true
+						}
+
+						specOpts = append(specOpts, oci.WithEnv([]string{envVar}))
+					}
 				}
 			}
+			specOpts = append(specOpts, oci.WithMounts(tmpfsMounts))
 
 			container, err = client.NewContainer(
 				ctx,
