@@ -120,11 +120,16 @@ func (es *EventStream) StartCheckpointsPublisher(ctx context.Context) error {
 /////////////
 
 type checkpointReq struct {
-	PodName   string `json:"pod_name"`
-	RuncRoot  string `json:"runc_root"`
-	Namespace string `json:"namespace"`
-	Kind      string `json:"kind"`
-	ActionId  string `json:"action_id"`
+	PodName   string   `json:"pod_name"`
+	RuncRoot  string   `json:"runc_root"`
+	Namespace string   `json:"namespace"`
+	Kind      string   `json:"kind"`
+	ActionId  string   `json:"action_id"`
+	DumpOpts  dumpOpts `json:"dump_opts"`
+}
+
+type dumpOpts struct {
+	GPUFreezeType string `json:"gpu_freeze_type"`
 }
 
 type checkpointInfo struct {
@@ -242,8 +247,9 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 
 		for i, container := range containers {
 			dumpReq := &daemon.DumpReq{
-				Name: checkpointIdMap[i],
-				Type: "containerd",
+				Name:          checkpointIdMap[i],
+				Type:          "containerd",
+				GPUFreezeType: req.DumpOpts.GPUFreezeType,
 				Criu: &criu.CriuOpts{
 					LeaveRunning:    proto.Bool(true),
 					TcpEstablished:  proto.Bool(true),
