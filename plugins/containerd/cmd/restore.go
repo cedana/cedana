@@ -18,7 +18,7 @@ func init() {
 	RestoreCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "containerd namespace")
 	RestoreCmd.Flags().Int32SliceP(containerd_flags.GPUsFlag.Full, containerd_flags.GPUsFlag.Short, []int32{}, "add GPUs to the container (e.g. 0,1,2)")
 	RestoreCmd.Flags().BoolP(runc_flags.NoPivotFlag.Full, runc_flags.NoPivotFlag.Short, false, "disable use of pivot-root")
-	RestoreCmd.Flags().StringSliceP(containerd_flags.EnvFlag.Full, containerd_flags.EnvFlag.Short, []string{}, "comma-separated list of envars (e.g. DATA=/data,CACHE=/tmp/cache),...")
+	RestoreCmd.Flags().StringSliceP(containerd_flags.EnvFlag.Full, containerd_flags.EnvFlag.Short, []string{}, "list of additional environment variables")
 }
 
 var RestoreCmd = &cobra.Command{
