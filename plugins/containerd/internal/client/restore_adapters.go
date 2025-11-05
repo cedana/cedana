@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
@@ -16,30 +15,12 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/types/runc/options"
 	"github.com/containerd/containerd/contrib/nvidia"
-	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-func SetupForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-		details := req.GetDetails().GetContainerd()
-
-		ctx = namespaces.WithNamespace(ctx, details.Namespace)
-
-		client, err := containerd.New(details.Address, containerd.WithDefaultNamespace(details.Namespace))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create containerd client: %v", err)
-		}
-
-		ctx = context.WithValue(ctx, containerd_keys.CLIENT_CONTEXT_KEY, client)
-
-		return next(ctx, opts, resp, req)
-	}
-}
 
 func CreateContainerForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
@@ -98,38 +79,6 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			"CEDANA_CRIU_OPTS=" + string(criuOptsJson), // For the shim to pass to `cedana restore <low-level runtime> ...`
 			"CEDANA_EXECUTABLE_PATH=" + executablePath, // For the shim to call cedana
 		}
-
-		tmpfsMounts := []specs.Mount{}
-		if len(details.Env) > 0 {
-			for _, envVar := range details.Env {
-				mountsStr, foundPersistEnv := strings.CutPrefix(envVar, "CEDANA_PERSISTENT_MOUNTS=")
-				if foundPersistEnv {
-					existingDests := map[string]bool{}
-					for dest := range strings.SplitSeq(mountsStr, ",") {
-						if dest == "" {
-							continue
-						}
-						if existingDests[dest] {
-							return nil, status.Errorf(codes.InvalidArgument, "cannot add persistent mount at %q: mount already exists", dest)
-						}
-
-						mount := specs.Mount{
-							Destination: dest,
-							Type:        "tmpfs",
-							Source:      "tmpfs",
-							Options:     []string{"nosuid", "strictatime", "mode=1777"},
-						}
-						tmpfsMounts = append(tmpfsMounts, mount)
-						log.Debug().Str("destination", dest).Msg("added persistent tmpfs mount")
-						existingDests[dest] = true
-					}
-				}
-				specOpts = append(specOpts, oci.WithEnv([]string{envVar}))
-			}
-		}
-
-		specOpts = append(specOpts, oci.WithMounts(tmpfsMounts))
-
 		specOpts = append(specOpts, oci.WithEnv(envVars))
 
 		// Read runtime from dump
@@ -166,7 +115,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			ctx,
 			details.ID,
 			containerd.WithImage(image),
-			containerd.WithNewSnapshot(details.ID+"-snapshot", image),
+			containerd.WithNewSnapshot(details.ID, image),
 			containerd.WithNewSpec(specOpts...),
 			containerd.WithRuntime(newRuntime, &options.Options{}),
 		)

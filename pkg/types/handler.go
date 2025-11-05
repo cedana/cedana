@@ -38,3 +38,18 @@ type (
 
 	Handler[REQ, RESP any] func(context.Context, Opts, *RESP, *REQ) (code func() <-chan int, err error)
 )
+
+func Details[REQ any](req *REQ) *daemon.Details {
+	switch r := any(req).(type) {
+	case *daemon.DumpReq:
+		return r.GetDetails()
+	case *daemon.RestoreReq:
+		return r.GetDetails()
+	case *daemon.RunReq:
+		return r.GetDetails()
+	case *daemon.DumpVMReq:
+		return r.GetDetails()
+	default:
+		return nil
+	}
+}
