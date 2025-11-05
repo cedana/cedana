@@ -6,9 +6,9 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251009084235-8dc16543509d.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251009084235-8dc16543509d.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20251009084235-f3f33473b2aa.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-a87ee74f12c1.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-7136a5b3ad44.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251009084235-2127b839c830.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20251105083538-89f6e36730b9.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251105083538-89f6e36730b9.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251105083538-53c7c62fed79.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
@@ -17,6 +17,7 @@ require (
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.5
 	github.com/containerd/containerd v1.7.28
+	github.com/containerd/containerd/api v1.8.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v0.2.1
 	github.com/coreos/go-systemd/v22 v22.6.0
@@ -83,7 +84,6 @@ require (
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
 	github.com/cilium/ebpf v0.17.3 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
-	github.com/containerd/containerd/api v1.8.0 // indirect
 	github.com/containerd/continuity v0.4.4 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
