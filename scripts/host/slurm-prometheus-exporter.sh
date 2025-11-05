@@ -13,6 +13,7 @@ DEFAULT_METRICS_PATH="/metrics"
 DEFAULT_COLLECT_DIAGS="false"
 DEFAULT_COLLECT_LICENSES="false"
 DEFAULT_COLLECT_LIMITS="false"
+DEFAULT_COLLECT_GPUS="true"
 
 # Configuration variables (can be overridden by command line)
 PORT="${DEFAULT_PORT}"
@@ -21,6 +22,7 @@ METRICS_PATH="${DEFAULT_METRICS_PATH}"
 COLLECT_DIAGS="${DEFAULT_COLLECT_DIAGS}"
 COLLECT_LICENSES="${DEFAULT_COLLECT_LICENSES}"
 COLLECT_LIMITS="${DEFAULT_COLLECT_LIMITS}"
+COLLECT_GPUS="${DEFAULT_COLLECT_GPUS}"
 
 VECTOR_INSTALL_DIR="/usr/local"
 VECTOR_CONFIG_DIR="/etc/vector"
@@ -46,6 +48,7 @@ OPTIONS:
     --collect-diags          Enable SLURM diagnostics collection
     --collect-licenses       Enable SLURM license collection  
     --collect-limits         Enable SLURM account limits collection
+    --collect-gpus           Enable GPU metrics collection (default: true)
     --vector-bucket BUCKET   S3/MinIO bucket name for metrics storage
     --vector-endpoint URL    S3/MinIO endpoint URL (e.g., http://localhost:9000)
     --vector-access-key KEY  S3/MinIO access key
@@ -225,8 +228,29 @@ install_prometheus_slurm_exporter() {
         exit 1
     fi
     
-    echo "Installing from github.com/rivosinc/prometheus-slurm-exporter..."
-    go install github.com/rivosinc/prometheus-slurm-exporter@latest
+    local build_dir="/tmp/prometheus-slurm-exporter-build"
+    
+    echo "Cloning from github.com/cedana/prometheus-slurm-exporter..."
+    rm -rf "$build_dir"
+    git clone https://github.com/cedana/prometheus-slurm-exporter.git "$build_dir"
+    
+    cd "$build_dir"
+    echo "Building prometheus-slurm-exporter..."
+    go build -o prometheus-slurm-exporter .
+    
+    local install_path="$GOPATH/bin"
+    if [ -z "$install_path" ]; then
+        install_path="$HOME/go/bin"
+    fi
+    
+    mkdir -p "$install_path"
+    cp prometheus-slurm-exporter "$install_path/"
+    chmod +x "$install_path/prometheus-slurm-exporter"
+    
+    cd - > /dev/null
+    rm -rf "$build_dir"
+    
+    export PATH="$install_path:$PATH"
     
     if command -v prometheus-slurm-exporter &>/dev/null; then
         echo "✓ prometheus-slurm-exporter installed successfully"
@@ -389,6 +413,7 @@ ExecStart=$exporter_binary \\
     -slurm.collect-diags=${COLLECT_DIAGS} \\
     -slurm.collect-licenses=${COLLECT_LICENSES} \\
     -slurm.collect-limits=${COLLECT_LIMITS} \\
+    -slurm.collect-gpus=${COLLECT_GPUS} \\
     -slurm.cli-fallback=true \\
     -slurm.poll-limit=10.0
 
@@ -818,6 +843,10 @@ parse_arguments() {
                 COLLECT_LIMITS="true"
                 shift
                 ;;
+            --collect-gpus)
+                COLLECT_GPUS="true"
+                shift
+                ;;
             --vector-bucket)
                 VECTOR_BUCKET="$2"
                 shift 2
@@ -1079,6 +1108,7 @@ echo "   Metrics Path: ${METRICS_PATH}"
 echo "   Collect Diags: ${COLLECT_DIAGS}"
 echo "   Collect Licenses: ${COLLECT_LICENSES}"
 echo "   Collect Limits: ${COLLECT_LIMITS}"
+echo "   Collect GPUs: ${COLLECT_GPUS}"
 echo ""
 echo "   Vector.dev Configuration:"
 echo "   Bucket: ${VECTOR_BUCKET:-<not configured>}"
