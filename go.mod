@@ -15,12 +15,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.4
 	github.com/cedana/cedana-go-sdk v0.3.7
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
-	github.com/containerd/console v1.0.5
-	github.com/containerd/containerd v1.7.28
+	github.com/containerd/containerd v1.7.29
 	github.com/containerd/containerd/api v1.8.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v0.2.1
-	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/cyphar/filepath-securejoin v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/gogo/protobuf v1.3.2
@@ -30,13 +28,10 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/mdlayher/vsock v1.2.1
 	github.com/moby/sys/mountinfo v0.7.2
-	github.com/moby/sys/userns v0.1.0
-	github.com/opencontainers/cgroups v0.0.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/opencontainers/runc v1.3.2
 	github.com/opencontainers/runtime-spec v1.2.1
-	github.com/opencontainers/selinux v1.12.0
 	github.com/pierrec/lz4 v2.6.1+incompatible
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0
@@ -82,13 +77,14 @@ require (
 	github.com/aws/smithy-go v1.23.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/checkpoint-restore/go-criu/v6 v6.3.0 // indirect
-	github.com/cilium/ebpf v0.17.3 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
+	github.com/containerd/console v1.0.5 // indirect
 	github.com/containerd/continuity v0.4.4 // indirect
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.7 // indirect
 	github.com/containerd/typeurl/v2 v2.1.1 // indirect
+	github.com/coreos/go-systemd/v22 v22.6.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
@@ -121,7 +117,10 @@ require (
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
+	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
+	github.com/opencontainers/cgroups v0.0.5 // indirect
+	github.com/opencontainers/selinux v1.12.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
