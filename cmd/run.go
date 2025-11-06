@@ -29,6 +29,10 @@ func init() {
 	runCmd.PersistentFlags().
 		BoolP(flags.GpuEnabledFlag.Full, flags.GpuEnabledFlag.Short, false, "enable GPU support")
 	runCmd.PersistentFlags().
+		BoolP(flags.GpuTracingFlag.Full, flags.GpuTracingFlag.Short, false, "enable GPU tracing")
+	runCmd.PersistentFlags().
+		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
+	runCmd.PersistentFlags().
 		BoolP(flags.AttachFlag.Full, flags.AttachFlag.Short, false, "attach stdin/out/err")
 	runCmd.PersistentFlags().
 		BoolP(flags.AttachableFlag.Full, flags.AttachableFlag.Short, false, "make it attachable, but don't attach")
@@ -65,6 +69,8 @@ var runCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
+		gpuTracing, _ := cmd.Flags().GetBool(flags.GpuTracingFlag.Full)
+		gpuID, _ := cmd.Flags().GetString(flags.GpuIdFlag.Full)
 		out, _ := cmd.Flags().GetString(flags.OutFlag.Full)
 		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
@@ -94,6 +100,9 @@ var runCmd = &cobra.Command{
 			Log:        out,
 			PidFile:    pidFile,
 			GPUEnabled: gpuEnabled,
+			GPUTracing: gpuTracing,
+			GPUID:      gpuID,
+
 			Attachable: attach || attachable,
 			Action:     daemon.RunAction_START_NEW,
 			Env:        env,
@@ -233,9 +242,6 @@ var processRunCmd = &cobra.Command{
 			req.GID = user.Gid
 			req.Groups = user.Groups
 		}
-
-		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
 
 		return nil
 	},

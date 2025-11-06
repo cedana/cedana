@@ -34,7 +34,7 @@ on:
         type: number
         description: "Parallelism for running tests"
         required: false
-        default: 4
+        default: 2
       parallelism_gpu:
         type: number
         description: "Parallelism for running GPU tests"
@@ -44,17 +44,12 @@ on:
         type: string
         description: "Runner machine for CPU tests"
         required: false
-        default: 4cpu-16g
+        default: 2cpu
       runner_gpu:
         type: string
         description: "Runner machine for GPU tests"
         required: false
-        default: 4cpu-16g-1xT4
-      runner_gpu_arm64:
-        type: string
-        description: "Runner machine for GPU tests (arm64)"
-        required: false
-        default: 8cpu-16g-1xT4G
+        default: 4cpu-1gpu
       post_summary_slack:
         type: string
         description: "Webhook URL for posting summary to Slack"
@@ -75,13 +70,18 @@ env:
 jobs:
   unit:
     name: Unit
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
         arch:
           - amd64
           - arm64
+    container:
+      image: golang:1.25rc3-bullseye
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -99,7 +99,9 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          path: .
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Make executable
         run: |
@@ -112,21 +114,18 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
-
       - name: Run unit tests
         run: make test-unit
 
   script:
-    name: Scripts
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-4g-${{ matrix.arch }}/extras=s3-cache
+    name: Script
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
+        name:
+          - k8s-setup-host
+          # - slurm-setup-host
         arch:
           - amd64
           - arm64
@@ -144,12 +143,14 @@ jobs:
           name: cedana-${{ matrix.arch }}
 
       - name: Run k8s setup host
+        env:
+          CEDANA_PLUGINS_BUILDS: local # change to alpha to test plugin downloads
         run: |
           sudo -E chmod +x ./cedana
           sudo -E cp ./cedana /usr/local/bin/
           sudo -E mkdir -p /cedana/scripts/host
           sudo -E cp -r ./scripts/host/* /cedana/scripts/host
-          sudo -E /cedana/scripts/host/k8s-setup-host.sh
+          sudo -E /cedana/scripts/host/${{ matrix.name }}.sh
 
   basic:
     name: Basic
@@ -296,7 +297,9 @@ jobs:
       - name: Download plugins
         uses: actions/download-artifact@v4
         with:
-          name: plugins-${{ matrix.arch }}
+          path: .
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
 
       - name: Download CRIU
         uses: actions/download-artifact@v4
@@ -338,7 +341,7 @@ jobs:
             make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
-      - name: Set sanitized plugin
+      - name: Set plugin name
         if: always()
         env:
           PLUGIN: ${{ matrix.plugin }}
@@ -397,7 +400,6 @@ jobs:
       parallelism_gpu: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
-      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
   gpu:
@@ -410,7 +412,6 @@ jobs:
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner_gpu }}
-      runner_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
   # XXX: Below kubernetes tests are split into separate workflows, instead of using matrix,
@@ -430,7 +431,6 @@ jobs:
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
-      runner_gpu_arm64: ${{ inputs.runner_gpu_arm64 }}
       post_summary: false # Will post consolidated summary instead
 
   eks:

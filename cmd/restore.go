@@ -6,6 +6,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 
@@ -38,6 +39,8 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
+		StringP(flags.CriuOptsFlag.Full, flags.CriuOptsFlag.Short, "", "CRIU options JSON (overriddes individual CRIU flags)")
+	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpEstablishedFlag.Full, flags.TcpEstablishedFlag.Short, false, "restore tcp established connections")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.TcpCloseFlag.Full, flags.TcpCloseFlag.Short, false, "allow listening TCP sockets to exist on restore")
@@ -57,6 +60,8 @@ func init() {
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
+	restoreCmd.PersistentFlags().
+		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.OutFlag.Full,
@@ -76,7 +81,9 @@ func init() {
 
 			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
 				newFlag := *f
-				jobRestoreCmd.Flags().AddFlag(&newFlag)
+				if jobRestoreCmd.Flags().Lookup(newFlag.Name) == nil {
+					jobRestoreCmd.Flags().AddFlag(&newFlag)
+				}
 				newFlag.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
 			})
 			return nil
@@ -91,18 +98,37 @@ var restoreCmd = &cobra.Command{
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		path, _ := cmd.Flags().GetString(flags.PathFlag.Full)
+		log, _ := cmd.Flags().GetString(flags.OutFlag.Full)
+		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
+		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
+		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
+		gpuID, _ := cmd.Flags().GetString(flags.GpuIdFlag.Full)
+
+		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
+		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
+		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
 		tcpEstablished, _ := cmd.Flags().GetBool(flags.TcpEstablishedFlag.Full)
 		tcpClose, _ := cmd.Flags().GetBool(flags.TcpCloseFlag.Full)
 		leaveStopped, _ := cmd.Flags().GetBool(flags.LeaveStoppedFlag.Full)
 		fileLocks, _ := cmd.Flags().GetBool(flags.FileLocksFlag.Full)
-		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
-		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
-		log, _ := cmd.Flags().GetString(flags.OutFlag.Full)
-		attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
-		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
-		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
-		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
-		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
+		criuOptsJSON, _ := cmd.Flags().GetString(flags.CriuOptsFlag.Full)
+
+		criuOpts := &criu.CriuOpts{
+			TcpEstablished: proto.Bool(tcpEstablished),
+			TcpClose:       proto.Bool(tcpClose),
+			LeaveStopped:   proto.Bool(leaveStopped),
+			FileLocks:      proto.Bool(fileLocks),
+			ShellJob:       proto.Bool(shellJob),
+			LinkRemap:      proto.Bool(linkRemap),
+			External:       external,
+		}
+		if criuOptsJSON != "" {
+			err := json.Unmarshal([]byte(criuOptsJSON), criuOpts)
+			if err != nil {
+				return fmt.Errorf("Error parsing CRIU options JSON: %v", err)
+			}
+		}
 
 		if noServer && (log != "" || attach || attachable) {
 			fmt.Println(
@@ -127,20 +153,13 @@ var restoreCmd = &cobra.Command{
 			PidFile:    pidFile,
 			Log:        log,
 			Attachable: attach || attachable,
-			Criu: &criu.CriuOpts{
-				TcpEstablished: proto.Bool(tcpEstablished),
-				TcpClose:       proto.Bool(tcpClose),
-				LeaveStopped:   proto.Bool(leaveStopped),
-				FileLocks:      proto.Bool(fileLocks),
-				External:       external,
-				ShellJob:       proto.Bool(shellJob),
-				LinkRemap:      proto.Bool(linkRemap),
-			},
-			Env:     env,
-			UID:     user.Uid,
-			GID:     user.Gid,
-			Groups:  user.Groups,
-			Details: &daemon.Details{},
+			Criu:       criuOpts,
+			Env:        env,
+			GPUID:      gpuID,
+			UID:        user.Uid,
+			GID:        user.Gid,
+			Groups:     user.Groups,
+			Details:    &daemon.Details{},
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
@@ -300,9 +319,6 @@ var jobRestoreCmd = &cobra.Command{
 			req.Details = &daemon.Details{}
 		}
 		req.Details.JID = proto.String(jid)
-
-		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
 
 		return nil
 	},

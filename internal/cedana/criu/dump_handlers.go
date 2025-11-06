@@ -22,16 +22,6 @@ const (
 	GHOST_FILE_MAX_SIZE = 200 * utils.MEBIBYTE
 )
 
-var CRIU_LOG_VERBOSITY_LEVEL int32 = 1 // errors only
-
-func init() {
-	if log.Logger.GetLevel() <= zerolog.TraceLevel {
-		CRIU_LOG_VERBOSITY_LEVEL = 3 // debug statements
-	} else if log.Logger.GetLevel() <= zerolog.DebugLevel {
-		CRIU_LOG_VERBOSITY_LEVEL = 2 // warning statements
-	}
-}
-
 var Dump types.Dump = dump
 
 // Returns a CRIU dump handler for the server
@@ -51,7 +41,7 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	// Set CRIU server
 	criuOpts.LogFile = proto.String(CRIU_DUMP_LOG_FILE)
-	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
+	criuOpts.LogLevel = proto.Int32(logLevel())
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 	criuOpts.LogToStderr = proto.Bool(false)
@@ -91,4 +81,18 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	log.Info().Msg("CRIU dump complete")
 
 	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.State.PID)), nil
+}
+
+//////////////////////
+// Helper functions //
+//////////////////////
+
+func logLevel() int32 {
+	level := 1 // error statements
+	if log.Logger.GetLevel() <= zerolog.TraceLevel {
+		level = 3 // debug statements
+	} else if log.Logger.GetLevel() <= zerolog.DebugLevel {
+		level = 2 // warning statements
+	}
+	return int32(level)
 }

@@ -143,6 +143,7 @@ type checkpointInfo struct {
 type profilingInfo struct {
 	Raw           *profiling.Data `json:"raw"`
 	TotalDuration int64           `json:"total_duration"`
+	TotalIO       int64           `json:"total_io"`
 }
 
 type imageSecret struct {
@@ -230,6 +231,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					Username: strings.Split(imageSecret.ImageSecret, ":")[0],
 					Secret:   strings.Split(imageSecret.ImageSecret, ":")[1],
 				}
+				container.Rootfs = rootfs
 				container.RootfsOnly = rootfsOnly
 			} else {
 				container.Image = nil // Ensure this is nil, so rootfs is not dumped
@@ -340,7 +342,7 @@ func (es *EventStream) publishCheckpoint(
 	podId string,
 	actionId string,
 	checkpointId string,
-	profiling *profiling.Data,
+	profilingData *profiling.Data,
 	path string,
 	state *daemon.ProcessState,
 	containerOrder int,
@@ -373,14 +375,20 @@ func (es *EventStream) publishCheckpoint(
 		ci.Path = path
 	}
 
-	if profiling != nil {
-		totalDuration := profiling.Duration
-		for _, component := range profiling.Components {
-			totalDuration += component.Duration
+	if profilingData != nil {
+		profiling.CleanData(profilingData)
+		profiling.FlattenData(profilingData)
+		var totalDuration, totalIO int64
+		for _, component := range profilingData.Components {
+			if !component.Parallel {
+				totalDuration += component.Duration
+			}
+			totalIO += component.IO
 		}
 		profilingInfo := profilingInfo{
-			Raw:           profiling,
+			Raw:           profilingData,
 			TotalDuration: totalDuration,
+			TotalIO:       totalIO,
 		}
 		ci.ProfilingInfo = profilingInfo
 	}

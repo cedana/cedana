@@ -80,8 +80,8 @@ helm_install_cedana() {
     if [ -n "$CEDANA_PLUGINS_CRIU_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsCriuVersion=$CEDANA_PLUGINS_CRIU_VERSION"
     fi
-    if [ -n "$CEDANA_PLUGINS_RUNTIME_SHIM_VERSION" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsRuntimeShimVersion=$CEDANA_PLUGINS_RUNTIME_SHIM_VERSION"
+    if [ -n "$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION" ]; then
+        helm_cmd="$helm_cmd --set config.pluginsContainerdRuntimeVersion=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION"
     fi
     if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"

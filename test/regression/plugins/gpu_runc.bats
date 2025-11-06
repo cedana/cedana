@@ -39,7 +39,7 @@ teardown_file() {
 ### Run ###
 ###########
 
-@test "run GPU container (non-GPU binary)" {
+@test "[$GPU_INFO] run GPU container (non-GPU binary)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_cmd_bundle_cuda "echo hello")"
@@ -53,7 +53,7 @@ teardown_file() {
     assert_output --partial "$jid"
 }
 
-@test "run GPU container (GPU binary)" {
+@test "[$GPU_INFO] run GPU container (GPU binary)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy")"
@@ -68,7 +68,7 @@ teardown_file() {
 }
 
 # bats test_tags=daemonless
-@test "run GPU container (GPU binary, without daemon)" {
+@test "[$GPU_INFO] run GPU container (GPU binary, without daemon)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy")"
@@ -81,7 +81,7 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "dump GPU container (non-GPU binary)" {
+@test "[$GPU_INFO] dump GPU container (non-GPU binary)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle_cuda "date-loop.sh")"
 
@@ -95,7 +95,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "dump GPU container (vector add)" {
+@test "[$GPU_INFO] dump GPU container (vector add)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
@@ -109,7 +109,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "dump GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] dump GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
@@ -127,7 +127,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "restore GPU container (non-GPU binary)" {
+@test "[$GPU_INFO] restore GPU container (non-GPU binary)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle_cuda "date-loop.sh")"
 
@@ -150,7 +150,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "restore GPU container (vector add)" {
+@test "[$GPU_INFO] restore GPU container (vector add)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
@@ -173,7 +173,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "restore GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] restore GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
@@ -196,7 +196,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore,daemonless
-@test "restore GPU container (mem throughput saxpy, without daemon)" {
+@test "[$GPU_INFO] restore GPU container (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 

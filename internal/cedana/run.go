@@ -153,8 +153,30 @@ func pluginRunHandler() types.Run {
 			defer end()
 
 		}
+
+		// Plugin any late run middleware if found
+
+		switch t {
+		case "process":
+			// No late middleware for default process type
+		default:
+			// Insert plugin-specific late middleware
+			features.RunMiddlewareLate.IfAvailable(func(
+				name string,
+				pluginMiddleware types.Middleware[types.Run],
+			) error {
+				handler = handler.With(pluginMiddleware...)
+				return nil
+			}, t)
+		}
+
+		// Plugin GPU adapters if requested
+
 		if req.GPUEnabled {
 			handler = handler.With(gpu.Interception)
+		}
+		if req.GPUTracing {
+			handler = handler.With(gpu.Tracing)
 		}
 
 		return handler(ctx, opts, resp, req)

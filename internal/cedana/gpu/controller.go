@@ -19,6 +19,7 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/gofrs/flock"
@@ -43,6 +44,13 @@ const (
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1      // Signal to the restored process to notify it has a new PID
 	CONTROLLER_CHECK_SHM_SIZE              = 100 * utils.MEBIBYTE // Small size to run controller health check
+
+	LOG_DIR_FORMATTER              = "%s/cedana-gpu.%s"
+	LOG_DIR_PATTERN                = "%s/cedana-gpu.(.*)"
+	INTERCEPTOR_LOG_FILE_PATTERN   = LOG_DIR_PATTERN + "/cedana-so-(\\d+).log"
+	INTERCEPTOR_LOG_FILE_FORMATTER = LOG_DIR_FORMATTER + "/cedana-so-%d.log"
+	TRACER_LOG_FILE_PATTERN        = LOG_DIR_PATTERN + "/cedana-tracer-(\\d+).log"
+	TRACER_LOG_FILE_FORMATTER      = LOG_DIR_FORMATTER + "/cedana-tracer-%d.log"
 
 	FREEZE_TIMEOUT    = 1 * time.Minute
 	UNFREEZE_TIMEOUT  = 1 * time.Minute
@@ -180,16 +188,14 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			continue
 		}
 
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			err := c.Sync(ctx, false)
 			if err == nil {
 				p.Store(id, c)
 			} else {
 				log.Trace().Err(err).Str("ID", id).Msg("failed to sync with GPU controller")
 			}
-			wg.Done()
-		}()
+		})
 	}
 
 	wg.Wait()
@@ -227,12 +233,17 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		GID:    uint32(os.Getgid()),
 	}
 
+	logDir, err := EnsureLogDir(id, c.UID, c.GID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
+	}
+
 	cmd := exec.Command(
 		binary,
 		id,
 		observability,
 		"--log-dir",
-		config.Global.GPU.LogDir,
+		logDir,
 		"--sock-dir",
 		config.Global.GPU.SockDir,
 	)
@@ -433,7 +444,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 		<-dumpErr // Ensure GPU dump has finished before unfreezing
 
-    // NOTE: Unfreeze must complete even if parent context is cancelled
+		// NOTE: Unfreeze must complete even if parent context is cancelled
 		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
 		defer cancel()
 
@@ -468,7 +479,7 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 
 			log.Debug().Msg("GPU restore starting")
 
-			_, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
+			resp, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
 			if err != nil {
 				log.Error().Err(err).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
@@ -476,13 +487,10 @@ func (p *pool) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu_clien
 			}
 			log.Info().Msg("GPU restore complete")
 
-			// FIXME: It's not correct to add the below as components to the parent (PreRestoreFunc). Because
-			// the restore happens inside a goroutine, the timing components belong to the restore goroutine (concurrent).
-
-			// copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
-			// replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond
-			// profiling.AddTimingComponent(ctx, copyMemTime, "controller.CopyMemory")
-			// profiling.AddTimingComponent(ctx, replayCallsTime, "controller.ReplayCalls")
+			copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
+			replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond
+			profiling.AddTimingParallelComponent(ctx, copyMemTime, "CopyMemory")
+			profiling.AddTimingParallelComponent(ctx, replayCallsTime, "ReplayCalls")
 		}()
 		if PARALLEL_RESTORE {
 			return nil
@@ -696,4 +704,17 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 	}
 
 	return components, nil
+}
+
+///////////////
+/// HELPERS ///
+///////////////
+
+func EnsureLogDir(id string, uid, gid uint32) (string, error) {
+	dir := fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, id)
+	err := os.MkdirAll(dir, 0o755)
+	if err != nil {
+		return "", err
+	}
+	return dir, os.Chown(dir, int(uid), int(gid))
 }

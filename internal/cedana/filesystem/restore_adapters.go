@@ -2,6 +2,7 @@ package filesystem
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -44,42 +45,48 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 		} else {
 			// Create a temporary directory for the restore
 			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().UnixNano()))
+
 			if err := os.Mkdir(imagesDirectory, DUMP_DIR_PERMS); err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create restore dir: %v", err)
 			}
 			err = os.Chmod(imagesDirectory, DUMP_DIR_PERMS) // XXX: Because for some reason mkdir is not applying perms
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to chmod dump dir: %v", err)
+				return nil, status.Errorf(codes.Internal, "failed to chmod restore dir: %v", err)
 			}
 			defer os.RemoveAll(imagesDirectory)
 
-			// Detect compression from path
+			decompress := func(ctx context.Context) (err error) {
+				// Detect compression from path
+				compression, err := io.CompressionFromExt(path)
+				if err != nil {
+					return err
+				}
 
-			compression, err := io.CompressionFromExt(path)
+				tarball, err := storage.Open(path)
+				if err != nil {
+					return fmt.Errorf("failed to open dump file: %v", err)
+				}
+				defer func() {
+					err = errors.Join(err, tarball.Close())
+				}()
+
+				log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
+
+				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Untar, compression)
+				err = io.Untar(tarball, imagesDirectory, compression)
+				if err != nil {
+					return fmt.Errorf("failed to decompress dump: %v", err)
+				}
+
+				log.Debug().Str("path", path).Str("compression", compression).Msg("decompressed tarball")
+
+				return nil
+			}
+
+			err = decompress(ctx)
 			if err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
-
-			tarball, err := storage.Open(path)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to open dump file: %v", err)
-			}
-			defer func() {
-				if e := tarball.Close(); e != nil && err == nil {
-					err = e
-				}
-			}()
-
-			log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
-
-			_, end := profiling.StartTimingCategory(ctx, "storage", io.Untar)
-			err = io.Untar(tarball, imagesDirectory, compression)
-			end()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to decompress dump: %v", err)
-			}
-
-			log.Debug().Str("path", path).Str("compression", compression).Msg("decompressed tarball")
 		}
 
 		dir, err := os.Open(imagesDirectory)

@@ -179,9 +179,6 @@ var jobUnfreezeCmd = &cobra.Command{
 		}
 		req.Details.JID = proto.String(jid)
 
-		ctx := context.WithValue(cmd.Context(), keys.UNFREEZE_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
-
 		return nil
 	},
 }

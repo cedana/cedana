@@ -37,7 +37,7 @@ teardown_file() {
 ### Run ###
 ###########
 
-@test "run GPU process (non-GPU binary)" {
+@test "[$GPU_INFO] run GPU process (non-GPU binary)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -50,20 +50,20 @@ teardown_file() {
     assert_output --partial "$jid"
 }
 
-@test "run GPU process (GPU binary)" {
+@test "[$GPU_INFO] run GPU process (GPU binary)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy --attach
 }
 
 # bats test_tags=daemonless
-@test "run GPU process (GPU binary, without daemon)" {
+@test "[$GPU_INFO] run GPU process (GPU binary, without daemon)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy --no-server
 }
 
-@test "run GPU process (non-existent binary)" {
+@test "[$GPU_INFO] run GPU process (non-existent binary)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -77,7 +77,7 @@ teardown_file() {
     refute_output --partial "$jid"
 }
 
-@test "exec GPU process (run process alias)" {
+@test "[$GPU_INFO] exec GPU process (run process alias)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -91,7 +91,7 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "dump GPU process (non-GPU binary)" {
+@test "[$GPU_INFO] dump GPU process (non-GPU binary)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -108,7 +108,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "dump GPU process (vector add)" {
+@test "[$GPU_INFO] dump GPU process (vector add)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -125,7 +125,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "dump GPU process (mem throughput saxpy)" {
+@test "[$GPU_INFO] dump GPU process (mem throughput saxpy)" {
     jid=$(unix_nano)
     log_file="/var/log/cedana-output-$jid.log"
 
@@ -146,7 +146,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "restore GPU process (non-GPU binary)" {
+@test "[$GPU_INFO] restore GPU process (non-GPU binary)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- "$WORKLOADS"/date-loop.sh
@@ -168,7 +168,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "restore GPU process (vector add)" {
+@test "[$GPU_INFO] restore GPU process (vector add)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
@@ -190,7 +190,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "restore GPU process (mem throughput saxpy)" {
+@test "[$GPU_INFO] restore GPU process (mem throughput saxpy)" {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
@@ -212,9 +212,9 @@ teardown_file() {
 }
 
 # bats test_tags=restore,daemonless
-@test "restore GPU process (mem throughput saxpy, without daemon)" {
+@test "[$GPU_INFO] restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
-    pid_file=$(mktemp)
+    pid_file=/tmp/pid-$jid
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
 
@@ -227,10 +227,8 @@ teardown_file() {
 
     debug cedana restore process --path "$dump_file" --pid-file "$pid_file" --no-server &
 
-    sleep 5
-
     wait_for_file "$pid_file"
     pid=$(cat "$pid_file")
-    run kill -KILL "$pid"
+    kill -KILL "$pid"
     wait_for_no_pid "$pid"
 }

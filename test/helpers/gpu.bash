@@ -6,6 +6,16 @@ INFERENCE_MODELS=(
     "stabilityai/stablelm-2-1_6b"
 )
 
+if cmd_exists nvidia-smi; then
+    export GPU_MODEL=$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)
+    export GPU_API=$(nvidia-smi | grep -Po '(?<=CUDA Version: )[\d.]+')
+    export GPU_INFO="$GPU_MODEL, CUDA $GPU_API"
+else
+    export GPU_MODEL="No GPU"
+    export GPU_API="N/A"
+    export GPU_INFO="No GPU detected"
+fi
+
 check_huggingface_token() {
     if [ -z "$HF_TOKEN" ]; then
         error_log "HF_TOKEN unset"

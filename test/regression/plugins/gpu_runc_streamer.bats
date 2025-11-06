@@ -40,7 +40,7 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "stream dump GPU container (vector add)" {
+@test "[$GPU_INFO] stream dump GPU container (vector add)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
@@ -57,7 +57,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "stream dump GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] stream dump GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
@@ -81,7 +81,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "stream restore GPU container (vector add)" {
+@test "[$GPU_INFO] stream restore GPU container (vector add)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
@@ -100,7 +100,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "stream restore GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] stream restore GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
@@ -122,7 +122,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore,daemonless
-@test "stream restore GPU container (mem throughput saxpy, without daemon)" {
+@test "[$GPU_INFO] stream restore GPU container (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 

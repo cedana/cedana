@@ -34,9 +34,9 @@ on:
         description: Version for controller binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
-      runtime_shim_version:
+      containerd_runtime_version:
         type: string
-        description: Version for runtime shim binaries (branch name, tag or "release" for latest release)
+        description: Version for containerd runtime binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
       helm_chart_version:
@@ -58,7 +58,6 @@ jobs:
           - arm64
       max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
-      - uses: runs-on/action@v1
       - name: Download cedana
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
@@ -75,49 +74,11 @@ jobs:
           fi
           echo $VERSION > cedana-version.txt
 
-      - name: Download plugins
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
-          ARCH: ${{ matrix.arch }}
-        run: |
-          mkdir -p plugins
-          cd plugins
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-runc.so-$ARCH/versions/$VERSION/libcedana-runc.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-containerd.so-$ARCH/versions/$VERSION/libcedana-containerd.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-crio.so-$ARCH/versions/$VERSION/libcedana-crio.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-k8s.so-$ARCH/versions/$VERSION/libcedana-k8s.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-kata.so-$ARCH/versions/$VERSION/libcedana-kata.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$VERSION/libcedana-cloud-hypervisor.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$VERSION/libcedana-storage-cedana.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-s3.so-$ARCH/versions/$VERSION/libcedana-storage-s3.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$VERSION/libcedana-storage-gcs.so
-          else
-            VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-runc.so-$ARCH/versions/$VERSION/libcedana-runc.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-containerd.so-$ARCH/versions/$VERSION/libcedana-containerd.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-crio.so-$ARCH/versions/$VERSION/libcedana-crio.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-k8s.so-$ARCH/versions/$VERSION/libcedana-k8s.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-kata.so-$ARCH/versions/$VERSION/libcedana-kata.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$VERSION/libcedana-cloud-hypervisor.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$VERSION/libcedana-storage-cedana.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-storage-s3.so-$ARCH/versions/$VERSION/libcedana-storage-s3.so
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$VERSION/libcedana-storage-gcs.so
-          fi
-          echo $VERSION > plugins-version.txt
-
       - name: Upload cedana
         uses: actions/upload-artifact@v4
         with:
           name: cedana-${{ matrix.arch }}
           path: ./cedana/*
-
-      - name: Upload plugins
-        uses: actions/upload-artifact@v4
-        with:
-          name: plugins-${{ matrix.arch }}
-          path: ./plugins/*
 
       - name: Get digest
         env:
@@ -147,6 +108,57 @@ jobs:
           path: /tmp/image-name/*
           if-no-files-found: error
 
+  plugin:
+    name: Plugin
+    if: ${{ inputs.cedana_version != 'none' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        plugin:
+          - runc
+          - containerd
+          - crio
+          - kata
+          - cloud-hypervisor
+          - k8s
+          - storage/cedana
+          - storage/s3
+          - storage/gcs
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Set plugin name
+        env:
+          PLUGIN: ${{ matrix.plugin }}
+        run: |
+          PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
+          echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
+
+      - name: Download plugin
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          PLUGIN: ${{ env.PLUGIN }}
+          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+            curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so
+          else
+            VERSION=$(echo $VERSION | sed 's/\//-/g')
+            curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-alpha/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so
+          fi
+          echo $VERSION > plugins-version.txt
+
+      - name: Upload plugin
+        uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
+          path: |
+            ./libcedana-*.so
+            ./plugin-version.txt
+
   criu:
     name: CRIU
     if: ${{ inputs.criu_version != 'none' }}
@@ -159,7 +171,6 @@ jobs:
           - arm64
       max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
-      - uses: runs-on/action@v1
       - name: Download CRIU
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
@@ -194,7 +205,6 @@ jobs:
           - arm64
       max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
-      - uses: runs-on/action@v1
       - name: Download binaries
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
@@ -231,7 +241,6 @@ jobs:
           - arm64
       max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
-      - uses: runs-on/action@v1
       - name: Download binaries
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
@@ -265,8 +274,6 @@ jobs:
           - amd64
           - arm64
     steps:
-      - uses: runs-on/action@v1
-
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -301,9 +308,9 @@ jobs:
           path: /tmp/image-name/*
           if-no-files-found: error
 
-  runtime-shim:
-    name: Runtime Shim
-    if: ${{ inputs.runtime_shim_version != 'none' }}
+  containerd-runtime-runc:
+    name: Containerd Runtime
+    if: ${{ inputs.containerd_runtime_version != 'none' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
@@ -313,28 +320,29 @@ jobs:
           - arm64
       max-parallel: 1 # to avoid unknown cloudsmith failures
     steps:
-      - uses: runs-on/action@v1
-      - name: Download binaries
+      - name: Download runtime binaries
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.runtime_shim_version == 'release' && 'latest' || inputs.runtime_shim_version }}
+          VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
           ARCH: ${{ matrix.arch }}
         run: |
-          mkdir -p runtime-shim
-          cd runtime-shim
+          mkdir -p containerd-runtime-runc
+          cd containerd-runtime-runc
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim-alpha/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
           fi
-          echo $VERSION > runtime-shim-version.txt
+          echo $VERSION > containerd-runtime-version.txt
+          cd -
+          # TODO: Can add more runtimes here in the future
 
-      - name: Upload artifacts
+      - name: Upload runtime runc artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: shim-runc-v2-${{ matrix.arch }}
-          path: ./runtime-shim/*
+          name: containerd-runtime-${{ matrix.arch }}-runc
+          path: ./containerd-runtime-runc/*
 
   helm-chart:
     name: Helm Chart

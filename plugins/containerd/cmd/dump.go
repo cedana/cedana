@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -15,7 +14,8 @@ func init() {
 	DumpCmd.Flags().StringP(containerd_flags.ImageFlag.Full, containerd_flags.ImageFlag.Short, "", "image ref (rootfs). leave empty to skip rootfs")
 	DumpCmd.Flags().StringP(containerd_flags.AddressFlag.Full, containerd_flags.AddressFlag.Short, "", "containerd socket address")
 	DumpCmd.Flags().StringP(containerd_flags.NamespaceFlag.Full, containerd_flags.NamespaceFlag.Short, "", "containerd namespace")
-	DumpCmd.Flags().Bool(containerd_flags.RootfsOnlyFlag.Full, false, "dump only the rootfs")
+	DumpCmd.Flags().BoolP(containerd_flags.RootfsFlag.Full, containerd_flags.RootfsFlag.Short, false, "dump with rootfs")
+	DumpCmd.Flags().BoolP(containerd_flags.RootfsOnlyFlag.Full, containerd_flags.RootfsOnlyFlag.Short, false, "dump only the rootfs")
 }
 
 var DumpCmd = &cobra.Command{
@@ -37,6 +37,7 @@ var DumpCmd = &cobra.Command{
 		image, _ := cmd.Flags().GetString(containerd_flags.ImageFlag.Full)
 		address, _ := cmd.Flags().GetString(containerd_flags.AddressFlag.Full)
 		namespace, _ := cmd.Flags().GetString(containerd_flags.NamespaceFlag.Full)
+		rootfs, _ := cmd.Flags().GetBool(containerd_flags.RootfsFlag.Full)
 		rootfsOnly, _ := cmd.Flags().GetBool(containerd_flags.RootfsOnlyFlag.Full)
 
 		req.Type = "containerd"
@@ -44,15 +45,13 @@ var DumpCmd = &cobra.Command{
 			ID:         id,
 			Address:    address,
 			Namespace:  namespace,
+			Rootfs:     rootfs,
 			RootfsOnly: rootfsOnly,
 		}}
 
 		if image != "" {
 			req.Details.Containerd.Image = &containerd.Image{Name: image}
 		}
-
-		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
-		cmd.SetContext(ctx)
 
 		return nil
 	},
