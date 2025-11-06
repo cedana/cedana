@@ -46,7 +46,7 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	// Set CRIU server
 	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
-	criuOpts.LogLevel = proto.Int32(CRIU_LOG_VERBOSITY_LEVEL)
+	criuOpts.LogLevel = proto.Int32(logLevel())
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.LogToStderr = proto.Bool(false)
 
