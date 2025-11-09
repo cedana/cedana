@@ -111,6 +111,41 @@ apt install -y /tmp/k9s.deb
 rm -f /tmp/k9s.deb
 EOT
 
+RUN <<EOT
+mkdir -p /etc/containerd
+containerd config default > /etc/containerd/config.toml
+sed -i 's/snapshotter = "overlayfs"/snapshotter = "native"/g' /etc/containerd/config.toml
+EOT
+
+RUN <<EOT
+cat > /entrypoint.sh << 'EOF'
+#!/bin/bash
+set -e
+echo "[entrypoint] starting containerd with native snapshotter"
+containerd > /var/log/containerd.log 2>&1 &
+CONTAINERD_PID=$!
+
+echo "[entrypoint] waiting for containerd to be ready..."
+for i in {1..30}; do
+    if ctr version > /dev/null 2>&1; then
+        echo "[entrypoint] containerd is ready (PID: $CONTAINERD_PID)"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "[entrypoint] ERROR: containerd failed to start within 30 seconds"
+        cat /var/log/containerd.log
+        exit 1
+    fi
+    sleep 1
+done 
+
+echo "[entrypoint] executing command: $@"
+exec "$@"
+EOF
+chmod +x /entrypoint.sh
+EOT
+
+
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples
 
@@ -119,4 +154,5 @@ WORKDIR /src
 ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
 
-CMD []
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["sleep", "inf"]
