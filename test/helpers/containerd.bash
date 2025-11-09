@@ -57,11 +57,13 @@ get_latest_cedana_samples_tag() {
 }
 
 start_containerd() {
-    if pgrep -x contianerd > /dev/null; then
-        debug_log "containerd is already running."
-        for i in {1..30}; do
+    if pgrep -x containerd > /dev/null; then
+        local containerd_pid=$(pgrep -x containerd)
+        debug_log "Containerd is already running (PID: $containerd_pid, likely from entrypoint)"
+        
+        for i in {1..60}; do
             if ctr version > /dev/null 2>&1; then
-                debug_log "containerd is responsive."
+                debug_log "Containerd socket is ready after $i seconds"
                 if [ -f /etc/containerd/config.toml ]; then
                     snapshotter=$(grep -m 1 'snapshotter = ' /etc/containerd/config.toml | cut -d'"' -f2)
                     debug_log "Containerd is using snapshotter: $snapshotter"
@@ -70,8 +72,10 @@ start_containerd() {
             fi
             sleep 1
         done
-        error_log "containerd is running but socket is not responsive."
-        exit 1
+        error_log "Containerd is running but socket not responding after 60 seconds"
+        error_log "Containerd logs:"
+        tail -50 /var/log/containerd.log 2>&1 || echo "No containerd logs found"
+        return 1
     fi
     if cmd_exists start-docker.sh; then
         debug_log "Starting containerd via start-docker.sh"
@@ -87,14 +91,16 @@ start_containerd() {
         fi
         containerd > /var/log/containerd.log 2>&1 &
 
-        for i in {1..30}; do
+        for i in {1..60}; do
             if ctr version > /dev/null 2>&1; then
                 debug_log "containerd started and is responsive."
+                return 0
             fi
             sleep 1
         done
-        error_log "containerd failed to start or is not responsive."
-        cat /var/log/containerd.log
+        error_log "Containerd failed to start after 60 seconds"
+        error_log "Containerd logs:"
+        cat /var/log/containerd.log 2>&1 || echo "No containerd logs found"
         return 1
     else
         error_log "containerd is not installed. Please install it first."
@@ -103,11 +109,22 @@ start_containerd() {
 }
 
 stop_containerd() {
-    if cmd_exists start-docker.sh; then
-        pkill supervisord
-    elif pid=$(pidof containerd); then
-        kill "$pid"
-    else
-        debug_log "containerd is not running."
+    local containerd_pid=$(pgrep -x containerd)
+    if [ -n "$containerd_pid" ]; then
+        debug_log "Stopping containerd (PID: $containerd_pid)"
+        kill "$containerd_pid" 2>/dev/null || true
+        for i in {1..10}; do
+            if ! pgrep -x containerd > /dev/null; then
+                debug_log "containerd stopped successfully."
+                return 0
+            fi
+            sleep 1
+        done
+        kill -9 "$containerd_pid" 2>/dev/null || true
     fi
+
+    if cmd_exists start-docker.sh; then
+        pkill supervisord 2>/dev/null || true
+    fi
+    debug_log "containerd cleanup complete."
 }
