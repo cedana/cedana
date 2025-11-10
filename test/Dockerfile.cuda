@@ -2,12 +2,13 @@
 
 FROM cedana/cedana-samples:cuda12.4-torch2.7 AS cedana-samples
 
-FROM nvidia/cuda:12.8.0-base-ubuntu24.04
+FROM cruizba/ubuntu-dind:noble-latest
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
 ARG GO_VERSION=1.25.1
 ARG KUBECTL_VERSION=1.33.0
 ARG K9S_VERSION=latest
+ARG DEBIAN_FRONTEND=noninteractive
 
 # install packages
 RUN <<EOT
@@ -23,6 +24,18 @@ apt-get update
 for pkg in $APT_PACKAGES; do
     apt-get install -y $pkg || echo "failed to install $pkg" >&2
 done
+EOT
+
+# install NVIDIA container toolkit
+RUN <<'EOT'
+set -eux
+# Add NVIDIA repository
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+apt-get update
+apt-get install -y nvidia-container-toolkit
 EOT
 
 # install bats
@@ -111,40 +124,53 @@ apt install -y /tmp/k9s.deb
 rm -f /tmp/k9s.deb
 EOT
 
-RUN <<EOT
+# configure Docker daemon for NVIDIA runtime
+RUN <<'EOT'
+mkdir -p /etc/docker
+cat > /etc/docker/daemon.json <<'JSON'
+{
+  "runtimes": {
+    "nvidia": {
+      "path": "nvidia-container-runtime",
+      "runtimeArgs": []
+    }
+  },
+  "default-runtime": "nvidia"
+}
+JSON
+EOT
+
+RUN <<'EOT'
 mkdir -p /etc/containerd
-containerd config default > /etc/containerd/config.toml
-sed -i 's/snapshotter = "overlayfs"/snapshotter = "native"/g' /etc/containerd/config.toml
+cat > /etc/containerd/config.toml <<'CONFIG'
+version = 2
+
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    disable_tcp_service = true
+    stream_server_address = "127.0.0.1"
+    stream_server_port = "0"
+    enable_selinux = false
+    sandbox_image = "registry.k8s.io/pause:3.8"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      snapshotter = "overlayfs"
+      default_runtime_name = "nvidia"
+      
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          runtime_type = "io.containerd.runc.v2"
+          
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+          runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+            BinaryName = "/usr/bin/nvidia-container-runtime"
+CONFIG
 EOT
 
-RUN <<EOT
-cat > /entrypoint.sh << 'EOF'
-#!/bin/bash
-set -e
-echo "[entrypoint] starting containerd with native snapshotter"
-containerd > /var/log/containerd.log 2>&1 &
-CONTAINERD_PID=$!
-
-echo "[entrypoint] waiting for containerd to be ready..."
-for i in {1..30}; do
-    if ctr version > /dev/null 2>&1; then
-        echo "[entrypoint] containerd is ready (PID: $CONTAINERD_PID)"
-        break
-    fi
-    if [ $i -eq 30 ]; then
-        echo "[entrypoint] ERROR: containerd failed to start within 30 seconds"
-        cat /var/log/containerd.log
-        exit 1
-    fi
-    sleep 1
-done 
-
-echo "[entrypoint] executing command: $@"
-exec "$@"
-EOF
-chmod +x /entrypoint.sh
-EOT
-
+# Setup containerd symlink (same as CPU)
+RUN rm -rf /run/containerd && ln -s /run/docker/containerd /run/containerd
+RUN sed -i '2iumount /var/run/docker.sock || true' /usr/local/bin/start-docker.sh
 
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples
@@ -154,5 +180,4 @@ WORKDIR /src
 ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
 
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["sleep", "inf"]
+CMD []
