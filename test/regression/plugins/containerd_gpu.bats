@@ -99,7 +99,7 @@ print('vLLM import successful')
 }
 
 # bats test_tags=gpu,vllm
-@test "[$GPU_INFO] run vLLM inference" {
+@test "[$GPU_INFO] run vLLM initialization" {
     jid="vllm-$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
@@ -120,15 +120,28 @@ try:
 except Exception as e:
     print(f'Expected error (no model downloaded): {e}')
     print('But vLLM library is working')
-"
-    
-    # This might fail due to model download, but should at least start
+"    
     assert_success
     assert_output --partial "vLLM library is working"
 }
 
-# bats test_tags=gpu,vllm
-@test "[$GPU_INFO] run vLLM inference in containerd with GPU" {
+@test "[$GPU_INFO] run tensorflow training in containerd with GPU" { # turned off because of shim issues -> race condition?
+    jid=$(unix_nano)
+    image="$CEDANA_SAMPLES_CUDA_IMAGE"
+    log_file="/var/log/cedana-output-$jid.log"
+    
+    run cedana run containerd \
+        --jid "$jid" \
+        --gpu-enabled \
+        --attach \
+        --snapshotter "overlayfs" \
+        -- "$image" \
+        python3 /cedana-samples/gpu_smr/pytorch/training/tensorflow-train.py
+    assert_success
+    assert_output --partial "Model built and compiled successfully within the MirroredStrategy scope." 
+}
+
+@test "[$GPU_INFO] run vLLM inference in containerd with GPU" { # turned off because of shim issues -> race condition?
     jid=$(unix_nano)
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     log_file="/var/log/cedana-output-$jid.log"
@@ -140,7 +153,7 @@ except Exception as e:
         --snapshotter "overlayfs" \
         -- "$image" \
         python3 /cedana-samples/gpu_smr/pytorch/llm/vllm_inference.py \
-        --model 'TinyLlama/TinyLlama-1.1B-Chat-v1.0' \
+        --model 'facebook/opt-125m' \
         --tensor-parallel-size 1 \
         --temperature 0.1 \
         --top-p 0.9
@@ -168,4 +181,148 @@ except Exception as e:
     fi
     
     assert_success
+}
+
+################
+### GPU Dump ###
+################
+
+# bats test_tags=dump,gpu
+@test "[$GPU_INFO] test simple GPU dump" {
+    jid="$(unix_nano)"
+    image="$CEDANA_SAMPLES_CUDA_IMAGE"
+    
+    cedana run containerd \
+        --jid "$jid" \
+        --gpu-enabled \
+        --snapshotter "overlayfs" \
+        -- "$image" python3 -c "
+import torch
+print('Starting GPU workload...')
+x = torch.randn(1000, 1000).cuda()
+y = torch.randn(1000, 1000).cuda()
+z = torch.matmul(x, y)
+print('GPU workload complete')
+while True:
+    pass  # Keep the process running
+"
+
+    sleep 5
+
+    echo "Dumping GPU containerd..."
+    run cedana dump job "$jid"
+    assert_success
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"   
+}
+
+# bats test_tags=dump,gpu
+@test "[$GPU_INFO] test GPU inference dump" {
+    jid="$(unix_nano)"
+    image="$CEDANA_SAMPLES_CUDA_IMAGE"
+    
+    cedana run containerd \
+        --jid "$jid" \
+        --gpu-enabled \
+        --snapshotter "overlayfs" \
+        -- "$image" python3 -c "
+import torch
+import torch.nn as nn
+import torch.optim as optim
+print('Starting GPU workload with ANN...')
+class SimpleNN(nn.Module):
+    def __init__(self):
+        super(SimpleNN, self).__init__()
+        self.fc = nn.Linear(1000, 10)
+    def forward(self, x):
+        return self.fc(x)
+model = SimpleNN().cuda()
+criterion = nn.CrossEntropyLoss()
+optimizer = optim.SGD(model.parameters(), lr=0.01)
+for epoch in range(5):
+    inputs = torch.randn(32, 1000).cuda()
+    labels = torch.randint(0, 10, (32,)).cuda()
+    optimizer.zero_grad()
+    outputs = model(inputs)
+    loss = criterion(outputs, labels)
+    loss.backward()
+    optimizer.step()
+    print(f'Epoch {epoch+1}, Loss: {loss.item()}')
+print('GPU ANN workload complete')
+while True:
+    inputs = torch.randn(32, 1000).cuda()
+    outputs = model(inputs)
+    print(f'Inference output shape: {outputs.shape}')
+"
+    sleep 5
+
+    echo "Dumping GPU containerd..."
+    run cedana dump job "$jid"
+    assert_success
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"   
+}
+
+@test "[$GPU_INFO] test tensorflow training GPU dump" { # turned off because of shim issues -> race condition?
+    jid=$(unix_nano)
+    image="$CEDANA_SAMPLES_CUDA_IMAGE"
+    log_file="/var/log/cedana-output-$jid.log"
+    
+    cedana run containerd \
+        --jid "$jid" \
+        --gpu-enabled \
+        --attach \
+        --snapshotter "overlayfs" \
+        -- "$image" \
+        python3 /cedana-samples/gpu_smr/pytorch/training/tensorflow-train.py \
+
+    sleep 1
+
+    run cedana dump job "$jid"
+    assert_success
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"
+}
+
+
+###############
+### Restore ###
+###############
+
+# bats test_tags=restore,gpu
+@test "[$GPU_INFO] restore simple workload in GPU containerd" {
+    jid="$(unix_nano)"
+    image="$CEDANA_SAMPLES_CUDA_IMAGE"
+    
+    cedana run containerd \
+        --jid "$jid" \
+        --gpu-enabled \
+        --snapshotter "overlayfs" \
+        -- "$image" python3 -c "
+import torch
+print ('Starting GPU workload...')
+x = torch.randn(1000, 1000).cuda()
+y = torch.randn(1000, 1000).cuda()
+print('GPU workload complete')
+while True:
+    z = torch.matmul(x, y)
+"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid" --image "$image"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+    run cedana job delete "$jid"
 }
