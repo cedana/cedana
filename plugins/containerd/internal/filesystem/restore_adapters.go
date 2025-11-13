@@ -3,6 +3,7 @@ package filesystem
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"os"
@@ -193,4 +194,14 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 	log.Info().Str("dir", upperDir).Int("files", len(rwLayerFiles)).Msg("restored rw layer files")
 
 	return nil
+}
+
+func readDelimitedMessage(r io.Reader) ([]byte, error) {
+	var size uint32
+	if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
+		return nil, err
+	}
+	data := make([]byte, size)
+	_, err := io.ReadFull(r, data)
+	return data, err
 }

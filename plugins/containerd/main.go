@@ -80,6 +80,7 @@ var (
 		validation.ValidateRestoreRequest,
 		client.Setup[daemon.RestoreReq, daemon.RestoreResp],
 		client.CreateContainerForRestore,
+		filesystem.RestoreRWLayer,
 		client.SetAdditionalEnv[daemon.RestoreReq, daemon.RestoreResp],
 	}
 )
