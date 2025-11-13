@@ -3,6 +3,7 @@ package filesystem
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,9 +22,9 @@ import (
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/protobuf/proto"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/platforms"
+	proto_proto "github.com/golang/protobuf/proto"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
@@ -190,6 +191,24 @@ func DumpImageName(next types.Dump) types.Dump {
 	}
 }
 
+func writeDelimitedMessage(w io.Writer, msg proto_proto.Message) error {
+	data, err := proto_proto.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	size := uint32(len(data))
+	if err := binary.Write(w, binary.LittleEndian, size); err != nil {
+		return fmt.Errorf("failed to write message size: %w", err)
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		return fmt.Errorf("failed to write message data: %w", err)
+	}
+	return nil
+}
+
 func dumpRWLayer(ctx context.Context, client *containerd.Client, container containerd.Container, dumpDir string) (err error) {
 	log.Info().Str("container", container.ID()).Msg("rw layer dump started")
 	defer func() {
@@ -255,17 +274,13 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 		}
 
 		xattrResults := make(map[string]string)
-
 		offset := 0
-
 		for offset < xattrSize {
 			end := offset
 			for end < xattrSize && xattrList[end] != 0 {
 				end++
 			}
-
 			name := string(xattrList[offset:end])
-
 			valueSize, err := unix.Getxattr(fullPath, name, nil)
 			if err != nil {
 				return fmt.Errorf("failed to get xattr size for %s on %s: %v", name, fullPath, err)
@@ -281,7 +296,6 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 			xattrResults[name] = base64.StdEncoding.EncodeToString(value)
 			offset = end + 1
 		}
-
 		rwLayerFile.SetXattrs(xattrResults)
 
 		stat := fi.Sys().(*syscall.Stat_t)
@@ -290,6 +304,7 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 
 		rwLayerFile.SetMode(uint32(fi.Mode()))
 		rwLayerFile.SetPath(entry.Name())
+		rwLayerFile.SetMtime(uint64(fi.ModTime().UnixNano()))
 
 		if fi.Mode()&os.ModeSymlink != 0 {
 			target, err := os.Readlink(fullPath)
@@ -304,22 +319,43 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 			log.Debug().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("directory in rw layer")
 		} else if fi.Mode().IsRegular() {
 			log.Debug().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("regular file in rw layer")
+		} else {
+			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer")
+		}
 
+		rwFilePath := filepath.Join(dumpDir, fmt.Sprintf("rw-layer-%d.pb", i))
+		outFile, err := os.Create(rwFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to create rw file %s: %v", rwFilePath, err)
+		}
+		defer outFile.Close()
+
+		if err := writeDelimitedMessage(outFile, rwLayerFile); err != nil {
+			return fmt.Errorf("failed to write metadata for %s: %v", entry.Name(), err)
+		}
+
+		if fi.Mode().IsRegular() {
 			f, err := os.Open(fullPath)
 			if err != nil {
 				return fmt.Errorf("failed to open file %s for reading: %v", fullPath, err)
 			}
 			defer f.Close()
 
+			// 4MB buffer
 			buf := make([]byte, 4*1024*1024)
-
 			for {
 				n, err := f.Read(buf)
 				if n > 0 {
-					chunk := make([]byte, n)
-					copy(chunk, buf[:n])
+					chunkMsg := &containerd_proto.RWFile{}
 
-					rwLayerFile.Content = append(rwLayerFile.Content, chunk)
+					chunkData := make([]byte, n)
+					copy(chunkData, buf[:n])
+
+					chunkMsg.Content = [][]byte{chunkData}
+
+					if err := writeDelimitedMessage(outFile, chunkMsg); err != nil {
+						return fmt.Errorf("failed to write content chunk for %s: %v", fullPath, err)
+					}
 				}
 
 				if err == io.EOF {
@@ -329,22 +365,6 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 					return fmt.Errorf("failed to read file content for %s: %v", fullPath, err)
 				}
 			}
-		} else {
-			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer")
-		}
-
-		rwLayerFile.SetMtime(uint64(fi.ModTime().UnixNano()))
-
-		rwLayerFile.Path = entry.Name()
-
-		rwLayerBytes, err := proto.Marshal(rwLayerFile)
-		if err != nil {
-			return fmt.Errorf("failed to marshal rw file %s: %v", entry.Name(), err)
-		}
-
-		rwFilePath := filepath.Join(dumpDir, fmt.Sprintf("rw-layer-%d.pb", i))
-		if err := os.WriteFile(rwFilePath, rwLayerBytes, 0o644); err != nil {
-			return fmt.Errorf("failed to write rw file %s: %v", rwFilePath, err)
 		}
 
 		log.Debug().Str("path", rwFilePath).Str("file", entry.Name()).Msg("wrote rw layer file")

@@ -16,11 +16,11 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
-	"github.com/containerd/containerd/protobuf/proto"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	proto_proto "google.golang.org/protobuf/proto"
 )
 
 func RestoreRWLayer(next types.Restore) types.Restore {
@@ -102,7 +102,7 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 		}
 
 		rwLayerFile := &containerd_proto.RWFile{}
-		if err := proto.Unmarshal(metadataBytes, rwLayerFile); err != nil {
+		if err := proto_proto.Unmarshal(metadataBytes, rwLayerFile); err != nil {
 			return fmt.Errorf("failed to unmarshal metadata from %s: %v", rwFilePath, err)
 		}
 
@@ -142,7 +142,7 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 				}
 
 				chunkMsg := &containerd_proto.RWFile{}
-				if err := proto.Unmarshal(chunkBytes, chunkMsg); err != nil {
+				if err := proto_proto.Unmarshal(chunkBytes, chunkMsg); err != nil {
 					outFile.Close()
 					return fmt.Errorf("failed to unmarshal chunk from %s: %v", rwFilePath, err)
 				}
