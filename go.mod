@@ -6,8 +6,8 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251009084235-8dc16543509d.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251009084235-8dc16543509d.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20251009084235-f3f33473b2aa.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20251105083538-89f6e36730b9.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251105083538-89f6e36730b9.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-229101f41642.2
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-229101f41642.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251105083538-53c7c62fed79.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
