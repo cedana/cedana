@@ -240,19 +240,28 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 		}
 	}
 
-	rwEntries, err := os.ReadDir(upperDir)
-	if err != nil {
-		return fmt.Errorf("failed to read upperdir: %v", err)
-	}
+	var fileIndex int
+	err = filepath.WalkDir(upperDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 
-	for i, entry := range rwEntries {
+		relPath, err := filepath.Rel(upperDir, path)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path for %s: %v", path, err)
+		}
+
+		if relPath == "." {
+			return nil
+		}
+
 		rwLayerFile := &containerd_proto.RWFile{}
 
-		fi, err := entry.Info()
+		fi, err := d.Info()
 		if err != nil {
-			return fmt.Errorf("failed to get file info for %s: %v", entry.Name(), err)
+			return fmt.Errorf("failed to get file info for %s: %v", path, err)
 		}
-		fullPath := filepath.Join(upperDir, entry.Name())
+		fullPath := path
 
 		xattrSize, err := unix.Listxattr(fullPath, nil)
 		if err != nil {
@@ -299,7 +308,7 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 		rwLayerFile.SetGid(stat.Gid)
 
 		rwLayerFile.SetMode(uint32(fi.Mode()))
-		rwLayerFile.SetPath(entry.Name())
+		rwLayerFile.SetPath(relPath)
 		rwLayerFile.SetMtime(uint64(fi.ModTime().UnixNano()))
 
 		if fi.Mode()&os.ModeSymlink != 0 {
@@ -319,7 +328,8 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer")
 		}
 
-		rwFilePath := filepath.Join(dumpDir, fmt.Sprintf("rw-layer-%d.pb", i))
+		rwFilePath := filepath.Join(dumpDir, fmt.Sprintf("rw-layer-%d.pb", fileIndex))
+		fileIndex++
 		outFile, err := os.Create(rwFilePath)
 		if err != nil {
 			return fmt.Errorf("failed to create rw file %s: %v", rwFilePath, err)
@@ -327,7 +337,7 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 		defer outFile.Close()
 
 		if err := writeDelimitedMessage(outFile, rwLayerFile); err != nil {
-			return fmt.Errorf("failed to write metadata for %s: %v", entry.Name(), err)
+			return fmt.Errorf("failed to write metadata for %s: %v", relPath, err)
 		}
 
 		if fi.Mode().IsRegular() {
@@ -363,10 +373,15 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 			}
 		}
 
-		log.Debug().Str("path", rwFilePath).Str("file", entry.Name()).Msg("wrote rw layer file")
+		log.Debug().Str("path", rwFilePath).Str("file", relPath).Msg("wrote rw layer file")
+		return nil
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to walk upperdir: %v", err)
 	}
 
-	log.Info().Str("dir", dumpDir).Int("files", len(rwEntries)).Msg("wrote rw layer files")
+	log.Info().Str("dir", dumpDir).Int("files", fileIndex).Msg("wrote rw layer files")
 
 	return nil
 }

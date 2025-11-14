@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -89,6 +90,17 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 		return fmt.Errorf("failed to glob rw layer files: %v", err)
 	}
 
+	type fileEntry struct {
+		path       string
+		relPath    string
+		mode       os.FileMode
+		metadata   *containerd_proto.RWFile
+		filePath   string
+		isDir      bool
+	}
+
+	var entries []fileEntry
+
 	for _, rwFilePath := range rwLayerFiles {
 		inFile, err := os.Open(rwFilePath)
 		if err != nil {
@@ -106,8 +118,28 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 			return fmt.Errorf("failed to unmarshal metadata from %s: %v", rwFilePath, err)
 		}
 
-		fullPath := filepath.Join(upperDir, rwLayerFile.GetPath())
 		mode := os.FileMode(rwLayerFile.GetMode())
+		entries = append(entries, fileEntry{
+			path:     filepath.Join(upperDir, rwLayerFile.GetPath()),
+			relPath:  rwLayerFile.GetPath(),
+			mode:     mode,
+			metadata: rwLayerFile,
+			filePath: rwFilePath,
+			isDir:    mode.IsDir(),
+		})
+	}
+
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].isDir != entries[j].isDir {
+			return entries[i].isDir
+		}
+		return strings.Count(entries[i].relPath, string(filepath.Separator)) < strings.Count(entries[j].relPath, string(filepath.Separator))
+	})
+
+	for _, entry := range entries {
+		fullPath := entry.path
+		mode := entry.mode
+		rwLayerFile := entry.metadata
 
 		if mode&os.ModeSymlink != 0 {
 			if err := os.Symlink(rwLayerFile.GetSymlinkTarget(), fullPath); err != nil {
@@ -121,11 +153,19 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 			}
 			log.Debug().Str("path", fullPath).Uint32("major", rwLayerFile.GetDevMajor()).Uint32("minor", rwLayerFile.GetDevMinor()).Msg("restored device")
 		} else if mode.IsDir() {
-			if err := os.Mkdir(fullPath, mode&os.ModePerm); err != nil && !os.IsExist(err) {
+			if err := os.MkdirAll(fullPath, mode&os.ModePerm); err != nil {
 				return fmt.Errorf("failed to create directory %s: %v", fullPath, err)
 			}
 			log.Debug().Str("path", fullPath).Msg("restored directory")
 		} else if mode.IsRegular() {
+			inFile, err := os.Open(entry.filePath)
+			if err != nil {
+				return fmt.Errorf("failed to open rw layer file %s: %v", entry.filePath, err)
+			}
+			if _, err := readDelimitedMessage(inFile); err != nil {
+				inFile.Close()
+				return fmt.Errorf("failed to skip metadata from %s: %v", entry.filePath, err)
+			}
 			outFile, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode&os.ModePerm)
 			if err != nil {
 				return fmt.Errorf("failed to create file %s: %v", fullPath, err)
@@ -137,23 +177,27 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 					break
 				}
 				if err != nil {
+					inFile.Close()
 					outFile.Close()
-					return fmt.Errorf("failed to read chunk from %s: %v", rwFilePath, err)
+					return fmt.Errorf("failed to read chunk from %s: %v", entry.filePath, err)
 				}
 
 				chunkMsg := &containerd_proto.RWFile{}
 				if err := proto_proto.Unmarshal(chunkBytes, chunkMsg); err != nil {
+					inFile.Close()
 					outFile.Close()
-					return fmt.Errorf("failed to unmarshal chunk from %s: %v", rwFilePath, err)
+					return fmt.Errorf("failed to unmarshal chunk from %s: %v", entry.filePath, err)
 				}
 
 				for _, chunk := range chunkMsg.GetContent() {
 					if _, err := outFile.Write(chunk); err != nil {
+						inFile.Close()
 						outFile.Close()
 						return fmt.Errorf("failed to write content to %s: %v", fullPath, err)
 					}
 				}
 			}
+			inFile.Close()
 			outFile.Close()
 			log.Debug().Str("path", fullPath).Msg("restored regular file")
 		} else {
