@@ -195,7 +195,6 @@ jobs:
           - kata
           - cloud-hypervisor
           - k8s
-          - slurm
           - storage/cedana
           - storage/s3
           - storage/gcs
@@ -459,7 +458,6 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-slurm.so-$ARCH/versions/$TAG/libcedana-slurm.so
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so
@@ -481,7 +479,6 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-slurm.so-$ARCH/versions/$TAG/libcedana-slurm.so || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so || true
