@@ -6,9 +6,7 @@ import (
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/jedib0t/go-pretty/v6/text"
-	"github.com/spf13/cobra"
 
-	"github.com/cedana/cedana/plugins/slurm/cmd"
 	"github.com/cedana/cedana/plugins/slurm/internal/cgroup"
 	"github.com/cedana/cedana/plugins/slurm/internal/defaults"
 	"github.com/cedana/cedana/plugins/slurm/internal/job"
@@ -23,10 +21,7 @@ import (
 // loaded from ldflag definitions
 var Version string = "dev"
 
-var (
-	RestoreCmd *cobra.Command = cmd.RestoreCmd
-	CmdTheme   text.Colors    = style.LowLevelRuntimeColors
-)
+var CmdTheme text.Colors = style.HighLevelRuntimeColors
 
 var (
 	KillSignal = syscall.SIGKILL
