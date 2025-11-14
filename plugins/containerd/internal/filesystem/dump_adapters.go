@@ -27,6 +27,7 @@ import (
 	proto_proto "github.com/golang/protobuf/proto"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -59,7 +60,7 @@ func DumpRWLayer(next types.Dump) types.Dump {
 			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 				go func() {
 					log.Debug().Str("container", container.ID()).Msg("dumping rw layer")
-					rootfsErr <- dumpRWLayer(ctx, client, container, criuOpts.GetImagesDir())
+					rootfsErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
 				}()
 				return nil
 			},
@@ -205,7 +206,7 @@ func writeDelimitedMessage(w io.Writer, rwLayerFile *containerd_proto.RWFile) er
 	return nil
 }
 
-func dumpRWLayer(ctx context.Context, client *containerd.Client, container containerd.Container, dumpDir string) (err error) {
+func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client, container containerd.Container) (err error) {
 	log.Info().Str("container", container.ID()).Msg("rw layer dump started")
 	defer func() {
 		if err != nil {
@@ -328,11 +329,12 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer")
 		}
 
-		rwFilePath := filepath.Join(dumpDir, fmt.Sprintf("rw-layer-%d.pb", fileIndex))
+		rwFileName := fmt.Sprintf("rw-layer-%d.pb", fileIndex)
 		fileIndex++
-		outFile, err := os.Create(rwFilePath)
+		log.Debug().Str("file", rwFileName).Str("relPath", relPath).Msg("writing rw layer file")
+		outFile, err := dumpFs.Create(rwFileName)
 		if err != nil {
-			return fmt.Errorf("failed to create rw file %s: %v", rwFilePath, err)
+			return fmt.Errorf("failed to create rw file %s: %v", rwFileName, err)
 		}
 		defer outFile.Close()
 
@@ -373,14 +375,12 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 			}
 		}
 
-		log.Debug().Str("path", rwFilePath).Str("file", relPath).Msg("wrote rw layer file")
+		log.Debug().Str("file", rwFileName).Str("relPath", relPath).Msg("wrote rw layer file")
 		return nil
 	})
 	if err != nil {
 		return fmt.Errorf("failed to walk upperdir: %v", err)
 	}
-
-	log.Info().Str("dir", dumpDir).Int("files", fileIndex).Msg("wrote rw layer files")
 
 	return nil
 }
