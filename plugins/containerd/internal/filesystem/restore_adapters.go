@@ -136,10 +136,14 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 		return strings.Count(entries[i].relPath, string(filepath.Separator)) < strings.Count(entries[j].relPath, string(filepath.Separator))
 	})
 
+	log.Info().Int("total_entries", len(entries)).Msg("sorted entries for restore")
+
 	for _, entry := range entries {
 		fullPath := entry.path
 		mode := entry.mode
 		rwLayerFile := entry.metadata
+
+		log.Debug().Str("path", fullPath).Str("relPath", entry.relPath).Str("mode", mode.String()).Bool("isDir", entry.isDir).Msg("restoring entry")
 
 		if mode&os.ModeSymlink != 0 {
 			if err := os.Symlink(rwLayerFile.GetSymlinkTarget(), fullPath); err != nil {
@@ -199,7 +203,7 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 			}
 			inFile.Close()
 			outFile.Close()
-			log.Debug().Str("path", fullPath).Msg("restored regular file")
+			log.Info().Str("path", fullPath).Str("relPath", entry.relPath).Msg("restored regular file")
 		} else {
 			log.Warn().Str("path", fullPath).Str("mode", mode.String()).Msg("unsupported file type during restore")
 			continue
