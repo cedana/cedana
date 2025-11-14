@@ -60,14 +60,10 @@ func DumpRWLayer(next types.Dump) types.Dump {
 				go func() {
 					log.Debug().Str("container", container.ID()).Msg("dumping rw layer")
 					rootfsErr <- dumpRWLayer(ctx, client, container, criuOpts.GetImagesDir())
-					close(rootfsErr)
 				}()
 				return nil
 			},
 			PostDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
-				return <-rootfsErr
-			},
-			FinalizeDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 				return <-rootfsErr
 			},
 		})
@@ -191,8 +187,8 @@ func DumpImageName(next types.Dump) types.Dump {
 	}
 }
 
-func writeDelimitedMessage(w io.Writer, msg proto_proto.Message) error {
-	data, err := proto_proto.Marshal(msg)
+func writeDelimitedMessage(w io.Writer, rwLayerFile *containerd_proto.RWFile) error {
+	data, err := proto_proto.Marshal(rwLayerFile)
 	if err != nil {
 		return err
 	}
