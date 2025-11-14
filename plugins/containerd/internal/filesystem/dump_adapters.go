@@ -241,7 +241,66 @@ func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client
 		}
 	}
 
+	const ENTRIES_PER_FILE = 1000
 	var fileIndex int
+	var currentBatch []*containerd_proto.RWFile
+	var currentBatchFiles []string
+
+	flushBatch := func() error {
+		if len(currentBatch) == 0 {
+			return nil
+		}
+		
+		batchFileName := fmt.Sprintf("rw-layer-%d.pb", fileIndex)
+		fileIndex++
+		
+		outFile, err := dumpFs.Create(batchFileName)
+		if err != nil {
+			return fmt.Errorf("failed to create batch file %s: %v", batchFileName, err)
+		}
+		defer outFile.Close()
+
+		for i, entry := range currentBatch {
+			if err := writeDelimitedMessage(outFile, entry); err != nil {
+				return fmt.Errorf("failed to write entry metadata: %v", err)
+			}
+			
+			if currentBatchFiles[i] != "" {
+				f, err := os.Open(currentBatchFiles[i])
+				if err != nil {
+					return fmt.Errorf("failed to open file %s for reading: %v", currentBatchFiles[i], err)
+				}
+				defer f.Close()
+
+				buf := make([]byte, 4*1024*1024)
+				for {
+					n, err := f.Read(buf)
+					if n > 0 {
+						chunkMsg := &containerd_proto.RWFile{}
+						chunkData := make([]byte, n)
+						copy(chunkData, buf[:n])
+						chunkMsg.Content = [][]byte{chunkData}
+						if err := writeDelimitedMessage(outFile, chunkMsg); err != nil {
+							return fmt.Errorf("failed to write content chunk: %v", err)
+						}
+					}
+					if err == io.EOF {
+						break
+					}
+					if err != nil {
+						return fmt.Errorf("failed to read file content: %v", err)
+					}
+				}
+			}
+		}
+		
+		log.Debug().Str("file", batchFileName).Int("entries", len(currentBatch)).Msg("wrote rw layer batch")
+		currentBatch = nil
+		currentBatchFiles = nil
+		return nil
+	}
+
+	var walkErr error
 	err = filepath.WalkDir(upperDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -329,60 +388,31 @@ func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client
 			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer")
 		}
 
-		rwFileName := fmt.Sprintf("rw-layer-%d.pb", fileIndex)
-		fileIndex++
-		log.Debug().Str("file", rwFileName).Str("relPath", relPath).Msg("writing rw layer file")
-		outFile, err := dumpFs.Create(rwFileName)
-		if err != nil {
-			return fmt.Errorf("failed to create rw file %s: %v", rwFileName, err)
-		}
-		defer outFile.Close()
-
-		if err := writeDelimitedMessage(outFile, rwLayerFile); err != nil {
-			return fmt.Errorf("failed to write metadata for %s: %v", relPath, err)
-		}
-
+		currentBatch = append(currentBatch, rwLayerFile)
 		if fi.Mode().IsRegular() {
-			f, err := os.Open(fullPath)
-			if err != nil {
-				return fmt.Errorf("failed to open file %s for reading: %v", fullPath, err)
-			}
-			defer f.Close()
-
-			// 4MB buffer
-			buf := make([]byte, 4*1024*1024)
-			for {
-				n, err := f.Read(buf)
-				if n > 0 {
-					chunkMsg := &containerd_proto.RWFile{}
-
-					chunkData := make([]byte, n)
-					copy(chunkData, buf[:n])
-
-					chunkMsg.Content = [][]byte{chunkData}
-
-					if err := writeDelimitedMessage(outFile, chunkMsg); err != nil {
-						return fmt.Errorf("failed to write content chunk for %s: %v", fullPath, err)
-					}
-				}
-
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					return fmt.Errorf("failed to read file content for %s: %v", fullPath, err)
-				}
-			}
+			currentBatchFiles = append(currentBatchFiles, fullPath)
+		} else {
+			currentBatchFiles = append(currentBatchFiles, "")
 		}
 
-		log.Debug().Str("file", rwFileName).Str("relPath", relPath).Msg("wrote rw layer file")
+		if len(currentBatch) >= ENTRIES_PER_FILE {
+			if err := flushBatch(); err != nil {
+				return err
+			}
+		}
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("failed to walk upperdir: %v", err)
+		walkErr = fmt.Errorf("failed to walk upperdir: %v", err)
 	}
 
-	return nil
+	if walkErr == nil && len(currentBatch) > 0 {
+		if err := flushBatch(); err != nil {
+			return err
+		}
+	}
+
+	return walkErr
 }
 
 func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) (err error) {
