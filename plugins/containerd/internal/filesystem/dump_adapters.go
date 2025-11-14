@@ -46,7 +46,7 @@ func DumpRWLayer(next types.Dump) types.Dump {
 
 		defer func() {
 			if err == nil {
-				resp.Messages = append(resp.Messages, "Dumped RW layer")
+				log.Info().Str("container", container.ID()).Msg("Dumped rw layer successfully")
 			}
 		}()
 
@@ -376,7 +376,6 @@ func dumpRWLayer(ctx context.Context, client *containerd.Client, container conta
 		log.Debug().Str("path", rwFilePath).Str("file", relPath).Msg("wrote rw layer file")
 		return nil
 	})
-
 	if err != nil {
 		return fmt.Errorf("failed to walk upperdir: %v", err)
 	}
