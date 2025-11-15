@@ -51,21 +51,19 @@ func DumpRWLayer(next types.Dump) types.Dump {
 			}
 		}()
 
-		// When doing a full dump, we instead start a rootfs dump async with CRIU and wait for it to finish
-
-		rootfsErr := make(chan error, 1)
+		rwLayerErr := make(chan error, 1)
 
 		opts.CRIUCallback.Include(&criu.NotifyCallback{
-			Name: "rootfs",
+			Name: "rw-layer",
 			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 				go func() {
 					log.Debug().Str("container", container.ID()).Msg("dumping rw layer")
-					rootfsErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
+					rwLayerErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
 				}()
 				return nil
 			},
 			PostDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
-				return <-rootfsErr
+				return <-rwLayerErr
 			},
 		})
 
