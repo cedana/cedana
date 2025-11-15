@@ -3,13 +3,18 @@ package filesystem
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	containerd_proto "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -19,11 +24,52 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/platforms"
+	proto_proto "github.com/golang/protobuf/proto"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func DumpRWLayer(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
+		}
+
+		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get container from context")
+		}
+
+		defer func() {
+			if err == nil {
+				log.Info().Str("container", container.ID()).Msg("Dumped rw layer successfully")
+			}
+		}()
+
+		rwLayerErr := make(chan error, 1)
+
+		opts.CRIUCallback.Include(&criu.NotifyCallback{
+			Name: "rw-layer",
+			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
+				go func() {
+					log.Debug().Str("container", container.ID()).Msg("dumping rw layer")
+					rwLayerErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
+				}()
+				return nil
+			},
+			PostDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
+				return <-rwLayerErr
+			},
+		})
+
+		return next(ctx, opts, resp, req)
+	}
+}
 
 // Adds a post-dump CRIU callback to dump the container's rootfs
 // Using post-dump ensures that the container is in a frozen state
@@ -138,6 +184,253 @@ func DumpImageName(next types.Dump) types.Dump {
 
 		return next(ctx, opts, resp, req)
 	}
+}
+
+func writeDelimitedMessage(w io.Writer, rwLayerFile *containerd_proto.RWFile) error {
+	data, err := proto_proto.Marshal(rwLayerFile)
+	if err != nil {
+		return err
+	}
+
+	size := uint32(len(data))
+	if err := binary.Write(w, binary.LittleEndian, size); err != nil {
+		return fmt.Errorf("failed to write message size: %w", err)
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		return fmt.Errorf("failed to write message data: %w", err)
+	}
+	return nil
+}
+
+func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client, container containerd.Container) (err error) {
+	log.Info().Str("container", container.ID()).Msg("rw layer dump started")
+	defer func() {
+		if err != nil {
+			log.Error().Err(err).Str("container", container.ID()).Msg("rw layer dump failed")
+		} else {
+			log.Info().Str("container", container.ID()).Msg("rw layer dump completed")
+		}
+	}()
+
+	info, err := container.Info(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get container info: %v", err)
+	}
+
+	snapshotter := client.SnapshotService(info.Snapshotter)
+
+	mounts, err := snapshotter.Mounts(ctx, info.SnapshotKey)
+	if err != nil {
+		return fmt.Errorf("failed to get container mounts: %v", err)
+	}
+
+	var upperDir string
+	for _, m := range mounts {
+		if m.Type == "overlay" {
+			for _, o := range m.Options {
+				var found bool
+				upperDir, found = strings.CutPrefix(o, "upperdir=")
+				if found {
+					break
+				}
+			}
+		}
+	}
+
+	if upperDir == "" {
+		log.Warn().Str("container", container.ID()).Msg("no upperdir found, skipping rw layer dump")
+		return nil
+	}
+
+	log.Info().Str("upperDir", upperDir).Str("container", container.ID()).Msg("dumping rw layer from upperdir")
+
+	const ENTRIES_PER_FILE = 1000
+	var fileIndex int
+	var currentBatch []*containerd_proto.RWFile
+	var currentBatchFiles []string
+
+	flushBatch := func() error {
+		if len(currentBatch) == 0 {
+			return nil
+		}
+		
+		batchFileName := fmt.Sprintf("rw-layer-%d.pb", fileIndex)
+		fileIndex++
+		
+		outFile, err := dumpFs.Create(batchFileName)
+		if err != nil {
+			return fmt.Errorf("failed to create batch file %s: %v", batchFileName, err)
+		}
+		defer outFile.Close()
+
+		for i, entry := range currentBatch {
+			if err := writeDelimitedMessage(outFile, entry); err != nil {
+				return fmt.Errorf("failed to write entry metadata: %v", err)
+			}
+			
+			if currentBatchFiles[i] != "" {
+				f, err := os.Open(currentBatchFiles[i])
+				if err != nil {
+					return fmt.Errorf("failed to open file %s for reading: %v", currentBatchFiles[i], err)
+				}
+				defer f.Close()
+
+				buf := make([]byte, 4*1024*1024)
+				for {
+					n, err := f.Read(buf)
+					if n > 0 {
+						chunkMsg := &containerd_proto.RWFile{}
+						chunkData := make([]byte, n)
+						copy(chunkData, buf[:n])
+						chunkMsg.Content = [][]byte{chunkData}
+						if err := writeDelimitedMessage(outFile, chunkMsg); err != nil {
+							return fmt.Errorf("failed to write content chunk: %v", err)
+						}
+					}
+					if err == io.EOF {
+						break
+					}
+					if err != nil {
+						return fmt.Errorf("failed to read file content: %v", err)
+					}
+				}
+			}
+		}
+		
+		log.Debug().Str("file", batchFileName).Int("entries", len(currentBatch)).Msg("wrote rw layer batch")
+		currentBatch = nil
+		currentBatchFiles = nil
+		return nil
+	}
+
+	var walkErr error
+	err = filepath.WalkDir(upperDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(upperDir, path)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path for %s: %v", path, err)
+		}
+
+		if relPath == "." {
+			return nil
+		}
+
+		rwLayerFile := &containerd_proto.RWFile{}
+
+		fi, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("failed to get file info for %s: %v", path, err)
+		}
+		fullPath := path
+
+		xattrSize, err := unix.Listxattr(fullPath, nil)
+		if err != nil {
+			return fmt.Errorf("failed to list xattrs for %s: %v", fullPath, err)
+		}
+
+		if xattrSize == 0 {
+			log.Debug().Str("file", fullPath).Msg("no xattrs found")
+		}
+
+		xattrList := make([]byte, xattrSize)
+		_, err = unix.Listxattr(fullPath, xattrList)
+		if err != nil {
+			return fmt.Errorf("failed to list xattrs for %s: %v", fullPath, err)
+		}
+
+		xattrResults := make(map[string]string)
+		offset := 0
+		for offset < xattrSize {
+			end := offset
+			for end < xattrSize && xattrList[end] != 0 {
+				end++
+			}
+			name := string(xattrList[offset:end])
+			valueSize, err := unix.Getxattr(fullPath, name, nil)
+			if err != nil {
+				return fmt.Errorf("failed to get xattr size for %s on %s: %v", name, fullPath, err)
+			}
+			var value []byte
+			if valueSize > 0 {
+				value = make([]byte, valueSize)
+				_, err = unix.Getxattr(fullPath, name, value)
+				if err != nil {
+					return fmt.Errorf("failed to get xattr value for %s on %s: %v", name, fullPath, err)
+				}
+			}
+			xattrResults[name] = base64.StdEncoding.EncodeToString(value)
+			offset = end + 1
+		}
+		rwLayerFile.SetXattrs(xattrResults)
+
+		stat := fi.Sys().(*syscall.Stat_t)
+		rwLayerFile.SetUid(stat.Uid)
+		rwLayerFile.SetGid(stat.Gid)
+
+		rwLayerFile.SetMode(uint32(fi.Mode()))
+		rwLayerFile.SetPath(relPath)
+		rwLayerFile.SetMtime(uint64(fi.ModTime().UnixNano()))
+
+		if fi.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(fullPath)
+			if err != nil {
+				return fmt.Errorf("failed to read symlink target for %s: %v", fullPath, err)
+			}
+			rwLayerFile.SetSymlinkTarget(target)
+		} else if fi.Mode()&os.ModeDevice != 0 {
+			rwLayerFile.SetDevMajor(unix.Major(stat.Rdev))
+			rwLayerFile.SetDevMinor(unix.Minor(stat.Rdev))
+		} else if fi.Mode().IsDir() {
+			log.Debug().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("directory in rw layer")
+		} else if fi.Mode().IsRegular() {
+			log.Debug().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("regular file in rw layer")
+		} else {
+			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer")
+		}
+
+		currentBatch = append(currentBatch, rwLayerFile)
+		if fi.Mode().IsRegular() {
+			currentBatchFiles = append(currentBatchFiles, fullPath)
+		} else {
+			currentBatchFiles = append(currentBatchFiles, "")
+		}
+
+		if len(currentBatch) >= ENTRIES_PER_FILE {
+			if err := flushBatch(); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		walkErr = fmt.Errorf("failed to walk upperdir: %v", err)
+	}
+
+	if walkErr == nil && len(currentBatch) > 0 {
+		if err := flushBatch(); err != nil {
+			return err
+		}
+	}
+
+	if walkErr == nil {
+		manifestFile, err := dumpFs.Create("rw-layer-manifest.txt")
+		if err != nil {
+			return fmt.Errorf("failed to create manifest: %v", err)
+		}
+		defer manifestFile.Close()
+		_, err = fmt.Fprintf(manifestFile, "%d\n", fileIndex)
+		if err != nil {
+			return fmt.Errorf("failed to write manifest: %v", err)
+		}
+		log.Info().Int("batches", fileIndex).Msg("wrote rw layer manifest")
+	}
+
+	return walkErr
 }
 
 func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) (err error) {
