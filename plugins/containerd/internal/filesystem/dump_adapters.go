@@ -239,6 +239,13 @@ func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client
 		}
 	}
 
+	if upperDir == "" {
+		log.Warn().Str("container", container.ID()).Msg("no upperdir found, skipping rw layer dump")
+		return nil
+	}
+
+	log.Info().Str("upperDir", upperDir).Str("container", container.ID()).Msg("dumping rw layer from upperdir")
+
 	const ENTRIES_PER_FILE = 1000
 	var fileIndex int
 	var currentBatch []*containerd_proto.RWFile
@@ -408,6 +415,19 @@ func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client
 		if err := flushBatch(); err != nil {
 			return err
 		}
+	}
+
+	if walkErr == nil {
+		manifestFile, err := dumpFs.Create("rw-layer-manifest.txt")
+		if err != nil {
+			return fmt.Errorf("failed to create manifest: %v", err)
+		}
+		defer manifestFile.Close()
+		_, err = fmt.Fprintf(manifestFile, "%d\n", fileIndex)
+		if err != nil {
+			return fmt.Errorf("failed to write manifest: %v", err)
+		}
+		log.Info().Int("batches", fileIndex).Msg("wrote rw layer manifest")
 	}
 
 	return walkErr
