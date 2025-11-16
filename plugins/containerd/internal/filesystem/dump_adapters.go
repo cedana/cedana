@@ -28,7 +28,6 @@ import (
 	proto_proto "github.com/golang/protobuf/proto"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -59,7 +58,8 @@ func DumpRWLayer(next types.Dump) types.Dump {
 			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 				go func() {
 					log.Debug().Str("container", container.ID()).Msg("dumping rw layer")
-					rwLayerErr <- dumpRWLayer(ctx, opts.Storage, req.GetPath(), client, container)
+					storagePath := req.Dir + "/" + req.Name
+				rwLayerErr <- dumpRWLayer(ctx, opts.Storage, storagePath, client, container)
 				}()
 				return nil
 			},
