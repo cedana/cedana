@@ -17,6 +17,7 @@ import (
 	containerd_proto "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
@@ -58,7 +59,7 @@ func DumpRWLayer(next types.Dump) types.Dump {
 			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 				go func() {
 					log.Debug().Str("container", container.ID()).Msg("dumping rw layer")
-					rwLayerErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
+					rwLayerErr <- dumpRWLayer(ctx, opts.Storage, req.GetPath(), client, container)
 				}()
 				return nil
 			},
@@ -204,7 +205,7 @@ func writeDelimitedMessage(w io.Writer, rwLayerFile *containerd_proto.RWFile) er
 	return nil
 }
 
-func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client, container containerd.Container) (err error) {
+func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath string, client *containerd.Client, container containerd.Container) (err error) {
 	log.Info().Str("container", container.ID()).Msg("rw layer dump started")
 	defer func() {
 		if err != nil {
@@ -256,12 +257,13 @@ func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client
 			return nil
 		}
 		
-		batchFileName := fmt.Sprintf("rw-layer-%d.pb", fileIndex)
+		batchFileName := fmt.Sprintf("rw-layer-%d.img", fileIndex)
 		fileIndex++
 		
-		outFile, err := dumpFs.Create(batchFileName)
+		filePath := storagePath + "/" + batchFileName
+		outFile, err := storage.Create(filePath)
 		if err != nil {
-			return fmt.Errorf("failed to create batch file %s: %v", batchFileName, err)
+			return fmt.Errorf("failed to create batch file %s: %v", filePath, err)
 		}
 		defer outFile.Close()
 
@@ -418,7 +420,8 @@ func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client
 	}
 
 	if walkErr == nil {
-		manifestFile, err := dumpFs.Create("rw-layer-manifest.txt")
+		manifestPath := storagePath + "/rw-layer-manifest.img"
+		manifestFile, err := storage.Create(manifestPath)
 		if err != nil {
 			return fmt.Errorf("failed to create manifest: %v", err)
 		}
