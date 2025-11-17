@@ -261,7 +261,7 @@ func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client
 		
 		outFile, err := dumpFs.Create(batchFileName)
 		if err != nil {
-			return fmt.Errorf("failed to create batch file %s: %v", filePath, err)
+			return fmt.Errorf("failed to create batch file %s: %v", batchFileName, err)
 		}
 		defer outFile.Close()
 
