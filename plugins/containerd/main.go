@@ -3,6 +3,7 @@ package main
 import (
 	"syscall"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/plugins/containerd/cmd"
@@ -45,8 +46,9 @@ var (
 	RunMiddleware types.Middleware[types.Run] = types.Middleware[types.Run]{
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
-		client.SetupForRun,
-		client.CreateContainerForRun,
+		client.Setup[daemon.RunReq, daemon.RunResp],
+		client.CreateContainer,
+		client.SetAdditionalEnv[daemon.RunReq, daemon.RunResp],
 	}
 	ManageHandler types.Run = client.Manage
 
@@ -54,9 +56,9 @@ var (
 	Cleanup    = client.Cleanup
 
 	GPUInterception        types.Adapter[types.Run]     = gpu.Interception
-	// GPUInterceptionRestore types.Adapter[types.Restore] = nil // Handled by lower-level runtime plugin
+	GPUInterceptionRestore types.Adapter[types.Restore] = gpu.Interception
 	GPUTracing             types.Adapter[types.Run]     = gpu.Tracing
-	// GPUTracingRestore      types.Adapter[types.Restore] = nil // Handled by lower-level runtime plugin
+	GPUTracingRestore      types.Adapter[types.Restore] = gpu.Tracing
 
 	FreezeHandler   types.Freeze   = runtime.Freeze
 	UnfreezeHandler types.Unfreeze = runtime.Unfreeze
@@ -64,8 +66,8 @@ var (
 	DumpMiddleware types.Middleware[types.Dump] = types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
-		client.SetupForDump,
-		client.LoadContainerForDump,
+		client.Setup[daemon.DumpReq, daemon.DumpResp],
+		client.LoadContainer[daemon.DumpReq, daemon.DumpResp],
 		filesystem.DumpRootfs,
 		filesystem.DumpImageName,
 
@@ -76,7 +78,8 @@ var (
 	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
-		client.SetupForRestore,
+		client.Setup[daemon.RestoreReq, daemon.RestoreResp],
 		client.CreateContainerForRestore,
+		client.SetAdditionalEnv[daemon.RestoreReq, daemon.RestoreResp],
 	}
 )

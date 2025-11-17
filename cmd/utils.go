@@ -30,7 +30,8 @@ func getRevision() string {
 
 // PrintProfilingData prints the profiling data in a very readable format.
 func printProfilingData(data *profiling.Data) {
-	var total time.Duration
+	var totalDuration time.Duration
+	var totalIO int64
 
 	fmt.Print("Profiling data received:\n\n")
 
@@ -38,11 +39,12 @@ func printProfilingData(data *profiling.Data) {
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
 
-	categoryMap := make(map[string]time.Duration)
+	categoryDuration := make(map[string]time.Duration)
+	categoryIO := make(map[string]int64)
 	precision := config.Global.Profiling.Precision
 
 	for _, p := range data.Components {
-		if p.Duration == 0 {
+		if p.Duration == 0 && p.IO == 0 {
 			continue
 		}
 		categoryName, name := utils.SimplifyFuncName(p.Name)
@@ -54,32 +56,60 @@ func printProfilingData(data *profiling.Data) {
 		}, categoryName)
 
 		duration := time.Duration(p.Duration)
-		total += duration
+		durationStr := profiling.DurationStr(duration, precision)
+		if p.Parallel {
+			durationStr = style.DisabledColors.Sprint("├──" + durationStr)
+			duration = 0 // Don't count parallel durations towards total
+		}
+		totalDuration += duration
+		totalIO += p.IO
 
 		if categoryName != "" {
-			categoryMap[category] += duration
+			categoryDuration[category] += duration
+			categoryIO[category] += p.IO
 		} else {
-			categoryMap[style.DisabledColors.Sprint("other")] += duration
+			categoryDuration[style.DisabledColors.Sprint("other")] += duration
+			categoryIO[style.DisabledColors.Sprint("other")] += p.IO
 		}
 
-		tableWriter.AppendRow([]any{profiling.DurationStr(duration, precision), category, style.DisabledColors.Sprint(name)})
+		tableWriter.AppendRow([]any{
+			durationStr,
+			category,
+			utils.SizeStr(p.IO),
+			style.DisabledColors.Sprint(name),
+		})
 	}
 
-	tableWriter.AppendFooter([]any{profiling.DurationStr(total, precision), "", fmt.Sprintf("%s (total)", data.Name)})
+	tableWriter.AppendFooter([]any{
+		profiling.DurationStr(totalDuration, precision),
+		"",
+		utils.SizeStr(totalIO),
+		fmt.Sprintf("%s (total)", data.Name),
+	})
 	tableWriter.Render()
 
-	if len(categoryMap) > 1 {
+	if len(categoryDuration) > 1 {
 		fmt.Println()
 		tableWriter = table.NewWriter()
 		tableWriter.SetStyle(style.TableStyle)
 		tableWriter.SetOutputMirror(os.Stdout)
 
-		for category, duration := range categoryMap {
-			percentage := (float64(duration) / float64(total)) * 100
-			tableWriter.AppendRow([]any{profiling.DurationStr(duration, precision), fmt.Sprintf("%.2f%%", percentage), category})
+		for category, duration := range categoryDuration {
+			percentage := (float64(duration) / float64(totalDuration)) * 100
+			tableWriter.AppendRow([]any{
+				profiling.DurationStr(duration, precision),
+				fmt.Sprintf("%.2f%%", percentage),
+				utils.SizeStr(categoryIO[category]),
+				category,
+			})
 		}
 
-		tableWriter.AppendFooter([]any{profiling.DurationStr(total, precision), "", fmt.Sprintf("%s (total)", data.Name)})
+		tableWriter.AppendFooter([]any{
+			profiling.DurationStr(totalDuration, precision),
+			"",
+			utils.SizeStr(totalIO),
+			fmt.Sprintf("%s (total)", data.Name),
+		})
 		tableWriter.Render()
 	}
 

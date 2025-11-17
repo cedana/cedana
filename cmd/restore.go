@@ -60,6 +60,8 @@ func init() {
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 	restoreCmd.PersistentFlags().
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
+	restoreCmd.PersistentFlags().
+		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.OutFlag.Full,
@@ -101,6 +103,7 @@ var restoreCmd = &cobra.Command{
 		attachable, _ := cmd.Flags().GetBool(flags.AttachableFlag.Full)
 		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
+		gpuID, _ := cmd.Flags().GetString(flags.GpuIdFlag.Full)
 
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
@@ -152,6 +155,7 @@ var restoreCmd = &cobra.Command{
 			Attachable: attach || attachable,
 			Criu:       criuOpts,
 			Env:        env,
+			GPUID:      gpuID,
 			UID:        user.Uid,
 			GID:        user.Gid,
 			Groups:     user.Groups,

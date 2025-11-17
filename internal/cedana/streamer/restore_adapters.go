@@ -2,6 +2,7 @@ package streamer
 
 import (
 	"context"
+	"errors"
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -77,10 +78,9 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 
 			// Setup filesystem that can be used by future adapters to directly read files from the checkpoint
 
-			streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
 			var waitForIO func() error
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
-				streamerCtx,
+				ctx,
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
 				storage,
@@ -88,25 +88,17 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				streams,
 				READ_ONLY,
 			)
-			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
 
-			code, err = next(ctx, opts, resp, req)
-			if err != nil {
-				return nil, err
-			}
+			defer func() {
+				_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
+				err = errors.Join(err, waitForIO())
+				end()
+			}()
 
-			// Wait for all the streaming to finish
-			_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
-			err = waitForIO()
-			end()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to stream restore: %v", err)
-			}
-
-			return code, nil
+			return next(ctx, opts, resp, req)
 		}
 	}
 }

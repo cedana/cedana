@@ -47,11 +47,17 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 			pid := make(chan uint32, 1)
 			defer close(pid)
 
-			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-			id, err := gpus.Attach(ctx, pid)
-			end()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
+			var id string
+
+			if req.GPUID != "" {
+				id = req.GPUID
+			} else {
+				_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
+				id, err = gpus.Attach(ctx, pid)
+				end()
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
+				}
 			}
 
 			// Import GPU CRIU callbacks

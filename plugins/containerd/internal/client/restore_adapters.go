@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
@@ -14,29 +15,12 @@ import (
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/types/runc/options"
 	"github.com/containerd/containerd/contrib/nvidia"
-	"github.com/containerd/containerd/namespaces"
 	"github.com/containerd/containerd/oci"
+	"github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
-
-func SetupForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-		details := req.GetDetails().GetContainerd()
-
-		ctx = namespaces.WithNamespace(ctx, details.Namespace)
-
-		client, err := containerd.New(details.Address, containerd.WithDefaultNamespace(details.Namespace))
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create containerd client: %v", err)
-		}
-
-		ctx = context.WithValue(ctx, containerd_keys.CLIENT_CONTEXT_KEY, client)
-
-		return next(ctx, opts, resp, req)
-	}
-}
 
 func CreateContainerForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
@@ -57,6 +41,9 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 
 		specOpts := []oci.SpecOpts{
 			oci.WithImageConfig(image),
+			oci.WithHostNamespace(specs.NetworkNamespace),
+			oci.WithHostHostsFile,
+			oci.WithHostResolvconf,
 		}
 
 		if len(details.GPUs) > 0 {
@@ -81,11 +68,18 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.Internal, "failed to marshal config: %v", err)
 		}
 
-		specOpts = append(specOpts, oci.WithEnv([]string{
+		executablePath, err := os.Executable()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get executable path: %v", err)
+		}
+
+		envVars := []string{
 			"CEDANA_CONFIG=" + string(configJson),      // For the shim to call cedana with the current config
 			"CEDANA_CHECKPOINT_PATH=" + req.Path,       // For the shim to know this is a restore and not a run
 			"CEDANA_CRIU_OPTS=" + string(criuOptsJson), // For the shim to pass to `cedana restore <low-level runtime> ...`
-		}))
+			"CEDANA_EXECUTABLE_PATH=" + executablePath, // For the shim to call cedana
+		}
+		specOpts = append(specOpts, oci.WithEnv(envVars))
 
 		// Read runtime from dump
 
@@ -121,7 +115,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			ctx,
 			details.ID,
 			containerd.WithImage(image),
-			containerd.WithNewSnapshot(details.ID+"-snapshot", image),
+			containerd.WithNewSnapshot(details.ID, image),
 			containerd.WithNewSpec(specOpts...),
 			containerd.WithRuntime(newRuntime, &options.Options{}),
 		)

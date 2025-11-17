@@ -37,7 +37,7 @@ func loadPlugins() (loadedPlugins map[string]*plugin.Plugin) {
 		return nil
 	}
 
-	if len(os.Args) > 0 && strings.HasPrefix(os.Args[1], "plugin") {
+	if len(os.Args) > 1 && strings.HasPrefix(os.Args[1], "plugin") {
 		// Skip loading plugins when running plugin management commands
 		return nil
 	}

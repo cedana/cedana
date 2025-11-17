@@ -99,10 +99,9 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 
 			path := req.Dir + "/" + req.Name // do not use filepath.Join as it removes a slash
 
-			streamerCtx, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs)
 			var waitForIO func() error
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
-				streamerCtx,
+				ctx,
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
 				storage,
@@ -111,7 +110,6 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				WRITE_ONLY,
 				compression,
 			)
-			end()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
@@ -121,7 +119,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`.
 
 			defer func() {
-				_, end = profiling.StartTimingCategory(ctx, "storage", waitForIO)
+				_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
 				err = errors.Join(err, waitForIO())
 				end()
 			}()

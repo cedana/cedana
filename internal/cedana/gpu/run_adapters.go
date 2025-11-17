@@ -45,13 +45,19 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			pid := make(chan uint32, 1)
 			defer close(pid)
 
-			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-			id, err := gpus.Attach(ctx, pid)
-			end()
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
-			}
+			var id string
 
+			if req.GPUID != "" {
+				id = req.GPUID
+			} else {
+				_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
+				id, err = gpus.Attach(ctx, pid)
+				end()
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
+				}
+
+			}
 			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 
 			code, err = next(ctx, opts, resp, req)
@@ -78,8 +84,13 @@ func Interception(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
 		if !ok {
-			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
+			if req.GPUID != "" {
+				id = req.GPUID
+			} else {
+				return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
+			}
 		}
+		ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 
 		plugin := opts.Plugins.Get("gpu")
 		if !plugin.IsInstalled() {
@@ -123,9 +134,13 @@ func Tracing(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string) // Try to use existing ID
 		if !ok {
-			id = uuid.New().String()
-			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
+			if req.GPUID != "" {
+				id = req.GPUID
+			} else {
+				id = uuid.New().String()
+			}
 		}
+		ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 
 		plugin := opts.Plugins.Get("gpu/tracer")
 		if !plugin.IsInstalled() {

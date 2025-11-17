@@ -223,6 +223,17 @@ add_bind_mount() {
     mv "$bundle/config.json.tmp" "$bundle/config.json"
 }
 
+add_env_var() {
+    local bundle="$1"
+    local name="$2"
+    local value="$3"
+
+    # add a new item to the env array, with the provided name and value
+    jq ".process.env += [\"$name=$value\"]" "$bundle/config.json" > "$bundle/config.json.tmp"
+
+    mv "$bundle/config.json.tmp" "$bundle/config.json"
+}
+
 container_status() {
     local cid="$1"
     runc list | awk -v id="$cid" 'NR>1 && $1==id {print $3}'
