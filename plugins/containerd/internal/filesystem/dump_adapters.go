@@ -390,7 +390,8 @@ func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client
 		} else if fi.Mode().IsRegular() {
 			log.Debug().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("regular file in rw layer")
 		} else {
-			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer")
+			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer, skipping")
+			return nil
 		}
 
 		currentBatch = append(currentBatch, rwLayerFile)
