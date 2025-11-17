@@ -17,7 +17,6 @@ import (
 	containerd_proto "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
-	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
@@ -28,6 +27,7 @@ import (
 	proto_proto "github.com/golang/protobuf/proto"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -58,8 +58,7 @@ func DumpRWLayer(next types.Dump) types.Dump {
 			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 				go func() {
 					log.Debug().Str("container", container.ID()).Msg("dumping rw layer")
-					storagePath := req.Dir + "/" + req.Name
-				rwLayerErr <- dumpRWLayer(ctx, opts.Storage, storagePath, client, container)
+					rwLayerErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
 				}()
 				return nil
 			},
@@ -205,7 +204,7 @@ func writeDelimitedMessage(w io.Writer, rwLayerFile *containerd_proto.RWFile) er
 	return nil
 }
 
-func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath string, client *containerd.Client, container containerd.Container) (err error) {
+func dumpRWLayer(ctx context.Context, dumpFs afero.Fs, client *containerd.Client, container containerd.Container) (err error) {
 	log.Info().Str("container", container.ID()).Msg("rw layer dump started")
 	defer func() {
 		if err != nil {
@@ -260,8 +259,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		batchFileName := fmt.Sprintf("rw-layer-%d.img", fileIndex)
 		fileIndex++
 		
-		filePath := storagePath + "/" + batchFileName
-		outFile, err := storage.Create(filePath)
+		outFile, err := dumpFs.Create(batchFileName)
 		if err != nil {
 			return fmt.Errorf("failed to create batch file %s: %v", filePath, err)
 		}
@@ -420,8 +418,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 	}
 
 	if walkErr == nil {
-		manifestPath := storagePath + "/rw-layer-manifest.img"
-		manifestFile, err := storage.Create(manifestPath)
+		manifestFile, err := dumpFs.Create("rw-layer-manifest.img")
 		if err != nil {
 			return fmt.Errorf("failed to create manifest: %v", err)
 		}
