@@ -227,6 +227,13 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		return fmt.Errorf("failed to get container mounts: %v", err)
 	}
 
+	spec, err := container.Spec(ctx)
+
+	mapOfMounts := make(map[string]string)
+	for _, m := range spec.Mounts {
+		mapOfMounts[m.Destination] = m.Destination
+	}
+
 	var upperDir string
 	for _, m := range mounts {
 		if m.Type == "overlay" {
@@ -256,10 +263,10 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		if len(currentBatch) == 0 {
 			return nil
 		}
-		
+
 		batchFileName := fmt.Sprintf("rw-layer-%d.img", fileIndex)
 		fileIndex++
-		
+
 		filePath := storagePath + "/" + batchFileName
 		outFile, err := storage.Create(filePath)
 		if err != nil {
@@ -271,7 +278,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 			if err := writeDelimitedMessage(outFile, entry); err != nil {
 				return fmt.Errorf("failed to write entry metadata: %v", err)
 			}
-			
+
 			if currentBatchFiles[i] != "" {
 				f, err := os.Open(currentBatchFiles[i])
 				if err != nil {
@@ -300,7 +307,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 				}
 			}
 		}
-		
+
 		log.Debug().Str("file", batchFileName).Int("entries", len(currentBatch)).Msg("wrote rw layer batch")
 		currentBatch = nil
 		currentBatchFiles = nil
@@ -329,6 +336,11 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 			return fmt.Errorf("failed to get file info for %s: %v", path, err)
 		}
 		fullPath := path
+
+		if mapOfMounts[fullPath] != "" {
+			log.Debug().Str("file", fullPath).Msg("skipping mount point in rw layer")
+			return nil
+		}
 
 		xattrSize, err := unix.Listxattr(fullPath, nil)
 		if err != nil {
