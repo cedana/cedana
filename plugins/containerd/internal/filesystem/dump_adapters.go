@@ -305,6 +305,11 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 						return fmt.Errorf("failed to read file content: %v", err)
 					}
 				}
+
+				terminatorMsg := &containerd_proto.RWFile{}
+				if err := writeDelimitedMessage(outFile, terminatorMsg); err != nil {
+					return fmt.Errorf("failed to write terminator message: %v", err)
+				}
 			}
 		}
 
