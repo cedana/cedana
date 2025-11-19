@@ -338,7 +338,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		fullPath := path
 
 		if mapOfMounts[fullPath] != "" {
-			log.Debug().Str("file", fullPath).Msg("skipping mount point in rw layer")
+			log.Warn().Str("file", fullPath).Msg("skipping mount point in rw layer")
 			return nil
 		}
 
