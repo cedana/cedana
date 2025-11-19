@@ -112,6 +112,7 @@ jobs:
           - kata
           - cloud-hypervisor
           - k8s
+          - slurm
           - storage/cedana
           - storage/s3
           - storage/gcs
