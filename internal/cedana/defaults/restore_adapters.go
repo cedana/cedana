@@ -21,6 +21,7 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		req.Criu.NotifyScripts = proto.Bool(true)
 		req.Criu.EvasiveDevices = proto.Bool(true)
 		req.Criu.RstSibling = proto.Bool(true) // always restore as a child
+		req.Criu.LinkRemap = proto.Bool(true)
 
 		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, map[string]int32{})
 		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, []*os.File{})
