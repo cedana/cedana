@@ -77,7 +77,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --ipc=host --gpus all
+      options: --privileged --init --ipc=host --gpus all
     outputs:
       runtimes: ${{ steps.list-runtimes.outputs.runtimes }}
       matrix: ${{ steps.dry-run.outputs.matrix }}
@@ -122,7 +122,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --ipc=host --gpus all
+      options: --privileged --init --ipc=host --gpus all
     strategy:
       fail-fast: false
       matrix:

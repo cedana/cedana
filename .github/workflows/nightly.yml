@@ -45,20 +45,18 @@ jobs:
       parallelism_gpu: 4
       post_summary_slack: nightly
 
-  # TODO: Enable once the larger GPU benchmarks are fixed
-
-  # bench:
-  #   name: Bench
-  #   uses: ./.github/workflows/bench.yml
-  #   needs: download
-  #   secrets: inherit
-  #   with:
-  #     debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
-  #     runtimes: cedana
-  #     samples: 2
-  #     push_results: true
-  #     results_dataset: cedana_nightly
-  #     comparison_previous: true
-  #     comparison_runtime: true
-  #     post_summary_slack: nightly
-  #     runner: 8cpu-64g-1xL40S # use larger runner (bench will automatically run larger metrics)
+  bench:
+    name: Bench
+    uses: ./.github/workflows/bench.yml
+    needs: download
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
+      runtimes: cedana
+      samples: 2
+      push_results: true
+      results_dataset: cedana_nightly
+      comparison_previous: true
+      comparison_runtime: true
+      post_summary_slack: nightly
+      runner: 8cpu-64g-1xL40S # use larger runner (bench will automatically run larger metrics)
