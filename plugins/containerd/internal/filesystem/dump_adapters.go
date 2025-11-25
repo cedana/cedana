@@ -334,6 +334,11 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 			return nil
 		}
 
+		// Debug: Check if this is the problematic file
+		if strings.Contains(relPath, "libSvtAv1Enc") {
+			log.Info().Str("relPath", relPath).Str("fullPath", path).Msg("FOUND libSvtAv1Enc during dump walk")
+		}
+
 		rwLayerFile := &containerd_proto.RWFile{}
 
 		fi, err := d.Info()
@@ -416,6 +421,11 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		currentBatch = append(currentBatch, rwLayerFile)
 		if fi.Mode().IsRegular() {
 			currentBatchFiles = append(currentBatchFiles, fullPath)
+			
+			// Debug: Check if this is the problematic file
+			if strings.Contains(fullPath, "libSvtAv1Enc") {
+				log.Info().Str("fullPath", fullPath).Str("relPath", relPath).Msg("ADDED libSvtAv1Enc to batch for dump")
+			}
 		} else {
 			currentBatchFiles = append(currentBatchFiles, "")
 		}
