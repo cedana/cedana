@@ -240,7 +240,6 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		}
 
 		var dumpReqs []*daemon.DumpReq
-
 		for i, container := range containers {
 			dumpReq := &daemon.DumpReq{
 				Name:          checkpointIdMap[i],
