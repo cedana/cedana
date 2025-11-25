@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"bufio"
 	"context"
 	"encoding/base64"
 	"encoding/binary"
@@ -205,6 +206,60 @@ func writeDelimitedMessage(w io.Writer, rwLayerFile *containerd_proto.RWFile) er
 	return nil
 }
 
+type fileNode struct {
+	path     string
+	fi       os.FileInfo
+	children []*fileNode
+}
+
+func buildFileTree(upperDir string, mapOfMounts map[string]string) (*fileNode, error) {
+	root := &fileNode{path: upperDir}
+	pathToNode := make(map[string]*fileNode)
+	pathToNode[upperDir] = root
+
+	err := filepath.WalkDir(upperDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if path == upperDir {
+			return nil
+		}
+
+		if mapOfMounts[path] != "" {
+			log.Warn().Str("file", path).Msg("skipping mount point in rw layer")
+			return filepath.SkipDir
+		}
+
+		fi, err := d.Info()
+		if err != nil {
+			return fmt.Errorf("failed to get file info for %s: %v", path, err)
+		}
+
+		node := &fileNode{
+			path: path,
+			fi:   fi,
+		}
+
+		parentPath := filepath.Dir(path)
+		parentNode, ok := pathToNode[parentPath]
+		if !ok {
+			return fmt.Errorf("parent node not found for %s", path)
+		}
+
+		parentNode.children = append(parentNode.children, node)
+		pathToNode[path] = node
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to build file tree: %v", err)
+	}
+
+	return root, nil
+}
+
 func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath string, client *containerd.Client, container containerd.Container) (err error) {
 	log.Info().Str("container", container.ID()).Msg("rw layer dump started")
 	defer func() {
@@ -254,19 +309,31 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 
 	log.Info().Str("upperDir", upperDir).Str("container", container.ID()).Msg("dumping rw layer from upperdir")
 
-	const ENTRIES_PER_FILE = 1000
-	var fileIndex int
-	var currentBatch []*containerd_proto.RWFile
-	var currentBatchFiles []string
+	log.Info().Msg("building file tree")
+	root, err := buildFileTree(upperDir, mapOfMounts)
+	if err != nil {
+		return err
+	}
+	log.Info().Msg("file tree built successfully")
+
+	const (
+		NODES_PER_BATCH = 1000
+		CHUNK_SIZE      = 64 * 1024
+	)
+
+	var (
+		batchIndex    = 0
+		nodeCount     = 0
+		currentBatch  = make([]*containerd_proto.RWFile, 0, NODES_PER_BATCH)
+		currentFiles  = make([]string, 0, NODES_PER_BATCH)
+	)
 
 	flushBatch := func() error {
 		if len(currentBatch) == 0 {
 			return nil
 		}
 
-		batchFileName := fmt.Sprintf("rw-layer-%d.img", fileIndex)
-		fileIndex++
-
+		batchFileName := fmt.Sprintf("rw-layer-%d.img", batchIndex)
 		filePath := storagePath + "/" + batchFileName
 		outFile, err := storage.Create(filePath)
 		if err != nil {
@@ -274,97 +341,67 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		}
 		defer outFile.Close()
 
+		writer := bufio.NewWriterSize(outFile, CHUNK_SIZE)
+		defer writer.Flush()
+
 		for i, entry := range currentBatch {
-			if err := writeDelimitedMessage(outFile, entry); err != nil {
+			if err := writeDelimitedMessageBuffered(writer, entry); err != nil {
 				return fmt.Errorf("failed to write entry metadata: %v", err)
 			}
 
-			if currentBatchFiles[i] != "" {
-				f, err := os.Open(currentBatchFiles[i])
-				if err != nil {
-					return fmt.Errorf("failed to open file %s for reading: %v", currentBatchFiles[i], err)
-				}
-				defer f.Close()
-
-				buf := make([]byte, 4*1024*1024)
-				for {
-					n, err := f.Read(buf)
-					if n > 0 {
-						chunkMsg := &containerd_proto.RWFile{}
-						chunkData := make([]byte, n)
-						copy(chunkData, buf[:n])
-						chunkMsg.Content = [][]byte{chunkData}
-						if err := writeDelimitedMessage(outFile, chunkMsg); err != nil {
-							return fmt.Errorf("failed to write content chunk: %v", err)
-						}
-					}
-					if err == io.EOF {
-						break
-					}
-					if err != nil {
-						return fmt.Errorf("failed to read file content: %v", err)
-					}
-				}
-
-				terminatorMsg := &containerd_proto.RWFile{}
-				if err := writeDelimitedMessage(outFile, terminatorMsg); err != nil {
-					return fmt.Errorf("failed to write terminator message: %v", err)
+			if currentFiles[i] != "" {
+				if err := writeFileContentBuffered(writer, currentFiles[i]); err != nil {
+					return err
 				}
 			}
 		}
 
+		if err := writer.Flush(); err != nil {
+			return fmt.Errorf("failed to flush writer: %v", err)
+		}
+
 		log.Debug().Str("file", batchFileName).Int("entries", len(currentBatch)).Msg("wrote rw layer batch")
-		currentBatch = nil
-		currentBatchFiles = nil
+		currentBatch = currentBatch[:0]
+		currentFiles = currentFiles[:0]
+		batchIndex++
 		return nil
 	}
 
-	var walkErr error
-	err = filepath.WalkDir(upperDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		relPath, err := filepath.Rel(upperDir, path)
-		if err != nil {
-			return fmt.Errorf("failed to get relative path for %s: %v", path, err)
-		}
-
-		if relPath == "." {
+	var traverse func(*fileNode) error
+	traverse = func(node *fileNode) error {
+		if node.path == upperDir {
+			for _, child := range node.children {
+				if err := traverse(child); err != nil {
+					return err
+				}
+			}
 			return nil
 		}
 
-		// Debug: Check if this is the problematic file
+		relPath, err := filepath.Rel(upperDir, node.path)
+		if err != nil {
+			return fmt.Errorf("failed to get relative path for %s: %v", node.path, err)
+		}
+
 		if strings.Contains(relPath, "libSvtAv1Enc") {
-			log.Info().Str("relPath", relPath).Str("fullPath", path).Msg("FOUND libSvtAv1Enc during dump walk")
+			log.Info().Str("relPath", relPath).Str("fullPath", node.path).Msg("FOUND libSvtAv1Enc during dump walk")
 		}
 
 		rwLayerFile := &containerd_proto.RWFile{}
 
-		fi, err := d.Info()
+		xattrSize, err := unix.Listxattr(node.path, nil)
 		if err != nil {
-			return fmt.Errorf("failed to get file info for %s: %v", path, err)
-		}
-		fullPath := path
-
-		if mapOfMounts[fullPath] != "" {
-			log.Warn().Str("file", fullPath).Msg("skipping mount point in rw layer")
-			return nil
-		}
-
-		xattrSize, err := unix.Listxattr(fullPath, nil)
-		if err != nil {
-			return fmt.Errorf("failed to list xattrs for %s: %v", fullPath, err)
+			return fmt.Errorf("failed to list xattrs for %s: %v", node.path, err)
 		}
 
 		if xattrSize == 0 {
-			log.Debug().Str("file", fullPath).Msg("no xattrs found")
+			log.Debug().Str("file", node.path).Msg("no xattrs found")
 		}
 
 		xattrList := make([]byte, xattrSize)
-		_, err = unix.Listxattr(fullPath, xattrList)
+		_, err = unix.Listxattr(node.path, xattrList)
 		if err != nil {
-			return fmt.Errorf("failed to list xattrs for %s: %v", fullPath, err)
+			return fmt.Errorf("failed to list xattrs for %s: %v", node.path, err)
 		}
 
 		xattrResults := make(map[string]string)
@@ -375,16 +412,16 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 				end++
 			}
 			name := string(xattrList[offset:end])
-			valueSize, err := unix.Getxattr(fullPath, name, nil)
+			valueSize, err := unix.Getxattr(node.path, name, nil)
 			if err != nil {
-				return fmt.Errorf("failed to get xattr size for %s on %s: %v", name, fullPath, err)
+				return fmt.Errorf("failed to get xattr size for %s on %s: %v", name, node.path, err)
 			}
 			var value []byte
 			if valueSize > 0 {
 				value = make([]byte, valueSize)
-				_, err = unix.Getxattr(fullPath, name, value)
+				_, err = unix.Getxattr(node.path, name, value)
 				if err != nil {
-					return fmt.Errorf("failed to get xattr value for %s on %s: %v", name, fullPath, err)
+					return fmt.Errorf("failed to get xattr value for %s on %s: %v", name, node.path, err)
 				}
 			}
 			xattrResults[name] = base64.StdEncoding.EncodeToString(value)
@@ -392,76 +429,144 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		}
 		rwLayerFile.SetXattrs(xattrResults)
 
-		stat := fi.Sys().(*syscall.Stat_t)
+		stat := node.fi.Sys().(*syscall.Stat_t)
 		rwLayerFile.SetUid(stat.Uid)
 		rwLayerFile.SetGid(stat.Gid)
-
-		rwLayerFile.SetMode(uint32(fi.Mode()))
+		rwLayerFile.SetMode(uint32(node.fi.Mode()))
 		rwLayerFile.SetPath(relPath)
-		rwLayerFile.SetMtime(uint64(fi.ModTime().UnixNano()))
+		rwLayerFile.SetMtime(uint64(node.fi.ModTime().UnixNano()))
 
-		if fi.Mode()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(fullPath)
+		if node.fi.Mode()&os.ModeSymlink != 0 {
+			target, err := os.Readlink(node.path)
 			if err != nil {
-				return fmt.Errorf("failed to read symlink target for %s: %v", fullPath, err)
+				return fmt.Errorf("failed to read symlink target for %s: %v", node.path, err)
 			}
 			rwLayerFile.SetSymlinkTarget(target)
-		} else if fi.Mode()&os.ModeDevice != 0 {
+		} else if node.fi.Mode()&os.ModeDevice != 0 {
 			rwLayerFile.SetDevMajor(unix.Major(stat.Rdev))
 			rwLayerFile.SetDevMinor(unix.Minor(stat.Rdev))
-		} else if fi.Mode().IsDir() {
-			log.Debug().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("directory in rw layer")
-		} else if fi.Mode().IsRegular() {
-			log.Debug().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("regular file in rw layer")
+		} else if node.fi.Mode().IsDir() {
+			log.Debug().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("directory in rw layer")
+		} else if node.fi.Mode().IsRegular() {
+			log.Debug().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("regular file in rw layer")
 		} else {
-			log.Warn().Str("file", fullPath).Str("mode", fi.Mode().String()).Msg("unsupported file type in rw layer, skipping")
+			log.Warn().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("unsupported file type in rw layer, skipping")
 			return nil
 		}
 
 		currentBatch = append(currentBatch, rwLayerFile)
-		if fi.Mode().IsRegular() {
-			currentBatchFiles = append(currentBatchFiles, fullPath)
-			
-			// Debug: Check if this is the problematic file
-			if strings.Contains(fullPath, "libSvtAv1Enc") {
-				log.Info().Str("fullPath", fullPath).Str("relPath", relPath).Msg("ADDED libSvtAv1Enc to batch for dump")
+		if node.fi.Mode().IsRegular() {
+			currentFiles = append(currentFiles, node.path)
+			if strings.Contains(node.path, "libSvtAv1Enc") {
+				log.Info().Str("fullPath", node.path).Str("relPath", relPath).Msg("ADDED libSvtAv1Enc to batch for dump")
 			}
 		} else {
-			currentBatchFiles = append(currentBatchFiles, "")
+			currentFiles = append(currentFiles, "")
 		}
 
-		if len(currentBatch) >= ENTRIES_PER_FILE {
+		nodeCount++
+
+		if len(currentBatch) >= NODES_PER_BATCH {
 			if err := flushBatch(); err != nil {
 				return err
 			}
 		}
+
+		for _, child := range node.children {
+			if err := traverse(child); err != nil {
+				return err
+			}
+		}
+
 		return nil
-	})
-	if err != nil {
-		walkErr = fmt.Errorf("failed to walk upperdir: %v", err)
 	}
 
-	if walkErr == nil && len(currentBatch) > 0 {
+	if err := traverse(root); err != nil {
+		return err
+	}
+
+	if len(currentBatch) > 0 {
 		if err := flushBatch(); err != nil {
 			return err
 		}
 	}
 
-	if walkErr == nil {
-		manifestPath := storagePath + "/rw-layer-manifest.img"
-		manifestFile, err := storage.Create(manifestPath)
-		if err != nil {
-			return fmt.Errorf("failed to create manifest: %v", err)
-		}
-		defer manifestFile.Close()
-		_, err = fmt.Fprintf(manifestFile, "%d\n", fileIndex)
-		if err != nil {
-			return fmt.Errorf("failed to write manifest: %v", err)
-		}
-		log.Info().Int("batches", fileIndex).Msg("wrote rw layer manifest")
+	manifestPath := storagePath + "/rw-layer-manifest.img"
+	manifestFile, err := storage.Create(manifestPath)
+	if err != nil {
+		return fmt.Errorf("failed to create manifest: %v", err)
+	}
+	defer manifestFile.Close()
+
+	manifest := map[string]interface{}{
+		"total_nodes":     nodeCount,
+		"total_batches":   batchIndex,
+		"nodes_per_batch": NODES_PER_BATCH,
+	}
+	manifestData, err := json.Marshal(manifest)
+	if err != nil {
+		return fmt.Errorf("failed to marshal manifest: %v", err)
+	}
+	_, err = manifestFile.Write(manifestData)
+	if err != nil {
+		return fmt.Errorf("failed to write manifest: %v", err)
+	}
+	log.Info().Int("batches", batchIndex).Int("nodes", nodeCount).Msg("wrote rw layer manifest")
+
+	return nil
+}
+
+func writeDelimitedMessageBuffered(w *bufio.Writer, rwLayerFile *containerd_proto.RWFile) error {
+	data, err := proto_proto.Marshal(rwLayerFile)
+	if err != nil {
+		return err
 	}
 
-	return walkErr
+	size := uint32(len(data))
+	if err := binary.Write(w, binary.LittleEndian, size); err != nil {
+		return fmt.Errorf("failed to write message size: %w", err)
+	}
+
+	_, err = w.Write(data)
+	if err != nil {
+		return fmt.Errorf("failed to write message data: %w", err)
+	}
+	return nil
+}
+
+func writeFileContentBuffered(w *bufio.Writer, filePath string) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file %s for reading: %v", filePath, err)
+	}
+	defer f.Close()
+
+	buf := make([]byte, 4*1024*1024)
+	for {
+		n, err := f.Read(buf)
+		if n > 0 {
+			chunkMsg := &containerd_proto.RWFile{}
+			chunkData := make([]byte, n)
+			copy(chunkData, buf[:n])
+			chunkMsg.Content = [][]byte{chunkData}
+			if err := writeDelimitedMessageBuffered(w, chunkMsg); err != nil {
+				return fmt.Errorf("failed to write content chunk: %v", err)
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read file content: %v", err)
+		}
+	}
+
+	terminatorMsg := &containerd_proto.RWFile{}
+	if err := writeDelimitedMessageBuffered(w, terminatorMsg); err != nil {
+		return fmt.Errorf("failed to write terminator message: %v", err)
+	}
+
+	return nil
 }
 
 func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) (err error) {
