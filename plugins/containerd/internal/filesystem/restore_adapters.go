@@ -85,10 +85,12 @@ func restoreRWLayer(ctx context.Context, client *containerd.Client, container co
 		}
 	}
 
-	rwLayerFiles, err := filepath.Glob(filepath.Join(imagesDir, "rw-layer-*.pb"))
+	rwLayerFiles, err := filepath.Glob(filepath.Join(imagesDir, "rw-layer-*.img"))
 	if err != nil {
 		return fmt.Errorf("failed to glob rw layer files: %v", err)
 	}
+	
+	log.Info().Int("batchFiles", len(rwLayerFiles)).Msg("found rw layer batch files")
 
 	type fileEntry struct {
 		path       string
