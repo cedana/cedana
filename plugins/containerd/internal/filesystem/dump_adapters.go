@@ -389,7 +389,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 
 		rwLayerFile := &containerd_proto.RWFile{}
 
-		xattrSize, err := unix.Listxattr(node.path, nil)
+		xattrSize, err := unix.Llistxattr(node.path, nil)
 		if err != nil {
 			return fmt.Errorf("failed to list xattrs for %s: %v", node.path, err)
 		}
@@ -399,7 +399,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		}
 
 		xattrList := make([]byte, xattrSize)
-		_, err = unix.Listxattr(node.path, xattrList)
+		_, err = unix.Llistxattr(node.path, xattrList)
 		if err != nil {
 			return fmt.Errorf("failed to list xattrs for %s: %v", node.path, err)
 		}
@@ -412,14 +412,14 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 				end++
 			}
 			name := string(xattrList[offset:end])
-			valueSize, err := unix.Getxattr(node.path, name, nil)
+			valueSize, err := unix.Lgetxattr(node.path, name, nil)
 			if err != nil {
 				return fmt.Errorf("failed to get xattr size for %s on %s: %v", name, node.path, err)
 			}
 			var value []byte
 			if valueSize > 0 {
 				value = make([]byte, valueSize)
-				_, err = unix.Getxattr(node.path, name, value)
+				_, err = unix.Lgetxattr(node.path, name, value)
 				if err != nil {
 					return fmt.Errorf("failed to get xattr value for %s on %s: %v", name, node.path, err)
 				}
