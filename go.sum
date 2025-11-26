@@ -1,11 +1,17 @@
 buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251009084235-8dc16543509d.2 h1:oWlb4w4YcUDcvUGVDkieHLSZx2bxvHPmReZZOUWJQHk=
 buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251009084235-8dc16543509d.2/go.mod h1:Hv2ehCVjRCHNkNc0Ye1zgQhzmhqY/O4fVbShgDu69Vc=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251105083538-8857373f0ba0.2 h1:zv8L8rQylgP6p/CEDtK+bgyVVIRD1QR2H8T/Mkop7Fk=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251105083538-8857373f0ba0.2/go.mod h1:A6xm+O/25C7jzphZ2XxuyYsARzNOKhSZ+qAANnojC4U=
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251009084235-8dc16543509d.1 h1:BJK4Bn5pGF9AOuwDl0lByQStV85swtI9hryVgnHwHnw=
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251009084235-8dc16543509d.1/go.mod h1:BCUalSU5+L4yyzu90kdGXKVgK6jhp/wIN8Z5xi5kdtk=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251105083538-8857373f0ba0.1 h1:vEDij/qXcE/stp96dYmkOUyMYTYtm+Nbp4rdViZ5hXI=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251105083538-8857373f0ba0.1/go.mod h1:BCUalSU5+L4yyzu90kdGXKVgK6jhp/wIN8Z5xi5kdtk=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20251009084235-f3f33473b2aa.1 h1:3FzMp4U4k9aXQJjWOGEM0aODfRFkYlIZSQhZkRfcHnc=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20251009084235-f3f33473b2aa.1/go.mod h1:d5peOfCNe/zOqvTKPpK6kB1cuAgb1ZDt8QucSYP/Ams=
+buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-00000000000000-229101f41642.2/go.mod h1:ImXlzJdSUYmO2EXodoVOAeyo9P+5QLbTsy0u2lJZ/j0=
 buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20251105083538-89f6e36730b9.2 h1:VtCligMoEFBrOYaBW1+3Il82Yef+xZ+0Ofx74meEWqE=
 buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20251105083538-89f6e36730b9.2/go.mod h1:9q0nzcNP359nysYCUoKkgSLIEDmqFAhPgL1JaYQfSds=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-229101f41642.1/go.mod h1:ZMIRR4iC9kuFdIxcIrH7MWsVPmgPzMDGRtTD/AIjZ3E=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251105083538-89f6e36730b9.1 h1:3WmCqZWXywk3hZ9obqdDXFbPd+PijbV7PBZclJZJOPk=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251105083538-89f6e36730b9.1/go.mod h1:mi5uMz/bW460ltbkWhfjs2KZxh/s0GduId1SsSBmoMs=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251105083538-53c7c62fed79.1 h1:9sGe1N+BhRYufzyzt+rUU6tsiDgWDZzZEBGHWEMOWuw=
