@@ -44,7 +44,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=gpu
-@test "[$GPU_INFO] test GPU with PyTorch check" {
+@test "[$GPU_INFO] run GPU with PyTorch check" {
     jid="gpu-torch-$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
@@ -188,7 +188,7 @@ except Exception as e:
 ################
 
 # bats test_tags=dump,gpu
-@test "[$GPU_INFO] test simple GPU dump" {
+@test "[$GPU_INFO] dump simple GPU dump" {
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
@@ -218,7 +218,7 @@ while True:
 }
 
 # bats test_tags=dump,gpu
-@test "[$GPU_INFO] test GPU inference dump" {
+@test "[$GPU_INFO] dump GPU inference" {
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
@@ -265,7 +265,7 @@ while True:
     rm -rf "$dump_file"   
 }
 
-@test "[$GPU_INFO] test tensorflow training GPU dump" { # turned off because of shim issues -> race condition?
+@test "[$GPU_INFO] dump tensorflow training GPU dump" { # turned off because of shim issues -> race condition?
     jid=$(unix_nano)
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     log_file="/var/log/cedana-output-$jid.log"
@@ -292,8 +292,7 @@ while True:
 ### Restore ###
 ###############
 
-# bats test_tags=restore,gpu
-@test "[$GPU_INFO] restore simple workload in GPU containerd" {
+@test "[$GPU_INFO] restore simple workload in GPU containerd" { # turned off because of shim issues -> race condition?
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
