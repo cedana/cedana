@@ -18,6 +18,7 @@ func init() {
 	RunCmd.Flags().Int32SliceP(containerd_flags.GPUsFlag.Full, containerd_flags.GPUsFlag.Short, []int32{}, "add GPUs to the container (e.g. 0,1,2)")
 	RunCmd.Flags().BoolP(runc_flags.NoPivotFlag.Full, runc_flags.NoPivotFlag.Short, false, "disable use of pivot-root")
 	RunCmd.Flags().StringSliceP(containerd_flags.EnvFlag.Full, containerd_flags.EnvFlag.Short, []string{}, "list of additional environment variables")
+	RunCmd.Flags().StringP(containerd_flags.SnapshotterFlag.Full, containerd_flags.SnapshotterFlag.Short, "overlayfs", "snapshotter to use for containerd")
 }
 
 var RunCmd = &cobra.Command{
@@ -39,16 +40,18 @@ var RunCmd = &cobra.Command{
 		gpus, _ := cmd.Flags().GetInt32Slice(containerd_flags.GPUsFlag.Full)
 		noPivot, _ := cmd.Flags().GetBool(runc_flags.NoPivotFlag.Full)
 		env, _ := cmd.Flags().GetStringSlice(containerd_flags.EnvFlag.Full)
+		snapshotter, _ := cmd.Flags().GetString(containerd_flags.SnapshotterFlag.Full)
 
 		req.Type = "containerd"
 		req.Details = &daemon.Details{Containerd: &containerd.Containerd{
-			ID:        id,
-			Address:   address,
-			Namespace: namespace,
-			GPUs:      gpus,
-			NoPivot:   noPivot,
-			Args:      procArgs,
-			Env:       env,
+			ID:          id,
+			Address:     address,
+			Namespace:   namespace,
+			GPUs:        gpus,
+			NoPivot:     noPivot,
+			Args:        procArgs,
+			Env:         env,
+			Snapshotter: snapshotter,
 		}}
 
 		if image != "" {

@@ -115,6 +115,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			ctx,
 			details.ID,
 			containerd.WithImage(image),
+			containerd.WithSnapshotter(details.Snapshotter),
 			containerd.WithNewSnapshot(details.ID, image),
 			containerd.WithNewSpec(specOpts...),
 			containerd.WithRuntime(newRuntime, &options.Options{}),
