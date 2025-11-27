@@ -15,12 +15,11 @@ pull_images() {
 
 pull_latest_cedana_samples_image() {
     local latest_tag
-    local snapshotter="overlayfs"
     
     latest_tag=$(get_latest_cedana_samples_tag)
     echo "Pulling latest cedana-samples image with tag: $latest_tag"
 
-    ctr images pull --snapshotter "$snapshotter" "docker.io/cedana/cedana-samples:${latest_tag}"
+    ctr images pull "docker.io/cedana/cedana-samples:${latest_tag}"
     debug_log "Verifying pulled image..."
     ctr images ls | grep cedana-samples || true
 }

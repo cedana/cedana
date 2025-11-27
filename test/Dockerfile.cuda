@@ -140,6 +140,7 @@ cat > /etc/docker/daemon.json <<'JSON'
 JSON
 EOT
 
+# Configure containerd for OVERLAYFS snapshotter + NVIDIA runtime
 RUN <<'EOT'
 mkdir -p /etc/containerd
 cat > /etc/containerd/config.toml <<'CONFIG'

@@ -12,6 +12,9 @@ load_lib support
 load_lib assert
 load_lib file
 
+SNAPSHOTTER="overlayfs"
+export CTR_SNAPSHOTTER="$SNAPSHOTTER"
+
 setup_file() {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
@@ -20,9 +23,11 @@ setup_file() {
     do_once pull_images
     do_once pull_latest_cedana_samples_image
 
-    echo "Using CEDANA_SAMPLES_CUDA_IMAGE=$CEDANA_SAMPLES_CUDA_IMAGE"
+    export CEDANA_SAMPLES_REPO="docker.io/cedana/cedana-samples"
     export CEDANA_SAMPLES_LATEST_TAG=$(get_latest_cedana_samples_tag)
-    export CEDANA_SAMPLES_CUDA_IMAGE="docker.io/cedana/cedana-samples:${CEDANA_SAMPLES_LATEST_TAG}"
+    export CEDANA_SAMPLES_CUDA_IMAGE="${CEDANA_SAMPLES_REPO}:${CEDANA_SAMPLES_LATEST_TAG}"
+
+    echo "Using CEDANA_SAMPLES_CUDA_IMAGE=$CEDANA_SAMPLES_CUDA_IMAGE"
     
     setup_file_daemon
 }
@@ -44,33 +49,25 @@ teardown_file() {
 ###############
 
 # bats test_tags=gpu
-@test "[$GPU_INFO] run GPU with PyTorch check" {
+@test "[$GPU_INFO] run GPU with vector add" {
     jid="gpu-torch-$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
-    
-    echo "Testing GPU with PyTorch..."
-    run cedana run containerd \
+    log_file="/var/log/cedana-output-$jid.log"
+
+    echo "Testing GPU vector_add without attach..."
+    cedana run containerd \
         --jid "$jid" \
         --gpu-enabled \
-        --attach \
-        --snapshotter "overlayfs" \
-        -- "$image" python3 -c "
-import torch
-print('PyTorch version:', torch.__version__)
-print('CUDA available:', torch.cuda.is_available())
-if torch.cuda.is_available():
-    print('GPU count:', torch.cuda.device_count())
-    print('GPU name:', torch.cuda.get_device_name(0))
-    # Do a simple GPU operation
-    x = torch.randn(100, 100).cuda()
-    y = torch.randn(100, 100).cuda()
-    z = torch.matmul(x, y)
-    print('GPU computation successful')
-"
-    
+        --snapshotter "$SNAPSHOTTER" \
+        -- "$image" /app/gpu_smr/vector_add &
+
+    # give it some time to start and log
+    sleep 5
+
+    assert_exists "$log_file"
+
+    run cedana job kill "$jid"
     assert_success
-    assert_output --partial "CUDA available: True"
-    assert_output --partial "GPU computation successful"
 }
 
 # bats test_tags=gpu,vllm
@@ -84,7 +81,7 @@ if torch.cuda.is_available():
         --jid "$jid" \
         --gpu-enabled \
         --attach \
-        --snapshotter "overlayfs" \
+        --snapshotter "$SNAPSHOTTER" \
         -- "$image" python3 -c "
 import sys
 print('Python path:', sys.executable)
@@ -108,7 +105,7 @@ print('vLLM import successful')
         --jid "$jid" \
         --gpu-enabled \
         --attach \
-        --snapshotter "overlayfs" \
+        --snapshotter "$SNAPSHOTTER" \
         -- "$image" python3 -c "
 from vllm import LLM, SamplingParams
 
@@ -134,9 +131,9 @@ except Exception as e:
         --jid "$jid" \
         --gpu-enabled \
         --attach \
-        --snapshotter "overlayfs" \
+        --snapshotter "$SNAPSHOTTER" \
         -- "$image" \
-        python3 /cedana-samples/gpu_smr/pytorch/training/tensorflow-train.py
+        python3 /app/gpu_smr/pytorch/training/tensorflow-train.py
     assert_success
     assert_output --partial "Model built and compiled successfully within the MirroredStrategy scope." 
 }
@@ -150,35 +147,13 @@ except Exception as e:
         --jid "$jid" \
         --gpu-enabled \
         --attach \
-        --snapshotter "overlayfs" \
+        --snapshotter "$SNAPSHOTTER" \
         -- "$image" \
-        python3 /cedana-samples/gpu_smr/pytorch/llm/vllm_inference.py \
+        python3 /app/gpu_smr/pytorch/llm/vllm_inference.py \
         --model 'facebook/opt-125m' \
         --tensor-parallel-size 1 \
         --temperature 0.1 \
         --top-p 0.9
-
-    echo "$output"
-    if [ -f "$log_file" ]; then
-        echo "Log file contents:"
-        cat "$log_file"
-        tail -50 "$log_file" 2>/dev/null || cat "$log_file"
-    else
-        echo "Log file not found at: $log_file"
-    fi
-
-    if [ -f /var/log/dockerd.err.log ]; then
-        echo "Docker daemon error log contents:"
-        tail -100 /var/log/dockerd.err.log
-    else
-        echo "Docker daemon error log not found."
-    fi
-
-    if [ -f /var/log/dockerd.out.log ]; then
-        tail -100 /var/log/dockerd.out.log
-    else
-        echo "Docker daemon output log not found."
-    fi
     
     assert_success
 }
@@ -188,24 +163,15 @@ except Exception as e:
 ################
 
 # bats test_tags=dump,gpu
-@test "[$GPU_INFO] dump simple GPU dump" {
+@test "[$GPU_INFO] dump GPU vector add" {
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
     cedana run containerd \
         --jid "$jid" \
         --gpu-enabled \
-        --snapshotter "overlayfs" \
-        -- "$image" python3 -c "
-import torch
-print('Starting GPU workload...')
-x = torch.randn(1000, 1000).cuda()
-y = torch.randn(1000, 1000).cuda()
-z = torch.matmul(x, y)
-print('GPU workload complete')
-while True:
-    pass  # Keep the process running
-"
+        --snapshotter "$SNAPSHOTTER" \
+        -- "$image" /app/gpu_smr/vector_add
 
     sleep 5
 
@@ -218,54 +184,31 @@ while True:
 }
 
 # bats test_tags=dump,gpu
-@test "[$GPU_INFO] dump GPU inference" {
+@test "[$GPU_INFO] dump GPU compute throughput saxpy" {
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
     cedana run containerd \
         --jid "$jid" \
         --gpu-enabled \
-        --snapshotter "overlayfs" \
-        -- "$image" python3 -c "
-import torch
-import torch.nn as nn
-import torch.optim as optim
-print('Starting GPU workload with ANN...')
-class SimpleNN(nn.Module):
-    def __init__(self):
-        super(SimpleNN, self).__init__()
-        self.fc = nn.Linear(1000, 10)
-    def forward(self, x):
-        return self.fc(x)
-model = SimpleNN().cuda()
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.SGD(model.parameters(), lr=0.01)
-for epoch in range(5):
-    inputs = torch.randn(32, 1000).cuda()
-    labels = torch.randint(0, 10, (32,)).cuda()
-    optimizer.zero_grad()
-    outputs = model(inputs)
-    loss = criterion(outputs, labels)
-    loss.backward()
-    optimizer.step()
-    print(f'Epoch {epoch+1}, Loss: {loss.item()}')
-print('GPU ANN workload complete')
-while True:
-    inputs = torch.randn(32, 1000).cuda()
-    outputs = model(inputs)
-    print(f'Inference output shape: {outputs.shape}')
-"
-    sleep 5
-
+        --snapshotter "$SNAPSHOTTER" \
+        -- "$image" /app/gpu_smr/compute-throughput-saxpy
+    for i in {1..10}; do
+        if cedana ps | grep -q "$jid"; then
+            break
+        fi
+        sleep 0.5
+    done
     echo "Dumping GPU containerd..."
     run cedana dump job "$jid"
+
     assert_success
 
     run cedana job kill "$jid"
     rm -rf "$dump_file"   
 }
 
-@test "[$GPU_INFO] dump tensorflow training GPU dump" { # turned off because of shim issues -> race condition?
+@test "[$GPU_INFO] dump GPU tensorflow training" { # turned off because of shim issues -> race condition?
     jid=$(unix_nano)
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     log_file="/var/log/cedana-output-$jid.log"
@@ -274,9 +217,9 @@ while True:
         --jid "$jid" \
         --gpu-enabled \
         --attach \
-        --snapshotter "overlayfs" \
+        --snapshotter "$SNAPSHOTTER" \
         -- "$image" \
-        python3 /cedana-samples/gpu_smr/pytorch/training/tensorflow-train.py \
+        python3 /app/gpu_smr/pytorch/training/tensorflow-train.py \
 
     sleep 1
 
@@ -292,31 +235,27 @@ while True:
 ### Restore ###
 ###############
 
-@test "[$GPU_INFO] restore simple workload in GPU containerd" { # turned off because of shim issues -> race condition?
+# bats test_tags=restore,gpu
+@test "[$GPU_INFO] restore GPU vector add (no new image)" {
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
-    
+
+    # Start job detached
     cedana run containerd \
         --jid "$jid" \
         --gpu-enabled \
-        --snapshotter "overlayfs" \
-        -- "$image" python3 -c "
-import torch
-print ('Starting GPU workload...')
-x = torch.randn(1000, 1000).cuda()
-y = torch.randn(1000, 1000).cuda()
-print('GPU workload complete')
-while True:
-    z = torch.matmul(x, y)
-"
+        --snapshotter "$SNAPSHOTTER" \
+        -- "$image" /app/gpu_smr/vector_add
 
-    sleep 1
+    sleep 2
 
-    cedana dump job "$jid"
+    run cedana dump job "$jid"
+    assert_success
 
-    cedana restore job "$jid" --image "$image"
+    run cedana restore job "$jid"
+    assert_success
 
-    sleep 1
+    sleep 2
 
     run bats_pipe cedana ps \| grep "$jid"
     assert_success
