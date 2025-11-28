@@ -49,7 +49,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=gpu
-@test "[$GPU_INFO] run GPU with vector add" {
+@test "[$GPU_INFO] run GPU containerd (vector add)" {
     jid="gpu-torch-$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     log_file="/var/log/cedana-output-$jid.log"
@@ -71,7 +71,7 @@ teardown_file() {
 }
 
 # bats test_tags=gpu,vllm
-@test "[$GPU_INFO] run simple vLLM test" {
+@test "[$GPU_INFO] run GPU containerd (simple vLLM test)" {
     jid="vllm-simple-$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
@@ -96,7 +96,7 @@ print('vLLM import successful')
 }
 
 # bats test_tags=gpu,vllm
-@test "[$GPU_INFO] run vLLM initialization" {
+@test "[$GPU_INFO] run GPU containerd (vLLM initialization)" {
     jid="vllm-$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
@@ -122,7 +122,7 @@ except Exception as e:
     assert_output --partial "vLLM library is working"
 }
 
-@test "[$GPU_INFO] run tensorflow training in containerd with GPU" { # turned off because of shim issues -> race condition?
+@test "[$GPU_INFO] run GPU containerd (tensorflow training)" { # turned off because of shim issues -> race condition?
     jid=$(unix_nano)
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     log_file="/var/log/cedana-output-$jid.log"
@@ -138,7 +138,7 @@ except Exception as e:
     assert_output --partial "Model built and compiled successfully within the MirroredStrategy scope." 
 }
 
-@test "[$GPU_INFO] run vLLM inference in containerd with GPU" { # turned off because of shim issues -> race condition?
+@test "[$GPU_INFO] run GPU containerd (vLLM inference)" { # turned off because of shim issues -> race condition?
     jid=$(unix_nano)
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     log_file="/var/log/cedana-output-$jid.log"
@@ -163,7 +163,7 @@ except Exception as e:
 ################
 
 # bats test_tags=dump,gpu
-@test "[$GPU_INFO] dump GPU vector add" {
+@test "[$GPU_INFO] dump GPU containerd (vector add)" {
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
@@ -184,7 +184,7 @@ except Exception as e:
 }
 
 # bats test_tags=dump,gpu
-@test "[$GPU_INFO] dump GPU compute throughput saxpy" {
+@test "[$GPU_INFO] dump GPU containerd (compute throughput saxpy)" {
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
@@ -236,22 +236,24 @@ except Exception as e:
 ###############
 
 # bats test_tags=restore,gpu
-@test "[$GPU_INFO] restore GPU vector add (no new image)" {
+@test "[$GPU_INFO] restore GPU containerd (vector add) (no new image)" {
     jid="$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
 
-    # Start job detached
     cedana run containerd \
         --jid "$jid" \
         --gpu-enabled \
         --snapshotter "$SNAPSHOTTER" \
-        -- "$image" /app/gpu_smr/vector_add
+        -- "$image" sh -c "/app/gpu_smr/vector_add && sleep infinity"
 
-    sleep 2
+    sleep 3
 
     run cedana dump job "$jid"
     assert_success
 
+    ctr --namespace default container delete "$jid" 2>/dev/null || true
+    ctr --namespace default snapshots --snapshotter "$SNAPSHOTTER" remove "$jid" 2>/dev/null || true
+    
     run cedana restore job "$jid"
     assert_success
 

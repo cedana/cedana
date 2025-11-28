@@ -169,8 +169,9 @@ version = 2
 CONFIG
 EOT
 
+RUN mkdir -p /run/containerd
 # Setup containerd symlink (same as CPU)
-RUN rm -rf /run/containerd && ln -s /run/docker/containerd /run/containerd
+#RUN rm -rf /run/containerd && ln -s /run/docker/containerd /run/containerd
 RUN sed -i '2iumount /var/run/docker.sock || true' /usr/local/bin/start-docker.sh
 
 # copy cedana-samples
