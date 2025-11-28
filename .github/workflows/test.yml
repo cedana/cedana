@@ -459,6 +459,19 @@ jobs:
       large: ${{ inputs.large }}
       post_summary: false # Will post consolidated summary instead
 
+  h100:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
+    secrets: inherit
+    concurrency: test-k8s-eks # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: H100
+      large: ${{ inputs.large }}
+      post_summary: false # Will post consolidated summary instead
+
   post-summary:
     name: Post Summary
     if: always()

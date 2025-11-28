@@ -22,7 +22,7 @@ on:
         default: false
       platform:
         type: string
-        description: "Platform to run tests on (K3s, EKS, GKE)"
+        description: "Platform to run tests on (K3s, EKS, GKE, H100)"
         required: false
         default: K3s
       large:
@@ -63,6 +63,7 @@ env:
   GCLOUD_REGION: ${{ vars.GCLOUD_REGION }}
   EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
+  H100_CLUSTER_NAME: ${{ vars.H100_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging
@@ -86,7 +87,7 @@ jobs:
   k8s:
     name: Kubernetes
     runs-on:
-      ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || format(
+      ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'H100' ) && 'ubuntu-latest' || format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
@@ -129,7 +130,8 @@ jobs:
             cr: streamer
           - platform: GKE
             cr: default
-      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 1 || 9999 }}
+      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform ==
+      'H100' ) && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
@@ -259,6 +261,7 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
+          H100_CLUSTER_NAME: ${{ env.H100_CLUSTER_NAME }}-${{ matrix.arch }}
         run: |
           if [ "$PLATFORM" = "K3s" ]; then
             exit 0 # XXX: Temporarily disable k3s tests until image pull fixed
