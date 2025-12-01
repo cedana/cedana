@@ -39,6 +39,7 @@ const (
 	CONTROLLER_SHM_FILE_PATTERN            = "/dev/shm/cedana-gpu.(.*)"
 	CONTROLLER_HOSTMEM_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
 	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
+	CONTROLLER_MISC_DIR_FORMATTER          = "/dev/shm/cedana-gpu.%s.misc"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_DEFAULT_FREEZE_TYPE         = gpu.FreezeType_FREEZE_TYPE_IPC
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
@@ -59,6 +60,7 @@ const (
 	HEALTH_TIMEOUT    = 30 * time.Second
 	INFO_TIMEOUT      = 30 * time.Second
 	TERMINATE_TIMEOUT = 10 * time.Second
+	MAX_SYNC_FAILURES = 2
 
 	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
 	PARALLEL_DUMP    = true
@@ -80,6 +82,7 @@ type controller struct {
 	ErrBuf      *bytes.Buffer
 	Booking     *flock.Flock // To book the controller for use
 	Termination sync.Mutex   // To protect termination
+	syncFails   int          // Number of consecutive sync failures
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
 }
@@ -191,10 +194,12 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 		wg.Go(func() {
 			err := c.Sync(ctx, false)
 			if err == nil {
-				p.Store(id, c)
+				c.syncFails = 0
 			} else {
+				c.syncFails++
 				log.Trace().Err(err).Str("ID", id).Msg("failed to sync with GPU controller")
 			}
+			p.Store(id, c)
 		})
 	}
 
@@ -322,6 +327,9 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 	defer c.Termination.Unlock()
 
 	defer os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
+	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
+	defer os.Remove(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id))
+	defer os.RemoveAll(fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id))
 	defer c.Booking.Close()
 
 	defer p.Delete(id) // Remove from the pool
@@ -570,7 +578,7 @@ func (c *controller) Book() bool {
 }
 
 func (c *controller) Status() (status controllerStatus, reason string) {
-	if utils.PidRunning(c.PID) {
+	if c.syncFails < MAX_SYNC_FAILURES && utils.PidRunning(c.PID) {
 		if c.AttachedPID == 0 {
 			shmSizeMatches := c.ShmSize == uint64(config.Global.GPU.ShmSize)
 			credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
