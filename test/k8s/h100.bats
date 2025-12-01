@@ -10,19 +10,19 @@ export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-lz4}
 
 load ../helpers/utils
 load ../helpers/daemon # required for config env vars
-load ../helpers/aws
+load ../helpers/nebius
 load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
-CLUSTER_NAME="test-eks-$(unix_nano)"
+CLUSTER_NAME="test-mk8s-$(unix_nano)"
 export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="test"
 export CEDANA_NAMESPACE="cedana-system"
 
 setup_file() {
-    setup_cluster
+    setup_nebius_cluster
     tail_all_logs $CEDANA_NAMESPACE 300 &
     TAIL_PID=$!
     CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
