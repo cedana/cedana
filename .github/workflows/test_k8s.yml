@@ -130,8 +130,7 @@ jobs:
             cr: streamer
           - platform: GKE
             cr: default
-      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform ==
-      'H100' ) && 1 || 9999 }}
+      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'H100' ) && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
