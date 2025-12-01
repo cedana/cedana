@@ -57,6 +57,9 @@ type (
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 		// Streams specifies the number of parallel streams to use when checkpointing.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
+		// Staged enables staging streamed checkpoints to local disk before uploading to remote storage.
+		// Only applies when Streams > 0 and using remote storage.
+		Staged bool `json:"staged" key:"staged" yaml:"staged" mapstructure:"staged"`
 	}
 
 	DB struct {
