@@ -47,12 +47,15 @@ configure_nebius_credentials() {
 
 create_nebius_mk8s() {
     debug_log "Creating Nebius mk8s with H100..."
+    export NB_SUBNET_ID=$(nebius vpc subnet list \
+    --format json \
+    | jq -r '.items[0].metadata.id')
 
-    nebius mk8s cluster create \
+    export NB_CLUSTER_ID=$(nebius mk8s cluster create \
         --name "$H100_CLUSTER_NAME" \
-        --region "$NB_REGION" \
-        --wait=false \
-        || return 1
+        --control-plane-subnet-id $NB_SUBNET_ID \
+        '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
+        --format json | jq -r '.metadata.id')
 
     debug_log "Nebius mk8s with H100 has been created"
 }
@@ -61,20 +64,16 @@ create_nebius_nodegroup() {
     debug_log "Creating Nebius node-group with H100..."
 
     export NB_NODEGROUP_NAME="github-ci-H100"
-    export NB_CLUSTER_ID=$(
-        nebius mk8s cluster get-by-name \
-            --name "$H100_CLUSTER_NAME" \
-            --format json | jq -r '.metadata.id'
-    )
     nebius mk8s node-group create \
         --name "$NB_NODEGROUP_NAME" \
-        --cluster-id "$NB_CLUSTER_ID" \
-        --node-service-account-id "$NB_SA_ID"
-        --zone "eu-north1-a" \
+        --parent-id "$NB_CLUSTER_ID" \
+        --node-service-account-id "$NB_SA_ID" \
+        --template-boot-disk-size-bytes 137438953472 \ # 128 GB
+        --fixed-node-count 1 \
         --template-resources-platform "gpu-h100-sxm" \
         --template-resources-preset "1gpu-16vcpu-200gb" \
-        --scale-min 1 \
-        --scale-max 1 \
+        --template-network-interfaces "[{\"public_ip_address\": {},
+                                   \"subnet_id\": \"$NB_SUBNET_ID\"}]"
 
     debug_log "Nebius node-group with H100 has been created"
 }
@@ -87,11 +86,7 @@ setup_nebius_cluster() {
     create_nebius_nodegroup
 
     debug_log "Fetching Nebius mk8s kubeconfig file..."
-    export NB_CLUSTER_ID=$(
-        nebius mk8s cluster get-by-name \
-            --name "$H100_CLUSTER_NAME" \
-            --format json | jq -r '.metadata.id'
-    )
+
     nebius mk8s cluster get-credentials \--id $NB_CLUSTER_ID --external
 
     debug_log "Nebius mk8 kubeconfig file has been fetched"
