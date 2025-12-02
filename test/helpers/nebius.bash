@@ -34,14 +34,6 @@ configure_nebius_credentials() {
     printf '%s' "$NB_SA_PRIVATE_KEY" > "$NB_SA_PRIVATE_KEY_PATH"
     chmod 600 "$NB_SA_PRIVATE_KEY_PATH"
 
-    export NB_CLUSTER_ID=$(
-        nebius mk8s cluster get-by-name \
-            --name "$H100_CLUSTER_NAME" \
-            --format json | jq -r '.metadata.id'
-    )
-    if [ -n "$CLUSTER_ID" ] && [ "$CLUSTER_ID" != "null" ]; then
-        debug_log "Cluster already exists, skipp creation..."
-    else
     nebius profile create \
         --endpoint api.nebius.cloud \
         --service-account-id "$NB_SA_ID" \
@@ -60,11 +52,20 @@ create_nebius_mk8s() {
     --format json \
     | jq -r '.items[0].metadata.id')
 
+    export NB_CLUSTER_ID=$(
+        nebius mk8s cluster get-by-name \
+            --name "$H100_CLUSTER_NAME" \
+            --format json | jq -r '.metadata.id'
+    )
+    if [ -n "$NB_CLUSTER_ID" ] && [ "$NB_CLUSTER_ID" != "null" ]; then
+        debug_log "Cluster already exists, skip creation..."
+    else
     export NB_CLUSTER_ID=$(nebius mk8s cluster create \
         --name "$H100_CLUSTER_NAME" \
         --control-plane-subnet-id $NB_SUBNET_ID \
         '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
         --format json | jq -r '.metadata.id')
+    fi
 
     debug_log "Nebius mk8s with H100 has been created"
 }
