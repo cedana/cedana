@@ -65,7 +65,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging
+  DEBUG: 1 # bats debug logging
 
 jobs:
   unit:
