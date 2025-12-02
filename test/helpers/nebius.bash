@@ -20,9 +20,9 @@ install_nebius_cli() {
 
     curl -sSL https://storage.eu-north1.nebius.cloud/cli/install.sh | bash
     # set binary path
-    if [ -d "$HOME/.nebius/bin" ]; then
-        export PATH="$HOME/.nebius/bin:$PATH"
-    fi
+    export PATH="/github/home/.nebius/bin:$PATH"
+
+    nebius version
 
     debug_log "Nebius CLI installed"
 }
