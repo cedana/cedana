@@ -118,11 +118,17 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`.
 
-			defer func() {
+			finalize := func() {
 				_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
 				err = errors.Join(err, waitForIO())
 				end()
-			}()
+			}
+
+      if config.Global.Checkpoint.Async {
+        go finalize()
+      } else {
+        defer finalize()
+      }
 
 			resp.Paths = append(resp.Paths, path)
 
@@ -130,3 +136,4 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 		}
 	}
 }
+

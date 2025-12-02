@@ -130,9 +130,15 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			// can be resumed on failure.
 
 			if req.GetCriu().GetLeaveRunning() {
-				defer func() {
-					err = errors.Join(err, compress(ctx))
-				}()
+        finalize := func() {
+          err = errors.Join(err, compress(ctx))
+        }
+
+        if config.Global.Checkpoint.Async {
+          go finalize()
+        } else {
+          defer finalize()
+        }
 			} else {
 				callback := &criu_client.NotifyCallback{
 					PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) (err error) {
