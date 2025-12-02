@@ -19,7 +19,11 @@ install_nebius_cli() {
     arch=$(uname -m)
 
     curl -sSL https://storage.eu-north1.nebius.cloud/cli/install.sh | bash
-    exec -l $SHELL
+    # set binary path
+    cli_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    bin_path="${cli_dir}/bin"
+    export PATH="${bin_path}:${PATH}"
+
     debug_log "Nebius CLI installed"
 }
 
