@@ -126,10 +126,10 @@ CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
 BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
-				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
+				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER)
 BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
-		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
+		        --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER)
 
 test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
