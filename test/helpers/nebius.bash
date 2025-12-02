@@ -66,10 +66,10 @@ create_nebius_mk8s() {
 
 create_nebius_nodegroup() {
     debug_log "Creating Nebius node-group with H100..."
-
     export NB_NODEGROUP_NAME="github-ci-H100"
     EXISTING_NODEGROUP=$(nebius mk8s node-group list --parent-id "$NB_CLUSTER_ID" \
-        --format json | jq -r ".items[] | select(.metadata.name==\"$NB_NODEGROUP_NAME\") | .metadata.id")
+        --format json | jq -r ".items[]? | select(.metadata.name==\"$NB_NODEGROUP_NAME\") | .metadata.id" 2>/dev/null || echo "")
+
     if [ -n "$EXISTING_NODEGROUP" ] && [ "$EXISTING_NODEGROUP" != "null" ]; then
         debug_log "Node-group already exists, skipping creation..."
         export NB_NODEGROUP_ID="$EXISTING_NODEGROUP"
@@ -83,7 +83,6 @@ create_nebius_nodegroup() {
             --template-resources-platform "gpu-h100-sxm" \
             --template-resources-preset "1gpu-16vcpu-200gb" \
             --template-network-interfaces "[{\"public_ip_address\": {},\"subnet_id\": \"$NB_SUBNET_ID\"}]"
-
         debug_log "Nebius node-group with H100 has been created"
     fi
 }
