@@ -35,27 +35,34 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				compression = config.Global.Checkpoint.Compression
 			}
 
+			// Check if compression is valid, because we don't want to fail after the dump
+			// as the process would be killed.
+
 			if _, ok := cedana_io.SUPPORTED_COMPRESSIONS[compression]; !ok {
 				return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 			}
 
-			staged := config.Global.Checkpoint.Staged && storage.IsRemote()
+			async := config.Global.Checkpoint.Async && storage.IsRemote()
 
+			// If remote storage, we instead use a temporary directory for CRIU
 			if storage.IsRemote() {
 				dir = os.TempDir()
 			}
 
+			// Check if the provided dir exists
 			if _, err := os.Stat(dir); os.IsNotExist(err) {
 				return nil, status.Errorf(codes.InvalidArgument, "dump dir does not exist: %s", dir)
 			}
 
+			// Create a new directory within the dump dir, where dump will happen
 			imagesDirectory := filepath.Join(dir, req.Name)
 
+			// Create the directory
 			if err := os.Mkdir(imagesDirectory, filesystem.DUMP_DIR_PERMS); err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create dump dir: %v", err)
 			}
 			defer func() {
-				if err != nil || (storage.IsRemote() && !staged) {
+				if err != nil || (storage.IsRemote() && !async) {
 					os.RemoveAll(imagesDirectory)
 				}
 			}()
@@ -78,6 +85,8 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			req.Criu.ImagesDirFd = proto.Int32(int32(f.Fd()))
 			req.Criu.Stream = proto.Bool(true)
 
+			// Streamer also requires Cedana's CRIU version until the Stream proto option
+			// is merged into CRIU upstream.
 			if !opts.Plugins.IsInstalled("criu") {
 				return nil, status.Errorf(
 					codes.FailedPrecondition,
@@ -93,11 +102,12 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				)
 			}
 
-			path := req.Dir + "/" + req.Name
+			path := req.Dir + "/" + req.Name // do not use filepath.Join as it removes a slash
 
 			var streamStorage cedana_io.Storage
 			var storagePath string
-			if staged {
+
+			if async {
 				streamStorage = &filesystem.Storage{}
 				storagePath = imagesDirectory
 			} else {
@@ -120,7 +130,10 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
 
-			if staged {
+			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
+			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
+			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`
+			if async {
 				ext, _ := cedana_io.ExtForCompression(compression)
 
 				upload := func(ctx context.Context) error {
@@ -181,7 +194,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						go func() {
 							defer opts.WG.Done()
 							if uploadErr := upload(ctx); uploadErr != nil {
-								log.Error().Err(uploadErr).Msg("staged upload failed")
+								log.Error().Err(uploadErr).Msg("async upload failed")
 							}
 						}()
 					} else {
