@@ -67,8 +67,7 @@ create_nebius_nodegroup() {
     nebius mk8s node-group create \
         --name "$NB_NODEGROUP_NAME" \
         --parent-id "$NB_CLUSTER_ID" \
-        --node-service-account-id "$NB_SA_ID" \
-        --template-boot-disk-size-bytes 137438953472 \ # 128 GB
+        --template-boot-disk-size-bytes 137438953472 \
         --fixed-node-count 1 \
         --template-resources-platform "gpu-h100-sxm" \
         --template-resources-preset "1gpu-16vcpu-200gb" \
