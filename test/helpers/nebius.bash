@@ -10,11 +10,6 @@ export H100_CLUSTER_NAME="${H100_CLUSTER_NAME:-cedana-ci-arm64}"
 install_nebius_cli() {
     debug_log "Installing Nebius CLI..."
 
-    if command -v nebius version &>/dev/null; then
-        debug_log "nebius CLI already installed"
-        return 0
-    fi
-
     local arch
     arch=$(uname -m)
 
@@ -41,7 +36,6 @@ configure_nebius_credentials() {
         --private-key-file "$NB_SA_PRIVATE_KEY_PATH" \
         --profile "$NB_SA_PROFILE_NAME" \
         --parent-id "$NB_PROJECT_ID"
-    fi
 
     debug_log "Nebius credentials configured"
 }
@@ -62,7 +56,7 @@ create_nebius_mk8s() {
     else
     export NB_CLUSTER_ID=$(nebius mk8s cluster create \
         --name "$H100_CLUSTER_NAME" \
-        --control-plane-subnet-id $NB_SUBNET_ID \
+        --control-plane-subnet-id "$NB_SUBNET_ID" \
         '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
         --format json | jq -r '.metadata.id')
     fi
@@ -103,7 +97,7 @@ setup_nebius_cluster() {
 
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
-    nebius mk8s cluster get-credentials \--id $NB_CLUSTER_ID --external
+    nebius mk8s cluster get-credentials --id "$NB_CLUSTER_ID" --external
 
     debug_log "Nebius mk8 kubeconfig file has been fetched"
 }
