@@ -94,6 +94,9 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				)
 			}
 
+			// Setup dump fs that can be used by future adapters to directly read write/extra files
+			// to the dump directory. Here, instead of OsFs we use the streamer's Fs implementation
+			// that handles all read/writes directly through streaming.
 			var imgStreamer *plugins.Plugin
 			if imgStreamer = opts.Plugins.Get("streamer"); !imgStreamer.IsInstalled() {
 				return nil, status.Errorf(
@@ -197,6 +200,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						opts.WG.Add(1)
 						go func() {
 							defer opts.WG.Done()
+							log.Info().Msg("async dump upload started")
 							asyncCtx, end := profiling.StartTiming(uploadCtx, "async-upload")
 							defer end()
 							if uploadErr := upload(asyncCtx); uploadErr != nil {
