@@ -325,10 +325,10 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 	)
 
 	var (
-		batchIndex    = 0
-		nodeCount     = 0
-		currentBatch  = make([]*containerd_proto.RWFile, 0, NODES_PER_BATCH)
-		currentFiles  = make([]string, 0, NODES_PER_BATCH)
+		batchIndex   = 0
+		nodeCount    = 0
+		currentBatch = make([]*containerd_proto.RWFile, 0, NODES_PER_BATCH)
+		currentFiles = make([]string, 0, NODES_PER_BATCH)
 	)
 
 	flushBatch := func() error {
@@ -384,10 +384,6 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		relPath, err := filepath.Rel(upperDir, node.path)
 		if err != nil {
 			return fmt.Errorf("failed to get relative path for %s: %v", node.path, err)
-		}
-
-		if strings.Contains(relPath, "libSvtAv1Enc") {
-			log.Info().Str("relPath", relPath).Str("fullPath", node.path).Msg("FOUND libSvtAv1Enc during dump walk")
 		}
 
 		rwLayerFile := &containerd_proto.RWFile{}
@@ -460,9 +456,6 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		currentBatch = append(currentBatch, rwLayerFile)
 		if node.fi.Mode().IsRegular() {
 			currentFiles = append(currentFiles, node.path)
-			if strings.Contains(node.path, "libSvtAv1Enc") {
-				log.Info().Str("fullPath", node.path).Str("relPath", relPath).Msg("ADDED libSvtAv1Enc to batch for dump")
-			}
 		} else {
 			currentFiles = append(currentFiles, "")
 		}
