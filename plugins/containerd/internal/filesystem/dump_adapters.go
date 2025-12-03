@@ -283,6 +283,9 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 	}
 
 	spec, err := container.Spec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get container spec: %v", err)
+	}
 
 	mapOfMounts := make(map[string]string)
 	for _, m := range spec.Mounts {
