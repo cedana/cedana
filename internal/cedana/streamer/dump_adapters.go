@@ -148,14 +148,14 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							localPath := fmt.Sprintf("%s/img-%d%s", imagesDirectory, i, ext)
 							remotePath := fmt.Sprintf("%s/img-%d%s", path, i, ext)
 
-							src, err := streamStorage.Open(localPath)
+							src, err := streamStorage.Open(ctx, localPath)
 							if err != nil {
 								errCh <- fmt.Errorf("failed to open local shard %d: %w", i, err)
 								return
 							}
 							defer src.Close()
 
-							dst, err := storage.Create(remotePath)
+							dst, err := storage.Create(ctx, remotePath)
 							if err != nil {
 								errCh <- fmt.Errorf("failed to create remote shard %d: %w", i, err)
 								return

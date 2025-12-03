@@ -100,7 +100,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				path = req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
-				tarball, err := storage.Create(path)
+				tarball, err := storage.Create(ctx, path)
 				if err != nil {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
@@ -113,7 +113,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
 				err = io.Tar(imagesDirectory, tarball, compression)
 				if err != nil {
-					storage.Delete(path)
+					storage.Delete(ctx, path)
 					return fmt.Errorf("failed to create tarball: %w", err)
 				}
 
