@@ -189,18 +189,26 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						return
 					}
 
+					// Use a detached context for async upload since the parent request
+					// context will be canceled after the dump completes.
+					uploadCtx := context.WithoutCancel(ctx)
+
 					if req.GetCriu().GetLeaveRunning() {
 						opts.WG.Add(1)
 						go func() {
 							defer opts.WG.Done()
-							if uploadErr := upload(ctx); uploadErr != nil {
+							asyncCtx, end := profiling.StartTiming(uploadCtx, "async-upload")
+							defer end()
+							if uploadErr := upload(asyncCtx); uploadErr != nil {
 								log.Error().Err(uploadErr).Msg("async upload failed")
 							}
 						}()
 					} else {
 						callback := &criu_client.NotifyCallback{
-							PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) error {
-								return upload(ctx)
+							PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) error {
+								asyncCtx, end := profiling.StartTiming(uploadCtx, "async-upload")
+								defer end()
+								return upload(asyncCtx)
 							},
 						}
 						opts.CRIUCallback.Include(callback)
