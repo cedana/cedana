@@ -61,7 +61,6 @@ teardown_file() {
         --snapshotter "$SNAPSHOTTER" \
         -- "$image" /app/gpu_smr/vector_add &
 
-    # give it some time to start and log
     sleep 5
 
     assert_exists "$log_file"
@@ -76,7 +75,6 @@ teardown_file() {
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
     echo "Testing vLLM import..."
-    # can vLLM import successfully?
     run cedana run containerd \
         --jid "$jid" \
         --gpu-enabled \
@@ -100,7 +98,6 @@ print('vLLM import successful')
     jid="vllm-$(unix_nano)"
     image="$CEDANA_SAMPLES_CUDA_IMAGE"
     
-    # smaller model to avoid download issues
     run cedana run containerd \
         --jid "$jid" \
         --gpu-enabled \
@@ -108,8 +105,6 @@ print('vLLM import successful')
         --snapshotter "$SNAPSHOTTER" \
         -- "$image" python3 -c "
 from vllm import LLM, SamplingParams
-
-# This will fail but at least tests the vLLM setup
 try:
     print('Initializing vLLM...')
     llm = LLM(model='gpt2', max_model_len=128)  # Small model
