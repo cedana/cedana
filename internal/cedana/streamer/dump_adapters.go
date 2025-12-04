@@ -165,6 +165,9 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							}
 							defer dst.Close()
 
+							
+							dst = profiling.IOCategory(ctx, dst, "storage", io.Copy)
+							
 							if _, err := io.Copy(dst, src); err != nil {
 								errCh <- fmt.Errorf("failed to upload shard %d: %w", i, err)
 							}
