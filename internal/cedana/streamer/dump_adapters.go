@@ -133,6 +133,10 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
 
+			_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
+			err = errors.Join(err, waitForIO())
+			end()
+
 			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
 			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`
@@ -143,7 +147,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					var wg sync.WaitGroup
 					errCh := make(chan error, streams)
 
-					for i := int32(0); i < streams; i++ {
+					for i := range streams {
 						wg.Add(1)
 						go func(i int32) {
 							defer wg.Done()
@@ -187,10 +191,6 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				}
 
 				defer func() {
-					_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
-					err = errors.Join(err, waitForIO())
-					end()
-
 					if err != nil {
 						return
 					}
@@ -204,9 +204,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						go func() {
 							defer opts.WG.Done()
 							log.Info().Msg("async dump upload started")
-							asyncCtx, end := profiling.StartTiming(uploadCtx, "async-upload")
-							defer end()
-							if uploadErr := upload(asyncCtx); uploadErr != nil {
+							if uploadErr := upload(uploadCtx); uploadErr != nil {
 								log.Error().Err(uploadErr).Msg("async upload failed")
 							}
 						}()
