@@ -12,4 +12,5 @@ var (
 	RootfsOnlyFlag = flags.Flag{Full: "rootfs-only"}
 	GPUsFlag       = flags.Flag{Full: "gpus"}
 	EnvFlag        = flags.Flag{Full: "env"}
+	SnapshotterFlag = flags.Flag{Full: "snapshotter"}
 )
