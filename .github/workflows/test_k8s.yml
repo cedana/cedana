@@ -111,7 +111,7 @@ jobs:
           - ${{ inputs.platform }}
         compute:
           - CPU
-          # - CUDA # TODO: Enable when GPU tests are added
+          - CUDA # TODO: Enable when GPU tests are added
         cr:
           - default
           - streamer
@@ -136,6 +136,12 @@ jobs:
             cr: streamer
           - platform: GKE
             cr: default
+          - platform: K3s
+            compute: CUDA
+          - platform: GKE
+            compute: CUDA
+          - platform: EKS
+            compute: CUDA
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'H100' ) && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
