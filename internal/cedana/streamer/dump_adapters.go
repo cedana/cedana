@@ -133,10 +133,6 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
 
-			_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
-			err = errors.Join(err, waitForIO())
-			end()
-
 			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
 			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`
@@ -169,9 +165,9 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							}
 							defer dst.Close()
 
-							
+							// add profiling for io copier
 							dst = profiling.IOCategory(ctx, dst, "storage", io.Copy)
-							
+
 							if _, err := io.Copy(dst, src); err != nil {
 								errCh <- fmt.Errorf("failed to upload shard %d: %w", i, err)
 							}
@@ -211,9 +207,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					} else {
 						callback := &criu_client.NotifyCallback{
 							PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) error {
-								asyncCtx, end := profiling.StartTiming(uploadCtx, "async-upload")
-								defer end()
-								return upload(asyncCtx)
+								return upload(uploadCtx)
 							},
 						}
 						opts.CRIUCallback.Include(callback)
