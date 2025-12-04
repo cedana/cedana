@@ -20,7 +20,6 @@ pull_latest_cedana_samples_image() {
 }
 
 get_latest_cedana_samples_tag() {
-    # Keep your existing logic here, it is fine
     local repo="cedana/cedana-samples"
     local tag="cuda12.4-torch2.7"
     if ! cmd_exists jq; then echo "$tag"; return 0; fi
@@ -44,8 +43,7 @@ start_containerd() {
         sleep 1
         retries=$((retries+1))
         if [ $retries -gt 10 ]; then
-            # If standard socket isn't up, try forcing it manually 
-            # pointing specifically to the SAFE VOLUME
+            # manual force to volume mount
             echo "Socket not found, starting manually on safe volume..."
             containerd \
                 --config /etc/containerd/config.toml \
