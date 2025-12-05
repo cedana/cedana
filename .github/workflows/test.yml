@@ -459,7 +459,7 @@ jobs:
       large: ${{ inputs.large }}
       post_summary: false # Will post consolidated summary instead
 
-  h100:
+  mk8s:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
     if: ${{ inputs.kubernetes }}
@@ -468,14 +468,14 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      platform: H100
+      platform: MK8s
       large: ${{ inputs.large }}
       post_summary: false # Will post consolidated summary instead
 
   post-summary:
     name: Post Summary
     if: always()
-    needs: [basic, plugin, streamer, gpu, k3s, eks, gke, h100]
+    needs: [basic, plugin, streamer, gpu, k3s, eks, gke, mk8s]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

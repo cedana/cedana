@@ -5,7 +5,7 @@
 ######################
 
 export KUBECONFIG=~/.kube/config
-export H100_CLUSTER_NAME="${H100_CLUSTER_NAME:-cedana-ci-arm64}"
+export MK8s_CLUSTER_NAME="${MK8s_CLUSTER_NAME:-cedana-ci-arm64}"
 
 install_nebius_cli() {
     debug_log "Installing Nebius CLI..."
@@ -48,14 +48,14 @@ create_nebius_mk8s() {
 
     export NB_CLUSTER_ID=$(
         nebius mk8s cluster get-by-name \
-            --name "$H100_CLUSTER_NAME" \
+            --name "$MK8s_CLUSTER_NAME" \
             --format json | jq -r '.metadata.id'
     )
     if [ -n "$NB_CLUSTER_ID" ] && [ "$NB_CLUSTER_ID" != "null" ]; then
         debug_log "Cluster already exists, skip creation..."
     else
     export NB_CLUSTER_ID=$(nebius mk8s cluster create \
-        --name "$H100_CLUSTER_NAME" \
+        --name "$MK8s_CLUSTER_NAME" \
         --control-plane-subnet-id "$NB_SUBNET_ID" \
         '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
         --format json | jq -r '.metadata.id')
@@ -66,7 +66,7 @@ create_nebius_mk8s() {
 
 create_nebius_nodegroup() {
     debug_log "Creating Nebius node-group with H100..."
-    export NB_NODEGROUP_NAME="github-ci-H100"
+    export NB_NODEGROUP_NAME="github-ci-MK8s"
     EXISTING_NODEGROUP=$(nebius mk8s node-group list --parent-id "$NB_CLUSTER_ID" \
         --format json | jq -r ".items[]? | select(.metadata.name==\"$NB_NODEGROUP_NAME\") | .metadata.id" 2>/dev/null || echo "")
 
@@ -84,6 +84,21 @@ create_nebius_nodegroup() {
             --template-resources-preset "1gpu-16vcpu-200gb" \
             --template-network-interfaces "[{\"public_ip_address\": {},\"subnet_id\": \"$NB_SUBNET_ID\"}]"
         debug_log "Nebius node-group with H100 has been created"
+    fi
+}
+
+delete_nebius_nodegroup() {
+    debug_log "Deleting Nebius node-group with H100..."
+    export NB_NODEGROUP_NAME="github-ci-MK8s"
+    export NB_K8S_NODE_GROUP_ID=$(nebius mk8s node-group get-by-name \
+        --parent-id $NB_CLUSTER_ID \
+        --name $NB_NODEGROUP_NAME --format json | jq -r '.metadata.id')
+    if [ -z "$NB_K8S_NODE_GROUP_ID" ] || [ "$NB_K8S_NODE_GROUP_ID" = "null" ]; then
+        debug_log "Cluster Node-group does not exist, skipping deletion..."
+    else
+        debug_log "Deleting node-group..."
+        nebius mk8s node-group delete --id "$NB_K8S_NODE_GROUP_ID"
+        debug_log "Nebius node-group with H100 has been deleted"
     fi
 }
 
