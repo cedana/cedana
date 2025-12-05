@@ -22,7 +22,7 @@ export NAMESPACE="test"
 export CEDANA_NAMESPACE="cedana-system"
 
 setup_file() {
-    setup_nebius_cluster
+    setup_cluster
     tail_all_logs $CEDANA_NAMESPACE 300 &
     TAIL_PID=$!
     CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
@@ -39,7 +39,6 @@ teardown_file() {
     # Clean up any leftover PVs from tests
     kubectl delete pv --all --wait=false || true
     helm_uninstall_cedana $CEDANA_NAMESPACE
-    delete_nebius_nodegroup
     teardown_cluster &> /dev/null
     deregister_cluster "$CLUSTER_ID"
 }
