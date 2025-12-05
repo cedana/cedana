@@ -13,7 +13,6 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/internal/cedana/filesystem"
 	"github.com/cedana/cedana/pkg/config"
-	criu_client "github.com/cedana/cedana/pkg/criu"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
