@@ -87,7 +87,7 @@ create_nebius_nodegroup() {
     fi
 }
 
-delete_nebius_nodegroup() {
+teardown_cluster() {
     debug_log "Deleting Nebius node-group with H100..."
     export NB_NODEGROUP_NAME="github-ci-Nebius"
     export NB_K8S_NODE_GROUP_ID=$(nebius mk8s node-group get-by-name \
@@ -102,7 +102,7 @@ delete_nebius_nodegroup() {
     fi
 }
 
-setup_nebius_cluster() {
+setup_cluster() {
 
     install_nebius_cli
     configure_nebius_credentials
