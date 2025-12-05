@@ -68,7 +68,7 @@ var (
 		validation.ValidateDumpRequest,
 		client.Setup[daemon.DumpReq, daemon.DumpResp],
 		client.LoadContainer[daemon.DumpReq, daemon.DumpResp],
-		filesystem.DumpRootfs,
+		filesystem.DumpRWLayer,
 		filesystem.DumpImageName,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
@@ -80,6 +80,7 @@ var (
 		validation.ValidateRestoreRequest,
 		client.Setup[daemon.RestoreReq, daemon.RestoreResp],
 		client.CreateContainerForRestore,
+		filesystem.RestoreRWLayer,
 		client.SetAdditionalEnv[daemon.RestoreReq, daemon.RestoreResp],
 	}
 )
