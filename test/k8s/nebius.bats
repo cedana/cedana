@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
 # This file assumes its being run from the same directory as the Makefile
-# bats file_tags=k8s,kubernetes,mk8s,MK8s
+# bats file_tags=k8s,kubernetes,nebius,Nebius
 
 # NOTE: Set defaults to use remote checkpoint storage with good compression
 # as this test suite will always run on a remote cluster.
@@ -15,7 +15,7 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
-CLUSTER_NAME="test-mk8s-$(unix_nano)"
+CLUSTER_NAME="test-nebius-$(unix_nano)"
 export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="test"
