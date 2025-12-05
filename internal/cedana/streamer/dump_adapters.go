@@ -187,6 +187,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				}
 
 				defer func() {
+					err = errors.Join(err, waitForIO())
 					if err != nil {
 						return
 					}
@@ -195,25 +196,17 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					// context will be canceled after the dump completes.
 					uploadCtx := context.WithoutCancel(ctx)
 
-					if req.GetCriu().GetLeaveRunning() {
-						opts.WG.Add(1)
-						go func() {
-							defer opts.WG.Done()
-							log.Info().Msg("async dump upload started")
-							if uploadErr := upload(uploadCtx); uploadErr != nil {
-								log.Error().Err(uploadErr).Msg("async upload failed")
-							}
-						}()
-					} else {
-						callback := &criu_client.NotifyCallback{
-							PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) error {
-								return upload(uploadCtx)
-							},
+					opts.WG.Add(1)
+					go func() {
+						defer opts.WG.Done()
+						log.Info().Msg("async dump upload started")
+						if uploadErr := upload(uploadCtx); uploadErr != nil {
+							log.Error().Err(uploadErr).Msg("async upload failed")
 						}
-						opts.CRIUCallback.Include(callback)
-					}
+					}()
 				}()
 			} else {
+				// Sync upload, wait for IO completion in PostDumpFunc
 				defer func() {
 					_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
 					err = errors.Join(err, waitForIO())
