@@ -338,7 +338,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 
 		batchFileName := fmt.Sprintf("rw-layer-%d.img", batchIndex)
 		filePath := storagePath + "/" + batchFileName
-		outFile, err := storage.Create(filePath)
+		outFile, err := storage.Create(ctx, filePath)
 		if err != nil {
 			return fmt.Errorf("failed to create batch file %s: %v", filePath, err)
 		}
@@ -488,7 +488,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 	}
 
 	manifestPath := storagePath + "/rw-layer-manifest.img"
-	manifestFile, err := storage.Create(manifestPath)
+	manifestFile, err := storage.Create(ctx, manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to create manifest: %v", err)
 	}

@@ -100,7 +100,7 @@ func NewStreamingFs(
 	io := &sync.WaitGroup{}
 	io.Add(int(streams))
 	ioErr := make(chan error, streams)
-	paths, err := imgPaths(storage, storagePath, mode, streams)
+	paths, err := imgPaths(ctx, storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -112,7 +112,7 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
-			file, err := storage.Open(paths[i])
+			file, err := storage.Open(ctx, paths[i])
 			if err != nil {
 				return nil, nil, err
 			}
@@ -143,7 +143,7 @@ func NewStreamingFs(
 				return nil, nil, err
 			}
 			path := paths[i] + ext
-			file, err := storage.Create(path)
+			file, err := storage.Create(ctx, path)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -469,10 +469,10 @@ func (fs *Fs) stopListener() error {
 
 // Returns a list of image paths found in the image directory.
 // Returns an error if the number of images found is not equal to the number of streams specified.
-func imgPaths(storage cedana_io.Storage, dir string, mode Mode, streams int32) ([]string, error) {
+func imgPaths(ctx context.Context, storage cedana_io.Storage, dir string, mode Mode, streams int32) ([]string, error) {
 	switch mode {
 	case READ_ONLY:
-		list, err := storage.ReadDir(dir)
+		list, err := storage.ReadDir(ctx, dir)
 		if err != nil {
 			return nil, err
 		}
@@ -501,12 +501,12 @@ func imgPaths(storage cedana_io.Storage, dir string, mode Mode, streams int32) (
 	}
 }
 
-func IsStreamable(storage cedana_io.Storage, dir string) (streams int32, err error) {
+func IsStreamable(ctx context.Context, storage cedana_io.Storage, dir string) (streams int32, err error) {
 	if storage == nil {
 		return 0, fmt.Errorf("storage is nil")
 	}
 
-	isDir, err := storage.IsDir(dir)
+	isDir, err := storage.IsDir(ctx, dir)
 	if err != nil {
 		return 0, fmt.Errorf("failed to check if path is a directory: %w", err)
 	}
@@ -515,7 +515,7 @@ func IsStreamable(storage cedana_io.Storage, dir string) (streams int32, err err
 		return 0, nil
 	}
 
-	list, err := storage.ReadDir(dir)
+	list, err := storage.ReadDir(ctx, dir)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read dir: %w", err)
 	}

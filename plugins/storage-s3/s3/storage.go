@@ -18,7 +18,6 @@ const PATH_PREFIX = "s3://"
 
 // S3 storage
 type Storage struct {
-	ctx    context.Context
 	client *s3.Client
 }
 
@@ -57,14 +56,13 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 	})
 
 	storage := &Storage{
-		ctx:    ctx,
 		client: client,
 	}
 
 	return storage, nil
 }
 
-func (s *Storage) Open(path string) (io.ReadCloser, error) {
+func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) {
 	bucket, key, err := s.sanitizePath(path)
 	log.Info().Str("bucket", bucket).Str("key", key).Msg("using S3 storage path")
 	if err != nil {
@@ -72,34 +70,34 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 	}
 
 	// Sanity check: ensure the bucket exists
-	_, err = s.client.HeadBucket(s.ctx, &s3.HeadBucketInput{
+	_, err = s.client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: &bucket,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to access bucket %q: %w", bucket, err)
 	}
 
-	return NewFile(s.ctx, s.client, bucket, key), nil
+	return NewFile(ctx, s.client, bucket, key), nil
 }
 
-func (s *Storage) Create(path string) (io.WriteCloser, error) {
+func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, error) {
 	bucket, key, err := s.sanitizePath(path)
 	if err != nil {
 		return nil, err
 	}
 
 	// Sanity check: ensure the bucket exists
-	_, err = s.client.HeadBucket(s.ctx, &s3.HeadBucketInput{
+	_, err = s.client.HeadBucket(ctx, &s3.HeadBucketInput{
 		Bucket: &bucket,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to access bucket %q: %w", bucket, err)
 	}
 
-	return NewFile(s.ctx, s.client, bucket, key), nil
+	return NewFile(ctx, s.client, bucket, key), nil
 }
 
-func (s *Storage) Delete(path string) error {
+func (s *Storage) Delete(_ context.Context, path string) error {
 	_, _, err := s.sanitizePath(path)
 	if err != nil {
 		return err
@@ -108,7 +106,7 @@ func (s *Storage) Delete(path string) error {
 	return fmt.Errorf("this operation is currently not supported for s3 storage")
 }
 
-func (s *Storage) IsDir(path string) (bool, error) {
+func (s *Storage) IsDir(_ context.Context, path string) (bool, error) {
 	_, _, err := s.sanitizePath(path)
 	if err != nil {
 		return false, err
@@ -117,7 +115,7 @@ func (s *Storage) IsDir(path string) (bool, error) {
 	return true, nil // S3 does not support directories in the same way as local filesystems
 }
 
-func (s *Storage) ReadDir(path string) ([]string, error) {
+func (s *Storage) ReadDir(ctx context.Context, path string) ([]string, error) {
 	bucket, key, err := s.sanitizePath(path)
 	if err != nil {
 		return nil, err
@@ -136,7 +134,7 @@ func (s *Storage) ReadDir(path string) ([]string, error) {
 
 	paginator := s3.NewListObjectsV2Paginator(s.client, query)
 	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(s.ctx)
+		page, err := paginator.NextPage(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list objects in bucket %s: %w", bucket, err)
 		}

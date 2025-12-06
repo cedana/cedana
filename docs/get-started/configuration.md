@@ -66,6 +66,9 @@ type Checkpoint struct {
     // Stream (for streaming checkpoints) specifies the number of parallel streams to use.
     // 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.
     Stream int32 `json:"stream" key:"stream" yaml:"stream" mapstructure:"stream"`
+    // Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
+	// checkpoint reqeust to return early.
+	Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
 }
 ```
 

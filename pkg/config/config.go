@@ -33,6 +33,7 @@ const (
 	DEFAULT_CHECKPOINT_COMPRESSION = "none"
 	DEFAULT_CHECKPOINT_DIR         = "/tmp"
 	DEFAULT_CHECKPOINT_STREAMS     = 0
+	DEFAULT_CHECKPOINT_ASYNC       = false
 
 	DEFAULT_DB_REMOTE = false
 	DEFAULT_DB_PATH   = "/tmp/cedana.db"
@@ -75,6 +76,7 @@ var Global Config = Config{
 		Dir:         DEFAULT_CHECKPOINT_DIR,
 		Compression: DEFAULT_CHECKPOINT_COMPRESSION,
 		Streams:     DEFAULT_CHECKPOINT_STREAMS,
+		Async:       DEFAULT_CHECKPOINT_ASYNC,
 	},
 	DB: DB{
 		Remote: DEFAULT_DB_REMOTE,

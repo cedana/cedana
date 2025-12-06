@@ -171,7 +171,7 @@ func pluginRestoreStorage(next types.Restore) types.Restore {
 
 		opts.Storage = storage
 
-		streams, err := streamer.IsStreamable(storage, dir)
+		streams, err := streamer.IsStreamable(ctx, storage, dir)
 		if err != nil {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to detect restore filesystem to use: %v", err))
 		}
