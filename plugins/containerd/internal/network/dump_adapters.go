@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	"github.com/containerd/containerd"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -43,6 +44,7 @@ func DumpPodIP(next types.Dump) types.Dump {
 		}
 
 		if opts.DumpFs != nil {
+			log.Info().Msgf("Dumping pod IP %s to file", podIP)
 			if err := writePodIPToFile(opts.DumpFs, podIP); err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to write pod IP to file: %v", err)
 			}
@@ -95,7 +97,7 @@ func getPodIPFromNamespace(nsPid uint32) (string, error) {
 }
 
 func writePodIPToFile(fs afero.Fs, podIP string) error {
-	f, err := fs.Create("pod-ip")
+	f, err := fs.Create(containerd_keys.DUMP_PODIP_KEY)
 	if err != nil {
 		return fmt.Errorf("failed to create pod-ip file: %w", err)
 	}
