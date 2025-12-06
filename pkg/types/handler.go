@@ -23,7 +23,7 @@ type (
 		Plugins      plugins.Manager
 		Lifetime     context.Context
 		Storage      io.Storage // Direct R/W access to underlying storage of the dump (use DumpFs instead)
-		DumpFs       afero.Fs   // Filesystem to use for any dump/restore operations
+		DumpFs       afero.Fs   // Full filesystem to use for any dump/restore operations
 		FdStore      *sync.Map
 	}
 
