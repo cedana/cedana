@@ -18,7 +18,6 @@ import (
 	containerd_proto "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
-	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
@@ -26,16 +25,21 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/platforms"
-	proto_proto "github.com/golang/protobuf/proto"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func DumpRWLayer(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		if req.Action != daemon.DumpAction_DUMP || opts.DumpFs == nil {
+			return next(ctx, opts, resp, req)
+		}
+
 		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
 		if !ok {
 			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
@@ -46,21 +50,13 @@ func DumpRWLayer(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to get container from context")
 		}
 
-		defer func() {
-			if err == nil {
-				log.Info().Str("container", container.ID()).Msg("Dumped rw layer successfully")
-			}
-		}()
-
 		rwLayerErr := make(chan error, 1)
 
 		opts.CRIUCallback.Include(&criu.NotifyCallback{
-			Name: "rw-layer",
+			Name: "rw layer",
 			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 				go func() {
-					log.Debug().Str("container", container.ID()).Msg("dumping rw layer")
-					storagePath := req.Dir + "/" + req.Name
-					rwLayerErr <- dumpRWLayer(ctx, opts.Storage, storagePath, client, container)
+					rwLayerErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
 				}()
 				return nil
 			},
@@ -189,7 +185,7 @@ func DumpImageName(next types.Dump) types.Dump {
 }
 
 func writeDelimitedMessage(w io.Writer, rwLayerFile *containerd_proto.RWFile) error {
-	data, err := proto_proto.Marshal(rwLayerFile)
+	data, err := proto.Marshal(rwLayerFile)
 	if err != nil {
 		return err
 	}
@@ -252,7 +248,6 @@ func buildFileTree(upperDir string, mapOfMounts map[string]string) (*fileNode, e
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to build file tree: %v", err)
 	}
@@ -260,13 +255,13 @@ func buildFileTree(upperDir string, mapOfMounts map[string]string) (*fileNode, e
 	return root, nil
 }
 
-func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath string, client *containerd.Client, container containerd.Container) (err error) {
-	log.Info().Str("container", container.ID()).Msg("rw layer dump started")
+func dumpRWLayer(ctx context.Context, dump afero.Fs, client *containerd.Client, container containerd.Container) (err error) {
+	log.Info().Str("container", container.ID()).Msg("RW layer dump starting")
 	defer func() {
 		if err != nil {
-			log.Error().Err(err).Str("container", container.ID()).Msg("rw layer dump failed")
+			log.Error().Err(err).Str("container", container.ID()).Msg("RW layer dump failed")
 		} else {
-			log.Info().Str("container", container.ID()).Msg("rw layer dump completed")
+			log.Info().Str("container", container.ID()).Msg("RW layer dump completed")
 		}
 	}()
 
@@ -310,14 +305,14 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		return nil
 	}
 
-	log.Info().Str("upperDir", upperDir).Str("container", container.ID()).Msg("dumping rw layer from upperdir")
+	log.Debug().Str("upperDir", upperDir).Str("container", container.ID()).Msg("dumping rw layer from upperdir")
 
-	log.Info().Msg("building file tree")
+	log.Debug().Msg("building file tree")
 	root, err := buildFileTree(upperDir, mapOfMounts)
 	if err != nil {
 		return err
 	}
-	log.Info().Msg("file tree built successfully")
+	log.Debug().Msg("file tree built successfully")
 
 	const (
 		NODES_PER_BATCH = 1000
@@ -336,9 +331,8 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 			return nil
 		}
 
-		batchFileName := fmt.Sprintf("rw-layer-%d.img", batchIndex)
-		filePath := storagePath + "/" + batchFileName
-		outFile, err := storage.Create(ctx, filePath)
+		filePath := fmt.Sprintf(containerd_keys.DUMP_RW_LAYER_BATCH_FORMATTER, batchIndex)
+		outFile, err := dump.Create(filePath)
 		if err != nil {
 			return fmt.Errorf("failed to create batch file %s: %v", filePath, err)
 		}
@@ -363,7 +357,7 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 			return fmt.Errorf("failed to flush writer: %v", err)
 		}
 
-		log.Debug().Str("file", batchFileName).Int("entries", len(currentBatch)).Msg("wrote rw layer batch")
+		log.Debug().Str("file", filePath).Int("entries", len(currentBatch)).Msg("wrote rw layer batch")
 		currentBatch = currentBatch[:0]
 		currentFiles = currentFiles[:0]
 		batchIndex++
@@ -487,14 +481,14 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 		}
 	}
 
-	manifestPath := storagePath + "/rw-layer-manifest.img"
-	manifestFile, err := storage.Create(ctx, manifestPath)
+	manifestPath := containerd_keys.DUMP_RW_LAYER_MANIFEST_KEY
+	manifestFile, err := dump.Create(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to create manifest: %v", err)
 	}
 	defer manifestFile.Close()
 
-	manifest := map[string]interface{}{
+	manifest := map[string]any{
 		"total_nodes":     nodeCount,
 		"total_batches":   batchIndex,
 		"nodes_per_batch": NODES_PER_BATCH,
@@ -507,13 +501,13 @@ func dumpRWLayer(ctx context.Context, storage cedana_io.Storage, storagePath str
 	if err != nil {
 		return fmt.Errorf("failed to write manifest: %v", err)
 	}
-	log.Info().Int("batches", batchIndex).Int("nodes", nodeCount).Msg("wrote rw layer manifest")
+	log.Debug().Int("batches", batchIndex).Int("nodes", nodeCount).Msg("wrote rw layer manifest")
 
 	return nil
 }
 
 func writeDelimitedMessageBuffered(w *bufio.Writer, rwLayerFile *containerd_proto.RWFile) error {
-	data, err := proto_proto.Marshal(rwLayerFile)
+	data, err := proto.Marshal(rwLayerFile)
 	if err != nil {
 		return err
 	}
@@ -653,9 +647,9 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 
 	if err := pushImage(context.WithoutCancel(ctx), client, ref, username, secret); err != nil {
 		log.Error().Msgf("failed to push image: %v", err)
+	} else {
+		log.Info().Msgf("pushed image %s successful", ref)
 	}
-
-	log.Info().Msgf("pushed image %s successful", ref)
 
 	return nil
 }
