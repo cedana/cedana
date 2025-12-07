@@ -58,6 +58,12 @@ func getPodIPFromNamespace(nsPid uint32) (string, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
+	origNsFd, err := os.Open("/proc/self/ns/net")
+	if err != nil {
+		return "", err
+	}
+	defer origNsFd.Close()
+
 	nsPath := fmt.Sprintf("/proc/%d/ns/net", nsPid)
 	nsFd, err := os.Open(nsPath)
 	if err != nil {
@@ -68,6 +74,8 @@ func getPodIPFromNamespace(nsPid uint32) (string, error) {
 	if err := unix.Setns(int(nsFd.Fd()), syscall.CLONE_NEWNET); err != nil {
 		return "", err
 	}
+
+	defer unix.Setns(int(origNsFd.Fd()), syscall.CLONE_NEWNET)
 
 	ifaces, err := net.Interfaces()
 	if err != nil {
