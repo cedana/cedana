@@ -12,3 +12,8 @@ export APP_PATH="/usr/local/bin/$APP_NAME"
 export SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 USER=$(whoami)
 export USER
+
+export ENV=production
+if [ -f /.dockerenv ]; then
+    export ENV=test
+fi

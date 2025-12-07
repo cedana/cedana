@@ -9,8 +9,8 @@ INSTALL_K3S_EXEC="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
         --snapshotter=native"
-CONTAINERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
-export CONTAINERD_ADDRESS="/run/k3s/containerd/containerd.sock"
+CONTAINERD_CONFIG_PATH="/run/containerd/containerd.toml"
+export CONTAINERD_ADDRESS="/run/containerd/containerd.sock"
 CONTAINERD_NAMESPACE="k8s.io"
 
 # Function to set up k3s cluster
