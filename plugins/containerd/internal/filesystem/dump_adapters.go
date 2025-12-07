@@ -53,7 +53,7 @@ func DumpRWLayer(next types.Dump) types.Dump {
 		rwLayerErr := make(chan error, 1)
 
 		opts.CRIUCallback.Include(&criu.NotifyCallback{
-			Name: "rw-layer",
+			Name: "rw layer",
 			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
 				go func() {
 					rwLayerErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
@@ -331,7 +331,7 @@ func dumpRWLayer(ctx context.Context, dump afero.Fs, client *containerd.Client, 
 			return nil
 		}
 
-		filePath := fmt.Sprintf("rw-layer-%d.img", batchIndex)
+		filePath := fmt.Sprintf(containerd_keys.DUMP_RW_LAYER_BATCH_FORMATTER, batchIndex)
 		outFile, err := dump.Create(filePath)
 		if err != nil {
 			return fmt.Errorf("failed to create batch file %s: %v", filePath, err)
@@ -481,7 +481,7 @@ func dumpRWLayer(ctx context.Context, dump afero.Fs, client *containerd.Client, 
 		}
 	}
 
-	manifestPath := "rw-layer-manifest.img"
+	manifestPath := containerd_keys.DUMP_RW_LAYER_MANIFEST_KEY
 	manifestFile, err := dump.Create(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to create manifest: %v", err)
