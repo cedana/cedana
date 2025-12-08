@@ -469,7 +469,6 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: Nebius
-      runner: ${{ inputs.runner_gpu }}
       large: ${{ inputs.large }}
       post_summary: false # Will post consolidated summary instead
 

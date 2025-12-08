@@ -150,7 +150,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && matrix.platform != 'Nebius' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
       - uses: runs-on/action@v1
 
