@@ -119,6 +119,45 @@ EOF
     echo "$spec"
 }
 
+gpu_cmd_pod_spec () {
+    local namespace="${1:-default}"
+    local name="$2"
+    local image="$3"
+    local args="$4"
+
+    local spec=/tmp/pod-${name}.yaml
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  labels:
+    app: "$name"
+spec:
+  containers:
+  - name: "$name"
+    image: $image
+    command: ["/bin/sh", "-c"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+EOF
+
+    if [[ -n "$args" ]]; then
+        # Print args as multi-line block, indent each line correctly
+        printf "    args:\n" >> "$spec"
+        printf "      - |\n" >> "$spec"
+        while IFS= read -r line; do
+            printf "        %s\n" "$line" >> "$spec"
+        done <<< "$args"
+    fi
+
+    # debug cat "$spec"
+
+    echo "$spec"
+}
+
 # List all restored pods in a given namespace.
 # Does a simple filter on pod names containing "restored".
 list_restored_pods() {

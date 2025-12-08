@@ -64,6 +64,104 @@ teardown() {
     validate_propagator_connectivity
 }
 
+# bats test_tags=gpu
+@test "Deploy a gpu pod" {
+    local name
+    name=$(unix_nano)
+    local script
+    script=$'-c\ngpu_smr/vector_add'
+    local spec
+    spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 40
+
+    # Check if pod is running
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=600s -n "$NAMESPACE"
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
+# bats test_tags=gpu
+@test "Checkpoint a gpu pod (wait for completion, streams=$CEDANA_CHECKPOINT_STREAMS)" {
+    local name
+    name=$(unix_nano)
+    local script
+    script=$'-c\ngpu_smr/vector_add'
+    local spec
+    spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
+
+    kubectl apply -f "$spec"
+
+
+    sleep 40
+
+    # Check if pod is running
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+    fi
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
+# bats test_tags=gpu
+@test "Restore a gpu pod with original pod running (wait until running, streams=$CEDANA_CHECKPOINT_STREAMS)" {
+    local name
+    name=$(unix_nano)
+    local script
+    script=$'-c\ngpu_smr/vector_add'
+    local spec
+    spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 40
+
+    # Check if pod is running
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+
+        run restore_pod "$action_id" "$CLUSTER_ID"
+        [ "$status" -eq 0 ]
+
+        if [ $status -eq 0 ]; then
+            action_id="$output"
+            validate_action_id "$action_id"
+
+            run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
+            [ "$status" -eq 0 ]
+
+            if [ $status -eq 0 ]; then
+                local restored_pod="$output"
+                validate_pod "$NAMESPACE" "$restored_pod" 20s
+
+                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            fi
+        fi
+    fi
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
 # bats test_tags=deploy
 @test "Deploy a pod" {
     local name
