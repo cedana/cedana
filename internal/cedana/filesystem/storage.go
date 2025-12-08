@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -9,7 +10,7 @@ import (
 // Default filesystem storage
 type Storage struct{}
 
-func (s *Storage) Open(path string) (io.ReadCloser, error) {
+func (s *Storage) Open(_ context.Context, path string) (io.ReadCloser, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
@@ -17,7 +18,7 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 	return file, nil
 }
 
-func (s *Storage) Create(path string) (io.WriteCloser, error) {
+func (s *Storage) Create(_ context.Context, path string) (io.WriteCloser, error) {
 	file, err := os.Create(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
@@ -25,7 +26,7 @@ func (s *Storage) Create(path string) (io.WriteCloser, error) {
 	return file, nil
 }
 
-func (s *Storage) Delete(path string) error {
+func (s *Storage) Delete(_ context.Context, path string) error {
 	err := os.Remove(path)
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
@@ -33,7 +34,7 @@ func (s *Storage) Delete(path string) error {
 	return nil
 }
 
-func (s *Storage) IsDir(path string) (bool, error) {
+func (s *Storage) IsDir(_ context.Context, path string) (bool, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return false, fmt.Errorf("failed to stat path: %w", err)
@@ -41,7 +42,7 @@ func (s *Storage) IsDir(path string) (bool, error) {
 	return info.IsDir(), nil
 }
 
-func (s *Storage) ReadDir(path string) ([]string, error) {
+func (s *Storage) ReadDir(_ context.Context, path string) ([]string, error) {
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read directory: %w", err)

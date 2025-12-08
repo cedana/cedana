@@ -20,8 +20,8 @@ import (
 )
 
 const (
-	DEFAULT_MAX_BATCH_SIZE_JSON    = 100
-	DEFAULT_FLUSH_INTERVAL_MS_JSON = 5000 // 5 seconds
+	DEFAULT_MAX_BATCH_SIZE_JSON = 100
+	DEFAULT_FLUSH_INTERVAL      = 5 * time.Second
 )
 
 type SigNozLogEntry struct {
@@ -109,7 +109,7 @@ func InitSigNoz(ctx context.Context, wg *sync.WaitGroup, service, version string
 		resourceAttrs: resources,
 		logBuffer:     make([]SigNozLogEntry, 0, DEFAULT_MAX_BATCH_SIZE_JSON),
 		maxBatchSize:  DEFAULT_MAX_BATCH_SIZE_JSON,
-		flushInterval: time.Duration(DEFAULT_FLUSH_INTERVAL_MS_JSON) * time.Millisecond,
+		flushInterval: DEFAULT_FLUSH_INTERVAL,
 		lifetime:      ctx,
 		wg:            wg,
 	}
@@ -139,16 +139,7 @@ func (sw *SigNozWriter) Write(p []byte) (n int, err error) {
 		return len(p), nil // Consume and drop
 	}
 
-	// Timestamp
 	var tsNano int64 = time.Now().UnixNano() // Default to now
-	if tsStr, ok := zerologEntry[zerolog.TimestampFieldName].(string); ok {
-		parsedTime, err := time.Parse(ZEROLOG_TIME_FORMAT_DEFAULT, tsStr)
-		if err == nil {
-			tsNano = parsedTime.UnixNano()
-		} else {
-			fmt.Fprintf(os.Stderr, "signoz: Error parsing timestamp: %v. Using current time.\n", err)
-		}
-	}
 
 	levelStr, _ := zerologEntry[zerolog.LevelFieldName].(string)
 	parsedLevel, _ := zerolog.ParseLevel(levelStr) // Handles error by defaulting to NoLevel
@@ -163,7 +154,7 @@ func (sw *SigNozWriter) Write(p []byte) (n int, err error) {
 	attributes := make(map[string]string)
 
 	for k, v := range zerologEntry {
-		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName {
+		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName || k == zerolog.ErrorFieldName {
 			continue
 		}
 		switch k {
