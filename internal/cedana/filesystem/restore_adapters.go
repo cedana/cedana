@@ -62,7 +62,7 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 					return err
 				}
 
-				tarball, err := storage.Open(path)
+				tarball, err := storage.Open(ctx, path)
 				if err != nil {
 					return fmt.Errorf("failed to open dump file: %v", err)
 				}

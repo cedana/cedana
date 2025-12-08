@@ -57,6 +57,9 @@ type (
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 		// Streams specifies the number of parallel streams to use when checkpointing.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
+		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
+		// checkpoint reqeust to return early.
+		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
 	}
 
 	DB struct {

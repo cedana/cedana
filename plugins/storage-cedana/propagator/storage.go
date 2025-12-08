@@ -17,7 +17,6 @@ const PATH_PREFIX = "cedana://"
 
 // Cedana managed storage
 type Storage struct {
-	ctx context.Context
 	*v2.V2RequestBuilder
 }
 
@@ -26,16 +25,16 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 	authToken := config.Global.Connection.AuthToken
 
 	// Creating the client is no extra compute/work as this is not a durable connection
-	return &Storage{ctx, sdk.NewCedanaClient(url, authToken).V2()}, nil
+	return &Storage{sdk.NewCedanaClient(url, authToken).V2()}, nil
 }
 
-func (s *Storage) Open(path string) (io.ReadCloser, error) {
+func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) {
 	path, err := s.sanitizePath(path)
 	if err != nil {
 		return nil, err
 	}
 
-	downloadUrl, err := s.Files().ByPath(path).Get(s.ctx, nil)
+	downloadUrl, err := s.Files().ByPath(path).Get(ctx, nil)
 	if err != nil {
 		switch v := err.(type) {
 		case *models.HttpError:
@@ -45,16 +44,16 @@ func (s *Storage) Open(path string) (io.ReadCloser, error) {
 		}
 	}
 
-	return NewDownloadableFile(s.ctx, *downloadUrl), nil
+	return NewDownloadableFile(ctx, *downloadUrl), nil
 }
 
-func (s *Storage) Create(path string) (io.WriteCloser, error) {
+func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, error) {
 	path, err := s.sanitizePath(path)
 	if err != nil {
 		return nil, err
 	}
 
-	uploadUrl, err := s.Files().ByPath(path).Put(s.ctx, nil)
+	uploadUrl, err := s.Files().ByPath(path).Put(ctx, nil)
 	if err != nil {
 		switch v := err.(type) {
 		case *models.HttpError:
@@ -64,10 +63,10 @@ func (s *Storage) Create(path string) (io.WriteCloser, error) {
 		}
 	}
 
-	return NewUploadableFile(s.ctx, *uploadUrl), nil
+	return NewUploadableFile(ctx, *uploadUrl), nil
 }
 
-func (s *Storage) Delete(path string) error {
+func (s *Storage) Delete(_ context.Context, path string) error {
 	path, err := s.sanitizePath(path)
 	if err != nil {
 		return err
@@ -76,7 +75,7 @@ func (s *Storage) Delete(path string) error {
 	return fmt.Errorf("this operation is currently not supported for cedana storage")
 }
 
-func (s *Storage) IsDir(path string) (bool, error) {
+func (s *Storage) IsDir(_ context.Context, path string) (bool, error) {
 	path, err := s.sanitizePath(path)
 	if err != nil {
 		return false, err
@@ -85,13 +84,13 @@ func (s *Storage) IsDir(path string) (bool, error) {
 	return true, nil // Cedana storage does not differentiate between files and directories
 }
 
-func (s *Storage) ReadDir(path string) ([]string, error) {
+func (s *Storage) ReadDir(ctx context.Context, path string) ([]string, error) {
 	path, err := s.sanitizePath(path)
 	if err != nil {
 		return nil, err
 	}
 
-	list, err := s.Files().Dir().ByPath(path).Get(s.ctx, nil)
+	list, err := s.Files().Dir().ByPath(path).Get(ctx, nil)
 	if err != nil {
 		switch v := err.(type) {
 		case *models.HttpError:
