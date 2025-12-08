@@ -80,7 +80,6 @@ create_nebius_nodegroup() {
             --parent-id "$NB_CLUSTER_ID" \
             --template-boot-disk-size-bytes 137438953472 \
             --fixed-node-count 1 \
-            --template-gpu-settings-drivers-preset cuda12
             --template-resources-platform "gpu-h100-sxm" \
             --template-resources-preset "1gpu-16vcpu-200gb" \
             --template-network-interfaces "[{\"public_ip_address\": {},\"subnet_id\": \"$NB_SUBNET_ID\"}]"
