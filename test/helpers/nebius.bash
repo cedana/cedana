@@ -103,6 +103,16 @@ teardown_cluster() {
     fi
 }
 
+setup_nvidia_operator() {
+    debug_log "Install nvidia operator"
+
+    helm install --wait --generate-name \
+        -n gpu-operator --create-namespace \
+        nvidia/gpu-operator \
+        --version=v25.3.4 --set driver.version=570.195.03
+
+    debug_log "Nvidia operator has been installed successfully"
+}
 setup_cluster() {
 
     install_nebius_cli
@@ -115,4 +125,6 @@ setup_cluster() {
     nebius mk8s cluster get-credentials --id "$NB_CLUSTER_ID" --external
 
     debug_log "Nebius mk8 kubeconfig file has been fetched"
+
+    setup_nvidia_operator
 }
