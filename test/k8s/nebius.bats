@@ -75,7 +75,11 @@ teardown() {
 
     kubectl apply -f "$spec"
 
-    sleep 40
+    sleep 60
+
+    # DEBUG: Check pod status
+    kubectl get pod "$name" -n "$NAMESPACE" >&3
+    kubectl describe pod "$name" -n "$NAMESPACE" >&3
 
     # Check if pod is running
     kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=600s -n "$NAMESPACE"
@@ -88,7 +92,7 @@ teardown() {
     local name
     name=$(unix_nano)
     local script
-    script=$'-c\ngpu_smr/vector_add'
+    script=$'\ngpu_smr/vector_add'
     local spec
     spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
 
@@ -119,7 +123,7 @@ teardown() {
     local name
     name=$(unix_nano)
     local script
-    script=$'-c\ngpu_smr/vector_add'
+    script=$'\ngpu_smr/vector_add'
     local spec
     spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
 
