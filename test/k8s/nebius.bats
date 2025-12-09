@@ -69,7 +69,7 @@ teardown() {
     local name
     name=$(unix_nano)
     local script
-    script=$'-c\ngpu_smr/vector_add'
+    script=$'\ngpu_smr/vector_add'
     local spec
     spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
 
