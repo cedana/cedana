@@ -95,11 +95,13 @@ run_step() {
     echo "--- Completed: $name ---"
 }
 
-run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
+if [ "$ENV" != "test" ]; then
+    run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
+fi
 run_step "install plugins" "$DIR/k8s-install-plugins.sh"     # install the plugins (including shim)
 run_step "configure shm" "$DIR/shm-configure.sh"             # configure shm
 
-if [ -f /.dockerenv ]; then # for tests
+if [ "$ENV" == "test" ]; then
     pkill -f 'cedana daemon' || true
     $APP_PATH daemon start &>/var/log/cedana-daemon.log &
 else
