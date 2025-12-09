@@ -102,7 +102,7 @@ jobs:
       matrix.cr,
       matrix.storage
       ) }}
-    timeout-minutes: 30
+    timeout-minutes: 50
     needs: propagator-connectivity
     strategy:
       fail-fast: true

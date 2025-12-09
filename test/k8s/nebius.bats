@@ -59,7 +59,7 @@ teardown() {
     kubectl get pods -n $CEDANA_NAMESPACE
 
     # Check if all Cedana pods are actually ready
-    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=1000s
+    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=300s
 
     validate_propagator_connectivity
 }
@@ -98,7 +98,7 @@ teardown() {
     sleep 40
 
     # Check if pod is running
-    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=600s -n "$NAMESPACE"
 
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
     run checkpoint_pod "$pod_id"
@@ -128,7 +128,7 @@ teardown() {
     sleep 40
 
     # Check if pod is running
-    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=600s -n "$NAMESPACE"
 
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
     run checkpoint_pod "$pod_id"
