@@ -56,6 +56,7 @@ const (
 	DEFAULT_GPU_DEBUG       = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
+	DEFAULT_CRIU_LEAVE_STOPPED  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
@@ -103,6 +104,7 @@ var Global Config = Config{
 	},
 	CRIU: CRIU{
 		LeaveRunning:  DEFAULT_CRIU_LEAVE_RUNNING,
+		LeaveStopped:  DEFAULT_CRIU_LEAVE_STOPPED,
 		ManageCgroups: DEFAULT_CRIU_MANAGE_CGROUPS,
 	},
 	Plugins: Plugins{
