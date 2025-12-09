@@ -54,7 +54,7 @@ start_cluster() {
     fi
 
     debug_log "k3s binary found, starting k3s..."
-    debug eval "k3s $INSTALL_K3S_EXEC" &
+    eval "k3s $INSTALL_K3S_EXEC" &> /dev/null &
 
     debug_log "Waiting for k3s cluster to start..."
 
@@ -80,8 +80,8 @@ stop_cluster() {
 
     debug_log "Stopping k3s processes..."
     pkill k3s || true
-    pkill containerd-shim-runc-v2 || true
-    pkill cedana-shim-runc-v2 || true
+    pkill -f containerd-shim-runc-v2 || true
+    pkill -f cedana-shim-runc-v2 || true
     pkill kubectl || true
 
     sleep 2
