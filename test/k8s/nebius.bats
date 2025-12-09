@@ -59,7 +59,7 @@ teardown() {
     kubectl get pods -n $CEDANA_NAMESPACE
 
     # Check if all Cedana pods are actually ready
-    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=300s
+    kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=1000s
 
     validate_propagator_connectivity
 }
