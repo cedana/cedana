@@ -4,26 +4,21 @@
 ### K3s Helpers ###
 ###################
 
+CONTAINERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
+export CONTAINERD_ADDRESS="/run/k3s/containerd/containerd.sock"
+CONTAINERD_NAMESPACE="k8s.io"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 INSTALL_K3S_EXEC="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
         --snapshotter=native"
-CONTAINERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
-export CONTAINERD_ADDRESS="/run/k3s/containerd/containerd.sock"
-CONTAINERD_NAMESPACE="k8s.io"
 
 # Function to set up k3s cluster
 setup_cluster() {
     debug_log "Installing k3s cluster..."
 
-    wget https://get.k3s.io -O /tmp/k3s-install.sh
-    chmod +x /tmp/k3s-install.sh
-
-    if ! /tmp/k3s-install.sh &> /dev/null; then
-        debug_log "Installer failed, will try the binary directly"
-        start_cluster
-    fi
+    download_k3s
+    start_cluster
 
     # XXX: The tar in busybox is incompatible with CRIU
     rm /var/lib/rancher/k3s/data/current/bin/tar
@@ -85,8 +80,8 @@ stop_cluster() {
 
     debug_log "Stopping k3s processes..."
     pkill k3s || true
-    pkill containerd-shim-runc-v2 || true
-    pkill cedana-shim-runc-v2 || true
+    pkill -f containerd-shim-runc-v2 || true
+    pkill -f cedana-shim-runc-v2 || true
     pkill kubectl || true
 
     sleep 2
@@ -118,6 +113,32 @@ teardown_cluster() {
     debug_log "k3s teardown complete"
 }
 
+download_k3s() {
+    debug_log "Downloading k3s binary..."
+
+    local arch
+    arch=$(uname -m)
+    local binary_name
+
+    case "$arch" in
+        x86_64)
+            binary_name="k3s"
+            ;;
+        aarch64|arm64)
+            binary_name="k3s-arm64"
+            ;;
+        *)
+            error_log "Unsupported architecture: $arch. Only x86_64 and arm64/aarch64 are supported."
+            return 1
+            ;;
+    esac
+
+    wget "https://github.com/k3s-io/k3s/releases/download/v1.34.2%2Bk3s1/$binary_name" -O /usr/local/bin/k3s
+    chmod +x /usr/local/bin/k3s
+
+    debug_log "Downloaded k3s binary"
+}
+
 preinstall_containerd_runtime() {
     debug_log "Pre-installing containerd runtime for k3s..."
 
@@ -142,6 +163,8 @@ preinstall_containerd_runtime() {
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+[plugins.'io.containerd.cri.v1.images']
+  use_local_image_pull = true
 END_CAT
     fi
 
