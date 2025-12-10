@@ -71,7 +71,7 @@ var (
 		client.LoadContainer[daemon.DumpReq, daemon.DumpResp],
 		filesystem.DumpRWLayer,
 		filesystem.DumpImageName,
-		network.DumpPodIP,
+		network.DumpNetnsEth0IPv4Addr,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}

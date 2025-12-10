@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-func DumpPodIP(next types.Dump) types.Dump {
+func DumpNetnsEth0IPv4Addr(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 		if !ok {
@@ -38,15 +38,15 @@ func DumpPodIP(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to get container pid")
 		}
 
-		podIP, err := getPodIPFromNamespace(jobPid)
+		netnsEth0IPv4Addr, err := getNetnsEth0IPv4Addr(jobPid)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get pod IP from container pid %d: %v", jobPid, err)
+			return nil, status.Errorf(codes.Internal, "failed to get netns eth0 IPv4 address from container pid %d: %v", jobPid, err)
 		}
 
 		if opts.DumpFs != nil {
-			log.Info().Msgf("Dumping pod IP %s to file", podIP)
-			if err := writePodIPToFile(opts.DumpFs, podIP); err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to write pod IP to file: %v", err)
+			log.Info().Msgf("Dumping netns eth0 IPv4 address %s to file", netnsEth0IPv4Addr)
+			if err := writeNetnsEth0IPv4AddrFile(opts.DumpFs, netnsEth0IPv4Addr); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to write netns eth0 IPv4 address to file: %v", err)
 			}
 		}
 
@@ -54,7 +54,7 @@ func DumpPodIP(next types.Dump) types.Dump {
 	}
 }
 
-func getPodIPFromNamespace(nsPid uint32) (string, error) {
+func getNetnsEth0IPv4Addr(nsPid uint32) (string, error) {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -104,15 +104,15 @@ func getPodIPFromNamespace(nsPid uint32) (string, error) {
 	return "", fmt.Errorf("no IP found")
 }
 
-func writePodIPToFile(fs afero.Fs, podIP string) error {
-	f, err := fs.Create(containerd_keys.DUMP_PODIP_KEY)
+func writeNetnsEth0IPv4AddrFile(fs afero.Fs, netnsEth0IPv4Addr string) error {
+	f, err := fs.Create(containerd_keys.DUMP_NETNS_ETH0_IPV4ADDR_KEY)
 	if err != nil {
-		return fmt.Errorf("failed to create pod-ip file: %w", err)
+		return fmt.Errorf("failed to create netns eth0 IPv4 address file: %w", err)
 	}
 	defer f.Close()
 
-	if _, err := f.Write([]byte(podIP)); err != nil {
-		return fmt.Errorf("failed to write pod IP to file: %w", err)
+	if _, err := f.Write([]byte(netnsEth0IPv4Addr)); err != nil {
+		return fmt.Errorf("failed to write netns eth0 IPv4 address to file: %w", err)
 	}
 
 	return nil
