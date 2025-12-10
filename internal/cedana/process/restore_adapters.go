@@ -157,8 +157,12 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					key = fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev)
 					fd = int32(f.Fd)
 				} else {
-					key = fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode)
-					fd = int32(f.Fd)
+					if f.MountID == 0 && f.Inode == 0 {
+						log.Warn().Msgf("skipping open file %s with fd %d which has invalid mountID/inode", f.Path, f.Fd)
+					} else {
+						key = fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode)
+						fd = int32(f.Fd)
+					}
 				}
 				log.Warn().Msgf("inherited external file %s with fd %d. assuming it still exists", f.Path, f.Fd)
 
