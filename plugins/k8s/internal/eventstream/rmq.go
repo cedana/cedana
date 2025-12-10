@@ -130,11 +130,11 @@ type checkpointReq struct {
 }
 
 type checkpointOverrides struct {
-	CRIUOpts      string `json:"criu_opts"`
-	GPUFreezeType string `json:"gpu_freeze_type"`
-	Compression   string `json:"compression"`
-	Streams       int    `json:"streams"`
-	Async         bool   `json:"asynchronous"`
+	CRIUOpts      *criu.CriuOpts `json:"criu_opts"`
+	GPUFreezeType string         `json:"gpu_freeze_type"`
+	Compression   string         `json:"compression"`
+	Streams       int            `json:"streams"`
+	Async         bool           `json:"asynchronous"`
 }
 
 type checkpointInfo struct {
@@ -263,13 +263,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				},
 			}
 			if req.Overrides != nil {
-				criuOpts := &criu.CriuOpts{}
-				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
-				} else {
-					dumpReq.Criu = criuOpts
-				}
+				dumpReq.Criu = req.Overrides.CRIUOpts
 				dumpReq.GPUFreezeType = req.Overrides.GPUFreezeType
 				dumpReq.Compression = req.Overrides.Compression
 				dumpReq.Streams = int32(req.Overrides.Streams)
