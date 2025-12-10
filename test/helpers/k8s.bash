@@ -135,6 +135,7 @@ metadata:
   labels:
     app: "$name"
 spec:
+  runtimeClassName: cedana
   containers:
   - name: "$name"
     image: $image
@@ -153,7 +154,7 @@ EOF
         done <<< "$args"
     fi
 
-    # debug cat "$spec"
+    debug cat "$spec"
 
     echo "$spec"
 }
