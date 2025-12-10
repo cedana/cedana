@@ -264,7 +264,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			}
 			if req.Overrides != nil {
 				var criuOpts criu.CriuOpts
-				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), &criuOpts)
+				err = proto.Unmarshal([]byte(req.Overrides.CRIUOpts), &criuOpts)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
 				} else {
