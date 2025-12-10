@@ -46,7 +46,13 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	criuOpts := req.GetCriu()
 
 	// Set CRIU server
-	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
+	var logFilePath string
+	if config.Global.CRIU.LeaveStopped {
+		logFilePath = filepath.Join("/tmp", CRIU_RESTORE_LOG_FILE)
+	} else {
+		logFilePath = CRIU_RESTORE_LOG_FILE
+	}
+	criuOpts.LogFile = proto.String(logFilePath)
 	
 	// Enable debug logging if LeaveStopped is enabled via config
 	if config.Global.CRIU.LeaveStopped {
@@ -121,9 +127,17 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	end()
 
+	// Log file location depends on whether LeaveStopped is enabled
+	var logFileFullPath string
+	if config.Global.CRIU.LeaveStopped {
+		logFileFullPath = filepath.Join("/tmp", CRIU_RESTORE_LOG_FILE)
+	} else {
+		logFileFullPath = filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE)
+	}
+	
 	logging.FromFile(
 		log.WithContext(ctx),
-		filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE),
+		logFileFullPath,
 		zerolog.TraceLevel,
 	)
 
