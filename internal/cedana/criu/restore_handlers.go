@@ -120,6 +120,16 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	)
 
 	if err != nil {
+		// Copy log file to checkpoint directory when LeaveStopped is enabled and restore fails
+		if config.Global.CRIU.LeaveStopped {
+			destPath := filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE)
+			if copyErr := utils.CopyFile(logFileFullPath, destPath); copyErr != nil {
+				log.Warn().Err(copyErr).Str("src", logFileFullPath).Str("dest", destPath).Msg("failed to copy restore log to checkpoint dir")
+			} else {
+				log.Debug().Str("dest", destPath).Msg("copied restore log to checkpoint dir")
+			}
+		}
+
 		// NOTE: It's possible that after the restore failed, the process
 		// exists as a zombie process. We need to reap it.
 		if pid := resp.GetState().GetPID(); pid != 0 {
