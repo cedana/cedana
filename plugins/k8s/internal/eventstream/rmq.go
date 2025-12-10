@@ -196,7 +196,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			log.Trace().Msg("no containers found in pod for checkpoint request")
 			return rabbitmq.Ack
 		}
-		log.Info().Int("containers", len(containers)).Interface("overrides", req.Overrides).Msg("found container(s) in pod to checkpoint")
+		log.Info().Int("containers", len(containers)).Msg("found container(s) in pod to checkpoint")
 
 		checkpointIdMap := make(map[int]string)
 		specMap := make(map[int]*specs.Spec)
@@ -264,7 +264,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			}
 			if req.Overrides != nil {
 				var criuOpts criu.CriuOpts
-				err = proto.Unmarshal([]byte(req.Overrides.CRIUOpts), &criuOpts)
+				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), &criuOpts)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
 				} else {
@@ -275,6 +275,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				dumpReq.Streams = int32(req.Overrides.Streams)
 				dumpReq.Async = req.Overrides.Async
 			}
+			log.Info().Str("container", container.ID).Msg("prepared dump request for container")
 			dumpReqs = append(dumpReqs, dumpReq)
 		}
 
