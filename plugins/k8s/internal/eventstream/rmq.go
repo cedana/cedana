@@ -196,7 +196,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			log.Trace().Msg("no containers found in pod for checkpoint request")
 			return rabbitmq.Ack
 		}
-		log.Info().Int("containers", len(containers)).Msg("found container(s) in pod to checkpoint")
+		log.Info().Int("containers", len(containers)).Interface("overrides", req.Overrides).Msg("found container(s) in pod to checkpoint")
 
 		checkpointIdMap := make(map[int]string)
 		specMap := make(map[int]*specs.Spec)
