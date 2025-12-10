@@ -22,6 +22,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
+	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
@@ -119,13 +120,21 @@ func (es *EventStream) StartCheckpointsPublisher(ctx context.Context) error {
 /////////////
 
 type checkpointReq struct {
-	PodName       string        `json:"pod_name"`
-	RuncRoot      string        `json:"runc_root"`
-	Namespace     string        `json:"namespace"`
-	Kind          string        `json:"kind"`
-	ActionId      string        `json:"action_id"`
-	GPUFreezeType string        `json:"gpu_freeze_type"`
-	CRIUOpts      criu.CriuOpts `json:"criu_opts"`
+	PodName   string `json:"pod_name"`
+	RuncRoot  string `json:"runc_root"`
+	Namespace string `json:"namespace"`
+	Kind      string `json:"kind"`
+	ActionId  string `json:"action_id"`
+
+	Overrides *checkpointOverrides `json:"overrides"`
+}
+
+type checkpointOverrides struct {
+	CRIUOpts      string `json:"criu_opts"`
+	GPUFreezeType string `json:"gpu_freeze_type"`
+	Compression   string `json:"compression"`
+	Streams       int    `json:"streams"`
+	Async         bool   `json:"asynchronous"`
 }
 
 type checkpointInfo struct {
@@ -242,13 +251,29 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		var dumpReqs []*daemon.DumpReq
 		for i, container := range containers {
 			dumpReq := &daemon.DumpReq{
-				Name:          checkpointIdMap[i],
-				Type:          "containerd",
-				GPUFreezeType: req.GPUFreezeType,
-				Criu:          &req.CRIUOpts,
+				Name: checkpointIdMap[i],
+				Type: "containerd",
+				Criu: &criu.CriuOpts{
+					LeaveRunning:    proto.Bool(true),
+					TcpEstablished:  proto.Bool(true),
+					TcpSkipInFlight: proto.Bool(true),
+				},
 				Details: &daemon.Details{
 					Containerd: container,
 				},
+			}
+			if req.Overrides != nil {
+				var criuOpts criu.CriuOpts
+				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), &criuOpts)
+				if err != nil {
+					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
+				} else {
+					dumpReq.Criu = &criuOpts
+				}
+				dumpReq.GPUFreezeType = req.Overrides.GPUFreezeType
+				dumpReq.Compression = req.Overrides.Compression
+				dumpReq.Streams = int32(req.Overrides.Streams)
+				dumpReq.Async = req.Overrides.Async
 			}
 			dumpReqs = append(dumpReqs, dumpReq)
 		}
