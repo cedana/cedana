@@ -9,6 +9,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
@@ -46,7 +47,14 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	// Set CRIU server
 	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
-	criuOpts.LogLevel = proto.Int32(logLevel())
+	
+	// Enable debug logging if LeaveStopped is enabled via config
+	if config.Global.CRIU.LeaveStopped {
+		criuOpts.LogLevel = proto.Int32(4)
+	} else {
+		criuOpts.LogLevel = proto.Int32(logLevel())
+	}
+	
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.LogToStderr = proto.Bool(false)
 
