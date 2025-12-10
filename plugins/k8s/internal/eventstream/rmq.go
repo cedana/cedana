@@ -126,7 +126,7 @@ type checkpointReq struct {
 	Kind      string `json:"kind"`
 	ActionId  string `json:"action_id"`
 
-	Overrides *checkpointOverrides `json:"overrides"`
+	Overrides *checkpointOverrides `json:"overrides,omitempty"`
 }
 
 type checkpointOverrides struct {
