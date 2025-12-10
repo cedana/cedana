@@ -263,19 +263,19 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				},
 			}
 			if req.Overrides != nil {
-				var criuOpts criu.CriuOpts
-				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), &criuOpts)
+				criuOpts := &criu.CriuOpts{}
+				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
 				} else {
-					dumpReq.Criu = &criuOpts
+					dumpReq.Criu = criuOpts
 				}
 				dumpReq.GPUFreezeType = req.Overrides.GPUFreezeType
 				dumpReq.Compression = req.Overrides.Compression
 				dumpReq.Streams = int32(req.Overrides.Streams)
 				dumpReq.Async = req.Overrides.Async
 			}
-			log.Info().Str("container", container.ID).Msg("prepared dump request for container")
+			log.Info().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
 			dumpReqs = append(dumpReqs, dumpReq)
 		}
 
