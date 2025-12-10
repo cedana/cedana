@@ -22,7 +22,6 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
-	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
@@ -120,12 +119,13 @@ func (es *EventStream) StartCheckpointsPublisher(ctx context.Context) error {
 /////////////
 
 type checkpointReq struct {
-	PodName       string `json:"pod_name"`
-	RuncRoot      string `json:"runc_root"`
-	Namespace     string `json:"namespace"`
-	Kind          string `json:"kind"`
-	ActionId      string `json:"action_id"`
-	GPUFreezeType string `json:"gpu_freeze_type"`
+	PodName       string        `json:"pod_name"`
+	RuncRoot      string        `json:"runc_root"`
+	Namespace     string        `json:"namespace"`
+	Kind          string        `json:"kind"`
+	ActionId      string        `json:"action_id"`
+	GPUFreezeType string        `json:"gpu_freeze_type"`
+	CRIUOpts      criu.CriuOpts `json:"criu_opts"`
 }
 
 type checkpointInfo struct {
@@ -245,11 +245,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				Name:          checkpointIdMap[i],
 				Type:          "containerd",
 				GPUFreezeType: req.GPUFreezeType,
-				Criu: &criu.CriuOpts{
-					LeaveRunning:    proto.Bool(true),
-					TcpEstablished:  proto.Bool(true),
-					TcpSkipInFlight: proto.Bool(true),
-				},
+				Criu:          &req.CRIUOpts,
 				Details: &daemon.Details{
 					Containerd: container,
 				},
