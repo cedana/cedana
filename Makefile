@@ -222,7 +222,7 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
         fi; \
 		if [ "$(GPU)" = "1" ]; then \
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
-			$(DOCKER_TEST_CREATE_CUDA) ;\
+			$(DOCKER_TEST_CREATE_NO_PLUGINS_CUDA) ;\
 			$(DOCKER_TEST_START) ;\
 			$(DOCKER_TEST_EXEC) make test-k8s \
 				ARGS=$(ARGS) \
@@ -240,7 +240,7 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 			$(DOCKER_TEST_REMOVE) ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
-			$(DOCKER_TEST_CREATE) ;\
+			$(DOCKER_TEST_CREATE_NO_PLUGINS) ;\
 			$(DOCKER_TEST_START) ;\
 			$(DOCKER_TEST_EXEC) make test-k8s \
 				ARGS=$(ARGS) \
@@ -281,7 +281,7 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 	fi ;\
 
 test-k9s: ## Enter k9s in the test environment
-	$(DOCKER_TEST_EXEC) k9s ;\
+	$(DOCKER_TEST_EXEC) k9s -A --logoless --splashless ;\
 
 ##########
 ##@ Docker
@@ -323,14 +323,18 @@ DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE)
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_BIN_COPY_CRIU) && \
 						$(HELM_CHART_COPY) >/dev/null
+DOCKER_TEST_CREATE_NO_PLUGINS=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
+						$(HELM_CHART_COPY) >/dev/null
 DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_LIB_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
+DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
+						$(HELM_CHART_COPY) >/dev/null
 
-docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
+docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
 	@echo "Building helper Docker image..."
 	docker buildx build --platform $(PLATFORM) \
 		--build-arg PREBUILT_BINARIES=$(PREBUILT_BINARIES) \
@@ -338,23 +342,23 @@ docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
 		--build-arg VERSION=$(VERSION) \
 		-t $(DOCKER_IMAGE) --load . ;\
 
-docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64)
+docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE=<image>)
 	@echo "Building test Docker image..."
 	cd test ;\
 	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE) --load . ;\
 	cd -
 
-docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
+docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE_CUDA=<image>)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
 	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
-docker-test-push: ## Push the test Docker image (PLATFORM=linux/amd64,linux/arm64)
+docker-test-push: ## Push the test Docker image (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE=<image>)
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-cuda-push: ## Push the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
+docker-test-cuda-push: ## Push the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE_CUDA=<image>)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 
