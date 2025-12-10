@@ -388,7 +388,7 @@ func dumpRWLayer(ctx context.Context, dump afero.Fs, client *containerd.Client, 
 		}
 
 		if xattrSize == 0 {
-			log.Debug().Str("file", node.path).Msg("no xattrs found")
+			log.Trace().Str("file", node.path).Msg("no xattrs found")
 		}
 
 		xattrList := make([]byte, xattrSize)
@@ -439,9 +439,9 @@ func dumpRWLayer(ctx context.Context, dump afero.Fs, client *containerd.Client, 
 			rwLayerFile.SetDevMajor(unix.Major(stat.Rdev))
 			rwLayerFile.SetDevMinor(unix.Minor(stat.Rdev))
 		} else if node.fi.Mode().IsDir() {
-			log.Debug().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("directory in rw layer")
+			log.Trace().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("directory in rw layer")
 		} else if node.fi.Mode().IsRegular() {
-			log.Debug().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("regular file in rw layer")
+			log.Trace().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("regular file in rw layer")
 		} else {
 			log.Warn().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("unsupported file type in rw layer, skipping")
 			return nil
