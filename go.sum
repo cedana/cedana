@@ -8,8 +8,12 @@ buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20251105083538-89f6e36730b9.2 h1:V
 buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20251105083538-89f6e36730b9.2/go.mod h1:9q0nzcNP359nysYCUoKkgSLIEDmqFAhPgL1JaYQfSds=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-086c10836add.1 h1:rmO0eWVTyRJ0vHB7mdtCdvbshOSNtiKam2i9KG3zzec=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-086c10836add.1/go.mod h1:u/LQM+dHJ0eMvEotu+BFRg93ePdA7oR994bsh4JQdj4=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251210183443-4d040457b4e7.1 h1:6Q5igz5JUJ5Yw+KnQGp0Bu2bJ2f2Q4RDn/kkZawFOTI=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251210183443-4d040457b4e7.1/go.mod h1:yCrVT3Hd73xIuPSNUCwq3IRgO4nLSVKpM5CGb2ZplZk=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251105083538-53c7c62fed79.1 h1:9sGe1N+BhRYufzyzt+rUU6tsiDgWDZzZEBGHWEMOWuw=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251105083538-53c7c62fed79.1/go.mod h1:Pw6ULXMjHBhDrWH9RZpsQXnGPlTVvx09ki+wsLQP4XU=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251210183443-f6beafc23c40.1 h1:S/aML2wRSBteFDGfjEa2kyHWGMKXGLLfMAO0qPpOJ/Q=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251210183443-f6beafc23c40.1/go.mod h1:Pw6ULXMjHBhDrWH9RZpsQXnGPlTVvx09ki+wsLQP4XU=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 h1:bvDV9vkmnHYOMsOr4WLk+Vo07yKIzd94sVoIqshQ4bU=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24/go.mod h1:8o94RPi1/7XTJvwPpRSzSUedZrtlirdB3r9Z20bi2f8=
