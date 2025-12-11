@@ -11,7 +11,6 @@ import (
 	"github.com/cedana/cedana/plugins/containerd/internal/defaults"
 	"github.com/cedana/cedana/plugins/containerd/internal/filesystem"
 	"github.com/cedana/cedana/plugins/containerd/internal/gpu"
-	"github.com/cedana/cedana/plugins/containerd/internal/network"
 	"github.com/cedana/cedana/plugins/containerd/internal/runtime"
 	"github.com/cedana/cedana/plugins/containerd/internal/validation"
 	"github.com/jedib0t/go-pretty/v6/text"
@@ -71,7 +70,6 @@ var (
 		client.LoadContainer[daemon.DumpReq, daemon.DumpResp],
 		filesystem.DumpRWLayer,
 		filesystem.DumpImageName,
-		network.DumpNetnsEth0IPv4Addr,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}
