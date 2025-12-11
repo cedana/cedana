@@ -43,7 +43,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 
-		async := config.Global.Checkpoint.Async && storage.IsRemote()
+		async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
 
 		// If remote storage, we instead use a temporary directory for CRIU
 		if storage.IsRemote() {
