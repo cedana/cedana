@@ -274,6 +274,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
+		"CUDA_VISIBLE_DEVICES=0", // TODO: REMOVE
 		"LD_LIBRARY_PATH="+ldPath,
 	)
 
