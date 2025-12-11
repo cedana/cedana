@@ -117,6 +117,14 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			})
 		}
 
+		internalMounts := make(map[uint64]any)
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+			if m.Major == 0 {
+				internalMounts[m.ID] = nil
+			}
+			return true
+		})
+
 		var toClose []*os.File
 		var logDir string
 
@@ -128,9 +136,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			var newFile *os.File
 			var pid int
 
+			isPipe := strings.HasPrefix(file.Path, "pipe")
+			isSocket := strings.HasPrefix(file.Path, "socket")
+			isAnon := strings.HasPrefix(file.Path, "anon_inode")
+			_, internal := internalMounts[file.MountID]
+
+			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
+
 			hostmemRegex := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
-			interceptorLogRegex := regexp.MustCompile(fmt.Sprintf(INTERCEPTOR_LOG_FILE_PATTERN, config.Global.GPU.LogDir))
-			tracerLogRegex := regexp.MustCompile(fmt.Sprintf(TRACER_LOG_FILE_PATTERN, config.Global.GPU.LogDir))
+			interceptorLogRegex := regexp.MustCompile(INTERCEPTOR_LOG_FILE_PATTERN)
+			tracerLogRegex := regexp.MustCompile(TRACER_LOG_FILE_PATTERN)
 
 			if matches := hostmemRegex.FindStringSubmatch(path); id != "" && len(matches) == 3 {
 				pid, err = strconv.Atoi(matches[2])
@@ -139,9 +154,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
-			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 3 {
-				oldId := matches[1]
-				pid, err = strconv.Atoi(matches[2])
+			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
+				oldId := matches[2]
+				pid, err = strconv.Atoi(matches[3])
 				if err != nil {
 					err = status.Errorf(codes.Internal, "failed to parse PID from interceptor log file path %s: %v", path, err)
 					return false
@@ -155,9 +170,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 				newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
-			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 3 {
-				oldId := matches[1]
-				pid, err = strconv.Atoi(matches[2])
+			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 4 {
+				oldId := matches[2]
+				pid, err = strconv.Atoi(matches[3])
 				if err != nil {
 					err = status.Errorf(codes.Internal, "failed to parse PID from tracer log file path %s: %v", path, err)
 					return false
@@ -181,12 +196,19 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				return false
 			}
 
-			key = strings.TrimPrefix(path, "/")
+			if external {
+				key = fmt.Sprintf("file[%x:%x]", file.MountID, file.Inode)
+			} else {
+				key = strings.TrimPrefix(path, "/")
+			}
 			fd = int32(3 + len(extraFiles))
 
 			if _, ok := inheritFdMap[key]; ok {
 				return true // already inherited
 			}
+
+			log.Debug().Str("key", key).Int32("fd", fd).Bool("external", external).Str("old", path).Str("new", newPath).Msgf("inheriting file")
+
 			inheritFdMap[key] = fd
 			extraFiles = append(extraFiles, newFile)
 			toClose = append(toClose, newFile)
