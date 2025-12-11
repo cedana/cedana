@@ -39,7 +39,7 @@ teardown_file() {
     # Clean up any leftover PVs from tests
     kubectl delete pv --all --wait=false || true
     helm_uninstall_cedana $CEDANA_NAMESPACE
-    teardown_cluster &> /dev/null
+    # teardown_cluster &> /dev/null
     deregister_cluster "$CLUSTER_ID"
 }
 
