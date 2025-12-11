@@ -24,7 +24,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
 	github.com/mattn/go-isatty v0.0.20
