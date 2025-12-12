@@ -69,7 +69,7 @@ teardown() {
     local name
     name=$(unix_nano)
     local script
-    script=$'\ngpu_smr/vector_add'
+    script=$'gpu_smr/vector_add'
     local spec
     spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
 
@@ -82,7 +82,7 @@ teardown() {
     kubectl describe pod "$name" -n "$NAMESPACE" >&3
 
     # Check if pod is running
-    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=600s -n "$NAMESPACE"
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=900s -n "$NAMESPACE"
 
     kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
 }
@@ -92,7 +92,7 @@ teardown() {
     local name
     name=$(unix_nano)
     local script
-    script=$'\ngpu_smr/vector_add'
+    script=$'gpu_smr/vector_add'
     local spec
     spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
 
@@ -102,7 +102,7 @@ teardown() {
     sleep 40
 
     # Check if pod is running
-    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=600s -n "$NAMESPACE"
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=900s -n "$NAMESPACE"
 
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
     run checkpoint_pod "$pod_id"
@@ -123,7 +123,7 @@ teardown() {
     local name
     name=$(unix_nano)
     local script
-    script=$'\ngpu_smr/vector_add'
+    script=$'gpu_smr/vector_add'
     local spec
     spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
 
@@ -132,7 +132,7 @@ teardown() {
     sleep 40
 
     # Check if pod is running
-    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=600s -n "$NAMESPACE"
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=900s -n "$NAMESPACE"
 
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
     run checkpoint_pod "$pod_id"

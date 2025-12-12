@@ -470,6 +470,7 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: Nebius
       large: ${{ inputs.large }}
+      parallelism: 1
       post_summary: false # Will post consolidated summary instead
 
   post-summary:
