@@ -127,5 +127,5 @@ setup_cluster() {
 
     debug_log "Nebius mk8 kubeconfig file has been fetched"
 
-   # setup_nvidia_operator
+    setup_nvidia_operator
 }
