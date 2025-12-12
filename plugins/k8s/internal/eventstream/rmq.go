@@ -257,7 +257,6 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					LeaveRunning:    proto.Bool(true),
 					TcpEstablished:  proto.Bool(true),
 					TcpSkipInFlight: proto.Bool(true),
-					LinkRemap:       proto.Bool(true),
 				},
 				Details: &daemon.Details{
 					Containerd: container,
