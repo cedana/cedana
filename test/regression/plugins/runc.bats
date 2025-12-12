@@ -51,7 +51,7 @@ teardown_file() {
     assert_output --partial "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run container (without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "echo hello")"
@@ -63,7 +63,7 @@ teardown_file() {
     run runc delete "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run container (without daemon, exit code)" {
     jid=$(unix_nano)
     code=42
@@ -75,7 +75,7 @@ teardown_file() {
     run runc delete "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run container (without daemon, detached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -90,7 +90,7 @@ teardown_file() {
     run runc delete "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run container (without daemon, PID file)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "echo hello")"
@@ -543,7 +543,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (without daemon)" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh" 3)"
@@ -563,7 +563,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (without daemon, exit code)" {
     id=$(unix_nano)
     code=42
@@ -585,7 +585,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (without daemon, PID file)" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh" 3)"
@@ -630,7 +630,7 @@ teardown_file() {
     assert_equal "$status" "" # should be automatically deleted (as it was attached)
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (detached to without daemon)" {
     id=$(unix_nano)
     code=42
@@ -652,7 +652,7 @@ teardown_file() {
     assert_equal "$status" "" # should be automatically deleted (as not detached & without daemon)
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (detached to without daemon detached)" {
     id=$(unix_nano)
     code=42

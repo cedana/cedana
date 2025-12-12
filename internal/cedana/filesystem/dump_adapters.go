@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -172,7 +173,12 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				}
 			}
 		} else {
-			// Nothing else to do, just set the path
+			// Nothing else to do, just set the path and
+			// add profiling data manually as no IO could be measured
+			defer func() {
+				size := utils.SizeFromPath(imagesDirectory)
+				profiling.AddIO(ctx, size)
+			}()
 			resp.Paths = append(resp.Paths, imagesDirectory)
 		}
 

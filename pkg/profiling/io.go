@@ -9,21 +9,16 @@ import (
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // TODO: Add data to OTel meter as well
 
 // commonWrapper holds common profiling data for all io wrappers.
 type commonWrapper struct {
-	n    int64
-	data *Data
-	end  func()
-}
-
-// updateIO updates the IO metrics and calls the end function.
-func (cw *commonWrapper) updateIO() {
-	cw.data.IO += cw.n
-	cw.end()
+	data  *Data
+	start func()
+	end   func(n *int)
 }
 
 type readWriteCloser struct {
@@ -32,19 +27,18 @@ type readWriteCloser struct {
 }
 
 func (sw *readWriteCloser) Write(p []byte) (n int, err error) {
-	n, err = sw.w.Write(p)
-	sw.n += int64(n)
-	return n, err
+	sw.start()
+	defer sw.end(&n)
+	return sw.w.Write(p)
 }
 
 func (sw *readWriteCloser) Read(p []byte) (n int, err error) {
-	n, err = sw.w.Read(p)
-	sw.n += int64(n)
-	return n, err
+	sw.start()
+	defer sw.end(&n)
+	return sw.w.Read(p)
 }
 
 func (sw *readWriteCloser) Close() error {
-	sw.updateIO()
 	return sw.w.Close()
 }
 
@@ -54,13 +48,12 @@ type readCloser struct {
 }
 
 func (prc *readCloser) Read(p []byte) (n int, err error) {
-	n, err = prc.rc.Read(p)
-	prc.n += int64(n)
-	return n, err
+	prc.start()
+	defer prc.end(&n)
+	return prc.rc.Read(p)
 }
 
 func (prc *readCloser) Close() error {
-	prc.updateIO()
 	return prc.rc.Close()
 }
 
@@ -70,13 +63,12 @@ type writeCloser struct {
 }
 
 func (pwc *writeCloser) Write(p []byte) (n int, err error) {
-	n, err = pwc.wc.Write(p)
-	pwc.n += int64(n)
-	return n, err
+	pwc.start()
+	defer pwc.end(&n)
+	return pwc.wc.Write(p)
 }
 
 func (pwc *writeCloser) Close() error {
-	pwc.updateIO()
 	return pwc.wc.Close()
 }
 
@@ -92,20 +84,24 @@ func IO[T any](ctx context.Context, w T, f ...any) T {
 
 	data.Name = getName(f...)
 
-	start := time.Now()
-	_, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, data.Name)
+	var span trace.Span
+	var beginning time.Time
 
-	end := func() {
-		duration := time.Since(start)
+	start := func() {
+		_, span = otel.Tracer(metrics.TRACER_NAME).Start(ctx, data.Name)
+		beginning = time.Now()
+	}
+
+	end := func(n *int) {
+		data.Duration += time.Since(beginning).Nanoseconds()
+		data.IO += int64(*n)
 		span.End()
-		data.Duration = duration.Nanoseconds()
-
-		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
 	}
 
 	common := commonWrapper{
-		data: data,
-		end:  end,
+		data:  data,
+		start: start,
+		end:   end,
 	}
 
 	switch v := any(w).(type) {
@@ -134,20 +130,24 @@ func IOComponent[T any](ctx context.Context, w T, f ...any) T {
 	component := &Data{Name: getName(f...)}
 	data.Components = append(data.Components, component)
 
-	start := time.Now()
-	_, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, component.Name)
+	var span trace.Span
+	var beginning time.Time
 
-	end := func() {
-		duration := time.Since(start)
+	start := func() {
+		_, span = otel.Tracer(metrics.TRACER_NAME).Start(ctx, component.Name)
+		beginning = time.Now()
+	}
+
+	end := func(n *int) {
+		component.Duration += time.Since(beginning).Nanoseconds()
+		component.IO += int64(*n)
 		span.End()
-		component.Duration = duration.Nanoseconds()
-
-		log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
 	}
 
 	common := commonWrapper{
-		data: component,
-		end:  end,
+		data:  component,
+		start: start,
+		end:   end,
 	}
 
 	switch v := any(w).(type) {
@@ -163,6 +163,9 @@ func IOComponent[T any](ctx context.Context, w T, f ...any) T {
 	}
 }
 
+// IOParallelComponent is same as IOComponent but marks the component as parallel.
+// Parallel components' durations are not counted towards their parent's duration.
+// However, their I/O is still counted towards total.
 func IOParallelComponent[T any](ctx context.Context, w T, f ...any) T {
 	var data *Data
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
@@ -173,20 +176,69 @@ func IOParallelComponent[T any](ctx context.Context, w T, f ...any) T {
 	component := &Data{Name: getName(f...), Parallel: true}
 	data.Components = append(data.Components, component)
 
-	start := time.Now()
-	_, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, component.Name)
+	var span trace.Span
+	var beginning time.Time
 
-	end := func() {
-		duration := time.Since(start)
+	start := func() {
+		_, span = otel.Tracer(metrics.TRACER_NAME).Start(ctx, component.Name)
+		beginning = time.Now()
+	}
+
+	end := func(n *int) {
+		component.Duration += time.Since(beginning).Nanoseconds()
+		component.IO += int64(*n)
 		span.End()
-		component.Duration = duration.Nanoseconds()
-
-		log.Trace().Str("in", component.Name).Msgf("spent %s", duration)
 	}
 
 	common := commonWrapper{
-		data: component,
-		end:  end,
+		data:  component,
+		start: start,
+		end:   end,
+	}
+
+	switch v := any(w).(type) {
+	case io.ReadWriteCloser:
+		return any(&readWriteCloser{commonWrapper: common, w: v}).(T)
+	case io.ReadCloser:
+		return any(&readCloser{commonWrapper: common, rc: v}).(T)
+	case io.WriteCloser:
+		return any(&writeCloser{commonWrapper: common, wc: v}).(T)
+	default:
+		log.Trace().Str("in", component.Name).Msgf("unsupported io type %T", w)
+		return w
+	}
+}
+
+// IORedundantComponent is same as IOComponent but marks the component as redundant.
+// Redundant components are not counted towards their parent's duration or I/O.
+func IORedundantComponent[T any](ctx context.Context, w T, f ...any) T {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return w
+	}
+
+	component := &Data{Name: getName(f...), Redundant: true}
+	data.Components = append(data.Components, component)
+
+	var span trace.Span
+	var beginning time.Time
+
+	start := func() {
+		_, span = otel.Tracer(metrics.TRACER_NAME).Start(ctx, component.Name)
+		beginning = time.Now()
+	}
+
+	end := func(n *int) {
+		component.Duration += time.Since(beginning).Nanoseconds()
+		component.IO += int64(*n)
+		span.End()
+	}
+
+	common := commonWrapper{
+		data:  component,
+		start: start,
+		end:   end,
 	}
 
 	switch v := any(w).(type) {
@@ -230,21 +282,26 @@ func IOCategory[T any](ctx context.Context, w T, category string, f ...any) T {
 	childComponent := &Data{Name: getName(f...)}
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
-	start := time.Now()
-	_, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, childComponent.Name)
+	var span trace.Span
+	var beginning time.Time
 
-	end := func() {
-		duration := time.Since(start)
-		span.End()
+	start := func() {
+		_, span = otel.Tracer(metrics.TRACER_NAME).Start(ctx, childComponent.Name)
+		beginning = time.Now()
+	}
+
+	end := func(n *int) {
+		duration := time.Since(beginning)
 		categoryComponent.Duration += duration.Nanoseconds()
-		childComponent.Duration = duration.Nanoseconds()
-
-		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
+		childComponent.Duration += duration.Nanoseconds()
+		childComponent.IO += int64(*n)
+		span.End()
 	}
 
 	common := commonWrapper{
-		data: childComponent,
-		end:  end,
+		data:  childComponent,
+		start: start,
+		end:   end,
 	}
 
 	switch v := any(w).(type) {
@@ -260,6 +317,9 @@ func IOCategory[T any](ctx context.Context, w T, category string, f ...any) T {
 	}
 }
 
+// IOParallelCategory is same as IOCategory but marks the component as parallel.
+// Parallel components' durations are not counted towards their parent's duration.
+// However, their I/O is still counted towards total.
 func IOParallelCategory[T any](ctx context.Context, w T, category string, f ...any) T {
 	var data *Data
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
@@ -285,21 +345,86 @@ func IOParallelCategory[T any](ctx context.Context, w T, category string, f ...a
 	childComponent := &Data{Name: getName(f...), Parallel: true}
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
-	start := time.Now()
-	_, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, childComponent.Name)
+	var span trace.Span
+	var beginning time.Time
 
-	end := func() {
-		duration := time.Since(start)
-		span.End()
+	start := func() {
+		_, span = otel.Tracer(metrics.TRACER_NAME).Start(ctx, childComponent.Name)
+		beginning = time.Now()
+	}
+
+	end := func(n *int) {
 		// Don't count parallel durations towards the category total
-		childComponent.Duration = duration.Nanoseconds()
-
-		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
+		childComponent.Duration = time.Since(beginning).Nanoseconds()
+		childComponent.IO += int64(*n)
+		span.End()
 	}
 
 	common := commonWrapper{
-		data: childComponent,
-		end:  end,
+		data:  childComponent,
+		start: start,
+		end:   end,
+	}
+
+	switch v := any(w).(type) {
+	case io.ReadWriteCloser:
+		return any(&readWriteCloser{commonWrapper: common, w: v}).(T)
+	case io.ReadCloser:
+		return any(&readCloser{commonWrapper: common, rc: v}).(T)
+	case io.WriteCloser:
+		return any(&writeCloser{commonWrapper: common, wc: v}).(T)
+	default:
+		log.Trace().Str("in", category).Msgf("unsupported io type %T", w)
+		return w
+	}
+}
+
+// IORedundantCategory is same as IOCategory but marks the component as redundant.
+// Redundant components are not counted towards their parent's duration or I/O.
+func IORedundantCategory[T any](ctx context.Context, w T, category string, f ...any) T {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return w
+	}
+
+	var categoryComponent *Data
+	// Add to existing category component if it exists
+	for _, component := range data.Components {
+		if component.Name == category {
+			categoryComponent = component
+			break
+		}
+	}
+	if categoryComponent == nil {
+		categoryComponent = &Data{
+			Name: category,
+		}
+		data.Components = append(data.Components, categoryComponent)
+	}
+
+	childComponent := &Data{Name: getName(f...), Redundant: true}
+	categoryComponent.Components = append(categoryComponent.Components, childComponent)
+
+	var span trace.Span
+	var beginning time.Time
+
+	start := func() {
+		_, span = otel.Tracer(metrics.TRACER_NAME).Start(ctx, childComponent.Name)
+		beginning = time.Now()
+	}
+
+	end := func(n *int) {
+		// Don't count parallel durations towards the category total
+		childComponent.Duration = time.Since(beginning).Nanoseconds()
+		childComponent.IO += int64(*n)
+		span.End()
+	}
+
+	common := commonWrapper{
+		data:  childComponent,
+		start: start,
+		end:   end,
 	}
 
 	switch v := any(w).(type) {
@@ -334,6 +459,31 @@ func AddIOComponent(ctx context.Context, n int64, f ...any) {
 	component := &Data{Name: getName(f...)}
 	data.Components = append(data.Components, component)
 	component.IO += n
+}
 
-	log.Trace().Str("in", component.Name).Msgf("added %d bytes IO", n)
+func AddIOCategory(ctx context.Context, n int64, category string, f ...any) {
+	var data *Data
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return
+	}
+
+	var categoryComponent *Data
+	// Add to existing category component if it exists
+	for _, component := range data.Components {
+		if component.Name == category {
+			categoryComponent = component
+			break
+		}
+	}
+	if categoryComponent == nil {
+		categoryComponent = &Data{
+			Name: category,
+		}
+		data.Components = append(data.Components, categoryComponent)
+	}
+
+	childComponent := &Data{Name: getName(f...)}
+	categoryComponent.Components = append(categoryComponent.Components, childComponent)
+	childComponent.IO += n
 }

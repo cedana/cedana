@@ -53,7 +53,7 @@ teardown_file() {
     debug cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled --attach
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "[$GPU_INFO] run GPU container (GPU binary, without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy")"
@@ -189,7 +189,7 @@ teardown_file() {
     run cedana job delete "$jid"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "[$GPU_INFO] restore GPU container (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"

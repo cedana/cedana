@@ -40,14 +40,14 @@ teardown_file() {
     assert_output --partial "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run process (without daemon)" {
     run cedana run --no-server process echo hello
     assert_success
     assert_output --partial "hello"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run process (without daemon, exit code)" {
     code=42
 
@@ -55,7 +55,7 @@ teardown_file() {
     assert_equal $status $code
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run process (without daemon, PID file)" {
     pid_file=/tmp/$(unix_nano).pid
 

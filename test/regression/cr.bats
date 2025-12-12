@@ -407,7 +407,7 @@ teardown_file() {
     run kill $pid
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore process (without daemon)" {
     "$WORKLOADS"/date-loop.sh 3 &
     pid=$!
@@ -418,7 +418,7 @@ teardown_file() {
     cedana restore process --path "/tmp/$name.tar" --no-server
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore process (without daemon, exit code)" {
     code=42
     "$WORKLOADS"/date-loop.sh 3 "$code" &
@@ -431,7 +431,7 @@ teardown_file() {
     assert_equal $status $code
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore process (without daemon, PID file)" {
     "$WORKLOADS"/date-loop.sh 3 &
     pid=$!

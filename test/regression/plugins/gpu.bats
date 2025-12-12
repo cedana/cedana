@@ -49,7 +49,7 @@ teardown_file() {
     debug cedana run process --attach -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "[$GPU_INFO] run GPU process (GPU binary, without daemon)" {
     jid=$(unix_nano)
 
@@ -194,7 +194,7 @@ teardown_file() {
     rm -rf "$dump_file"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "[$GPU_INFO] restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     pid_file=/tmp/pid-$jid

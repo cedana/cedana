@@ -11,6 +11,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/spf13/cobra"
 )
 
@@ -18,9 +19,15 @@ func init() {
 	manageCmd.AddCommand(processManageCmd)
 
 	// Add common flags
+	manageCmd.PersistentFlags().
+		StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "file to write PID to")
 	manageCmd.PersistentFlags().StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "job id")
 	manageCmd.PersistentFlags().
 		BoolP(flags.GpuEnabledFlag.Full, flags.GpuEnabledFlag.Short, false, "enable GPU support")
+	manageCmd.PersistentFlags().
+		BoolP(flags.GpuTracingFlag.Full, flags.GpuTracingFlag.Short, false, "enable GPU tracing")
+	manageCmd.PersistentFlags().
+		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
 	manageCmd.PersistentFlags().
 		BoolP(flags.UpcomingFlag.Full, flags.UpcomingFlag.Short, false, "wait for upcoming process/container")
 
@@ -44,6 +51,8 @@ var manageCmd = &cobra.Command{
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		jid, _ := cmd.Flags().GetString(flags.JidFlag.Full)
 		gpuEnabled, _ := cmd.Flags().GetBool(flags.GpuEnabledFlag.Full)
+		gpuTracing, _ := cmd.Flags().GetBool(flags.GpuTracingFlag.Full)
+		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		upcoming, _ := cmd.Flags().GetBool(flags.UpcomingFlag.Full)
 
 		action := daemon.RunAction_MANAGE_EXISTING
@@ -55,6 +64,8 @@ var manageCmd = &cobra.Command{
 		req := &daemon.RunReq{
 			JID:        jid,
 			GPUEnabled: gpuEnabled,
+			GPUTracing: gpuTracing,
+			PidFile:    pidFile,
 			Action:     action,
 		}
 
@@ -83,13 +94,13 @@ var manageCmd = &cobra.Command{
 			return fmt.Errorf("invalid request in context")
 		}
 
-		resp, profiling, err := client.Manage(cmd.Context(), req)
+		resp, data, err := client.Manage(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
-		if config.Global.Profiling.Enabled && profiling != nil {
-			printProfilingData(profiling)
+		if config.Global.Profiling.Enabled && data != nil {
+			profiling.Print(data, features.Theme())
 		}
 
 		for _, message := range resp.GetMessages() {

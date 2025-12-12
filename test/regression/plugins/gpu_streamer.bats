@@ -137,7 +137,7 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "[$GPU_INFO] stream restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     pid_file=/tmp/pid-$jid

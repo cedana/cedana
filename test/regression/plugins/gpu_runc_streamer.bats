@@ -139,7 +139,7 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "[$GPU_INFO] stream restore GPU container (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"

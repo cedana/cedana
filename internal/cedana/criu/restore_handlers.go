@@ -2,15 +2,12 @@ package criu
 
 import (
 	"context"
-	"io"
-	"math/rand/v2"
 	"os"
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/features"
-	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -25,12 +22,8 @@ import (
 
 const CRIU_RESTORE_LOG_FILE = "criu-restore.log"
 
-var Restore types.Restore = restore
-
 // Returns a CRIU restore handler for the server
-func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-	extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-
+func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 	if req.GetCriu() == nil {
 		return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 	}
@@ -77,26 +70,6 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	}
 	code = channel.Broadcaster(exitCode)
 
-	var stdin io.Reader
-	var stdout, stderr io.Writer
-
-	// if we aren't using a client
-	daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
-	if daemonless {
-		stdin = os.Stdin
-		stdout = os.Stdout
-		stderr = os.Stderr
-	} else if req.Attachable {
-		id := rand.Uint32() // Use a random number, since we don't have PID yet
-		stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, code())
-		defer cedana_io.SetIOSlavePID(id, &resp.PID) // PID should be available then
-	} else {
-		outFile, ok := ctx.Value(keys.OUT_FILE_CONTEXT_KEY).(*os.File)
-		if ok {
-			stdout, stderr = outFile, outFile
-		}
-	}
-
 	log.Info().Msg("CRIU restore starting")
 	log.Debug().Interface("opts", criuOpts).Msg("CRIU restore options")
 
@@ -106,10 +79,11 @@ func restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		ctx,
 		criuOpts,
 		opts.CRIUCallback,
-		stdin,
-		stdout,
-		stderr,
-		extraFiles...)
+		opts.IO.Stdin,
+		opts.IO.Stdout,
+		opts.IO.Stderr,
+		opts.ExtraFiles...,
+	)
 
 	end()
 

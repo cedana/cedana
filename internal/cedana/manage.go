@@ -30,6 +30,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 		job.Manage(s.jobs),
 		defaults.FillMissingRunDefaults,
 		validation.ValidateRunRequest,
+		process.WritePIDFile,
 		gpu.Attach(s.gpus),
 
 		pluginRunMiddleware, // middleware from plugins
@@ -81,11 +82,11 @@ func pluginManageHandler() types.Run {
 			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
 			defer end()
 		}
-		if req.GPUEnabled {
-			log.Warn().Msg("GPU interception for the process/container must be manually enabled." +
-				"You may use the `--no-server` run option with `--gpu-enabled` to spawn a process/container with just GPU interception.")
-			resp.Messages = append(resp.Messages, "GPU interception for the process/container must be manually enabled.\n"+
-				"You may use the `--no-server` run option with `--gpu-enabled` to spawn a process/container with just GPU interception.")
+		if req.GPUEnabled || req.GPUTracing {
+			msg := fmt.Sprintf("GPU interception/tracing for %s must be manually enabled.\n"+
+				"You may use the `--no-server` run option with `--gpu-enabled` or `--gpu-tracing` to spawn %s", t, t)
+			log.Warn().Msgf(msg)
+			resp.Messages = append(resp.Messages, msg)
 		}
 		return handler(ctx, opts, resp, req)
 	}

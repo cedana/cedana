@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/spf13/cobra"
 )
 
@@ -75,9 +76,10 @@ var pluginListCmd = &cobra.Command{
 		tableWriter := table.NewWriter()
 		tableWriter.SetStyle(style.TableStyle)
 		tableWriter.SetOutputMirror(os.Stdout)
-
-		tableWriter.SetStyle(style.TableStyle)
-		tableWriter.Style().Options.SeparateRows = false
+		tableWriter.SetColumnConfigs([]table.ColumnConfig{
+			{Name: "Size", Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
+			{Name: "Published", Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
+		})
 
 		tableWriter.AppendHeader(table.Row{
 			"Plugin",
@@ -110,9 +112,10 @@ var pluginListCmd = &cobra.Command{
 		installedCount := 0
 		availableCount := 0
 		for _, p := range list {
-			if p.Status == plugins.INSTALLED || p.Status == plugins.OUTDATED {
+			switch p.Status {
+			case plugins.INSTALLED, plugins.OUTDATED:
 				installedCount++
-			} else if p.Status == plugins.AVAILABLE {
+			case plugins.AVAILABLE:
 				availableCount++
 			}
 		}
@@ -325,7 +328,7 @@ var pluginFeaturesCmd = &cobra.Command{
 
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames, &errs))
-			tableWriter.AppendRow(featureRow(manager, features.RunDaemonlessSupport, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.RunServerlessSupport, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunMiddlewareLate, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.ManageHandler, pluginNames, &errs))
