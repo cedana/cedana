@@ -107,7 +107,7 @@ setup_nvidia_operator() {
 
     helm repo add nvidia https://helm.ngc.nvidia.com/nvidia \
         && helm repo update
-    helm install --wait --generate-name \
+    helm upgrade -i --wait gpu-operator \
         -n gpu-operator --create-namespace \
         nvidia/gpu-operator \
         --version=v25.3.4 --set driver.version=570.195.03
