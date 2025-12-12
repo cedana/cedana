@@ -242,10 +242,12 @@ teardown_file() {
 @test "dump container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" --attach &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump job "$jid"
     assert_success
@@ -695,10 +697,12 @@ teardown_file() {
 @test "restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" --attach &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump job "$jid"
     assert_success

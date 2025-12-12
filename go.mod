@@ -6,9 +6,9 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251009084235-8dc16543509d.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251009084235-8dc16543509d.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20251009084235-f3f33473b2aa.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.5.1-20251105083538-89f6e36730b9.2
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-086c10836add.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251105083538-53c7c62fed79.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.0-00000000000000-5b8c0524399e.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20251211145253-b40edc2bfd45.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251211145253-0dd2c35fd7ce.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
@@ -24,7 +24,6 @@ require (
 	github.com/cyphar/filepath-securejoin v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/protobuf v1.5.4
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
 	github.com/mattn/go-isatty v0.0.20

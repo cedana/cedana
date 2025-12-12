@@ -36,10 +36,12 @@ teardown_file() {
 @test "stream dump container" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    runc run --bundle "$bundle" "$id" &
+    runc run --bundle "$bundle" "$id" --pid-file "$pid_file" &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump runc "$id" --streams 1 --compression none
     assert_success
@@ -90,10 +92,12 @@ teardown_file() {
 @test "stream dump container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" --attach &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
@@ -113,10 +117,12 @@ teardown_file() {
 @test "stream restore container" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    runc run --bundle "$bundle" "$id" &
+    runc run --bundle "$bundle" "$id" --pid-file "$pid_file" &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump runc "$id" --streams 1 --compression none
     assert_success
@@ -153,10 +159,12 @@ teardown_file() {
 @test "stream restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" --attach &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
@@ -175,10 +183,12 @@ teardown_file() {
     id=$(unix_nano)
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    runc run --bundle "$bundle" "$id" &
+    runc run --bundle "$bundle" "$id" --pid-file "$pid_file" &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
