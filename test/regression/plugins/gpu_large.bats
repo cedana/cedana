@@ -45,6 +45,7 @@ teardown_file() {
     sleep_duration=$((RANDOM % 11 + 10))
 
     cedana run process -g --jid "$jid" -- python3 /cedana-samples/gpu_smr/pytorch/llm/transformers_inference.py --model "$model"
+    watch_logs "$jid"
 
     sleep "$sleep_duration"
 
@@ -56,6 +57,7 @@ teardown_file() {
     sleep 5
 
     cedana restore job "$jid"
+    watch_logs "$jid"
 
     run cedana ps
     assert_success

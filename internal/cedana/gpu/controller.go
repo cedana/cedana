@@ -47,7 +47,7 @@ const (
 	CONTROLLER_CHECK_SHM_SIZE              = 100 * utils.MEBIBYTE // Small size to run controller health check
 
 	LOG_DIR_FORMATTER              = "%s/cedana-gpu.%s"
-	LOG_DIR_PATTERN                = "%s/cedana-gpu.(.*)"
+	LOG_DIR_PATTERN                = "(.*)/cedana-gpu.(.*)"
 	INTERCEPTOR_LOG_FILE_PATTERN   = LOG_DIR_PATTERN + "/cedana-so-(\\d+).log"
 	INTERCEPTOR_LOG_FILE_FORMATTER = LOG_DIR_FORMATTER + "/cedana-so-%d.log"
 	TRACER_LOG_FILE_PATTERN        = LOG_DIR_PATTERN + "/cedana-tracer-(\\d+).log"
