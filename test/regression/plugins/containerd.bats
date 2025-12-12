@@ -72,10 +72,11 @@ teardown_file() {
 @test "manage container (existing)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    ctr run --detach "$image" "$id"
+    ctr run --detach --pid-file "$pid_file" "$image" "$id"
 
-    sleep 2
+    wait_for_file "$pid_file"
 
     cedana manage containerd "$id" --jid "$id"
 
@@ -90,14 +91,15 @@ teardown_file() {
 @test "manage container (upcoming)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
 
     run cedana manage containerd "$id" --jid "$id" --upcoming &
 
     sleep 2
 
-    ctr run --detach "$image" "$id"
+    ctr run --detach --pid-file "$pid_file" "$image" "$id"
 
-    sleep 2
+    wait_for_file "$pid_file"
 
     run cedana ps
     assert_success
@@ -114,10 +116,12 @@ teardown_file() {
 @test "dump container" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    ctr run "$image" "$id" &
+    ctr run --pid-file "$pid_file" "$image" "$id" &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump containerd "$id"
     assert_success
@@ -131,10 +135,12 @@ teardown_file() {
 @test "dump container (detached)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    ctr run --detach "$image" "$id"
+    ctr run --pid-file "$pid_file" --detach "$image" "$id"
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump containerd "$id"
     assert_success
@@ -167,10 +173,12 @@ teardown_file() {
     jid=$(unix_nano)
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run containerd --jid "$jid" --attach "$image" &
+    cedana run containerd --pid-file "$pid_file" --jid "$jid" --attach "$image" &
 
-    sleep 3
+    wait_for_file "$pid_file"
+    sleep 2
 
     run cedana dump job "$jid" --image "$new_image"
     assert_success
@@ -186,8 +194,11 @@ teardown_file() {
     jid="$id"
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    ctr run --detach "$image" "$id"
+    ctr run --pid-file "$pid_file" --detach "$image" "$id"
+
+    wait_for_file "$pid_file"
 
     cedana manage containerd "$id" --jid "$jid"
 
@@ -207,13 +218,15 @@ teardown_file() {
     jid="$id"
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
+    pid_file="/tmp/$(unix_nano).pid"
 
     run cedana manage containerd "$id" --jid "$jid" --upcoming &
 
     sleep 2
 
-    ctr run --detach "$image" "$id"
+    ctr run --pid-file "$pid_file" --detach "$image" "$id"
 
+    wait_for_file "$pid_file"
     sleep 2
 
     run cedana dump job "$jid" --image "$new_image"

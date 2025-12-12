@@ -142,14 +142,12 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					compressCtx := context.WithoutCancel(ctx)
 
 					if req.GetCriu().GetLeaveRunning() {
-						opts.WG.Add(1)
-						go func() {
-							defer opts.WG.Done()
+						opts.WG.Go(func() {
 							log.Info().Msg("async dump compress/upload started")
 							if compressErr := compress(compressCtx); compressErr != nil {
 								log.Error().Err(compressErr).Msg("async compress/upload failed")
 							}
-						}()
+						})
 					} else {
 						callback := &criu_client.NotifyCallback{
 							PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) error {
