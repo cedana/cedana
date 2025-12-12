@@ -24,7 +24,6 @@ export GPU_OPERATOR_NAMESPACE="gpu-operator"
 
 setup_file() {
     setup_cluster
-    wait_for_ready "$GPU_OPERATOR_NAMESPACE" 900
     tail_all_logs $CEDANA_NAMESPACE 300 &
     TAIL_PID=$!
     CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
