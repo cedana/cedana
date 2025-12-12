@@ -119,6 +119,46 @@ EOF
     echo "$spec"
 }
 
+gpu_cmd_pod_spec () {
+    local namespace="${1:-default}"
+    local name="$2"
+    local image="$3"
+    local args="$4"
+
+    local spec=/tmp/pod-${name}.yaml
+    cat > "$spec" << EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  labels:
+    app: "$name"
+spec:
+  runtimeClassName: cedana
+  containers:
+  - name: "$name"
+    image: $image
+    command: ["/bin/sh", "-c"]
+    resources:
+      limits:
+        nvidia.com/gpu: 1
+EOF
+
+    if [[ -n "$args" ]]; then
+        # Print args as multi-line block, indent each line correctly
+        printf "    args:\n" >> "$spec"
+        printf "      - |\n" >> "$spec"
+        while IFS= read -r line; do
+            printf "        %s\n" "$line" >> "$spec"
+        done <<< "$args"
+    fi
+
+    debug cat "$spec"
+
+    echo "$spec"
+}
+
 # List all restored pods in a given namespace.
 # Does a simple filter on pod names containing "restored".
 list_restored_pods() {
@@ -258,7 +298,7 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    kubectl wait --for=condition=Ready pod --all -n "$namespace" --timeout="$timeout"s || {
+    kubectl wait --for=condition=Ready --for=jsonpath='{.status.phase}'=Succeeded pod --all -n "$namespace" --timeout="$timeout"s || {
         error_log "Failed to wait for all pods in namespace $namespace to be Ready"
         for pod in $(kubectl get pods -n "$namespace" -o name); do
             error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"

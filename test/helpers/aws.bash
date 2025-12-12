@@ -58,3 +58,4 @@ teardown_cluster() {
 
     debug_log "EKS cluster $EKS_CLUSTER_NAME teardown complete"
 }
+

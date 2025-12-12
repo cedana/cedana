@@ -22,7 +22,7 @@ on:
         default: false
       platform:
         type: string
-        description: "Platform to run tests on (K3s, EKS, GKE)"
+        description: "Platform to run tests on (K3s, EKS, GKE, Nebius)"
         required: false
         default: K3s
       large:
@@ -61,8 +61,15 @@ env:
   GCLOUD_PROJECT_ID: ${{ vars.GCLOUD_PROJECT_ID }}
   GCLOUD_SERVICE_ACCOUNT_KEY: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_KEY }}
   GCLOUD_REGION: ${{ vars.GCLOUD_REGION }}
+  NB_REGION: ${{ vars.NB_REGION }}
+  NB_PROJECT_ID: ${{ secrets.NB_PROJECT_ID }}
+  NB_PUBLIC_KEY_ID: ${{ secrets.NB_PUBLIC_KEY_ID }}
+  NB_SA_ID: ${{ secrets.NB_SA_ID }}
+  NB_SA_PRIVATE_KEY: ${{ secrets.NB_SA_PRIVATE_KEY }}
+  NB_SA_PRIVATE_KEY_PATH: ${{ secrets.NB_SA_PRIVATE_KEY_PATH }}
   EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
+  NEBIUS_CLUSTER_NAME: ${{ vars.NEBIUS_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging
@@ -86,7 +93,7 @@ jobs:
   k8s:
     name: Kubernetes
     runs-on:
-      ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || format(
+      ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 'ubuntu-latest' || format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
@@ -95,7 +102,7 @@ jobs:
       matrix.cr,
       matrix.storage
       ) }}
-    timeout-minutes: 30
+    timeout-minutes: 60
     needs: propagator-connectivity
     strategy:
       fail-fast: true
@@ -104,7 +111,7 @@ jobs:
           - ${{ inputs.platform }}
         compute:
           - CPU
-          # - CUDA # TODO: Enable when GPU tests are added
+          - CUDA # TODO: Enable when GPU tests are added
         cr:
           - default
           - streamer
@@ -129,13 +136,21 @@ jobs:
             cr: streamer
           - platform: GKE
             cr: default
-      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 1 || 9999 }}
+          - platform: K3s
+            compute: CUDA
+          - platform: GKE
+            compute: CUDA
+          - platform: EKS
+            compute: CUDA
+          - platform: Nebius
+            compute: CPU
+      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 1 || 9999 }}
     container:
-      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.platform == 'CUDA' && matrix.platform != 'Nebius' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && matrix.platform != 'Nebius' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
       - uses: runs-on/action@v1
 
@@ -259,6 +274,7 @@ jobs:
           PARALLELISM: ${{ inputs.parallelism }}
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
+          NEBIUS_CLUSTER_NAME: ${{ env.NEBIUS_CLUSTER_NAME }}-${{ matrix.arch }}
         run: |
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)

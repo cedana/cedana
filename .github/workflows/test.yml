@@ -459,10 +459,24 @@ jobs:
       large: ${{ inputs.large }}
       post_summary: false # Will post consolidated summary instead
 
+  nebius:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
+    secrets: inherit
+    concurrency: test-k8s-nebius
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: Nebius
+      large: ${{ inputs.large }}
+      parallelism: 1
+      post_summary: false # Will post consolidated summary instead
+
   post-summary:
     name: Post Summary
     if: always()
-    needs: [basic, plugin, streamer, gpu, k3s, eks, gke]
+    needs: [basic, plugin, streamer, gpu, k3s, eks, gke, nebius]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
