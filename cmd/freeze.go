@@ -11,6 +11,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -96,13 +97,13 @@ var freezeCmd = &cobra.Command{
 			return fmt.Errorf("invalid request in context")
 		}
 
-		resp, profiling, err := client.Freeze(cmd.Context(), req)
+		resp, data, err := client.Freeze(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
-		if config.Global.Profiling.Enabled && profiling != nil {
-			printProfilingData(profiling)
+		if config.Global.Profiling.Enabled && data != nil {
+			profiling.Print(data, features.Theme())
 		}
 
 		for _, message := range resp.GetMessages() {

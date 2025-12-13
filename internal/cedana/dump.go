@@ -162,15 +162,16 @@ func pluginDumpHandler() types.Dump {
 			// Use default handler
 		default:
 			// Check if plugin-specific handler is available
-			features.DumpHandler.IfAvailable(func(name string, pluginHandler types.Dump) error {
+			err := features.DumpHandler.IfAvailable(func(name string, pluginHandler types.Dump) error {
 				handler = pluginHandler
 				return nil
 			}, t)
 
-			var end func()
-			ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
-			defer end()
-
+			if err == nil {
+				var end func()
+				ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
+				defer end()
+			}
 		}
 
 		return handler(ctx, opts, resp, req)

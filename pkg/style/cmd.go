@@ -18,6 +18,12 @@ var (
 
 var (
 	TableStyle = table.Style{
+		Options: table.Options{
+			SeparateHeader:  false,
+			SeparateRows:    false,
+			SeparateColumns: false,
+			SeparateFooter:  false,
+		},
 		Box: table.BoxStyle{
 			PaddingRight: "  ",
 		},

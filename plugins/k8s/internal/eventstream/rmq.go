@@ -20,6 +20,7 @@ import (
 	cedanagosdk "github.com/cedana/cedana-go-sdk"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/gogo/protobuf/proto"
@@ -132,6 +133,7 @@ type checkpointReq struct {
 type checkpointOverrides struct {
 	CRIUOpts      string `json:"criu_opts"`
 	GPUFreezeType string `json:"gpu_freeze_type"`
+	Directory     string `json:"directory"`
 	Compression   string `json:"compression"`
 	Streams       int    `json:"streams"`
 	Async         bool   `json:"asynchronous"`
@@ -273,6 +275,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				}
 				dumpReq.GPUFreezeType = req.Overrides.GPUFreezeType
 				dumpReq.Compression = req.Overrides.Compression
+				dumpReq.Dir = req.Overrides.Directory
 				dumpReq.Streams = int32(req.Overrides.Streams)
 				dumpReq.Async = req.Overrides.Async
 			}
@@ -400,14 +403,19 @@ func (es *EventStream) publishCheckpoint(
 	}
 
 	if profilingData != nil {
-		profiling.CleanData(profilingData)
-		profiling.FlattenData(profilingData)
+		profiling.Clean(profilingData)
+		profiling.Flatten(profilingData)
+
+		profiling.Print(profilingData, features.Theme())
+
 		var totalDuration, totalIO int64
 		for _, component := range profilingData.Components {
-			if !component.Parallel {
+			if !(component.Parallel || component.Redundant) {
 				totalDuration += component.Duration
 			}
-			totalIO += component.IO
+			if !component.Redundant {
+				totalIO += component.IO
+			}
 		}
 		profilingInfo := profilingInfo{
 			Raw:           profilingData,

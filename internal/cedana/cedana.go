@@ -73,8 +73,8 @@ func (c *Cedana) Finalize() *profiling.Data {
 	data, ok := c.lifetime.Value(keys.PROFILING_CONTEXT_KEY).(*profiling.Data)
 	if ok {
 		c.profilingShutdown()
-		profiling.CleanData(data)
-		profiling.FlattenData(data)
+		profiling.Clean(data)
+		profiling.Flatten(data)
 	}
 
 	if c.metricsShutdown != nil {

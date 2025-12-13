@@ -2,11 +2,9 @@ package defaults
 
 import (
 	"context"
-	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/protobuf/proto"
 )
@@ -22,8 +20,7 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		req.Criu.EvasiveDevices = proto.Bool(true)
 		req.Criu.RstSibling = proto.Bool(true) // always restore as a child
 
-		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, map[string]int32{})
-		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, []*os.File{})
+		opts.InheritFdMap = make(map[string]int32)
 
 		return next(ctx, opts, resp, req)
 	}

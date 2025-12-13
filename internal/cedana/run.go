@@ -11,7 +11,6 @@ import (
 	"github.com/cedana/cedana/internal/cedana/process"
 	"github.com/cedana/cedana/internal/cedana/validation"
 	"github.com/cedana/cedana/pkg/features"
-	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -32,6 +31,8 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 		gpu.Attach(s.gpus),
 
 		pluginRunMiddleware, // middleware from plugins
+
+		process.SetupIO[daemon.RunReq, daemon.RunResp],
 	}
 
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
@@ -67,14 +68,17 @@ func (s *Cedana) Run(req *daemon.RunReq) (exitCode <-chan int, err error) {
 		gpu.Attach(s.gpus),
 
 		pluginRunMiddleware, // middleware from plugins
+
+		process.SetupIO[daemon.RunReq, daemon.RunResp],
 	}
 
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
 
 	opts := types.Opts{
-		Lifetime: s.lifetime,
-		Plugins:  s.plugins,
-		WG:       s.WaitGroup,
+		Lifetime:   s.lifetime,
+		Plugins:    s.plugins,
+		WG:         s.WaitGroup,
+		Serverless: true,
 	}
 	resp := &daemon.RunResp{}
 
@@ -127,8 +131,6 @@ func pluginRunHandler() types.Run {
 		t := req.Type
 		var handler types.Run
 
-		daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
-
 		switch t {
 		case "process":
 			handler = process.Run
@@ -138,10 +140,10 @@ func pluginRunHandler() types.Run {
 				handler = pluginHandler
 				return nil
 			}, t)
-			if daemonless {
-				supported, _ := features.RunDaemonlessSupport.IsAvailable(t)
+			if opts.Serverless {
+				supported, _ := features.RunServerlessSupport.IsAvailable(t)
 				if !supported {
-					return nil, fmt.Errorf("plugin '%s' does not support daemonless run", t)
+					return nil, fmt.Errorf("plugin '%s' does not support serverless run", t)
 				}
 			}
 			if err != nil {

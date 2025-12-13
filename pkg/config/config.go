@@ -39,6 +39,7 @@ const (
 	DEFAULT_DB_PATH   = "/tmp/cedana.db"
 
 	DEFAULT_PROFILING_ENABLED   = true
+	DEFAULT_PROFILING_DETAILED  = true
 	DEFAULT_PROFILING_PRECISION = "auto"
 
 	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai"
@@ -84,6 +85,7 @@ var Global Config = Config{
 	},
 	Profiling: Profiling{
 		Enabled:   DEFAULT_PROFILING_ENABLED,
+		Detailed:  DEFAULT_PROFILING_DETAILED,
 		Precision: DEFAULT_PROFILING_PRECISION,
 	},
 	Connection: Connection{

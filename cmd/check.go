@@ -39,6 +39,6 @@ var checkCmd = &cobra.Command{
 			return err
 		}
 
-		return printHealthCheckResults(resp.GetResults())
+		return PrintHealthCheckResults(resp.GetResults())
 	},
 }

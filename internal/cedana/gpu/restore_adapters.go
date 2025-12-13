@@ -27,13 +27,13 @@ import (
 func Restore(gpus Manager) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-			next = next.With(InheritFilesForRestore)
-
 			state := resp.GetState()
 
 			if !state.GPUEnabled {
 				return next(ctx, opts, resp, req)
 			}
+
+			next = next.With(InheritFilesForRestore)
 
 			if !opts.Plugins.IsInstalled("gpu") {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to restore GPU support")
@@ -86,20 +86,17 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.InvalidArgument, "missing state. it should have been set by the adapter")
 		}
 
-		extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-		inheritFdMap, _ := ctx.Value(keys.INHERIT_FD_MAP_CONTEXT_KEY).(map[string]int32)
-
 		if req.Criu == nil {
 			req.Criu = &criu.CriuOpts{}
 		}
 
 		key := strings.TrimPrefix(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, state.GPUID), "/")
-		fd := int32(3 + len(extraFiles))
+		fd := int32(3 + len(opts.ExtraFiles))
 
-		if _, ok := inheritFdMap[key]; ok {
+		if _, ok := opts.InheritFdMap[key]; ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "controller shm file already inherited")
 		}
-		inheritFdMap[key] = fd
+		opts.InheritFdMap[key] = fd
 
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
 		if ok {
@@ -110,7 +107,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			}
 			defer shmFile.Close()
 
-			extraFiles = append(extraFiles, shmFile)
+			opts.ExtraFiles = append(opts.ExtraFiles, shmFile)
 			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
 				Fd:  proto.Int32(fd),
 				Key: proto.String(key),
@@ -201,16 +198,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			} else {
 				key = strings.TrimPrefix(path, "/")
 			}
-			fd = int32(3 + len(extraFiles))
+			fd = int32(3 + len(opts.ExtraFiles))
 
-			if _, ok := inheritFdMap[key]; ok {
+			if _, ok := opts.InheritFdMap[key]; ok {
 				return true // already inherited
 			}
 
 			log.Debug().Str("key", key).Int32("fd", fd).Bool("external", external).Str("old", path).Str("new", newPath).Msgf("inheriting file")
 
-			inheritFdMap[key] = fd
-			extraFiles = append(extraFiles, newFile)
+			opts.InheritFdMap[key] = fd
+			opts.ExtraFiles = append(opts.ExtraFiles, newFile)
 			toClose = append(toClose, newFile)
 			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
 				Key: proto.String(key),
@@ -228,8 +225,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return nil, err
 		}
 
-		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
-		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, inheritFdMap)
 		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
 
 		return next(ctx, opts, resp, req)
