@@ -32,7 +32,7 @@ start_containerd() {
 
 stop_containerd() {
     if cmd_exists start-docker.sh; then
-        pkill supervisord
+        pkill containerd
     elif pid=$(pidof containerd); then
         kill "$pid"
     else
