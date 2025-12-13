@@ -17,26 +17,17 @@ helm_install_cedana() {
     local cluster_id="$1"
     local namespace="$2"
 
-    if kubectl get pods -n "$namespace" --no-headers 2>/dev/null | grep -q .; then
-        debug_log "Cleaning up old helm chart installation..."
-        helm uninstall cedana -n "$namespace" --wait --timeout=2m || {
-            error_log "Error: Failed to uninstall helm chart"
-            return 1
-        }
-        wait_for_cmd_fail 60 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
-        delete_namespace "$namespace" --wait
-    fi
-
-    debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
+    debug_log "Installing/upgrading helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
 
     local helm_cmd
 
+    # Use upgrade --install for idempotent installs
     if [ -e "$HELM_CHART" ]; then
-        helm_cmd="helm install cedana $HELM_CHART" # local path to chart
+        helm_cmd="helm upgrade --install cedana $HELM_CHART" # local path to chart
     elif [ -n "$HELM_CHART" ]; then
-        helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm --version $HELM_CHART"
+        helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm --version $HELM_CHART"
     else
-        helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
+        helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
     fi
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
     helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"

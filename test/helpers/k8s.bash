@@ -298,7 +298,7 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    kubectl wait --for=condition=Ready --for=jsonpath='{.status.phase}'=Succeeded pod --all -n "$namespace" --timeout="$timeout"s || {
+    kubectl wait --for=condition=Ready pod --all -n "$namespace" --timeout="$timeout"s || {
         error_log "Failed to wait for all pods in namespace $namespace to be Ready"
         for pod in $(kubectl get pods -n "$namespace" -o name); do
             error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"

@@ -260,6 +260,22 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 		fi ;\
 	fi
 
+test-k8s-generic: ## Run generic kubernetes tests against any cluster (GPU=[0|1], LARGE=[0|1], FILTER=<samples>, SKIP_HELM=[0|1], CLUSTER_ID=<id>, SAMPLES_DIR=<path>, DEBUG=[0|1], CEDANA_NAMESPACE=<ns>)
+	@echo "Running generic kubernetes tests..."
+	@echo "GPU: $(GPU), LARGE: $(LARGE), FILTER: $(FILTER), DEBUG: $(DEBUG)"
+	DEBUG=$(DEBUG) \
+	GPU_ENABLED=$(GPU) \
+	LARGE_TESTS=$(LARGE) \
+	TEST_FILTER=$(FILTER) \
+	SKIP_HELM_INSTALL=$(SKIP_HELM) \
+	SKIP_HELM_UNINSTALL=$(SKIP_HELM) \
+	CLUSTER_ID=$(CLUSTER_ID) \
+	SAMPLES_DIR=$(SAMPLES_DIR) \
+	CEDANA_NAMESPACE=$(CEDANA_NAMESPACE) \
+	CEDANA_URL=$(CEDANA_URL) \
+	CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
+	bats --jobs 1 test/k8s-generic/generic.bats
+
 test-enter: ## Enter the test environment
 	$(DOCKER_TEST_CREATE) ;\
 	if [ "$$?" -ne 0 ]; then \
