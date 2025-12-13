@@ -46,7 +46,7 @@ start_cluster() {
     # XXX: Pre-install the containerd v2 runtime so we won't have to restart k3s otherwise it needs to
     # be restarted after we install the new runtime.
 
-    preinstall_containerd_runtime
+    configure_containerd_runtime
 
     if ! command -v k3s &> /dev/null; then
         error_log "k3s binary not found"
@@ -139,17 +139,8 @@ download_k3s() {
     debug_log "Downloaded k3s binary"
 }
 
-preinstall_containerd_runtime() {
-    debug_log "Pre-installing containerd runtime for k3s..."
-
-    if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
-        if [ "$CEDANA_PLUGINS_BUILDS" = "local" ]; then
-            error_log "Runtime shim not found in /usr/local/bin"
-            return 1
-        else
-            cedana plugin install containerd/runtime-runc
-        fi
-    fi
+configure_containerd_runtime() {
+    debug_log "Configuring containerd runtime for k3s..."
 
     if ! path_exists $CONTAINERD_CONFIG_PATH; then
         mkdir -p "$(dirname "$CONTAINERD_CONFIG_PATH")"
@@ -168,7 +159,7 @@ preinstall_containerd_runtime() {
 END_CAT
     fi
 
-    debug_log "Pre-installed containerd runtime for k3s"
+    debug_log "Configured containerd runtime for k3s"
 }
 
 # Pre-load an image into k3s from docker if available locally
