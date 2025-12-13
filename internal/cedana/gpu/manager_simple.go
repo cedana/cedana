@@ -156,19 +156,17 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
-	return m.controllers.CRIUCallback(id, freezeType...)
+func (m *ManagerSimple) CRIUCallback(id string) *criu.NotifyCallback {
+	return m.controllers.CRIUCallback(id)
 }
 
-func (m *ManagerSimple) Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error {
+func (m *ManagerSimple) Freeze(ctx context.Context, pid uint32) error {
 	controller := m.controllers.Find(pid)
 	if controller == nil {
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
 	}
 
-	freezeType = append(freezeType, CONTROLLER_DEFAULT_FREEZE_TYPE)
-
-	_, err := controller.Freeze(ctx, &gpu.FreezeReq{Type: freezeType[0]})
+	_, err := controller.Freeze(ctx, &gpu.FreezeReq{})
 	return err
 }
 

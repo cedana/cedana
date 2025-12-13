@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 )
@@ -28,13 +27,13 @@ type Manager interface {
 	GetID(pid uint32) string
 
 	// Freeze the GPU for a given PID
-	Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error
+	Freeze(ctx context.Context, pid uint32) error
 
 	// Unfreeze the GPU for a given PID
 	Unfreeze(ctx context.Context, pid uint32) error
 
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
-	CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback
+	CRIUCallback(id string) *criu.NotifyCallback
 
 	// Sync is used to force the GPU manager to sync its state with the current system state.
 	Sync(ctx context.Context) error
@@ -67,11 +66,11 @@ func (ManagerMissing) GetID(pid uint32) string {
 	return ""
 }
 
-func (ManagerMissing) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
+func (ManagerMissing) CRIUCallback(id string) *criu.NotifyCallback {
 	return nil
 }
 
-func (ManagerMissing) Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error {
+func (ManagerMissing) Freeze(ctx context.Context, pid uint32) error {
 	return fmt.Errorf("GPU manager missing")
 }
 

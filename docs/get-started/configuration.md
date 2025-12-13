@@ -115,8 +115,6 @@ type GPU struct {
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
 		// Track metrics associated with observability
 		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
-		// FreezeType is the type of freeze to use for GPU processes (IPC, NCCL)
-		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 		// LdLibPath holds any additional directories to search for GPU libraries
@@ -145,6 +143,8 @@ type Plugins struct {
 type Profiling struct {
     // Enabled sets whether to enable and show profiling information
     Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
+		// Detailed sets whether to show detailed profiling information
+		Detailed bool `json:"detailed" key:"detailed" yaml:"detailed" mapstructure:"detailed"`
     // Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
     Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
 }

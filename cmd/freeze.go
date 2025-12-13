@@ -9,7 +9,6 @@ import (
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
-	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/spf13/cobra"
@@ -24,10 +23,6 @@ import (
 func init() {
 	freezeCmd.AddCommand(processFreezeCmd)
 	freezeCmd.AddCommand(jobFreezeCmd)
-
-	// Add common flags
-	freezeCmd.PersistentFlags().
-		StringP(flags.GpuFreezeTypeFlag.Full, flags.GpuFreezeTypeFlag.Short, "", "GPU freeze type (IPC, NCCL)")
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
@@ -56,12 +51,9 @@ var freezeCmd = &cobra.Command{
 	Short: "Freeze a container/process",
 	Args:  cobra.ArbitraryArgs,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		gpuFreezeType, _ := cmd.Flags().GetString(flags.GpuFreezeTypeFlag.Full)
-
 		// Create half-baked request
 		req := &daemon.DumpReq{
-			Action:        daemon.DumpAction_FREEZE_ONLY,
-			GPUFreezeType: gpuFreezeType,
+			Action: daemon.DumpAction_FREEZE_ONLY,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.FREEZE_REQ_CONTEXT_KEY, req)
