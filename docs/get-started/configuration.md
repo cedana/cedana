@@ -143,8 +143,8 @@ type Plugins struct {
 type Profiling struct {
     // Enabled sets whether to enable and show profiling information
     Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
-		// Detailed sets whether to show detailed profiling information
-		Detailed bool `json:"detailed" key:"detailed" yaml:"detailed" mapstructure:"detailed"`
+    // Detailed sets whether to show detailed profiling information
+    Detailed bool `json:"detailed" key:"detailed" yaml:"detailed" mapstructure:"detailed"`
     // Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
     Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
 }
