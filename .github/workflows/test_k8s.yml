@@ -310,12 +310,6 @@ jobs:
             LARGE_FLAG=1
           fi
 
-          # Export plugin versions for helm chart
-          export CEDANA_PLUGINS_CRIU_VERSION
-          export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION
-          export CEDANA_PLUGINS_GPU_VERSION
-          export CEDANA_PLUGINS_STREAMER_VERSION
-
           make test-k8s-generic \
             PROVIDER=$PROVIDER \
             GPU=$GPU_FLAG \
@@ -325,7 +319,12 @@ jobs:
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \
             HELPER_DIGEST=$HELPER_DIGEST \
-            HELM_CHART=$HELM_CHART
+            HELM_CHART=$HELM_CHART \
+            CEDANA_PLUGINS_BUILDS=$CEDANA_PLUGINS_BUILDS \
+            CEDANA_PLUGINS_CRIU_VERSION=$CEDANA_PLUGINS_CRIU_VERSION \
+            CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION \
+            CEDANA_PLUGINS_GPU_VERSION=$CEDANA_PLUGINS_GPU_VERSION \
+            CEDANA_PLUGINS_STREAMER_VERSION=$CEDANA_PLUGINS_STREAMER_VERSION
 
       - name: Setup node
         if: always()
