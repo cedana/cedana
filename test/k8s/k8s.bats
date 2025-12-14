@@ -24,7 +24,7 @@
 #   GPU_ENABLED               - If set to "1", run GPU tests
 #   CEDANA_CHECKPOINT_DIR     - Checkpoint storage location (default: cedana://ci)
 #   CEDANA_CHECKPOINT_COMPRESSION - Compression algorithm (default: lz4)
-#   CEDANA_NAMESPACE          - Namespace for Cedana components (default: cedana-system)
+#   CEDANA_NAMESPACE          - Namespace for Cedana components (default: cedana-systems)
 #   NAMESPACE                 - Namespace for test pods (default: test)
 #   SAMPLES_DIR               - Path to cedana-samples/kubernetes (default: auto-detect)
 #   TEST_FILTER               - Comma-separated list of sample filenames to test (default: all)
@@ -72,7 +72,7 @@ fi
 export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="${NAMESPACE:-test}"
-export CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-system}"
+export CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-systems}"
 
 # Auto-detect or clone samples directory
 if [ -z "$SAMPLES_DIR" ]; then
@@ -347,9 +347,6 @@ setup_file() {
         debug_log "Cleaning up any leftover cedana resources..."
         kubectl delete pods -n "$CEDANA_NAMESPACE" --field-selector=status.phase=Failed --ignore-not-found=true 2>/dev/null || true
         kubectl delete pods -n "$CEDANA_NAMESPACE" -l app.kubernetes.io/component=uninstaller --ignore-not-found=true 2>/dev/null || true
-        # Clean up orphaned cluster-scoped resources from previous installs (may have different namespace annotations)
-        kubectl delete clusterrole cedana-manager-role --ignore-not-found=true 2>/dev/null || true
-        kubectl delete clusterrolebinding cedana-manager-rolebinding --ignore-not-found=true 2>/dev/null || true
 
         if [ -z "$CLUSTER_ID" ]; then
             debug_log "Registering cluster '$CLUSTER_NAME' with propagator..."
