@@ -260,10 +260,11 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 		fi ;\
 	fi
 
-test-k8s-generic: ## Run generic kubernetes tests against any cluster (GPU=[0|1], LARGE=[0|1], FILTER=<samples>, SKIP_HELM=[0|1], CLUSTER_ID=<id>, SAMPLES_DIR=<path>, DEBUG=[0|1], CEDANA_NAMESPACE=<ns>)
-	@echo "Running generic kubernetes tests..."
-	@echo "GPU: $(GPU), LARGE: $(LARGE), FILTER: $(FILTER), DEBUG: $(DEBUG)"
+test-k8s-generic: ## Run unified kubernetes tests against any cluster (PROVIDER=[generic|aws|gcp|nebius|k3s], GPU=[0|1], LARGE=[0|1], FILTER=<samples>, SKIP_HELM=[0|1], CLUSTER_ID=<id>, SAMPLES_DIR=<path>, DEBUG=[0|1])
+	@echo "Running unified kubernetes tests..."
+	@echo "Provider: $(or $(PROVIDER),generic), GPU: $(GPU), LARGE: $(LARGE), FILTER: $(FILTER), DEBUG: $(DEBUG)"
 	DEBUG=$(DEBUG) \
+	K8S_PROVIDER=$(or $(PROVIDER),generic) \
 	GPU_ENABLED=$(GPU) \
 	LARGE_TESTS=$(LARGE) \
 	TEST_FILTER=$(FILTER) \
@@ -274,7 +275,27 @@ test-k8s-generic: ## Run generic kubernetes tests against any cluster (GPU=[0|1]
 	CEDANA_NAMESPACE=$(CEDANA_NAMESPACE) \
 	CEDANA_URL=$(CEDANA_URL) \
 	CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
-	bats --jobs 1 test/k8s-generic/generic.bats
+	CONTROLLER_REPO=$(CONTROLLER_REPO) \
+	CONTROLLER_TAG=$(CONTROLLER_TAG) \
+	CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
+	HELPER_REPO=$(HELPER_REPO) \
+	HELPER_TAG=$(HELPER_TAG) \
+	HELPER_DIGEST=$(HELPER_DIGEST) \
+	HELM_CHART=$(HELM_CHART) \
+	bats --jobs 1 test/k8s/k8s.bats
+
+# Provider-specific convenience targets
+test-k8s-eks: ## Run kubernetes tests against EKS (GPU=[0|1], LARGE=[0|1], DEBUG=[0|1])
+	$(MAKE) test-k8s-generic PROVIDER=aws GPU=$(GPU) LARGE=$(LARGE) DEBUG=$(DEBUG)
+
+test-k8s-gke: ## Run kubernetes tests against GKE (GPU=[0|1], LARGE=[0|1], DEBUG=[0|1])
+	$(MAKE) test-k8s-generic PROVIDER=gcp GPU=$(GPU) LARGE=$(LARGE) DEBUG=$(DEBUG)
+
+test-k8s-nebius: ## Run kubernetes tests against Nebius with GPU (LARGE=[0|1], DEBUG=[0|1])
+	$(MAKE) test-k8s-generic PROVIDER=nebius GPU=1 LARGE=$(LARGE) DEBUG=$(DEBUG)
+
+test-k8s-local: ## Run kubernetes tests against local k3s cluster (DEBUG=[0|1])
+	$(MAKE) test-k8s-generic PROVIDER=k3s DEBUG=$(DEBUG)
 
 test-enter: ## Enter the test environment
 	$(DOCKER_TEST_CREATE) ;\

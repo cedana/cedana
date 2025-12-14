@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 
 ###################
-### EKS Helpers ###
+### AWS/EKS Provider ###
 ###################
+#
+# Environment variables:
+#   AWS_ACCESS_KEY_ID     - AWS access key
+#   AWS_SECRET_ACCESS_KEY - AWS secret key
+#   AWS_REGION            - AWS region
+#   EKS_CLUSTER_NAME      - EKS cluster name (default: cedana-ci-arm64)
+#
 
-export KUBECONFIG=~/.kube/config
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 export EKS_CLUSTER_NAME="${EKS_CLUSTER_NAME:-cedana-ci-arm64}"
 
-install_aws_cli() {
+_install_aws_cli() {
     debug_log "Installing AWS CLI..."
 
     if command -v aws &>/dev/null; then
@@ -25,7 +32,7 @@ install_aws_cli() {
     debug_log "AWS CLI installed"
 }
 
-configure_aws_credentials() {
+_configure_aws_credentials() {
     debug_log "Configuring AWS credentials..."
 
     if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] || [ -z "$AWS_REGION" ]; then
@@ -41,8 +48,8 @@ configure_aws_credentials() {
 }
 
 setup_cluster() {
-    install_aws_cli
-    configure_aws_credentials
+    _install_aws_cli
+    _configure_aws_credentials
 
     debug_log "Setting up $EKS_CLUSTER_NAME EKS cluster..."
 
@@ -55,7 +62,24 @@ teardown_cluster() {
     debug_log "Tearing down EKS cluster $EKS_CLUSTER_NAME..."
 
     # NOTE: Since we reuse the cluster, we don't do anything here.
+    # Add nodegroup deletion here if needed for GPU clusters.
 
     debug_log "EKS cluster $EKS_CLUSTER_NAME teardown complete"
 }
 
+# Optional: Create GPU nodegroup (can be called from tests if needed)
+create_nodegroup() {
+    local nodegroup_name="${1:-cedana-gpu-nodegroup}"
+    debug_log "Creating EKS nodegroup $nodegroup_name..."
+    # Implementation for creating GPU nodegroups on EKS
+    # aws eks create-nodegroup ...
+    debug_log "EKS nodegroup creation not implemented (using existing cluster)"
+}
+
+delete_nodegroup() {
+    local nodegroup_name="${1:-cedana-gpu-nodegroup}"
+    debug_log "Deleting EKS nodegroup $nodegroup_name..."
+    # Implementation for deleting GPU nodegroups on EKS
+    # aws eks delete-nodegroup ...
+    debug_log "EKS nodegroup deletion not implemented (using existing cluster)"
+}

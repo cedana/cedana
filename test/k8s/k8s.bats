@@ -1,12 +1,21 @@
 #!/usr/bin/env bats
 
-# Generic Kubernetes test file - runs against any pre-configured cluster
+################################################################################
+# Unified Kubernetes Tests
+################################################################################
 #
-# This file assumes:
-# 1. kubectl is configured and can reach the cluster
-# 2. Cedana helm chart is either already installed, or will be installed (default)
+# This test file runs against any Kubernetes cluster using the provider abstraction.
+# Select provider via K8S_PROVIDER environment variable.
+#
+# Providers:
+#   generic  - Pre-configured cluster (default) - requires kubectl to be configured
+#   aws/eks  - Amazon EKS - requires AWS credentials
+#   gcp/gke  - Google GKE - requires GCP credentials
+#   nebius   - Nebius Cloud - requires Nebius credentials, creates GPU nodegroups
+#   k3s      - Local K3s - creates fresh cluster
 #
 # Environment variables:
+#   K8S_PROVIDER              - Provider to use (default: generic)
 #   KUBECONFIG                - Path to kubeconfig (default: ~/.kube/config)
 #   CLUSTER_NAME              - Name for registering cluster with propagator (default: auto-generated)
 #   CLUSTER_ID                - If set, skip cluster registration and use this ID
@@ -23,32 +32,42 @@
 #
 # Usage examples:
 #   # Run against a pre-configured cluster with Cedana already installed
-#   SKIP_HELM_INSTALL=1 CLUSTER_ID="your-cluster-id" bats test/k8s/generic.bats
+#   SKIP_HELM_INSTALL=1 CLUSTER_ID="your-cluster-id" bats test/k8s/k8s.bats
+#
+#   # Run against EKS
+#   K8S_PROVIDER=aws bats test/k8s/k8s.bats
 #
 #   # Run with GPU tests enabled
-#   GPU_ENABLED=1 bats test/k8s/generic.bats
+#   GPU_ENABLED=1 bats test/k8s/k8s.bats
 #
 #   # Run specific samples only
-#   TEST_FILTER="counting.yaml,cuda-vector-add.yaml" bats test/k8s/generic.bats
+#   TEST_FILTER="counting.yaml,cuda-vector-add.yaml" bats test/k8s/k8s.bats
 #
-#   # Run only checkpoint tests (no restore)
-#   SKIP_RESTORE=1 bats test/k8s/generic.bats
+#   # Run on Nebius with GPU
+#   K8S_PROVIDER=nebius GPU_ENABLED=1 bats test/k8s/k8s.bats
+#
 
-# bats file_tags=k8s,kubernetes,generic
+# bats file_tags=k8s,kubernetes
+
+################################################################################
+# Setup and Configuration
+################################################################################
 
 # Defaults for remote checkpoint storage
 export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-cedana://ci}
 export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-lz4}
 
+# Load helpers
 load ../helpers/utils
 load ../helpers/daemon # required for config env vars
+load ../helpers/providers/provider # auto-loads correct provider
 load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
 # Generate cluster name if not provided
 if [ -z "$CLUSTER_NAME" ]; then
-    CLUSTER_NAME="test-generic-$(unix_nano)"
+    CLUSTER_NAME="test-${K8S_PROVIDER}-$(unix_nano)"
 fi
 export CLUSTER_NAME
 export CLUSTER_ID
@@ -57,7 +76,6 @@ export CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-system}"
 
 # Auto-detect or clone samples directory
 if [ -z "$SAMPLES_DIR" ]; then
-    # Try common locations first
     if [ -d "../cedana-samples/kubernetes" ]; then
         SAMPLES_DIR="../cedana-samples/kubernetes"
     elif [ -d "/cedana-samples/kubernetes" ]; then
@@ -69,14 +87,17 @@ if [ -z "$SAMPLES_DIR" ]; then
         if git clone --depth 1 https://github.com/cedana/cedana-samples.git /tmp/cedana-samples 2>/dev/null; then
             SAMPLES_DIR="/tmp/cedana-samples/kubernetes"
         else
-            # Fallback - will skip sample-based tests
             SAMPLES_DIR=""
         fi
     fi
 fi
 export SAMPLES_DIR
 
-# Helper: Check if a sample should be tested based on TEST_FILTER
+################################################################################
+# Helper Functions
+################################################################################
+
+# Check if a sample should be tested based on TEST_FILTER
 should_test_sample() {
     local filename="$1"
     if [ -z "$TEST_FILTER" ]; then
@@ -85,11 +106,10 @@ should_test_sample() {
     echo "$TEST_FILTER" | grep -q "$filename"
 }
 
-# Helper: Check if sample is GPU-based (from metadata.json)
+# Check if sample is GPU-based (from metadata.json)
 is_gpu_sample() {
     local filename="$1"
     if [ -z "$SAMPLES_DIR" ] || [ ! -f "$SAMPLES_DIR/metadata.json" ]; then
-        # Fallback: check filename
         echo "$filename" | grep -qi "cuda\|gpu"
         return $?
     fi
@@ -98,25 +118,22 @@ is_gpu_sample() {
     [ "$type" = "gpu" ]
 }
 
-# Helper: Get sample title from metadata
-get_sample_title() {
-    local filename="$1"
-    if [ -z "$SAMPLES_DIR" ] || [ ! -f "$SAMPLES_DIR/metadata.json" ]; then
-        echo "$filename"
-        return
-    fi
-    local title
-    title=$(jq -r --arg f "$filename" '.[] | select(.filename == $f) | .title' "$SAMPLES_DIR/metadata.json" 2>/dev/null)
-    if [ -n "$title" ] && [ "$title" != "null" ]; then
-        echo "$title"
-    else
-        echo "$filename"
-    fi
+# Get available GPU count from any schedulable node
+get_available_gpus() {
+    local gpu_count
+    gpu_count=$(kubectl get nodes -o json | jq '[.items[].status.allocatable["nvidia.com/gpu"] // "0" | tonumber] | add' 2>/dev/null)
+    echo "${gpu_count:-0}"
 }
 
-# Helper: Prepare a sample spec for testing
-# - Changes namespace to test namespace
-# - Uses generateName for unique pod names
+# Count total GPUs required by a spec file
+get_required_gpus() {
+    local spec_file="$1"
+    local gpu_count
+    gpu_count=$(grep -o "nvidia.com/gpu.*[0-9]" "$spec_file" 2>/dev/null | grep -o "[0-9]*" | awk '{sum+=$1} END {print sum}')
+    echo "${gpu_count:-0}"
+}
+
+# Prepare a sample spec for testing (change namespace, etc.)
 prepare_sample_spec() {
     local source_file="$1"
     local test_namespace="$2"
@@ -124,14 +141,10 @@ prepare_sample_spec() {
 
     local temp_spec="/tmp/test-spec-${unique_id}.yaml"
 
-    # Copy and modify the spec
-    # - Replace namespace
-    # - Ensure generateName is set for uniqueness
     sed -e "s/namespace: default/namespace: $test_namespace/g" \
         -e "s/namespace: .*/namespace: $test_namespace/g" \
         "$source_file" > "$temp_spec"
 
-    # If no namespace specified, add it under metadata
     if ! grep -q "namespace:" "$temp_spec"; then
         sed -i '/^metadata:/a\  namespace: '"$test_namespace"'' "$temp_spec"
     fi
@@ -139,14 +152,12 @@ prepare_sample_spec() {
     echo "$temp_spec"
 }
 
-# Helper: Get pod name from a created resource
-# Handles both static names and generateName
+# Get pod name from a created resource
 get_created_pod_name() {
     local spec_file="$1"
     local namespace="$2"
     local timeout="${3:-60}"
 
-    # Try to get the name or generateName prefix
     local name
     name=$(grep -E "^\s*name:" "$spec_file" | head -1 | awk '{print $2}' | tr -d '"')
     local generate_name
@@ -156,7 +167,6 @@ get_created_pod_name() {
         echo "$name"
         return 0
     elif [ -n "$generate_name" ]; then
-        # Wait for pod with this prefix to appear
         for i in $(seq 1 $timeout); do
             local pod
             pod=$(kubectl get pods -n "$namespace" --no-headers 2>/dev/null | grep "^${generate_name}" | head -1 | awk '{print $1}')
@@ -174,8 +184,7 @@ get_created_pod_name() {
     fi
 }
 
-# Helper: Run a complete test cycle for a sample
-# Deploy -> Wait -> Checkpoint -> Restore -> Cleanup
+# Run a complete test cycle for a sample: Deploy -> Wait -> Checkpoint -> Restore -> Cleanup
 run_sample_test() {
     local spec_file="$1"
     local namespace="$2"
@@ -189,13 +198,11 @@ run_sample_test() {
         pod_timeout=900
     fi
 
-    # Extract the first container name from the spec (used later for finding restored pod)
-    # Format is typically "    - name: container-name" so we need field 3, then strip quotes
     local container_name
     container_name=$(grep -A1 "containers:" "$spec_file" | grep "name:" | head -1 | awk '{print $3}' | tr -d '"' | tr -d "'")
     debug_log "Container name from spec: $container_name"
 
-    # Deploy - use 'create' for specs with generateName, 'apply' otherwise
+    # Deploy
     debug_log "Deploying from $spec_file..."
     if grep -q "generateName:" "$spec_file"; then
         kubectl create -f "$spec_file"
@@ -255,10 +262,9 @@ run_sample_test() {
 
     # Restore (unless skipped)
     if [ "$skip_restore" != "1" ]; then
-        # Delete original pod before restore to free up resources (especially GPU on single-node clusters)
         debug_log "Deleting original pod before restore..."
         kubectl delete pod "$pod_name" -n "$namespace" --wait=true || true
-        pod_name=""  # Mark as deleted so we don't try to delete again later
+        pod_name=""
 
         debug_log "Restoring pod..."
 
@@ -277,8 +283,6 @@ run_sample_test() {
             return 1
         }
 
-        # Wait for restored pod (poll until get_restored_pod succeeds and returns a pod name)
-        # Use container_name to match, as get_restored_pod searches by container name, not pod name
         local restored_pod=""
         local wait_elapsed=0
         local wait_timeout=120
@@ -292,11 +296,9 @@ run_sample_test() {
 
         if [ -z "$restored_pod" ]; then
             error_log "Failed to find restored pod after ${wait_timeout}s"
-            # Clean up any restored pods by name pattern (they contain "restored" in the name)
             for rp in $(list_restored_pods "$namespace"); do
                 kubectl delete pod "$rp" -n "$namespace" --wait=false 2>/dev/null || true
             done
-            kubectl delete pod "$pod_name" -n "$namespace" --wait=true || true
             return 1
         fi
 
@@ -304,18 +306,15 @@ run_sample_test() {
 
         validate_pod "$namespace" "$restored_pod" 30s || {
             error_log "Restored pod validation failed"
-            kubectl delete pod "$restored_pod" -n "$namespace" --wait=false || true
-            kubectl delete pod "$pod_name" -n "$namespace" --wait=true || true
+            kubectl delete pod "$restored_pod" -n "$namespace" --wait=false 2>/dev/null || true
             return 1
         }
 
         debug_log "Restore completed successfully"
-
-        # Cleanup restored pod
         kubectl delete pod "$restored_pod" -n "$namespace" --wait=true || true
     fi
 
-    # Cleanup original pod (if not already deleted before restore)
+    # Cleanup original pod (if not already deleted)
     if [ -n "$pod_name" ]; then
         kubectl delete pod "$pod_name" -n "$namespace" --wait=true || true
     fi
@@ -323,19 +322,26 @@ run_sample_test() {
     return 0
 }
 
+################################################################################
+# File Setup/Teardown
+################################################################################
+
 setup_file() {
+    # Setup cluster using provider
+    setup_cluster
+
     # Verify kubectl connectivity
     if ! kubectl cluster-info &>/dev/null; then
-        error_log "Cannot connect to Kubernetes cluster. Ensure KUBECONFIG is set correctly."
+        error_log "Cannot connect to Kubernetes cluster after provider setup."
         return 1
     fi
 
     debug_log "Connected to cluster: $(kubectl config current-context)"
+    debug_log "Provider: $K8S_PROVIDER"
     debug_log "Samples directory: ${SAMPLES_DIR:-not set}"
 
     # Install Cedana helm chart unless skipped
     if [ "${SKIP_HELM_INSTALL:-0}" != "1" ]; then
-        # Register cluster with propagator if CLUSTER_ID not provided
         if [ -z "$CLUSTER_ID" ]; then
             debug_log "Registering cluster '$CLUSTER_NAME' with propagator..."
             CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
@@ -348,19 +354,15 @@ setup_file() {
         wait_for_ready "$CEDANA_NAMESPACE" 300
     else
         debug_log "Skipping helm install (SKIP_HELM_INSTALL=1)"
-        # When skipping helm install, get cluster ID from existing configmap
         if [ -z "$CLUSTER_ID" ]; then
             CLUSTER_ID=$(kubectl get cm cedana-config -n "$CEDANA_NAMESPACE" -o jsonpath='{.data.cluster-id}' 2>/dev/null)
             if [ -z "$CLUSTER_ID" ]; then
-                error_log "SKIP_HELM_INSTALL=1 but no cedana-config configmap found. Please provide CLUSTER_ID or install Cedana first."
+                error_log "SKIP_HELM_INSTALL=1 but no cedana-config configmap found. Please provide CLUSTER_ID."
                 return 1
             fi
             export CLUSTER_ID
             debug_log "Using cluster ID from existing installation: $CLUSTER_ID"
-        else
-            debug_log "Using provided cluster ID: $CLUSTER_ID"
         fi
-        # Still wait for pods to be ready
         if kubectl get pods -n "$CEDANA_NAMESPACE" --no-headers 2>/dev/null | grep -q .; then
             wait_for_ready "$CEDANA_NAMESPACE" 300
         fi
@@ -393,10 +395,13 @@ teardown_file() {
         debug_log "Skipping helm uninstall"
     fi
 
-    # Deregister cluster (only if we registered it - not when using SKIP_HELM_INSTALL)
+    # Deregister cluster (only if we registered it)
     if [ -n "$CLUSTER_ID" ] && [ -z "${SKIP_CLUSTER_DEREGISTER:-}" ] && [ "${SKIP_HELM_INSTALL:-0}" != "1" ]; then
         deregister_cluster "$CLUSTER_ID"
     fi
+
+    # Teardown cluster using provider
+    teardown_cluster
 }
 
 teardown() {
@@ -405,29 +410,342 @@ teardown() {
     fi
 }
 
-#######################
-### Setup Test      ###
-#######################
+setup() {
+    create_namespace "$NAMESPACE" 2>/dev/null || true
+}
+
+################################################################################
+# Verification Tests
+################################################################################
 
 @test "Verify cluster and Cedana installation" {
-    # Test that cluster is running
     run kubectl get nodes
     [ "$status" -eq 0 ]
     [[ "$output" == *"Ready"* ]]
 
-    # Test that Cedana components are running
     kubectl get pods -n $CEDANA_NAMESPACE
 
-    # Check if all Cedana pods are actually ready
     kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cedana -n $CEDANA_NAMESPACE --timeout=300s
 
     validate_propagator_connectivity
 }
 
-#######################
-### CPU Sample Tests ###
-#######################
+################################################################################
+# Core CPU Tests
+################################################################################
 
+# bats test_tags=deploy,cpu
+@test "Deploy a pod" {
+    local name
+    name=$(unix_nano)
+    local script
+    script=$(cat "$WORKLOADS"/date-loop.sh)
+    local spec
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 5
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
+# bats test_tags=dump,cpu
+@test "Checkpoint a pod" {
+    local name
+    name=$(unix_nano)
+    local script
+    script=$(cat "$WORKLOADS"/date-loop.sh)
+    local spec
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 5
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+    fi
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
+# bats test_tags=restore,cpu
+@test "Restore a pod with original pod running" {
+    local name
+    name=$(unix_nano)
+    local script
+    script=$(cat "$WORKLOADS"/date-loop.sh)
+    local spec
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 5
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+
+        run restore_pod "$action_id" "$CLUSTER_ID"
+        [ "$status" -eq 0 ]
+
+        if [ $status -eq 0 ]; then
+            action_id="$output"
+            validate_action_id "$action_id"
+
+            run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
+            [ "$status" -eq 0 ]
+
+            if [ $status -eq 0 ]; then
+                local restored_pod="$output"
+                validate_pod "$NAMESPACE" "$restored_pod" 20s
+
+                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            fi
+        fi
+    fi
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
+# bats test_tags=restore,cpu
+@test "Restore a pod with original pod deleted" {
+    local name
+    name=$(unix_nano)
+    local script
+    script=$(cat "$WORKLOADS"/date-loop.sh)
+    local spec
+    spec=$(cmd_pod_spec "$NAMESPACE" "$name" "alpine:latest" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 5
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=300s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+
+        kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+
+        run restore_pod "$action_id" "$CLUSTER_ID"
+        [ "$status" -eq 0 ]
+
+        if [ $status -eq 0 ]; then
+            action_id="$output"
+            validate_action_id "$action_id"
+
+            run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
+            [ "$status" -eq 0 ]
+
+            if [ $status -eq 0 ]; then
+                local restored_pod="$output"
+                validate_pod "$NAMESPACE" "$restored_pod" 20s
+
+                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            fi
+        fi
+    fi
+}
+
+# bats test_tags=restore,pvc
+@test "Checkpoint and restore pod with PVC" {
+    skip "Skipped until it supports running parallely with other tests"
+
+    local pv_name="counting-pv"
+    local pvc_name="counting-pvc"
+    local pod_name="counting-pvc-pod"
+
+    kubectl apply -f /cedana-samples/kubernetes/counting-persistent-volume.yaml -n "$NAMESPACE"
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$pod_name" --timeout=300s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$pod_name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+
+        kubectl delete pod "$pod_name" -n "$NAMESPACE" --wait=true
+
+        run restore_pod "$action_id" "$CLUSTER_ID"
+        [ "$status" -eq 0 ]
+
+        if [ $status -eq 0 ]; then
+            action_id="$output"
+            validate_action_id "$action_id"
+
+            run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$pod_name"
+            [ "$status" -eq 0 ]
+
+            if [ $status -eq 0 ]; then
+                local restored_pod="$output"
+                validate_pod "$NAMESPACE" "$restored_pod" 20s
+
+                kubectl get pvc "$pvc_name" -n "$NAMESPACE" -o jsonpath='{.status.phase}'
+
+                run kubectl get pod "$restored_pod" -n "$NAMESPACE" -o jsonpath='{.spec.volumes[*].persistentVolumeClaim.claimName}'
+                [ "$status" -eq 0 ]
+                [[ "$output" == *"$pvc_name"* ]]
+
+                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            fi
+        fi
+    fi
+
+    run kubectl delete pvc "$pvc_name" -n "$NAMESPACE" --wait=true
+    run kubectl delete pv "$pv_name" --wait=true
+}
+
+################################################################################
+# GPU Tests
+################################################################################
+
+# bats test_tags=deploy,gpu
+@test "Deploy a GPU pod" {
+    if [ "${GPU_ENABLED:-0}" != "1" ]; then
+        skip "GPU tests disabled (set GPU_ENABLED=1)"
+    fi
+
+    local name
+    name=$(unix_nano)
+    local script
+    script=$'gpu_smr/vector_add'
+    local spec
+    spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 60
+
+    kubectl get pod "$name" -n "$NAMESPACE" >&3
+    kubectl describe pod "$name" -n "$NAMESPACE" >&3
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=900s -n "$NAMESPACE"
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
+# bats test_tags=dump,gpu
+@test "Checkpoint a GPU pod" {
+    if [ "${GPU_ENABLED:-0}" != "1" ]; then
+        skip "GPU tests disabled (set GPU_ENABLED=1)"
+    fi
+
+    local name
+    name=$(unix_nano)
+    local script
+    script=$'gpu_smr/vector_add'
+    local spec
+    spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 40
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=900s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+    fi
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
+# bats test_tags=restore,gpu
+@test "Restore a GPU pod with original pod running" {
+    if [ "${GPU_ENABLED:-0}" != "1" ]; then
+        skip "GPU tests disabled (set GPU_ENABLED=1)"
+    fi
+
+    local name
+    name=$(unix_nano)
+    local script
+    script=$'gpu_smr/vector_add'
+    local spec
+    spec=$(gpu_cmd_pod_spec "$NAMESPACE" "$name" "cedana/cedana-samples:cuda" "$script")
+
+    kubectl apply -f "$spec"
+
+    sleep 40
+
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=900s -n "$NAMESPACE"
+
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    run checkpoint_pod "$pod_id"
+    [ "$status" -eq 0 ]
+
+    if [ $status -eq 0 ]; then
+        action_id=$output
+        validate_action_id "$action_id"
+
+        poll_action_status "$action_id" "checkpoint"
+
+        run restore_pod "$action_id" "$CLUSTER_ID"
+        [ "$status" -eq 0 ]
+
+        if [ $status -eq 0 ]; then
+            action_id="$output"
+            validate_action_id "$action_id"
+
+            run wait_for_cmd 30 get_restored_pod "$NAMESPACE" "$name"
+            [ "$status" -eq 0 ]
+
+            if [ $status -eq 0 ]; then
+                local restored_pod="$output"
+                validate_pod "$NAMESPACE" "$restored_pod" 20s
+
+                kubectl delete pod "$restored_pod" -n "$NAMESPACE" --wait=true
+            fi
+        fi
+    fi
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+}
+
+################################################################################
+# Sample-Based Tests (CPU)
+################################################################################
+
+# bats test_tags=samples,cpu
 @test "Sample: counting.yaml - Timestamp Logger" {
     if [ -z "$SAMPLES_DIR" ]; then
         skip "SAMPLES_DIR not set"
@@ -445,6 +763,7 @@ teardown() {
     run_sample_test "$spec" "$NAMESPACE" "0" "${SKIP_RESTORE:-0}"
 }
 
+# bats test_tags=samples,cpu
 @test "Sample: counting-multicontainer.yaml - Multi-container Pod" {
     if [ -z "$SAMPLES_DIR" ]; then
         skip "SAMPLES_DIR not set"
@@ -462,10 +781,11 @@ teardown() {
     run_sample_test "$spec" "$NAMESPACE" "0" "${SKIP_RESTORE:-0}"
 }
 
-#######################
-### GPU Sample Tests ###
-#######################
+################################################################################
+# Sample-Based Tests (GPU)
+################################################################################
 
+# bats test_tags=samples,gpu
 @test "Sample: cuda-vector-add.yaml - CUDA Vector Addition" {
     if [ "${GPU_ENABLED:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU_ENABLED=1)"
@@ -486,6 +806,7 @@ teardown() {
     run_sample_test "$spec" "$NAMESPACE" "1" "${SKIP_RESTORE:-0}"
 }
 
+# bats test_tags=samples,gpu
 @test "Sample: cuda-vector-add-multicontainer.yaml - CUDA Multi-container" {
     if [ "${GPU_ENABLED:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU_ENABLED=1)"
@@ -500,12 +821,21 @@ teardown() {
         skip "Filtered out by TEST_FILTER"
     fi
 
+    local required_gpus
+    required_gpus=$(get_required_gpus "$SAMPLES_DIR/cuda-vector-add-multicontainer.yaml")
+    local available_gpus
+    available_gpus=$(get_available_gpus)
+    if [ "$available_gpus" -lt "$required_gpus" ]; then
+        skip "Insufficient GPUs: need $required_gpus, have $available_gpus"
+    fi
+
     local spec
     spec=$(prepare_sample_spec "$SAMPLES_DIR/cuda-vector-add-multicontainer.yaml" "$NAMESPACE" "$(unix_nano)")
 
     run_sample_test "$spec" "$NAMESPACE" "1" "${SKIP_RESTORE:-0}"
 }
 
+# bats test_tags=samples,gpu
 @test "Sample: cuda-mem-throughput.yaml - CUDA Memory Throughput" {
     if [ "${GPU_ENABLED:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU_ENABLED=1)"
@@ -526,6 +856,7 @@ teardown() {
     run_sample_test "$spec" "$NAMESPACE" "1" "${SKIP_RESTORE:-0}"
 }
 
+# bats test_tags=samples,gpu
 @test "Sample: cuda-gpu-train-simple.yaml - Simple PyTorch Training" {
     if [ "${GPU_ENABLED:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU_ENABLED=1)"
@@ -546,6 +877,7 @@ teardown() {
     run_sample_test "$spec" "$NAMESPACE" "1" "${SKIP_RESTORE:-0}"
 }
 
+# bats test_tags=samples,gpu
 @test "Sample: cuda-tensorflow.yaml - TensorFlow Training" {
     if [ "${GPU_ENABLED:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU_ENABLED=1)"
@@ -566,6 +898,7 @@ teardown() {
     run_sample_test "$spec" "$NAMESPACE" "1" "${SKIP_RESTORE:-0}"
 }
 
+# bats test_tags=samples,gpu
 @test "Sample: cuda-deepspeed-train.yaml - DeepSpeed Training" {
     if [ "${GPU_ENABLED:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU_ENABLED=1)"
@@ -586,10 +919,9 @@ teardown() {
     run_sample_test "$spec" "$NAMESPACE" "1" "${SKIP_RESTORE:-0}"
 }
 
-#######################
-### Large GPU Tests ###
-### (LLM inference)  ###
-#######################
+################################################################################
+# Large GPU Tests (LLM inference, CompBio)
+################################################################################
 
 # bats test_tags=large,gpu
 @test "Sample: cuda-vllm-llama-8b.yaml - vLLM Llama 8B" {
@@ -614,10 +946,6 @@ teardown() {
 
     run_sample_test "$spec" "$NAMESPACE" "1" "${SKIP_RESTORE:-0}"
 }
-
-#######################
-### CompBio Tests   ###
-#######################
 
 # bats test_tags=large,gpu,compbio
 @test "Sample: gromacs-simple-example.yaml - GROMACS MD Simulation" {

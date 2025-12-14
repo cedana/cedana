@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
 
 ###################
-### GCP Helpers ###
+### GCP/GKE Provider ###
 ###################
+#
+# Environment variables:
+#   GCLOUD_PROJECT_ID         - GCP project ID
+#   GCLOUD_SERVICE_ACCOUNT_KEY - Service account JSON key
+#   GCLOUD_REGION             - GCP region
+#   GKE_CLUSTER_NAME          - GKE cluster name (default: cedana-ci-amd64)
+#
 
-export KUBECONFIG=~/.kube/config
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 export GKE_CLUSTER_NAME="${GKE_CLUSTER_NAME:-cedana-ci-amd64}"
 
-install_gcloud_cli() {
+_install_gcloud_cli() {
     debug_log "Installing GCP CLI..."
 
     if command -v gcloud &>/dev/null; then
@@ -26,7 +33,7 @@ install_gcloud_cli() {
     debug_log "GCP CLI installed"
 }
 
-configure_gcp_credentials() {
+_configure_gcp_credentials() {
     debug_log "Configuring GCP credentials..."
 
     if [ -z "$GCLOUD_PROJECT_ID" ] || [ -z "$GCLOUD_SERVICE_ACCOUNT_KEY" ] || [ -z "$GCLOUD_REGION" ]; then
@@ -45,8 +52,8 @@ configure_gcp_credentials() {
 }
 
 setup_cluster() {
-    install_gcloud_cli
-    configure_gcp_credentials
+    _install_gcloud_cli
+    _configure_gcp_credentials
 
     debug_log "Setting up $GKE_CLUSTER_NAME GKE cluster..."
 
@@ -61,4 +68,19 @@ teardown_cluster() {
     # NOTE: Since we reuse the cluster, we don't do anything here.
 
     debug_log "GKE cluster $GKE_CLUSTER_NAME teardown complete"
+}
+
+# Optional: Create GPU nodepool
+create_nodegroup() {
+    local nodepool_name="${1:-cedana-gpu-nodepool}"
+    debug_log "Creating GKE nodepool $nodepool_name..."
+    # gcloud container node-pools create ...
+    debug_log "GKE nodepool creation not implemented (using existing cluster)"
+}
+
+delete_nodegroup() {
+    local nodepool_name="${1:-cedana-gpu-nodepool}"
+    debug_log "Deleting GKE nodepool $nodepool_name..."
+    # gcloud container node-pools delete ...
+    debug_log "GKE nodepool deletion not implemented (using existing cluster)"
 }
