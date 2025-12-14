@@ -131,12 +131,11 @@ type checkpointReq struct {
 }
 
 type checkpointOverrides struct {
-	CRIUOpts      string `json:"criu_opts"`
-	GPUFreezeType string `json:"gpu_freeze_type"`
-	Directory     string `json:"directory"`
-	Compression   string `json:"compression"`
-	Streams       int    `json:"streams"`
-	Async         bool   `json:"asynchronous"`
+	CRIUOpts    string `json:"criu_opts"`
+	Directory   string `json:"directory"`
+	Compression string `json:"compression"`
+	Streams     int    `json:"streams"`
+	Async       bool   `json:"asynchronous"`
 }
 
 type checkpointInfo struct {
@@ -273,7 +272,6 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				} else {
 					dumpReq.Criu = criuOpts
 				}
-				dumpReq.GPUFreezeType = req.Overrides.GPUFreezeType
 				dumpReq.Compression = req.Overrides.Compression
 				dumpReq.Dir = req.Overrides.Directory
 				dumpReq.Streams = int32(req.Overrides.Streams)
