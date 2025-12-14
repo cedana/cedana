@@ -5,6 +5,7 @@
 source "${BATS_TEST_DIRNAME}"/../helpers/utils.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/k8s.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/helm.bash
+source "${BATS_TEST_DIRNAME}"/../helpers/containerd.bash
 
 setup_suite() {
     install_kubectl
