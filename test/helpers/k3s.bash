@@ -58,7 +58,7 @@ start_cluster() {
 
     debug_log "Waiting for k3s cluster to start..."
 
-    local timeout=120
+    local timeout=300
     wait_for_cmd "$timeout" "kubectl get nodes | grep -q ."
 
     debug_log "Waiting for k3s node to be Ready..."
