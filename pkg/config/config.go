@@ -52,7 +52,6 @@ const (
 	DEFAULT_GPU_POOL_SIZE   = 0
 	DEFAULT_GPU_LOG_DIR     = "/tmp"
 	DEFAULT_GPU_SOCK_DIR    = "/tmp"
-	DEFAULT_GPU_FREEZE_TYPE = "IPC"
 	DEFAULT_GPU_SHM_SIZE    = 8 * utils.GIBIBYTE
 	DEFAULT_GPU_DEBUG       = false
 
@@ -99,7 +98,6 @@ var Global Config = Config{
 		PoolSize:   DEFAULT_GPU_POOL_SIZE,
 		LogDir:     DEFAULT_GPU_LOG_DIR,
 		SockDir:    DEFAULT_GPU_SOCK_DIR,
-		FreezeType: DEFAULT_GPU_FREEZE_TYPE,
 		ShmSize:    DEFAULT_GPU_SHM_SIZE,
 		Debug:      DEFAULT_GPU_DEBUG,
 	},

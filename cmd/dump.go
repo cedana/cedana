@@ -53,8 +53,6 @@ func init() {
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to files in the dump")
-	dumpCmd.PersistentFlags().
-		StringP(flags.GpuFreezeTypeFlag.Full, flags.GpuFreezeTypeFlag.Short, "", "GPU freeze type (IPC, NCCL)")
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
@@ -90,7 +88,6 @@ var dumpCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression, _ := cmd.Flags().GetString(flags.CompressionFlag.Full)
 		streams, _ := cmd.Flags().GetInt32(flags.StreamsFlag.Full)
-		gpuFreezeType, _ := cmd.Flags().GetString(flags.GpuFreezeTypeFlag.Full)
 
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
@@ -125,7 +122,6 @@ var dumpCmd = &cobra.Command{
 			Streams:       int32(streams),
 			Criu:          criuOpts,
 			Action:        daemon.DumpAction_DUMP,
-			GPUFreezeType: gpuFreezeType,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
