@@ -218,7 +218,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 						return
 					}
 				}
-				msgs <- fmt.Sprintf("Downloaded plugin %s", name)
+				msgs <- fmt.Sprintf("Downloaded plugin %s (%s)", name, plugin.AvailableVersion)
 			})
 		}
 
