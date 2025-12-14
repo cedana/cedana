@@ -31,9 +31,10 @@ start_containerd() {
 }
 
 stop_containerd() {
-    if pid=$(pidof containerd); then
+    if cmd_exists start-docker.sh; then
+        pkill supervisord
+    elif pid=$(pidof containerd); then
         kill "$pid"
-        wait_for_no_pid "$pid"
     else
         debug_log "containerd is not running."
     fi
