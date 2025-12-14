@@ -42,6 +42,7 @@ teardown_file() {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    watch_logs "$jid"
 
     sleep 1
 
@@ -55,6 +56,7 @@ teardown_file() {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    watch_logs "$jid"
 
     sleep 1
 
@@ -72,12 +74,14 @@ teardown_file() {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    watch_logs "$jid"
 
     sleep 1
 
     cedana dump job "$jid" --streams 1 --dir cedana://ci
 
     cedana restore job "$jid"
+    watch_logs "$jid"
 
     sleep 1
 
@@ -93,12 +97,14 @@ teardown_file() {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    watch_logs "$jid"
 
     sleep 1
 
     cedana dump job "$jid" --streams 4 --dir cedana://ci
 
     cedana restore job "$jid"
+    watch_logs "$jid"
 
     sleep 1
 
@@ -109,12 +115,13 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "[$GPU_INFO] remote stream restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     pid_file=/tmp/pid-$jid
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    watch_logs "$jid"
 
     sleep 1
 

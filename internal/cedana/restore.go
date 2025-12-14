@@ -42,6 +42,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		pluginRestoreMiddleware, // middleware from plugins
 
 		process.InheritFilesForRestore,
+		process.SetupIO[daemon.RestoreReq, daemon.RestoreResp],
 		criu.CheckOptsForRestore,
 	}
 
@@ -94,6 +95,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		pluginRestoreMiddleware, // middleware from plugins
 
 		process.InheritFilesForRestore,
+		process.SetupIO[daemon.RestoreReq, daemon.RestoreResp],
 		criu.CheckOptsForRestore,
 	}
 
@@ -101,9 +103,10 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 	restore = restore.With(criu.New[daemon.RestoreReq, daemon.RestoreResp](s.plugins))
 
 	opts := types.Opts{
-		Lifetime: s.lifetime,
-		Plugins:  s.plugins,
-		WG:       s.WaitGroup,
+		Lifetime:   s.lifetime,
+		Plugins:    s.plugins,
+		WG:         s.WaitGroup,
+		Serverless: true,
 	}
 	resp := &daemon.RestoreResp{}
 
@@ -190,7 +193,7 @@ func pluginRestoreStorage(next types.Restore) types.Restore {
 func pluginRestoreHandler() types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		t := req.Type
-		handler := criu.Restore
+		var handler types.Restore = criu.Restore
 
 		switch t {
 		case "process":

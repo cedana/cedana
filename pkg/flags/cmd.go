@@ -25,7 +25,6 @@ var (
 	GpuEnabledFlag    = Flag{Full: "gpu-enabled", Short: "g"}
 	GpuTracingFlag    = Flag{Full: "gpu-tracing"}
 	GpuIdFlag         = Flag{Full: "gpu-id"}
-	GpuFreezeTypeFlag = Flag{Full: "gpu-freeze-type"}
 	AttachFlag        = Flag{Full: "attach", Short: "a"}
 	AttachableFlag    = Flag{Full: "attachable"}
 	AllFlag           = Flag{Full: "all", Short: "a"}

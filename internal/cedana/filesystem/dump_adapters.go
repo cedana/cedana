@@ -14,6 +14,7 @@ import (
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -43,7 +44,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 
-		async := config.Global.Checkpoint.Async && storage.IsRemote()
+		async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
 
 		// If remote storage, we instead use a temporary directory for CRIU
 		if storage.IsRemote() {
@@ -142,14 +143,12 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					compressCtx := context.WithoutCancel(ctx)
 
 					if req.GetCriu().GetLeaveRunning() {
-						opts.WG.Add(1)
-						go func() {
-							defer opts.WG.Done()
+						opts.WG.Go(func() {
 							log.Info().Msg("async dump compress/upload started")
 							if compressErr := compress(compressCtx); compressErr != nil {
 								log.Error().Err(compressErr).Msg("async compress/upload failed")
 							}
-						}()
+						})
 					} else {
 						callback := &criu_client.NotifyCallback{
 							PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) error {
@@ -174,7 +173,12 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				}
 			}
 		} else {
-			// Nothing else to do, just set the path
+			// Nothing else to do, just set the path and
+			// add profiling data manually as no IO could be measured
+			defer func() {
+				size := utils.SizeFromPath(imagesDirectory)
+				profiling.AddIO(ctx, size)
+			}()
 			resp.Paths = append(resp.Paths, imagesDirectory)
 		}
 

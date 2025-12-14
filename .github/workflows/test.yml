@@ -306,6 +306,14 @@ jobs:
         with:
           name: criu-${{ matrix.arch }}
 
+      - name: Download containerd runtime
+        if: matrix.plugin == 'containerd'
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: containerd-runtime-${{ matrix.arch }}-*
+          merge-multiple: true
+
       - name: Make executable
         run: |
           chmod +x ./cedana*
@@ -316,6 +324,9 @@ jobs:
         run: |
           make install
           sudo -E cedana plugin install ${{ matrix.plugin }} criu runc storage/cedana storage/s3 storage/gcs
+          if [ "${{ matrix.plugin }}" = "containerd" ]; then
+            sudo -E cedana plugin install containerd/runtime-runc
+          fi
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"

@@ -20,7 +20,7 @@ INSTALL_K3S_EXEC="server \
         --disable=traefik \
         --snapshotter=native"
 
-_download_k3s() {
+download_k3s() {
     debug_log "Downloading k3s binary..."
 
     local arch
@@ -46,17 +46,8 @@ _download_k3s() {
     debug_log "Downloaded k3s binary"
 }
 
-_preinstall_containerd_runtime() {
-    debug_log "Pre-installing containerd runtime for k3s..."
-
-    if ! path_exists /usr/local/bin/cedana-shim-runc-v2; then
-        if [ "$CEDANA_PLUGINS_BUILDS" = "local" ]; then
-            error_log "Runtime shim not found in /usr/local/bin"
-            return 1
-        else
-            cedana plugin install containerd/runtime-runc
-        fi
-    fi
+configure_containerd_runtime() {
+    debug_log "Configuring containerd runtime for k3s..."
 
     if ! path_exists $CONTAINERD_CONFIG_PATH; then
         mkdir -p "$(dirname "$CONTAINERD_CONFIG_PATH")"
@@ -75,14 +66,15 @@ _preinstall_containerd_runtime() {
 END_CAT
     fi
 
-    debug_log "Pre-installed containerd runtime for k3s"
+    debug_log "Configured containerd runtime for k3s"
 }
 
-_start_cluster() {
+start_cluster() {
     debug_log "Starting k3s cluster..."
 
-    # Pre-install the containerd v2 runtime so we won't have to restart k3s
-    _preinstall_containerd_runtime
+    # XXX: Pre-install the containerd v2 runtime so we won't have to restart k3s otherwise it needs to
+    # be restarted after we install the new runtime.
+    configure_containerd_runtime
 
     if ! command -v k3s &> /dev/null; then
         error_log "k3s binary not found"
@@ -94,7 +86,7 @@ _start_cluster() {
 
     debug_log "Waiting for k3s cluster to start..."
 
-    local timeout=120
+    local timeout=300
     wait_for_cmd "$timeout" "kubectl get nodes | grep -q ."
 
     debug_log "Waiting for k3s node to be Ready..."
@@ -106,7 +98,7 @@ _start_cluster() {
     debug_log "k3s cluster has started successfully"
 }
 
-_stop_cluster() {
+stop_cluster() {
     debug_log "Stopping k3s cluster..."
 
     if command -v k3s-killall.sh &>/dev/null; then
@@ -126,7 +118,7 @@ _stop_cluster() {
 }
 
 # Pre-load an image into k3s from docker if available locally
-_preload_images() {
+preload_images() {
     local image="$1"
     if ! docker images -q "$image" 2>/dev/null | grep -q .; then
         debug_log "Local $image image not found, skipping..."
@@ -154,11 +146,12 @@ _preload_images() {
     debug_log "Preloaded image $image into k3s"
 }
 
+# Function to set up k3s cluster
 setup_cluster() {
     debug_log "Installing k3s cluster..."
 
-    _download_k3s
-    _start_cluster
+    download_k3s
+    start_cluster
 
     # XXX: The tar in busybox is incompatible with CRIU
     rm -f /var/lib/rancher/k3s/data/current/bin/tar
@@ -166,21 +159,21 @@ setup_cluster() {
     mkdir -p ~/.kube
     cat $KUBECONFIG > ~/.kube/config
 
-    # Preload controller/helper images if available locally
     if [ -n "$CONTROLLER_DIGEST" ]; then
-        _preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
+        preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
     elif [ -n "$CONTROLLER_TAG" ]; then
-        _preload_images "$CONTROLLER_REPO:$CONTROLLER_TAG"
+        preload_images "$CONTROLLER_REPO:$CONTROLLER_TAG"
     fi
     if [ -n "$HELPER_DIGEST" ]; then
-        _preload_images "$HELPER_REPO@$HELPER_DIGEST"
+        preload_images "$HELPER_REPO@$HELPER_DIGEST"
     elif [ -n "$HELPER_TAG" ]; then
-        _preload_images "$HELPER_REPO:$HELPER_TAG"
+        preload_images "$HELPER_REPO:$HELPER_TAG"
     fi
 
     debug_log "k3s cluster is ready"
 }
 
+# Teardown k3s cluster completely
 teardown_cluster() {
     debug_log "Tearing down k3s cluster..."
 

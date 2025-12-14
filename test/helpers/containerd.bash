@@ -14,6 +14,12 @@ pull_images() {
 }
 
 start_containerd() {
+    # Check if containerd is already running
+    if pidof containerd > /dev/null 2>&1; then
+        debug_log "containerd is already running."
+        return 0
+    fi
+
     if cmd_exists start-docker.sh; then
         start-docker.sh # XXX: use docker-in-docker, if available, from the container image
     elif cmd_exists containerd; then

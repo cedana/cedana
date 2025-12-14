@@ -45,6 +45,7 @@ teardown_file() {
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
     cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    watch_logs "$jid"
 
     sleep 1
 
@@ -62,6 +63,7 @@ teardown_file() {
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
     cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    watch_logs "$jid"
 
     sleep 1
 
@@ -86,6 +88,7 @@ teardown_file() {
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
     cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    watch_logs "$jid"
 
     sleep 1
 
@@ -95,6 +98,13 @@ teardown_file() {
     assert_exists "$dump_file/img-0.gz"
 
     cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
 
     run cedana job kill "$jid"
 }
@@ -105,6 +115,7 @@ teardown_file() {
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
     cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    watch_logs "$jid"
 
     sleep 1
 
@@ -117,11 +128,18 @@ teardown_file() {
     assert_exists "$dump_file/img-3.gz"
 
     cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
 
     run cedana job kill "$jid"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "[$GPU_INFO] stream restore GPU container (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"

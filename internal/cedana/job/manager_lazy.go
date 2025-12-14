@@ -242,9 +242,28 @@ func (m *ManagerLazy) Exists(jid string) bool {
 	return ok
 }
 
+func (m *ManagerLazy) Find(pid uint32) *Job {
+	var found *Job
+	m.jobs.Range(func(key any, val any) bool {
+		job := val.(*Job)
+		if job.GetPID() == pid {
+			found = job
+			return false
+		}
+		return true
+	})
+	return found
+}
+
 func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, code <-chan int) error {
 	if !m.Exists(jid) {
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
+	}
+	if pid == 0 {
+		return fmt.Errorf("invalid PID 0 for job %s", jid)
+	}
+	if existing := m.Find(pid); existing != nil && existing.JID != jid {
+		return fmt.Errorf("PID %d is already being managed under job %s", pid, jid)
 	}
 
 	log := log.With().Str("JID", jid).Str("type", m.Get(jid).GetType()).Uint32("PID", pid).Logger()
@@ -338,13 +357,12 @@ func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
 	}
 
 	for _, path := range paths {
-		size, _ := utils.SizeFromPath(path)
 		checkpoint := &daemon.Checkpoint{
 			ID:   uuid.New().String(),
 			JID:  jid,
 			Path: path,
 			Time: time.Now().UnixMilli(),
-			Size: size,
+			Size: utils.SizeFromPath(path),
 		}
 		m.checkpoints.Store(checkpoint.ID, checkpoint)
 

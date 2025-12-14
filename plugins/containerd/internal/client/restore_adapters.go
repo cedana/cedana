@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -90,12 +91,44 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			log.Warn().Err(err).Msgf("could not open runtime file from dump, will use %s", runtime)
 		} else {
 			defer file.Close()
-			var runtimeBytes [256]byte
-			n, err := file.Read(runtimeBytes[:])
+			bytes, err := io.ReadAll(file)
 			if err != nil {
 				log.Warn().Err(err).Msgf("could not read runtime from dump, will use %s", runtime)
 			} else {
-				runtime = string(runtimeBytes[:n])
+				log.Debug().Str("runtime", string(bytes)).Msg("read runtime from dump")
+				runtime = string(bytes)
+			}
+		}
+
+		snapshotKey := details.ID
+
+		file, err = opts.DumpFs.Open(containerd_keys.DUMP_SNAPSHOT_KEY)
+		if err != nil {
+			log.Warn().Err(err).Msgf("could not open snapshot key file from dump, will use %s", snapshotKey)
+		} else {
+			defer file.Close()
+			bytes, err := io.ReadAll(file)
+			if err != nil {
+				log.Warn().Err(err).Msgf("could not read snapshot key from dump, will use %s", snapshotKey)
+			} else {
+				snapshotKey = string(bytes)
+				log.Debug().Str("snapshot_key", snapshotKey).Msg("read snapshot key from dump")
+			}
+		}
+
+		snapshotter := containerd.DefaultSnapshotter
+
+		file, err = opts.DumpFs.Open(containerd_keys.DUMP_SNAPSHOTTER_KEY)
+		if err != nil {
+			log.Warn().Err(err).Msgf("could not open snapshotter file from dump, will use %s", snapshotter)
+		} else {
+			defer file.Close()
+			bytes, err := io.ReadAll(file)
+			if err != nil {
+				log.Warn().Err(err).Msgf("could not read snapshotter from dump, will use %s", snapshotter)
+			} else {
+				log.Debug().Str("snapshotter", string(bytes)).Msg("read snapshotter from dump")
+				snapshotter = string(bytes)
 			}
 		}
 
@@ -115,12 +148,13 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			ctx,
 			details.ID,
 			containerd.WithImage(image),
-			containerd.WithNewSnapshot(details.ID, image),
+			containerd.WithNewSnapshot(snapshotKey, image),
+			containerd.WithSnapshotter(snapshotter),
 			containerd.WithNewSpec(specOpts...),
 			containerd.WithRuntime(newRuntime, &options.Options{}),
 		)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create container for run: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to create container for restore: %v", err)
 		}
 		defer func() {
 			if err != nil {

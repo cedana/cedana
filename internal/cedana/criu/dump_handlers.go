@@ -22,10 +22,8 @@ const (
 	GHOST_FILE_MAX_SIZE = 200 * utils.MEBIBYTE
 )
 
-var Dump types.Dump = dump
-
 // Returns a CRIU dump handler for the server
-func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 	if req.GetCriu() == nil {
 		return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 	}

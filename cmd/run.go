@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
@@ -116,8 +117,6 @@ var runCmd = &cobra.Command{
 		cmd.SetContext(ctx)
 
 		if noServer {
-			ctx := context.WithValue(cmd.Context(), keys.DAEMONLESS_CONTEXT_KEY, true)
-			cmd.SetContext(ctx)
 			return nil
 		}
 
@@ -160,9 +159,9 @@ var runCmd = &cobra.Command{
 				return utils.GRPCErrorColored(err)
 			}
 
-			profiling := cedana.Finalize()
-			if config.Global.Profiling.Enabled && profiling != nil {
-				printProfilingData(profiling)
+			data := cedana.Finalize()
+			if config.Global.Profiling.Enabled && data != nil {
+				profiling.Print(data, features.Theme())
 			}
 			cedana.Wait()
 
@@ -175,13 +174,13 @@ var runCmd = &cobra.Command{
 			defer client.Close()
 
 			// Assuming request is now ready to be sent to the server
-			resp, profiling, err := client.Run(cmd.Context(), req)
+			resp, data, err := client.Run(cmd.Context(), req)
 			if err != nil {
 				return err
 			}
 
-			if config.Global.Profiling.Enabled && profiling != nil {
-				printProfilingData(profiling)
+			if config.Global.Profiling.Enabled && data != nil {
+				profiling.Print(data, features.Theme())
 			}
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
