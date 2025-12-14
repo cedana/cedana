@@ -342,11 +342,14 @@ setup_file() {
 
     # Install Cedana helm chart unless skipped
     if [ "${SKIP_HELM_INSTALL:-0}" != "1" ]; then
-        # Clean up any leftover pods from previous test runs (especially uninstaller pods)
-        # This prevents wait_for_ready from hanging on broken pods from prior runs
-        debug_log "Cleaning up any leftover pods in $CEDANA_NAMESPACE namespace..."
+        # Clean up any leftover resources from previous test runs
+        # This prevents helm install failures due to orphaned cluster-scoped resources
+        debug_log "Cleaning up any leftover cedana resources..."
         kubectl delete pods -n "$CEDANA_NAMESPACE" --field-selector=status.phase=Failed --ignore-not-found=true 2>/dev/null || true
         kubectl delete pods -n "$CEDANA_NAMESPACE" -l app.kubernetes.io/component=uninstaller --ignore-not-found=true 2>/dev/null || true
+        # Clean up orphaned cluster-scoped resources from previous installs (may have different namespace annotations)
+        kubectl delete clusterrole cedana-manager-role --ignore-not-found=true 2>/dev/null || true
+        kubectl delete clusterrolebinding cedana-manager-rolebinding --ignore-not-found=true 2>/dev/null || true
 
         if [ -z "$CLUSTER_ID" ]; then
             debug_log "Registering cluster '$CLUSTER_NAME' with propagator..."
