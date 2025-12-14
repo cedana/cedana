@@ -53,7 +53,7 @@ jobs:
       streamer_version: main
       helm_chart_version: main
       controller_version: main
-      containerd_runtime_version: hotfix/termination
+      containerd_runtime_version: cedana
 
   publish:
     name: Publish

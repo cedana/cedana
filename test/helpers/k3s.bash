@@ -43,9 +43,6 @@ setup_cluster() {
 start_cluster() {
     debug_log "Starting k3s cluster..."
 
-    # XXX: Pre-install the containerd v2 runtime so we won't have to restart k3s otherwise it needs to
-    # be restarted after we install the new runtime.
-
     configure_containerd_runtime
 
     if ! command -v k3s &> /dev/null; then
