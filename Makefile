@@ -341,7 +341,7 @@ DOCKER_TEST_START=docker start $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
 DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 PLATFORM=linux/amd64,linux/arm64
-ALL_PLUGINS?=0
+ALL_PLUGINS?=1
 PREBUILT_BINARIES?=0
 
 PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
@@ -385,6 +385,10 @@ docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERS
 		--build-arg VERSION=$(VERSION) \
 		-t $(DOCKER_IMAGE) --load . ;\
 
+docker-push: ## Push the helper Docker image (DOCKER_IMAGE=<image>)
+	@echo "Pushing helper Docker image..."
+	docker push $(DOCKER_IMAGE)
+
 docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE=<image>)
 	@echo "Building test Docker image..."
 	cd test ;\
@@ -397,11 +401,11 @@ docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,
 	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
-docker-test-push: ## Push the test Docker image (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE=<image>)
+docker-test-push: ## Push the test Docker image (DOCKER_TEST_IMAGE=<image>)
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-cuda-push: ## Push the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE_CUDA=<image>)
+docker-test-cuda-push: ## Push the test Docker image for CUDA (DOCKER_TEST_IMAGE_CUDA=<image>)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 

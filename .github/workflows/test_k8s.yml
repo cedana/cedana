@@ -282,13 +282,13 @@ jobs:
           CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
           HELM_CHART=/tmp/helm-chart
 
-          CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
-          CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
+          export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
+          export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
           if [ "$GPU" = "true" ]; then
-            CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+            export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
           fi
           if [ "$STREAMER" = "true" ]; then
-            CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
+            export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
           fi
 
           # Map platform names to provider names
