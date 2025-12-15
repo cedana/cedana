@@ -147,8 +147,8 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						go func(i int32) {
 							defer wg.Done()
 
-							localPath := fmt.Sprintf("%s/img-%d%s", imagesDirectory, i, ext)
-							remotePath := fmt.Sprintf("%s/img-%d%s", path, i, ext)
+							localPath := filepath.Join(imagesDirectory, fmt.Sprintf(IMG_FILE_FORMATTER, i)+ext)
+							remotePath := path + "/" + fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext // do not use filepath.Join as it removes a slash
 
 							src, err := streamStorage.Open(ctx, localPath)
 							if err != nil {
@@ -163,9 +163,6 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 								return
 							}
 							defer dst.Close()
-
-							// add profiling for io copier
-							dst = profiling.IOCategory(ctx, dst, "storage", io.Copy)
 
 							if _, err := io.Copy(dst, src); err != nil {
 								errCh <- fmt.Errorf("failed to upload shard %d: %w", i, err)

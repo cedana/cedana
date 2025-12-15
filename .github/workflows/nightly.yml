@@ -29,7 +29,7 @@ jobs:
       streamer_version: ${{ vars.NIGHTLY_STREAMER_VERSION }}
       helm_chart_version: ${{ vars.NIGHTLY_HELM_CHART_VERSION }}
       controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
-      containerd_runtime_version: ${{ vars.NIGHTLY_RUNTIME_SHIM_VERSION }}
+      containerd_runtime_version: ${{ vars.NIGHTLY_CONTAINERD_RUNTIME_VERSION }}
 
   test:
     name: Test

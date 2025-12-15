@@ -3,6 +3,7 @@
 # This file contains setup functions that run for the duration of the test suite run.
 
 source "${BATS_TEST_DIRNAME}"/../helpers/utils.bash
+source "${BATS_TEST_DIRNAME}"/../helpers/daemon.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/k8s.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/helm.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/containerd.bash
