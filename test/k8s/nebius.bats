@@ -15,6 +15,7 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
+
 CLUSTER_NAME="test-nebius-$(unix_nano)"
 export CLUSTER_NAME
 export CLUSTER_ID
