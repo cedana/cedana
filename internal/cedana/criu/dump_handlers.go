@@ -86,11 +86,11 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 //////////////////////
 
 func logLevel() int32 {
-	level := 1 // error statements
+	level := 2 // error statements
 	if log.Logger.GetLevel() <= zerolog.TraceLevel {
-		level = 3 // debug statements
+		level = 4 // debug statements
 	} else if log.Logger.GetLevel() <= zerolog.DebugLevel {
-		level = 2 // warning statements
+		level = 3 // warning statements
 	}
 	return int32(level)
 }

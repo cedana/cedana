@@ -245,8 +245,6 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "restore container" {
-    skip "Restore test is flaky, needs investigation"
-
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
     pid_file="/tmp/$(unix_nano).pid"
@@ -262,7 +260,49 @@ teardown_file() {
     assert_exists "$dump_file"
     ctr container delete "$id"
 
-    debug cedana restore containerd --path "$dump_file" --id "$id" --attach
+    cedana restore containerd --path "$dump_file" --id "$id"
 
     run ctr task kill "$id"
+}
+
+# bats test_tags=restore
+@test "restore container (detached)" {
+    id=$(unix_nano)
+    image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
+
+    ctr run --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+
+    wait_for_file "$pid_file" && sleep 1
+
+    run cedana dump containerd "$id"
+    assert_success
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+    ctr container delete "$id"
+
+    cedana restore containerd --path "$dump_file" --id "$id"
+
+    run ctr task kill "$id"
+}
+
+# bats test_tags=restore
+@test "restore container (new job)" {
+    jid=$(unix_nano)
+    image="docker.io/library/nginx:latest"
+    port=$(random_free_port)
+
+    cedana run containerd --jid "$jid" --env NGINX_PORT="$port" "$image"
+
+    sleep 2
+
+    run cedana dump job "$jid"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1  | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    debug cedana restore job "$jid" --path "$dump_file"
+
+    run cedana job kill "$jid"
 }

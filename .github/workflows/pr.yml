@@ -54,7 +54,7 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      criu_version: release
+      criu_version: criu-dev
       gpu_version: main
       streamer_version: main
       helm_chart_version: main

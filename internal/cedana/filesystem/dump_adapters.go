@@ -138,25 +138,23 @@ func DumpFilesystem(next types.Dump) types.Dump {
 						return
 					}
 
+					// Directly add profiling data here since the compress/upload
+					// will happen asynchronously and we cannot hook that into profiling later.
+					size := utils.SizeFromPath(imagesDirectory)
+					profiling.AddIO(ctx, size)
+
 					// Use a detached context for async upload since the parent request
 					// context will be canceled after the dump completes.
 					compressCtx := context.WithoutCancel(ctx)
 
-					if req.GetCriu().GetLeaveRunning() {
-						opts.WG.Go(func() {
-							log.Info().Msg("async dump compress/upload started")
-							if compressErr := compress(compressCtx); compressErr != nil {
-								log.Error().Err(compressErr).Msg("async compress/upload failed")
-							}
-						})
-					} else {
-						callback := &criu_client.NotifyCallback{
-							PostDumpFunc: func(_ context.Context, _ *criu_proto.CriuOpts) error {
-								return compress(compressCtx)
-							},
+					opts.WG.Go(func() {
+						log.Info().Msg("async dump compress/upload started")
+						if compressErr := compress(compressCtx); compressErr != nil {
+							log.Error().Err(compressErr).Msg("async compress/upload failed")
+						} else {
+							log.Info().Msg("async dump compress/upload completed")
 						}
-						opts.CRIUCallback.Include(callback)
-					}
+					})
 				}()
 			} else {
 				if req.GetCriu().GetLeaveRunning() {
