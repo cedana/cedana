@@ -156,9 +156,7 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 
 		internalMounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			if m.Major == 0 {
-				internalMounts[m.ID] = nil
-			}
+			internalMounts[m.ID] = nil
 			return true
 		})
 
