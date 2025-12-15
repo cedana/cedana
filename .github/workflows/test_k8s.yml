@@ -147,6 +147,12 @@ jobs:
             storage: storage/s3
           - platform: Nebius
             storage: storage/cedana
+          - platform: Nebius
+            compute: CPU
+          - platform: Nebius
+            arch: arm64
+          - platform: Nebius
+            cr: streamer
         include:
           # Nebius uses local storage for now
           - platform: Nebius
