@@ -28,6 +28,11 @@ APT_PACKAGES=(
 )
 
 install_apt_packages() {
+    # Fix any interrupted dpkg state first
+    if ! apt-get check &>/dev/null; then
+        echo "Fixing interrupted dpkg state..." >&2
+        dpkg --configure -a || true
+    fi
     apt-get update
     for pkg in "${APT_PACKAGES[@]}"; do
         if ! apt-get install -y "$pkg"; then
