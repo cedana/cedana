@@ -142,17 +142,21 @@ jobs:
             compute: CUDA
           - platform: EKS
             compute: CUDA
+          # Exclude all default matrix combinations for Nebius - we use include instead
           - platform: Nebius
-            compute: CPU
+            storage: storage/s3
           - platform: Nebius
-            compute: storage/s3
+            storage: storage/cedana
+        include:
+          # Nebius uses local storage for now
           - platform: Nebius
-            compute: storage/cedana
-          - platform: Nebius
-            compute: arm64
+            compute: CUDA
+            cr: default
+            storage: storage/local
+            arch: amd64
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 1 || 9999 }}
     container:
-      image: ${{ matrix.platform == 'CUDA' && matrix.platform != 'Nebius' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.compute == 'CUDA' && matrix.platform != 'Nebius' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
@@ -270,7 +274,8 @@ jobs:
 
       - name: Run k8s tests
         env:
-          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci' }}
+          # Checkpoint storage: local for Nebius, s3:// or cedana:// for others
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || (matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci') }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}

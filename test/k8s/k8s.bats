@@ -348,6 +348,18 @@ setup_file() {
         kubectl delete pods -n "$CEDANA_NAMESPACE" --field-selector=status.phase=Failed --ignore-not-found=true 2>/dev/null || true
         kubectl delete pods -n "$CEDANA_NAMESPACE" -l app.kubernetes.io/component=uninstaller --ignore-not-found=true 2>/dev/null || true
 
+        # If Cedana is already installed, uninstall it first to ensure clean state
+        # This is especially important for persistent clusters (EKS, GKE, Nebius)
+        if helm status cedana -n "$CEDANA_NAMESPACE" &>/dev/null; then
+            debug_log "Found existing Cedana installation, uninstalling first..."
+            helm_uninstall_cedana "$CEDANA_NAMESPACE" || true
+            # Also clean up any orphaned resources after uninstall
+            kubectl delete pods -n "$CEDANA_NAMESPACE" --all --ignore-not-found=true 2>/dev/null || true
+            kubectl delete pvc -n "$CEDANA_NAMESPACE" --all --ignore-not-found=true 2>/dev/null || true
+            # Wait for namespace to be clean
+            sleep 5
+        fi
+
         if [ -z "$CLUSTER_ID" ]; then
             debug_log "Registering cluster '$CLUSTER_NAME' with propagator..."
             CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
