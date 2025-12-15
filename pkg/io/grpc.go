@@ -133,7 +133,6 @@ func NewStreamIOSlave(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	pid uint32,
-	exitCode <-chan int,
 ) (stdIn *StreamIOReader, stdOut *StreamIOWriter, stdErr *StreamIOWriter) {
 	in := make(chan []byte, channelBufLen)
 	out := make(chan []byte, channelBufLen)
@@ -145,7 +144,7 @@ func NewStreamIOSlave(
 		in,
 		out,
 		err,
-		exitCode,
+		make(chan int, 1),
 	}
 
 	SetIOSlave(pid, slave)
@@ -203,7 +202,7 @@ func NewStreamIOSlave(
 		}
 
 		close(in)
-		code := <-exitCode
+		code := <-slave.exitCode
 		for master := range masters {
 			master.Send(
 				&daemon.AttachResp{Output: &daemon.AttachResp_ExitCode{ExitCode: int32(code)}},
@@ -349,11 +348,19 @@ func GetIOSlave(pid uint32) *StreamIOSlave {
 
 // SetIOSlavePID updates the PID of an existing slave.
 // Uses the PID value of pointer at the time of the call.
-func SetIOSlavePID(oldId uint32, pid *uint32) {
-	slave, ok := availableSlaves.Load(oldId)
-	if !ok {
+func SetIOSlavePID(oldId uint32, pid uint32) {
+	slave := GetIOSlave(oldId)
+	if slave == nil {
 		return
 	}
 	DeleteIOSlave(&oldId)
-	SetIOSlave(*pid, slave.(*StreamIOSlave))
+	SetIOSlave(pid, slave)
+}
+
+func SetIOSlaveExitCode(oldId uint32, code <-chan int) {
+	slave := GetIOSlave(oldId)
+	if slave == nil {
+		return
+	}
+	slave.exitCode = code
 }

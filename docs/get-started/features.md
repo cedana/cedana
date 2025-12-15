@@ -23,7 +23,7 @@ Freeze handler            •                 ✔     ✔           •     • 
 Unfreeze handler          •                 ✔     ✔           •     •     •               •           •            •
 
 Run handler               •                 ✔     ✔           ✔     •     •               •           •            •
-Run handler (daemonless)  •                 ✔     •           •     •     •               •           •            •
+Run handler (serverless)  •                 ✔     •           •     •     •               •           •            •
 Run middleware            •                 ✔     ✔           ✔     •     •               •           •            •
 Manage handler            •                 ✔     ✔           •     •     •               •           •            •
 Custom kill signal        •                 ✔     ✔           •     ✔     •               •           •            •

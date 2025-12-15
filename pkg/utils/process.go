@@ -390,11 +390,16 @@ func IsTTY(path string) (bool, error) {
 	return isatty.IsTerminal(file.Fd()), nil
 }
 
+// Gets the last value of an env var from a list of env vars
 func Getenv(env []string, key string, defaultValue ...string) string {
-	for _, e := range env {
-		if after, ok := strings.CutPrefix(e, key+"="); ok {
+	prefix := key + "="
+	for i := len(env) - 1; i >= 0; i-- {
+		if after, ok := strings.CutPrefix(env[i], prefix); ok {
 			return after
 		}
 	}
-	return strings.Join(defaultValue, "")
+	if len(defaultValue) > 0 {
+		return defaultValue[0]
+	}
+	return ""
 }

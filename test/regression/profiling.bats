@@ -44,7 +44,7 @@ teardown_file() {
     refute_output --partial "total"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run process (profiling, without daemon)" {
     jid=$(unix_nano)
 
@@ -53,7 +53,7 @@ teardown_file() {
     assert_output --partial "total"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run process (profiling output off, without daemon)" {
     jid=$(unix_nano)
 
@@ -122,7 +122,7 @@ teardown_file() {
     run kill $pid
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore process (profiling, without daemon)" {
     "$WORKLOADS"/date-loop.sh 3 &
     pid=$!
@@ -140,7 +140,7 @@ teardown_file() {
     run kill $pid
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore process (profiling output off, without daemon)" {
     "$WORKLOADS"/date-loop.sh 3 &
     pid=$!

@@ -7,6 +7,7 @@ export CEDANA_REMOTE=${CEDANA_REMOTE:-false}
 export CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-debug}
 export CEDANA_LOG_LEVEL_NO_SERVER=$CEDANA_LOG_LEVEL
 export CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-false}
+export CEDANA_METRICS_ENABLED=${CEDANA_METRICS_ENABLED:-false}
 export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-/tmp}
 export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
 export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
@@ -132,4 +133,18 @@ pid_for_jid() {
     local jid=$1
     table=$(cedana ps)
     echo "$table" | awk -v job="$jid" '$1 == job {print $3}'
+}
+
+logfile_for_jid() {
+    local jid=$1
+    table=$(cedana ps)
+    echo "$table" | awk -v job="$jid" '$1 == job {print $NF}'
+}
+
+watch_logs() {
+    local jid=$1
+    log_file=$(logfile_for_jid "$jid")
+    pid=$(pid_for_jid "$jid")
+
+    debug tail -f --silent --pid="$pid" "$log_file" &
 }

@@ -3,21 +3,15 @@ package job
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rb-go/namegen"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
-const (
-	DEFAULT_LOG_PATH_FORMATTER string      = "/var/log/cedana-output-%s.log"
-	OUT_FILE_PERMS             os.FileMode = 0o644
-	OUT_FILE_FLAGS             int         = os.O_CREATE | os.O_WRONLY | os.O_APPEND | os.O_TRUNC
-)
+const DEFAULT_LOG_PATH_FORMATTER string = "/var/log/cedana-output-%s.log"
 
 // Adapter that manages the job state.
 // Also attaches GPU support to the job, if requested.
@@ -38,16 +32,6 @@ func Manage(jobs Manager) types.Adapter[types.Run] {
 				if req.Log == "" {
 					req.Log = fmt.Sprintf(DEFAULT_LOG_PATH_FORMATTER, job.JID)
 				}
-				outFile, err := os.OpenFile(req.Log, OUT_FILE_FLAGS, OUT_FILE_PERMS)
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to open log file: %v", err)
-				}
-				defer outFile.Close()
-				err = os.Chown(req.Log, int(req.UID), int(req.GID))
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to change log file owner: %v", err)
-				}
-				ctx = context.WithValue(ctx, keys.OUT_FILE_CONTEXT_KEY, outFile)
 			}
 
 			job.SetLog(req.Log)

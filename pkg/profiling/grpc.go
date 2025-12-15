@@ -23,15 +23,15 @@ func UnaryProfiler() grpc.UnaryServerInterceptor {
 
 		name := filepath.Base(strings.ToLower(info.FullMethod))
 
-		chilCtx, end := StartTiming(ctx, name)
-		resp, err := handler(chilCtx, req)
+		childCtx, end := StartTiming(ctx, name)
+		resp, err := handler(childCtx, req)
 		end()
 
 		if err != nil {
 			return nil, err
 		}
 
-		err = AttachTrailer(chilCtx)
+		err = AttachTrailer(childCtx)
 		if err != nil {
 			return nil, err
 		}
@@ -47,8 +47,8 @@ func AttachTrailer(ctx context.Context) error {
 		return nil
 	}
 
-	CleanData(data)
-	FlattenData(data)
+	Clean(data)
+	Flatten(data)
 
 	var md metadata.MD
 	md, ok = metadata.FromOutgoingContext(ctx)

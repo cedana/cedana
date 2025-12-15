@@ -68,13 +68,13 @@ var (
 		validation.ValidateDumpRequest,
 		client.Setup[daemon.DumpReq, daemon.DumpResp],
 		client.LoadContainer[daemon.DumpReq, daemon.DumpResp],
-		filesystem.DumpRWLayer,
 		filesystem.DumpImageName,
+		filesystem.DumpSnapshotter,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}
 
-	RestoreHandler    types.Restore                   = client.Restore
+	RestoreHandler    types.Restore                   = client.Run // Can simply use Run as shim will handle restoring
 	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,

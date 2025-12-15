@@ -3,6 +3,8 @@
 # This file assumes its being run from the same directory as the Makefile
 # bats file_tags=containerd
 
+# TODO: Diversify images used in tests (currently only nginx)
+
 load ../../helpers/utils
 load ../../helpers/daemon
 load ../../helpers/containerd
@@ -12,7 +14,6 @@ load_lib assert
 load_lib file
 
 setup_file() {
-    cedana plugin install containerd/runtime-runc
     do_once pull_images
     setup_file_daemon
 }
@@ -40,8 +41,9 @@ teardown_file() {
 
     cedana run containerd --jid "$jid" -- "$image" echo hello
 
-    assert_exists "$log_file"
-    assert_file_contains "$log_file" "hello"
+    run cat "$log_file"
+    assert_success
+    assert_output --partial "hello"
 
     run cedana ps
     assert_success
@@ -72,10 +74,12 @@ teardown_file() {
 @test "manage container (existing)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
 
-    ctr run --detach "$image" "$id"
+    ctr run --detach --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id"
 
-    sleep 2
+    wait_for_file "$pid_file"
 
     cedana manage containerd "$id" --jid "$id"
 
@@ -90,14 +94,14 @@ teardown_file() {
 @test "manage container (upcoming)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
 
-    run cedana manage containerd "$id" --jid "$id" --upcoming &
+    run cedana manage containerd "$id" --jid "$id" --pid-file "$pid_file" --upcoming &
 
-    sleep 2
+    ctr run --detach --env NGINX_PORT="$port" "$image" "$id"
 
-    ctr run --detach "$image" "$id"
-
-    sleep 2
+    wait_for_file "$pid_file"
 
     run cedana ps
     assert_success
@@ -114,10 +118,12 @@ teardown_file() {
 @test "dump container" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
 
-    ctr run "$image" "$id" &
+    ctr run --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id" &
 
-    sleep 2
+    wait_for_file "$pid_file" && sleep 1
 
     run cedana dump containerd "$id"
     assert_success
@@ -131,10 +137,12 @@ teardown_file() {
 @test "dump container (detached)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
 
-    ctr run --detach "$image" "$id"
+    ctr run --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
 
-    sleep 2
+    wait_for_file "$pid_file" && sleep 1
 
     run cedana dump containerd "$id"
     assert_success
@@ -149,10 +157,11 @@ teardown_file() {
     jid=$(unix_nano)
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
+    port=$(random_free_port)
 
-    cedana run containerd --jid "$jid" "$image"
+    cedana run containerd --jid "$jid" --env NGINX_PORT="$port" "$image"
 
-    sleep 3
+    sleep 2
 
     run cedana dump job "$jid" --image "$new_image"
     assert_success
@@ -167,10 +176,12 @@ teardown_file() {
     jid=$(unix_nano)
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
 
-    cedana run containerd --jid "$jid" --attach "$image" &
+    cedana run containerd --pid-file "$pid_file" --env NGINX_PORT="$port" --jid "$jid" --attach "$image" &
 
-    sleep 3
+    wait_for_file "$pid_file" && sleep 2
 
     run cedana dump job "$jid" --image "$new_image"
     assert_success
@@ -186,8 +197,12 @@ teardown_file() {
     jid="$id"
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
 
-    ctr run --detach "$image" "$id"
+    ctr run --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+
+    wait_for_file "$pid_file"
 
     cedana manage containerd "$id" --jid "$jid"
 
@@ -207,14 +222,14 @@ teardown_file() {
     jid="$id"
     image="docker.io/library/nginx:latest"
     new_image="docker.io/library/nginx:$jid"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
 
-    run cedana manage containerd "$id" --jid "$jid" --upcoming &
+    run cedana manage containerd "$id" --jid "$jid" --pid-file "$pid_file" --upcoming &
 
-    sleep 2
+    ctr run --detach --env NGINX_PORT="$port" "$image" "$id"
 
-    ctr run --detach "$image" "$id"
-
-    sleep 2
+    wait_for_file "$pid_file" && sleep 2
 
     run cedana dump job "$jid" --image "$new_image"
     assert_success
@@ -222,4 +237,32 @@ teardown_file() {
     assert_exists "$dump_file"
 
     run cedana kill "$jid"
+}
+
+###############
+### Restore ###
+###############
+
+# bats test_tags=restore
+@test "restore container" {
+    skip "Restore test is flaky, needs investigation"
+
+    id=$(unix_nano)
+    image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
+
+    ctr run --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id" &
+
+    wait_for_file "$pid_file" && sleep 1
+
+    run cedana dump containerd "$id"
+    assert_success
+    dump_file=$(echo "$output" | awk '{print $NF}')
+    assert_exists "$dump_file"
+    ctr container delete "$id"
+
+    debug cedana restore containerd --path "$dump_file" --id "$id" --attach
+
+    run ctr task kill "$id"
 }

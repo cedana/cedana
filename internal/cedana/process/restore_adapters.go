@@ -9,7 +9,6 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
-	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 
@@ -120,10 +119,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return next(ctx, opts, resp, req)
 		}
 
-		daemonless, _ := ctx.Value(keys.DAEMONLESS_CONTEXT_KEY).(bool)
 		visitedStdioFds := make(map[uint64]bool)
-		inheritFdMap, _ := ctx.Value(keys.INHERIT_FD_MAP_CONTEXT_KEY).(map[string]int32)
-		extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
 
 		// Set the inherited fds
 		if req.Criu == nil {
@@ -131,17 +127,19 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 		inheritFds := req.Criu.InheritFd
 
-		mountIds := make(map[uint64]any)
+		internalMounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			mountIds[m.ID] = nil
+			internalMounts[m.ID] = nil
 			return true
 		})
+
+		var toClose []*os.File
 
 		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
-			_, internal := mountIds[f.MountID]
+			_, internal := internalMounts[f.MountID]
 
 			var key string
 			var fd int32
@@ -150,7 +148,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
 			if external {
-
 				// Inherit all external namespace files, expecting them to still exist
 
 				if f.IsTTY {
@@ -159,10 +156,19 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				} else {
 					if f.MountID == 0 && f.Inode == 0 {
 						log.Warn().Msgf("skipping open file %s with fd %d which has invalid mountID/inode", f.Path, f.Fd)
+						return true
 					} else {
 						key = fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode)
-						fd = int32(f.Fd)
-						log.Warn().Msgf("inherited external file %s with fd %d. assuming it still exists", f.Path, f.Fd)
+						fd = int32(3 + len(opts.ExtraFiles))
+						if _, ok := opts.InheritFdMap[key]; key == "" || ok {
+							return true
+						}
+						extraFile, err = os.OpenFile(f.Path, os.O_RDONLY, 0o644)
+						if err != nil {
+							log.Warn().Err(err).Str("path", f.Path).Uint64("fd", f.Fd).Msgf("failed to open external file for inheritance")
+							return true
+						}
+						toClose = append(toClose, extraFile)
 					}
 				}
 			} else {
@@ -174,8 +180,8 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				}
 				visitedStdioFds[f.Fd] = true
 
-				if f.IsTTY || daemonless {
-					if !daemonless {
+				if f.IsTTY || opts.Serverless {
+					if !opts.Serverless {
 						err = status.Errorf(codes.FailedPrecondition,
 							"found open file %s with fd %d which is a TTY and so restoring will fail because no TTY to inherit. Try --no-server restore", f.Path, f.Fd)
 						return false
@@ -185,15 +191,15 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					case 0:
 						extraFile = os.Stdin
 						key = strings.TrimPrefix(f.Path, "/")
-						fd = int32(3 + len(extraFiles))
+						fd = int32(3 + len(opts.ExtraFiles))
 					case 1:
 						extraFile = os.Stdout
 						key = strings.TrimPrefix(f.Path, "/")
-						fd = int32(3 + len(extraFiles))
+						fd = int32(3 + len(opts.ExtraFiles))
 					case 2:
 						extraFile = os.Stderr
 						key = strings.TrimPrefix(f.Path, "/")
-						fd = int32(3 + len(extraFiles))
+						fd = int32(3 + len(opts.ExtraFiles))
 					}
 				} else if f.Fd == 0 {
 					if req.Attachable {
@@ -214,11 +220,14 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				}
 			}
 
-			if _, ok := inheritFdMap[key]; key == "" || ok {
+			if _, ok := opts.InheritFdMap[key]; key == "" || ok {
 				return true
 			}
-			inheritFdMap[key] = fd
-			extraFiles = append(extraFiles, extraFile)
+
+			log.Debug().Str("key", key).Int32("fd", fd).Bool("external", external).Str("old", f.Path).Msgf("inheriting file")
+
+			opts.InheritFdMap[key] = fd
+			opts.ExtraFiles = append(opts.ExtraFiles, extraFile)
 			inheritFds = append(inheritFds, &criu_proto.InheritFd{
 				Fd:  proto.Int32(fd),
 				Key: proto.String(key),
@@ -227,13 +236,15 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return true
 		})
 
+		for _, file := range toClose {
+			defer file.Close()
+		}
+
 		if err != nil {
 			return nil, err
 		}
 
 		req.Criu.InheritFd = inheritFds
-		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
-		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, inheritFdMap)
 
 		return next(ctx, opts, resp, req)
 	}

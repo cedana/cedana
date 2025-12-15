@@ -1,21 +1,15 @@
 package filesystem
 
 import (
-	"bufio"
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io"
 	"os"
-	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	containerd_proto "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -27,47 +21,9 @@ import (
 	"github.com/containerd/platforms"
 	"github.com/opencontainers/image-spec/identity"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/afero"
-	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
-
-func DumpRWLayer(next types.Dump) types.Dump {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
-		if req.Action != daemon.DumpAction_DUMP || opts.DumpFs == nil {
-			return next(ctx, opts, resp, req)
-		}
-
-		client, ok := ctx.Value(containerd_keys.CLIENT_CONTEXT_KEY).(*containerd.Client)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
-		}
-
-		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "failed to get container from context")
-		}
-
-		rwLayerErr := make(chan error, 1)
-
-		opts.CRIUCallback.Include(&criu.NotifyCallback{
-			Name: "rw layer",
-			PreDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
-				go func() {
-					rwLayerErr <- dumpRWLayer(ctx, opts.DumpFs, client, container)
-				}()
-				return nil
-			},
-			PostDumpFunc: func(ctx context.Context, criuOpts *criu_proto.CriuOpts) error {
-				return <-rwLayerErr
-			},
-		})
-
-		return next(ctx, opts, resp, req)
-	}
-}
 
 // Adds a post-dump CRIU callback to dump the container's rootfs
 // Using post-dump ensures that the container is in a frozen state
@@ -179,384 +135,51 @@ func DumpImageName(next types.Dump) types.Dump {
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to write dump image name file: %v", err)
 		}
+		log.Debug().Str("image", image.Name()).Str("container", container.ID()).Msg("wrote dump image name")
 
 		return next(ctx, opts, resp, req)
 	}
 }
 
-func writeDelimitedMessage(w io.Writer, rwLayerFile *containerd_proto.RWFile) error {
-	data, err := proto.Marshal(rwLayerFile)
-	if err != nil {
-		return err
-	}
-
-	size := uint32(len(data))
-	if err := binary.Write(w, binary.LittleEndian, size); err != nil {
-		return fmt.Errorf("failed to write message size: %w", err)
-	}
-
-	_, err = w.Write(data)
-	if err != nil {
-		return fmt.Errorf("failed to write message data: %w", err)
-	}
-	return nil
-}
-
-type fileNode struct {
-	path     string
-	fi       os.FileInfo
-	children []*fileNode
-}
-
-func buildFileTree(upperDir string, mapOfMounts map[string]string) (*fileNode, error) {
-	root := &fileNode{path: upperDir}
-	pathToNode := make(map[string]*fileNode)
-	pathToNode[upperDir] = root
-
-	err := filepath.WalkDir(upperDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
+func DumpSnapshotter(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		if req.Action != daemon.DumpAction_DUMP || opts.DumpFs == nil {
+			return next(ctx, opts, resp, req)
 		}
 
-		if path == upperDir {
-			return nil
-		}
-
-		if mapOfMounts[path] != "" {
-			log.Warn().Str("file", path).Msg("skipping mount point in rw layer")
-			return filepath.SkipDir
-		}
-
-		fi, err := d.Info()
-		if err != nil {
-			return fmt.Errorf("failed to get file info for %s: %v", path, err)
-		}
-
-		node := &fileNode{
-			path: path,
-			fi:   fi,
-		}
-
-		parentPath := filepath.Dir(path)
-		parentNode, ok := pathToNode[parentPath]
+		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
 		if !ok {
-			return fmt.Errorf("parent node not found for %s", path)
+			return nil, status.Errorf(codes.Internal, "failed to get container from context")
 		}
-
-		parentNode.children = append(parentNode.children, node)
-		pathToNode[path] = node
-
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to build file tree: %v", err)
-	}
-
-	return root, nil
-}
-
-func dumpRWLayer(ctx context.Context, dump afero.Fs, client *containerd.Client, container containerd.Container) (err error) {
-	log.Info().Str("container", container.ID()).Msg("RW layer dump starting")
-	defer func() {
+		info, err := container.Info(ctx)
 		if err != nil {
-			log.Error().Err(err).Str("container", container.ID()).Msg("RW layer dump failed")
-		} else {
-			log.Info().Str("container", container.ID()).Msg("RW layer dump completed")
-		}
-	}()
-
-	info, err := container.Info(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get container info: %v", err)
-	}
-
-	snapshotter := client.SnapshotService(info.Snapshotter)
-
-	mounts, err := snapshotter.Mounts(ctx, info.SnapshotKey)
-	if err != nil {
-		return fmt.Errorf("failed to get container mounts: %v", err)
-	}
-
-	spec, err := container.Spec(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get container spec: %v", err)
-	}
-
-	mapOfMounts := make(map[string]string)
-	for _, m := range spec.Mounts {
-		mapOfMounts[m.Destination] = m.Destination
-	}
-
-	var upperDir string
-	for _, m := range mounts {
-		if m.Type == "overlay" {
-			for _, o := range m.Options {
-				var found bool
-				upperDir, found = strings.CutPrefix(o, "upperdir=")
-				if found {
-					break
-				}
-			}
-		}
-	}
-
-	if upperDir == "" {
-		log.Warn().Str("container", container.ID()).Msg("no upperdir found, skipping rw layer dump")
-		return nil
-	}
-
-	log.Debug().Str("upperDir", upperDir).Str("container", container.ID()).Msg("dumping rw layer from upperdir")
-
-	log.Debug().Msg("building file tree")
-	root, err := buildFileTree(upperDir, mapOfMounts)
-	if err != nil {
-		return err
-	}
-	log.Debug().Msg("file tree built successfully")
-
-	const (
-		NODES_PER_BATCH = 1000
-		CHUNK_SIZE      = 64 * 1024
-	)
-
-	var (
-		batchIndex   = 0
-		nodeCount    = 0
-		currentBatch = make([]*containerd_proto.RWFile, 0, NODES_PER_BATCH)
-		currentFiles = make([]string, 0, NODES_PER_BATCH)
-	)
-
-	flushBatch := func() error {
-		if len(currentBatch) == 0 {
-			return nil
+			return nil, status.Errorf(codes.Internal, "failed to get container info: %v", err)
 		}
 
-		filePath := fmt.Sprintf(containerd_keys.DUMP_RW_LAYER_BATCH_FORMATTER, batchIndex)
-		outFile, err := dump.Create(filePath)
+		snapshotKey, err := opts.DumpFs.Create(containerd_keys.DUMP_SNAPSHOT_KEY)
 		if err != nil {
-			return fmt.Errorf("failed to create batch file %s: %v", filePath, err)
+			return nil, status.Errorf(codes.Internal, "failed to create dump snapshot key file: %v", err)
 		}
-		defer outFile.Close()
-
-		writer := bufio.NewWriterSize(outFile, CHUNK_SIZE)
-		defer writer.Flush()
-
-		for i, entry := range currentBatch {
-			if err := writeDelimitedMessageBuffered(writer, entry); err != nil {
-				return fmt.Errorf("failed to write entry metadata: %v", err)
-			}
-
-			if currentFiles[i] != "" {
-				if err := writeFileContentBuffered(writer, currentFiles[i]); err != nil {
-					return err
-				}
-			}
-		}
-
-		if err := writer.Flush(); err != nil {
-			return fmt.Errorf("failed to flush writer: %v", err)
-		}
-
-		log.Debug().Str("file", filePath).Int("entries", len(currentBatch)).Msg("wrote rw layer batch")
-		currentBatch = currentBatch[:0]
-		currentFiles = currentFiles[:0]
-		batchIndex++
-		return nil
-	}
-
-	var traverse func(*fileNode) error
-	traverse = func(node *fileNode) error {
-		if node.path == upperDir {
-			for _, child := range node.children {
-				if err := traverse(child); err != nil {
-					return err
-				}
-			}
-			return nil
-		}
-
-		relPath, err := filepath.Rel(upperDir, node.path)
+		defer snapshotKey.Close()
+		_, err = snapshotKey.WriteString(info.SnapshotKey)
 		if err != nil {
-			return fmt.Errorf("failed to get relative path for %s: %v", node.path, err)
+			return nil, status.Errorf(codes.Internal, "failed to write dump snapshot key file: %v", err)
 		}
+		log.Debug().Str("snapshot_key", info.SnapshotKey).Str("container", container.ID()).Msg("wrote dump snapshot key")
 
-		rwLayerFile := &containerd_proto.RWFile{}
-
-		xattrSize, err := unix.Llistxattr(node.path, nil)
+		snapshotter, err := opts.DumpFs.Create(containerd_keys.DUMP_SNAPSHOTTER_KEY)
 		if err != nil {
-			return fmt.Errorf("failed to list xattrs for %s: %v", node.path, err)
+			return nil, status.Errorf(codes.Internal, "failed to create dump snapshotter file: %v", err)
 		}
-
-		if xattrSize == 0 {
-			log.Debug().Str("file", node.path).Msg("no xattrs found")
-		}
-
-		xattrList := make([]byte, xattrSize)
-		_, err = unix.Llistxattr(node.path, xattrList)
+		defer snapshotter.Close()
+		_, err = snapshotter.WriteString(info.Snapshotter)
 		if err != nil {
-			return fmt.Errorf("failed to list xattrs for %s: %v", node.path, err)
+			return nil, status.Errorf(codes.Internal, "failed to write dump snapshotter file: %v", err)
 		}
+		log.Debug().Str("snapshotter", info.Snapshotter).Str("container", container.ID()).Msg("wrote dump snapshotter")
 
-		xattrResults := make(map[string]string)
-		offset := 0
-		for offset < xattrSize {
-			end := offset
-			for end < xattrSize && xattrList[end] != 0 {
-				end++
-			}
-			name := string(xattrList[offset:end])
-			valueSize, err := unix.Lgetxattr(node.path, name, nil)
-			if err != nil {
-				return fmt.Errorf("failed to get xattr size for %s on %s: %v", name, node.path, err)
-			}
-			var value []byte
-			if valueSize > 0 {
-				value = make([]byte, valueSize)
-				_, err = unix.Lgetxattr(node.path, name, value)
-				if err != nil {
-					return fmt.Errorf("failed to get xattr value for %s on %s: %v", name, node.path, err)
-				}
-			}
-			xattrResults[name] = base64.StdEncoding.EncodeToString(value)
-			offset = end + 1
-		}
-		rwLayerFile.SetXattrs(xattrResults)
-
-		stat := node.fi.Sys().(*syscall.Stat_t)
-		rwLayerFile.SetUid(stat.Uid)
-		rwLayerFile.SetGid(stat.Gid)
-		rwLayerFile.SetMode(uint32(node.fi.Mode()))
-		rwLayerFile.SetPath(relPath)
-		rwLayerFile.SetMtime(uint64(node.fi.ModTime().UnixNano()))
-
-		if node.fi.Mode()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(node.path)
-			if err != nil {
-				return fmt.Errorf("failed to read symlink target for %s: %v", node.path, err)
-			}
-			rwLayerFile.SetSymlinkTarget(target)
-		} else if node.fi.Mode()&os.ModeDevice != 0 {
-			rwLayerFile.SetDevMajor(unix.Major(stat.Rdev))
-			rwLayerFile.SetDevMinor(unix.Minor(stat.Rdev))
-		} else if node.fi.Mode().IsDir() {
-			log.Debug().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("directory in rw layer")
-		} else if node.fi.Mode().IsRegular() {
-			log.Debug().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("regular file in rw layer")
-		} else {
-			log.Warn().Str("file", node.path).Str("mode", node.fi.Mode().String()).Msg("unsupported file type in rw layer, skipping")
-			return nil
-		}
-
-		currentBatch = append(currentBatch, rwLayerFile)
-		if node.fi.Mode().IsRegular() {
-			currentFiles = append(currentFiles, node.path)
-		} else {
-			currentFiles = append(currentFiles, "")
-		}
-
-		nodeCount++
-
-		if len(currentBatch) >= NODES_PER_BATCH {
-			if err := flushBatch(); err != nil {
-				return err
-			}
-		}
-
-		for _, child := range node.children {
-			if err := traverse(child); err != nil {
-				return err
-			}
-		}
-
-		return nil
+		return next(ctx, opts, resp, req)
 	}
-
-	if err := traverse(root); err != nil {
-		return err
-	}
-
-	if len(currentBatch) > 0 {
-		if err := flushBatch(); err != nil {
-			return err
-		}
-	}
-
-	manifestPath := containerd_keys.DUMP_RW_LAYER_MANIFEST_KEY
-	manifestFile, err := dump.Create(manifestPath)
-	if err != nil {
-		return fmt.Errorf("failed to create manifest: %v", err)
-	}
-	defer manifestFile.Close()
-
-	manifest := map[string]any{
-		"total_nodes":     nodeCount,
-		"total_batches":   batchIndex,
-		"nodes_per_batch": NODES_PER_BATCH,
-	}
-	manifestData, err := json.Marshal(manifest)
-	if err != nil {
-		return fmt.Errorf("failed to marshal manifest: %v", err)
-	}
-	_, err = manifestFile.Write(manifestData)
-	if err != nil {
-		return fmt.Errorf("failed to write manifest: %v", err)
-	}
-	log.Debug().Int("batches", batchIndex).Int("nodes", nodeCount).Msg("wrote rw layer manifest")
-
-	return nil
-}
-
-func writeDelimitedMessageBuffered(w *bufio.Writer, rwLayerFile *containerd_proto.RWFile) error {
-	data, err := proto.Marshal(rwLayerFile)
-	if err != nil {
-		return err
-	}
-
-	size := uint32(len(data))
-	if err := binary.Write(w, binary.LittleEndian, size); err != nil {
-		return fmt.Errorf("failed to write message size: %w", err)
-	}
-
-	_, err = w.Write(data)
-	if err != nil {
-		return fmt.Errorf("failed to write message data: %w", err)
-	}
-	return nil
-}
-
-func writeFileContentBuffered(w *bufio.Writer, filePath string) error {
-	f, err := os.Open(filePath)
-	if err != nil {
-		return fmt.Errorf("failed to open file %s for reading: %v", filePath, err)
-	}
-	defer f.Close()
-
-	buf := make([]byte, 4*1024*1024)
-	for {
-		n, err := f.Read(buf)
-		if n > 0 {
-			chunkMsg := &containerd_proto.RWFile{}
-			chunkData := make([]byte, n)
-			copy(chunkData, buf[:n])
-			chunkMsg.Content = [][]byte{chunkData}
-			if err := writeDelimitedMessageBuffered(w, chunkMsg); err != nil {
-				return fmt.Errorf("failed to write content chunk: %v", err)
-			}
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return fmt.Errorf("failed to read file content: %v", err)
-		}
-	}
-
-	terminatorMsg := &containerd_proto.RWFile{}
-	if err := writeDelimitedMessageBuffered(w, terminatorMsg); err != nil {
-		return fmt.Errorf("failed to write terminator message: %v", err)
-	}
-
-	return nil
 }
 
 func dumpRootfs(ctx context.Context, client *containerd.Client, container containerd.Container, ref, username, secret string) (err error) {

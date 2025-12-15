@@ -41,7 +41,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 			}
 
-			async := config.Global.Checkpoint.Async && storage.IsRemote()
+			async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
 
 			// If remote storage, we instead use a temporary directory for CRIU
 			if storage.IsRemote() {
@@ -195,14 +195,12 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					// context will be canceled after the dump completes.
 					uploadCtx := context.WithoutCancel(ctx)
 
-					opts.WG.Add(1)
-					go func() {
-						defer opts.WG.Done()
+					opts.WG.Go(func() {
 						log.Info().Msg("async dump upload started")
 						if uploadErr := upload(uploadCtx); uploadErr != nil {
 							log.Error().Err(uploadErr).Msg("async upload failed")
 						}
-					}()
+					})
 				}()
 			} else {
 				// Sync upload, wait for IO completion in PostDumpFunc

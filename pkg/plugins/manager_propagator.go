@@ -200,7 +200,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 			wg.Go(func() {
 				plugin := availableSet[name]
 
-				msgs <- fmt.Sprintf("Downloading plugin %s...", name)
+				msgs <- fmt.Sprintf("Downloading plugin %s (%s)...", name, plugin.AvailableVersion)
 				for _, binary := range plugin.Binaries {
 					err := m.downloadBinary(binary.Name, plugin.AvailableVersion, m.arch, m.builds, BINARY_PERMS)
 					if err != nil {
@@ -218,7 +218,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 						return
 					}
 				}
-				msgs <- fmt.Sprintf("Downloaded plugin %s", name)
+				msgs <- fmt.Sprintf("Downloaded plugin %s (%s)", name, plugin.AvailableVersion)
 			})
 		}
 

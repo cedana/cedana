@@ -299,7 +299,7 @@ DOCKER_TEST_START=docker start $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
 DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 PLATFORM=linux/amd64,linux/arm64
-ALL_PLUGINS?=0
+ALL_PLUGINS?=1
 PREBUILT_BINARIES?=0
 
 PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
@@ -313,6 +313,7 @@ DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTER
 				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
 				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \
+				-e CEDANA_METRICS_ENABLED=$(CEDANA_METRICS_ENABLED) \
 				-e HF_TOKEN=$(HF_TOKEN) \
 				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
 				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
@@ -342,6 +343,10 @@ docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERS
 		--build-arg VERSION=$(VERSION) \
 		-t $(DOCKER_IMAGE) --load . ;\
 
+docker-push: ## Push the helper Docker image (DOCKER_IMAGE=<image>)
+	@echo "Pushing helper Docker image..."
+	docker push $(DOCKER_IMAGE)
+
 docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE=<image>)
 	@echo "Building test Docker image..."
 	cd test ;\
@@ -354,11 +359,11 @@ docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,
 	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
 	cd -
 
-docker-test-push: ## Push the test Docker image (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE=<image>)
+docker-test-push: ## Push the test Docker image (DOCKER_TEST_IMAGE=<image>)
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-cuda-push: ## Push the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE_CUDA=<image>)
+docker-test-cuda-push: ## Push the test Docker image for CUDA (DOCKER_TEST_IMAGE_CUDA=<image>)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 
