@@ -11,9 +11,4 @@ setup_suite() {
     install_kubectl
     install_helm
     install_k9s
-    start_containerd
-}
-
-teardown_suite() {
-    stop_containerd
 }
