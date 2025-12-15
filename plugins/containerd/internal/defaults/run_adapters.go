@@ -2,16 +2,20 @@ package defaults
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 )
 
-const (
-	DEFAULT_NAMESPACE = "default"
-	BASE_RUNTIME_DIR  = "/run/containerd"
-	DEFAULT_ADDRESS   = "/run/containerd/containerd.sock"
+const DEFAULT_NAMESPACE = "default"
+
+var (
+	DEFAULT_ADDRESS  = utils.Getenv(os.Environ(), "CONTAINERD_ADDRESS", "/run/containerd/containerd.sock")
+	BASE_RUNTIME_DIR = filepath.Dir(DEFAULT_ADDRESS)
 )
 
 func FillMissingRunDefaults(next types.Run) types.Run {
