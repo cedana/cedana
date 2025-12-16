@@ -144,8 +144,6 @@ jobs:
             compute: CUDA
           # Exclude all default matrix combinations for Nebius - we use include instead
           - platform: Nebius
-            compute: CUDA
-          - platform: Nebius
             storage: storage/s3
           - platform: Nebius
             storage: storage/cedana
@@ -155,13 +153,6 @@ jobs:
             arch: arm64
           - platform: Nebius
             cr: streamer
-        include:
-          # Nebius uses local storage for now
-          - platform: Nebius
-            compute: CUDA
-            cr: default
-            storage: storage/local
-            arch: amd64
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && matrix.platform != 'Nebius' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
