@@ -19,6 +19,11 @@ export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 export NEBIUS_CLUSTER_NAME="${NEBIUS_CLUSTER_NAME:-cedana-ci-arm64}"
 export NB_SA_PRIVATE_KEY_PATH="${NB_SA_PRIVATE_KEY_PATH:-/tmp/nb_sa_key}"
 export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
+export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
+export GPU_OPERATOR_DRIVER_VERSION="${GPU_OPERATOR_DRIVER_VERSION:-570.195.03}"
+export NB_NODEGROUP_NAME="${NB_NODEGROUP_NAME:-github-ci-Nebius}"
+export NB_GPU_PRESET="${NB_GPU_PRESET:-1gpu-16vcpu-200gb}"
+export NB_GPU_PLATFORM="${NB_GPU_PLATFORM:-gpu-h100-sxm}"
 
 # Internal state
 NB_CLUSTER_ID=""
@@ -89,13 +94,8 @@ _create_nebius_mk8s() {
 }
 
 create_nodegroup() {
-    local nodegroup_name="${1:-github-ci-Nebius}"
-    local gpu_preset="${2:-1gpu-16vcpu-200gb}"
-    local gpu_platform="${3:-gpu-h100-sxm}"
 
     debug_log "Creating Nebius node-group with H100..."
-
-    export NB_NODEGROUP_NAME="$nodegroup_name"
 
     local existing_nodegroup
     existing_nodegroup=$(nebius mk8s node-group list --parent-id "$NB_CLUSTER_ID" \
@@ -110,9 +110,9 @@ create_nodegroup() {
             --name "$NB_NODEGROUP_NAME" \
             --parent-id "$NB_CLUSTER_ID" \
             --template-boot-disk-size-bytes 137438953472 \
-            --fixed-node-count 1 \
-            --template-resources-platform "$gpu_platform" \
-            --template-resources-preset "$gpu_preset" \
+            --fixed-node-count 2 \
+            --template-resources-platform "$NB_GPU_PLATFORM" \
+            --template-resources-preset "$NB_GPU_PRESET" \
             --template-network-interfaces "[{\"public_ip_address\": {},\"subnet_id\": \"$NB_SUBNET_ID\"}]"
         debug_log "Nebius node-group with H100 has been created"
     fi
@@ -149,7 +149,7 @@ setup_gpu_operator() {
     helm upgrade -i --wait gpu-operator \
         -n "$GPU_OPERATOR_NAMESPACE" --create-namespace \
         nvidia/gpu-operator \
-        --version=v25.3.4 --set driver.version=570.195.03
+        --version=$GPU_OPERATOR_VERSION --set driver.version=$GPU_OPERATOR_DRIVER_VERSION
 
     debug_log "NVIDIA GPU operator installed successfully"
 }

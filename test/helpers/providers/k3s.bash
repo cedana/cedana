@@ -7,12 +7,9 @@
 # Local K3s cluster for CI/development testing.
 # Creates a fresh K3s cluster on setup and tears it down completely.
 #
-# Environment variables:
-#   CONTAINERD_ADDRESS - Containerd socket (default: /run/k3s/containerd/containerd.sock)
-#
 
 CONTAINERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
-export CONTAINERD_ADDRESS="${CONTAINERD_ADDRESS:-/run/k3s/containerd/containerd.sock}"
+export CONTAINERD_ADDRESS="/run/k3s/containerd/containerd.sock"
 CONTAINERD_NAMESPACE="k8s.io"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 INSTALL_K3S_EXEC="server \
