@@ -195,7 +195,7 @@ run_sample_test() {
     local pod_timeout=300
     if [ "$is_gpu" = "1" ]; then
         wait_time=60
-        pod_timeout=900
+        pod_timeout=1300
     fi
 
     local container_name
@@ -670,7 +670,7 @@ setup() {
     kubectl get pod "$name" -n "$NAMESPACE" >&3
     kubectl describe pod "$name" -n "$NAMESPACE" >&3
 
-    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=900s -n "$NAMESPACE"
+    kubectl wait --for=jsonpath='{.status.phase}=Running' pod/"$name" --timeout=1300s -n "$NAMESPACE"
 
     kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
 }
