@@ -196,71 +196,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
-	if [ -f /.dockerenv ]; then \
-		echo "Running kubernetes e2e tests..." ;\
-		echo "Parallelism: $(PARALLELISM)" ;\
-		if [ "$(TAGS)" = "" ]; then \
-			$(BATS_CMD) -r test/k8s ; status=$$? ;\
-		else \
-			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
-		fi ;\
-		if [ $$status -ne 0 ]; then \
-			echo "Kubernetes e2e tests failed" ;\
-			exit $$status ;\
-		else \
-			echo "All kubernetes e2e tests passed!" ;\
-		fi ;\
-	else \
-        MAKE_ADDITIONAL_OPTS=""; \
-        if [ -n "$(HELM_CHART)" ]; then \
-			if echo "$(HELM_CHART)" | grep -q /; then \
-				MAKE_ADDITIONAL_OPTS="HELM_CHART=/helm-chart"; \
-			else \
-				MAKE_ADDITIONAL_OPTS="HELM_CHART=$(HELM_CHART)"; \
-			fi; \
-        fi; \
-		if [ "$(GPU)" = "1" ]; then \
-			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
-			$(DOCKER_TEST_CREATE_NO_PLUGINS_CUDA) ;\
-			$(DOCKER_TEST_START) ;\
-			$(DOCKER_TEST_EXEC) make test-k8s \
-				ARGS=$(ARGS) \
-				PARALLELISM=$(PARALLELISM) \
-				TAGS=$(TAGS) \
-				RETRIES=$(RETRIES) \
-				DEBUG=$(DEBUG) \
-				CONTROLLER_REPO=$(CONTROLLER_REPO) \
-				CONTROLLER_TAG=$(CONTROLLER_TAG) \
-				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
-				HELPER_REPO=$(HELPER_REPO) \
-				HELPER_TAG=$(HELPER_TAG) \
-				HELPER_DIGEST=$(HELPER_DIGEST) \
-				$$MAKE_ADDITIONAL_OPTS ;\
-			$(DOCKER_TEST_REMOVE) ;\
-		else \
-			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
-			$(DOCKER_TEST_CREATE_NO_PLUGINS) ;\
-			$(DOCKER_TEST_START) ;\
-			$(DOCKER_TEST_EXEC) make test-k8s \
-				ARGS=$(ARGS) \
-				PARALLELISM=$(PARALLELISM) \
-				GPU=$(GPU) \
-				TAGS=$(TAGS) \
-				RETRIES=$(RETRIES) \
-				DEBUG=$(DEBUG) \
-				CONTROLLER_REPO=$(CONTROLLER_REPO) \
-				CONTROLLER_TAG=$(CONTROLLER_TAG) \
-				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
-				HELPER_REPO=$(HELPER_REPO) \
-				HELPER_TAG=$(HELPER_TAG) \
-				HELPER_DIGEST=$(HELPER_DIGEST) \
-				$$MAKE_ADDITIONAL_OPTS ;\
-			$(DOCKER_TEST_REMOVE) ;\
-		fi ;\
-	fi
-
-test-k8s-generic: ## Run unified kubernetes tests against any cluster (PROVIDER=[generic|aws|gcp|nebius|k3s], GPU=[0|1], LARGE=[0|1], FILTER=<samples>, SKIP_HELM=[0|1], CLUSTER_ID=<id>, SAMPLES_DIR=<path>, DEBUG=[0|1])
+test-k8s: ## Run unified kubernetes tests against any cluster (PROVIDER=[generic|aws|gcp|nebius|k3s], GPU=[0|1], LARGE=[0|1], FILTER=<samples>, SKIP_HELM=[0|1], CLUSTER_ID=<id>, SAMPLES_DIR=<path>, DEBUG=[0|1])
 	@echo "Running unified kubernetes tests..."
 	@echo "Provider: $(or $(PROVIDER),generic), GPU: $(GPU), LARGE: $(LARGE), FILTER: $(FILTER), DEBUG: $(DEBUG)"
 	DEBUG=$(DEBUG) \
@@ -291,16 +227,16 @@ test-k8s-generic: ## Run unified kubernetes tests against any cluster (PROVIDER=
 
 # Provider-specific convenience targets
 test-k8s-eks: ## Run kubernetes tests against EKS (GPU=[0|1], LARGE=[0|1], DEBUG=[0|1])
-	$(MAKE) test-k8s-generic PROVIDER=aws GPU=$(GPU) LARGE=$(LARGE) DEBUG=$(DEBUG)
+	$(MAKE) test-k8s PROVIDER=aws GPU=$(GPU) LARGE=$(LARGE) DEBUG=$(DEBUG)
 
 test-k8s-gke: ## Run kubernetes tests against GKE (GPU=[0|1], LARGE=[0|1], DEBUG=[0|1])
-	$(MAKE) test-k8s-generic PROVIDER=gcp GPU=$(GPU) LARGE=$(LARGE) DEBUG=$(DEBUG)
+	$(MAKE) test-k8s PROVIDER=gcp GPU=$(GPU) LARGE=$(LARGE) DEBUG=$(DEBUG)
 
 test-k8s-nebius: ## Run kubernetes tests against Nebius with GPU (LARGE=[0|1], DEBUG=[0|1])
-	$(MAKE) test-k8s-generic PROVIDER=nebius GPU=1 LARGE=$(LARGE) DEBUG=$(DEBUG)
+	$(MAKE) test-k8s PROVIDER=nebius GPU=1 LARGE=$(LARGE) DEBUG=$(DEBUG)
 
 test-k8s-local: ## Run kubernetes tests against local k3s cluster (DEBUG=[0|1])
-	$(MAKE) test-k8s-generic PROVIDER=k3s DEBUG=$(DEBUG)
+	$(MAKE) test-k8s PROVIDER=k3s DEBUG=$(DEBUG)
 
 test-enter: ## Enter the test environment
 	$(DOCKER_TEST_CREATE) ;\

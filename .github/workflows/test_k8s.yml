@@ -319,9 +319,10 @@ jobs:
             LARGE_FLAG=1
           fi
 
-          make test-k8s-generic \
+          make test-k8s \
             PROVIDER=$PROVIDER \
             GPU=$GPU_FLAG \
+            FORMATTER=$FORMATTER \
             LARGE=$LARGE_FLAG \
             DEBUG=$DEBUG \
             CONTROLLER_REPO=$CONTROLLER_REPO \
