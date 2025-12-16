@@ -144,6 +144,8 @@ jobs:
             compute: CUDA
           # Exclude all default matrix combinations for Nebius - we use include instead
           - platform: Nebius
+            compute: CUDA
+          - platform: Nebius
             storage: storage/s3
           - platform: Nebius
             storage: storage/cedana
