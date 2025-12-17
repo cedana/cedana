@@ -66,8 +66,11 @@ setup_suite() {
         return 1
     fi
 
-    debug_log "Connected to cluster: $(kubectl config current-context)"
-    debug_log "Provider: $PROVIDER"
+    debug_log "Connected to $PROVIDER cluster: $(kubectl config current-context)"
+
+    # Start tailing logs in background
+    tail_all_logs "$CEDANA_NAMESPACE" 300 &
+    TAIL_PID=$!
 
     # Install Cedana helm chart unless skipped
     if [ "${SKIP_HELM:-0}" != "1" ]; then
@@ -95,10 +98,6 @@ setup_suite() {
     fi
 
     wait_for_ready "$CEDANA_NAMESPACE" 300
-
-    # Start tailing logs in background
-    tail_all_logs "$CEDANA_NAMESPACE" 300 &
-    TAIL_PID=$!
 
     # Create test namespace
     create_namespace "$NAMESPACE"

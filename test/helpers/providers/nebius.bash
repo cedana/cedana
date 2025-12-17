@@ -7,12 +7,12 @@
 # Nebius is unique in that it creates/destroys nodegroups dynamically for GPU tests.
 #
 # Environment variables:
-#   NB_SA_ID              - Service account ID
-#   NB_PUBLIC_KEY_ID      - Public key ID
-#   NB_SA_PRIVATE_KEY     - Private key content
-#   NB_SA_PRIVATE_KEY_PATH - Path to store private key (default: /tmp/nb_sa_key)
-#   NB_PROJECT_ID         - Nebius project ID
-#   NB_CLUSTER_NAME   - Cluster name (default: cedana-ci-arm64)
+#   NB_SA_ID                - Service account ID
+#   NB_PUBLIC_KEY_ID        - Public key ID
+#   NB_SA_PRIVATE_KEY       - Private key content
+#   NB_SA_PRIVATE_KEY_PATH  - Path to store private key (default: /tmp/nb_sa_key)
+#   NB_PROJECT_ID           - Nebius project ID
+#   NB_CLUSTER_NAME         - Cluster name (default: cedana-ci-arm64)
 #
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"

@@ -113,6 +113,7 @@ RUN <<'EOT'
 mkdir -p /etc/containerd
 cat > /etc/containerd/config.toml <<'CONFIG'
 version = 2
+snapshotter = "native"
 
 [plugins]
   [plugins."io.containerd.grpc.v1.cri"]
@@ -137,7 +138,6 @@ COPY --from=cedana-samples /app /cedana-samples
 
 VOLUME ["/src"]
 WORKDIR /src
-ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
 
 CMD []

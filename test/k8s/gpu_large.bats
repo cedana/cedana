@@ -19,7 +19,7 @@ setup_file() {
 ###############################################
 
 # bats test_tags=dump,restore,llm,vllm,inference
-@test "Sample: vLLM Llama 8B Inference" {
+@test "Dump/Restore: vLLM Llama 8B Inference" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cuda-vllm-llama-8b.yaml")
 
@@ -27,7 +27,7 @@ setup_file() {
 }
 
 # bats test_tags=dump,restore,compbio,gromacs
-@test "Sample: GROMACS MD Simulation" {
+@test "Dump/Restore: GROMACS MD Simulation" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gromacs-simple-example.yaml")
 
@@ -35,7 +35,7 @@ setup_file() {
 }
 
 # bats test_tags=dump,restore,combio,openmm
-@test "Sample: OpenMM MD Simulation" {
+@test "Dump/Restore: OpenMM MD Simulation" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/openmm.yaml")
 
@@ -43,7 +43,7 @@ setup_file() {
 }
 
 # bats test_tags=dump,restore,tensorflow,training
-@test "Sample: TensorFlow Training" {
+@test "Dump/Restore: TensorFlow Training" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cuda-tensorflow.yaml")
 
@@ -51,7 +51,7 @@ setup_file() {
 }
 
 # bats test_tags=dump,restore,deepspeed,training
-@test "Sample: DeepSpeed Training" {
+@test "Dump/Restore: DeepSpeed Training" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cuda-deepspeed-train.yaml")
 

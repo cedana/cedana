@@ -135,7 +135,6 @@ COPY --from=cedana-samples /app /cedana-samples
 
 VOLUME ["/src"]
 WORKDIR /src
-ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
 
 CMD []

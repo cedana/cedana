@@ -81,6 +81,7 @@ fi
 
 # Install all plugins
 if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
+    # shellcheck disable=SC2086
     "$APP_PATH" plugin install $PLUGINS
 fi
 
@@ -123,6 +124,6 @@ END_CAT
 END_CAT
         fi
     fi
-    echo "Sending SIGHUP to containerd..."
+    echo "Restarting containerd to pick up the new runtime configuration..."
     (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
 fi

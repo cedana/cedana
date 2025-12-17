@@ -57,15 +57,15 @@ get_kubelet_arg_value() {
     local args=("$@")
     for ((i = 0; i < ${#args[@]}; i++)); do
         case "${args[i]}" in
-        $arg=*)
-            echo "${args[i]#*=}"
-            return
-            ;;
-        $arg)
-            ((i++))
-            echo "${args[i]}"
-            return
-            ;;
+            $arg=*)
+                echo "${args[i]#*=}"
+                return
+                ;;
+            "$arg")
+                ((i++))
+                echo "${args[i]}"
+                return
+                ;;
         esac
     done
 }

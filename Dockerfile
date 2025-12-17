@@ -1,12 +1,23 @@
 # syntax=docker/dockerfile:1.6
-FROM golang:1.25rc3-bullseye as builder
+FROM golang:1.25-rc-bullseye as builder
 
 ARG PREBUILT_BINARIES=0
 ARG ALL_PLUGINS=0
 ARG VERSION
 
-ADD . /app
 WORKDIR /app
+
+# Copy dependency files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy Makefile and scripts needed for build
+COPY Makefile ./
+COPY scripts/ ./scripts/
+
+# Copy source code
+COPY . .
+
 RUN <<EOT
 make reset
 if [ "$PREBUILT_BINARIES" -ne "1" ]; then

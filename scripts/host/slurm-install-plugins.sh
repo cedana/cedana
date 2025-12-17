@@ -79,6 +79,7 @@ fi
 
 # Install all plugins
 if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
+    # shellcheck disable=SC2086
     "$APP_PATH" plugin install $PLUGINS
 fi
 

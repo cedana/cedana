@@ -4,6 +4,7 @@
 
 export CONTAINERD_CONFIG_PATH="/etc/containerd/config.toml"
 export CONTAINERD_ADDRESS="/run/containerd/containerd.sock"
+export CONTAINERD_SNAPSHOTTER="native"
 
 pull_images() {
     if ! cmd_exists containerd; then
@@ -31,21 +32,27 @@ start_containerd() {
         exit 1
     fi
 
+    wait_for_cmd 30 ctr --address $CONTAINERD_ADDRESS version
+
     debug_log "Containerd started"
 }
 
 stop_containerd() {
     debug_log "Stopping containerd..."
+
     if pid=$(pidof containerd); then
         kill "$pid"
-        wait_for_no_pid "$pid" 30
     else
         debug_log "Containerd is not running"
     fi
+
+    wait_for_cmd_fail 30 ctr --address $CONTAINERD_ADDRESS version
+
+    debug_log "Containerd stopped"
 }
 
-install_cni_plugins() {
+install_containerd_plugins() {
     debug_log "Installing CNI plugins..."
     curl -sSL https://raw.githubusercontent.com/containerd/containerd/refs/heads/main/script/setup/install-cni | bash
-    debug_log "CNI plugins installed"
+    debug_log "Installed CNI plugins"
 }

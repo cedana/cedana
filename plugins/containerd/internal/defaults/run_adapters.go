@@ -11,7 +11,10 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 )
 
-const DEFAULT_NAMESPACE = "default"
+const (
+	DEFAULT_NAMESPACE   = "default"
+	DEFAULT_SNAPSHOTTER = "overlayfs"
+)
 
 var (
 	DEFAULT_ADDRESS  = utils.Getenv(os.Environ(), "CONTAINERD_ADDRESS", "/run/containerd/containerd.sock")
@@ -34,6 +37,9 @@ func FillMissingRunDefaults(next types.Run) types.Run {
 		}
 		if req.GetDetails().GetContainerd().GetID() == "" {
 			req.Details.Containerd.ID = req.JID
+		}
+		if req.GetDetails().GetContainerd().GetSnapshotter() == "" {
+			req.Details.Containerd.Snapshotter = DEFAULT_SNAPSHOTTER
 		}
 
 		return next(ctx, opts, resp, req)

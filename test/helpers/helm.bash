@@ -88,13 +88,26 @@ helm_install_cedana() {
         return 1
     }
 
-    debug_log "Helm chart installed successfully"
+    debug_log "Helm chart installed"
+}
+
+helm_is_cedana_installed() {
+    local namespace="$1"
+
+    helm status cedana -n "$namespace" &>/dev/null
+    return $?
 }
 
 helm_uninstall_cedana() {
     local namespace="$1"
 
     debug_log "Uninstalling helm chart..."
+
+    if ! helm_is_cedana_installed "$namespace"; then
+        debug_log "Helm chart is not installed"
+        return 0
+    fi
+
     helm uninstall cedana -n "$namespace" --wait --timeout=2m --ignore-not-found || {
         error_log "Failed to uninstall helm chart"
         return 1

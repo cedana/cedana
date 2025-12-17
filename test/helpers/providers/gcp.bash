@@ -5,10 +5,10 @@
 ########################
 #
 # Environment variables:
-#   GCLOUD_PROJECT_ID         - GCP project ID
-#   GCLOUD_SERVICE_ACCOUNT_KEY - Service account JSON key
-#   GCLOUD_REGION             - GCP region
-#   GKE_CLUSTER_NAME          - GKE cluster name (default: cedana-ci-amd64)
+#   GCLOUD_PROJECT_ID           - GCP project ID
+#   GCLOUD_SERVICE_ACCOUNT_KEY  - Service account JSON key
+#   GCLOUD_REGION               - GCP region
+#   GKE_CLUSTER_NAME            - GKE cluster name (default: cedana-ci-amd64)
 #
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
