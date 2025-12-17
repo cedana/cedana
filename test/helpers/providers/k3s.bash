@@ -10,7 +10,7 @@
 
 export CONTAINERD_NAMESPACE="k8s.io"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
-INSTALL_K3S_EXEC="server \
+START_K3S_SERVER="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
         --snapshotter=native \
@@ -95,7 +95,7 @@ download_k3s() {
             ;;
     esac
 
-    wget "https://github.com/k3s-io/k3s/releases/download/v1.34.2%2Bk3s1/$binary_name" -O /usr/local/bin/k3s
+    wget -q "https://github.com/k3s-io/k3s/releases/download/v1.34.2%2Bk3s1/$binary_name" -O /usr/local/bin/k3s
     chmod +x /usr/local/bin/k3s
 
     debug_log "Downloaded k3s binary"
@@ -109,10 +109,10 @@ configure_containerd_runtime() {
         touch "$CONTAINERD_CONFIG_PATH"
     fi
 
-    local template=$CONTAINERD_CONFIG_PATH.tmpl
-    if ! grep -q 'cedana' "$template" 2>/dev/null; then
-        echo '{{ template "base" . }}' > "$template"
-        cat >> "$template" <<'END_CAT'
+    local config=$CONTAINERD_CONFIG_PATH
+    if ! grep -q 'cedana' "$config" 2>/dev/null; then
+        echo '{{ template "base" . }}' > "$config"
+        cat >> "$config" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
@@ -133,7 +133,7 @@ start_cluster() {
     fi
 
     debug_log "k3s binary found, starting k3s..."
-    eval "k3s $INSTALL_K3S_EXEC" &
+    eval "k3s $START_K3S_SERVER" &
 
     debug_log "Waiting for k3s cluster to start..."
 

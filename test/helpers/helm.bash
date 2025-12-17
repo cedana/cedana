@@ -82,7 +82,7 @@ helm_install_cedana() {
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
     fi
 
-    $helm_cmd || {
+    debug "$helm_cmd" || {
         error_log "Failed to install helm chart"
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
