@@ -42,7 +42,7 @@ if [ "$CEDANA_CHECKPOINT_STREAMS" -gt 0 ]; then
 fi
 
 # if gpu driver present then add gpu plugin
-if [ "$ENV" == "test" ]; then
+if [ "$ENV" == "k3s" ]; then
     if command -v nvidia-smi >/dev/null 2>&1; then
         PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
         echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"

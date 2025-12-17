@@ -70,8 +70,8 @@ get_kubelet_arg_value() {
     done
 }
 
-if [ -n "$CI" ]; then
-    echo "Running in CI; skipping kubelet detection"
+if [ "$ENV" == "k3s" ]; then
+    echo "Running in k3s environment; skipping kubelet configuration update" >&2
     exit 0
 fi
 

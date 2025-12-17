@@ -14,6 +14,6 @@ USER=$(whoami)
 export USER
 
 export ENV=production
-if [ -f /.dockerenv ]; then
-    export ENV=test
+if pgrep -f "k3s server" >/dev/null 2>&1; then
+    ENV="k3s"
 fi
