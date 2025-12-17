@@ -1,21 +1,74 @@
 #!/usr/bin/env bash
 
-###################
+####################
 ### K3s Provider ###
-###################
+####################
 #
 # Local K3s cluster for CI/development testing.
 # Creates a fresh K3s cluster on setup and tears it down completely.
 #
 
-CONTAINERD_CONFIG_PATH="/var/lib/rancher/k3s/agent/etc/containerd/config.toml"
-export CONTAINERD_ADDRESS="/run/k3s/containerd/containerd.sock"
-CONTAINERD_NAMESPACE="k8s.io"
+export CONTAINERD_NAMESPACE="k8s.io"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 INSTALL_K3S_EXEC="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
-        --snapshotter=native"
+        --snapshotter=native \
+        --container-runtime-endpoint=$CONTAINERD_ADDRESS"
+
+# Function to set up k3s cluster
+setup_cluster() {
+    debug_log "Installing k3s cluster..."
+
+    download_k3s
+    install_cni_plugins
+    start_containerd
+
+    if [ -n "$CONTROLLER_DIGEST" ]; then
+        preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
+    elif [ -n "$CONTROLLER_TAG" ]; then
+        preload_images "$CONTROLLER_REPO:$CONTROLLER_TAG"
+    fi
+    if [ -n "$HELPER_DIGEST" ]; then
+        preload_images "$HELPER_REPO@$HELPER_DIGEST"
+    elif [ -n "$HELPER_TAG" ]; then
+        preload_images "$HELPER_REPO:$HELPER_TAG"
+    fi
+
+    start_cluster
+
+    # XXX: The tar in busybox is incompatible with CRIU
+    rm -f /var/lib/rancher/k3s/data/current/bin/tar
+
+    mkdir -p ~/.kube
+    cat $KUBECONFIG > ~/.kube/config
+
+    debug_log "k3s cluster is ready"
+}
+
+# Teardown k3s cluster completely
+teardown_cluster() {
+    debug_log "Tearing down k3s cluster..."
+
+    if command -v k3s-uninstall.sh &>/dev/null; then
+        debug_log "Running k3s uninstall script..."
+        timeout 120 k3s-uninstall.sh || error_log "k3s uninstall script timed out or failed"
+    fi
+
+    debug_log "Stopping k3s processes..."
+    pkill k3s || true
+    pkill kubectl || true
+
+    sleep 2
+
+    debug_log "Cleaning up k3s data..."
+    rm -rf /var/lib/rancher/k3s || true
+    rm -rf /etc/rancher/k3s || true
+
+    stop_containerd
+
+    debug_log "k3s teardown complete"
+}
 
 download_k3s() {
     debug_log "Downloading k3s binary..."
@@ -46,15 +99,15 @@ download_k3s() {
 configure_containerd_runtime() {
     debug_log "Configuring containerd runtime for k3s..."
 
-    if ! path_exists $CONTAINERD_CONFIG_PATH; then
+    if ! path_exists "$CONTAINERD_CONFIG_PATH"; then
         mkdir -p "$(dirname "$CONTAINERD_CONFIG_PATH")"
         touch "$CONTAINERD_CONFIG_PATH"
     fi
 
     local template=$CONTAINERD_CONFIG_PATH.tmpl
     if ! grep -q 'cedana' "$template" 2>/dev/null; then
-        echo '{{ template "base" . }}' > $template
-        cat >> $template <<'END_CAT'
+        echo '{{ template "base" . }}' > "$template"
+        cat >> "$template" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
@@ -79,7 +132,7 @@ start_cluster() {
     fi
 
     debug_log "k3s binary found, starting k3s..."
-    eval "k3s $INSTALL_K3S_EXEC" &> /dev/null &
+    eval "k3s $INSTALL_K3S_EXEC" &
 
     debug_log "Waiting for k3s cluster to start..."
 
@@ -141,57 +194,6 @@ preload_images() {
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"
 
     debug_log "Preloaded image $image into k3s"
-}
-
-# Function to set up k3s cluster
-setup_cluster() {
-    debug_log "Installing k3s cluster..."
-
-    download_k3s
-    start_cluster
-
-    # XXX: The tar in busybox is incompatible with CRIU
-    rm -f /var/lib/rancher/k3s/data/current/bin/tar
-
-    mkdir -p ~/.kube
-    cat $KUBECONFIG > ~/.kube/config
-
-    if [ -n "$CONTROLLER_DIGEST" ]; then
-        preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
-    elif [ -n "$CONTROLLER_TAG" ]; then
-        preload_images "$CONTROLLER_REPO:$CONTROLLER_TAG"
-    fi
-    if [ -n "$HELPER_DIGEST" ]; then
-        preload_images "$HELPER_REPO@$HELPER_DIGEST"
-    elif [ -n "$HELPER_TAG" ]; then
-        preload_images "$HELPER_REPO:$HELPER_TAG"
-    fi
-
-    debug_log "k3s cluster is ready"
-}
-
-# Teardown k3s cluster completely
-teardown_cluster() {
-    debug_log "Tearing down k3s cluster..."
-
-    if command -v k3s-uninstall.sh &>/dev/null; then
-        debug_log "Running k3s uninstall script..."
-        timeout 120 k3s-uninstall.sh || error_log "k3s uninstall script timed out or failed"
-    fi
-
-    debug_log "Stopping k3s processes..."
-    pkill k3s || true
-    pkill -f containerd-shim-runc-v2 || true
-    pkill -f cedana-shim-runc-v2 || true
-    pkill kubectl || true
-
-    sleep 2
-
-    debug_log "Cleaning up k3s data..."
-    rm -rf /var/lib/rancher/k3s || true
-    rm -rf /etc/rancher/k3s || true
-
-    debug_log "k3s teardown complete"
 }
 
 # Optional interface functions (no-ops for k3s)

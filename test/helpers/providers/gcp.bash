@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-###################
+########################
 ### GCP/GKE Provider ###
-###################
+########################
 #
 # Environment variables:
 #   GCLOUD_PROJECT_ID         - GCP project ID

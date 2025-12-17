@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-#######################
+########################
 ### Generic Provider ###
-#######################
+########################
 #
 # Generic provider for pre-configured Kubernetes clusters.
 # Assumes kubectl is already configured and can reach the cluster.

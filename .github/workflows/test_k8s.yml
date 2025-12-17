@@ -69,7 +69,7 @@ env:
   NB_SA_PRIVATE_KEY_PATH: ${{ secrets.NB_SA_PRIVATE_KEY_PATH }}
   EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
-  NEBIUS_CLUSTER_NAME: ${{ vars.NEBIUS_CLUSTER_NAME }}
+  NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging
@@ -92,8 +92,7 @@ jobs:
 
   k8s:
     name: Kubernetes
-    runs-on:
-      ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 'ubuntu-latest' || format(
+    runs-on: ${{ (inputs.platform != 'K3s') && 'ubuntu-latest' || format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
@@ -111,47 +110,52 @@ jobs:
           - ${{ inputs.platform }}
         compute:
           - CPU
-          - CUDA # TODO: Enable when GPU tests are added
+          - CUDA
         cr:
           - default
           - streamer
         storage:
+          - storage/local
           - storage/cedana
           - storage/s3
         arch:
           - amd64
           - arm64
-        exclude: # XXX: To reduce overusage of CI minutes
+        exclude:
+          #
+          # XXX: To reduce overusage of CI minutes
           - platform: K3s
-            arch: arm64
+            compute: CUDA
+          - platform: K3s
             storage: storage/s3
           - platform: K3s
-            arch: amd64
             storage: storage/cedana
+
+          - platform: EKS
+            compute: CUDA
           - platform: EKS
             arch: amd64
-          - platform: GKE
-            arch: arm64
           - platform: EKS
             cr: streamer
+
+          - platform: GKE
+            compute: CUDA
+          - platform: GKE
+            arch: arm64
           - platform: GKE
             cr: default
-          - platform: K3s
-            compute: CUDA
-          - platform: GKE
-            compute: CUDA
-          - platform: EKS
-            compute: CUDA
-          - platform: Nebius
-            storage: storage/s3
-          - platform: Nebius
-            storage: storage/cedana
+
           - platform: Nebius
             compute: CPU
           - platform: Nebius
             arch: arm64
           - platform: Nebius
+            storage: storage/s3
+          - platform: Nebius
+            storage: storage/cedana
+          - platform: Nebius
             cr: streamer
+
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
@@ -272,12 +276,11 @@ jobs:
 
       - name: Run k8s tests
         env:
-          # Checkpoint storage: local for Nebius, s3:// or cedana:// for others
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || (matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci') }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}
-          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large && 'true' || 'false' }}
           PARALLELISM: ${{ inputs.parallelism }}
@@ -309,32 +312,16 @@ jobs:
             *)    PROVIDER="generic" ;;
           esac
 
-          # Set GPU and LARGE flags for make target
-          GPU_FLAG=0
-          LARGE_FLAG=0
-          if [ "$GPU" = "true" ]; then
-            GPU_FLAG=1
-          fi
-          if [ "$LARGE" = "true" ]; then
-            LARGE_FLAG=1
-          fi
-
           make test-k8s \
             PROVIDER=$PROVIDER \
-            GPU=$GPU_FLAG \
+            GPU=$GPU \
             FORMATTER=$FORMATTER \
-            LARGE=$LARGE_FLAG \
             DEBUG=$DEBUG \
             CONTROLLER_REPO=$CONTROLLER_REPO \
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \
             HELPER_DIGEST=$HELPER_DIGEST \
-            HELM_CHART=$HELM_CHART \
-            CEDANA_PLUGINS_BUILDS=$CEDANA_PLUGINS_BUILDS \
-            CEDANA_PLUGINS_CRIU_VERSION=$CEDANA_PLUGINS_CRIU_VERSION \
-            CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION \
-            CEDANA_PLUGINS_GPU_VERSION=$CEDANA_PLUGINS_GPU_VERSION \
-            CEDANA_PLUGINS_STREAMER_VERSION=$CEDANA_PLUGINS_STREAMER_VERSION
+            HELM_CHART=$HELM_CHART
 
       - name: Setup node
         if: always()

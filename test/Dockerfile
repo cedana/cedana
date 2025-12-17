@@ -2,7 +2,7 @@
 
 FROM cedana/cedana-samples:cpu AS cedana-samples
 
-FROM cruizba/ubuntu-dind:noble-latest
+FROM ubuntu:24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
 ARG GO_VERSION=1.25.1
@@ -16,7 +16,7 @@ APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lso
     pkg-config libbsd-dev libcap-dev libgpgme-dev iptables iproute2 \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
-    zip jq
+    containerd zip jq
 "
 apt-get update
 for pkg in $APT_PACKAGES; do
@@ -96,9 +96,39 @@ apt install -y /tmp/k9s.deb
 rm -f /tmp/k9s.deb
 EOT
 
-# configure containerd
-RUN rm -rf /run/containerd
-RUN ln -s /run/docker/containerd /run/containerd
+# Install docker-cli
+RUN <<EOT
+sudo mkdir -m 0755 -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt update && apt install -y docker-ce-cli
+EOT
+
+# Configure containerd
+RUN <<'EOT'
+mkdir -p /etc/containerd
+cat > /etc/containerd/config.toml <<'CONFIG'
+version = 2
+
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    disable_tcp_service = true
+    stream_server_address = "127.0.0.1"
+    stream_server_port = "0"
+    enable_selinux = false
+    sandbox_image = "registry.k8s.io/pause:3.8"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      snapshotter = "native"
+      default_runtime_name = "runc"
+
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          runtime_type = "io.containerd.runc.v2"
+CONFIG
+EOT
 
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples
@@ -107,8 +137,5 @@ VOLUME ["/src"]
 WORKDIR /src
 ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
-
-# because github actions forces it on us
-RUN sed -i '2iumount /var/run/docker.sock || true' /usr/local/bin/start-docker.sh
 
 CMD []

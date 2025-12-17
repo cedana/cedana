@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-######################
+#######################
 ### Nebius Provider ###
-######################
+#######################
 #
 # Nebius is unique in that it creates/destroys nodegroups dynamically for GPU tests.
 #
@@ -12,11 +12,11 @@
 #   NB_SA_PRIVATE_KEY     - Private key content
 #   NB_SA_PRIVATE_KEY_PATH - Path to store private key (default: /tmp/nb_sa_key)
 #   NB_PROJECT_ID         - Nebius project ID
-#   NEBIUS_CLUSTER_NAME   - Cluster name (default: cedana-ci-arm64)
+#   NB_CLUSTER_NAME   - Cluster name (default: cedana-ci-arm64)
 #
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-export NEBIUS_CLUSTER_NAME="${NEBIUS_CLUSTER_NAME:-cedana-ci-arm64}"
+export NB_CLUSTER_NAME="${NB_CLUSTER_NAME:-cedana-ci-arm64}"
 export NB_SA_PRIVATE_KEY_PATH="${NB_SA_PRIVATE_KEY_PATH:-/tmp/nb_sa_key}"
 export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
 export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
@@ -69,13 +69,13 @@ _create_nebius_mk8s() {
     debug_log "Creating Nebius mk8s cluster..."
 
     NB_SUBNET_ID=$(nebius vpc subnet list \
-        --format json \
+            --format json \
         | jq -r '.items[0].metadata.id')
     export NB_SUBNET_ID
 
     NB_CLUSTER_ID=$(
         nebius mk8s cluster get-by-name \
-            --name "$NEBIUS_CLUSTER_NAME" \
+            --name "$NB_CLUSTER_NAME" \
             --format json | jq -r '.metadata.id'
     )
 
@@ -83,9 +83,9 @@ _create_nebius_mk8s() {
         debug_log "Cluster already exists, skip creation..."
     else
         NB_CLUSTER_ID=$(nebius mk8s cluster create \
-            --name "$NEBIUS_CLUSTER_NAME" \
-            --control-plane-subnet-id "$NB_SUBNET_ID" \
-            '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
+                --name "$NB_CLUSTER_NAME" \
+                --control-plane-subnet-id "$NB_SUBNET_ID" \
+                '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
             --format json | jq -r '.metadata.id')
     fi
     export NB_CLUSTER_ID
@@ -128,7 +128,7 @@ delete_nodegroup() {
 
     local nodegroup_id
     nodegroup_id=$(nebius mk8s node-group get-by-name \
-        --parent-id "$NB_CLUSTER_ID" \
+            --parent-id "$NB_CLUSTER_ID" \
         --name "$NB_NODEGROUP_NAME" --format json | jq -r '.metadata.id')
 
     if [ -z "$nodegroup_id" ] || [ "$nodegroup_id" = "null" ]; then
@@ -149,7 +149,7 @@ setup_gpu_operator() {
     helm upgrade -i --wait gpu-operator \
         -n "$GPU_OPERATOR_NAMESPACE" --create-namespace \
         nvidia/gpu-operator \
-        --version=$GPU_OPERATOR_VERSION --set driver.version=$GPU_OPERATOR_DRIVER_VERSION
+        --version="$GPU_OPERATOR_VERSION" --set driver.version="$GPU_OPERATOR_DRIVER_VERSION"
 
     debug_log "NVIDIA GPU operator installed successfully"
 }

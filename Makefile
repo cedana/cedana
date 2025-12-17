@@ -117,6 +117,9 @@ PARALLELISM?=8
 TAGS?=
 ARGS?=
 RETRIES?=0
+GPU?=0
+PROVIDER?=K3s
+SKIP_HELM?=0
 HELPER_REPO?=
 HELPER_TAG?=""
 HELPER_DIGEST?=""
@@ -196,47 +199,76 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		fi ;\
 	fi
 
-test-k8s: ## Run unified kubernetes tests against any cluster (PROVIDER=[generic|aws|gcp|nebius|k3s], GPU=[0|1], LARGE=[0|1], FILTER=<samples>, SKIP_HELM=[0|1], CLUSTER_ID=<id>, SAMPLES_DIR=<path>, DEBUG=[0|1])
-	@echo "Running unified kubernetes tests..."
-	@echo "Provider: $(or $(PROVIDER),generic), GPU: $(GPU), LARGE: $(LARGE), FILTER: $(FILTER), DEBUG: $(DEBUG)"
-	DEBUG=$(DEBUG) \
-	K8S_PROVIDER=$(or $(PROVIDER),generic) \
-	GPU_ENABLED=$(GPU) \
-	LARGE_TESTS=$(LARGE) \
-	TEST_FILTER=$(FILTER) \
-	SKIP_HELM_INSTALL=$(SKIP_HELM) \
-	SKIP_HELM_UNINSTALL=$(SKIP_HELM) \
-	CLUSTER_ID=$(CLUSTER_ID) \
-	SAMPLES_DIR=$(SAMPLES_DIR) \
-	CEDANA_NAMESPACE=$(CEDANA_NAMESPACE) \
-	CEDANA_URL=$(CEDANA_URL) \
-	CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
-	CONTROLLER_REPO=$(CONTROLLER_REPO) \
-	CONTROLLER_TAG=$(CONTROLLER_TAG) \
-	CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
-	HELPER_REPO=$(HELPER_REPO) \
-	HELPER_TAG=$(HELPER_TAG) \
-	HELPER_DIGEST=$(HELPER_DIGEST) \
-	HELM_CHART=$(HELM_CHART) \
-	CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \
-	CEDANA_PLUGINS_CRIU_VERSION=$(CEDANA_PLUGINS_CRIU_VERSION) \
-	CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION) \
-	CEDANA_PLUGINS_GPU_VERSION=$(CEDANA_PLUGINS_GPU_VERSION) \
-	CEDANA_PLUGINS_STREAMER_VERSION=$(CEDANA_PLUGINS_STREAMER_VERSION) \
-	bats --jobs 1 test/k8s/k8s.bats
-
-# Provider-specific convenience targets
-test-k8s-eks: ## Run kubernetes tests against EKS (GPU=[0|1], LARGE=[0|1], DEBUG=[0|1])
-	$(MAKE) test-k8s PROVIDER=aws GPU=$(GPU) LARGE=$(LARGE) DEBUG=$(DEBUG)
-
-test-k8s-gke: ## Run kubernetes tests against GKE (GPU=[0|1], LARGE=[0|1], DEBUG=[0|1])
-	$(MAKE) test-k8s PROVIDER=gcp GPU=$(GPU) LARGE=$(LARGE) DEBUG=$(DEBUG)
-
-test-k8s-nebius: ## Run kubernetes tests against Nebius with GPU (LARGE=[0|1], DEBUG=[0|1])
-	$(MAKE) test-k8s PROVIDER=nebius GPU=1 LARGE=$(LARGE) DEBUG=$(DEBUG)
-
-test-k8s-local: ## Run kubernetes tests against local k3s cluster (DEBUG=[0|1])
-	$(MAKE) test-k8s PROVIDER=k3s DEBUG=$(DEBUG)
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+	if [ -f /.dockerenv ] || [ "$(PROVIDER)" != "K3s" ]; then \
+		echo "Running kubernetes e2e tests..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		if [ "$(TAGS)" = "" ]; then \
+			$(BATS_CMD) -r test/k8s ; status=$$? ;\
+		else \
+			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
+		fi ;\
+		if [ $$status -ne 0 ]; then \
+			echo "Kubernetes e2e tests failed" ;\
+			exit $$status ;\
+		else \
+			echo "All kubernetes e2e tests passed!" ;\
+		fi ;\
+	else \
+        MAKE_ADDITIONAL_OPTS=""; \
+        if [ -n "$(HELM_CHART)" ]; then \
+			if echo "$(HELM_CHART)" | grep -q /; then \
+				MAKE_ADDITIONAL_OPTS="HELM_CHART=/helm-chart"; \
+			else \
+				MAKE_ADDITIONAL_OPTS="HELM_CHART=$(HELM_CHART)"; \
+			fi; \
+        fi; \
+		if [ "$(GPU)" = "1" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_CREATE_NO_PLUGINS_CUDA) ;\
+			$(DOCKER_TEST_START) ;\
+			$(DOCKER_TEST_EXEC) make test-k8s \
+				ARGS=$(ARGS) \
+				PARALLELISM=$(PARALLELISM) \
+				TAGS=$(TAGS) \
+				RETRIES=$(RETRIES) \
+				GPU=$(GPU) \
+				DEBUG=$(DEBUG) \
+				PROVIDER=$(PROVIDER) \
+				CLUSTER_ID=$(CLUSTER_ID) \
+				SKIP_HELM=$(SKIP_HELM) \
+				CONTROLLER_REPO=$(CONTROLLER_REPO) \
+				CONTROLLER_TAG=$(CONTROLLER_TAG) \
+				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
+				HELPER_REPO=$(HELPER_REPO) \
+				HELPER_TAG=$(HELPER_TAG) \
+				HELPER_DIGEST=$(HELPER_DIGEST) \
+				$$MAKE_ADDITIONAL_OPTS ;\
+			$(DOCKER_TEST_REMOVE) ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_CREATE_NO_PLUGINS) ;\
+			$(DOCKER_TEST_START) ;\
+			$(DOCKER_TEST_EXEC) make test-k8s \
+				ARGS=$(ARGS) \
+				PARALLELISM=$(PARALLELISM) \
+				TAGS=$(TAGS) \
+				RETRIES=$(RETRIES) \
+				GPU=$(GPU) \
+				DEBUG=$(DEBUG) \
+				PROVIDER=$(PROVIDER) \
+				CLUSTER_ID=$(CLUSTER_ID) \
+				SKIP_HELM=$(SKIP_HELM) \
+				CONTROLLER_REPO=$(CONTROLLER_REPO) \
+				CONTROLLER_TAG=$(CONTROLLER_TAG) \
+				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
+				HELPER_REPO=$(HELPER_REPO) \
+				HELPER_TAG=$(HELPER_TAG) \
+				HELPER_DIGEST=$(HELPER_DIGEST) \
+				$$MAKE_ADDITIONAL_OPTS ;\
+			$(DOCKER_TEST_REMOVE) ;\
+		fi ;\
+	fi
 
 test-enter: ## Enter the test environment
 	$(DOCKER_TEST_CREATE) ;\
@@ -287,7 +319,7 @@ PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gp
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --name=$(DOCKER_TEST_CONTAINER_NAME) \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --entrypoint sleep --name=$(DOCKER_TEST_CONTAINER_NAME) \
 				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
 				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) \
@@ -295,22 +327,22 @@ DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTER
 				-e HF_TOKEN=$(HF_TOKEN) \
 				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
 				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
-				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) -e NEBIUS_CLUSTER_NAME=$(NEBIUS_CLUSTER_NAME)\
+				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) -e NB_CLUSTER_NAME=$(NB_CLUSTER_NAME)\
 				$(DOCKER_ADDITIONAL_OPTS)
-DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) inf >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_BIN_COPY_CRIU) && \
 						$(HELM_CHART_COPY) >/dev/null
-DOCKER_TEST_CREATE_NO_PLUGINS=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE_NO_PLUGINS=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) inf >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null
-DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) inf >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_LIB_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
-DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) inf >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null
 
 docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])

@@ -4,7 +4,7 @@
 ### Provider Interface   ###
 ############################
 #
-# This file auto-loads the correct provider based on K8S_PROVIDER env var.
+# This file auto-loads the correct provider based on PROVIDER env var.
 # All providers must implement:
 #   - setup_cluster()    : Configure kubectl access to the cluster
 #   - teardown_cluster() : Clean up cluster resources (optional for persistent clusters)
@@ -15,37 +15,37 @@
 #   - setup_gpu_operator() : Install NVIDIA GPU operator if needed
 #
 # Environment variables:
-#   K8S_PROVIDER - Provider to use: aws|eks|gcp|gke|nebius|k3s|generic (default: generic)
+#   PROVIDER - Provider to use: aws|eks|gcp|gke|nebius|k3s|generic (default: generic)
 #
 
-K8S_PROVIDER="${K8S_PROVIDER:-generic}"
+PROVIDER="${PROVIDER:-generic}"
 
 # Normalize provider names
-case "$K8S_PROVIDER" in
+case "$PROVIDER" in
     aws|eks|EKS)
-        K8S_PROVIDER="aws"
+        PROVIDER="aws"
         ;;
     gcp|gke|GKE)
-        K8S_PROVIDER="gcp"
+        PROVIDER="gcp"
         ;;
     nebius|Nebius|NEBIUS)
-        K8S_PROVIDER="nebius"
+        PROVIDER="nebius"
         ;;
     k3s|K3s|K3S)
-        K8S_PROVIDER="k3s"
+        PROVIDER="k3s"
         ;;
     generic|GENERIC|*)
-        K8S_PROVIDER="generic"
+        PROVIDER="generic"
         ;;
 esac
 
-export K8S_PROVIDER
+export PROVIDER
 
 # Get the directory where this script is located
 PROVIDERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source the appropriate provider
-case "$K8S_PROVIDER" in
+case "$PROVIDER" in
     aws)
         source "${PROVIDERS_DIR}/aws.bash"
         ;;
@@ -69,12 +69,12 @@ _verify_provider_interface() {
 
     for fn in "${required_functions[@]}"; do
         if ! declare -f "$fn" > /dev/null 2>&1; then
-            error_log "Provider '$K8S_PROVIDER' must implement $fn()"
+            error_log "Provider '$PROVIDER' must implement $fn()"
             return 1
         fi
     done
 
-    debug_log "Provider '$K8S_PROVIDER' loaded successfully"
+    debug_log "Provider '$PROVIDER' loaded successfully"
     return 0
 }
 

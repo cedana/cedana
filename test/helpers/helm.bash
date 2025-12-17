@@ -17,7 +17,7 @@ helm_install_cedana() {
     local cluster_id="$1"
     local namespace="$2"
 
-    debug_log "Installing/upgrading helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
+    debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
 
     local helm_cmd
 
@@ -42,6 +42,7 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.awsSecretAccessKey=$AWS_SECRET_ACCESS_KEY"
     helm_cmd="$helm_cmd --set config.awsRegion=$AWS_REGION"
     helm_cmd="$helm_cmd --set config.containerdAddress=$CONTAINERD_ADDRESS"
+    helm_cmd="$helm_cmd --set daemonHelper.forceCleanup=true" # for any old installations
 
     # Set overrides from environment variables
 
@@ -86,13 +87,15 @@ helm_install_cedana() {
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
     }
+
+    debug_log "Helm chart installed successfully"
 }
 
 helm_uninstall_cedana() {
     local namespace="$1"
 
     debug_log "Uninstalling helm chart..."
-    helm uninstall cedana -n "$namespace" --wait --timeout=2m || {
+    helm uninstall cedana -n "$namespace" --wait --timeout=2m --ignore-not-found || {
         error_log "Failed to uninstall helm chart"
         return 1
     }

@@ -9,6 +9,7 @@ export MEBIBYTE=$(( KIBIBYTE * 1024 ))
 export GIBIBYTE=$(( MEBIBYTE * 1024 ))
 
 export RED='\033[0;31m'
+export YELLOW='\033[0;33m'
 export NC='\033[0m' # No Color
 
 load_lib() {
@@ -239,7 +240,7 @@ wait_for_file() {
 debug_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
-        echo "[DEBUG] $message" >&3
+        echo -e "${YELLOW}[DEBUG] $message${NC}" >&3
     fi
 }
 

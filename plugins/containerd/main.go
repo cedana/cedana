@@ -31,6 +31,7 @@ var (
 	UnfreezeCmd *cobra.Command = cmd.UnfreezeCmd
 	RunCmd      *cobra.Command = cmd.RunCmd
 	ManageCmd   *cobra.Command = cmd.ManageCmd
+	QueryCmd    *cobra.Command = cmd.QueryCmd
 	CmdTheme    text.Colors    = style.HighLevelRuntimeColors
 )
 
@@ -40,6 +41,8 @@ var HealthChecks types.Checks = types.Checks{
 		client.CheckRuntime(),
 	},
 }
+
+var QueryHandler types.Query = client.Query
 
 var (
 	RunHandler    types.Run                   = client.Run

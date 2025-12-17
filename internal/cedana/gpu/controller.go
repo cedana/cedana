@@ -41,7 +41,6 @@ const (
 	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
 	CONTROLLER_MISC_DIR_FORMATTER          = "/dev/shm/cedana-gpu.%s.misc"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
-	CONTROLLER_DEFAULT_FREEZE_TYPE         = gpu.FreezeType_FREEZE_TYPE_IPC
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1     // Signal to the restored process to notify it has a new PID
 	CONTROLLER_CHECK_SHM_SIZE              = 10 * utils.MEBIBYTE // Small size to run controller health check

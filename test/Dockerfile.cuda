@@ -17,7 +17,7 @@ APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lso
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
     python3-pip \
-    zip jq
+    containerd zip jq
 "
 apt-get update
 for pkg in $APT_PACKAGES; do
@@ -47,20 +47,6 @@ rm -rf /usr/local/go
 tar -C /usr/local -xzf go${GO_VERSION}.linux-${ARCH}.tar.gz
 ln -s /usr/local/go/bin/go /usr/local/bin/go
 rm go${GO_VERSION}.linux-${ARCH}.tar.gz
-EOT
-
-# install Docker (CLI only)
-RUN <<EOT
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-chmod a+r /etc/apt/keyrings/docker.asc
-echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
-    https://download.docker.com/linux/ubuntu \
-    $(. /etc/os-release && echo "$UBUNTU_CODENAME") stable" | \
-tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update
-apt-get install -y docker-ce docker-ce-cli
 EOT
 
 # install kubectl
@@ -109,6 +95,41 @@ esac
 wget https://github.com/derailed/k9s/releases/${K9S_VERSION}/download/k9s_linux_"${K9S_ARCH}".deb -O /tmp/k9s.deb
 apt install -y /tmp/k9s.deb
 rm -f /tmp/k9s.deb
+EOT
+
+# install docker-cli
+RUN <<EOT
+sudo mkdir -m 0755 -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt update && apt install -y docker-ce-cli
+EOT
+
+# Configure containerd
+# TODO: configure nvidia
+RUN <<'EOT'
+mkdir -p /etc/containerd
+cat > /etc/containerd/config.toml <<'CONFIG'
+version = 2
+
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    disable_tcp_service = true
+    stream_server_address = "127.0.0.1"
+    stream_server_port = "0"
+    enable_selinux = false
+    sandbox_image = "registry.k8s.io/pause:3.8"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      snapshotter = "native"
+      default_runtime_name = "runc"
+
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          runtime_type = "io.containerd.runc.v2"
+CONFIG
 EOT
 
 # copy cedana-samples

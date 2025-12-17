@@ -43,7 +43,7 @@ func (feature Feature[T]) IfAvailable(
 			sym, ok := symUntyped.(*T)
 			if !ok {
 				errs = append(errs, fmt.Errorf("plugin '%s' has incompatible '%s'. expected '%s', got '%s'",
-					name, feature, reflect.TypeOf(sym).String(), reflect.TypeOf(symUntyped).String()))
+					name, feature, reflect.TypeFor[*T]().String(), reflect.TypeOf(symUntyped).String()))
 				continue
 			}
 			if sym == nil || (reflect.TypeOf(*sym).Kind() == reflect.Pointer && reflect.ValueOf(*sym).IsNil()) {
@@ -85,7 +85,7 @@ func (feature Feature[T]) IsAvailable(filter ...string) (bool, error) {
 			sym, ok := symUntyped.(*T)
 			if !ok {
 				errs = append(errs, fmt.Errorf("plugin '%s' has incompatible '%s'. expected '%s', got '%s'",
-					name, feature, reflect.TypeOf(sym).String(), reflect.TypeOf(symUntyped).String()))
+					name, feature, reflect.TypeFor[*T]().String(), reflect.TypeOf(symUntyped).String()))
 				continue
 			}
 			if sym == nil || (reflect.TypeOf(*sym).Kind() == reflect.Pointer && reflect.ValueOf(*sym).IsNil()) {

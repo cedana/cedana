@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-###################
+########################
 ### AWS/EKS Provider ###
-###################
+########################
 #
 # Environment variables:
 #   AWS_ACCESS_KEY_ID     - AWS access key
