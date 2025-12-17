@@ -52,7 +52,7 @@ load ../helpers/propagator
 # bats test_tags=dump,restore
 @test "Dump/Restore: Timestamp Logger" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/counting.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/cpu/counting.yaml")
 
     test_pod_spec DUMP_RESTORE "$spec"
 }
@@ -60,7 +60,7 @@ load ../helpers/propagator
 # bats test_tags=dump,restore
 @test "Dump/Restore: Multi-container Counter" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/counting-multicontainer.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/cpu/counting-multicontainer.yaml")
 
     test_pod_spec DUMP_RESTORE "$spec"
 }

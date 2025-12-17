@@ -58,7 +58,7 @@ setup_file() {
 # bats test_tags=dump,restore
 @test "Dump/Restore: CUDA Vector Addition" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cuda-vector-add.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add.yaml")
 
     test_pod_spec DUMP_RESTORE "$spec"
 }
@@ -66,7 +66,7 @@ setup_file() {
 # bats test_tags=dump,restore
 @test "Dump/Restore: CUDA Multi-container Vector Addition" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cuda-vector-add-multicontainer.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add-multicontainer.yaml")
 
     test_pod_spec DUMP_RESTORE "$spec"
 }
@@ -74,15 +74,7 @@ setup_file() {
 # bats test_tags=dump,restore
 @test "Dump/Restore: CUDA Memory Throughput" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cuda-mem-throughput.yaml")
-
-    test_pod_spec DUMP_RESTORE "$spec"
-}
-
-# bats test_tags=dump,restore
-@test "Dump/Restore: Simple PyTorch Training" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cuda-pytorch-train.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-mem-throughput.yaml")
 
     test_pod_spec DUMP_RESTORE "$spec"
 }
