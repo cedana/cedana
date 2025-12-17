@@ -23,8 +23,8 @@ setup_file() {
     local script
     local spec
 
-    script='/cedana-samples/gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
+    script='gpu_smr/vector_add'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
 
     test_pod_spec DEPLOY "$spec"
 }
@@ -34,8 +34,8 @@ setup_file() {
     local script
     local spec
 
-    script='/cedana-samples/gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
+    script='gpu_smr/vector_add'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
 
     test_pod_spec DUMP "$spec"
 }
@@ -45,8 +45,8 @@ setup_file() {
     local script
     local spec
 
-    script='/cedana-samples/gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
+    script='gpu_smr/vector_add'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
 
     test_pod_spec RESTORE "$spec"
 }

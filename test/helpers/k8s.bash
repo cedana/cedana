@@ -506,7 +506,9 @@ get_created_pod_name() {
 test_pod_spec() {
     local action="$1"
     local spec="$2"
-    local namespace="${3:-$NAMESPACE}"
+    local dump_wait_time="${3:-5}"
+    local pod_timeout="${4:-300}"
+    local namespace="${5:-$NAMESPACE}"
 
     local required_gpus
     required_gpus=$(get_required_gpus "$spec")
@@ -516,13 +518,6 @@ test_pod_spec() {
 
     if [ "$available_gpus" -lt "$required_gpus" ]; then
         skip "Insufficient GPUs: need $required_gpus, have $available_gpus"
-    fi
-
-    local dump_wait_time=5
-    local pod_timeout=300
-    if [ "$required_gpus" -gt 0 ]; then
-        dump_wait_time=60
-        pod_timeout=1300
     fi
 
     local container_name
