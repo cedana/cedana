@@ -80,7 +80,7 @@ func (c *ContainerdClient) Pods(ctx context.Context, req *k8s.QueryReq) (resp *k
 				continue
 			}
 		}
-		if req.Namespace != "" && info.Namespace != req.Namespace {
+		if req.Namespace != "" && req.Namespace != info.Namespace {
 			continue
 		}
 		if req.ContainerType != "" && req.ContainerType != info.Type {
@@ -95,6 +95,7 @@ func (c *ContainerdClient) Pods(ctx context.Context, req *k8s.QueryReq) (resp *k
 				Namespace: info.Namespace,
 				UID:       info.UID,
 			}
+			podMap[info.ID] = pod
 		}
 
 		pod.Containerd = append(pod.Containerd, container)
@@ -106,3 +107,4 @@ func (c *ContainerdClient) Pods(ctx context.Context, req *k8s.QueryReq) (resp *k
 
 	return &k8s.QueryResp{Pods: pods}, nil
 }
+
