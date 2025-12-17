@@ -137,6 +137,8 @@ jobs:
             arch: amd64
           - platform: EKS
             cr: streamer
+          - platform: EKS
+            storage: storage/local
 
           - platform: GKE
             compute: CUDA
@@ -144,17 +146,19 @@ jobs:
             arch: arm64
           - platform: GKE
             cr: default
+          - platform: GKE
+            storage: storage/local
 
           - platform: Nebius
             compute: CPU
           - platform: Nebius
             arch: arm64
           - platform: Nebius
+            cr: streamer
+          - platform: Nebius
             storage: storage/s3
           - platform: Nebius
             storage: storage/cedana
-          - platform: Nebius
-            cr: streamer
 
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 1 || 9999 }}
     container:
