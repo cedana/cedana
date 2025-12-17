@@ -104,21 +104,29 @@ download_k3s() {
 configure_containerd_runtime() {
     debug_log "Configuring containerd runtime for k3s..."
 
-    if ! path_exists "$CONTAINERD_CONFIG_PATH"; then
-        mkdir -p "$(dirname "$CONTAINERD_CONFIG_PATH")"
-        touch "$CONTAINERD_CONFIG_PATH"
-    fi
+    check_env CONTAINERD_CONFIG_PATH
 
-    local config=$CONTAINERD_CONFIG_PATH
-    if ! grep -q 'cedana' "$config" 2>/dev/null; then
-        echo '{{ template "base" . }}' > "$config"
-        cat >> "$config" <<'END_CAT'
+    if ! grep -q 'cedana' "$CONTAINERD_CONFIG_PATH"; then
+        # if it's not version = 3 then we assume it's version = 2, as containerd config version = 1 is not used any more, largely that's considered deprecated
+        if ! grep -q 'version = 3' "$CONTAINERD_CONFIG_PATH"; then
+            debug_log "Writing containerd config to $CONTAINERD_CONFIG_PATH"
+            cat >> "$CONTAINERD_CONFIG_PATH" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 [plugins.'io.containerd.cri.v1.images']
   use_local_image_pull = true
 END_CAT
+        else
+            debug_log "Writing containerd config to $CONTAINERD_CONFIG_PATH"
+            cat >> "$CONTAINERD_CONFIG_PATH" <<'END_CAT'
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
+    runtime_type = "io.containerd.runc.v2"
+    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+[plugins.'io.containerd.cri.v1.images']
+  use_local_image_pull = true
+END_CAT
+        fi
     fi
 
     debug_log "Configured containerd runtime for k3s"
