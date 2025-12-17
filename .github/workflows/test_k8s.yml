@@ -72,7 +72,7 @@ env:
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging
+  DEBUG: 1 # bats debug logging
 
 jobs:
   propagator-connectivity:
@@ -286,7 +286,7 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
-          LARGE: ${{ inputs.large && 'true' || 'false' }}
+          LARGE: ${{ inputs.large && '1' || '0' }}
           PARALLELISM: ${{ inputs.parallelism }}
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
@@ -316,7 +316,18 @@ jobs:
             *)    PROVIDER="generic" ;;
           esac
 
+          TAGS="k8s"
+          if [ "$GPU" = "1" ]; then
+            TAGS="${TAGS},gpu"
+          else
+            TAGS="${TAGS},!gpu"
+          fi
+          if [ "$LARGE" = "0" ]; then
+            TAGS="${TAGS},!large"
+          fi
+
           make test-k8s \
+            TAGS=$TAGS \
             PROVIDER=$PROVIDER \
             GPU=$GPU \
             FORMATTER=$FORMATTER \
