@@ -282,9 +282,24 @@ var pluginFeaturesCmd = &cobra.Command{
 		tableWriter := table.NewWriter()
 		tableWriter.SetStyle(style.TableStyle)
 		tableWriter.SetOutputMirror(os.Stdout)
-
 		tableWriter.SetStyle(style.TableStyle)
-		tableWriter.Style().Options.SeparateRows = false
+		columnConfigs := []table.ColumnConfig{
+			{
+				Name:        "Feature",
+				Align:       text.AlignRight,
+				AlignHeader: text.AlignRight,
+				AlignFooter: text.AlignRight,
+			},
+		}
+		for _, p := range list {
+			columnConfigs = append(columnConfigs, table.ColumnConfig{
+				Name:        p.Name,
+				Align:       text.AlignCenter,
+				AlignHeader: text.AlignCenter,
+				AlignFooter: text.AlignCenter,
+			})
+		}
+		tableWriter.SetColumnConfigs(columnConfigs)
 
 		header := table.Row{
 			"Feature",
