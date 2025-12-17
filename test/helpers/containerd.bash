@@ -46,6 +46,9 @@ stop_containerd() {
         debug_log "Containerd is not running"
     fi
 
+    pkill -f containerd-shim-runc-v2 || true
+    pkill -f cedana-shim-runc-v2 || true
+
     wait_for_cmd_fail 30 ctr --address $CONTAINERD_ADDRESS version
 
     debug_log "Containerd stopped"

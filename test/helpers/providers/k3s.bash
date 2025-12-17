@@ -165,13 +165,7 @@ stop_cluster() {
         timeout 120 k3s-killall.sh || error_log "k3s killall script timed out or failed"
     fi
 
-    debug_log "Stopping k3s processes..."
     pkill k3s || true
-    pkill -f containerd-shim-runc-v2 || true
-    pkill -f cedana-shim-runc-v2 || true
-    pkill kubectl || true
-
-    sleep 2
 
     debug_log "k3s cluster stopped"
 }
