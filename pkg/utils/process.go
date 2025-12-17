@@ -190,18 +190,15 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		children, err = p.ChildrenWithContext(ctx)
 
 		if err == nil {
-			childErrs := []error{}
+			// Don't fail if children exit during the walk
 			for _, child := range children {
 				childState, err := GetProcessState(ctx, uint32(child.Pid), tree...)
 				if err != nil {
-					childErrs = append(childErrs, err)
 					continue
 				}
 
 				state.Children = append(state.Children, childState)
 			}
-
-			errs = append(errs, childErrs...)
 		}
 	}
 
