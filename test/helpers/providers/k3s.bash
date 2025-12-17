@@ -43,7 +43,6 @@ setup_cluster() {
         preload_images "$HELPER_REPO:$HELPER_TAG"
     fi
     if [ "${GPU:-0}" = "1" ]; then
-        preload_images "cedana/cedana-test:cuda"
         preload_images "cedana/cedana-samples:cuda"
     fi
 

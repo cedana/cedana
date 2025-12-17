@@ -291,7 +291,7 @@ jobs:
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large && '1' || '0' }}
-          PARALLELISM: ${{ inputs.parallelism }}
+          PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }} # limit GPU tests to 1 parallelism to avoid GPU contention for now
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
           NEBIUS_CLUSTER_NAME: ${{ env.NEBIUS_CLUSTER_NAME }}-${{ matrix.arch }}
@@ -336,6 +336,7 @@ jobs:
             GPU=$GPU \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
+            PARALLELISM=1 \ # TODO: revert after testing
             CONTROLLER_REPO=$CONTROLLER_REPO \
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \

@@ -478,13 +478,13 @@ jobs:
     uses: ./.github/workflows/test_k8s.yml
     if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius on nightly (when large=true)
     secrets: inherit
-    concurrency: test-k8s-nebius
+    concurrency: test-k8s-nebius # Since the cluster is reused
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: Nebius
       large: ${{ inputs.large }}
-      parallelism: 1 # because single GPU node
+      parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
   post-summary:
