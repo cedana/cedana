@@ -21,8 +21,24 @@ APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lso
 "
 apt-get update
 for pkg in $APT_PACKAGES; do
-    apt-get install -y $pkg || echo "failed to install $pkg" >&2
+    apt-get install -y --no-install-recommends $pkg || echo "failed to install $pkg" >&2
 done
+EOT
+
+# Install NVIDIA container toolkit
+RUN <<EOT
+apt-get install -y --no-install-recommends curl gnupg2
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+  && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+apt-get update
+export NVIDIA_CONTAINER_TOOLKIT_VERSION=1.18.1-1
+  apt-get install -y \
+      nvidia-container-toolkit=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      nvidia-container-toolkit-base=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      libnvidia-container-tools=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      libnvidia-container1=${NVIDIA_CONTAINER_TOOLKIT_VERSION}
 EOT
 
 # install bats
@@ -99,16 +115,15 @@ EOT
 
 # install docker-cli
 RUN <<EOT
-sudo mkdir -m 0755 -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+mkdir -m 0755 -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
 apt update && apt install -y docker-ce-cli
 EOT
 
 # Configure containerd
-# TODO: configure nvidia
 RUN <<'EOT'
 mkdir -p /etc/containerd
 cat > /etc/containerd/config.toml <<'CONFIG'
@@ -131,6 +146,7 @@ snapshotter = "native"
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
           runtime_type = "io.containerd.runc.v2"
 CONFIG
+nvidia-ctk runtime configure --runtime=containerd
 EOT
 
 # copy cedana-samples

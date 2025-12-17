@@ -16,6 +16,9 @@ START_K3S_SERVER="server \
         --snapshotter=native \
         --container-runtime-endpoint=$CONTAINERD_ADDRESS"
 
+export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
+export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.10}"
+
 # Function to set up k3s cluster
 setup_cluster() {
     debug_log "Installing k3s cluster..."
@@ -39,14 +42,21 @@ setup_cluster() {
     elif [ -n "$HELPER_TAG" ]; then
         preload_images "$HELPER_REPO:$HELPER_TAG"
     fi
+    if [ "${GPU:-0}" = "1" ]; then
+        preload_images "cedana/cedana-test:cuda"
+    fi
 
     start_cluster
 
-    # XXX: The tar in busybox is incompatible with CRIU
-    rm -f /var/lib/rancher/k3s/data/current/bin/tar
-
     mkdir -p ~/.kube
     cat $KUBECONFIG > ~/.kube/config
+
+    if [ "${GPU:-0}" = "1" ]; then
+        setup_gpu_operator
+    fi
+
+    # XXX: The tar in busybox is incompatible with CRIU
+    rm -f /var/lib/rancher/k3s/data/current/bin/tar
 
     debug_log "k3s cluster is ready"
 }
@@ -106,28 +116,22 @@ configure_containerd_runtime() {
 
     check_env CONTAINERD_CONFIG_PATH
 
-    if ! grep -q 'cedana' "$CONTAINERD_CONFIG_PATH"; then
-        # if it's not version = 3 then we assume it's version = 2, as containerd config version = 1 is not used any more, largely that's considered deprecated
-        if ! grep -q 'version = 3' "$CONTAINERD_CONFIG_PATH"; then
-            debug_log "Writing containerd config to $CONTAINERD_CONFIG_PATH"
-            cat >> "$CONTAINERD_CONFIG_PATH" <<'END_CAT'
+    local path=$CONTAINERD_CONFIG_PATH
+
+    if [ "${GPU:-0}" = "1" ]; then
+        local config_dir
+        config_dir=$(dirname "$CONTAINERD_CONFIG_PATH")/conf.d
+        path="$config_dir/99-nvidia.toml"
+    fi
+
+    debug_log "Writing containerd config to $path"
+    cat >> "$path" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 [plugins.'io.containerd.cri.v1.images']
   use_local_image_pull = true
 END_CAT
-        else
-            debug_log "Writing containerd config to $CONTAINERD_CONFIG_PATH"
-            cat >> "$CONTAINERD_CONFIG_PATH" <<'END_CAT'
-[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
-    runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
-[plugins.'io.containerd.cri.v1.images']
-  use_local_image_pull = true
-END_CAT
-        fi
-    fi
 
     debug_log "Configured containerd runtime for k3s"
 }
@@ -197,6 +201,37 @@ preload_images() {
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"
 
     debug_log "Preloaded image $image into k3s"
+}
+
+setup_gpu_operator() {
+    debug_log "Installing NVIDIA GPU operator..."
+
+    helm repo add nvidia https://helm.ngc.nvidia.com/nvidia \
+        && helm repo update
+
+    mount --make-rshared /
+
+    # See https://github.com/NVIDIA/gpu-operator/issues/569
+    # Because we are working inside a container.
+    cat << END_CAT > /tmp/gpu-operator-values.yaml
+validator:
+  driver:
+    env:
+    - name: DISABLE_DEV_CHAR_SYMLINK_CREATION
+      value: "true"
+END_CAT
+
+    debug helm upgrade -i --wait gpu-operator -n "$GPU_OPERATOR_NAMESPACE" --create-namespace \
+        nvidia/gpu-operator --version="$GPU_OPERATOR_VERSION" \
+        --set cdi.enabled=false --set driver.enabled=false --set toolkit.enabled=false \
+        -f /tmp/gpu-operator-values.yaml
+
+    # NOTE: Assuming driver is already installed on the k3s node
+
+    wait_for_ready "$GPU_OPERATOR_NAMESPACE" 120
+    wait_for_cmd 30 is_gpu_available 1
+
+    debug_log "NVIDIA GPU operator installed successfully"
 }
 
 # Optional interface functions (no-ops for k3s)

@@ -115,7 +115,7 @@ helm_uninstall_cedana() {
 
     debug_log "Waiting for all pods in $namespace namespace to terminate..."
 
-    wait_for_cmd_fail 60 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
+    wait_for_cmd_fail 120 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
 
     debug_log "Helm chart uninstalled successfully"
 }

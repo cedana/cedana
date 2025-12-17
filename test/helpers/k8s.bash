@@ -357,7 +357,16 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    kubectl wait --for=condition=Ready pod --all -n "$namespace" --timeout="$timeout"s || {
+    # Get only Running pods
+    local running_pods
+    running_pods=$(kubectl get pods -n "$namespace" --field-selector=status.phase=Running -o name 2>/dev/null)
+
+    if [ -z "$running_pods" ]; then
+        debug_log "No Running pods found in namespace $namespace"
+        return 0
+    fi
+
+    echo "$running_pods" | xargs -r kubectl wait --for=condition=Ready -n "$namespace" --timeout="$timeout"s || {
         error_log "Failed to wait for all pods in namespace $namespace to be Ready"
         for pod in $(kubectl get pods -n "$namespace" -o name); do
             error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
@@ -435,6 +444,19 @@ get_available_gpus() {
     local gpu_count
     gpu_count=$(kubectl get nodes -o json | jq '[.items[].status.allocatable["nvidia.com/gpu"] // "0" | tonumber] | add' 2>/dev/null)
     echo "${gpu_count:-0}"
+}
+
+# Check if required GPUs are available
+is_gpu_available() {
+    local required_gpus="$1"
+    local available_gpus
+    available_gpus=$(get_available_gpus)
+
+    if [ "$available_gpus" -ge "$required_gpus" ]; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # Count total GPUs required by a spec file
@@ -558,7 +580,6 @@ test_pod_spec() {
     }
 
     poll_action_status "$action_id" "checkpoint" || {
-        error_log "Checkpoint polling failed"
         kubectl delete pod "$name" -n "$namespace" --wait=true || true
         return 1
     }

@@ -366,7 +366,7 @@ docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64, D
 docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE_CUDA=<image>)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f cuda.Dockerfile --load . ;\
 	cd -
 
 docker-test-push: ## Push the test Docker image (DOCKER_TEST_IMAGE=<image>)

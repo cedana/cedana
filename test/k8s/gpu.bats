@@ -23,8 +23,8 @@ setup_file() {
     local script
     local spec
 
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "alpine:latest" "$script" 1)
+    script='/cedana-samples/gpu_smr/vector_add'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY "$spec"
 }
@@ -34,8 +34,8 @@ setup_file() {
     local script
     local spec
 
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "alpine:latest" "$script" 1)
+    script='/cedana-samples/gpu_smr/vector_add'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DUMP "$spec"
 }
@@ -45,8 +45,8 @@ setup_file() {
     local script
     local spec
 
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "alpine:latest" "$script" 1)
+    script='/cedana-samples/gpu_smr/vector_add'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec RESTORE "$spec"
 }
@@ -82,7 +82,7 @@ setup_file() {
 # bats test_tags=dump,restore
 @test "Dump/Restore: Simple PyTorch Training" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cuda-gpu-train-simple.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/cuda-pytorch-train.yaml")
 
     test_pod_spec DUMP_RESTORE "$spec"
 }

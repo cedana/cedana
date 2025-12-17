@@ -72,7 +72,7 @@ env:
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 1 # bats debug logging
+  DEBUG: 1 # bats debug logging (enabled until stable)
 
 jobs:
   propagator-connectivity:
@@ -104,7 +104,7 @@ jobs:
     timeout-minutes: 240
     needs: propagator-connectivity
     strategy:
-      fail-fast: true
+      fail-fast: ${{ inputs.platform != 'K3s' }} # save minutes on cloud providers
       matrix:
         platform:
           - ${{ inputs.platform }}
@@ -124,8 +124,6 @@ jobs:
         exclude:
           #
           # XXX: To reduce overusage of CI minutes
-          - platform: K3s
-            compute: CUDA
           - platform: K3s
             storage: storage/s3
           - platform: K3s

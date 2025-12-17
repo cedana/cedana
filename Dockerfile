@@ -23,7 +23,7 @@ RUN <<EOT
 set -eux
 DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y software-properties-common make sudo
+apt-get install -y --no-install-recommends software-properties-common make sudo
 rm -rf /var/lib/apt/lists/*
 EOT
 

@@ -20,7 +20,7 @@ APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lso
 "
 apt-get update
 for pkg in $APT_PACKAGES; do
-    apt-get install -y $pkg || echo "failed to install $pkg" >&2
+    apt-get install -y --no-install-recommends $pkg || echo "failed to install $pkg" >&2
 done
 EOT
 
