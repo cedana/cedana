@@ -12,7 +12,7 @@ ARG K9S_VERSION=latest
 # install packages
 RUN <<EOT
 set -eux
-APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lsof psmisc \
+APT_PACKAGES="build-essential sudo wget git make curl libnftables1 libnl-3-dev libnet-dev lsof psmisc \
     pkg-config libbsd-dev libcap-dev libgpgme-dev iptables iproute2 \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \

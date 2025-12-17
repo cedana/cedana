@@ -230,7 +230,7 @@ END_CAT
     # NOTE: Assuming driver is already installed on the k3s node
 
     wait_for_ready "$GPU_OPERATOR_NAMESPACE" 120
-    wait_for_cmd 30 is_gpu_available 1
+    wait_for_cmd 120 is_gpu_available 1
 
     debug_log "NVIDIA GPU operator installed successfully"
 }
