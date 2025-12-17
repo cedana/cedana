@@ -49,7 +49,7 @@ install_k9s () {
             return 1
             ;;
     esac
-    wget https://github.com/derailed/k9s/releases/latest/download/k9s_linux_"$K9S_ARCH".deb -O /tmp/k9s.deb
+    wget -q https://github.com/derailed/k9s/releases/latest/download/k9s_linux_"$K9S_ARCH".deb -O /tmp/k9s.deb
     apt install -y /tmp/k9s.deb
     rm -f /tmp/k9s.deb
     debug_log "k9s installed"

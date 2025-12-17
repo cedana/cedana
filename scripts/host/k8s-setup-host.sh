@@ -77,10 +77,10 @@ fi
 bash
 case "$(uname -m)" in
     x86_64)
-        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+        wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
         ;;
     arm64|aarch64)
-        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
+        wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
         ;;
     *)
         echo "Unsupported architecture: $(uname -m)"

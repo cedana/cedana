@@ -26,7 +26,7 @@ setup_file() {
     script='gpu_smr/vector_add'
     spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
 
-    test_pod_spec DEPLOY "$spec"
+    test_pod_spec DEPLOY "$spec" 5 600
 }
 
 # bats test_tags=dump
@@ -37,7 +37,7 @@ setup_file() {
     script='gpu_smr/vector_add'
     spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
 
-    test_pod_spec DUMP "$spec"
+    test_pod_spec DUMP "$spec" 5 600
 }
 
 # bats test_tags=restore
@@ -48,7 +48,7 @@ setup_file() {
     script='gpu_smr/vector_add'
     spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
 
-    test_pod_spec RESTORE "$spec"
+    test_pod_spec RESTORE "$spec" 5 600
 }
 
 ################
@@ -60,7 +60,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec"
+    test_pod_spec DUMP_RESTORE "$spec" 5 600
 }
 
 # bats test_tags=dump,restore
@@ -68,7 +68,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add-multicontainer.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec"
+    test_pod_spec DUMP_RESTORE "$spec" 5 600
 }
 
 # bats test_tags=dump,restore
@@ -76,5 +76,5 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-mem-throughput.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec"
+    test_pod_spec DUMP_RESTORE "$spec" 5 600
 }
