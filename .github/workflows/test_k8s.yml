@@ -336,7 +336,7 @@ jobs:
             GPU=$GPU \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
-            PARALLELISM=1 \ # TODO: revert after testing
+            PARALLELISM=$PARALLELISM \
             CONTROLLER_REPO=$CONTROLLER_REPO \
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \

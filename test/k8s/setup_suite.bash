@@ -31,6 +31,10 @@
 # Setup and Configuration
 ################################################################################
 
+# Defaults for remote checkpoint storage
+export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-cedana://ci}
+export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-lz4}
+
 source "${BATS_TEST_DIRNAME}"/../helpers/utils.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/containerd.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/daemon.bash
@@ -38,10 +42,6 @@ source "${BATS_TEST_DIRNAME}"/../helpers/providers/provider.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/k8s.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/helm.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/propagator.bash
-
-# Defaults for remote checkpoint storage
-export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-cedana://ci}
-export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-lz4}
 
 # Generate cluster name if not provided
 if [ -z "$CLUSTER_NAME" ]; then
