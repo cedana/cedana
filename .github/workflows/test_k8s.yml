@@ -129,10 +129,10 @@ jobs:
           - platform: K3s
             storage: storage/cedana
           - platform: K3s
-            storage: CUDA
+            compute: CUDA
             arch: arm64
           - platform: K3s
-            storage: CPU
+            compute: CPU
             arch: amd64
 
           - platform: EKS
