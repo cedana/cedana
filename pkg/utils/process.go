@@ -48,7 +48,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 	p, err := process.NewProcessWithContext(ctx, int32(pid))
 	if err != nil {
-		return fmt.Errorf("could not get process: %v", err)
+		return fmt.Errorf("could not get process: (pid) %d with error: %v", pid, err)
 	}
 
 	state.IsRunning = true
