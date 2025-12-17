@@ -28,9 +28,9 @@ func (feature Feature[T]) IfAvailable(
 	loadedPlugins := Load()
 
 	errs := []error{}
-	pluginSet := map[string]struct{}{}
+	pluginSet := map[string]bool{}
 	for _, p := range filter {
-		pluginSet[p] = struct{}{}
+		pluginSet[p] = true
 	}
 	noValidPlugins := true
 	for name, p := range loadedPlugins {
@@ -70,9 +70,9 @@ func (feature Feature[T]) IsAvailable(filter ...string) (bool, error) {
 
 	available := false
 
-	pluginSet := map[string]struct{}{}
+	pluginSet := map[string]bool{}
 	for _, p := range filter {
-		pluginSet[p] = struct{}{}
+		pluginSet[p] = true
 	}
 	errs := []error{}
 

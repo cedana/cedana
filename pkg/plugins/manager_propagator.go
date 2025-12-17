@@ -128,7 +128,6 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 									list[i].Status = OUTDATED
 								} else {
 									list[i].Status = INSTALLED
-									list[i].Version = list[i].AvailableVersion
 								}
 							case UNKNOWN:
 								list[i].Status = AVAILABLE

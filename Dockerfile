@@ -8,9 +8,8 @@ ARG VERSION
 ADD . /app
 WORKDIR /app
 RUN <<EOT
-make reset
-if [ "$PREBUILT_BINARIES" -ne "1" ]; then
-  if [ "$ALL_PLUGINS" -eq "1" ]; then
+if [ "${PREBUILT_BINARIES}" -ne "1" ]; then
+  if [ "${ALL_PLUGINS}" -eq "1" ]; then
     make cedana plugins -j $(nproc) VERSION=${VERSION}
   else
     make cedana ${PWD}/libcedana-k8s.so -j $(nproc) VERSION=${VERSION}
