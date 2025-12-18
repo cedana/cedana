@@ -51,7 +51,7 @@ setup_file() {
     script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
     spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
-    test_pod_spec DEPLOY_RESTORE "$spec" 600 5 60
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }
 
 # bats test_tags=restore,crcr
