@@ -16,4 +16,6 @@ export USER
 export ENV=production
 if pgrep -f "k3s server" >/dev/null 2>&1; then
     ENV="k3s"
+elif [ -f /.dockerenv ]; then
+    ENV="docker"
 fi

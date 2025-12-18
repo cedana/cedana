@@ -104,7 +104,7 @@ run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
 run_step "install plugins" "$DIR/k8s-install-plugins.sh"     # install the plugins (including shim)
 run_step "configure shm" "$DIR/shm-configure.sh"             # configure shm
 
-if [ "$ENV" == "k3s" ]; then
+if [ "$ENV" == "k3s" ] || [ "$ENV" == "docker" ]; then
     pkill -f 'cedana daemon' || true
     $APP_PATH daemon start &>/var/log/cedana-daemon.log &
 else
