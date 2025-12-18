@@ -51,6 +51,7 @@ export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="${NAMESPACE:-test}"
 export CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-system}"
+export TAIL_PID=""
 
 setup_suite() {
     install_kubectl
@@ -70,7 +71,7 @@ setup_suite() {
 
     # Start tailing logs in background
     tail_all_logs "$CEDANA_NAMESPACE" 300 &
-    export TAIL_PID=$!
+    TAIL_PID=$!
 
     # Install Cedana helm chart unless skipped
     if [ "${SKIP_HELM:-0}" != "1" ]; then
