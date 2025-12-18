@@ -506,8 +506,9 @@ get_created_pod_name() {
 test_pod_spec() {
     local action="$1"
     local spec="$2"
-    local dump_wait_time="${3:-5}"
-    local pod_timeout="${4:-300}"
+    local pod_timeout="${3:-60}"
+    local dump_wait_time="${4:-5}"
+    local dump_timeout="${5:-30}"
     local namespace="${5:-$NAMESPACE}"
 
     local required_gpus
@@ -574,7 +575,7 @@ test_pod_spec() {
         return 1
     }
 
-    poll_action_status "$action_id" "checkpoint" || {
+    poll_action_status "$action_id" "checkpoint" "$dump_timeout" || {
         kubectl delete pod "$name" -n "$namespace" --wait=true || true
         return 1
     }

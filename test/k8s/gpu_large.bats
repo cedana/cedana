@@ -23,7 +23,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vllm-llama-8b.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec" 60 900
+    test_pod_spec DUMP_RESTORE "$spec" 900 60 300
 }
 
 # bats test_tags=dump,restore,compbio,gromacs
@@ -31,7 +31,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/gromacs-simple-example.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec" 60 900
+    test_pod_spec DUMP_RESTORE "$spec" 900 60 300
 }
 
 # bats test_tags=dump,restore,combio,openmm
@@ -39,7 +39,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/openmm.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec" 60 900
+    test_pod_spec DUMP_RESTORE "$spec" 900 60 300
 }
 
 # bats test_tags=dump,restore,tensorflow,training
@@ -47,7 +47,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec" 60 900
+    test_pod_spec DUMP_RESTORE "$spec" 900 60 300
 }
 
 # bats test_tags=dump,restore,deepspeed,training
@@ -55,5 +55,5 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-deepspeed-train.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec" 60 900
+    test_pod_spec DUMP_RESTORE "$spec" 900 60 300
 }

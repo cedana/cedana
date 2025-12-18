@@ -13,6 +13,15 @@ DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
+if [ "$ENV" == "k3s" ]; then
+    echo "Running in k3s environment; skipping kubelet configuration update" >&2
+    exit 0
+fi
+if [ "$ENV" == "docker" ]; then
+    echo "Running in docker environment; skipping kubelet configuration update" >&2
+    exit 0
+fi
+
 # Ensure necessary tools are available
 check_tool() {
     command -v "$1" >/dev/null 2>&1
@@ -69,11 +78,6 @@ get_kubelet_arg_value() {
         esac
     done
 }
-
-if [ "$ENV" == "k3s" ]; then
-    echo "Running in k3s environment; skipping kubelet configuration update" >&2
-    exit 0
-fi
 
 KUBELET_PID=$(pidof kubelet || true)
 if [ -z "$KUBELET_PID" ]; then
