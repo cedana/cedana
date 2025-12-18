@@ -41,7 +41,7 @@ stop_containerd() {
     debug_log "Stopping containerd..."
 
     if pid=$(pidof containerd); then
-        kill "$pid"
+        kill -"$pid"
     else
         debug_log "Containerd is not running"
     fi
