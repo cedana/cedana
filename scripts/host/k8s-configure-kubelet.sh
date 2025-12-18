@@ -13,12 +13,8 @@ DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
-if [ "$ENV" == "k3s" ]; then
-    echo "Running in k3s environment; skipping kubelet configuration update" >&2
-    exit 0
-fi
-if [ "$ENV" == "docker" ]; then
-    echo "Running in docker environment; skipping kubelet configuration update" >&2
+if [ "$ENV" != "production" ]; then
+    echo "Running in non-production environment; skipping kubelet configuration update" >&2
     exit 0
 fi
 
