@@ -478,19 +478,24 @@ get_created_pod_name() {
 }
 
 # Run a complete test cycle based on action and pod spec.
-# @param $1: Action (DEPLOY, DUMP, RESTORE or DUMP_RESTORE)
+# @param $1: Action (DEPLOY, DUMP, RESTORE, DUMP_RESTORE or CR_CR)
 # @param $2: Pod spec file path
 # @param $3: Namespace (optional, defaults to $NAMESPACE)
+# @param $4: Iter (Specify the number of CR iterations needed for testing)
 test_pod_spec() {
     local action="$1"
     local spec="$2"
     local namespace="${3:-$NAMESPACE}"
-
+    local iter="${4:-1}"
     local required_gpus
     required_gpus=$(get_required_gpus "$spec")
 
     local available_gpus
     available_gpus=$(get_available_gpus)
+
+    if [ "$iter" -gt 1 ] && [ "$action" != "CR_CR"]; then
+        skip "Iterations are only suported for CR_CR actions"
+    fi
 
     if [ "$available_gpus" -lt "$required_gpus" ]; then
         skip "Insufficient GPUs: need $required_gpus, have $available_gpus"
@@ -534,7 +539,7 @@ test_pod_spec() {
     fi
 
     sleep "$dump_wait_time"
-
+    while [ "$iter" -gt 0 ]; do
     # Checkpoint
     debug_log "Dumping pod $name..."
     local pod_id
@@ -570,9 +575,10 @@ test_pod_spec() {
         return 0
     fi
 
-    debug_log "Deleting original pod before restore..."
-    kubectl delete pod "$name" -n "$namespace" --wait=true || true
-    name=""
+    if [ "$iter" -eq 1 ]; then
+        debug_log "Deleting original pod before restore..."
+        kubectl delete pod "$name" -n "$namespace" --wait=true || true
+    fi
 
     debug_log "Restoring pod..."
 
@@ -592,7 +598,7 @@ test_pod_spec() {
     }
 
     local name_restored
-    name_restored=$(wait_for_cmd 30 get_restored_pod "$name" "$namespace")
+    name_restored=$(wait_for_cmd 30 get_restored_pod "" "$namespace")
 
     debug_log "Restore starting for $name_restored..."
 
@@ -602,4 +608,7 @@ test_pod_spec() {
     debug_log "Restored pod $name_restored successfully"
 
     kubectl delete pod "$name_restored" -n "$namespace" --wait=true || true
+    iter=$((iter - 1))
+    done
+    name = ""
 }
