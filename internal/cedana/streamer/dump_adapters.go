@@ -104,7 +104,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				)
 			}
 
-			path := req.Dir + "/" + req.Name // do not use filepath.Join as it removes a slash
+			path := req.Dir + string(os.PathSeparator) + req.Name // do not use filepath.Join as it removes a slash
 
 			var streamStorage cedana_io.Storage
 			var storagePath string
@@ -148,7 +148,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							defer wg.Done()
 
 							localPath := filepath.Join(imagesDirectory, fmt.Sprintf(IMG_FILE_FORMATTER, i)+ext)
-							remotePath := path + "/" + fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext // do not use filepath.Join as it removes a slash
+							remotePath := path + string(os.PathSeparator) + fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext // do not use filepath.Join as it removes a slash
 
 							src, err := streamStorage.Open(ctx, localPath)
 							if err != nil {

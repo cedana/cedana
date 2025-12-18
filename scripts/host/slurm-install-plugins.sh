@@ -91,7 +91,7 @@ echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
 echo "Configuring the Cedana SLURM plugin..."
 if ! grep -q "optional /usr/lib64/slurm/libcedana-slurm.so" /etc/slurm/plugstack.conf; then \
         echo "Adding plugin to /etc/slurm/plugstack.conf"; \
-        echo "optional /usr/lib64/slurm/libcedana-slurm.so" | sudo tee -a /etc/slurm/plugstack.conf > /dev/null; \
+        echo "optional /usr/lib64/slurm/libcedana-slurm.so" | tee -a /etc/slurm/plugstack.conf > /dev/null; \
     else \
         echo "Plugin entry already exists in /etc/slurm/plugstack.conf"; \
     fi

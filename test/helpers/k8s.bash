@@ -111,7 +111,7 @@ cmd_pod_spec () {
     local namespace="${3:-$NAMESPACE}"
 
     local name
-    name=$(unix_nano)
+    name=test-$(unix_nano)
 
     local spec=/tmp/pod-${name}.yaml
     cat > "$spec" << EOF
@@ -148,7 +148,7 @@ cmd_pod_spec_gpu () {
     local namespace="${4:-$NAMESPACE}"
 
     local name
-    name=$(unix_nano)
+    name=test-cuda-$(unix_nano)
 
     local spec=/tmp/pod-${name}.yaml
     cat > "$spec" << EOF
@@ -187,13 +187,17 @@ EOF
 pod_spec() {
     local source_file="$1"
     local namespace="${2:-$NAMESPACE}"
-    local unique_id
-    unique_id="$(unix_nano)"
 
     # Check if source file exists
     if [ ! -f "$source_file" ]; then
         error_log "Error: spec file $source_file does not exist"
         return 1
+    fi
+
+    local unique_id
+    unique_id="test-$(unix_nano)"
+    if grep -q "nvidia.com/gpu" "$source_file"; then
+        unique_id="test-cuda-$(unix_nano)"
     fi
 
     # Check if the spec is a Pod
@@ -235,7 +239,7 @@ get_restored_pod() {
 
     for restored_pod in $restored_pods; do
         # check if the pod contains a container with the same name
-        if kubectl get pod "$restored_pod" -n "$namespace" -o jsonpath='{.spec.containers[*].name}' | grep -q "$name"; then
+        if kubectl get pod "$restored_pod" -n "$namespace" -o name | grep -q "$name"; then
             echo "$restored_pod"
             return 0
         fi
@@ -499,17 +503,21 @@ get_created_pod_name() {
     fi
 }
 
-# Run a complete test cycle based on action and pod spec.
-# @param $1: Action (DEPLOY, DUMP, RESTORE or DUMP_RESTORE)
+# Run a complete test cycle based on action sequence and pod spec.
+# @param $1: Action sequence (e.g., DEPLOY, DUMP_RESTORE, DUMP_RESTORE_DUMP_RESTORE)
+#            Actions are separated by underscores and executed in order.
+#            Valid actions: DEPLOY, DUMP, RESTORE
 # @param $2: Pod spec file path
-# @param $3: Namespace (optional, defaults to $NAMESPACE)
+# @param $3: Dump wait time (optional, defaults to 5)
+# @param $4: Pod timeout (optional, defaults to 300)
+# @param $5: Namespace (optional, defaults to $NAMESPACE)
 test_pod_spec() {
-    local action="$1"
+    local action_sequence="$1"
     local spec="$2"
     local pod_timeout="${3:-60}"
     local dump_wait_time="${4:-5}"
     local dump_timeout="${5:-30}"
-    local namespace="${5:-$NAMESPACE}"
+    local namespace="${6:-$NAMESPACE}"
 
     local required_gpus
     required_gpus=$(get_required_gpus "$spec")
@@ -525,98 +533,138 @@ test_pod_spec() {
     container_name=$(grep -A1 "containers:" "$spec" | grep "name:" | head -1 | awk '{print $3}' | tr -d '"' | tr -d "'")
     debug_log "Container name from spec: $container_name"
 
-    # Deploy
-    debug_log "Deploying from $spec..."
-    if grep -q "generateName:" "$spec"; then
-        kubectl create -f "$spec"
+    # Parse actions from the sequence (split by underscore)
+    IFS='_' read -ra actions <<< "$action_sequence"
+
+    local name=""
+    local original_name=""
+    local action_id=""
+    local deployed=false
+    local error=""
+
+    for action in "${actions[@]}"; do
+        case "$action" in
+            DEPLOY)
+                if [ "$deployed" = true ]; then
+                    error="Cannot DEPLOY twice - pod already deployed"
+                    break
+                fi
+
+                debug_log "Deploying from $spec..."
+                if grep -q "generateName:" "$spec"; then
+                    kubectl create -f "$spec"
+                else
+                    kubectl apply -f "$spec"
+                fi
+
+                name=$(get_created_pod_name "$spec" "$namespace" 60)
+                if [ -z "$name" ]; then
+                    error="Failed to get pod name"
+                    break
+                fi
+
+                validate_pod "$name" "$pod_timeout"
+                debug_log "Deployed pod $name successfully"
+                original_name="$name"
+                deployed=true
+                ;;
+
+            DUMP)
+                if [ "$deployed" = false ]; then
+                    error="Cannot DUMP - no pod deployed yet"
+                    break
+                fi
+                if [ -z "$name" ]; then
+                    error="Cannot DUMP - no active pod"
+                    break
+                fi
+
+                sleep "$dump_wait_time"
+
+                debug_log "Dumping pod $name..."
+                local pod_id
+                pod_id=$(get_pod_id "$name" "$namespace")
+
+                local checkpoint_output
+                checkpoint_output=$(checkpoint_pod "$pod_id")
+                local checkpoint_status=$?
+
+                if [ $checkpoint_status -ne 0 ]; then
+                    error="Checkpoint failed: $checkpoint_output"
+                    break
+                fi
+
+                action_id="$checkpoint_output"
+                validate_action_id "$action_id" || {
+                    error="Invalid action ID: $action_id"
+                    break
+                }
+
+                poll_action_status "$action_id" "checkpoint" "$dump_timeout" || {
+                    error="Checkpoint action $action_id did not complete successfully"
+                    break
+                }
+
+                debug_log "Dumped pod $name successfully (action_id: $action_id)"
+                ;;
+
+            RESTORE)
+                if [ -z "$action_id" ]; then
+                    error="Cannot RESTORE - no checkpoint action ID available"
+                    break
+                fi
+
+                debug_log "Deleting pod $name before restore..."
+                kubectl delete pod "$name" -n "$namespace" --wait=true || true
+                deployed=false
+
+                debug_log "Restoring pod from action_id $action_id..."
+
+                local restore_output
+                restore_output=$(restore_pod "$action_id" "$CLUSTER_ID")
+                local restore_status=$?
+
+                if [ $restore_status -ne 0 ]; then
+                    error="Restore failed: $restore_output"
+                    break
+                fi
+
+                local restore_action_id="$restore_output"
+                validate_action_id "$restore_action_id" || {
+                    error="Invalid restore action ID: $restore_action_id"
+                    break
+                }
+
+                name=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
+
+                debug_log "Restore starting for $name..."
+
+                validate_pod "$name" "$pod_timeout"
+                debug_log "Restored pod $name successfully"
+                original_name="$name"
+                deployed=true
+                ;;
+
+            *)
+                error="Unknown action: $action"
+                break
+                ;;
+        esac
+    done
+
+    if [ -n "$error" ]; then
+        error_log "$error"
+    fi
+
+    # Clean up the final pod
+    if [ -n "$name" ]; then
+        debug_log "Cleaning up pod $name..."
+        kubectl delete pod "$name" -n "$namespace"
+    fi
+
+    if [ -n "$error" ]; then
+        return 1
     else
-        kubectl apply -f "$spec"
-    fi
-
-    # Get pod name
-    local name
-    name=$(get_created_pod_name "$spec" "$namespace" 60)
-    if [ -z "$name" ]; then
-        error_log "Failed to get pod name"
-        return 1
-    fi
-
-    # Wait for pod to become ready
-    validate_pod "$name" "$pod_timeout"
-
-    debug_log "Deployed pod $name deployed successfully"
-
-    if [ "$action" = "DEPLOY" ]; then
-        kubectl delete pod "$name" -n "$namespace" --wait=true || true
         return 0
     fi
-
-    sleep "$dump_wait_time"
-
-    # Checkpoint
-    debug_log "Dumping pod $name..."
-    local pod_id
-    pod_id=$(get_pod_id "$name" "$namespace")
-
-    local checkpoint_output
-    checkpoint_output=$(checkpoint_pod "$pod_id")
-    local checkpoint_status=$?
-
-    if [ $checkpoint_status -ne 0 ]; then
-        error_log "Checkpoint failed: $checkpoint_output"
-        kubectl delete pod "$name" -n "$namespace" --wait=true || true
-        return 1
-    fi
-
-    local action_id="$checkpoint_output"
-    validate_action_id "$action_id" || {
-        error_log "Invalid action ID: $action_id"
-        kubectl delete pod "$name" -n "$namespace" --wait=true || true
-        return 1
-    }
-
-    poll_action_status "$action_id" "checkpoint" "$dump_timeout" || {
-        kubectl delete pod "$name" -n "$namespace" --wait=true || true
-        return 1
-    }
-
-    debug_log "Dumped pod $name successfully"
-
-    if [ "$action" = "DUMP" ]; then
-        kubectl delete pod "$name" -n "$namespace" --wait=true || true
-        return 0
-    fi
-
-    debug_log "Deleting original pod before restore..."
-    kubectl delete pod "$name" -n "$namespace" --wait=true || true
-    name=""
-
-    debug_log "Restoring pod..."
-
-    local restore_output
-    restore_output=$(restore_pod "$action_id" "$CLUSTER_ID")
-    local restore_status=$?
-
-    if [ $restore_status -ne 0 ]; then
-        error_log "Restore failed: $restore_output"
-        return 1
-    fi
-
-    local restore_action_id="$restore_output"
-    validate_action_id "$restore_action_id" || {
-        error_log "Invalid restore action ID: $restore_action_id"
-        return 1
-    }
-
-    local name_restored
-    name_restored=$(wait_for_cmd 30 get_restored_pod "$name" "$namespace")
-
-    debug_log "Restore starting for $name_restored..."
-
-    # Wait for pod to become ready
-    validate_pod "$name_restored" "$pod_timeout"
-
-    debug_log "Restored pod $name_restored successfully"
-
-    kubectl delete pod "$name_restored" -n "$namespace" --wait=true || true
 }

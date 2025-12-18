@@ -27,18 +27,27 @@ PLUGINS=" \
     containerd@$CEDANA_PLUGINS_NATIVE_VERSION \
     runc@$CEDANA_PLUGINS_NATIVE_VERSION"
 
+PLUGINS_TO_REMOVE=""
+
 # check if a storage plugin is required
 if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
     PLUGINS="$PLUGINS storage/cedana@$CEDANA_PLUGINS_NATIVE_VERSION"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/s3 storage/gcs"
 elif [[ "$CEDANA_CHECKPOINT_DIR" == s3://* ]]; then
     PLUGINS="$PLUGINS storage/s3@$CEDANA_PLUGINS_NATIVE_VERSION"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/gcs"
 elif [[ "$CEDANA_CHECKPOINT_DIR" == gcs://* ]]; then
     PLUGINS="$PLUGINS storage/gcs@$CEDANA_PLUGINS_NATIVE_VERSION"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3"
+else
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/gcs"
 fi
 
 # check if streamer plugin is required
 if [ "$CEDANA_CHECKPOINT_STREAMS" -gt 0 ]; then
     PLUGINS="$PLUGINS streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
+else
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE streamer"
 fi
 
 # if gpu driver present then add gpu plugin
@@ -83,6 +92,11 @@ fi
 if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
     # shellcheck disable=SC2086
     "$APP_PATH" plugin install $PLUGINS
+
+    if [[ "$PLUGINS_TO_REMOVE" != "" ]]; then
+        # shellcheck disable=SC2086
+        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE &>/dev/null || true
+    fi
 fi
 
 # Improve streaming performance

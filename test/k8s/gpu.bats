@@ -18,13 +18,16 @@ setup_file() {
 # Basic #
 #########
 
+# NOTE: Don't add too many tests here, as they will slow down
+# the CI pipeline for every PR. Only basic sanity checks.
+
 # bats test_tags=deploy
 @test "Deploy a GPU pod" {
     local script
     local spec
 
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY "$spec" 600 5 60
 }
@@ -34,10 +37,10 @@ setup_file() {
     local script
     local spec
 
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
-    test_pod_spec DUMP "$spec" 600 5 60
+    test_pod_spec DEPLOY_DUMP "$spec" 600 5 60
 }
 
 # bats test_tags=restore
@@ -45,36 +48,39 @@ setup_file() {
     local script
     local spec
 
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
-    test_pod_spec RESTORE "$spec" 600 5 60
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }
 
-################
-# Sample-Based #
-################
+# bats test_tags=restore,crcr
+@test "Dump/Restore/Dump/Restore a GPU pod" {
+    local script
+    local spec
 
-# bats test_tags=dump,restore
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
+
+    test_pod_spec DEPLOY_DUMP_RESTORE_DUMP_RESTORE "$spec" 600 5 60
+}
+
+##################
+# Cedana Samples #
+##################
+
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: CUDA Vector Addition" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec" 600 5 60
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }
 
-# bats test_tags=dump,restore
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: CUDA Multi-container Vector Addition" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add-multicontainer.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec" 600 5 60
-}
-
-# bats test_tags=dump,restore
-@test "Dump/Restore: CUDA Memory Throughput" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-mem-throughput.yaml")
-
-    test_pod_spec DUMP_RESTORE "$spec" 600 5 60
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }

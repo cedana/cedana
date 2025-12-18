@@ -51,6 +51,7 @@ export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="${NAMESPACE:-test}"
 export CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-system}"
+export TAIL_PID=""
 
 setup_suite() {
     install_kubectl
@@ -99,6 +100,13 @@ setup_suite() {
 
     wait_for_ready "$CEDANA_NAMESPACE" 300
 
+    # Restart log tailing (as it can be broken on kubelet restart)
+    if [ -n "$TAIL_PID" ]; then
+        kill -"$TAIL_PID" 2>/dev/null || true
+        tail_all_logs "$CEDANA_NAMESPACE" 300 &
+        TAIL_PID=$!
+    fi
+
     # Create test namespace
     create_namespace "$NAMESPACE"
 }
@@ -106,7 +114,7 @@ setup_suite() {
 teardown_suite() {
     # Stop log tailing
     if [ -n "$TAIL_PID" ]; then
-        kill "$TAIL_PID" 2>/dev/null || true
+        kill -"$TAIL_PID" 2>/dev/null || true
     fi
 
     # Clean up test namespace

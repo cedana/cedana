@@ -4,7 +4,7 @@
 
 trap 'exit 1' INT TERM
 
-COUNT=${1:-180}
+COUNT=${1:-999}
 
 i=0
 while :; do

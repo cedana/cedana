@@ -60,7 +60,7 @@ fi
 
 "$DIR"/slurm-install-plugins.sh # install the plugins (including shim)
 
-if [ "$ENV" == "k3s" ]; then
+if [ "$ENV" != "production" ]; then
     pkill -f 'cedana daemon' || true
     $APP_PATH daemon start &> /var/log/cedana-daemon.log &
 else

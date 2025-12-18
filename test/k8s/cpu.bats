@@ -12,6 +12,9 @@ load ../helpers/propagator
 # Basic #
 #########
 
+# NOTE: Don't add too many tests here, as they will slow down
+# the CI pipeline for every PR. Only basic sanity checks.
+
 # bats test_tags=deploy
 @test "Deploy a pod" {
     local script
@@ -31,7 +34,7 @@ load ../helpers/propagator
     script=$(cat "$WORKLOADS"/date-loop.sh)
     spec=$(cmd_pod_spec "alpine:latest" "$script")
 
-    test_pod_spec DUMP "$spec"
+    test_pod_spec DEPLOY_DUMP "$spec"
 }
 
 # bats test_tags=restore
@@ -42,25 +45,36 @@ load ../helpers/propagator
     script=$(cat "$WORKLOADS"/date-loop.sh)
     spec=$(cmd_pod_spec "alpine:latest" "$script")
 
-    test_pod_spec RESTORE "$spec"
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec"
 }
 
-################
-# Sample-Based #
-################
+# bats test_tags=restore,crcr
+@test "Dump/Restore/Dump/Restore a pod" {
+    local script
+    local spec
 
-# bats test_tags=dump,restore
+    script=$(cat "$WORKLOADS"/date-loop.sh)
+    spec=$(cmd_pod_spec "alpine:latest" "$script")
+
+    test_pod_spec DEPLOY_DUMP_RESTORE_DUMP_RESTORE "$spec"
+}
+
+##################
+# Cedana Samples #
+##################
+
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: Timestamp Logger" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/counting.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec"
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 120
 }
 
-# bats test_tags=dump,restore
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: Multi-container Counter" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/counting-multicontainer.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec"
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 120
 }
