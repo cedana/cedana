@@ -117,6 +117,9 @@ PARALLELISM?=8
 TAGS?=
 ARGS?=
 RETRIES?=0
+GPU?=0
+PROVIDER?=K3s
+SKIP_HELM?=0
 HELPER_REPO?=
 HELPER_TAG?=""
 HELPER_DIGEST?=""
@@ -126,10 +129,10 @@ CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
 BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
-				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
+				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER)
 BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
-		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
+		        --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER)
 
 test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
@@ -196,8 +199,8 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
-	if [ -f /.dockerenv ]; then \
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+	if [ -f /.dockerenv ] || [ "$${PROVIDER,,}" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -229,7 +232,11 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
+				GPU=$(GPU) \
 				DEBUG=$(DEBUG) \
+				PROVIDER=$(PROVIDER) \
+				CLUSTER_ID=$(CLUSTER_ID) \
+				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
 				CONTROLLER_TAG=$(CONTROLLER_TAG) \
 				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
@@ -245,10 +252,13 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 			$(DOCKER_TEST_EXEC) make test-k8s \
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
-				GPU=$(GPU) \
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
+				GPU=$(GPU) \
 				DEBUG=$(DEBUG) \
+				PROVIDER=$(PROVIDER) \
+				CLUSTER_ID=$(CLUSTER_ID) \
+				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
 				CONTROLLER_TAG=$(CONTROLLER_TAG) \
 				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
@@ -309,7 +319,7 @@ PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gp
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --name=$(DOCKER_TEST_CONTAINER_NAME) \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --entrypoint tail --name=$(DOCKER_TEST_CONTAINER_NAME) \
 				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
 				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) \
@@ -317,22 +327,22 @@ DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTER
 				-e HF_TOKEN=$(HF_TOKEN) \
 				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
 				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
-				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) \
+				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) -e NB_CLUSTER_NAME=$(NB_CLUSTER_NAME)\
 				$(DOCKER_ADDITIONAL_OPTS)
-DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_BIN_COPY_CRIU) && \
 						$(HELM_CHART_COPY) >/dev/null
-DOCKER_TEST_CREATE_NO_PLUGINS=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE_NO_PLUGINS=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null
-DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_LIB_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
-DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null
 
 docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
@@ -356,7 +366,7 @@ docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64, D
 docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE_CUDA=<image>)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f cuda.Dockerfile --load . ;\
 	cd -
 
 docker-test-push: ## Push the test Docker image (DOCKER_TEST_IMAGE=<image>)

@@ -86,7 +86,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 		size := int64(0)
 		var plublishedAt time.Time
 		files := append(p.Libraries, p.Binaries...)
-		totalSum := ""
+		var totalSum strings.Builder
 		for _, file := range files {
 			for path := range strings.SplitSeq(m.searchPath, ":") {
 				var stat os.FileInfo
@@ -98,7 +98,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 				size += stat.Size()
 				plublishedAt = stat.ModTime()
 				sum, _ := utils.FileMD5Sum(filepath.Join(path, file.Name))
-				totalSum += string(sum)
+				totalSum.WriteString(sum)
 				break
 			}
 		}
@@ -108,7 +108,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 			p.AvailableVersion = "local"
 			switch p.Status {
 			case INSTALLED, OUTDATED:
-				if p.Checksum() != totalSum {
+				if p.Checksum() != totalSum.String() {
 					p.Status = OUTDATED
 				} else {
 					p.Status = INSTALLED

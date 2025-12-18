@@ -28,6 +28,11 @@ APT_PACKAGES=(
 )
 
 install_apt_packages() {
+    # Fix any interrupted dpkg state first
+    if ! apt-get check &>/dev/null; then
+        echo "Fixing interrupted dpkg state..." >&2
+        dpkg --configure -a || true
+    fi
     apt-get update
     for pkg in "${APT_PACKAGES[@]}"; do
         if ! apt-get install -y "$pkg"; then
@@ -72,10 +77,10 @@ fi
 bash
 case "$(uname -m)" in
     x86_64)
-        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+        wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
         ;;
     arm64|aarch64)
-        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
+        wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
         ;;
     *)
         echo "Unsupported architecture: $(uname -m)"
@@ -95,13 +100,11 @@ run_step() {
     echo "--- Completed: $name ---"
 }
 
-if [ "$ENV" != "test" ]; then
-    run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
-fi
+run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
 run_step "install plugins" "$DIR/k8s-install-plugins.sh"     # install the plugins (including shim)
 run_step "configure shm" "$DIR/shm-configure.sh"             # configure shm
 
-if [ "$ENV" == "test" ]; then
+if [ "$ENV" == "k3s" ] || [ "$ENV" == "docker" ]; then
     pkill -f 'cedana daemon' || true
     $APP_PATH daemon start &>/var/log/cedana-daemon.log &
 else

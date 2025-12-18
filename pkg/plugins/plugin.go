@@ -222,14 +222,14 @@ func (p *Plugin) LibraryPaths() []string {
 
 // Checksum returns the concatenated checksum of all libraries and binaries
 func (p *Plugin) Checksum() string {
-	total := ""
+	var total strings.Builder
 	for _, lib := range p.Libraries {
-		total += lib.Checksum
+		total.WriteString(lib.Checksum)
 	}
 	for _, bin := range p.Binaries {
-		total += bin.Checksum
+		total.WriteString(bin.Checksum)
 	}
-	return total
+	return total.String()
 }
 
 func (p *Plugin) IsInstalled() bool {

@@ -100,6 +100,7 @@ func CreateContainer(next types.Run) types.Run {
 				details.ID,
 				containerd.WithImage(image),
 				containerd.WithNewSnapshot(details.ID, image),
+				containerd.WithSnapshotter(details.Snapshotter),
 				containerd.WithNewSpec(specOpts...),
 				containerd.WithRuntime(newRuntime, &options.Options{}),
 			)

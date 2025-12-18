@@ -136,6 +136,10 @@ poll_action_status() {
     local action_id="$1"
     action_id="${action_id//\"/}" # remove quotes if present
     local operation="${2:-operation}"
+    local timeout_seconds=${3:-300}
+
+    local interval=5
+    local timeout=$((timeout_seconds / interval))
 
     if [ -z "$action_id" ]; then
         error_log "poll_action_status requires action_id"
@@ -144,7 +148,7 @@ poll_action_status() {
 
     debug_log "Polling status for $operation action '$action_id'..."
 
-    for i in $(seq 1 60); do  # 5 minute timeout
+    for i in $(seq 1 $timeout); do
         local response
         response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/checkpoint/status/${action_id}" \
                 -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
@@ -223,7 +227,7 @@ poll_action_status() {
             debug_log "Warning: Failed to get action status (HTTP $http_code): $body (attempt $i/60)"
         fi
 
-        sleep 5
+        sleep $interval
     done
 
     error_log "Timeout waiting for $operation action '$action_id' to complete (last status: $status)"

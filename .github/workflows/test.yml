@@ -442,6 +442,7 @@ jobs:
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
+      parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
   eks:
@@ -455,6 +456,7 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: EKS
       large: ${{ inputs.large }}
+      parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
   gke:
@@ -468,12 +470,27 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: GKE
       large: ${{ inputs.large }}
+      parallelism: ${{ inputs.parallelism }}
+      post_summary: false # Will post consolidated summary instead
+
+  nebius:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius on nightly (when large=true)
+    secrets: inherit
+    concurrency: test-k8s-nebius # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: Nebius
+      large: ${{ inputs.large }}
+      parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
   post-summary:
     name: Post Summary
     if: always()
-    needs: [basic, plugin, streamer, gpu, k3s, eks, gke]
+    needs: [basic, plugin, streamer, gpu, k3s, eks, gke, nebius]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -122,7 +122,7 @@ func (es *EventStream) StartCheckpointsPublisher(ctx context.Context) error {
 
 type checkpointReq struct {
 	PodName   string `json:"pod_name"`
-	RuncRoot  string `json:"runc_root"`
+	RuncRoot  string `json:"runc_root"` // DEPRECATED
 	Namespace string `json:"namespace"`
 	Kind      string `json:"kind"`
 	ActionId  string `json:"action_id"`
@@ -177,9 +177,8 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		query := &daemon.QueryReq{
 			Type: "k8s",
 			K8S: &k8s.QueryReq{
-				Root:          req.RuncRoot,
-				Namespace:     req.Namespace,
 				Names:         []string{req.PodName},
+				Namespace:     req.Namespace,
 				ContainerType: "container",
 			},
 		}
@@ -189,7 +188,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			return rabbitmq.Ack
 		}
 		if len(queryResp.K8S.Pods) == 0 {
-			log.Trace().Msg("no pods found for checkpoint request")
+			log.Debug().Msg("no pods found for checkpoint request")
 			return rabbitmq.Ack
 		}
 		containers := queryResp.K8S.Pods[0].Containerd
@@ -245,7 +244,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				container.Rootfs = rootfs
 				container.RootfsOnly = rootfsOnly
 			} else {
-				container.Image = nil // Ensure this is nil, so rootfs is not dumped
+				container.Image = nil
 			}
 		}
 
@@ -404,6 +403,7 @@ func (es *EventStream) publishCheckpoint(
 		profiling.Clean(profilingData)
 		profiling.Flatten(profilingData)
 
+		fmt.Println()
 		profiling.Print(profilingData, features.Theme())
 
 		var totalDuration, totalIO int64

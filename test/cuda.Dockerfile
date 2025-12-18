@@ -12,17 +12,33 @@ ARG K9S_VERSION=latest
 # install packages
 RUN <<EOT
 set -eux
-APT_PACKAGES="build-essential sudo wget git make curl libnl-3-dev libnet-dev lsof psmisc \
+APT_PACKAGES="build-essential sudo wget git make curl libnftables1 libnl-3-dev libnet-dev lsof psmisc \
     pkg-config libbsd-dev containerd runc libcap-dev libgpgme-dev iptables iproute2 \
     libprotobuf-dev libprotobuf-c-dev protobuf-c-compiler \
     protobuf-compiler python3-protobuf software-properties-common \
     python3-pip \
-    zip jq
+    containerd zip unzip jq
 "
 apt-get update
 for pkg in $APT_PACKAGES; do
-    apt-get install -y $pkg || echo "failed to install $pkg" >&2
+    apt-get install -y --no-install-recommends $pkg || echo "failed to install $pkg" >&2
 done
+EOT
+
+# Install NVIDIA container toolkit
+RUN <<EOT
+apt-get install -y --no-install-recommends curl gnupg2
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+  && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+    sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+    tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+apt-get update
+export NVIDIA_CONTAINER_TOOLKIT_VERSION=1.18.1-1
+  apt-get install -y \
+      nvidia-container-toolkit=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      nvidia-container-toolkit-base=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      libnvidia-container-tools=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
+      libnvidia-container1=${NVIDIA_CONTAINER_TOOLKIT_VERSION}
 EOT
 
 # install bats
@@ -47,20 +63,6 @@ rm -rf /usr/local/go
 tar -C /usr/local -xzf go${GO_VERSION}.linux-${ARCH}.tar.gz
 ln -s /usr/local/go/bin/go /usr/local/bin/go
 rm go${GO_VERSION}.linux-${ARCH}.tar.gz
-EOT
-
-# install Docker (CLI only)
-RUN <<EOT
-install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-chmod a+r /etc/apt/keyrings/docker.asc
-echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] \
-    https://download.docker.com/linux/ubuntu \
-    $(. /etc/os-release && echo "$UBUNTU_CODENAME") stable" | \
-tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update
-apt-get install -y docker-ce docker-ce-cli
 EOT
 
 # install kubectl
@@ -111,12 +113,47 @@ apt install -y /tmp/k9s.deb
 rm -f /tmp/k9s.deb
 EOT
 
+# install docker-cli
+RUN <<EOT
+mkdir -m 0755 -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt update && apt install -y docker-ce-cli
+EOT
+
+# Configure containerd
+RUN <<'EOT'
+mkdir -p /etc/containerd
+cat > /etc/containerd/config.toml <<'CONFIG'
+version = 2
+snapshotter = "native"
+
+[plugins]
+  [plugins."io.containerd.grpc.v1.cri"]
+    disable_tcp_service = true
+    stream_server_address = "127.0.0.1"
+    stream_server_port = "0"
+    enable_selinux = false
+    sandbox_image = "registry.k8s.io/pause:3.8"
+
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      snapshotter = "native"
+      default_runtime_name = "runc"
+
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+          runtime_type = "io.containerd.runc.v2"
+CONFIG
+nvidia-ctk runtime configure --runtime=containerd
+EOT
+
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples
 
 VOLUME ["/src"]
 WORKDIR /src
-ENV PATH=${PATH}:/src
 RUN git config --global --add safe.directory `pwd`
 
 CMD []

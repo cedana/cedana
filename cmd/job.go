@@ -48,7 +48,6 @@ func init() {
 	rootCmd.AddCommand(utils.AliasOf(listJobCmd, "jobs"))
 	rootCmd.AddCommand(utils.AliasOf(deleteJobCmd))
 	rootCmd.AddCommand(utils.AliasOf(killJobCmd))
-	rootCmd.AddCommand(utils.AliasOf(inspectJobCmd))
 	rootCmd.AddCommand(utils.AliasOf(jobCheckpointCmd))
 	rootCmd.AddCommand(utils.AliasOf(listJobCheckpointCmd, "checkpoints"))
 }

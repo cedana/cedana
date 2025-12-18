@@ -42,7 +42,7 @@ if [ "$CEDANA_CHECKPOINT_STREAMS" -gt 0 ]; then
 fi
 
 # if gpu driver present then add gpu plugin
-if [ "$ENV" == "test" ]; then
+if [ "$ENV" == "k3s" ]; then
     if command -v nvidia-smi >/dev/null 2>&1; then
         PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
         echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
@@ -81,6 +81,7 @@ fi
 
 # Install all plugins
 if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
+    # shellcheck disable=SC2086
     "$APP_PATH" plugin install $PLUGINS
 fi
 
@@ -123,6 +124,6 @@ END_CAT
 END_CAT
         fi
     fi
-    echo "Sending SIGHUP to containerd..."
+    echo "Restarting containerd to pick up the new runtime configuration..."
     (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
 fi
