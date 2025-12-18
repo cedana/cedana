@@ -13,6 +13,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/mattn/go-isatty"
 	"github.com/moby/sys/mountinfo"
+	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v4/process"
 )
 
@@ -48,7 +49,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 
 	p, err := process.NewProcessWithContext(ctx, int32(pid))
 	if err != nil {
-		return fmt.Errorf("could not get process: %v", err)
+		return fmt.Errorf("could not get process: (pid) %d with error: %v", pid, err)
 	}
 
 	state.IsRunning = true
@@ -190,18 +191,16 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		children, err = p.ChildrenWithContext(ctx)
 
 		if err == nil {
-			childErrs := []error{}
+			// Don't fail if children exit during the walk
 			for _, child := range children {
 				childState, err := GetProcessState(ctx, uint32(child.Pid), tree...)
 				if err != nil {
-					childErrs = append(childErrs, err)
+					log.Warn().Err(err).Msgf("failed to get process state for child %d", child.Pid)
 					continue
 				}
 
 				state.Children = append(state.Children, childState)
 			}
-
-			errs = append(errs, childErrs...)
 		}
 	}
 
