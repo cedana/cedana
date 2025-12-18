@@ -487,20 +487,6 @@ jobs:
       parallelism: 1 # because single GPU node
       post_summary: false # Will post consolidated summary instead
 
-  nebius-multi-gpu:
-    name: Kubernetes
-    uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius on nightly (when large=true)
-    secrets: inherit
-    concurrency: test-k8s-nebius-multigpu
-    with:
-      ref: ${{ inputs.ref }}
-      debug: ${{ inputs.debug }}
-      platform: Nebius
-      large: ${{ inputs.large }}
-      parallelism: 1 # because single GPU node
-      post_summary: false # Will post consolidated summary instead
-
   post-summary:
     name: Post Summary
     if: always()
