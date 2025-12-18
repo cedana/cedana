@@ -327,7 +327,7 @@ jobs:
             TAGS="${TAGS},!gpu"
           fi
           if [ "$LARGE" = "0" ]; then
-            TAGS="${TAGS},!large"
+            TAGS="${TAGS},!samples,!large"
           fi
 
           make test-k8s \

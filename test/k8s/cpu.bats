@@ -56,11 +56,11 @@ load ../helpers/propagator
     test_pod_spec DEPLOY_DUMP_RESTORE_DUMP_RESTORE "$spec"
 }
 
-################
-# Sample-Based #
-################
+##################
+# Cedana Samples #
+##################
 
-# bats test_tags=dump,restore
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: Timestamp Logger" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/counting.yaml")
@@ -68,7 +68,7 @@ load ../helpers/propagator
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 120
 }
 
-# bats test_tags=dump,restore
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: Multi-container Counter" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/counting-multicontainer.yaml")

@@ -24,7 +24,7 @@ setup_file() {
     local spec
 
     script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY "$spec" 600 5 60
 }
@@ -35,7 +35,7 @@ setup_file() {
     local spec
 
     script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY_DUMP "$spec" 600 5 60
 }
@@ -46,7 +46,7 @@ setup_file() {
     local spec
 
     script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY_RESTORE "$spec" 600 5 60
 }
@@ -57,16 +57,16 @@ setup_file() {
     local spec
 
     script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "cedana/cedana-samples:cuda" "$script" 1)
+    spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY_DUMP_RESTORE_DUMP_RESTORE "$spec" 600 5 60
 }
 
-################
-# Sample-Based #
-################
+##################
+# Cedana Samples #
+##################
 
-# bats test_tags=dump,restore
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: CUDA Vector Addition" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add.yaml")
@@ -74,7 +74,7 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }
 
-# bats test_tags=dump,restore
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: CUDA Multi-container Vector Addition" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add-multicontainer.yaml")
@@ -82,7 +82,7 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }
 
-# bats test_tags=dump,restore
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: CUDA Memory Throughput" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-mem-throughput.yaml")
