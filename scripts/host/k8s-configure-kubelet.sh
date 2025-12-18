@@ -13,8 +13,6 @@ DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
-echo VALUE OF ENV IS "$ENV"
-
 if [ "$ENV" != "production" ]; then
     echo "Running in non-production environment; skipping kubelet configuration update" >&2
     exit 0
@@ -142,7 +140,7 @@ success_method=""
 
 if command -v systemctl >/dev/null 2>&1; then
     echo "Attempting to restart kubelet via systemctl..."
-    if sudo systemctl restart kubelet; then
+    if systemctl restart kubelet; then
         success_method="systemctl"
     else
         echo "systemctl restart failed, trying service and snap"
@@ -151,7 +149,7 @@ fi
 
 if [ -z "$success_method" ] && command -v service >/dev/null 2>&1; then
     echo "Attempting to restart kubelet via service..."
-    if sudo service kubelet restart; then
+    if service kubelet restart; then
         success_method="service"
     else
         echo "service restart failed, trying snap"
@@ -160,7 +158,7 @@ fi
 
 if [ -z "$success_method" ] && command -v snap >/dev/null 2>&1; then
     echo "Attempting to restart kubelet via snap..."
-    if sudo snap restart kubelet-eks; then
+    if snap restart kubelet-eks; then
         success_method="snap"
     else
         echo "snap restart failed, moving on"

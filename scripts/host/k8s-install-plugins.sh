@@ -46,6 +46,8 @@ fi
 # check if streamer plugin is required
 if [ "$CEDANA_CHECKPOINT_STREAMS" -gt 0 ]; then
     PLUGINS="$PLUGINS streamer@$CEDANA_PLUGINS_STREAMER_VERSION"
+else
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE streamer"
 fi
 
 # if gpu driver present then add gpu plugin

@@ -102,7 +102,7 @@ setup_suite() {
 
     # Restart log tailing (as it can be broken on kubelet restart)
     if [ -n "$TAIL_PID" ]; then
-        kill "$TAIL_PID" 2>/dev/null || true
+        kill -"$TAIL_PID" 2>/dev/null || true
         tail_all_logs "$CEDANA_NAMESPACE" 300 &
         TAIL_PID=$!
     fi
@@ -114,7 +114,7 @@ setup_suite() {
 teardown_suite() {
     # Stop log tailing
     if [ -n "$TAIL_PID" ]; then
-        kill "$TAIL_PID" 2>/dev/null || true
+        kill -"$TAIL_PID" 2>/dev/null || true
     fi
 
     # Clean up test namespace

@@ -239,7 +239,7 @@ get_restored_pod() {
 
     for restored_pod in $restored_pods; do
         # check if the pod contains a container with the same name
-        if kubectl get pod "$restored_pod" -n "$namespace" -o jsonpath='{.spec.containers[*].name}' | grep -q "$name"; then
+        if kubectl get pod "$restored_pod" -n "$namespace" -o name | grep -q "$name"; then
             echo "$restored_pod"
             return 0
         fi
@@ -616,7 +616,7 @@ test_pod_spec() {
 
                 debug_log "Deleting pod $name before restore..."
                 kubectl delete pod "$name" -n "$namespace" --wait=true || true
-                name=""
+                deployed=false
 
                 debug_log "Restoring pod from action_id $action_id..."
 
@@ -635,15 +635,14 @@ test_pod_spec() {
                     break
                 }
 
-                local name_restored
-                name_restored=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
+                name=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
 
-                debug_log "Restore starting for $name_restored..."
+                debug_log "Restore starting for $name..."
 
-                validate_pod "$name_restored" "$pod_timeout"
-
-                debug_log "Restored pod $name_restored successfully"
-                name="$name_restored"
+                validate_pod "$name" "$pod_timeout"
+                debug_log "Restored pod $name successfully"
+                original_name="$name"
+                deployed=true
                 ;;
 
             *)
