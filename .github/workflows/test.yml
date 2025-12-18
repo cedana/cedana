@@ -145,13 +145,18 @@ jobs:
       - name: Run k8s setup host
         env:
           CEDANA_PLUGINS_BUILDS: local # change to alpha to test plugin downloads
-          ENV: CI
         run: |
-          sudo -E chmod +x ./cedana
-          sudo -E cp ./cedana /usr/local/bin/
-          sudo -E mkdir -p /cedana/scripts/host
-          sudo -E cp -r ./scripts/host/* /cedana/scripts/host
-          sudo -E /cedana/scripts/host/${{ matrix.name }}.sh
+          sudo chmod +x ./cedana
+          sudo cp ./cedana /usr/local/bin/
+          sudo mkdir -p /cedana/scripts/host
+          sudo cp -r ./scripts/host/* /cedana/scripts/host
+          sudo \
+            ENV="CI" \
+            CEDANA_URL="${CEDANA_URL}" \
+            CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}" \
+            CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL}" \
+            CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS}" \
+            /cedana/scripts/host/${{ matrix.name }}.sh
 
   basic:
     name: Basic
@@ -548,3 +553,4 @@ jobs:
           TITLE: "Test results (${{ matrix.arch }})"
         run: |
           npx slack-ctrf results "report/**/*.json" --title "$TITLE" --prefix ${{ github.repository }}
+
