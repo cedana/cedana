@@ -291,7 +291,7 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 	fi ;\
 
 test-k9s: ## Enter k9s in the test environment
-	$(DOCKER_TEST_EXEC) k9s -A --logoless --splashless ;\
+	$(DOCKER_TEST_EXEC) k9s -A -r 1 --logoless --splashless ;\
 
 ##########
 ##@ Docker

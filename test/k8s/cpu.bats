@@ -12,6 +12,9 @@ load ../helpers/propagator
 # Basic #
 #########
 
+# NOTE: Don't add too many tests here, as they will slow down
+# the CI pipeline for every PR. Only basic sanity checks.
+
 # bats test_tags=deploy
 @test "Deploy a pod" {
     local script

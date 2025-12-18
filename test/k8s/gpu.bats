@@ -18,12 +18,15 @@ setup_file() {
 # Basic #
 #########
 
+# NOTE: Don't add too many tests here, as they will slow down
+# the CI pipeline for every PR. Only basic sanity checks.
+
 # bats test_tags=deploy
 @test "Deploy a GPU pod" {
     local script
     local spec
 
-    script='/cedana-samples/gpu_smr/vector_add'
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
     spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY "$spec" 600 5 60
@@ -34,7 +37,7 @@ setup_file() {
     local script
     local spec
 
-    script='/cedana-samples/gpu_smr/vector_add'
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
     spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY_DUMP "$spec" 600 5 60
@@ -45,7 +48,7 @@ setup_file() {
     local script
     local spec
 
-    script='/cedana-samples/gpu_smr/vector_add'
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
     spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY_RESTORE "$spec" 600 5 60
@@ -56,7 +59,7 @@ setup_file() {
     local script
     local spec
 
-    script='/cedana-samples/gpu_smr/vector_add'
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop'
     spec=$(cmd_pod_spec_gpu "cedana/cedana-test:cuda" "$script" 1)
 
     test_pod_spec DEPLOY_DUMP_RESTORE_DUMP_RESTORE "$spec" 600 5 60
@@ -78,14 +81,6 @@ setup_file() {
 @test "Dump/Restore: CUDA Multi-container Vector Addition" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add-multicontainer.yaml")
-
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
-}
-
-# bats test_tags=dump,restore,samples
-@test "Dump/Restore: CUDA Memory Throughput" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-mem-throughput.yaml")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }
