@@ -31,7 +31,7 @@ load ../helpers/propagator
     script=$(cat "$WORKLOADS"/date-loop.sh)
     spec=$(cmd_pod_spec "alpine:latest" "$script")
 
-    test_pod_spec DUMP "$spec"
+    test_pod_spec DEPLOY_DUMP "$spec"
 }
 
 # bats test_tags=restore
@@ -42,7 +42,18 @@ load ../helpers/propagator
     script=$(cat "$WORKLOADS"/date-loop.sh)
     spec=$(cmd_pod_spec "alpine:latest" "$script")
 
-    test_pod_spec RESTORE "$spec"
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec"
+}
+
+# bats test_tags=restore,crcr
+@test "Dump/Restore/Dump/Restore a pod" {
+    local script
+    local spec
+
+    script=$(cat "$WORKLOADS"/date-loop.sh)
+    spec=$(cmd_pod_spec "alpine:latest" "$script")
+
+    test_pod_spec DEPLOY_DUMP_RESTORE_DUMP_RESTORE "$spec"
 }
 
 ################
@@ -54,7 +65,7 @@ load ../helpers/propagator
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/counting.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec"
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 120
 }
 
 # bats test_tags=dump,restore
@@ -62,5 +73,5 @@ load ../helpers/propagator
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/counting-multicontainer.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec"
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 120
 }
