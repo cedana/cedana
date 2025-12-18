@@ -55,7 +55,7 @@ setup_file() {
 }
 
 # bats test_tags=restore,crcr
-@test "Dump/Restore/Dump/Restore a pod" {
+@test "Dump/Restore/Dump/Restore a GPU pod" {
     local script
     local spec
 

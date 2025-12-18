@@ -70,7 +70,7 @@ setup_suite() {
 
     # Start tailing logs in background
     tail_all_logs "$CEDANA_NAMESPACE" 300 &
-    TAIL_PID=$!
+    export TAIL_PID=$!
 
     # Install Cedana helm chart unless skipped
     if [ "${SKIP_HELM:-0}" != "1" ]; then
@@ -98,6 +98,13 @@ setup_suite() {
     fi
 
     wait_for_ready "$CEDANA_NAMESPACE" 300
+
+    # Restart log tailing (as it can be broken on kubelet restart)
+    if [ -n "$TAIL_PID" ]; then
+        kill "$TAIL_PID" 2>/dev/null || true
+        tail_all_logs "$CEDANA_NAMESPACE" 300 &
+        TAIL_PID=$!
+    fi
 
     # Create test namespace
     create_namespace "$NAMESPACE"

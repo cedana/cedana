@@ -13,6 +13,8 @@ DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
+echo VALUE OF ENV IS "$ENV"
+
 if [ "$ENV" != "production" ]; then
     echo "Running in non-production environment; skipping kubelet configuration update" >&2
     exit 0

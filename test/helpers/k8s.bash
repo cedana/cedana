@@ -567,6 +567,10 @@ test_pod_spec() {
                 debug_log "Deployed pod $name successfully"
                 original_name="$name"
                 deployed=true
+
+                while [ ! -f "/tmp/continue" ]; do
+                    sleep 1
+                done
                 ;;
 
             DUMP)
@@ -644,6 +648,10 @@ test_pod_spec() {
 
                 debug_log "Restored pod $name_restored successfully"
                 name="$name_restored"
+
+                while [ ! -f "/tmp/continue" ]; do
+                    sleep 1
+                done
                 ;;
 
             *)
