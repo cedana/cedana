@@ -92,12 +92,12 @@ jobs:
 
   k8s:
     name: Kubernetes
-    runs-on: ${{ (inputs.platform != 'K3s') && 'ubuntu-latest' || format(
+    runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
-      matrix.compute == 'CUDA' && '-cuda-12-4' || '',
+      (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
       matrix.cr,
       matrix.storage
       ) }}

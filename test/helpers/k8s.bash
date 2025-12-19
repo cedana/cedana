@@ -563,7 +563,11 @@ test_pod_spec() {
                     break
                 fi
 
-                validate_pod "$name" "$pod_timeout"
+                validate_pod "$name" "$pod_timeout" || {
+                    error="Pod $name failed to become Ready"
+                    break
+                }
+
                 debug_log "Deployed pod $name successfully"
                 original_name="$name"
                 deployed=true
@@ -615,7 +619,10 @@ test_pod_spec() {
                 fi
 
                 debug_log "Deleting pod $name before restore..."
-                kubectl delete pod "$name" -n "$namespace" --wait=true || true
+                kubectl delete pod "$name" -n "$namespace" --wait=true || {
+                    error="Failed to delete pod $name before restore"
+                    break
+                }
                 deployed=false
 
                 debug_log "Restoring pod from action_id $action_id..."
@@ -635,7 +642,7 @@ test_pod_spec() {
                     break
                 }
 
-                name=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
+                name=$(wait_for_cmd 60 get_restored_pod "$original_name" "$namespace")
 
                 debug_log "Restore starting for $name..."
 

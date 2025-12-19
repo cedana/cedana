@@ -39,7 +39,7 @@ jobs:
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
-      runner: 16cpu # use larger runner
+      runner: 8cpu # use larger runner
       runner_gpu: 16cpu-1gpu # use larger runner
       parallelism: 8
       parallelism_gpu: 4
