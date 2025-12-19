@@ -190,6 +190,10 @@ func (sw *SigNozWriter) runSender() {
 		case <-sw.ticker.C:
 			sw.flushBuffer()
 		case <-sw.lifetime.Done():
+			// This is useful as it marks the end of logging for a session, otherwise
+			// logs may appear to stop abruptly in SigNoz hinting at a possible crash.
+			log.Debug().Str("endpoint", metrics.Credentials.Endpoint).Msg("logging shutting down")
+
 			sw.ticker.Stop()
 			sw.flushBuffer() // Final flush
 			return
