@@ -463,7 +463,6 @@ jobs:
       platform: EKS
       runner: ${{ inputs.runner }}
       large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
@@ -477,7 +476,6 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      runner: ${{ inputs.runner }}
       platform: GKE
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
