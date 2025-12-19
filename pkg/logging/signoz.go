@@ -91,7 +91,7 @@ func InitSigNoz(ctx context.Context, wg *sync.WaitGroup, service, version string
 		handleErr(fmt.Errorf("failed to get host info: %w", err))
 		return
 	}
-	clusterId, _ := os.LookupEnv("CEDANA_CLUSTER_ID")
+	clusterId := config.Global.ClusterID
 	cedanaUrl := config.Global.Connection.URL
 
 	resources := map[string]string{
