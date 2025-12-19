@@ -102,6 +102,13 @@ create_nodegroup() {
     existing_nodegroup=$(nebius mk8s node-group list --parent-id "$NB_CLUSTER_ID" \
         --format json | jq -r ".items[]? | select(.metadata.name==\"$NB_NODEGROUP_NAME\") | .metadata.id" 2>/dev/null || echo "")
 
+    : "${NB_CLUSTER_ID:?NB_CLUSTER_ID is not set}"
+    : "${NB_SUBNET_ID:?NB_SUBNET_ID is not set}"
+    : "${NB_NODEGROUP_NAME:?NB_NODEGROUP_NAME is not set}"
+    : "${NB_NODE_COUNT:?NB_NODE_COUNT is not set}"
+    : "${NB_GPU_PLATFORM:?NB_GPU_PLATFORM is not set}"
+    : "${NB_GPU_PRESET:?NB_GPU_PRESET is not set}"
+
     if [ -n "$existing_nodegroup" ] && [ "$existing_nodegroup" != "null" ]; then
         debug_log "Node-group already exists, skipping creation..."
         NB_NODEGROUP_ID="$existing_nodegroup"
