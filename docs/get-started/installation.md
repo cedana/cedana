@@ -9,7 +9,7 @@ Since Cedana depends on [CRIU](https://criu.org), you will need to ensure its de
 #### Using apt (Ubuntu/Debian)&#x20;
 
 ```sh
-apt-get install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1
+apt-get install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables-dev
 ```
 
 #### Using dnf/yum (Fedora/CentOS)
