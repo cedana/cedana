@@ -102,16 +102,6 @@ create_nodegroup() {
     existing_nodegroup=$(nebius mk8s node-group list --parent-id "$NB_CLUSTER_ID" \
         --format json | jq -r ".items[]? | select(.metadata.name==\"$NB_NODEGROUP_NAME\") | .metadata.id" 2>/dev/null || echo "")
 
-    NB_CLUSTER_ID=$(
-          nebius mk8s cluster get-by-name \
-            --name "$NB_CLUSTER_NAME" \
-            --format json | jq -r '.metadata.id'
-    )
-    NB_SUBNET_ID=$(nebius vpc subnet list \
-            --format json \
-        | jq -r '.items[0].metadata.id')
-    export NB_SUBNET_ID
-
     if [ -n "$existing_nodegroup" ] && [ "$existing_nodegroup" != "null" ]; then
         debug_log "Node-group already exists, skipping creation..."
         NB_NODEGROUP_ID="$existing_nodegroup"
@@ -171,9 +161,9 @@ setup_cluster() {
     _create_nebius_mk8s
     create_nodegroup
     debug_log "Creating nebius multi_gpu nodegroup ..."
-    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
-    NB_NODE_COUNT="1"
-    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    export NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
+    export NB_NODE_COUNT="1"
+    export NB_GPU_PRESET="8gpu-128vcpu-1600gb"
     create_nodegroup
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
@@ -190,9 +180,9 @@ teardown_cluster() {
 
     # Delete the nodegroup (H100s are expensive!)
     delete_nodegroup
-    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
-    NB_NODE_COUNT="1"
-    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    export NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
+    export NB_NODE_COUNT="1"
+    export NB_GPU_PRESET="8gpu-128vcpu-1600gb"
     delete_nodegroup
 
     debug_log "Nebius cluster teardown complete"
