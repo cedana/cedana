@@ -79,7 +79,7 @@ setup_suite() {
             debug_log "Registering cluster '$CLUSTER_NAME' with propagator..."
             CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
             export CLUSTER_ID
-            debug_log "Cluster registered with ID: $CLUSTER_ID"
+            info_log "Cluster registered with ID: $CLUSTER_ID"
         else
             debug_log "Using provided cluster ID: $CLUSTER_ID"
         fi

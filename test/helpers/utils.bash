@@ -237,6 +237,11 @@ wait_for_file() {
     return 0
 }
 
+info_log() {
+    local message="$1"
+    echo -e "${YELLOW}[DEBUG] $message${NC}" >&3
+}
+
 debug_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
