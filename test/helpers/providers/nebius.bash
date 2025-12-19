@@ -22,6 +22,7 @@ export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
 export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
 export GPU_OPERATOR_DRIVER_VERSION="${GPU_OPERATOR_DRIVER_VERSION:-570.195.03}"
 export NB_NODEGROUP_NAME="${NB_NODEGROUP_NAME:-github-ci-Nebius}"
+export NB_NODE_COUNT="${NB_NODE_COUNT:-2}"
 export NB_GPU_PRESET="${NB_GPU_PRESET:-1gpu-16vcpu-200gb}"
 export NB_GPU_PLATFORM="${NB_GPU_PLATFORM:-gpu-h100-sxm}"
 
@@ -110,7 +111,7 @@ create_nodegroup() {
             --name "$NB_NODEGROUP_NAME" \
             --parent-id "$NB_CLUSTER_ID" \
             --template-boot-disk-size-bytes 137438953472 \
-            --fixed-node-count 2 \
+            --fixed-node-count "$NB_NODE_COUNT" \
             --template-resources-platform "$NB_GPU_PLATFORM" \
             --template-resources-preset "$NB_GPU_PRESET" \
             --template-network-interfaces "[{\"public_ip_address\": {},\"subnet_id\": \"$NB_SUBNET_ID\"}]"
@@ -182,7 +183,7 @@ teardown_cluster() {
     NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
     NB_NODE_COUNT="1"
     NB_GPU_PRESET="8gpu-128vcpu-1600gb"
-    delete_node_group
+    delete_nodegroup
 
     debug_log "Nebius cluster teardown complete"
 }
