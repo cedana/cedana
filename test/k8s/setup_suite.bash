@@ -42,6 +42,7 @@ source "${BATS_TEST_DIRNAME}"/../helpers/providers/provider.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/k8s.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/helm.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/propagator.bash
+source "${BATS_TEST_DIRNAME}"/../helpers/metrics.bash
 
 # Generate cluster name if not provided
 if [ -z "$CLUSTER_NAME" ]; then
@@ -80,6 +81,8 @@ setup_suite() {
             CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
             export CLUSTER_ID
             info_log "Cluster registered with ID: $CLUSTER_ID"
+            info_log "Logs for this cluster can be viewed at:"
+            info log_url_cluster "$CEDANA_URL" "$CLUSTER_ID"
         else
             debug_log "Using provided cluster ID: $CLUSTER_ID"
         fi
