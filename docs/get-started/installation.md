@@ -9,13 +9,13 @@ Since Cedana depends on [CRIU](https://criu.org), you will need to ensure its de
 #### Using apt (Ubuntu/Debian)&#x20;
 
 ```sh
-apt-get install -y libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel
+apt-get install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables-dev
 ```
 
 #### Using dnf/yum (Fedora/CentOS)
 
 ```sh
-yum install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1
+yum install -y libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel
 ```
 
 ## Build from source
