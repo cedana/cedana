@@ -16,7 +16,7 @@
 #
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-export NB_CLUSTER_NAME="${NB_CLUSTER_NAME:-cedana-ci-arm64}"
+export NB_CLUSTER_NAME="${NB_CLUSTER_NAME:-cedana-ci-amd64}"
 export NB_SA_PRIVATE_KEY_PATH="${NB_SA_PRIVATE_KEY_PATH:-/tmp/nb_sa_key}"
 export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
 export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
@@ -161,9 +161,9 @@ setup_cluster() {
     _create_nebius_mk8s
     create_nodegroup
     debug_log "Creating nebius multi_gpu nodegroup ..."
-    export NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
-    export NB_NODE_COUNT="1"
-    export NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
+    NB_NODE_COUNT="1"
+    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
     create_nodegroup
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
@@ -180,9 +180,9 @@ teardown_cluster() {
 
     # Delete the nodegroup (H100s are expensive!)
     delete_nodegroup
-    export NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
-    export NB_NODE_COUNT="1"
-    export NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
+    NB_NODE_COUNT="1"
+    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
     delete_nodegroup
 
     debug_log "Nebius cluster teardown complete"
