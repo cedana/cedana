@@ -462,6 +462,8 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: EKS
       large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
@@ -476,6 +478,8 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: GKE
       large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
@@ -490,6 +494,8 @@ jobs:
       debug: ${{ inputs.debug }}
       platform: Nebius
       large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
@@ -553,4 +559,3 @@ jobs:
           TITLE: "Test results (${{ matrix.arch }})"
         run: |
           npx slack-ctrf results "report/**/*.json" --title "$TITLE" --prefix ${{ github.repository }}
-
