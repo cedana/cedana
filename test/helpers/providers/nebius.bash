@@ -159,7 +159,11 @@ setup_cluster() {
     _configure_nebius_credentials
     _create_nebius_mk8s
     create_nodegroup
-
+    debug_log "Creating nebius multi_gpu nodegroup ..."
+    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
+    NB_NODE_COUNT="1"
+    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    create_nodegroup
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
     nebius mk8s cluster get-credentials --id "$NB_CLUSTER_ID" --external
@@ -175,6 +179,10 @@ teardown_cluster() {
 
     # Delete the nodegroup (H100s are expensive!)
     delete_nodegroup
+    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
+    NB_NODE_COUNT="1"
+    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    delete_node_group
 
     debug_log "Nebius cluster teardown complete"
 }
