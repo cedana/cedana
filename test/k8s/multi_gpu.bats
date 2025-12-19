@@ -55,7 +55,7 @@ setup_file() {
 # Sample-Based #
 ################
 
-# bats test_tags=dump,Restore
+# bats test_tags=dump,restore
 @test "Dump/Restore: CUDA MultiGpu Pytorch Training" {
     local spec
 
