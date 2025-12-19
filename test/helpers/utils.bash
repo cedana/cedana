@@ -10,6 +10,7 @@ export GIBIBYTE=$(( MEBIBYTE * 1024 ))
 
 export RED='\033[0;31m'
 export YELLOW='\033[0;33m'
+export BLUE='\033[0;34m'
 export NC='\033[0m' # No Color
 
 load_lib() {
@@ -237,6 +238,11 @@ wait_for_file() {
     return 0
 }
 
+info_log() {
+    local message="$1"
+    echo -e "${BLUE}$message${NC}" >&3
+}
+
 debug_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
@@ -250,6 +256,14 @@ error_log() {
         echo -e "${RED}[ERROR] $message${NC}" >&3
     else
         echo -e "${RED}[ERROR] $message${NC}" >&2
+    fi
+}
+
+info() {
+    if [ "$#" -eq 1 ]; then
+        eval "$1" >&3 2>&1
+    else
+        "$@" >&3 2>&1
     fi
 }
 
