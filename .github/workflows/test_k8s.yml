@@ -74,7 +74,7 @@ env:
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging (enable if unstable)
+  DEBUG: 1 # bats debug logging (enable if unstable)
 
 jobs:
   propagator-connectivity:
