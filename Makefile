@@ -301,7 +301,7 @@ test-k9s: ## Enter k9s in the test environment
 # and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
 # the default).
 
-DOCKER_IMAGE=cedana/cedana-helper-test:$(shell git rev-parse HEAD)
+DOCKER_IMAGE=cedana/cedana-helper-test:$(VERSION)
 DOCKER_TEST_CONTAINER_NAME=cedana-test
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
@@ -323,7 +323,7 @@ DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTER
 				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
 				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) \
-				-e CEDANA_METRICS_ENABLED=$(CEDANA_METRICS_ENABLED) \
+				-e CEDANA_METRICS_ENABLED=$(CEDANA_METRICS_ENABLED) -e CEDANA_PROFILING_ENABLED=$(CEDANA_PROFILING_ENABLED) \
 				-e HF_TOKEN=$(HF_TOKEN) \
 				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
 				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
