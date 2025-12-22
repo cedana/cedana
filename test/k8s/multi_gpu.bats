@@ -56,18 +56,18 @@ setup_file() {
 ################
 
 # bats test_tags=dump,restore
-@test "Dump/Restore: CUDA MultiGpu Pytorch Training" {
+@test "Dump/Restore: CUDA MultiGpu Vector Add" {
     local spec
 
-    spec=$(pod_spec "$SAMPLES_DIR/cuda-multigpu-pytorch-train.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-vector-add.yaml")
 
     test_pod_spec DUMP_RESTORE "$spec"
 }
 
 # bats test_tags=dump,restore
-@test "Dump/Restore: CUDA tensorflow MultiGpu" {
+@test "Dump/Restore: CUDA Deepseed Training MultiGpu" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cuda-tensorflow.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
 
     test_pod_spec DUMP_RESTORE "$spec"
 }
