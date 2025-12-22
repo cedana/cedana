@@ -13,7 +13,6 @@ import (
 
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/version"
 	"github.com/cedana/cedana/plugins/k8s/internal/eventstream"
@@ -64,21 +63,16 @@ var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Setup and start cedana on host",
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
-		ctx := cmd.Context()
-
-		var metricsShutdown func(context.Context) error
+		ctx, cancel := context.WithCancel(cmd.Context())
 		wg := &sync.WaitGroup{}
 
 		if config.Global.Metrics {
-			metricsShutdown = metrics.InitSigNoz(ctx, "cedana-helper", version.Version)
-			logging.InitSigNoz(ctx, wg, "cedana-helper", version.Version)
+			metrics.Init(ctx, wg, "cedana-helper", version.Version)
 		}
 
 		defer func() {
+			cancel()
 			wg.Wait()
-			if metricsShutdown != nil {
-				metricsShutdown(ctx)
-			}
 		}()
 
 		err = setupDaemon(ctx)

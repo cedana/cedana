@@ -60,7 +60,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.WaitGroup,
+		WG:       s.wg,
 	}
 	resp := &daemon.DumpResp{}
 

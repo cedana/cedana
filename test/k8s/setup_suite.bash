@@ -80,9 +80,11 @@ setup_suite() {
             debug_log "Registering cluster '$CLUSTER_NAME' with propagator..."
             CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
             export CLUSTER_ID
+            info_log "======================================="
             info_log "Cluster registered with ID: $CLUSTER_ID"
             info_log "Logs for this cluster can be viewed at:"
             info log_url_cluster "$CEDANA_URL" "$CLUSTER_ID"
+            info_log "======================================="
         else
             debug_log "Using provided cluster ID: $CLUSTER_ID"
         fi
