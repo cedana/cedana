@@ -71,7 +71,7 @@ load ../helpers/propagator
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 120
 }
 
-# bats test_tags=dump,restore,samples
+# bats test_tags=dump,restore,samples,multicontainer
 @test "Dump/Restore: Multi-container Counter" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/counting-multicontainer.yaml")
