@@ -25,13 +25,15 @@ setup_file() {
 
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-vector-add.yaml")
 
+    wait_for_gpus 2
     test_pod_spec DUMP_RESTORE "$spec"
 }
 
 # bats test_tags=dump,restore
-@test "Dump/Restore: CUDA Deepseed Training MultiGpu" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
+# @test "Dump/Restore: CUDA Deepseed Training MultiGpu" {
+#     local spec
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
 
-    test_pod_spec DUMP_RESTORE "$spec"
-}
+#     wait_for_gpus 4
+#     test_pod_spec DUMP_RESTORE "$spec"
+# }

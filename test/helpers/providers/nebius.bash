@@ -194,6 +194,9 @@ teardown_cluster() {
     debug_log "Tearing down Nebius cluster..."
 
     # Delete the nodegroup (H100s are expensive!)
+    NB_NODEGROUP_NAME="github-ci"
+    NB_NODE_COUNT="2"
+    NB_GPU_PRESET="1gpu-16vcpu-200gb"
     delete_nodegroup
     NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
     NB_NODE_COUNT="1"

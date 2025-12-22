@@ -466,9 +466,40 @@ is_gpu_available() {
 # Count total GPUs required by a spec file
 get_required_gpus() {
     local spec="$1"
-    local gpu_count
-    gpu_count=$(grep -o "nvidia.com/gpu.*[0-9]" "$spec" 2>/dev/null | grep -o "[0-9]*" | awk '{sum+=$1} END {print sum}')
-    echo "${gpu_count:-0}"
+
+    if command -v yq &> /dev/null; then
+        yq eval '[.. | select(has("resources")) | .resources.limits."nvidia.com/gpu" // 0] | add' "$spec" 2>/dev/null || echo "0"
+    else
+        grep -A 5 "limits:" "$spec" | grep "nvidia.com/gpu" | grep -o "[0-9]\+" | awk '{sum+=$1} END {print sum+0}' 2>/dev/null || echo "0"
+    fi
+}
+
+# Wait for gpu nodes to be spun up
+wait_for_gpus() {
+    local required_gpus="${1:-1}"
+    local max_wait="${2:-1800}"  # 30 minutes default
+    local check_interval="${3:-30}"
+    local elapsed=0
+
+    debug_log "Waiting for at least ${required_gpus} GPU(s) to become available..."
+
+    while [ $elapsed -lt $max_wait ]; do
+        local available_gpus
+        available_gpus=$(get_available_gpus)
+
+        debug_log "Available GPUs: ${available_gpus} (waited ${elapsed}s)"
+
+        if [ "$available_gpus" -ge "$required_gpus" ]; then
+            debug_log "Required GPUs are now available!"
+            return 0
+        fi
+
+        sleep $check_interval
+        elapsed=$((elapsed + check_interval))
+    done
+
+    debug_log "ERROR: Timeout waiting for GPUs to become available"
+    return 1
 }
 
 # Get pod name from a created resource
