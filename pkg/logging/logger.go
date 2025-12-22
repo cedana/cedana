@@ -74,8 +74,8 @@ func SetLogger(writer io.Writer) {
 		Logger().Hook(LineInfoHook{})
 }
 
-func GetLogger() zerolog.Logger {
-	return log.Logger
+func GetLogger() *zerolog.Logger {
+	return &log.Logger
 }
 
 func SetLevel(level string) {
