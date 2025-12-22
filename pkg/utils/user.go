@@ -2,29 +2,8 @@ package utils
 
 import (
 	"os"
-	"os/exec"
-	"os/user"
-	"strings"
 	"syscall"
 )
-
-func GetUser() (*user.User, error) {
-	var username string
-
-	path, err := exec.LookPath("whoami")
-	if err == nil {
-		cmd := exec.Command(path)
-		output, err := cmd.Output()
-		if err != nil {
-			return nil, err
-		}
-		username = strings.TrimSpace(string(output))
-	} else {
-		username = os.Getenv("USER")
-	}
-
-	return user.Lookup(username)
-}
 
 func GetCredentials() (*syscall.Credential, error) {
 	uid := os.Getuid()
