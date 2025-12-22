@@ -200,4 +200,3 @@ func (sw *signozWriter) flushBuffer() {
 		fmt.Printf("non-2xx status sending log batch: %d, response: %s\n", resp.StatusCode, string(bodyBytes))
 	}
 }
-

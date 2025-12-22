@@ -9,12 +9,20 @@ import (
 )
 
 func GetUser() (*user.User, error) {
-	cmd := exec.Command("whoami")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, err
+	var username string
+
+	path, err := exec.LookPath("whoami")
+	if err == nil {
+		cmd := exec.Command(path)
+		output, err := cmd.Output()
+		if err != nil {
+			return nil, err
+		}
+		username = strings.TrimSpace(string(output))
+	} else {
+		username = os.Getenv("USER")
 	}
-	username := strings.TrimSpace(string(output))
+
 	return user.Lookup(username)
 }
 
@@ -43,4 +51,3 @@ func GetRootCredentials() *syscall.Credential {
 func IsRootUser() bool {
 	return os.Getuid() == 0
 }
-

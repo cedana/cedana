@@ -28,6 +28,8 @@ var Credentials *Creds
 // Init initializes OpenTelemetry tracing and metrics with SigNoz as the backend.
 // Returns a shutdown function that must be called for proper cleanup.
 func Init(ctx context.Context, wg *sync.WaitGroup, service, version string) {
+	log := log.With().Str("service", service).Str("version", version).Logger()
+
 	handleErr := func(err error) {
 		log.Warn().Err(err).Msg("metrics will not be sent to SigNoz")
 	}
@@ -39,6 +41,8 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string) {
 		handleErr(err)
 		return
 	}
+
+	log = log.With().Str("endpoint", Credentials.Endpoint).Logger()
 
 	host, err := utils.GetHost(ctx)
 	if err != nil {
