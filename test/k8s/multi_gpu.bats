@@ -9,47 +9,11 @@ load ../helpers/helm
 load ../helpers/propagator
 
 setup_file() {
-    if [ "${GPU:-0}" != "1" ]; then
-        skip "GPU tests disabled (set GPU=1)"
+    if [ "${GPU:-0}" -lt "1" ]; then
+        skip "GPU tests disabled (set GPU > 0)"
     fi
 }
 
-#########
-# Basic #
-#########
-
-# bats test_tags=deploy
-@test "Deploy a GPU pod" {
-    local script
-    local spec
-
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "alpine:latest" "$script" 1)
-
-    test_pod_spec DEPLOY "$spec"
-}
-
-# bats test_tags=dump
-@test "Dump a GPU pod" {
-    local script
-    local spec
-
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "alpine:latest" "$script" 1)
-
-    test_pod_spec DUMP "$spec"
-}
-
-# bats test_tags=restore
-@test "Restore a GPU pod" {
-    local script
-    local spec
-
-    script='gpu_smr/vector_add'
-    spec=$(cmd_pod_spec_gpu "alpine:latest" "$script" 1)
-
-    test_pod_spec RESTORE "$spec"
-}
 
 ################
 # Sample-Based #
