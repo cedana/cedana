@@ -68,14 +68,14 @@ var setupCmd = &cobra.Command{
 		ctx, cancel := context.WithCancel(cmd.Context())
 		wg := &sync.WaitGroup{}
 
-		if config.Global.Metrics {
-			metrics.Init(ctx, wg, "cedana-helper", version.Version)
-		}
-
 		defer func() {
 			cancel()
 			wg.Wait()
 		}()
+
+		if config.Global.Metrics {
+			metrics.Init(ctx, wg, "cedana-helper", version.Version)
+		}
 
 		err = setupDaemon(
 			log.With().Str("operation", "setup").Logger().WithContext(ctx),
