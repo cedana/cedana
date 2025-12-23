@@ -16,12 +16,13 @@
 #
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-export NB_CLUSTER_NAME="${NB_CLUSTER_NAME:-cedana-ci-arm64}"
+export NB_CLUSTER_NAME="${NB_CLUSTER_NAME:-cedana-ci}"
 export NB_SA_PRIVATE_KEY_PATH="${NB_SA_PRIVATE_KEY_PATH:-/tmp/nb_sa_key}"
 export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
 export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
 export GPU_OPERATOR_DRIVER_VERSION="${GPU_OPERATOR_DRIVER_VERSION:-570.195.03}"
-export NB_NODEGROUP_NAME="${NB_NODEGROUP_NAME:-github-ci-Nebius}"
+export NB_NODEGROUP_NAME="${NB_NODEGROUP_NAME:-github-ci}"
+export NB_NODE_COUNT="${NB_NODE_COUNT:-2}"
 export NB_GPU_PRESET="${NB_GPU_PRESET:-1gpu-16vcpu-200gb}"
 export NB_GPU_PLATFORM="${NB_GPU_PLATFORM:-gpu-h100-sxm}"
 
@@ -110,7 +111,7 @@ create_nodegroup() {
             --name "$NB_NODEGROUP_NAME" \
             --parent-id "$NB_CLUSTER_ID" \
             --template-boot-disk-size-bytes 137438953472 \
-            --fixed-node-count 2 \
+            --fixed-node-count "$NB_NODE_COUNT" \
             --template-resources-platform "$NB_GPU_PLATFORM" \
             --template-resources-preset "$NB_GPU_PRESET" \
             --template-network-interfaces "[{\"public_ip_address\": {},\"subnet_id\": \"$NB_SUBNET_ID\"}]"
@@ -140,6 +141,21 @@ delete_nodegroup() {
     fi
 }
 
+delete_mk8s_cluster() {
+    local cluster_id
+    cluster_id=$(nebius mk8s cluster get-by-name \
+            --parent-id "$NB_CLUSTER_ID" \
+        --name "$NB_CLUSTER_NAME" --format json | jq -r '.metadata.id')
+
+    if [ -z "$cluster_id" ] || [ "$cluster_id" = "null" ]; then
+        debug_log "Cluster does not exist, skipping deletion..."
+    else
+        debug_log "Deleting Nebius MK8s cluster..."
+        nebius mk8s cluster delete --id "$cluster_id"
+        debug_log "Nebius MK8s cluster has been deleted"
+    fi
+}
+
 setup_gpu_operator() {
     debug_log "Installing NVIDIA GPU operator..."
 
@@ -159,7 +175,11 @@ setup_cluster() {
     _configure_nebius_credentials
     _create_nebius_mk8s
     create_nodegroup
-
+    debug_log "Creating nebius multi_gpu nodegroup ..."
+    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
+    NB_NODE_COUNT="1"
+    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    create_nodegroup
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
     nebius mk8s cluster get-credentials --id "$NB_CLUSTER_ID" --external
@@ -174,7 +194,14 @@ teardown_cluster() {
     debug_log "Tearing down Nebius cluster..."
 
     # Delete the nodegroup (H100s are expensive!)
+    NB_NODEGROUP_NAME="github-ci"
+    NB_NODE_COUNT="2"
+    NB_GPU_PRESET="1gpu-16vcpu-200gb"
     delete_nodegroup
-
+    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
+    NB_NODE_COUNT="1"
+    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    delete_nodegroup
+    delete_mk8s_cluster
     debug_log "Nebius cluster teardown complete"
 }
