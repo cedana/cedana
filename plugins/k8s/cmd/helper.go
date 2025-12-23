@@ -18,6 +18,7 @@ import (
 	"github.com/cedana/cedana/pkg/version"
 	"github.com/cedana/cedana/plugins/k8s/internal/eventstream"
 	"github.com/cedana/cedana/plugins/k8s/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -64,24 +65,25 @@ var setupCmd = &cobra.Command{
 	Use:   "setup",
 	Short: "Setup and start cedana on host",
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
-		ctx := cmd.Context()
-
-		var metricsShutdown func(context.Context) error
+		ctx, cancel := context.WithCancel(cmd.Context())
 		wg := &sync.WaitGroup{}
 
-		if config.Global.Metrics {
-			metricsShutdown = metrics.InitSigNoz(ctx, "cedana-helper", version.Version)
-			logging.InitSigNoz(ctx, wg, "cedana-helper", version.Version)
-		}
-
 		defer func() {
+			cancel()
 			wg.Wait()
-			if metricsShutdown != nil {
-				metricsShutdown(ctx)
-			}
 		}()
 
-		err = setupDaemon(ctx)
+		if config.Global.Metrics {
+			metrics.Init(ctx, wg, "cedana-helper", version.Version)
+		}
+
+		err = setupDaemon(
+			ctx,
+			logging.Writer(
+				log.With().Str("operation", "setup").Logger().WithContext(ctx),
+				zerolog.DebugLevel,
+			),
+		)
 		if err != nil {
 			return fmt.Errorf("error setting up host: %w", err)
 		}
@@ -102,12 +104,30 @@ var destroyCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Destroy and cleanup cedana on host",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return destroyDaemon(cmd.Context())
+		ctx, cancel := context.WithCancel(cmd.Context())
+		wg := &sync.WaitGroup{}
+
+		defer func() {
+			cancel()
+			wg.Wait()
+		}()
+
+		if config.Global.Metrics {
+			metrics.Init(ctx, wg, "cedana-helper", version.Version)
+		}
+
+		return destroyDaemon(
+			ctx,
+			logging.Writer(
+				log.With().Str("operation", "destroy").Logger().WithContext(ctx),
+				zerolog.DebugLevel,
+			),
+		)
 	},
 }
 
-func setupDaemon(ctx context.Context) error {
-	return utils.RunScript(ctx, setupScript)
+func setupDaemon(ctx context.Context, logger ...io.Writer) error {
+	return utils.RunScript(ctx, setupScript, logger...)
 }
 
 func startDaemon(ctx context.Context) error {
@@ -118,8 +138,8 @@ func stopDaemon(ctx context.Context) error {
 	return utils.RunScript(context.WithoutCancel(ctx), stopScript)
 }
 
-func destroyDaemon(ctx context.Context) error {
-	return utils.RunScript(context.WithoutCancel(ctx), cleanupScript)
+func destroyDaemon(ctx context.Context, logger ...io.Writer) error {
+	return utils.RunScript(context.WithoutCancel(ctx), cleanupScript, logger...)
 }
 
 func isDaemonRunning(ctx context.Context) (bool, error) {

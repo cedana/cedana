@@ -2,21 +2,8 @@ package utils
 
 import (
 	"os"
-	"os/exec"
-	"os/user"
-	"strings"
 	"syscall"
 )
-
-func GetUser() (*user.User, error) {
-	cmd := exec.Command("whoami")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-	username := strings.TrimSpace(string(output))
-	return user.Lookup(username)
-}
 
 func GetCredentials() (*syscall.Credential, error) {
 	uid := os.Getuid()
@@ -43,4 +30,3 @@ func GetRootCredentials() *syscall.Credential {
 func IsRootUser() bool {
 	return os.Getuid() == 0
 }
-
