@@ -13,10 +13,12 @@ import (
 
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/version"
 	"github.com/cedana/cedana/plugins/k8s/internal/eventstream"
 	"github.com/cedana/cedana/plugins/k8s/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -75,7 +77,9 @@ var setupCmd = &cobra.Command{
 			wg.Wait()
 		}()
 
-		err = setupDaemon(ctx)
+		logger := logging.Writer(ctx, zerolog.DebugLevel)
+
+		err = setupDaemon(ctx, logger)
 		if err != nil {
 			return fmt.Errorf("error setting up host: %w", err)
 		}
@@ -96,12 +100,26 @@ var destroyCmd = &cobra.Command{
 	Use:   "destroy",
 	Short: "Destroy and cleanup cedana on host",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return destroyDaemon(cmd.Context())
+		ctx, cancel := context.WithCancel(cmd.Context())
+		wg := &sync.WaitGroup{}
+
+		defer func() {
+			cancel()
+			wg.Wait()
+		}()
+
+		if config.Global.Metrics {
+			metrics.Init(ctx, wg, "cedana-helper", version.Version)
+		}
+
+		logger := logging.Writer(ctx, zerolog.DebugLevel)
+
+		return destroyDaemon(ctx, logger)
 	},
 }
 
-func setupDaemon(ctx context.Context) error {
-	return utils.RunScript(ctx, setupScript)
+func setupDaemon(ctx context.Context, logger ...io.Writer) error {
+	return utils.RunScript(ctx, setupScript, logger...)
 }
 
 func startDaemon(ctx context.Context) error {
@@ -112,8 +130,8 @@ func stopDaemon(ctx context.Context) error {
 	return utils.RunScript(context.WithoutCancel(ctx), stopScript)
 }
 
-func destroyDaemon(ctx context.Context) error {
-	return utils.RunScript(context.WithoutCancel(ctx), cleanupScript)
+func destroyDaemon(ctx context.Context, logger ...io.Writer) error {
+	return utils.RunScript(context.WithoutCancel(ctx), cleanupScript, logger...)
 }
 
 func isDaemonRunning(ctx context.Context) (bool, error) {
