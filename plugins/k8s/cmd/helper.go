@@ -78,8 +78,11 @@ var setupCmd = &cobra.Command{
 		}
 
 		err = setupDaemon(
-			log.With().Str("operation", "setup").Logger().WithContext(ctx),
-			logging.Writer(ctx, zerolog.DebugLevel),
+			ctx,
+			logging.Writer(
+				log.With().Str("operation", "setup").Logger().WithContext(ctx),
+				zerolog.DebugLevel,
+			),
 		)
 		if err != nil {
 			return fmt.Errorf("error setting up host: %w", err)
@@ -114,8 +117,11 @@ var destroyCmd = &cobra.Command{
 		}
 
 		return destroyDaemon(
-			log.With().Str("operation", "destroy").Logger().WithContext(ctx),
-			logging.Writer(ctx, zerolog.DebugLevel),
+			ctx,
+			logging.Writer(
+				log.With().Str("operation", "destroy").Logger().WithContext(ctx),
+				zerolog.DebugLevel,
+			),
 		)
 	},
 }
