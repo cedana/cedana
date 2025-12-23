@@ -77,9 +77,10 @@ var setupCmd = &cobra.Command{
 			wg.Wait()
 		}()
 
-		logger := logging.Writer(ctx, zerolog.DebugLevel)
-
-		err = setupDaemon(ctx, logger)
+		err = setupDaemon(
+			log.With().Str("operation", "setup").Logger().WithContext(ctx),
+			logging.Writer(ctx, zerolog.DebugLevel),
+		)
 		if err != nil {
 			return fmt.Errorf("error setting up host: %w", err)
 		}
@@ -112,9 +113,10 @@ var destroyCmd = &cobra.Command{
 			metrics.Init(ctx, wg, "cedana-helper", version.Version)
 		}
 
-		logger := logging.Writer(ctx, zerolog.DebugLevel)
-
-		return destroyDaemon(ctx, logger)
+		return destroyDaemon(
+			log.With().Str("operation", "destroy").Logger().WithContext(ctx),
+			logging.Writer(ctx, zerolog.DebugLevel),
+		)
 	},
 }
 

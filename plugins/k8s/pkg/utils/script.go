@@ -9,14 +9,16 @@ import (
 )
 
 func RunScript(ctx context.Context, script string, logger ...io.Writer) error {
-	stdouts := []io.Writer{os.Stdout}
-	stdouts = append(stdouts, logger...)
-	stderrs := []io.Writer{os.Stderr}
-	stderrs = append(stderrs, logger...)
-
 	cmd := exec.CommandContext(ctx, "bash")
 	cmd.Stdin = strings.NewReader(script)
-	cmd.Stdout = io.MultiWriter(stdouts...)
-	cmd.Stderr = io.MultiWriter(stderrs...)
+
+	if len(logger) > 0 {
+		cmd.Stdout = io.MultiWriter(logger...)
+		cmd.Stderr = io.MultiWriter(logger...)
+	} else {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+	}
+
 	return cmd.Run()
 }
