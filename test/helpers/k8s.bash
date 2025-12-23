@@ -107,8 +107,8 @@ pod_spec() {
     cp "$source_file" "$temp_spec"
 
     sed -i \
-        -e "s/name:[[:space:]]*.*/name: $unique_id/" \
-        -e "s/generateName:[[:space:]]*.*/name: $unique_id/" \
+        -e "/^metadata:/,/^[^ ]/ s/^  name:[[:space:]]*.*/  name: $unique_id/" \
+        -e "/^metadata:/,/^[^ ]/ s/^  generateName:[[:space:]]*.*/  name: $unique_id/" \
         -e "s/namespace: default/namespace: $namespace/g" \
         -e "s/namespace: .*/namespace: $namespace/g" \
         "$temp_spec"

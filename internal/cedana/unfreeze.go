@@ -46,7 +46,7 @@ func (s *Server) Unfreeze(ctx context.Context, req *daemon.DumpReq) (*daemon.Dum
 	opts := types.Opts{
 		Lifetime:     s.lifetime,
 		Plugins:      s.plugins,
-		WG:           s.WaitGroup,
+		WG:           s.wg,
 		CRIU:         criu.MakeCriu(),
 		CRIUCallback: &criu.NotifyCallbackMulti{},
 	}

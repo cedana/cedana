@@ -41,7 +41,7 @@ func (s *Server) Manage(ctx context.Context, req *daemon.RunReq) (*daemon.RunRes
 	opts := types.Opts{
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
-		WG:       s.WaitGroup,
+		WG:       s.wg,
 	}
 
 	resp := &daemon.RunResp{}

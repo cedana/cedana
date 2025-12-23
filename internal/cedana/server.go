@@ -58,11 +58,8 @@ type ServeOpts struct {
 func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error) {
 	wg := &sync.WaitGroup{}
 
-	var metricsShutdown func(context.Context) error
-
 	if config.Global.Metrics {
-		metricsShutdown = metrics.InitSigNoz(ctx, "cedana", version.Version)
-		logging.InitSigNoz(ctx, wg, "cedana", version.Version)
+		metrics.Init(ctx, wg, "cedana", version.Version)
 	}
 
 	host, err := utils.GetHost(ctx)
@@ -100,11 +97,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 
 	server = &Server{
 		Cedana: Cedana{
-			gpus:            gpuManager,
-			plugins:         pluginManager,
-			WaitGroup:       wg,
-			lifetime:        ctx,
-			metricsShutdown: metricsShutdown,
+			gpus:     gpuManager,
+			plugins:  pluginManager,
+			wg:       wg,
+			lifetime: ctx,
 		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(
@@ -192,8 +188,6 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 	<-lifetime.Done()
 	err = lifetime.Err()
 
-	// Wait for all background go routines to finish
-	s.Wait()
 	s.Stop()
 
 	return
@@ -202,6 +196,7 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 func (s *Server) Stop() {
 	s.grpcServer.GracefulStop()
 	s.listener.Close()
+	s.Wait()
 	log.Info().Msg("stopped server gracefully")
 }
 

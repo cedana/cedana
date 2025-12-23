@@ -20,30 +20,24 @@ type Cedana struct {
 	plugins plugins.Manager
 	gpus    gpu.Manager
 
+	wg       *sync.WaitGroup
 	lifetime context.Context
 	cancel   context.CancelFunc
-
-	metricsShutdown   func(context.Context) error
-	profilingShutdown func()
-
-	*sync.WaitGroup
 }
 
 func New(ctx context.Context, description ...any) (*Cedana, error) {
 	logging.SetLevel(config.Global.LogLevelNoServer)
 	wg := &sync.WaitGroup{}
-	ctx, cancel := context.WithCancel(ctx)
-
-	var metricsShutdown func(context.Context) error
-	var profilingShutdown func()
-
-	if config.Global.Metrics {
-		metricsShutdown = metrics.InitSigNoz(ctx, "cedana", version.Version)
-		logging.InitSigNoz(ctx, wg, "cedana", version.Version)
-	}
+	var cancel func()
 
 	if config.Global.Profiling.Enabled {
-		ctx, profilingShutdown = profiling.StartTiming(ctx, description...)
+		ctx, cancel = profiling.StartTiming(ctx, description...)
+	} else {
+		ctx, cancel = context.WithCancel(ctx)
+	}
+
+	if config.Global.Metrics {
+		metrics.Init(ctx, wg, "cedana", version.Version)
 	}
 
 	pluginManager := plugins.NewLocalManager()
@@ -54,31 +48,24 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	}
 
 	return &Cedana{
-		plugins:           pluginManager,
-		gpus:              gpuManager,
-		WaitGroup:         wg,
-		lifetime:          ctx,
-		cancel:            cancel,
-		metricsShutdown:   metricsShutdown,
-		profilingShutdown: profilingShutdown,
+		plugins:  pluginManager,
+		gpus:     gpuManager,
+		wg:       wg,
+		lifetime: ctx,
+		cancel:   cancel,
 	}, nil
 }
 
 func (c *Cedana) Wait() {
-	c.cancel()
-	c.WaitGroup.Wait()
+	c.wg.Wait()
 }
 
 func (c *Cedana) Finalize() *profiling.Data {
+	c.cancel()
 	data, ok := c.lifetime.Value(keys.PROFILING_CONTEXT_KEY).(*profiling.Data)
 	if ok {
-		c.profilingShutdown()
 		profiling.Clean(data)
 		profiling.Flatten(data)
-	}
-
-	if c.metricsShutdown != nil {
-		c.metricsShutdown(c.lifetime)
 	}
 
 	return data
