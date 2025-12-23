@@ -71,7 +71,7 @@ setup_suite() {
     debug_log "Connected to $PROVIDER cluster: $(kubectl config current-context)"
 
     # Start tailing logs in background
-    tail_all_logs "$CEDANA_NAMESPACE" 300 &
+    tail_all_logs "$CEDANA_NAMESPACE" 600 &
     TAIL_PID=$!
 
     # Install Cedana helm chart unless skipped
@@ -104,12 +104,12 @@ setup_suite() {
         fi
     fi
 
-    wait_for_ready "$CEDANA_NAMESPACE" 300
+    wait_for_ready "$CEDANA_NAMESPACE" 600
 
     # Restart log tailing (as it can be broken on kubelet restart)
     if [ -n "$TAIL_PID" ]; then
         pkill -P "$TAIL_PID" 2>/dev/null || true
-        tail_all_logs "$CEDANA_NAMESPACE" 300 &
+        tail_all_logs "$CEDANA_NAMESPACE" 120 &
         TAIL_PID=$!
     fi
 
