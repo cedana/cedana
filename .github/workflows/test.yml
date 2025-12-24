@@ -445,7 +445,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: K3s
-      large: ${{ inputs.large }}
+      large: false # K3s is only for small tests
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       parallelism: ${{ inputs.parallelism }}
