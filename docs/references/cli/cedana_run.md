@@ -8,6 +8,7 @@ Run a managed process/container (create a job)
   -a, --attach            attach stdin/out/err
       --attachable        make it attachable, but don't attach
   -g, --gpu-enabled       enable GPU support
+      --gpu-id string     specify existing GPU controller ID to attach (internal use only)
       --gpu-tracing       enable GPU tracing
   -h, --help              help for run
   -j, --jid string        job id
