@@ -107,6 +107,11 @@ echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
 # Setup containerd runtime configuration for cedana #
 #####################################################
 
+if [ "$ENV" != "production" ]; then
+    echo "Non-production environment detected, skipping containerd runtime configuration"
+    exit 0
+fi
+
 # k8s path - detect containerd config version
 PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
 
@@ -124,15 +129,16 @@ fi
 echo "Detected containerd config version $CONTAINERD_VERSION"
 
 if [ "$CONTAINERD_VERSION" = "2" ]; then
-    # Version 2: Copy last conf.d file if exists, then add config
+    # Version 2: Copy last conf.d file (excluding 999-cedana.toml) if exists, then add config
     # This is because merging multiple runtimes in version 2 is problematic
     # See https://github.com/containerd/containerd/issues/5837 (fixed in v3)
     CONFD_DIR="/etc/containerd/conf.d"
-    TARGET_CONFIG="$CONFD_DIR/999-cedana.toml" # Expected to be last lexicographically
+    TARGET_CONFIG="$CONFD_DIR/999-cedana.toml"
 
-    if [ -d "$CONFD_DIR" ] && [ -n "$(ls -A $CONFD_DIR/*.toml 2>/dev/null)" ]; then
-        # Get the last .toml file lexicographically
-        LAST_CONFD_FILE=$(find "$CONFD_DIR" -maxdepth 1 -type f -name "*.toml" | sort | tail -n 1)
+    # Find the last .toml file lexicographically (excluding 999-cedana.toml)
+    LAST_CONFD_FILE=$(find "$CONFD_DIR" -maxdepth 1 -type f -name "*.toml" ! -name "999-cedana.toml" 2>/dev/null | sort | tail -n 1)
+
+    if [ -n "$LAST_CONFD_FILE" ]; then
         echo "Copying existing config from $LAST_CONFD_FILE to $TARGET_CONFIG"
         cp "$LAST_CONFD_FILE" "$TARGET_CONFIG"
         echo "" >> "$TARGET_CONFIG"
@@ -143,7 +149,7 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
         TARGET_CONFIG="$PATH_CONTAINERD_CONFIG"
     fi
 
-    if ! grep -q 'cedana' "$TARGET_CONFIG"; then
+    if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
         echo "Adding cedana runtime config to $TARGET_CONFIG"
         cat >> "$TARGET_CONFIG" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
