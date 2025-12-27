@@ -128,17 +128,22 @@ fi
 
 echo "Detected containerd config version $CONTAINERD_VERSION"
 
+CONFD_DIR="/etc/containerd/conf.d"
+
 if [ "$CONTAINERD_VERSION" = "2" ]; then
     # Version 2: Copy last conf.d file (excluding 999-cedana.toml) if exists, then add config
     # This is because merging multiple runtimes in version 2 is problematic
     # See https://github.com/containerd/containerd/issues/5837 (fixed in v3)
-    CONFD_DIR="/etc/containerd/conf.d"
-    TARGET_CONFIG="$CONFD_DIR/999-cedana.toml"
 
     # Find the last .toml file lexicographically (excluding 999-cedana.toml)
-    LAST_CONFD_FILE=$(find "$CONFD_DIR" -maxdepth 1 -type f -name "*.toml" ! -name "999-cedana.toml" 2>/dev/null | sort | tail -n 1)
+    if [ -d "$CONFD_DIR" ]; then
+        LAST_CONFD_FILE=$(find "$CONFD_DIR" -maxdepth 1 -type f -name "*.toml" ! -name "999-cedana.toml" 2>/dev/null | sort | tail -n 1)
+    else
+        LAST_CONFD_FILE=""
+    fi
 
     if [ -n "$LAST_CONFD_FILE" ]; then
+        TARGET_CONFIG="$CONFD_DIR/999-cedana.toml"
         echo "Copying existing config from $LAST_CONFD_FILE to $TARGET_CONFIG"
         cp "$LAST_CONFD_FILE" "$TARGET_CONFIG"
         echo "" >> "$TARGET_CONFIG"
@@ -162,7 +167,6 @@ END_CAT
 
 elif [ "$CONTAINERD_VERSION" = "3" ]; then
     # Version 3: Ensure imports exist, then create conf.d file with only cedana config
-    CONFD_DIR="/etc/containerd/conf.d"
     TARGET_CONFIG="$CONFD_DIR/999-cedana.toml"
 
     # Ensure conf.d directory exists
@@ -181,7 +185,7 @@ elif [ "$CONTAINERD_VERSION" = "3" ]; then
         fi
     fi
 
-    if ! grep -q 'cedana' $TARGET_CONFIG; then
+    if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
         echo "Creating cedana runtime config at $TARGET_CONFIG"
         cat > "$TARGET_CONFIG" <<'END_CAT'
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
