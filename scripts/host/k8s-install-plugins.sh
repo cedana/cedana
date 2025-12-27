@@ -103,41 +103,89 @@ fi
 echo 0 > /proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
 echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
 
-# install the runtime configuration to containerd/runtime detected on the host, as it was downlaoded by the k8s plugin
-if [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
-    PATH_CONTAINERD_CONFIG=/var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl
-    if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
-        echo "k3s detected. Creating default config file at $PATH_CONTAINERD_CONFIG"
-        echo '{{ template "base" . }}' > $PATH_CONTAINERD_CONFIG
-        cat >> $PATH_CONTAINERD_CONFIG <<'END_CAT'
-[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
-    runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
-END_CAT
-    fi
+#####################################################
+# Setup containerd runtime configuration for cedana #
+#####################################################
+
+# k8s path - detect containerd config version
+PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+
+# Detect containerd config version
+CONTAINERD_VERSION=""
+if grep -q 'version = 2' "$PATH_CONTAINERD_CONFIG"; then
+    CONTAINERD_VERSION=2
+elif grep -q 'version = 3' "$PATH_CONTAINERD_CONFIG"; then
+    CONTAINERD_VERSION=3
 else
-    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
-    if ! grep -q 'cedana' "$PATH_CONTAINERD_CONFIG"; then
-        # if it's not version = 3 then we assume it's version = 2, as containerd config version = 1 is not used any more, largely that's considered deprecated
-        if ! grep -q 'version = 3' "$PATH_CONTAINERD_CONFIG"; then
-            echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
-            cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
+    echo "ERROR: Unsupported containerd config version. Only version 2 and 3 are supported." >&2
+    exit 1
+fi
+
+echo "Detected containerd config version $CONTAINERD_VERSION"
+
+if [ "$CONTAINERD_VERSION" = "2" ]; then
+    # Version 2: Copy last conf.d file if exists, then add config
+    # This is because merging multiple runtimes in version 2 is problematic
+    # See https://github.com/containerd/containerd/issues/5837 (fixed in v3)
+    CONFD_DIR="/etc/containerd/conf.d"
+    TARGET_CONFIG="$CONFD_DIR/999-cedana.toml" # Expected to be last lexicographically
+
+    if [ -d "$CONFD_DIR" ] && [ -n "$(ls -A $CONFD_DIR/*.toml 2>/dev/null)" ]; then
+        # Get the last .toml file lexicographically
+        LAST_CONFD_FILE=$(find "$CONFD_DIR" -maxdepth 1 -type f -name "*.toml" | sort | tail -n 1)
+        echo "Copying existing config from $LAST_CONFD_FILE to $TARGET_CONFIG"
+        cp "$LAST_CONFD_FILE" "$TARGET_CONFIG"
+        echo "" >> "$TARGET_CONFIG"
+    else
+        # Directly add to main config if no conf.d files exist, so that when NVIDIA plugin is added
+        # later it can copy from this and not miss the cedana config.
+        echo "No existing conf.d files found, will directly add to $PATH_CONTAINERD_CONFIG"
+        TARGET_CONFIG="$PATH_CONTAINERD_CONFIG"
+    fi
+
+    if ! grep -q 'cedana' "$TARGET_CONFIG"; then
+        echo "Adding cedana runtime config to $TARGET_CONFIG"
+        cat >> "$TARGET_CONFIG" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
+    else
+        echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
+    fi
+
+elif [ "$CONTAINERD_VERSION" = "3" ]; then
+    # Version 3: Ensure imports exist, then create conf.d file with only cedana config
+    CONFD_DIR="/etc/containerd/conf.d"
+    TARGET_CONFIG="$CONFD_DIR/999-cedana.toml"
+
+    # Ensure conf.d directory exists
+    mkdir -p "$CONFD_DIR"
+
+    # Ensure imports line exists in main config
+    if ! grep -q 'imports = \[.*"/etc/containerd/conf.d/\*\.toml".*\]' "$PATH_CONTAINERD_CONFIG"; then
+        echo "Adding imports to $PATH_CONTAINERD_CONFIG"
+        # Check if imports line already exists but doesn't include conf.d
+        if grep -q '^imports = \[' "$PATH_CONTAINERD_CONFIG"; then
+            # Modify existing imports line to add conf.d
+            sed -i 's|^imports = \[\(.*\)\]|imports = [\1, "/etc/containerd/conf.d/*.toml"]|' "$PATH_CONTAINERD_CONFIG"
         else
-            # TODO: move to python to handle edge cases (this works with AWS from local tests)
-            # ideally we should pick up the config for runc and mimic it, cause it might not be default config
-            # hence may break compat in some clusters AL2023 and others seem to not have any such issues so can be shipped with just a version check for now
-            echo "Writing containerd config to $PATH_CONTAINERD_CONFIG"
-            cat >> "$PATH_CONTAINERD_CONFIG" <<'END_CAT'
+            # Add imports line at the top after version line
+            sed -i '/^version = 3/a imports = ["/etc/containerd/conf.d/*.toml"]' "$PATH_CONTAINERD_CONFIG"
+        fi
+    fi
+
+    if ! grep -q 'cedana' $TARGET_CONFIG; then
+        echo "Creating cedana runtime config at $TARGET_CONFIG"
+        cat > "$TARGET_CONFIG" <<'END_CAT'
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 END_CAT
-        fi
+    else
+        echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
     fi
-    echo "Restarting containerd to pick up the new runtime configuration..."
-    (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
 fi
+
+echo "Restarting containerd to pick up the new runtime configuration..."
+(systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"

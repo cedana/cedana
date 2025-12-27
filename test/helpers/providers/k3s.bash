@@ -122,7 +122,8 @@ configure_containerd_runtime() {
     if [ "${GPU:-0}" = "1" ]; then
         local config_dir
         config_dir=$(dirname "$CONTAINERD_CONFIG_PATH")/conf.d
-        path="$config_dir/99-nvidia.toml"
+        path="$config_dir/999-cedana.toml"
+        cp "$config_dir/99-nvidia.toml" "$path"
     fi
 
     debug_log "Writing containerd config to $path"
@@ -130,7 +131,7 @@ configure_containerd_runtime() {
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
-[plugins.'io.containerd.cri.v1.images']
+[plugins."io.containerd.cri.v1.images"]
   use_local_image_pull = true
 END_CAT
 
