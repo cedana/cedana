@@ -36,10 +36,10 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 }
 
 func init() {
-	InitLogger(config.Global.LogLevel, io.Discard)
+	initLogger(config.Global.LogLevel, io.Discard)
 }
 
-func InitLogger(level string, writers ...io.Writer) {
+func initLogger(level string, writers ...io.Writer) {
 	var err error
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
@@ -74,8 +74,8 @@ func SetLogger(writer io.Writer) {
 		Logger().Hook(LineInfoHook{})
 }
 
-func GetLogger() zerolog.Logger {
-	return log.Logger
+func GetLogger() *zerolog.Logger {
+	return &log.Logger
 }
 
 func SetLevel(level string) {

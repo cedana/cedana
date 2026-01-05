@@ -1,22 +1,22 @@
-## cedana query runc
+## cedana query containerd
 
-Query runc containers
+Query containerd containers
 
 ```
-cedana query runc <ID1> [<ID2> ...] [flags]
+cedana query containerd <ID1> [<ID2> ...] [flags]
 ```
 
 ### Options
 
 ```
-  -h, --help          help for runc
-      --root string   root
+      --address string     containerd socket address
+  -h, --help               help for containerd
+      --namespace string   containerd namespace
 ```
 
 ### Options inherited from parent commands
 
 ```
-      --address string      address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)
       --config string       one-time config JSON string (merge with existing config)
       --config-dir string   custom config directory
   -i, --inspect             view details of first result

@@ -38,6 +38,9 @@ type (
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+
+		// Internal use only (for metrics and logging)
+		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id"`
 	}
 
 	Connection struct {

@@ -5,10 +5,13 @@ Manage an existing/upcoming process/container (create a job)
 ### Options
 
 ```
-  -g, --gpu-enabled   enable GPU support
-  -h, --help          help for manage
-  -j, --jid string    job id
-      --upcoming      wait for upcoming process/container
+  -g, --gpu-enabled       enable GPU support
+      --gpu-id string     specify existing GPU controller ID to attach (internal use only)
+      --gpu-tracing       enable GPU tracing
+  -h, --help              help for manage
+  -j, --jid string        job id
+      --pid-file string   file to write PID to
+      --upcoming          wait for upcoming process/container
 ```
 
 ### Options inherited from parent commands

@@ -44,7 +44,6 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.containerdAddress=$CONTAINERD_ADDRESS"
     helm_cmd="$helm_cmd --set config.profiling=$CEDANA_PROFILING_ENABLED"
     helm_cmd="$helm_cmd --set config.metrics=$CEDANA_METRICS_ENABLED"
-    helm_cmd="$helm_cmd --set daemonHelper.forceCleanup=true" # for any old installations
 
     # Set overrides from environment variables
 

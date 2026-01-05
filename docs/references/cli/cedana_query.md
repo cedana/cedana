@@ -5,7 +5,9 @@ Query containers/processes
 ### Options
 
 ```
-  -h, --help   help for query
+  -h, --help      help for query
+  -i, --inspect   view details of first result
+  -t, --tree      include entire process tree
 ```
 
 ### Options inherited from parent commands
@@ -21,6 +23,8 @@ Query containers/processes
 ### SEE ALSO
 
 * [cedana](cedana.md)	 - Root command for Cedana
-* [cedana query k8s](cedana_query_k8s.md)	 - Query k8s containers
-* [cedana query runc](cedana_query_runc.md)	 - Query runc containers. Can provide multiple IDs or names.
+* [cedana query containerd](cedana_query_containerd.md)	 - Query containerd containers
+* [cedana query k8s](cedana_query_k8s.md)	 - Query Kubernetes pods and containers
+* [cedana query process](cedana_query_process.md)	 - Query a process
+* [cedana query runc](cedana_query_runc.md)	 - Query runc containers
 

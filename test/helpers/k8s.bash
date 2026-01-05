@@ -77,32 +77,49 @@ setup_samples() {
     debug_log "SAMPLES_DIR is set to $SAMPLES_DIR"
 }
 
-# Generate a new spec from an existing one with a new name and namespace.
-new_spec () {
-    local spec="$1"
-    local newname="$2"
-    local newnamespace="${3:-$NAMESPACE}"
+# Use an existing pod spec file, modify its namespace to the
+# test namespace, and return the new spec path.
+pod_spec() {
+    local source_file="$1"
+    local namespace="${2:-$NAMESPACE}"
 
-    local newspec="/tmp/${newname}.yaml"
-
-    # Get the oldname from the first "name:" line
-    local oldname
-    oldname=$(grep -m1 '^[[:space:]]*name:' "$spec" | sed -E 's/^[[:space:]]*name:[[:space:]]*"?([^"]+)"?/\1/')
-
-    local oldnamespace
-    oldnamespace=$(grep -m1 '^[[:space:]]*namespace:' "$spec" | sed -E 's/^[[:space:]]*namespace:[[:space:]]*"?([^"]+)"?/\1/')
-
-    # Replace all 'name: <oldname>' patterns with the quoted newname
-    sed -E "s/^([[:space:]\-]*name:[[:space:]]*)\"?$oldname\"?/\1\"$newname\"/g" "$spec" > "$newspec"
-
-    # If oldnamespace is not empty, replace it; otherwise, add namespace under metadata
-    if [[ -n "$oldnamespace" ]]; then
-        sed -i -E "s/^([[:space:]]*namespace:[[:space:]]*)\"?$oldnamespace\"?/\1\"$newnamespace\"/g" "$newspec"
-    else
-        sed -i -E "/^metadata:/a\  namespace: \"$newnamespace\"" "$newspec"
+    # Check if source file exists
+    if [ ! -f "$source_file" ]; then
+        error_log "Error: spec file $source_file does not exist"
+        return 1
     fi
 
-    echo "$newspec"
+    local unique_id
+    unique_id="test-$(unix_nano)"
+    if grep -q "nvidia.com/gpu" "$source_file"; then
+        unique_id="test-cuda-$(unix_nano)"
+    fi
+
+    # Check if the spec is a Pod
+    local kind
+    kind=$(grep -E "^kind:" "$source_file" | head -1 | awk '{print $2}' | tr -d '"' | tr -d "'")
+    if [ "$kind" != "Pod" ]; then
+        error_log "Error: spec file $source_file is not a Pod (kind: $kind)"
+        return 1
+    fi
+
+    local temp_spec="/tmp/test-spec-${unique_id}.yaml"
+    cp "$source_file" "$temp_spec"
+
+    sed -i \
+        -e "/^metadata:/,/^[^ ]/ s/^  name:[[:space:]]*.*/  name: $unique_id/" \
+        -e "/^metadata:/,/^[^ ]/ s/^  generateName:[[:space:]]*.*/  name: $unique_id/" \
+        -e "s/namespace: default/namespace: $namespace/g" \
+        -e "s/namespace: .*/namespace: $namespace/g" \
+        "$temp_spec"
+
+    if ! grep -q "namespace:" "$temp_spec"; then
+        sed -i '/^metadata:/a\  namespace: '"$namespace"'' "$temp_spec"
+    fi
+
+    debug cat "$temp_spec"
+
+    echo "$temp_spec"
 }
 
 cmd_pod_spec () {
@@ -182,46 +199,6 @@ EOF
     echo "$spec"
 }
 
-# Use an existing pod spec file, modify its namespace to the
-# test namespace, and return the new spec path.
-pod_spec() {
-    local source_file="$1"
-    local namespace="${2:-$NAMESPACE}"
-
-    # Check if source file exists
-    if [ ! -f "$source_file" ]; then
-        error_log "Error: spec file $source_file does not exist"
-        return 1
-    fi
-
-    local unique_id
-    unique_id="test-$(unix_nano)"
-    if grep -q "nvidia.com/gpu" "$source_file"; then
-        unique_id="test-cuda-$(unix_nano)"
-    fi
-
-    # Check if the spec is a Pod
-    local kind
-    kind=$(grep -E "^kind:" "$source_file" | head -1 | awk '{print $2}' | tr -d '"' | tr -d "'")
-    if [ "$kind" != "Pod" ]; then
-        error_log "Error: spec file $source_file is not a Pod (kind: $kind)"
-        return 1
-    fi
-
-    local temp_spec="/tmp/test-spec-${unique_id}.yaml"
-
-    sed -e "s/namespace: default/namespace: $namespace/g" \
-        -e "s/namespace: .*/namespace: $namespace/g" \
-        "$source_file" > "$temp_spec"
-
-    if ! grep -q "namespace:" "$temp_spec"; then
-        sed -i '/^metadata:/a\  namespace: '"$namespace"'' "$temp_spec"
-    fi
-
-    echo "$temp_spec"
-}
-
-
 # List all restored pods in a given namespace.
 # Does a simple filter on pod names containing "restored".
 list_restored_pods() {
@@ -234,6 +211,8 @@ get_restored_pod() {
     local name="$1"
     local namespace="${2:-$NAMESPACE}"
 
+    name=${name%%-restored}
+
     local restored_pods
     restored_pods=$(list_restored_pods "$namespace")
 
@@ -245,7 +224,6 @@ get_restored_pod() {
         fi
     done
 
-    error_log "No restored pods found for original pod $name"
     return 1
 }
 
@@ -323,7 +301,9 @@ tail_all_logs() {
 
     debug_log "Tailing all logs in namespace $namespace"
 
-    debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace -f --tail $tail {}"
+    kubectl get pods -n "$namespace" -o name | while IFS= read -r pod; do
+        debug kubectl logs -n "$namespace" -f --tail "$tail" "$pod" &
+    done
 }
 
 # Logs of all pods in a given namespace, waiting for them to be Running first.
@@ -503,7 +483,7 @@ wait_for_gpus() {
 }
 
 # Get pod name from a created resource
-get_created_pod_name() {
+get_created_pod() {
     local spec="$1"
     local namespace="$2"
     local timeout="${3:-60}"
@@ -588,7 +568,7 @@ test_pod_spec() {
                     kubectl apply -f "$spec"
                 fi
 
-                name=$(get_created_pod_name "$spec" "$namespace" 60)
+                name=$(get_created_pod "$spec" "$namespace" 30)
                 if [ -z "$name" ]; then
                     error="Failed to get pod name"
                     break
@@ -673,7 +653,7 @@ test_pod_spec() {
                     break
                 }
 
-                name=$(wait_for_cmd 60 get_restored_pod "$original_name" "$namespace")
+                name=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
 
                 debug_log "Restore starting for $name..."
 

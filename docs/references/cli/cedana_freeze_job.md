@@ -18,11 +18,10 @@ cedana freeze job <JID> [flags]
 ### Options inherited from parent commands
 
 ```
-      --config string            one-time config JSON string (merge with existing config)
-      --config-dir string        custom config directory
-      --gpu-freeze-type string   GPU freeze type (IPC, NCCL)
-      --profiling                enable profiling/show profiling data
-      --protocol string          protocol to use (TCP, UNIX, VSOCK)
+      --config string       one-time config JSON string (merge with existing config)
+      --config-dir string   custom config directory
+      --profiling           enable profiling/show profiling data
+      --protocol string     protocol to use (TCP, UNIX, VSOCK)
 ```
 
 ### SEE ALSO
