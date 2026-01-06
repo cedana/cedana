@@ -447,7 +447,9 @@ is_gpu_available() {
 get_required_gpus() {
     local spec="$1"
     local gpu_count
-    gpu_count=$(grep -o "nvidia.com/gpu.*[0-9]" "$spec" 2>/dev/null | grep -o "[0-9]*" | awk '{sum+=$1} END {print sum}')
+    # Only count GPU limits (not requests) to avoid double-counting
+    # Look for "nvidia.com/gpu: N" under a "limits:" section
+    gpu_count=$(awk '/limits:/,/requests:|env:|^[^ ]/ {if (/nvidia\.com\/gpu:/) print $NF}' "$spec" 2>/dev/null | awk '{sum+=$1} END {print sum}')
     echo "${gpu_count:-0}"
 }
 
