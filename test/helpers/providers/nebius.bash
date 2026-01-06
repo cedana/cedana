@@ -110,7 +110,7 @@ create_nodegroup() {
         nebius mk8s node-group create \
             --name "$NB_NODEGROUP_NAME" \
             --parent-id "$NB_CLUSTER_ID" \
-            --template-boot-disk-size-bytes 137438953472 \
+            --template-boot-disk-size-bytes 1099511627776 \
             --fixed-node-count "$NB_NODE_COUNT" \
             --template-resources-platform "$NB_GPU_PLATFORM" \
             --template-resources-preset "$NB_GPU_PRESET" \
