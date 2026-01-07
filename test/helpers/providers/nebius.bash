@@ -23,6 +23,7 @@ export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
 export GPU_OPERATOR_DRIVER_VERSION="${GPU_OPERATOR_DRIVER_VERSION:-570.195.03}"
 export NB_NODEGROUP_NAME="${NB_NODEGROUP_NAME:-github-ci}"
 export NB_NODE_COUNT="${NB_NODE_COUNT:-2}"
+export NB_NODE_DISK_SIZE="${NB_NODE_DISK_SIZE:-1099511627776}"
 export NB_GPU_PRESET="${NB_GPU_PRESET:-1gpu-16vcpu-200gb}"
 export NB_GPU_PLATFORM="${NB_GPU_PLATFORM:-gpu-h100-sxm}"
 
@@ -110,7 +111,7 @@ create_nodegroup() {
         nebius mk8s node-group create \
             --name "$NB_NODEGROUP_NAME" \
             --parent-id "$NB_CLUSTER_ID" \
-            --template-boot-disk-size-bytes 1099511627776 \
+            --template-boot-disk-size-bytes "$NB_NODE_DISK_SIZE" \
             --fixed-node-count "$NB_NODE_COUNT" \
             --template-resources-platform "$NB_GPU_PLATFORM" \
             --template-resources-preset "$NB_GPU_PRESET" \
@@ -179,6 +180,7 @@ setup_cluster() {
     NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
     NB_NODE_COUNT="1"
     NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    NB_NODE_DISK_SIZE="137438953472"
     create_nodegroup
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
@@ -197,10 +199,12 @@ teardown_cluster() {
     NB_NODEGROUP_NAME="github-ci"
     NB_NODE_COUNT="2"
     NB_GPU_PRESET="1gpu-16vcpu-200gb"
+    NB_NODE_DISK_SIZE="1099511627776"
     delete_nodegroup
     NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
     NB_NODE_COUNT="1"
     NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    NB_NODE_DISK_SIZE="137438953472"
     delete_nodegroup
     delete_mk8s_cluster
     debug_log "Nebius cluster teardown complete"
