@@ -12,11 +12,11 @@
 #   NB_SA_PRIVATE_KEY       - Private key content
 #   NB_SA_PRIVATE_KEY_PATH  - Path to store private key (default: /tmp/nb_sa_key)
 #   NB_PROJECT_ID           - Nebius project ID
-#   NB_CLUSTER_NAME         - Cluster name (default: cedana-ci-arm64)
+#   NB_CLUSTER_NAME         - Cluster name (default: cedana-ci-amd64)
 #
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
-export NB_CLUSTER_NAME="${NB_CLUSTER_NAME:-cedana-ci}"
+export NB_CLUSTER_NAME="${NB_CLUSTER_NAME:-cedana-ci-amd64}"
 export NB_SA_PRIVATE_KEY_PATH="${NB_SA_PRIVATE_KEY_PATH:-/tmp/nb_sa_key}"
 export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
 export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
@@ -127,10 +127,14 @@ delete_nodegroup() {
     debug_log "Deleting Nebius node-group..."
 
     export NB_NODEGROUP_NAME="$nodegroup_name"
-
+    NB_CLUSTER_ID=$(
+        nebius mk8s cluster get-by-name \
+            --name "$NB_CLUSTER_NAME" \
+            --format json | jq -r '.metadata.id'
+    )
     local nodegroup_id
     nodegroup_id=$(nebius mk8s node-group get-by-name \
-            --parent-id "$NB_CLUSTER_ID" \
+        --parent-id "$NB_CLUSTER_ID" \
         --name "$NB_NODEGROUP_NAME" --format json | jq -r '.metadata.id')
 
     if [ -z "$nodegroup_id" ] || [ "$nodegroup_id" = "null" ]; then
@@ -145,7 +149,6 @@ delete_nodegroup() {
 delete_mk8s_cluster() {
     local cluster_id
     cluster_id=$(nebius mk8s cluster get-by-name \
-            --parent-id "$NB_CLUSTER_ID" \
         --name "$NB_CLUSTER_NAME" --format json | jq -r '.metadata.id')
 
     if [ -z "$cluster_id" ] || [ "$cluster_id" = "null" ]; then
