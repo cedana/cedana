@@ -47,7 +47,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 0 10  
 }
 
 # bats test_tags=dump,restore,samples,deepspeed,training

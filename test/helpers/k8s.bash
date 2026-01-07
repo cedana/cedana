@@ -490,9 +490,13 @@ get_created_pod() {
 #            Actions are separated by underscores and executed in order.
 #            Valid actions: DEPLOY, DUMP, RESTORE
 # @param $2: Pod spec file path
-# @param $3: Dump wait time (optional, defaults to 5)
-# @param $4: Pod timeout (optional, defaults to 300)
-# @param $5: Namespace (optional, defaults to $NAMESPACE)
+# @param $3: Pod timeout (optional, defaults to 60)
+# @param $4: Dump wait time in seconds (optional, defaults to 5) - ignored if dump_trigger is set
+# @param $5: Dump timeout (optional, defaults to 30)
+# @param $6: Namespace (optional, defaults to $NAMESPACE)
+# @param $7: Dump trigger string (optional) - if set, waits for this string in logs instead of using dump_wait_time
+# @param $8: Trigger timeout in seconds (optional, defaults to 300) - only used if dump_trigger is set
+# @param $9: Post-trigger wait time in seconds (optional, defaults to 0) - additional wait after trigger is found
 test_pod_spec() {
     local action_sequence="$1"
     local spec="$2"
@@ -500,6 +504,9 @@ test_pod_spec() {
     local dump_wait_time="${4:-5}"
     local dump_timeout="${5:-30}"
     local namespace="${6:-$NAMESPACE}"
+    local dump_trigger="${7:-}"
+    local trigger_timeout="${8:-300}"
+    local post_trigger_wait="${9:-0}"
 
     local required_gpus
     required_gpus=$(get_required_gpus "$spec")
@@ -565,7 +572,19 @@ test_pod_spec() {
                     break
                 fi
 
-                sleep "$dump_wait_time"
+                # Wait for log trigger if provided, otherwise use fixed sleep
+                if [ -n "$dump_trigger" ]; then
+                    wait_for_log_trigger "$name" "$dump_trigger" "$trigger_timeout" "$namespace" || {
+                        error="Timeout waiting for dump trigger '$dump_trigger' in pod $name"
+                        break
+                    }
+                    if [ "$post_trigger_wait" -gt 0 ]; then
+                        debug_log "Waiting ${post_trigger_wait}s after trigger before dump..."
+                        sleep "$post_trigger_wait"
+                    fi
+                else
+                    sleep "$dump_wait_time"
+                fi
 
                 debug_log "Dumping pod $name..."
                 local pod_id
@@ -656,4 +675,33 @@ test_pod_spec() {
     else
         return 0
     fi
+}
+
+# Wait for a specific string to appear in pod logs.
+# @param $1: Pod name
+# @param $2: Trigger string to grep for
+# @param $3: Timeout in seconds (optional, defaults to 300)
+# @param $4: Namespace (optional, defaults to $NAMESPACE)
+# Returns: 0 if trigger found, 1 if timeout
+wait_for_log_trigger() {
+    local name="$1"
+    local trigger="$2"
+    local timeout="${3:-300}"
+    local namespace="${4:-$NAMESPACE}"
+    local poll_interval=2
+
+    debug_log "Waiting for trigger '$trigger' in pod $name logs (timeout: ${timeout}s)"
+
+    local elapsed=0
+    while [ $elapsed -lt $timeout ]; do
+        if kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -q "$trigger"; then
+            debug_log "Found trigger '$trigger' in pod $name after ${elapsed}s"
+            return 0
+        fi
+        sleep $poll_interval
+        ((elapsed+=poll_interval))
+    done
+
+    error_log "Timeout waiting for trigger '$trigger' in pod $name logs after ${timeout}s"
+    return 1
 }
