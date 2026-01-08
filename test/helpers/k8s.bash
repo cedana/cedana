@@ -611,6 +611,15 @@ test_pod_spec() {
                 }
 
                 debug_log "Dumped pod $name successfully (action_id: $action_id)"
+
+                if [ -n "$dump_trigger" ]; then
+                    debug_log "Verifying pod $name resumes after checkpoint..."
+                    wait_for_new_log_trigger "$name" "$dump_trigger" 300 "$namespace" || {
+                        error="Pod $name did not resume training after checkpoint (no new '$dump_trigger' in logs)"
+                        break
+                    }
+                    debug_log "Pod $name successfully resumed after checkpoint"
+                fi
                 ;;
 
             RESTORE)
@@ -703,5 +712,42 @@ wait_for_log_trigger() {
     done
 
     error_log "Timeout waiting for trigger '$trigger' in pod $name logs after ${timeout}s"
+    return 1
+}
+
+# Wait for a new occurrence of a trigger string in pod logs (after checkpoint).
+# Tests for successful unfreeze
+# @param $1: Pod name
+# @param $2: Trigger string to grep for
+# @param $3: Timeout in seconds (optional, defaults to 300)
+# @param $4: Namespace (optional, defaults to $NAMESPACE)
+# Returns: 0 if new trigger found, 1 if timeout
+wait_for_new_log_trigger() {
+    local name="$1"
+    local trigger="$2"
+    local timeout="${3:-300}"
+    local namespace="${4:-$NAMESPACE}"
+    local poll_interval=2
+
+    debug_log "Waiting for NEW trigger '$trigger' in pod $name logs (timeout: ${timeout}s)"
+
+    local initial_count
+    initial_count=$(kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -c "$trigger" || echo "0")
+    debug_log "Initial count of '$trigger' in logs: $initial_count"
+
+    local elapsed=0
+    while [ $elapsed -lt $timeout ]; do
+        local current_count
+        current_count=$(kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -c "$trigger" || echo "0")
+
+        if [ "$current_count" -gt "$initial_count" ]; then
+            debug_log "Found NEW trigger '$trigger' in pod $name after ${elapsed}s (count: $initial_count -> $current_count)"
+            return 0
+        fi
+        sleep $poll_interval
+        ((elapsed+=poll_interval))
+    done
+
+    error_log "Timeout waiting for NEW trigger '$trigger' in pod $name logs after ${timeout}s"
     return 1
 }
