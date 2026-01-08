@@ -34,6 +34,7 @@ var (
 		validation.ValidateDumpRequest,
 
 		job.GetSlurmJobForDump,
+		job.DumpSlurmScript,
 
 		cgroup.UseCgroupFreezerIfAvailableForDump,
 		network.LockNetworkBeforeDump,
@@ -45,6 +46,7 @@ var (
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 
+		job.RestoreSlurmScript,
 		job.GetSlurmJobForRestore,
 
 		network.UnlockNetworkAfterRestore,
