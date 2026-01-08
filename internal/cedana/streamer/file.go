@@ -96,4 +96,3 @@ func (f *File) Stat() (os.FileInfo, error) {
 func (f *File) Sync() error {
 	return fmt.Errorf("not implemented for streaming")
 }
-

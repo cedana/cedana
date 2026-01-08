@@ -43,7 +43,7 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 
 		if !storage.IsRemote() && isDir {
 			imagesDirectory = path
-      // Add profiling data manually as no IO can be measured
+			// Add profiling data manually as no IO can be measured
 			size := utils.SizeFromPath(imagesDirectory)
 			profiling.AddIO(ctx, size)
 		} else {
