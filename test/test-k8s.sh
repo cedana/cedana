@@ -135,6 +135,36 @@ fi
 
 echo ""
 echo "======================================="
+echo "Setting up Test Namespace"
+echo "======================================="
+
+# Create test namespace if it doesn't exist
+if ! kubectl get namespace "$NAMESPACE" &>/dev/null; then
+    echo "Creating namespace $NAMESPACE..."
+    kubectl create namespace "$NAMESPACE"
+fi
+echo "✓ Test namespace ready: $NAMESPACE"
+
+# Create PVC required by training workloads (dgtest-pvc)
+if ! kubectl get pvc dgtest-pvc -n "$NAMESPACE" &>/dev/null; then
+    echo "Creating PVC dgtest-pvc in namespace $NAMESPACE..."
+    kubectl apply -n "$NAMESPACE" -f - <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dgtest-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+EOF
+fi
+echo "✓ PVC dgtest-pvc ready"
+
+echo ""
+echo "======================================="
 echo "Running GPU Tests with Tags"
 echo "======================================="
 echo "GPU: $GPU"

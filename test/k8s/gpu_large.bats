@@ -45,9 +45,9 @@ setup_file() {
 # bats test_tags=dump,restore,samples,tensorflow,training
 @test "Dump/Restore: TensorFlow Training" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow-cifar100.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 0 10  
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10  
 }
 
 # bats test_tags=dump,restore,samples,deepspeed,training
@@ -55,7 +55,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-deepspeed-train.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 20
 }
 
 # bats test_tags=dump,restore,samples,torch,training
@@ -63,7 +63,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-pytorch-cifar100.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
 
 # bats test_tags=dump,restore,samples,llamafactory,training,finetuning
@@ -71,7 +71,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-llamafactory-lora-sft.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 300 300
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 300 300 "$NAMESPACE" "step" 300 10
 }
 
 # bats test_tags=dump,restore,samples,training,multi
@@ -79,7 +79,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 20
 }
 
 # bats test_tags=dump,restore,samples,training,multi
@@ -87,7 +87,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-4xGPU-pytorch-cifar100.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
 
 # bats test_tags=dump,restore,samples,training,multi
@@ -95,6 +95,6 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-llamafactory-lora-sft.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 }
 
