@@ -170,7 +170,7 @@ setup_gpu_operator() {
         -n "$GPU_OPERATOR_NAMESPACE" --create-namespace \
         nvidia/gpu-operator \
         --version="$GPU_OPERATOR_VERSION" --set driver.version="$GPU_OPERATOR_DRIVER_VERSION"
-
+    sleep 330
     debug_log "NVIDIA GPU operator installed successfully"
 }
 
@@ -192,23 +192,29 @@ setup_cluster() {
     debug_log "Nebius mk8s kubeconfig file has been fetched"
 
     # Uncomment if GPU operator needs to be installed
-    # setup_gpu_operator
+    setup_gpu_operator
 }
 
 teardown_cluster() {
     debug_log "Tearing down Nebius cluster..."
 
-    # Delete the nodegroup (H100s are expensive!)
+    # Delete the H100 nodegroup
     NB_NODEGROUP_NAME="github-ci"
     NB_NODE_COUNT="2"
     NB_GPU_PRESET="1gpu-16vcpu-200gb"
+    # 1TB disk size
     NB_NODE_DISK_SIZE="1099511627776"
     delete_nodegroup
+
+    # Delete the H100 multi-gpu nodegroup
     NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
     NB_NODE_COUNT="1"
     NB_GPU_PRESET="8gpu-128vcpu-1600gb"
+    # 128GB disk size
     NB_NODE_DISK_SIZE="137438953472"
     delete_nodegroup
+
     delete_mk8s_cluster
+
     debug_log "Nebius cluster teardown complete"
 }
