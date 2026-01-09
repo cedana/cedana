@@ -171,6 +171,11 @@ func startHelper(ctx context.Context) error {
 			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
 			return
 		}
+		err = stream.StartMultiPodConsumer(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("[multinode] failed to setup checkpoint request consumer")
+			return
+		}
 	}()
 
 	go func() {
