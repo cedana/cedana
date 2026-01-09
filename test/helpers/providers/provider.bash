@@ -30,7 +30,7 @@ case "$PROVIDER" in
         ;;
     nebius|Nebius|NEBIUS)
         PROVIDER="nebius"
-        CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((8*GIBIBYTE))}"
+        export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((8*GIBIBYTE))}"
         ;;
     k3s|K3s|K3S)
         PROVIDER="k3s"
