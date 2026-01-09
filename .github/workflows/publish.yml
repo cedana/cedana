@@ -112,6 +112,9 @@ jobs:
           - amd64
           - arm64
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Download binary
         uses: actions/download-artifact@v4
         id: download-binary
@@ -203,6 +206,9 @@ jobs:
           - amd64
           - arm64
     steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
       - name: Set plugin name
         env:
           PLUGIN: ${{ matrix.plugin }}
