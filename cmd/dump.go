@@ -116,12 +116,12 @@ var dumpCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
-			Dir:           dir,
-			Name:          name,
-			Compression:   compression,
-			Streams:       int32(streams),
-			Criu:          criuOpts,
-			Action:        daemon.DumpAction_DUMP,
+			Dir:         dir,
+			Name:        name,
+			Compression: compression,
+			Streams:     int32(streams),
+			Criu:        criuOpts,
+			Action:      daemon.DumpAction_DUMP,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
@@ -164,6 +164,9 @@ var dumpCmd = &cobra.Command{
 
 		if config.Global.Profiling.Enabled && data != nil {
 			profiling.Print(data, features.Theme())
+			if config.Global.Profiling.Path != "" {
+				profiling.WriteJSON(config.Global.Profiling.Path, data)
+			}
 		}
 
 		for _, message := range resp.GetMessages() {

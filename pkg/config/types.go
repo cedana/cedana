@@ -79,6 +79,8 @@ type (
 		Detailed bool `json:"detailed" key:"detailed" yaml:"detailed" mapstructure:"detailed"`
 		// Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
 		Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
+		// Path is the path to write profiling JSON data to (if enabled)
+		Path string `json:"path" key:"path" yaml:"path" mapstructure:"path"`
 	}
 
 	Client struct {
