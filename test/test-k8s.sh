@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-# Wrapper script that runs through all Kubernetes tests. 
-# Use the TAG logic to specify workloads to run through. 
-# All GPU workloads are specified at k8s/gpu.bats and k8s/gpu_large.bats. 
+# Wrapper script that runs through all Kubernetes tests.
+# Use the TAG logic to specify workloads to run through.
+# All GPU workloads are specified at k8s/gpu.bats and k8s/gpu_large.bats.
 
 # Make sure GPU tests are enabled and set up your environment
 export GPU=1
@@ -20,7 +20,7 @@ export PROVIDER=generic
 #   TAGS="k8s,gpu,llm;k8s,gpu,training" - LLM OR training tests
 #   TAGS="k8s,gpu,tensorflow;k8s,gpu,deepspeed" - TensorFlow OR DeepSpeed
 #
-export TAGS="k8s,gpu,training"
+export TAGS="k8s,gpu,training,multi"
 
 export PARALLELISM=1 # Reduced to 1 to avoid GPU contention and make logs easier to follow
 
