@@ -112,9 +112,6 @@ jobs:
           - amd64
           - arm64
     steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - name: Download binary
         uses: actions/download-artifact@v4
         id: download-binary
@@ -126,7 +123,7 @@ jobs:
 
       - name: Push cedana to Cloudsmith
         id: push-cedana
-        uses: cloudsmith-io/action@master
+        uses: cloudsmith-io/cloudsmith-cli-action@v2
         continue-on-error: true
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
@@ -150,7 +147,7 @@ jobs:
       - name: Push cedana to Cloudsmith
         id: push-cedana-2
         if: steps.push-cedana.outcome == 'failure'
-        uses: cloudsmith-io/action@master
+        uses: cloudsmith-io/cloudsmith-cli-action@v2
         continue-on-error: true
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
@@ -171,7 +168,7 @@ jobs:
       - name: Push cedana to Cloudsmith
         id: push-cedana-3
         if: steps.push-cedana-2.outcome == 'failure'
-        uses: cloudsmith-io/action@master
+        uses: cloudsmith-io/cloudsmith-cli-action@v2
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
           command: "push"
@@ -206,9 +203,6 @@ jobs:
           - amd64
           - arm64
     steps:
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
       - name: Set plugin name
         env:
           PLUGIN: ${{ matrix.plugin }}
@@ -224,10 +218,9 @@ jobs:
 
       - name: Wait before trying
         run: sleep $((RANDOM % 6 + 5))
-
       - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
+        uses: cloudsmith-io/cloudsmith-cli-action@v2
         id: push-plugin
-        uses: cloudsmith-io/action@master
         continue-on-error: true
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
@@ -251,7 +244,7 @@ jobs:
       - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
         id: push-plugin-2
         if: steps.push-plugin.outcome == 'failure'
-        uses: cloudsmith-io/action@master
+        uses: cloudsmith-io/cloudsmith-cli-action@v2
         continue-on-error: true
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
@@ -272,7 +265,7 @@ jobs:
       - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
         id: push-plugin-3
         if: steps.push-plugin-2.outcome == 'failure'
-        uses: cloudsmith-io/action@master
+        uses: cloudsmith-io/cloudsmith-cli-action@v2
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
           command: "push"
