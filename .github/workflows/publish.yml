@@ -127,15 +127,9 @@ jobs:
         continue-on-error: true
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "${{ inputs.cloudsmith_repo }}"
-          file: "cedana"
-          name: "cedana-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+      - name: Push package to Cloudsmith
+        run: |
+          cloudsmith push raw --republish true --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --tags  ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }} --version  ${{ github.head_ref || github.ref_name }}
 
       # XXX: Cloudsmith is very flaky with parallel uploads. Since we don't want to waste CI minutes
       # by retrying the whole job, we just wait a bit and try again once.
@@ -151,15 +145,9 @@ jobs:
         continue-on-error: true
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "${{ inputs.cloudsmith_repo }}"
-          file: "cedana"
-          name: "cedana-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+      - name: Push package to Cloudsmith
+        run: |
+          cloudsmith push raw --republish true --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --tags  ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }} --version  ${{ github.head_ref || github.ref_name }}
 
       - name: Wait before retrying
         if: steps.push-cedana-2.outcome == 'failure'
@@ -171,15 +159,9 @@ jobs:
         uses: cloudsmith-io/cloudsmith-cli-action@v2
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "${{ inputs.cloudsmith_repo }}"
-          file: "cedana"
-          name: "cedana-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+      - name: Push package to Cloudsmith
+        run: |
+          cloudsmith push raw --republish true --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --tags  ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }} --version  ${{ github.head_ref || github.ref_name }}
 
   cloudsmith-plugin:
     name: Cloudsmith
@@ -224,15 +206,10 @@ jobs:
         continue-on-error: true
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-${{ env.PLUGIN }}.so"
-          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+      - name: Push package to Cloudsmith
+        run: |
+          cloudsmith push raw --republish true --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --tags  ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }} --version  ${{ github.head_ref || github.ref_name }}
+
 
       # XXX: Cloudsmith is very flaky with parallel uploads. Since we don't want to waste CI minutes
       # by retrying the whole job, we just wait a bit and try again once.
@@ -248,15 +225,9 @@ jobs:
         continue-on-error: true
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-${{ env.PLUGIN }}.so"
-          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+      - name: Push package to Cloudsmith
+        run: |
+          cloudsmith push raw --republish true --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --tags  ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }} --version  ${{ github.head_ref || github.ref_name }}
 
       - name: Wait before retrying
         if: steps.push-plugin-2.outcome == 'failure'
@@ -268,15 +239,10 @@ jobs:
         uses: cloudsmith-io/cloudsmith-cli-action@v2
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-${{ env.PLUGIN }}.so"
-          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+      - name: Push package to Cloudsmith
+        run: |
+          cloudsmith push raw --republish true --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --tags  ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }} --version  ${{ github.head_ref || github.ref_name }}
+
 
   dockerhub:
     name: DockerHub (multi-arch)
