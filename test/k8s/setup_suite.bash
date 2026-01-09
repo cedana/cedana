@@ -48,6 +48,9 @@ source "${BATS_TEST_DIRNAME}"/../helpers/metrics.bash
 if [ -z "$CLUSTER_NAME" ]; then
     CLUSTER_NAME="test-${PROVIDER}-$(unix_nano)"
 fi
+if [ "$PROVIDER" == "nebius" ]; then
+    export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((8*GIBIBYTE))}"
+fi
 export CLUSTER_NAME
 export CLUSTER_ID
 export NAMESPACE="${NAMESPACE:-test}"
