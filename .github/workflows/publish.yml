@@ -118,9 +118,6 @@ jobs:
         with:
           name: cedana-${{ matrix.arch }}
 
-      - name: Wait before trying
-        run: sleep $((RANDOM % 6 + 5))
-
       - name: Push cedana to Cloudsmith
         id: push-cedana
         uses: cloudsmith-io/cloudsmith-cli-action@v2
@@ -129,42 +126,7 @@ jobs:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
       - name: Push package to Cloudsmith
         run: |
-          cp -a cedana cedana-${{ matrix.arch }}
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish --name cedana-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
-
-      # XXX: Cloudsmith is very flaky with parallel uploads. Since we don't want to waste CI minutes
-      # by retrying the whole job, we just wait a bit and try again once.
-
-      - name: Wait before retrying
-        if: steps.push-cedana.outcome == 'failure'
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push cedana to Cloudsmith
-        id: push-cedana-2
-        if: steps.push-cedana.outcome == 'failure'
-        uses: cloudsmith-io/cloudsmith-cli-action@v2
-        continue-on-error: true
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-      - name: Push package to Cloudsmith
-        run: |
-          cp -a cedana cedana-${{ matrix.arch }}
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish --name cedana-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
-
-      - name: Wait before retrying
-        if: steps.push-cedana-2.outcome == 'failure'
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push cedana to Cloudsmith
-        id: push-cedana-3
-        if: steps.push-cedana-2.outcome == 'failure'
-        uses: cloudsmith-io/cloudsmith-cli-action@v2
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-      - name: Push package to Cloudsmith
-        run: |
-          cp -a cedana cedana-${{ matrix.arch }}
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish --name cedana-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana --republish --name cedana-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
 
   cloudsmith-plugin:
     name: Cloudsmith
@@ -201,8 +163,6 @@ jobs:
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
 
-      - name: Wait before trying
-        run: sleep $((RANDOM % 6 + 5))
       - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
         uses: cloudsmith-io/cloudsmith-cli-action@v2
         id: push-plugin
@@ -211,44 +171,7 @@ jobs:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
       - name: Push package to Cloudsmith
         run: |
-          cp -a libcedana-${{ env.PLUGIN }}.so  libcedana-${{ env.PLUGIN }}-${{ matrix.arch }}.so
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}-${{ matrix.arch }}.so --republish --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
-
-
-      # XXX: Cloudsmith is very flaky with parallel uploads. Since we don't want to waste CI minutes
-      # by retrying the whole job, we just wait a bit and try again once.
-
-      - name: Wait before retrying
-        if: steps.push-plugin.outcome == 'failure'
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
-        id: push-plugin-2
-        if: steps.push-plugin.outcome == 'failure'
-        uses: cloudsmith-io/cloudsmith-cli-action@v2
-        continue-on-error: true
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-      - name: Push package to Cloudsmith
-        run: |
-          cp -a libcedana-${{ env.PLUGIN }}.so  libcedana-${{ env.PLUGIN }}-${{ matrix.arch }}.so
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}-${{ matrix.arch }}.so --republish --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
-
-      - name: Wait before retrying
-        if: steps.push-plugin-2.outcome == 'failure'
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
-        id: push-plugin-3
-        if: steps.push-plugin-2.outcome == 'failure'
-        uses: cloudsmith-io/cloudsmith-cli-action@v2
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-      - name: Push package to Cloudsmith
-        run: |
-          cp -a libcedana-${{ env.PLUGIN }}.so  libcedana-${{ env.PLUGIN }}-${{ matrix.arch }}.so
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}-${{ matrix.arch }}.so --republish --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version  ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
-
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --republish --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
 
   dockerhub:
     name: DockerHub (multi-arch)
