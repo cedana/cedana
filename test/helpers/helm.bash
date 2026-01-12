@@ -37,7 +37,7 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
     helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
     helm_cmd="$helm_cmd --set config.checkpointCompression=$CEDANA_CHECKPOINT_COMPRESSION"
-    helm_cmd="$helm_cmd --set config.gpuShmSize=$(printf "%.0f" "$CEDANA_GPU_SHM_SIZE")"
+    helm_cmd="$helm_cmd --set config.gpuShmSize=$(printf "%.1f" "$CEDANA_GPU_SHM_SIZE")"
     helm_cmd="$helm_cmd --set config.awsAccessKeyId=$AWS_ACCESS_KEY_ID"
     helm_cmd="$helm_cmd --set config.awsSecretAccessKey=$AWS_SECRET_ACCESS_KEY"
     helm_cmd="$helm_cmd --set config.awsRegion=$AWS_REGION"
