@@ -82,7 +82,16 @@ func DumpSlurmScript(next types.Dump) types.Dump {
 				}
 				defer script.Close()
 
-				slurm_utils.SaveScriptToDump(script, SLURM_SCRIPT_FILE, opts.DumpFs)
+				if opts.DumpFs == nil {
+					log.Warn().Msg("dump filesystem is nil, cannot save slurm script")
+					return false
+				}
+
+				err = slurm_utils.SaveScriptToDump(script, SLURM_SCRIPT_FILE, opts.DumpFs)
+				if err != nil {
+					log.Warn().Err(err).Msgf("failed to save slurm script to dump from %s", path)
+				}
+
 				return false
 			}
 			return true

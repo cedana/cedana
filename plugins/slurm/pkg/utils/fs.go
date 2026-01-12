@@ -33,11 +33,6 @@ func SaveScriptToDump(script *os.File, fn string, fs ...afero.Fs) error {
 		return fmt.Errorf("error writing script data: %v", err)
 	}
 
-	err = filesystem.Chmod(fn, 0755)
-	if err != nil {
-		return fmt.Errorf("error setting script permissions: %v", err)
-	}
-
 	return nil
 }
 
