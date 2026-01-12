@@ -8,6 +8,8 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
+CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((8*GIBIBYTE))}"
+
 setup_file() {
     if [ "${GPU:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU=1)"
