@@ -125,7 +125,6 @@ func (es *EventStream) StartMultiPodConsumer(ctx context.Context) error {
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConcurrency(10),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
-		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_multinode_helper"),
 		rabbitmq.WithConsumerOptionsRoutingKey(""),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
@@ -160,8 +159,16 @@ func (es *EventStream) StartMultiPodConsumer(ctx context.Context) error {
 		podsHandled, err := es.handleMultiNodeAction(ctx, action, req)
 
 		// send response for each pod handled -> am thinking could have multiple allocated to same node
-		for i := 0; i < podsHandled; i++ {
-			if msg.ReplyTo != "" {
+		if msg.ReplyTo != "" {
+			if podsHandled == 0 {
+				// If this node has no pods, it shouldn't send anything
+				// because Rust isn't expecting a message from "every node",
+				// it's expecting a message for "every pod".
+				return rabbitmq.Ack
+			}
+
+			// Send a success message for every pod this node handled
+			for i := 0; i < podsHandled; i++ {
 				es.sendMultiNodeResponseToPropagator(ctx, msg.ReplyTo, msg.CorrelationId, err)
 			}
 		}
@@ -247,6 +254,11 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			log.Error().Err(err).Msg("failed to unmarshal message")
 			return rabbitmq.Ack
 		}
+		if len(req.PodName) == 0 {
+			log.Warn().Msg("checkpoint request missing pod_name; ignoring (likely multi-node request)")
+			return rabbitmq.Ack
+		}
+
 		log := log.With().Str("action_id", req.ActionId).Str("kind", req.Kind).Str("pod", req.PodName[0]).Str("namespace", req.Namespace).Logger()
 
 		query := &daemon.QueryReq{

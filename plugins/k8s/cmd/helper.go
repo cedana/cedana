@@ -160,20 +160,22 @@ func startHelper(ctx context.Context) error {
 	go func() {
 		defer cancel()
 		defer stream.Close()
-		log.Debug().Msg("listening on event stream for checkpoint requests")
 		err := stream.StartCheckpointsPublisher(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup checkpoint publisher")
 			return
 		}
+		go func() {
+			err := stream.StartMultiPodConsumer(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("[multinode] failed to setup checkpoint request consumer")
+				return
+			}
+		}()
+		log.Debug().Msg("listening on event stream for checkpoint requests")
 		err = stream.StartCheckpointsConsumer(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
-			return
-		}
-		err = stream.StartMultiPodConsumer(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("[multinode] failed to setup checkpoint request consumer")
 			return
 		}
 	}()
