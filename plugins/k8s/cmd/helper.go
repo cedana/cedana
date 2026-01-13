@@ -158,13 +158,14 @@ func startHelper(ctx context.Context) error {
 	}
 
 	go func() {
-		defer cancel()
+		defer cancel() // Event Stream failure SHOULD kill the helper
 		defer stream.Close()
 		err := stream.StartCheckpointsPublisher(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup checkpoint publisher")
 			return
 		}
+
 		go func() {
 			err := stream.StartMultiPodConsumer(ctx)
 			if err != nil {
@@ -172,38 +173,41 @@ func startHelper(ctx context.Context) error {
 				return
 			}
 		}()
+
 		log.Debug().Msg("listening on event stream for checkpoint requests")
 		err = stream.StartCheckpointsConsumer(ctx)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
+			log.Error().Err(err).Msg("failed to setup checkpoint request consumer")
 			return
 		}
 	}()
 
 	go func() {
-		defer cancel()
 		file, err := os.Open(DAEMON_LOG_PATH)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to open daemon logs")
+			log.Warn().Err(err).Msg("failed to open daemon logs (daemon may not be started)")
 			return
 		}
 		defer file.Close()
 
 		reader := bufio.NewReader(file)
 		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF {
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				log.Error().Err(err).Msg("Error reading from cedana-daemon.log")
+			select {
+			case <-ctx.Done():
 				return
-			}
-			trimmed := strings.TrimSpace(line)
-			if len(trimmed) > 0 {
-				// we don't use the log function as the logs should have their own timing data
-				fmt.Println(trimmed)
+			default:
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					if err == io.EOF {
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					return
+				}
+				trimmed := strings.TrimSpace(line)
+				if len(trimmed) > 0 {
+					fmt.Println(trimmed)
+				}
 			}
 		}
 	}()
