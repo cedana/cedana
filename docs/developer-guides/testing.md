@@ -28,6 +28,10 @@ test
 
 Tests are grouped by functionality, and each plugin has its own test file.
 
+### Dependencies
+
+Needs [rush](https://github.com/shenwei356/rush) installed at `/usr/local/bin`.
+
 ### Running tests
 
 Running `make help` you'll see the following test commands:
