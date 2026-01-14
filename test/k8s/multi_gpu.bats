@@ -19,21 +19,41 @@ setup_file() {
 # Sample-Based #
 ################
 
-# # bats test_tags=dump,restore
-# @test "Dump/Restore: CUDA MultiGpu Vector Add" {
-#     local spec
-
-#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-vector-add.yaml")
-
-#     wait_for_gpus 2
-#     test_pod_spec DUMP_RESTORE "$spec"
-# }
-
 # bats test_tags=dump,restore
-@test "Dump/Restore: CUDA Deepseed Training MultiGpu" {
+@test "Dump/Restore: CUDA MultiGpu Vector Add" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
+
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-vector-add.yaml")
 
     wait_for_gpus 2
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec"
 }
+
+# # bats test_tags=dump,restore
+# @test "Dump/Restore: CUDA MultiGpu Llamafactory lora-sft" {
+#     local spec
+
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-llamafactory-lora-sft.yaml")
+
+#     wait_for_gpus 2
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec"
+# }
+
+# # bats test_tags=dump,restore
+# @test "Dump/Restore: CUDA MultiGpu Tensorflow cifar100" {
+#     local spec
+
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-tensorflow-cifar100.yaml")
+
+#     wait_for_gpus 2
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec"
+# }
+
+# # bats test_tags=dump,restore
+# @test "Dump/Restore: CUDA Deepseed Training MultiGpu" {
+#     local spec
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
+
+#     wait_for_gpus 2
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+# }

@@ -199,6 +199,36 @@ EOF
     echo "$spec"
 }
 
+cmd_pvc_spec() {
+    local size="$1"
+    local storage_class="$2"
+    local namespace="${3:-$NAMESPACE}"
+
+    local name
+    name=pvc-$(unix_nano)
+
+    local spec=/tmp/pvc-${name}.yaml
+    cat >"$spec" <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: $size
+EOF
+
+    if [[ -n "$storage_class" ]]; then
+        printf "  storageClassName: %s\n" "$storage_class" >>"$spec"
+    fi
+
+    echo "$spec"
+}
+
 # List all restored pods in a given namespace.
 # Does a simple filter on pod names containing "restored".
 list_restored_pods() {
