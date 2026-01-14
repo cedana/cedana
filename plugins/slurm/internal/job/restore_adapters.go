@@ -4,11 +4,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
+
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
+	slurm_utils "github.com/cedana/cedana/plugins/slurm/pkg/utils"
+
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/cgroups"
 	cgroupsManager "github.com/opencontainers/cgroups/manager"
@@ -56,6 +63,46 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		if st == configs.Frozen {
 			return nil, status.Errorf(codes.FailedPrecondition, "container's cgroup unexpectedly frozen")
 		}
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+// We manually restore the SLURM script because SLURM
+// will delete the script used to launch the job step
+func RestoreSlurmScript(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			log.Warn().Msg("no process info found. it should have been filled by an adapter")
+			return next(ctx, opts, resp, req)
+		}
+
+		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
+			if path := f.GetPath(); filepath.Base(path) == SLURM_SCRIPT_FILE {
+				contents, err := slurm_utils.LoadScriptFromDump(path, opts.DumpFs)
+				if err != nil {
+					log.Warn().Err(err).Msgf("failed to load slurm script from dump %s", path)
+					return false
+				}
+
+				err = os.MkdirAll(filepath.Dir(path), 0755)
+				if err != nil {
+					log.Warn().Err(err).Msgf("failed to create directory for slurm script %s", path)
+					return false
+				}
+
+				err = os.WriteFile(path, contents, 0755)
+				if err != nil {
+					log.Warn().Err(err).Msgf("failed to restore slurm script file %s", path)
+					return false
+				}
+
+				return false
+			}
+
+			return true
+		})
 
 		return next(ctx, opts, resp, req)
 	}
