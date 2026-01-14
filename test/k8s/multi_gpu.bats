@@ -26,7 +26,7 @@ setup_file() {
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-vector-add.yaml")
 
     wait_for_gpus 2
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec"
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
 }
 
 # # bats test_tags=dump,restore
