@@ -16,8 +16,10 @@ setup_file() {
 
 # bats test_tags=spot
 @test "Checkpoint and restore across spot interruption" {
-    local script='counter=0; while true; do echo "Iteration: $counter"; counter=$((counter + 1)); sleep 1; done'
+    local script
     local spec
+
+    script=$(cat "$WORKLOADS"/date-loop.sh)
     spec=$(spot_pod_spec "alpine:latest" "$script")
 
     # Deploy and wait for spot node

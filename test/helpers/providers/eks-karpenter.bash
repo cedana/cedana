@@ -159,7 +159,7 @@ spec:
         kind: EC2NodeClass
         name: cedana-spot-test
       taints:
-        - key: "cedana.io/spot-test"
+        - key: "cedana.ai/spot-test"
           value: "true"
           effect: NoSchedule
   limits:
@@ -271,10 +271,10 @@ metadata:
   namespace: "$namespace"
   labels:
     app: "$name"
-    cedana.io/spot-test: "true"
+    cedana.ai/spot-test: "true"
 spec:
   tolerations:
-    - key: "cedana.io/spot-test"
+    - key: "cedana.ai/spot-test"
       operator: "Equal"
       value: "true"
       effect: NoSchedule
@@ -326,11 +326,11 @@ metadata:
   namespace: "$namespace"
   labels:
     app: "$name"
-    cedana.io/spot-test: "true"
+    cedana.ai/spot-test: "true"
 spec:
   runtimeClassName: cedana
   tolerations:
-    - key: "cedana.io/spot-test"
+    - key: "cedana.ai/spot-test"
       operator: "Equal"
       value: "true"
       effect: NoSchedule
