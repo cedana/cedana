@@ -14,6 +14,11 @@ setup_file() {
     if [ "${GPU:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU=1)"
     fi
+    debug_log "Creating dgtest-pvc"
+    spec=$(cmd_pvc_spec 50Gi dgtest-pvc)
+    kubectl apply -f "$spec"
+    sleep 10
+    debug_log "dgtest-pvc has been applied"
 }
 
 #################################################
@@ -49,7 +54,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow-cifar100.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10  
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
 
 # bats test_tags=dump,restore,samples,deepspeed,training
@@ -81,6 +86,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
 
+    wait_for_gpus 2
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 60
 }
 
@@ -89,6 +95,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-4xGPU-pytorch-cifar100.yaml")
 
+    wait_for_gpus 2
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
 
@@ -97,6 +104,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-llamafactory-lora-sft.yaml")
 
+    wait_for_gpus 2
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 }
 
@@ -105,6 +113,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-tensorflow-cifar100.yaml")
 
+    wait_for_gpus 2
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 }
 

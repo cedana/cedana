@@ -201,11 +201,13 @@ EOF
 
 cmd_pvc_spec() {
     local size="$1"
-    local storage_class="$2"
-    local namespace="${3:-$NAMESPACE}"
+    local name="$2"
+    local storage_class="$3"
+    local namespace="${4:-$NAMESPACE}"
 
-    local name
-    name=pvc-$(unix_nano)
+    if [[ -z "$name" ]]; then
+        name="pvc-$(unix_nano)"
+    fi
 
     local spec=/tmp/pvc-${name}.yaml
     cat >"$spec" <<EOF
@@ -222,6 +224,7 @@ spec:
       storage: $size
 EOF
 
+    # Use default StorageClass when omitted
     if [[ -n "$storage_class" ]]; then
         printf "  storageClassName: %s\n" "$storage_class" >>"$spec"
     fi
@@ -476,12 +479,11 @@ is_gpu_available() {
 # Count total GPUs required by a spec file
 get_required_gpus() {
     local spec="$1"
-
-    if command -v yq &> /dev/null; then
-        yq eval '[.. | select(has("resources")) | .resources.limits."nvidia.com/gpu" // 0] | add' "$spec" 2>/dev/null || echo "0"
-    else
-        grep -A 5 "limits:" "$spec" | grep "nvidia.com/gpu" | grep -o "[0-9]\+" | awk '{sum+=$1} END {print sum+0}' 2>/dev/null || echo "0"
-    fi
+    local gpu_count
+    # Only count GPU limits (not requests) to avoid double-counting
+    # Look for "nvidia.com/gpu: N" under a "limits:" section
+    gpu_count=$(awk '/limits:/,/requests:|env:|^[^ ]/ {if (/nvidia\.com\/gpu:/) print $NF}' "$spec" 2>/dev/null | awk '{sum+=$1} END {print sum}')
+    echo "${gpu_count:-0}"
 }
 
 # Wait for gpu nodes to be spun up
