@@ -47,6 +47,27 @@ set -eux
 apt-get install -y bats bats-assert bats-support bats-file
 EOT
 
+# install rush
+RUN <<EOT
+set -eux
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)
+        RUSH_ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        RUSH_ARCH="arm64"
+        ;;
+    *)
+        echo "Unsupported architecture for rush: $ARCH"
+        exit 1
+        ;;
+esac
+wget https://github.com/shenwei356/rush/releases/latest/download/rush_linux_"${RUSH_ARCH}".tar.gz
+tar -C /usr/local/bin -xzf rush_linux_"${RUSH_ARCH}".tar.gz rush
+rm rush_linux_"${RUSH_ARCH}".tar.gz
+EOT
+
 # install go
 RUN <<EOT
 set -eux
