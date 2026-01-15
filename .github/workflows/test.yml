@@ -461,8 +461,8 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: EKS
-      large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
+      large: ${{ inputs.large }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
@@ -502,7 +502,7 @@ jobs:
   nebius:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius on nightly (when large=true)
+    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius when large=true
     secrets: inherit
     concurrency: test-k8s-nebius # Since the cluster is reused
     with:

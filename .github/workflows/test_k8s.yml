@@ -306,7 +306,7 @@ jobs:
           PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }} # limit GPU tests to 1 parallelism to avoid GPU contention for now
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
-          NEBIUS_CLUSTER_NAME: ${{ env.NEBIUS_CLUSTER_NAME }}-${{ matrix.arch }}
+          NB_CLUSTER_NAME: ${{ env.NB_CLUSTER_NAME }}-${{ matrix.arch }}
         run: |
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
