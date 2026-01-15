@@ -86,7 +86,6 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
 
-    wait_for_gpus 2
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 60
 }
 
@@ -95,7 +94,6 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-4xGPU-pytorch-cifar100.yaml")
 
-    wait_for_gpus 2
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
 
@@ -104,7 +102,6 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-llamafactory-lora-sft.yaml")
 
-    wait_for_gpus 2
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 }
 
@@ -113,7 +110,6 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-tensorflow-cifar100.yaml")
 
-    wait_for_gpus 2
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 }
 

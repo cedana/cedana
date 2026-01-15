@@ -486,7 +486,7 @@ jobs:
   nebius:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes }} # Only run Nebius on nightly (when large=true)
+    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius when large=true
     secrets: inherit
     concurrency: test-k8s-nebius # Since the cluster is reused
     with:
