@@ -44,7 +44,7 @@ _install_aws_cli() {
     debug_log "AWS CLI installed"
 }
 
-install_eksctl() {
+_install_eksctl() {
   if command -v eksctl >/dev/null 2>&1; then
     debug_log "eksctl already installed"
     return 0
@@ -81,7 +81,8 @@ install_eksctl() {
 
   debug_log "eksctl ${EKSCTL_VERSION} installed successfully"
 }
-cloudformation_deploy_template() {
+_cloudformation_deploy_template() {
+    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
     local tmp_dir
     tmp_dir="$(mktemp -d)"
     curl -fsSL https://raw.githubusercontent.com/aws/karpenter-provider-aws/v"${KARPENTER_VERSION}"/website/content/en/preview/getting-started/getting-started-with-karpenter/cloudformation.yaml  > "$tmp_dir" \
@@ -90,9 +91,11 @@ cloudformation_deploy_template() {
   --template-file "$tmp_dir" \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides "ClusterName=${EKS_KARPENTER_CLUSTER}"
+    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
 }
-install_eks_karpenter_cluster() {
-    cloudformation_deploy_template
+_install_eks_karpenter_cluster() {
+    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
+    _cloudformation_deploy_template
   # Check if required AWS related vars are defined
     check_env AWS_PARTITION
     check_env AWS_ACCOUNT_ID
@@ -155,6 +158,7 @@ managedNodeGroups:
 addons:
   - name: eks-pod-identity-agent
 EOF
+    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
 }
 
 _configure_aws_credentials() {
@@ -206,7 +210,8 @@ _verify_karpenter() {
 setup_cluster() {
     _install_aws_cli
     _configure_aws_credentials
-
+    _install_eksctl
+    _install_eks_karpenter_cluster
     debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
 
     aws eks update-kubeconfig \
