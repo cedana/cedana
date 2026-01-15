@@ -72,7 +72,7 @@ _install_eksctl() {
   debug_log "eksctl installed successfully"
 }
 _cloudformation_deploy_template() {
-    debug_log "Deploying Karpenter CloudFormation stack for cluster ${EKS_KARPENTER_CLUSTER} ..."
+    debug_log "Deploying CloudFormation stack for cluster ${EKS_KARPENTER_CLUSTER} ..."
     local tmp_dir
     tmp_dir="$(mktemp -d)"
     curl -fsSL https://raw.githubusercontent.com/aws/karpenter-provider-aws/v"${KARPENTER_VERSION}"/website/content/en/preview/getting-started/getting-started-with-karpenter/cloudformation.yaml  > "$tmp_dir" \
@@ -81,10 +81,10 @@ _cloudformation_deploy_template() {
   --template-file "$tmp_dir" \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides "ClusterName=${EKS_KARPENTER_CLUSTER}"
-    debug_log "Karpenter CloudFormation stack deployed for cluster ${EKS_KARPENTER_CLUSTER}"
+    debug_log "CloudFormation stack deployed for cluster ${EKS_KARPENTER_CLUSTER}"
 }
 _install_eks_karpenter_cluster() {
-    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
+    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER ..."
     _cloudformation_deploy_template
   # Check if required AWS related vars are defined
     check_env AWS_PARTITION
