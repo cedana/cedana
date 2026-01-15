@@ -10,7 +10,7 @@
 # Environment variables:
 #   AWS_ACCESS_KEY_ID         - AWS access key
 #   AWS_SECRET_ACCESS_KEY     - AWS secret key
-#   AWS_REGION                - AWS region (default: us-west-2)
+#   AWS_REGION                - AWS region (default: us-east-1)
 #   EKS_KARPENTER_CLUSTER     - EKS cluster name with Karpenter installed
 #   KARPENTER_NODEPOOL        - NodePool name for spot instances (default: cedana-spot-test)
 #   KARPENTER_NAMESPACE       - Namespace where Karpenter is installed (default: kube-system)
@@ -18,9 +18,13 @@
 
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 export EKS_KARPENTER_CLUSTER="${EKS_KARPENTER_CLUSTER:-cedana-karpenter-ci}"
-export AWS_REGION="${AWS_REGION:-us-west-2}"
+export AWS_REGION="${AWS_REGION:-us-east-1}"
 export KARPENTER_NODEPOOL="${KARPENTER_NODEPOOL:-cedana-spot-test}"
 export KARPENTER_NAMESPACE="${KARPENTER_NAMESPACE:-kube-system}"
+export KARPENTER_VERSION="${KARPENTER_VERSION:-1.2.1}"
+export K8S_VERSION="${K8S_VERSION:-1.32}"
+export AWS_PARTITION="${AWS_PARTITION:-aws}"
+export EKSCTL_VERSION="${EKSCTL_VERSION:-0.208.0-dev}"
 
 _install_aws_cli() {
     debug_log "Installing AWS CLI..."
@@ -40,6 +44,119 @@ _install_aws_cli() {
     debug_log "AWS CLI installed"
 }
 
+install_eksctl() {
+  if command -v eksctl >/dev/null 2>&1; then
+    debug_log "eksctl already installed"
+    return 0
+  fi
+
+  debug_log "Installing eksctl version ${EKSCTL_VERSION}"
+
+  local tmp_dir
+  tmp_dir="$(mktemp -d)"
+
+  (
+    cd "$tmp_dir" || exit 1
+
+    curl -sSL \
+      "https://github.com/eksctl-io/eksctl/releases/download/${EKSCTL_VERSION}/eksctl_Linux_amd64.tar.gz" \
+      -o eksctl.tar.gz || exit 1
+
+    tar -xzf eksctl.tar.gz || exit 1
+
+    sudo mv eksctl /usr/local/bin/eksctl || exit 1
+    sudo chmod +x /usr/local/bin/eksctl
+  ) || {
+    error_log "Failed to install eksctl ${EKSCTL_VERSION}"
+    rm -rf "$tmp_dir"
+    return 1
+  }
+
+  rm -rf "$tmp_dir"
+
+  if ! command -v eksctl >/dev/null 2>&1; then
+    error_log "eksctl installation failed"
+    return 1
+  fi
+
+  debug_log "eksctl ${EKSCTL_VERSION} installed successfully"
+}
+cloudformation_deploy_template() {
+    local tmp_dir
+    tmp_dir="$(mktemp -d)"
+    curl -fsSL https://raw.githubusercontent.com/aws/karpenter-provider-aws/v"${KARPENTER_VERSION}"/website/content/en/preview/getting-started/getting-started-with-karpenter/cloudformation.yaml  > "$tmp_dir" \
+&& aws cloudformation deploy \
+  --stack-name "Karpenter-${EKS_KARPENTER_CLUSTER}" \
+  --template-file "$tmp_dir" \
+  --capabilities CAPABILITY_NAMED_IAM \
+  --parameter-overrides "ClusterName=${EKS_KARPENTER_CLUSTER}"
+}
+install_eks_karpenter_cluster() {
+    cloudformation_deploy_template
+  # Check if required AWS related vars are defined
+    check_env AWS_PARTITION
+    check_env AWS_ACCOUNT_ID
+    check_env AWS_VPC_ID
+    check_env AWS_SUBNET_PRIVATE_1
+    check_env AWS_SUBNET_PRIVATE_2
+    check_env AWS_SUBNET_PRIVATE_3
+    eksctl create cluster -f - <<EOF
+---
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: ${EKS_KARPENTER_CLUSTER}
+  region: ${AWS_REGION}
+  version: "${K8S_VERSION}"
+  tags:
+    karpenter.sh/discovery: ${EKS_KARPENTER_CLUSTER}
+
+vpc:
+  id: "${AWS_VPC_ID}"
+  subnets:
+    private:
+      us-east-1f:
+        id: ${AWS_SUBNET_PRIVATE_1}
+      us-east-1a:
+        id: ${AWS_SUBNET_PRIVATE_2}
+      us-east-1b:
+        id: ${AWS_SUBNET_PRIVATE_3}
+
+iam:
+  withOIDC: true
+  podIdentityAssociations:
+    - namespace: "${KARPENTER_NAMESPACE}"
+      serviceAccountName: karpenter
+      roleName: ${EKS_KARPENTER_CLUSTER}-karpenter
+      permissionPolicyARNs:
+        - arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:policy/KarpenterControllerPolicy-${EKS_KARPENTER_CLUSTER}
+
+iamIdentityMappings:
+  - arn: "arn:${AWS_PARTITION}:iam::${AWS_ACCOUNT_ID}:role/KarpenterNodeRole-${EKS_KARPENTER_CLUSTER}"
+    username: system:node:{{EC2PrivateDNSName}}
+    groups:
+      - system:bootstrappers
+      - system:nodes
+
+managedNodeGroups:
+  - name: ${EKS_KARPENTER_CLUSTER}-ng
+    instanceType: t3a.large
+    amiFamily: Ubuntu2204
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 1
+    privateNetworking: true
+    subnets:
+      - ${AWS_SUBNET_PRIVATE_1}
+      - ${AWS_SUBNET_PRIVATE_2}
+      - ${AWS_SUBNET_PRIVATE_3}
+
+addons:
+  - name: eks-pod-identity-agent
+EOF
+}
+
 _configure_aws_credentials() {
     debug_log "Configuring AWS credentials..."
 
@@ -51,6 +168,18 @@ _configure_aws_credentials() {
     aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
     aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
     aws configure set default.region "$AWS_REGION"
+
+
+    if [ -z "${AWS_ACCOUNT_ID:-}" ]; then
+        AWS_ACCOUNT_ID="$(aws sts get-caller-identity \
+            --query Account \
+            --output text 2>/dev/null)" || {
+            error_log "Failed to determine AWS_ACCOUNT_ID (Error in AWS CLI configuration)"
+            exit 1
+            }
+        export AWS_ACCOUNT_ID
+        info_log "AWS_ACCOUNT_ID detected and set"
+    fi
 
     debug_log "AWS credentials configured"
 }
