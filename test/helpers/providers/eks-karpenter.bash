@@ -24,7 +24,6 @@ export KARPENTER_NAMESPACE="${KARPENTER_NAMESPACE:-kube-system}"
 export KARPENTER_VERSION="${KARPENTER_VERSION:-1.2.1}"
 export K8S_VERSION="${K8S_VERSION:-1.32}"
 export AWS_PARTITION="${AWS_PARTITION:-aws}"
-export EKSCTL_VERSION="${EKSCTL_VERSION:-0.208.0-dev}"
 
 _install_aws_cli() {
     debug_log "Installing AWS CLI..."
@@ -52,37 +51,28 @@ _install_eksctl() {
 
   debug_log "Installing eksctl version ${EKSCTL_VERSION}"
 
-  local tmp_dir
-  tmp_dir="$(mktemp -d)"
-
   (
-    cd "$tmp_dir" || exit 1
-
-    curl -sSL \
-      "https://github.com/eksctl-io/eksctl/releases/download/${EKSCTL_VERSION}/eksctl_Linux_amd64.tar.gz" \
-      -o eksctl.tar.gz || exit 1
-
-    tar -xzf eksctl.tar.gz || exit 1
-
-    sudo mv eksctl /usr/local/bin/eksctl || exit 1
-    sudo chmod +x /usr/local/bin/eksctl
+    # for ARM systems, set ARCH to: `arm64`, `armv6` or `armv7`
+    local ARCH=amd64
+    local PLATFORM=$(uname -s)_$ARCH
+    curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_$PLATFORM.tar.gz"
+    curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_checksums.txt" | grep $PLATFORM | sha256sum --check
+    tar -xzf eksctl_$PLATFORM.tar.gz -C /tmp && rm eksctl_$PLATFORM.tar.gz
+    sudo install -m 0755 /tmp/eksctl /usr/local/bin && rm /tmp/eksctl
   ) || {
-    error_log "Failed to install eksctl ${EKSCTL_VERSION}"
-    rm -rf "$tmp_dir"
+    error_log "Failed to install eksctl"
     return 1
   }
-
-  rm -rf "$tmp_dir"
 
   if ! command -v eksctl >/dev/null 2>&1; then
     error_log "eksctl installation failed"
     return 1
   fi
 
-  debug_log "eksctl ${EKSCTL_VERSION} installed successfully"
+  debug_log "eksctl installed successfully"
 }
 _cloudformation_deploy_template() {
-    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
+    debug_log "Deploying Karpenter CloudFormation stack for cluster ${EKS_KARPENTER_CLUSTER} ..."
     local tmp_dir
     tmp_dir="$(mktemp -d)"
     curl -fsSL https://raw.githubusercontent.com/aws/karpenter-provider-aws/v"${KARPENTER_VERSION}"/website/content/en/preview/getting-started/getting-started-with-karpenter/cloudformation.yaml  > "$tmp_dir" \
@@ -91,7 +81,7 @@ _cloudformation_deploy_template() {
   --template-file "$tmp_dir" \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides "ClusterName=${EKS_KARPENTER_CLUSTER}"
-    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
+    debug_log "Karpenter CloudFormation stack deployed for cluster ${EKS_KARPENTER_CLUSTER}"
 }
 _install_eks_karpenter_cluster() {
     debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
@@ -158,7 +148,7 @@ managedNodeGroups:
 addons:
   - name: eks-pod-identity-agent
 EOF
-    debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
+    debug_log "EKS Karpenter cluster $EKS_KARPENTER_CLUSTER has been setup successfully"
 }
 
 _configure_aws_credentials() {
