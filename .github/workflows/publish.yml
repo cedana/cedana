@@ -126,7 +126,11 @@ jobs:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
       - name: Push package to Cloudsmith
         run: |
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana --republish --name cedana-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana --republish \
+            --name cedana-${{ matrix.arch }} \
+            --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
+            --version ${{ github.head_ref || github.ref_name }} \
+            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 5
 
   cloudsmith-plugin:
     name: Cloudsmith
@@ -171,7 +175,11 @@ jobs:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
       - name: Push package to Cloudsmith
         run: |
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --republish --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} --version ${{ github.head_ref || github.ref_name }} --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so --republish \
+            --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} \
+            --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
+            --version ${{ github.head_ref || github.ref_name }} \
+            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
 
   dockerhub:
     name: DockerHub (multi-arch)
