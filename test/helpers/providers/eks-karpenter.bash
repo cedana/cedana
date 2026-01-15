@@ -86,6 +86,7 @@ _cloudformation_deploy_template() {
 _install_eks_karpenter_cluster() {
     debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER ..."
     _cloudformation_deploy_template
+    debug_log "Checking env ..."
   # Check if required AWS related vars are defined
     check_env AWS_PARTITION
     check_env AWS_ACCOUNT_ID
@@ -93,6 +94,7 @@ _install_eks_karpenter_cluster() {
     check_env AWS_SUBNET_PRIVATE_1
     check_env AWS_SUBNET_PRIVATE_2
     check_env AWS_SUBNET_PRIVATE_3
+    debug_log "Running eksctl create cluster ..."
     eksctl create cluster -f - <<EOF
 ---
 apiVersion: eksctl.io/v1alpha5
@@ -172,7 +174,7 @@ _configure_aws_credentials() {
             exit 1
             }
         export AWS_ACCOUNT_ID
-        info_log "AWS_ACCOUNT_ID detected and set"
+        debug_log "AWS_ACCOUNT_ID detected and set"
     fi
 
     debug_log "AWS credentials configured"
