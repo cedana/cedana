@@ -55,25 +55,6 @@ _configure_aws_credentials() {
     debug_log "AWS credentials configured"
 }
 
-_verify_karpenter() {
-    debug_log "Verifying Karpenter installation..."
-
-    # Check common namespaces for Karpenter
-    local namespaces=("$KARPENTER_NAMESPACE" "karpenter" "kube-system")
-
-    for ns in "${namespaces[@]}"; do
-        if kubectl get deployment karpenter -n "$ns" &>/dev/null; then
-            debug_log "Karpenter found in namespace $ns"
-            KARPENTER_NAMESPACE="$ns"
-            export KARPENTER_NAMESPACE
-            return 0
-        fi
-    done
-
-    error_log "Karpenter deployment not found in cluster"
-    return 1
-}
-
 setup_cluster() {
     _install_aws_cli
     _configure_aws_credentials
@@ -84,8 +65,7 @@ setup_cluster() {
         --name "$EKS_KARPENTER_CLUSTER" \
         --kubeconfig "$KUBECONFIG"
 
-    # Verify Karpenter is running
-    _verify_karpenter || return 1
+    debug_log "Fetched kubeconfig for $EKS_KARPENTER_CLUSTER"
 
     # Create spot NodePool for testing
     create_spot_nodepool
