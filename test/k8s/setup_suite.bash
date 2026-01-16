@@ -34,6 +34,9 @@
 # Defaults for remote checkpoint storage
 export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-cedana://ci}
 export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-lz4}
+if [ "$PROVIDER" == "nebius" ]; then
+    export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((8*GIBIBYTE))}"
+fi
 
 source "${BATS_TEST_DIRNAME}"/../helpers/utils.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/containerd.bash

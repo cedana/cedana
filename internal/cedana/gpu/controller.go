@@ -721,5 +721,8 @@ func EnsureLogDir(id string, uid, gid uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := os.Chmod(dir, 0o777); err != nil {
+		return "", err
+	}
 	return dir, os.Chown(dir, int(uid), int(gid))
 }
