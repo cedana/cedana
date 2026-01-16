@@ -106,7 +106,7 @@ spec:
   role: "KarpenterNodeRole-${EKS_KARPENTER_CLUSTER}"
   subnetSelectorTerms:
     - tags:
-        karpenter.sh/discovery: "${EKS_KARPENTER_CLUSTER}"
+        karpenter.sh/discovery: "${EKS_KARPENTER_SUBNET_SELECTOR}"
   securityGroupSelectorTerms:
     - tags:
         karpenter.sh/discovery: "${EKS_KARPENTER_CLUSTER}"
@@ -127,29 +127,36 @@ spec:
   template:
     spec:
       requirements:
-        - key: karpenter.sh/capacity-type
-          operator: In
-          values: ["spot"]
         - key: kubernetes.io/arch
           operator: In
           values: ["amd64"]
-        - key: node.kubernetes.io/instance-type
+        - key: kubernetes.io/os
           operator: In
-          values: ["m5.large", "m5.xlarge", "m5a.large", "m5a.xlarge", "m6i.large", "m6i.xlarge"]
+          values: ["linux"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot"]
+        - key: karpenter.k8s.aws/instance-category
+          operator: In
+          values: ["c", "t", "m"]
+        - key: karpenter.k8s.aws/instance-family
+          operator: In
+          values: ["t3a","c5a","m6a","m5a","c6a","c7a","c5","c6","c7"]
+        - key: karpenter.k8s.aws/instance-generation
+          operator: Gt
+          values: ["2"]
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: cedana-spot-test
-      taints:
-        - key: "cedana.ai/spot-test"
-          value: "true"
-          effect: NoSchedule
+        name: default
+      expireAfter: 720h # 30 * 24h = 720h
   limits:
-    cpu: 100
-    memory: 100Gi
+    cpu: "100"
+    memory: "100Gi"
+
   disruption:
     consolidationPolicy: WhenEmpty
-    consolidateAfter: 30s
+    consolidateAfter: 5m
 EOF
 
     # Wait for NodePool to be ready
@@ -158,188 +165,4 @@ EOF
     }
 
     debug_log "Spot NodePool $nodepool_name created"
-}
-
-# Simulate spot interruption by terminating the EC2 instance
-simulate_spot_interruption() {
-    local node_name="$1"
-
-    if [ -z "$node_name" ]; then
-        error_log "simulate_spot_interruption requires node_name"
-        return 1
-    fi
-
-    debug_log "Simulating spot interruption for node $node_name..."
-
-    # Get the EC2 instance ID from the node's provider ID
-    local provider_id
-    provider_id=$(kubectl get node "$node_name" -o jsonpath='{.spec.providerID}')
-
-    local instance_id
-    instance_id=$(echo "$provider_id" | sed 's|.*/||')
-
-    if [ -z "$instance_id" ]; then
-        error_log "Failed to get instance ID for node $node_name"
-        return 1
-    fi
-
-    debug_log "Terminating EC2 instance $instance_id..."
-
-    aws ec2 terminate-instances --instance-ids "$instance_id" --region "$AWS_REGION"
-
-    debug_log "Spot interruption simulated for instance $instance_id (node $node_name)"
-}
-
-# Get the node where a pod is running
-get_pod_node() {
-    local pod_name="$1"
-    local namespace="${2:-$NAMESPACE}"
-
-    kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.spec.nodeName}' 2>/dev/null
-}
-
-# Wait for a pod to be scheduled on a Karpenter-provisioned spot node
-wait_for_spot_node() {
-    local pod_name="$1"
-    local namespace="${2:-$NAMESPACE}"
-    local timeout="${3:-300}"
-
-    debug_log "Waiting for pod $pod_name to be scheduled on spot node (timeout: ${timeout}s)..."
-
-    local elapsed=0
-    local poll_interval=5
-
-    while [ $elapsed -lt $timeout ]; do
-        local node_name
-        node_name=$(get_pod_node "$pod_name" "$namespace")
-
-        if [ -n "$node_name" ]; then
-            # Verify it's a spot instance via Karpenter label
-            local capacity_type
-            capacity_type=$(kubectl get node "$node_name" -o jsonpath='{.metadata.labels.karpenter\.sh/capacity-type}' 2>/dev/null)
-
-            if [ "$capacity_type" = "spot" ]; then
-                debug_log "Pod $pod_name scheduled on spot node $node_name"
-                echo "$node_name"
-                return 0
-            elif [ -n "$capacity_type" ]; then
-                debug_log "Pod scheduled on $capacity_type node, waiting for spot..."
-            fi
-        fi
-
-        sleep $poll_interval
-        ((elapsed += poll_interval))
-    done
-
-    error_log "Timeout waiting for pod $pod_name to be scheduled on spot node"
-    return 1
-}
-
-# Create a pod spec with spot tolerations and affinity
-spot_pod_spec() {
-    local image="$1"
-    local args="$2"
-    local namespace="${3:-$NAMESPACE}"
-
-    local name
-    name=test-spot-$(unix_nano)
-
-    local spec=/tmp/pod-${name}.yaml
-    cat >"$spec" <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: "$namespace"
-  labels:
-    app: "$name"
-    cedana.ai/spot-test: "true"
-spec:
-  tolerations:
-    - key: "cedana.ai/spot-test"
-      operator: "Equal"
-      value: "true"
-      effect: NoSchedule
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: karpenter.sh/capacity-type
-                operator: In
-                values: ["spot"]
-  containers:
-  - name: "$name"
-    image: $image
-    command: ["/bin/sh", "-c"]
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "512Mi"
-EOF
-
-    if [[ -n "$args" ]]; then
-        printf "    args:\n" >>"$spec"
-        printf "      - |\n" >>"$spec"
-        while IFS= read -r line; do
-            printf "        %s\n" "$line" >>"$spec"
-        done <<<"$args"
-    fi
-
-    echo "$spec"
-}
-
-# Create a GPU pod spec with spot tolerations
-spot_pod_spec_gpu() {
-    local image="$1"
-    local args="$2"
-    local gpus="${3:-1}"
-    local namespace="${4:-$NAMESPACE}"
-
-    local name
-    name=test-spot-cuda-$(unix_nano)
-
-    local spec=/tmp/pod-${name}.yaml
-    cat >"$spec" <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: "$namespace"
-  labels:
-    app: "$name"
-    cedana.ai/spot-test: "true"
-spec:
-  runtimeClassName: cedana
-  tolerations:
-    - key: "cedana.ai/spot-test"
-      operator: "Equal"
-      value: "true"
-      effect: NoSchedule
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: karpenter.sh/capacity-type
-                operator: In
-                values: ["spot"]
-  containers:
-  - name: "$name"
-    image: $image
-    command: ["/bin/sh", "-c"]
-    resources:
-      limits:
-        nvidia.com/gpu: "$gpus"
-EOF
-
-    if [[ -n "$args" ]]; then
-        printf "    args:\n" >>"$spec"
-        printf "      - |\n" >>"$spec"
-        while IFS= read -r line; do
-            printf "        %s\n" "$line" >>"$spec"
-        done <<<"$args"
-    fi
-
-    echo "$spec"
 }
