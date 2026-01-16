@@ -60,13 +60,14 @@ setup_cluster() {
     _configure_aws_credentials
     debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
 
-    if command -v aws eks update-kubeconfig \
+    if aws eks update-kubeconfig \
         --region "$AWS_REGION" \
         --name "$EKS_KARPENTER_CLUSTER" \
         --kubeconfig "$KUBECONFIG" &>/dev/null; then
         debug_log "Fetched kubeconfig for $EKS_KARPENTER_CLUSTER"
     else
         debug_log "Failed to fetch kubeconfig for $EKS_KARPENTER_CLUSTER"
+        return 1
     fi
 
     # Create spot NodePool for testing
