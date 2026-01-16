@@ -63,10 +63,11 @@ setup_cluster() {
     if command -v aws eks update-kubeconfig \
         --region "$AWS_REGION" \
         --name "$EKS_KARPENTER_CLUSTER" \
-        --kubeconfig "$KUBECONFIG"
-
-
-    debug_log "Fetched kubeconfig for $EKS_KARPENTER_CLUSTER"
+        --kubeconfig "$KUBECONFIG" &>/dev/null; then
+        debug_log "Fetched kubeconfig for $EKS_KARPENTER_CLUSTER"
+    else
+        debug_log "Failed to fetch kubeconfig for $EKS_KARPENTER_CLUSTER"
+    fi
 
     # Create spot NodePool for testing
     create_spot_nodepool
@@ -88,7 +89,7 @@ teardown_cluster() {
 
 # Create a spot-only NodePool for testing
 create_spot_nodepool() {
-    local nodepool_name="${1:-$KARPENTER_NODEPOOL}"
+    local nodepool_name="$KARPENTER_NODEPOOL"
 
     debug_log "Creating spot NodePool $nodepool_name..."
 
@@ -341,4 +342,3 @@ EOF
 
     echo "$spec"
 }
-
