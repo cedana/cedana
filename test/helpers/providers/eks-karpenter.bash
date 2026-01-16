@@ -148,7 +148,7 @@ spec:
       nodeClassRef:
         group: karpenter.k8s.aws
         kind: EC2NodeClass
-        name: default
+        name: $nodepool_name
       expireAfter: 720h # 30 * 24h = 720h
   limits:
     cpu: "100"
