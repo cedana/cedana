@@ -37,7 +37,7 @@ func CheckConfig() types.Check {
 		} else {
 			var errMsg string
 			switch v := err.(type) {
-			case *models.HttpError:
+			case *models.ApiError:
 				errMsg = *v.GetMessage()
 			default:
 				errMsg = err.Error()
