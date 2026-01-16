@@ -3,43 +3,251 @@ set -e
 
 # Wrapper script that runs through all Kubernetes tests.
 # Use the TAG logic to specify workloads to run through.
-# All GPU workloads are specified at k8s/gpu.bats and k8s/gpu_large.bats.
+# All workloads are specified in k8s/*.bats files.
 
-# Make sure GPU tests are enabled and set up your environment
-export GPU=1
+#######################################
+# Tag Discovery and Interactive Setup #
+#######################################
+
+show_help() {
+    cat <<EOF
+Usage: $0 [OPTIONS]
+
+Run Kubernetes tests with tag filtering.
+
+OPTIONS:
+    -t, --tags TAGS     Comma-separated tags to filter tests (default: k8s)
+                        Use semicolon for OR logic: "k8s,gpu;k8s,cpu"
+                        Use ! to exclude: "k8s,gpu,!large"
+    -l, --list-tags     List all available tags from bats files and exit
+    -i, --interactive   Interactive mode to select tags
+    -g, --gpu           Enable GPU tests (sets GPU=1)
+    -p, --parallelism N Number of parallel test jobs (default: 1)
+    -n, --namespace NS  Test namespace (default: test)
+    -h, --help          Show this help message
+
+EXAMPLES:
+    $0                          # Run all k8s tests
+    $0 -t 'k8s,gpu'             # Run GPU tests
+    $0 -t 'k8s,!gpu'            # Run CPU-only tests (exclude GPU)
+    $0 -t 'k8s,gpu,!large'      # Run GPU tests excluding large ones
+    $0 -t 'k8s,gpu,training'    # Run GPU training tests
+    $0 -i                       # Interactive tag selection
+    $0 -l                       # List all available tags
+
+TAG LOGIC:
+    - Comma separates tags with AND logic: 'k8s,gpu' = k8s AND gpu
+    - Semicolon separates tag sets with OR logic: 'k8s,gpu;k8s,cpu' = (k8s AND gpu) OR (k8s AND cpu)
+    - Exclamation excludes tags: 'k8s,gpu,!large' = k8s AND gpu AND NOT large
+
+NOTE: Use single quotes when using '!' to exclude tags, to avoid bash history expansion.
+EOF
+}
+
+# Extract all unique tags from bats files
+get_all_tags() {
+    local tags=()
+    local script_dir
+    script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+    # Extract file_tags
+    while IFS= read -r line; do
+        # Parse "# bats file_tags=tag1,tag2,tag3"
+        if [[ $line =~ file_tags=(.+) ]]; then
+            IFS=',' read -ra file_tags <<< "${BASH_REMATCH[1]}"
+            tags+=("${file_tags[@]}")
+        fi
+    done < <(grep -h "bats file_tags=" "$script_dir"/k8s/*.bats 2>/dev/null || true)
+
+    # Extract test_tags
+    while IFS= read -r line; do
+        # Parse "# bats test_tags=tag1,tag2,tag3"
+        if [[ $line =~ test_tags=(.+) ]]; then
+            IFS=',' read -ra test_tags <<< "${BASH_REMATCH[1]}"
+            tags+=("${test_tags[@]}")
+        fi
+    done < <(grep -h "bats test_tags=" "$script_dir"/k8s/*.bats 2>/dev/null || true)
+
+    # Sort and deduplicate
+    printf '%s\n' "${tags[@]}" | sort -u
+}
+
+list_tags() {
+    echo "Available tags from k8s/*.bats files:"
+    echo ""
+    echo "FILE TAGS (apply to entire files):"
+    echo "  k8s, kubernetes, gpu, large"
+    echo ""
+    echo "TEST TAGS (apply to individual tests):"
+    local tags
+    tags=$(get_all_tags)
+    echo "$tags" | tr '\n' ' '
+    echo ""
+    echo ""
+    echo "Common tag combinations:"
+    echo "  k8s                    - All k8s tests (default)"
+    echo "  k8s,gpu                - All GPU tests"
+    echo "  k8s,gpu,!large         - GPU tests without large/slow ones"
+    echo "  k8s,gpu,training       - GPU training workloads"
+    echo "  k8s,gpu,inference      - GPU inference workloads"
+    echo "  k8s,gpu,multi          - Multi-GPU tests"
+    echo "  k8s,samples            - All sample workload tests"
+}
+
+interactive_select() {
+    echo "=== Interactive Tag Selection ==="
+    echo ""
+
+    # Get all unique tags
+    local all_tags
+    all_tags=$(get_all_tags)
+
+    # Convert to array
+    local -a tag_array
+    mapfile -t tag_array <<< "$all_tags"
+
+    echo "Available tags:"
+    local i=1
+    for tag in "${tag_array[@]}"; do
+        printf "  %2d) %s\n" "$i" "$tag"
+        ((i++))
+    done
+    echo ""
+
+    # Preset options
+    echo "Preset options:"
+    echo "  a) All k8s tests (k8s)"
+    echo "  b) GPU tests (k8s,gpu)"
+    echo "  c) GPU tests without large (k8s,gpu,!large)"
+    echo "  d) CPU tests only (k8s,!gpu)"
+    echo "  e) Training tests (k8s,gpu,training)"
+    echo "  f) Inference tests (k8s,gpu,inference)"
+    echo "  g) Multi-GPU tests (k8s,gpu,multi)"
+    echo ""
+
+    read -rp "Enter preset letter, tag numbers (comma-separated), or custom tags: " selection
+
+    case "$selection" in
+        a) TAGS="k8s" ;;
+        b) TAGS="k8s,gpu" ;;
+        c) TAGS="k8s,gpu,!large" ;;
+        d) TAGS="k8s,!gpu" ;;
+        e) TAGS="k8s,gpu,training" ;;
+        f) TAGS="k8s,gpu,inference" ;;
+        g) TAGS="k8s,gpu,multi" ;;
+        *)
+            # Check if it's numbers or custom tags
+            if [[ "$selection" =~ ^[0-9,\ ]+$ ]]; then
+                # Numbers - build tag list
+                local selected_tags="k8s"
+                IFS=', ' read -ra nums <<< "$selection"
+                for num in "${nums[@]}"; do
+                    if [[ $num -ge 1 && $num -le ${#tag_array[@]} ]]; then
+                        selected_tags="$selected_tags,${tag_array[$((num-1))]}"
+                    fi
+                done
+                TAGS="$selected_tags"
+            else
+                # Custom tags - use as-is, prepend k8s if not present
+                if [[ "$selection" != *"k8s"* ]]; then
+                    TAGS="k8s,$selection"
+                else
+                    TAGS="$selection"
+                fi
+            fi
+            ;;
+    esac
+
+    echo ""
+    echo "Selected tags: $TAGS"
+    read -rp "Proceed? [Y/n] " confirm
+    if [[ "$confirm" =~ ^[Nn] ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+}
+
+# Default values
+TAGS="${TAGS:-k8s}"
+GPU="${GPU:-0}"
+PARALLELISM="${PARALLELISM:-1}"
+NAMESPACE="${NAMESPACE:-test}"
+INTERACTIVE=0
+LIST_TAGS=0
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -t|--tags)
+            TAGS="$2"
+            shift 2
+            ;;
+        -l|--list-tags)
+            LIST_TAGS=1
+            shift
+            ;;
+        -i|--interactive)
+            INTERACTIVE=1
+            shift
+            ;;
+        -g|--gpu)
+            GPU=1
+            shift
+            ;;
+        -p|--parallelism)
+            PARALLELISM="$2"
+            shift 2
+            ;;
+        -n|--namespace)
+            NAMESPACE="$2"
+            shift 2
+            ;;
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# Handle list tags
+if [[ $LIST_TAGS -eq 1 ]]; then
+    list_tags
+    exit 0
+fi
+
+# Handle interactive mode
+if [[ $INTERACTIVE -eq 1 ]]; then
+    interactive_select
+fi
+
+# Auto-enable GPU if gpu tag is present
+if [[ "$TAGS" == *"gpu"* && "$TAGS" != *"!gpu"* ]]; then
+    GPU=1
+fi
+
+export GPU
+export TAGS
+export PARALLELISM
+export NAMESPACE
 export PROVIDER=generic
 
-# Choose which tests to run by setting TAGS:
-# Single tag set (AND logic):
-#   TAGS="k8s,gpu" - All GPU tests (basic + large)
-#   TAGS="k8s,gpu,!large" - Only basic GPU tests (exclude large)
-#   TAGS="k8s,gpu,llm" - Only LLM inference tests
-#   TAGS="k8s,gpu,training" - Only training tests
-#
-# Multiple tag sets (OR logic) - separate with semicolon:
-#   TAGS="k8s,gpu,llm;k8s,gpu,training" - LLM OR training tests
-#   TAGS="k8s,gpu,tensorflow;k8s,gpu,deepspeed" - TensorFlow OR DeepSpeed
-#
-export TAGS="k8s,gpu,training,multi"
-
-export PARALLELISM=1 # Reduced to 1 to avoid GPU contention and make logs easier to follow
-
 # Skip helm install/uninstall since you already have Cedana installed
-export SKIP_HELM=1
+export SKIP_HELM="${SKIP_HELM:-1}"
 
-# Set to your existing Cedana namespace (note: it's cedana-systems with an 's')
-export CEDANA_NAMESPACE="cedana-systems"
+# Set to your existing Cedana namespace
+export CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-systems}"
 
 # The test script will auto-detect the cluster ID from the cedana-config configmap
-# Current cluster ID: d7fb23b9-d91c-41a1-9ccd-a4cc98dad0d1
 # Uncomment to skip auto-detection:
-# export CLUSTER_ID="d7fb23b9-d91c-41a1-9ccd-a4cc98dad0d1"
-
-# Set test namespace (where test pods will be created)
-export NAMESPACE="test"
+# export CLUSTER_ID="your-cluster-id"
 
 # Optional: Set your cluster name (for logging purposes)
-export CLUSTER_NAME="gpu-test-cluster-$(date +%s)"
+export CLUSTER_NAME="${CLUSTER_NAME:-k8s-test-cluster-$(date +%s)}"
 
 # Enable verbose bats output
 export BATS_NO_FAIL_FOCUS_RUN=1
@@ -165,15 +373,15 @@ echo "✓ PVC dgtest-pvc ready"
 
 echo ""
 echo "======================================="
-echo "Running GPU Tests with Tags"
+echo "Running K8s Tests with Tags"
 echo "======================================="
+echo "TAGS: $TAGS"
 echo "GPU: $GPU"
 echo "PROVIDER: $PROVIDER"
-echo "TAGS: $TAGS"
-echo "SKIP_HELM: $SKIP_HELM"
 echo "PARALLELISM: $PARALLELISM"
+echo "SKIP_HELM: $SKIP_HELM"
 echo "CEDANA_NAMESPACE: $CEDANA_NAMESPACE"
-echo "NAMESPACE: $NAMESPACE"
+echo "TEST_NAMESPACE: $NAMESPACE"
 echo "======================================="
 echo ""
 
