@@ -207,6 +207,12 @@ func EncodeJSON(data *Data) (string, error) {
 	return string(bytes), nil
 }
 
+func DecodeJSON(data string) (*Data, error) {
+	var d Data
+	err := json.Unmarshal([]byte(data), &d)
+	return &d, err
+}
+
 func WriteJSON(path string, data *Data) error {
 	bytes, err := json.Marshal(data)
 	if err != nil {
