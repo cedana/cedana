@@ -61,9 +61,8 @@ setup_cluster() {
     debug_log "Setting up EKS Karpenter cluster $EKS_KARPENTER_CLUSTER..."
 
     aws eks update-kubeconfig \
-        --region "$AWS_REGION" \
-        --name "$EKS_KARPENTER_CLUSTER" \
-        --kubeconfig "$KUBECONFIG"
+        --region "us-east-1" \
+        --name "cedana-karpenter-ci" \
 
     debug_log "Fetched kubeconfig for $EKS_KARPENTER_CLUSTER"
 
