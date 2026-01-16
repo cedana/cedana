@@ -199,6 +199,14 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	fmt.Println()
 }
 
+func EncodeJSON(data *Data) (string, error) {
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}
+
 func WriteJSON(path string, data *Data) error {
 	bytes, err := json.Marshal(data)
 	if err != nil {
