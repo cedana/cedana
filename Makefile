@@ -130,10 +130,10 @@ HELM_CHART?=""
 FORMATTER?=pretty
 BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
-				--formatter tap --output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
+				--formatter pretty --output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) \
-				--formatter tap --output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
+				--formatter pretty --output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 
 test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
