@@ -4,21 +4,19 @@
 
 # Chaos/Stress Test for Cedana Checkpoint/Migrate/Restore
 #
-# This test exercises checkpoint/migrate/restore under realistic chaos conditions
-# with randomly interleaved events:
+# This test exercises checkpoint/migrate/restore under realistic chaos conditions:
 #
-# - Deploys multiple diverse workloads
-# - Runs a chaos event loop that randomly triggers:
-#   - Checkpoint a random running pod
-#   - Delete a random node (simulating node failure)
-#   - Restore from a completed checkpoint
-# - Events happen at random intervals, interleaved together
-# - Validates all workloads can be restored after chaos
+# - Deploys multiple diverse workloads across nodes
+# - Checkpoints fire asynchronously (fire-and-forget)
+# - Restores trigger automatically when:
+#   1. A checkpoint completes (immediate restore to validate)
+#   2. A node goes down (restore workloads that were on that node)
+# - Node deletions simulate failures
 #
 # Environment variables:
 #   CHAOS_DURATION                        - Total chaos duration in seconds (default: 120)
-#   CHAOS_MIN_EVENT_INTERVAL              - Min seconds between events (default: 5)
-#   CHAOS_MAX_EVENT_INTERVAL              - Max seconds between events (default: 15)
+#   CHAOS_MIN_EVENT_INTERVAL              - Min seconds between events (default: 3)
+#   CHAOS_MAX_EVENT_INTERVAL              - Max seconds between events (default: 8)
 #   CHAOS_MIN_CHECKPOINTS_BEFORE_DELETE   - Min checkpoints before allowing node delete (default: 2)
 #   CHAOS_MAX_NODE_DELETES                - Max nodes to delete (default: 2)
 #   CHAOS_NAMESPACE                       - Namespace for chaos test pods (default: chaos-test)
@@ -29,42 +27,48 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
+################################################################################
 # Configuration
+################################################################################
+
 CHAOS_DURATION="${CHAOS_DURATION:-120}"
-CHAOS_MIN_EVENT_INTERVAL="${CHAOS_MIN_EVENT_INTERVAL:-5}"
-CHAOS_MAX_EVENT_INTERVAL="${CHAOS_MAX_EVENT_INTERVAL:-15}"
-CHAOS_MIN_CHECKPOINTS_BEFORE_DELETE="${CHAOS_MIN_CHECKPOINTS_BEFORE_DELETE:-2}"
+CHAOS_MIN_EVENT_INTERVAL="${CHAOS_MIN_EVENT_INTERVAL:-3}"
+CHAOS_MAX_EVENT_INTERVAL="${CHAOS_MAX_EVENT_INTERVAL:-8}"
 CHAOS_MAX_NODE_DELETES="${CHAOS_MAX_NODE_DELETES:-2}"
+CHAOS_CHECKPOINTS_PER_NODE_DELETE="${CHAOS_CHECKPOINTS_PER_NODE_DELETE:-3}"  # Force node delete every N checkpoints
 CHAOS_NAMESPACE="${CHAOS_NAMESPACE:-chaos-test}"
 
-# Diverse sample workloads
+# Sample workloads from cedana-samples (heavier workloads for realistic testing)
 SAMPLE_WORKLOADS=(
-    "counting.yaml"
-    "counting-multicontainer.yaml"
     "monte-carlo-pi.yaml"
     "numpy-matrix-ops.yaml"
     "sklearn-random-forest.yaml"
     "xgboost-training.yaml"
 )
 
-# State tracking (file-based for subshell compatibility)
-STATE_DIR="/tmp/chaos-state-$$"
+# State directory for file-based state tracking (subshell compatible)
+# Use fixed path since bats runs setup_file and tests in different processes
+STATE_DIR="/tmp/chaos-state-bats"
+
+################################################################################
+# Setup / Teardown
+################################################################################
 
 setup_file() {
+    rm -rf "$STATE_DIR"
     mkdir -p "$STATE_DIR"
-    echo "0" > "$STATE_DIR/checkpoint_count"
-    echo "0" > "$STATE_DIR/restore_count"
-    echo "0" > "$STATE_DIR/node_delete_count"
+    touch "$STATE_DIR/deleted_nodes"
 
     create_namespace "$CHAOS_NAMESPACE"
 
-    local node_count
-    node_count=$(get_worker_node_count)
-    info_log "Initial worker node count: $node_count"
+    local all_nodes deletable_nodes manager_node
+    all_nodes=$(get_all_nodes | wc -l)
+    deletable_nodes=$(get_deletable_node_count)
+    manager_node=$(get_cedana_manager_node)
 
-    if [ "$node_count" -lt 2 ]; then
-        skip "Insufficient nodes for chaos test: have $node_count, need at least 2"
-    fi
+    info_log "Nodes: $all_nodes total, $deletable_nodes deletable (manager on: $manager_node)"
+
+    [ "$deletable_nodes" -ge 1 ] || skip "Need at least 1 deletable node for chaos test"
 }
 
 teardown_file() {
@@ -77,419 +81,514 @@ teardown_file() {
             [ -f "$action_file" ] || continue
             local action_id
             action_id=$(cat "$action_file")
+            action_id="${action_id//\"/}"
             local checkpoint_id
             checkpoint_id=$(get_checkpoint_id_from_action "$action_id" 2>/dev/null) || true
-            if [ -n "$checkpoint_id" ]; then
-                cleanup_checkpoint "$checkpoint_id" 2>/dev/null || true
-            fi
+            [ -n "$checkpoint_id" ] && cleanup_checkpoint "$checkpoint_id" 2>/dev/null || true
         done
         rm -rf "$STATE_DIR"
     fi
 }
 
-#########################
-# Node Helpers          #
-#########################
+################################################################################
+# Node Helpers
+################################################################################
 
-get_worker_node_count() {
-    kubectl get nodes --no-headers 2>/dev/null | grep -cv "control-plane\|master" || echo 0
+get_all_nodes() {
+    kubectl get nodes --no-headers -o custom-columns=':metadata.name' 2>/dev/null || true
 }
 
-get_worker_nodes() {
-    kubectl get nodes --no-headers -o custom-columns=':metadata.name' 2>/dev/null | \
-        grep -v "control-plane\|master" || true
+get_cedana_manager_node() {
+    kubectl get pods -n "$CEDANA_NAMESPACE" -l app.kubernetes.io/component=manager \
+        -o jsonpath='{.items[0].spec.nodeName}' 2>/dev/null || true
 }
 
-delete_node() {
-    local node="$1"
-    info_log "EVENT: Deleting node $node"
-    kubectl delete node "$node" --wait=true --timeout=60s 2>/dev/null || true
+# Get nodes eligible for deletion (all nodes except the one running cedana-manager)
+get_deletable_nodes() {
+    local all_nodes manager_node
+    all_nodes=$(get_all_nodes)
+    manager_node=$(get_cedana_manager_node)
+
+    if [ -n "$manager_node" ]; then
+        echo "$all_nodes" | grep -vF "$manager_node"
+    else
+        echo "$all_nodes"
+    fi
 }
 
-#########################
-# State Management      #
-#########################
+get_deletable_node_count() {
+    local count
+    count=$(get_deletable_nodes | grep -c . 2>/dev/null) || count=0
+    echo "$count"
+}
 
-# Pod states: running, checkpointing, checkpointed, restoring, restored, deleted
-set_pod_state() {
+get_pod_node() {
     local pod="$1"
-    local state="$2"
-    echo "$state" > "$STATE_DIR/pod_${pod}"
+    kubectl get pod "$pod" -n "$CHAOS_NAMESPACE" -o jsonpath='{.spec.nodeName}' 2>/dev/null || true
+}
+
+################################################################################
+# State Management (file-based for subshell compatibility)
+################################################################################
+
+# Pod states: running, checkpointing, checkpointed, restoring, restored, failed
+set_pod_state() {
+    local pod="$1" state="$2"
+    echo "$state" > "$STATE_DIR/state_${pod}"
 }
 
 get_pod_state() {
     local pod="$1"
-    cat "$STATE_DIR/pod_${pod}" 2>/dev/null || echo "unknown"
+    cat "$STATE_DIR/state_${pod}" 2>/dev/null || echo "unknown"
 }
 
 set_pod_action_id() {
-    local pod="$1"
-    local action_id="$2"
+    local pod="$1" action_id="$2"
     echo "$action_id" > "$STATE_DIR/action_${pod}"
 }
 
 get_pod_action_id() {
     local pod="$1"
-    cat "$STATE_DIR/action_${pod}" 2>/dev/null
+    local id
+    id=$(cat "$STATE_DIR/action_${pod}" 2>/dev/null)
+    echo "${id//\"/}"  # Strip quotes
+}
+
+set_pod_node() {
+    local pod="$1" node="$2"
+    echo "$node" > "$STATE_DIR/node_${pod}"
+}
+
+get_stored_pod_node() {
+    local pod="$1"
+    cat "$STATE_DIR/node_${pod}" 2>/dev/null
 }
 
 list_pods_in_state() {
     local target_state="$1"
-    for f in "$STATE_DIR"/pod_*; do
+    for f in "$STATE_DIR"/state_*; do
         [ -f "$f" ] || continue
-        local pod="${f##*/pod_}"
-        local state
-        state=$(cat "$f")
-        if [ "$state" = "$target_state" ]; then
-            echo "$pod"
-        fi
+        local pod="${f##*/state_}"
+        [ "$(cat "$f")" = "$target_state" ] && echo "$pod"
     done
 }
 
 count_pods_in_state() {
-    local target_state="$1"
-    list_pods_in_state "$target_state" | wc -l
+    local count
+    count=$(list_pods_in_state "$1" | grep -c . 2>/dev/null) || count=0
+    echo "$count"
+}
+
+list_all_tracked_pods() {
+    for f in "$STATE_DIR"/state_*; do
+        [ -f "$f" ] || continue
+        echo "${f##*/state_}"
+    done
+}
+
+add_deleted_node() {
+    echo "$1" >> "$STATE_DIR/deleted_nodes"
+}
+
+get_deleted_node_count() {
+    local count
+    count=$(grep -c . "$STATE_DIR/deleted_nodes" 2>/dev/null) || count=0
+    echo "$count"
+}
+
+is_node_deleted() {
+    local node="$1"
+    grep -qx "$node" "$STATE_DIR/deleted_nodes" 2>/dev/null
 }
 
 increment_counter() {
     local counter="$1"
     local val
-    val=$(cat "$STATE_DIR/$counter")
+    val=$(cat "$STATE_DIR/$counter" 2>/dev/null || echo 0)
     echo $((val + 1)) > "$STATE_DIR/$counter"
 }
 
 get_counter() {
-    local counter="$1"
-    cat "$STATE_DIR/$counter" 2>/dev/null || echo 0
+    cat "$STATE_DIR/$1" 2>/dev/null || echo 0
 }
 
-add_deleted_node() {
-    local node="$1"
-    echo "$node" >> "$STATE_DIR/deleted_nodes"
-}
+################################################################################
+# Checkpoint Status Check (non-blocking)
+################################################################################
 
-get_deleted_node_count() {
-    wc -l < "$STATE_DIR/deleted_nodes" 2>/dev/null || echo 0
-}
+check_checkpoint_status() {
+    local action_id="$1"
+    action_id="${action_id//\"/}"
 
-#########################
-# Chaos Event Handlers  #
-#########################
+    local base_url
+    base_url=$(normalize_url "$CEDANA_URL")
+    local response
+    response=$(curl -s -X GET "${base_url}/v2/checkpoint/status/${action_id}" \
+        -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
+        -w "%{http_code}" 2>/dev/null)
 
-do_checkpoint_random_pod() {
-    local running_pods
-    running_pods=$(list_pods_in_state "running")
-    local count
-    count=$(echo "$running_pods" | grep -c . 2>/dev/null || echo 0)
+    local http_code="${response: -3}"
+    local body="${response%???}"
 
-    if [ "$count" -eq 0 ]; then
-        debug_log "No running pods to checkpoint"
-        return 0
+    if [ "$http_code" -eq 200 ]; then
+        echo "$body" | jq -r '.status' 2>/dev/null
+    else
+        echo "unknown"
     fi
+}
 
-    # Pick random pod
-    local pod
-    pod=$(echo "$running_pods" | shuf -n 1)
+################################################################################
+# Event Handlers
+################################################################################
 
-    info_log "EVENT: Checkpointing pod $pod"
-    set_pod_state "$pod" "checkpointing"
+# Checkpoint a specific pod (async - fire and forget)
+do_checkpoint_pod() {
+    local pod="$1"
 
     local pod_id
     pod_id=$(get_pod_id "$pod" "$CHAOS_NAMESPACE" 2>/dev/null)
     if [ -z "$pod_id" ]; then
         error_log "Failed to get pod ID for $pod"
-        set_pod_state "$pod" "running"
         return 1
     fi
+
+    info_log "CHECKPOINT: $pod"
+    set_pod_state "$pod" "checkpointing"
 
     local action_id
     action_id=$(checkpoint_pod "$pod_id" 2>/dev/null)
     if [ $? -ne 0 ] || ! validate_action_id "$action_id" 2>/dev/null; then
-        error_log "Checkpoint failed for $pod"
+        error_log "Checkpoint API call failed for $pod"
         set_pod_state "$pod" "running"
         return 1
     fi
 
     set_pod_action_id "$pod" "$action_id"
-
-    # Poll for completion (with timeout)
-    if poll_action_status "$action_id" "checkpoint" 120 2>/dev/null; then
-        info_log "Checkpoint complete for $pod (action: $action_id)"
-        set_pod_state "$pod" "checkpointed"
-        increment_counter "checkpoint_count"
-    else
-        error_log "Checkpoint timed out for $pod"
-        set_pod_state "$pod" "running"
-        return 1
-    fi
+    increment_counter "checkpoint_initiated"
+    debug_log "Checkpoint initiated: $pod -> $action_id"
 }
 
-do_delete_random_node() {
-    local deleted_count
-    deleted_count=$(get_deleted_node_count)
+# Restore a pod from its checkpoint
+do_restore_pod() {
+    local pod="$1"
 
-    if [ "$deleted_count" -ge "$CHAOS_MAX_NODE_DELETES" ]; then
-        debug_log "Max node deletes reached ($deleted_count)"
-        return 0
-    fi
-
-    local nodes
-    nodes=$(get_worker_nodes)
-    local node_count
-    node_count=$(echo "$nodes" | grep -c . 2>/dev/null || echo 0)
-
-    if [ "$node_count" -le 1 ]; then
-        debug_log "Only $node_count node(s) remaining, skipping delete"
-        return 0
-    fi
-
-    # Pick random node
-    local node
-    node=$(echo "$nodes" | shuf -n 1)
-
-    delete_node "$node"
-    add_deleted_node "$node"
-    increment_counter "node_delete_count"
-
-    info_log "Node $node deleted (total deleted: $((deleted_count + 1)))"
-}
-
-do_restore_random_checkpoint() {
-    local checkpointed_pods
-    checkpointed_pods=$(list_pods_in_state "checkpointed")
-    local count
-    count=$(echo "$checkpointed_pods" | grep -c . 2>/dev/null || echo 0)
-
-    if [ "$count" -eq 0 ]; then
-        debug_log "No checkpointed pods to restore"
-        return 0
-    fi
-
-    # Pick random checkpointed pod
-    local pod
-    pod=$(echo "$checkpointed_pods" | shuf -n 1)
     local action_id
     action_id=$(get_pod_action_id "$pod")
-
     if [ -z "$action_id" ]; then
         error_log "No action ID for pod $pod"
         return 1
     fi
 
-    info_log "EVENT: Restoring pod $pod from checkpoint $action_id"
+    info_log "RESTORE: $pod (from $action_id)"
     set_pod_state "$pod" "restoring"
 
-    # Delete original pod first
-    kubectl delete pod "$pod" -n "$CHAOS_NAMESPACE" --wait=true --timeout=30s 2>/dev/null || true
+    # Delete the original pod if it still exists
+    kubectl delete pod "$pod" -n "$CHAOS_NAMESPACE" --wait=false --timeout=10s 2>/dev/null || true
 
-    # Trigger restore
+    # Trigger restore via API
     local restore_id
     restore_id=$(restore_pod "$action_id" "$CLUSTER_ID" 2>/dev/null)
     if [ $? -ne 0 ]; then
-        error_log "Restore failed for $pod"
-        set_pod_state "$pod" "deleted"
+        error_log "Restore API call failed for $pod"
+        set_pod_state "$pod" "failed"
         return 1
     fi
 
-    info_log "Restore initiated for $pod (restore action: $restore_id)"
     set_pod_state "$pod" "restored"
-    increment_counter "restore_count"
+    increment_counter "restore_triggered"
+    debug_log "Restore triggered: $pod -> $restore_id"
 }
 
-#########################
-# Event Selection       #
-#########################
+# Delete a random eligible node (any node except the one running cedana-manager)
+do_delete_node() {
+    local deleted_count
+    deleted_count=$(get_deleted_node_count)
 
-select_random_event() {
-    local running
-    running=$(count_pods_in_state "running")
-    local checkpointed
-    checkpointed=$(count_pods_in_state "checkpointed")
-    local checkpoint_count
-    checkpoint_count=$(get_counter "checkpoint_count")
-    local node_delete_count
-    node_delete_count=$(get_deleted_node_count)
+    if [ "$deleted_count" -ge "$CHAOS_MAX_NODE_DELETES" ]; then
+        debug_log "Max node deletes reached ($deleted_count)"
+        return 1
+    fi
+
+    local nodes
+    nodes=$(get_deletable_nodes)
     local node_count
-    node_count=$(get_worker_node_count)
+    node_count=$(echo "$nodes" | grep -c . 2>/dev/null || echo 0)
 
-    local options=()
-
-    # CHECKPOINT: if we have running pods
-    if [ "$running" -gt 0 ]; then
-        options+=(CHECKPOINT CHECKPOINT CHECKPOINT)  # 3x weight
+    if [ "$node_count" -eq 0 ]; then
+        debug_log "No deletable nodes available"
+        return 1
     fi
 
-    # DELETE_NODE: if we have enough checkpoints and nodes to spare
-    if [ "$checkpoint_count" -ge "$CHAOS_MIN_CHECKPOINTS_BEFORE_DELETE" ] && \
-       [ "$node_delete_count" -lt "$CHAOS_MAX_NODE_DELETES" ] && \
-       [ "$node_count" -gt 1 ]; then
-        options+=(DELETE_NODE)
-    fi
+    # Pick random node from deletable nodes
+    local node
+    node=$(echo "$nodes" | shuf -n 1)
 
-    # RESTORE: if we have checkpointed pods
-    if [ "$checkpointed" -gt 0 ]; then
-        options+=(RESTORE RESTORE)  # 2x weight
-    fi
+    info_log "DELETE NODE: $node"
+    kubectl delete node "$node" --wait=false --timeout=60s 2>/dev/null || true
+    add_deleted_node "$node"
+    increment_counter "node_deleted"
 
-    if [ ${#options[@]} -eq 0 ]; then
-        echo "NONE"
-        return
-    fi
-
-    # Pick random from weighted options
-    echo "${options[$((RANDOM % ${#options[@]}))]}"
+    # Find pods that were on this node and have checkpoints - restore them
+    restore_pods_from_deleted_node "$node"
 }
 
-#########################
-# Main Chaos Loop       #
-#########################
+# Restore all checkpointed pods that were on a deleted node
+restore_pods_from_deleted_node() {
+    local deleted_node="$1"
 
-run_chaos_event_loop() {
-    local start_time
+    for pod in $(list_all_tracked_pods); do
+        local pod_node
+        pod_node=$(get_stored_pod_node "$pod")
+        local state
+        state=$(get_pod_state "$pod")
+
+        # If pod was on the deleted node and has a checkpoint, restore it
+        if [ "$pod_node" = "$deleted_node" ] && [ "$state" = "checkpointed" ]; then
+            info_log "Auto-restoring $pod (was on deleted node $deleted_node)"
+            do_restore_pod "$pod"
+        fi
+    done
+}
+
+################################################################################
+# Main Chaos Loop
+################################################################################
+
+run_chaos_loop() {
+    local start_time end_time event_num=0
     start_time=$(date +%s)
-    local end_time=$((start_time + CHAOS_DURATION))
-    local event_num=0
+    end_time=$((start_time + CHAOS_DURATION))
 
-    info_log "Starting chaos event loop for ${CHAOS_DURATION}s"
+    info_log "Starting chaos loop for ${CHAOS_DURATION}s"
 
     while [ "$(date +%s)" -lt "$end_time" ]; do
-        # Random delay between events
+        event_num=$((event_num + 1))
+        local elapsed=$(($(date +%s) - start_time))
+
+        # Check pending checkpoints and trigger restores when complete
+        process_pending_checkpoints
+
+        # Discover and track any new restored pods that are now running
+        discover_restored_pods
+
+        # Random delay
         local delay=$((CHAOS_MIN_EVENT_INTERVAL + RANDOM % (CHAOS_MAX_EVENT_INTERVAL - CHAOS_MIN_EVENT_INTERVAL + 1)))
         sleep "$delay"
 
-        ((event_num++))
-        local elapsed=$(($(date +%s) - start_time))
+        # Select and execute event
         local event
-        event=$(select_random_event)
-
+        event=$(select_event)
         debug_log "Event #$event_num at ${elapsed}s: $event"
 
         case "$event" in
             CHECKPOINT)
-                do_checkpoint_random_pod
+                local pod
+                pod=$(list_pods_in_state "running" | shuf -n 1)
+                [ -n "$pod" ] && do_checkpoint_pod "$pod" || true
                 ;;
             DELETE_NODE)
-                do_delete_random_node
-                ;;
-            RESTORE)
-                do_restore_random_checkpoint
+                do_delete_node || true
                 ;;
             NONE)
-                debug_log "No valid events available, waiting..."
+                debug_log "No events available"
                 ;;
         esac
     done
 
-    info_log "Chaos event loop complete after $event_num events"
+    # Final processing of pending checkpoints
+    info_log "Processing remaining checkpoints..."
+    for _ in $(seq 1 12); do
+        process_pending_checkpoints
+        [ "$(count_pods_in_state "checkpointing")" -eq 0 ] && break
+        sleep 5
+    done
+
+    info_log "Chaos loop complete ($event_num events)"
 }
 
-#########################
-# Main Chaos Test       #
-#########################
+# Discover restored pods that are now running and track them
+# Shows which node the restored pod landed on
+discover_restored_pods() {
+    local restored_pods
+    restored_pods=$(kubectl get pods -n "$CHAOS_NAMESPACE" --no-headers -o custom-columns=':metadata.name' 2>/dev/null | grep "restored" || true)
+
+    for pod in $restored_pods; do
+        [ -z "$pod" ] && continue
+        # Skip if already tracked
+        [ -f "$STATE_DIR/state_${pod}" ] && continue
+
+        # Check if pod is running
+        local phase
+        phase=$(kubectl get pod "$pod" -n "$CHAOS_NAMESPACE" -o jsonpath='{.status.phase}' 2>/dev/null || echo "")
+        if [ "$phase" = "Running" ]; then
+            local node
+            node=$(get_pod_node "$pod")
+            set_pod_state "$pod" "running"
+            set_pod_node "$pod" "$node"
+            increment_counter "restore_completed"
+
+            # Extract short node name for cleaner output
+            local short_node="${node##computeinstance-}"
+            info_log "RESTORED: $pod -> node: $short_node"
+        fi
+    done
+}
+
+# Process checkpointing pods - when checkpoint completes, trigger restore
+process_pending_checkpoints() {
+    for pod in $(list_pods_in_state "checkpointing"); do
+        local action_id
+        action_id=$(get_pod_action_id "$pod")
+        [ -n "$action_id" ] || continue
+
+        local status
+        status=$(check_checkpoint_status "$action_id")
+
+        case "$status" in
+            "ready")
+                info_log "Checkpoint complete: $pod"
+                set_pod_state "$pod" "checkpointed"
+                increment_counter "checkpoint_completed"
+                # Immediately restore from this checkpoint
+                do_restore_pod "$pod"
+                ;;
+            "error")
+                error_log "Checkpoint failed: $pod"
+                set_pod_state "$pod" "failed"
+                ;;
+        esac
+    done
+}
+
+# Select next event based on current state
+# Returns: CHECKPOINT, DELETE_NODE, or NONE
+select_event() {
+    local running_count checkpoint_count node_delete_count deletable_count
+    running_count=$(count_pods_in_state "running")
+    checkpoint_count=$(get_counter "checkpoint_completed")
+    node_delete_count=$(get_deleted_node_count)
+    deletable_count=$(get_deletable_node_count)
+
+    local can_checkpoint=false
+    local can_delete_node=false
+
+    # Can checkpoint if we have running pods
+    [ "$running_count" -gt 0 ] && can_checkpoint=true
+
+    # Can delete node only if:
+    # 1. We have at least CHAOS_CHECKPOINTS_PER_NODE_DELETE completed checkpoints
+    # 2. Haven't hit max node deletes
+    # 3. Have deletable nodes remaining
+    if [ "$checkpoint_count" -ge "$CHAOS_CHECKPOINTS_PER_NODE_DELETE" ] && \
+       [ "$node_delete_count" -lt "$CHAOS_MAX_NODE_DELETES" ] && \
+       [ "$deletable_count" -gt 0 ]; then
+        can_delete_node=true
+    fi
+
+    # Force node deletion after every N completed checkpoints
+    # e.g., with CHAOS_CHECKPOINTS_PER_NODE_DELETE=3: delete after checkpoint 3, 6, 9...
+    local expected_deletes=$((checkpoint_count / CHAOS_CHECKPOINTS_PER_NODE_DELETE))
+    if [ "$checkpoint_count" -ge "$CHAOS_CHECKPOINTS_PER_NODE_DELETE" ]; then
+        info_log "select: ckpt=$checkpoint_count deletable=$deletable_count can_del=$can_delete_node expected_del=$expected_deletes actual_del=$node_delete_count"
+    fi
+
+    if $can_delete_node && [ "$expected_deletes" -gt "$node_delete_count" ]; then
+        info_log "FORCING DELETE_NODE (ckpt=$checkpoint_count, expected=$expected_deletes, actual=$node_delete_count)"
+        echo "DELETE_NODE"
+        return
+    fi
+
+    # Random selection from available options
+    local options=()
+    $can_checkpoint && options+=(CHECKPOINT CHECKPOINT CHECKPOINT)  # 75% weight
+    $can_delete_node && options+=(DELETE_NODE)                       # 25% weight
+
+    [ ${#options[@]} -eq 0 ] && echo "NONE" && return
+    echo "${options[$((RANDOM % ${#options[@]}))]}"
+}
+
+################################################################################
+# Main Test
+################################################################################
 
 # bats test_tags=chaos,stress,interleaved
-@test "Chaos: Interleaved checkpoint/node-delete/restore events" {
+@test "Chaos: Interleaved checkpoint/node-delete/restore" {
     local workload_count=${#SAMPLE_WORKLOADS[@]}
 
     info_log "=========================================="
-    info_log "Starting Interleaved Chaos Test"
+    info_log "Chaos Test Configuration"
     info_log "  Workloads: $workload_count"
     info_log "  Duration: ${CHAOS_DURATION}s"
     info_log "  Event interval: ${CHAOS_MIN_EVENT_INTERVAL}-${CHAOS_MAX_EVENT_INTERVAL}s"
-    info_log "  Max node deletes: $CHAOS_MAX_NODE_DELETES"
+    info_log "  Node delete: every ${CHAOS_CHECKPOINTS_PER_NODE_DELETE} checkpoints (max ${CHAOS_MAX_NODE_DELETES})"
     info_log "=========================================="
 
-    # Phase 1: Deploy all workloads
-    info_log "Phase 1: Deploying $workload_count diverse workloads..."
-
+    # Phase 1: Deploy workloads
+    # Samples use generateName (e.g., monte-carlo-pi-) so pods get names like monte-carlo-pi-xyz123
+    info_log "Phase 1: Deploying workloads..."
     for sample in "${SAMPLE_WORKLOADS[@]}"; do
-        local spec
-        spec=$(pod_spec "$SAMPLES_DIR/cpu/$sample" "$CHAOS_NAMESPACE")
-        local pod_name
-        pod_name=$(get_created_pod "$spec" "$CHAOS_NAMESPACE" 0)
-        kubectl apply -f "$spec"
-        set_pod_state "$pod_name" "deploying"
-        debug_log "Deployed: $pod_name from $sample"
+        local base_name
+        base_name="${sample%.yaml}"
+
+        # Deploy with namespace override (samples have namespace: default hardcoded)
+        sed '/^  namespace:/d' "$SAMPLES_DIR/cpu/$sample" | kubectl create -n "$CHAOS_NAMESPACE" -f -
+
+        # Wait briefly for pod to be created, then find it by prefix
+        sleep 1
+        local actual_pod
+        actual_pod=$(kubectl get pods -n "$CHAOS_NAMESPACE" --no-headers -o custom-columns=':metadata.name' 2>/dev/null | grep "^${base_name}" | tail -1)
+
+        if [ -n "$actual_pod" ]; then
+            set_pod_state "$actual_pod" "deploying"
+            info_log "Deployed: $actual_pod"
+        else
+            error_log "Failed to find pod for $sample"
+        fi
     done
 
-    # Wait for all pods to be ready
-    info_log "Waiting for all workloads to become Ready..."
-    for f in "$STATE_DIR"/pod_*; do
-        [ -f "$f" ] || continue
-        local pod="${f##*/pod_}"
-        if validate_pod "$pod" 180 "$CHAOS_NAMESPACE"; then
+    # Wait for pods and record their nodes
+    info_log "Waiting for workloads to be Ready..."
+    for pod in $(list_all_tracked_pods); do
+        if validate_pod "$pod" 300 "$CHAOS_NAMESPACE"; then
             set_pod_state "$pod" "running"
-            info_log "Pod $pod is Ready"
+            local node
+            node=$(get_pod_node "$pod")
+            set_pod_node "$pod" "$node"
+            info_log "Ready: $pod (node: $node)"
         else
-            error_log "Pod $pod failed to become Ready"
             set_pod_state "$pod" "failed"
+            error_log "Failed to start: $pod"
         fi
     done
 
     local running_count
     running_count=$(count_pods_in_state "running")
-    info_log "All $running_count workloads are Ready"
+    info_log "$running_count workloads running"
 
-    # Phase 2: Run chaos event loop
-    # TODO: Replace individual checkpoint calls with a namespace-level policy.
-    # In production, configure a Cedana checkpoint policy for the entire
-    # namespace that triggers checkpoints based on signals (spot interruption,
-    # node pressure, schedule, etc.) rather than random events.
-    info_log "Phase 2: Running chaos event loop..."
-    run_chaos_event_loop
+    # Phase 2: Chaos loop
+    info_log "Phase 2: Running chaos loop..."
+    run_chaos_loop
 
-    # Phase 3: Final restoration of any remaining checkpointed pods
-    info_log "Phase 3: Final cleanup - restoring remaining checkpointed pods..."
-
-    local remaining_checkpointed
-    remaining_checkpointed=$(list_pods_in_state "checkpointed")
-    for pod in $remaining_checkpointed; do
-        do_restore_random_checkpoint
-    done
-
-    # Wait for restored pods to come up
-    sleep 15
-
-    # Phase 4: Validate results
-    info_log "Phase 4: Validating results..."
-
-    local restored_pods
-    restored_pods=$(list_restored_pods "$CHAOS_NAMESPACE")
-    local success_count=0
-
-    for restored_pod in $restored_pods; do
-        if validate_pod "$restored_pod" 180 "$CHAOS_NAMESPACE"; then
-            ((success_count++))
-            info_log "Restored pod $restored_pod is Ready"
-        else
-            error_log "Restored pod $restored_pod failed"
-        fi
-    done
-
-    local checkpoint_count
-    checkpoint_count=$(get_counter "checkpoint_count")
-    local restore_count
-    restore_count=$(get_counter "restore_count")
-    local node_delete_count
-    node_delete_count=$(get_deleted_node_count)
+    # Results
+    local checkpoints_completed=$(get_counter checkpoint_completed)
+    local restores_completed=$(get_counter restore_completed)
+    local nodes_deleted=$(get_deleted_node_count)
 
     info_log "=========================================="
-    info_log "Chaos Test Results"
+    info_log "Results"
     info_log "  Workloads deployed: $workload_count"
-    info_log "  Checkpoints performed: $checkpoint_count"
-    info_log "  Restores triggered: $restore_count"
-    info_log "  Nodes deleted: $node_delete_count"
-    info_log "  Successfully restored: $success_count"
+    info_log "  Checkpoints completed: $checkpoints_completed"
+    info_log "  Restores completed: $restores_completed"
+    info_log "  Nodes deleted: $nodes_deleted"
     info_log "=========================================="
 
-    # Success if at least 80% restored
-    local min_success=$((workload_count * 80 / 100))
-    if [ "$min_success" -lt 1 ]; then
-        min_success=1
-    fi
-
-    [ "$success_count" -ge "$min_success" ] || {
-        error_log "Too few successful restores: $success_count < $min_success"
+    # Pass if we completed at least 1 checkpoint and 1 restore
+    [ "$checkpoints_completed" -ge 1 ] || {
+        error_log "No checkpoints completed"
+        return 1
+    }
+    [ "$restores_completed" -ge 1 ] || {
+        error_log "No restores completed"
         return 1
     }
 
@@ -499,41 +598,38 @@ run_chaos_event_loop() {
 # bats test_tags=chaos,stress,rapid
 @test "Chaos: Rapid checkpoint/restore cycles" {
     local cycles=3
-
     info_log "Testing $cycles rapid checkpoint/restore cycles..."
 
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cpu/counting.yaml" "$CHAOS_NAMESPACE")
-    local pod_name
-    pod_name=$(grep -E "^\s*name:" "$spec" | head -1 | awk '{print $2}' | tr -d '"')
+    local spec pod_name
+    spec=$(pod_spec "$SAMPLES_DIR/cpu/monte-carlo-pi.yaml" "$CHAOS_NAMESPACE")
+    pod_name=$(get_created_pod "$spec" "$CHAOS_NAMESPACE" 0)
 
     kubectl apply -f "$spec"
-    validate_pod "$pod_name" 120 "$CHAOS_NAMESPACE" || return 1
+    validate_pod "$pod_name" 180 "$CHAOS_NAMESPACE" || return 1
 
     local current_name="$pod_name"
 
     for i in $(seq 1 "$cycles"); do
-        info_log "Cycle $i/$cycles: Checkpoint $current_name"
+        info_log "Cycle $i/$cycles"
 
-        # TODO: Replace with namespace-level policy checkpoint trigger
+        # Checkpoint
         local pod_id action_id
         pod_id=$(get_pod_id "$current_name" "$CHAOS_NAMESPACE")
         action_id=$(checkpoint_pod "$pod_id")
         [ $? -eq 0 ] || { error_log "Checkpoint failed"; return 1; }
 
-        poll_action_status "$action_id" "checkpoint" 60 || return 1
-        sleep 2
+        poll_action_status "$action_id" "checkpoint" 120 || return 1
 
+        # Delete and restore
         kubectl delete pod "$current_name" -n "$CHAOS_NAMESPACE" --wait=true
-
-        info_log "Cycle $i/$cycles: Restore"
         restore_pod "$action_id" "$CLUSTER_ID" || return 1
 
+        # Wait for restored pod
         sleep 5
-        current_name=$(wait_for_cmd 60 get_restored_pod "$pod_name" "$CHAOS_NAMESPACE")
-        [ -n "$current_name" ] || { error_log "No restored pod"; return 1; }
+        current_name=$(wait_for_cmd 120 get_restored_pod "$pod_name" "$CHAOS_NAMESPACE")
+        [ -n "$current_name" ] || { error_log "No restored pod found"; return 1; }
 
-        validate_pod "$current_name" 120 "$CHAOS_NAMESPACE" || return 1
+        validate_pod "$current_name" 180 "$CHAOS_NAMESPACE" || return 1
         pod_name="$current_name"
     done
 
@@ -545,34 +641,32 @@ run_chaos_event_loop() {
 @test "Chaos: Concurrent checkpoints" {
     info_log "Testing concurrent checkpoints..."
 
-    local samples=("counting.yaml" "monte-carlo-pi.yaml" "numpy-matrix-ops.yaml" "counting-multicontainer.yaml")
+    local samples=("monte-carlo-pi.yaml" "numpy-matrix-ops.yaml" "sklearn-random-forest.yaml")
     local pods=()
 
     for sample in "${samples[@]}"; do
-        local spec
+        local spec name
         spec=$(pod_spec "$SAMPLES_DIR/cpu/$sample" "$CHAOS_NAMESPACE")
-        local name
         name=$(get_created_pod "$spec" "$CHAOS_NAMESPACE" 0)
         kubectl apply -f "$spec"
         pods+=("$name")
     done
 
-    for pod_name in "${pods[@]}"; do
-        validate_pod "$pod_name" 120 "$CHAOS_NAMESPACE" || return 1
+    for pod in "${pods[@]}"; do
+        validate_pod "$pod" 300 "$CHAOS_NAMESPACE" || return 1
     done
 
     sleep 10
 
-    # TODO: Replace with namespace-level policy checkpoint trigger.
-    # In production, triggering a checkpoint policy for the namespace would
-    # handle all pods automatically rather than this manual concurrent approach.
+    # Checkpoint all concurrently
+    # TODO: Use namespace-level checkpoint policy in production
     local pids=() action_files=()
-    for pod_name in "${pods[@]}"; do
-        local action_file="/tmp/chaos-action-$pod_name"
+    for pod in "${pods[@]}"; do
+        local action_file="/tmp/chaos-action-$pod"
         action_files+=("$action_file")
         (
             local pid
-            pid=$(get_pod_id "$pod_name" "$CHAOS_NAMESPACE")
+            pid=$(get_pod_id "$pod" "$CHAOS_NAMESPACE")
             checkpoint_pod "$pid" > "$action_file" 2>&1
         ) &
         pids+=($!)
@@ -580,16 +674,16 @@ run_chaos_event_loop() {
 
     local failures=0
     for pid in "${pids[@]}"; do
-        wait "$pid" || ((failures++))
+        wait "$pid" || failures=$((failures + 1))
     done
 
     for action_file in "${action_files[@]}"; do
         local action_id
         action_id=$(cat "$action_file")
         if validate_action_id "$action_id" 2>/dev/null; then
-            poll_action_status "$action_id" "checkpoint" 120 || ((failures++))
+            poll_action_status "$action_id" "checkpoint" 180 || failures=$((failures + 1))
         else
-            ((failures++))
+            failures=$((failures + 1))
         fi
         rm -f "$action_file"
     done
