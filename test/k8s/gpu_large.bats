@@ -8,8 +8,6 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
-CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((8*GIBIBYTE))}"
-
 setup_file() {
     if [ "${GPU:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU=1)"
@@ -19,6 +17,18 @@ setup_file() {
     kubectl apply -f "$spec"
     sleep 10
     debug_log "dgtest-pvc has been applied"
+
+    # Create HuggingFace token secret for LLM tests
+    if [ -n "$HF_TOKEN" ]; then
+        debug_log "Creating hf-token-secret"
+        kubectl create secret generic hf-token-secret \
+            --from-literal=HF_TOKEN="$HF_TOKEN" \
+            -n "$NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        debug_log "hf-token-secret has been created"
+    else
+        debug_log "HF_TOKEN not set, skipping hf-token-secret creation"
+    fi
 }
 
 #################################################
