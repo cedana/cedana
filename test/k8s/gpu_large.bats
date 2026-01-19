@@ -35,13 +35,14 @@ setup_file() {
 # Large Cedana Samples (LLM inference, CompBio) #
 #################################################
 
-# bats test_tags=dump,restore,samples,llm,vllm,inference
-@test "Dump/Restore: vLLM Llama 8B Inference" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vllm-llama-3.1-8b.yaml")
+# Blocked on CED-1864
+# # bats test_tags=dump,restore,samples,llm,vllm,inference
+# @test "Dump/Restore: vLLM Llama 8B Inference" {
+#     local spec
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vllm-llama-3.1-8b.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
-}
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+# }
 
 # bats test_tags=dump,restore,samples,compbio,gromacs
 @test "Dump/Restore: GROMACS MD Simulation" {
@@ -59,13 +60,14 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
 }
 
-# bats test_tags=dump,restore,samples,tensorflow,training
-@test "Dump/Restore: TensorFlow Training" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow-cifar100.yaml")
+# Blocked on CED-1863
+# # bats test_tags=dump,restore,samples,tensorflow,training
+# @test "Dump/Restore: TensorFlow Training" {
+#     local spec
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow-cifar100.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
-}
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
+# }
 
 # bats test_tags=dump,restore,samples,deepspeed,training
 @test "Dump/Restore: DeepSpeed Training" {
@@ -115,13 +117,14 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 }
 
-# bats test_tags=dump,restore,samples,training,multi,tensorflow
-@test "Dump/Restore: Multi-GPU TensorFlow Training" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-tensorflow-cifar100.yaml")
+# Blocked on CED-1863
+# # bats test_tags=dump,restore,samples,training,multi,tensorflow
+# @test "Dump/Restore: Multi-GPU TensorFlow Training" {
+#     local spec
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-tensorflow-cifar100.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
-}
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
+# }
 
 
 
