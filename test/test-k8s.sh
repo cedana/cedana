@@ -59,7 +59,7 @@ get_all_tags() {
     while IFS= read -r line; do
         # Parse "# bats file_tags=tag1,tag2,tag3"
         if [[ $line =~ file_tags=(.+) ]]; then
-            IFS=',' read -ra file_tags <<< "${BASH_REMATCH[1]}"
+            IFS=',' read -ra file_tags <<<"${BASH_REMATCH[1]}"
             tags+=("${file_tags[@]}")
         fi
     done < <(grep -h "bats file_tags=" "$script_dir"/k8s/*.bats 2>/dev/null || true)
@@ -68,7 +68,7 @@ get_all_tags() {
     while IFS= read -r line; do
         # Parse "# bats test_tags=tag1,tag2,tag3"
         if [[ $line =~ test_tags=(.+) ]]; then
-            IFS=',' read -ra test_tags <<< "${BASH_REMATCH[1]}"
+            IFS=',' read -ra test_tags <<<"${BASH_REMATCH[1]}"
             tags+=("${test_tags[@]}")
         fi
     done < <(grep -h "bats test_tags=" "$script_dir"/k8s/*.bats 2>/dev/null || true)
@@ -113,7 +113,7 @@ interactive_select() {
 
     # Convert to array
     local -a tag_array
-    mapfile -t tag_array <<< "$all_tags"
+    mapfile -t tag_array <<<"$all_tags"
 
     echo "Available tags:"
     local i=1
@@ -138,35 +138,35 @@ interactive_select() {
     read -rp "Enter preset letter, tag numbers (comma-separated), or custom tags: " selection
 
     case "$selection" in
-        a) TAGS="k8s" ;;
-        b) TAGS="k8s,gpu" ;;
-        c) TAGS="k8s,gpu,!large" ;;
-        d) TAGS="k8s,!gpu" ;;
-        e) TAGS="k8s,gpu,training" ;;
-        f) TAGS="k8s,gpu,inference" ;;
-        g) TAGS="k8s,gpu,multi" ;;
-        h) TAGS="k8s,chaos" ;;
-        *)
-            # Check if it's numbers or custom tags
-            if [[ "$selection" =~ ^[0-9,\ ]+$ ]]; then
-                # Numbers - build tag list
-                local selected_tags="k8s"
-                IFS=', ' read -ra nums <<< "$selection"
-                for num in "${nums[@]}"; do
-                    if [[ $num -ge 1 && $num -le ${#tag_array[@]} ]]; then
-                        selected_tags="$selected_tags,${tag_array[$((num-1))]}"
-                    fi
-                done
-                TAGS="$selected_tags"
-            else
-                # Custom tags - use as-is, prepend k8s if not present
-                if [[ "$selection" != *"k8s"* ]]; then
-                    TAGS="k8s,$selection"
-                else
-                    TAGS="$selection"
+    a) TAGS="k8s" ;;
+    b) TAGS="k8s,gpu" ;;
+    c) TAGS="k8s,gpu,!large" ;;
+    d) TAGS="k8s,!gpu" ;;
+    e) TAGS="k8s,gpu,training" ;;
+    f) TAGS="k8s,gpu,inference" ;;
+    g) TAGS="k8s,gpu,multi" ;;
+    h) TAGS="k8s,chaos" ;;
+    *)
+        # Check if it's numbers or custom tags
+        if [[ "$selection" =~ ^[0-9,\ ]+$ ]]; then
+            # Numbers - build tag list
+            local selected_tags="k8s"
+            IFS=', ' read -ra nums <<<"$selection"
+            for num in "${nums[@]}"; do
+                if [[ $num -ge 1 && $num -le ${#tag_array[@]} ]]; then
+                    selected_tags="$selected_tags,${tag_array[$((num - 1))]}"
                 fi
+            done
+            TAGS="$selected_tags"
+        else
+            # Custom tags - use as-is, prepend k8s if not present
+            if [[ "$selection" != *"k8s"* ]]; then
+                TAGS="k8s,$selection"
+            else
+                TAGS="$selection"
             fi
-            ;;
+        fi
+        ;;
     esac
 
     echo ""
@@ -191,51 +191,51 @@ LIST_TAGS=0
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -t|--tags)
-            TAGS="$2"
-            shift 2
-            ;;
-        -l|--list-tags)
-            LIST_TAGS=1
-            shift
-            ;;
-        -i|--interactive)
-            INTERACTIVE=1
-            shift
-            ;;
-        -g|--gpu)
-            GPU=1
-            shift
-            ;;
-        -c|--chaos)
-            TAGS="k8s,chaos"
-            shift
-            ;;
-        --chaos-duration)
-            CHAOS_DURATION="$2"
-            shift 2
-            ;;
-        -s|--stream)
-            STREAM_OUTPUT=1
-            shift
-            ;;
-        -p|--parallelism)
-            PARALLELISM="$2"
-            shift 2
-            ;;
-        -n|--namespace)
-            NAMESPACE="$2"
-            shift 2
-            ;;
-        -h|--help)
-            show_help
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            show_help
-            exit 1
-            ;;
+    -t | --tags)
+        TAGS="$2"
+        shift 2
+        ;;
+    -l | --list-tags)
+        LIST_TAGS=1
+        shift
+        ;;
+    -i | --interactive)
+        INTERACTIVE=1
+        shift
+        ;;
+    -g | --gpu)
+        GPU=1
+        shift
+        ;;
+    -c | --chaos)
+        TAGS="k8s,chaos"
+        shift
+        ;;
+    --chaos-duration)
+        CHAOS_DURATION="$2"
+        shift 2
+        ;;
+    -s | --stream)
+        STREAM_OUTPUT=1
+        shift
+        ;;
+    -p | --parallelism)
+        PARALLELISM="$2"
+        shift 2
+        ;;
+    -n | --namespace)
+        NAMESPACE="$2"
+        shift 2
+        ;;
+    -h | --help)
+        show_help
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
     esac
 done
 
