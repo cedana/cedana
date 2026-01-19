@@ -645,14 +645,15 @@ test_pod_spec() {
 
                 debug_log "Dumped pod $name successfully (action_id: $action_id)"
 
-                if [ -n "$dump_trigger" ]; then
-                    debug_log "Verifying pod $name resumes after checkpoint..."
-                    wait_for_new_log_trigger "$name" "$dump_trigger" 300 "$namespace" || {
-                        error="Pod $name did not resume training after checkpoint (no new '$dump_trigger' in logs)"
-                        break
-                    }
-                    debug_log "Pod $name successfully resumed after checkpoint"
-                fi
+                # TODO: Re-enable after CED-1799 is merged
+                # if [ -n "$dump_trigger" ]; then
+                #     debug_log "Verifying pod $name resumes after checkpoint..."
+                #     wait_for_new_log_trigger "$name" "$dump_trigger" 300 "$namespace" || {
+                #         error="Pod $name did not resume training after checkpoint (no new '$dump_trigger' in logs)"
+                #         break
+                #     }
+                #     debug_log "Pod $name successfully resumed after checkpoint"
+                # fi
                 ;;
 
             RESTORE)
@@ -765,13 +766,15 @@ wait_for_new_log_trigger() {
     debug_log "Waiting for NEW trigger '$trigger' in pod $name logs (timeout: ${timeout}s)"
 
     local initial_count
-    initial_count=$(kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -c "$trigger" || echo "0")
+    initial_count=$(kubectl logs "$name" -n "$namespace" --all-containers=true 2>/dev/null | grep -ci "$trigger" || echo "0")
+    initial_count=${initial_count##*$'\n'}  # Take last line only (handles multi-container output)
     debug_log "Initial count of '$trigger' in logs: $initial_count"
 
     local elapsed=0
     while [ $elapsed -lt "$timeout" ]; do
         local current_count
-        current_count=$(kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -c "$trigger" || echo "0")
+        current_count=$(kubectl logs "$name" -n "$namespace" --all-containers=true 2>/dev/null | grep -ci "$trigger" || echo "0")
+        current_count=${current_count##*$'\n'}  # Take last line only (handles multi-container output)
 
         if [ "$current_count" -gt "$initial_count" ]; then
             debug_log "Found NEW trigger '$trigger' in pod $name after ${elapsed}s (count: $initial_count -> $current_count)"

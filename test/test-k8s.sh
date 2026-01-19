@@ -22,6 +22,9 @@ OPTIONS:
     -l, --list-tags     List all available tags from bats files and exit
     -i, --interactive   Interactive mode to select tags
     -g, --gpu           Enable GPU tests (sets GPU=1)
+    -c, --chaos         Run chaos/stress tests
+    --chaos-duration N  Chaos test duration in seconds (default: 120)
+    -s, --stream        Stream output in real-time (use pretty formatter instead of tap13)
     -p, --parallelism N Number of parallel test jobs (default: 1)
     -n, --namespace NS  Test namespace (default: test)
     -h, --help          Show this help message
@@ -32,6 +35,8 @@ EXAMPLES:
     $0 -t 'k8s,!gpu'            # Run CPU-only tests (exclude GPU)
     $0 -t 'k8s,gpu,!large'      # Run GPU tests excluding large ones
     $0 -t 'k8s,gpu,training'    # Run GPU training tests
+    $0 -c                       # Run chaos/stress tests
+    $0 -c --chaos-duration 300  # Run chaos tests for 5 minutes
     $0 -i                       # Interactive tag selection
     $0 -l                       # List all available tags
 
@@ -54,7 +59,7 @@ get_all_tags() {
     while IFS= read -r line; do
         # Parse "# bats file_tags=tag1,tag2,tag3"
         if [[ $line =~ file_tags=(.+) ]]; then
-            IFS=',' read -ra file_tags <<< "${BASH_REMATCH[1]}"
+            IFS=',' read -ra file_tags <<<"${BASH_REMATCH[1]}"
             tags+=("${file_tags[@]}")
         fi
     done < <(grep -h "bats file_tags=" "$script_dir"/k8s/*.bats 2>/dev/null || true)
@@ -63,7 +68,7 @@ get_all_tags() {
     while IFS= read -r line; do
         # Parse "# bats test_tags=tag1,tag2,tag3"
         if [[ $line =~ test_tags=(.+) ]]; then
-            IFS=',' read -ra test_tags <<< "${BASH_REMATCH[1]}"
+            IFS=',' read -ra test_tags <<<"${BASH_REMATCH[1]}"
             tags+=("${test_tags[@]}")
         fi
     done < <(grep -h "bats test_tags=" "$script_dir"/k8s/*.bats 2>/dev/null || true)
@@ -92,6 +97,10 @@ list_tags() {
     echo "  k8s,gpu,inference      - GPU inference workloads"
     echo "  k8s,gpu,multi          - Multi-GPU tests"
     echo "  k8s,samples            - All sample workload tests"
+    echo "  k8s,chaos              - Chaos/stress tests"
+    echo "  k8s,chaos,interleaved  - Interleaved checkpoint/node-delete/restore"
+    echo "  k8s,chaos,rapid        - Rapid checkpoint/restore cycles"
+    echo "  k8s,chaos,concurrent   - Concurrent checkpoints"
 }
 
 interactive_select() {
@@ -104,7 +113,7 @@ interactive_select() {
 
     # Convert to array
     local -a tag_array
-    mapfile -t tag_array <<< "$all_tags"
+    mapfile -t tag_array <<<"$all_tags"
 
     echo "Available tags:"
     local i=1
@@ -123,39 +132,41 @@ interactive_select() {
     echo "  e) Training tests (k8s,gpu,training)"
     echo "  f) Inference tests (k8s,gpu,inference)"
     echo "  g) Multi-GPU tests (k8s,gpu,multi)"
+    echo "  h) Chaos/stress tests (k8s,chaos)"
     echo ""
 
     read -rp "Enter preset letter, tag numbers (comma-separated), or custom tags: " selection
 
     case "$selection" in
-        a) TAGS="k8s" ;;
-        b) TAGS="k8s,gpu" ;;
-        c) TAGS="k8s,gpu,!large" ;;
-        d) TAGS="k8s,!gpu" ;;
-        e) TAGS="k8s,gpu,training" ;;
-        f) TAGS="k8s,gpu,inference" ;;
-        g) TAGS="k8s,gpu,multi" ;;
-        *)
-            # Check if it's numbers or custom tags
-            if [[ "$selection" =~ ^[0-9,\ ]+$ ]]; then
-                # Numbers - build tag list
-                local selected_tags="k8s"
-                IFS=', ' read -ra nums <<< "$selection"
-                for num in "${nums[@]}"; do
-                    if [[ $num -ge 1 && $num -le ${#tag_array[@]} ]]; then
-                        selected_tags="$selected_tags,${tag_array[$((num-1))]}"
-                    fi
-                done
-                TAGS="$selected_tags"
-            else
-                # Custom tags - use as-is, prepend k8s if not present
-                if [[ "$selection" != *"k8s"* ]]; then
-                    TAGS="k8s,$selection"
-                else
-                    TAGS="$selection"
+    a) TAGS="k8s" ;;
+    b) TAGS="k8s,gpu" ;;
+    c) TAGS="k8s,gpu,!large" ;;
+    d) TAGS="k8s,!gpu" ;;
+    e) TAGS="k8s,gpu,training" ;;
+    f) TAGS="k8s,gpu,inference" ;;
+    g) TAGS="k8s,gpu,multi" ;;
+    h) TAGS="k8s,chaos" ;;
+    *)
+        # Check if it's numbers or custom tags
+        if [[ "$selection" =~ ^[0-9,\ ]+$ ]]; then
+            # Numbers - build tag list
+            local selected_tags="k8s"
+            IFS=', ' read -ra nums <<<"$selection"
+            for num in "${nums[@]}"; do
+                if [[ $num -ge 1 && $num -le ${#tag_array[@]} ]]; then
+                    selected_tags="$selected_tags,${tag_array[$((num - 1))]}"
                 fi
+            done
+            TAGS="$selected_tags"
+        else
+            # Custom tags - use as-is, prepend k8s if not present
+            if [[ "$selection" != *"k8s"* ]]; then
+                TAGS="k8s,$selection"
+            else
+                TAGS="$selection"
             fi
-            ;;
+        fi
+        ;;
     esac
 
     echo ""
@@ -172,45 +183,59 @@ TAGS="${TAGS:-k8s}"
 GPU="${GPU:-0}"
 PARALLELISM="${PARALLELISM:-1}"
 NAMESPACE="${NAMESPACE:-test}"
+CHAOS_DURATION="${CHAOS_DURATION:-120}"
+STREAM_OUTPUT=0
 INTERACTIVE=0
 LIST_TAGS=0
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
-        -t|--tags)
-            TAGS="$2"
-            shift 2
-            ;;
-        -l|--list-tags)
-            LIST_TAGS=1
-            shift
-            ;;
-        -i|--interactive)
-            INTERACTIVE=1
-            shift
-            ;;
-        -g|--gpu)
-            GPU=1
-            shift
-            ;;
-        -p|--parallelism)
-            PARALLELISM="$2"
-            shift 2
-            ;;
-        -n|--namespace)
-            NAMESPACE="$2"
-            shift 2
-            ;;
-        -h|--help)
-            show_help
-            exit 0
-            ;;
-        *)
-            echo "Unknown option: $1"
-            show_help
-            exit 1
-            ;;
+    -t | --tags)
+        TAGS="$2"
+        shift 2
+        ;;
+    -l | --list-tags)
+        LIST_TAGS=1
+        shift
+        ;;
+    -i | --interactive)
+        INTERACTIVE=1
+        shift
+        ;;
+    -g | --gpu)
+        GPU=1
+        shift
+        ;;
+    -c | --chaos)
+        TAGS="k8s,chaos"
+        shift
+        ;;
+    --chaos-duration)
+        CHAOS_DURATION="$2"
+        shift 2
+        ;;
+    -s | --stream)
+        STREAM_OUTPUT=1
+        shift
+        ;;
+    -p | --parallelism)
+        PARALLELISM="$2"
+        shift 2
+        ;;
+    -n | --namespace)
+        NAMESPACE="$2"
+        shift 2
+        ;;
+    -h | --help)
+        show_help
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1"
+        show_help
+        exit 1
+        ;;
     esac
 done
 
@@ -230,10 +255,16 @@ if [[ "$TAGS" == *"gpu"* && "$TAGS" != *"!gpu"* ]]; then
     GPU=1
 fi
 
+# Auto-enable streaming for chaos tests (long-running, need real-time feedback)
+if [[ "$TAGS" == *"chaos"* ]]; then
+    STREAM_OUTPUT=1
+fi
+
 export GPU
 export TAGS
 export PARALLELISM
 export NAMESPACE
+export CHAOS_DURATION
 export PROVIDER=generic
 
 # Skip helm install/uninstall since you already have Cedana installed
@@ -382,11 +413,13 @@ echo "PARALLELISM: $PARALLELISM"
 echo "SKIP_HELM: $SKIP_HELM"
 echo "CEDANA_NAMESPACE: $CEDANA_NAMESPACE"
 echo "TEST_NAMESPACE: $NAMESPACE"
+if [[ "$TAGS" == *"chaos"* ]]; then
+    echo "CHAOS_DURATION: ${CHAOS_DURATION}s"
+fi
 echo "======================================="
 echo ""
 
 # Run tests with tag filtering across all GPU test files
-# Using tap13 formatter for better output with timing
 # Build the filter-tags arguments (supports OR logic with semicolon separator)
 FILTER_ARGS=""
 IFS=';' read -ra TAG_SETS <<<"$TAGS"
@@ -394,13 +427,21 @@ for tag_set in "${TAG_SETS[@]}"; do
     FILTER_ARGS="$FILTER_ARGS --filter-tags $tag_set"
 done
 
+# Choose formatter based on streaming preference
+# tap13 buffers output, pretty streams in real-time
+if [[ $STREAM_OUTPUT -eq 1 ]]; then
+    FORMATTER_ARGS="--formatter pretty"
+else
+    FORMATTER_ARGS="--formatter tap13"
+fi
+
 bats \
     $FILTER_ARGS \
     --jobs "$PARALLELISM" \
     --verbose-run \
     --print-output-on-failure \
     --timing \
-    --formatter tap13 \
+    $FORMATTER_ARGS \
     -r k8s
 
 TEST_EXIT_CODE=$?
