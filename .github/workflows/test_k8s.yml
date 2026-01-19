@@ -331,6 +331,10 @@ jobs:
           if [ "$LARGE" = "0" ]; then
             TAGS="${TAGS},!samples,!large"
           fi
+          # Nebius only runs large GPU workloads (skip small tests)
+          if [ "$PROVIDER" = "nebius" ]; then
+            TAGS="${TAGS},large"
+          fi
 
           make test-k8s \
             TAGS=$TAGS \
