@@ -563,8 +563,12 @@ jobs:
           FAILED=$(find report -name "*.json" -exec jq -r '.results.summary.failed // 0' {} \; | awk '{s+=$1} END {print s}')
           if [ "$FAILED" -gt 0 ]; then
             echo "Found $FAILED failures, generating AI summary..."
+            # Flatten all JSON reports into a single directory for merging
+            # (ctrf merge doesn't search recursively)
+            mkdir -p /tmp/ctrf-reports
+            find report -name "*.json" -exec cp {} /tmp/ctrf-reports/ \;
             # Merge all CTRF reports into one
-            npx ctrf merge report -o merged-report.json -d /tmp --keep-reports
+            npx ctrf merge /tmp/ctrf-reports -o merged-report.json -d /tmp --keep-reports
             npx ai-ctrf gemini "/tmp/merged-report.json" --consolidate --model gemini-2.0-flash \
               --additionalPromptContext "Focus on identifying root causes and common patterns across failures. Be concise." \
               > /tmp/ai-summary.txt 2>&1 || true
