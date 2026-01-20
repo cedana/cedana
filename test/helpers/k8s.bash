@@ -410,7 +410,7 @@ wait_for_ready() {
                 error_log "$line"
             done
             error_log "Logs from pod $pod in namespace $namespace:"
-            error kubectl logs "$pod" -n "$namespace" --tail=1000 --
+            error kubectl logs "$pod" -n "$namespace" --tail=1000 || true
         done
         return 1
     }
@@ -728,8 +728,8 @@ test_pod_spec() {
 
     # Fetch Pod logs before Deleting
     if [ -n "$name" ]; then
-        debug_log "Cleaning up pod $name..."
-        kubectl logs pod "$name" -n "$namespace"
+        debug_log "Fetching logs from pod $name..."
+        kubectl logs "$name" -n "$namespace" --tail=500 || true
     fi
 
     # Clean up the final pod
