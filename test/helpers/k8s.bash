@@ -79,9 +79,12 @@ setup_samples() {
 
 # Use an existing pod spec file, modify its namespace to the
 # test namespace, and return the new spec path.
+# Optional third parameter: workload name to include in the pod name
+# e.g., pod_spec "/path/to/spec.yaml" "test" "gromacs" -> test-cuda-gromacs-1737394521234567890
 pod_spec() {
     local source_file="$1"
     local namespace="${2:-$NAMESPACE}"
+    local workload_name="${3:-}"
 
     # Check if source file exists
     if [ ! -f "$source_file" ]; then
@@ -90,9 +93,15 @@ pod_spec() {
     fi
 
     local unique_id
-    unique_id="test-$(unix_nano)"
+    local prefix="test"
     if grep -q "nvidia.com/gpu" "$source_file"; then
-        unique_id="test-cuda-$(unix_nano)"
+        prefix="test-cuda"
+    fi
+
+    if [ -n "$workload_name" ]; then
+        unique_id="${prefix}-${workload_name}-$(unix_nano)"
+    else
+        unique_id="${prefix}-$(unix_nano)"
     fi
 
     # Check if the spec is a Pod
@@ -126,9 +135,14 @@ cmd_pod_spec() {
     local image="$1"
     local args="$2"
     local namespace="${3:-$NAMESPACE}"
+    local workload_name="${4:-}"
 
     local name
-    name=test-$(unix_nano)
+    if [ -n "$workload_name" ]; then
+        name="test-${workload_name}-$(unix_nano)"
+    else
+        name="test-$(unix_nano)"
+    fi
 
     local spec=/tmp/pod-${name}.yaml
     cat >"$spec" <<EOF
@@ -163,9 +177,14 @@ cmd_pod_spec_gpu() {
     local args="$2"
     local gpus="${3:-1}"
     local namespace="${4:-$NAMESPACE}"
+    local workload_name="${5:-}"
 
     local name
-    name=test-cuda-$(unix_nano)
+    if [ -n "$workload_name" ]; then
+        name="test-cuda-${workload_name}-$(unix_nano)"
+    else
+        name="test-cuda-$(unix_nano)"
+    fi
 
     local spec=/tmp/pod-${name}.yaml
     cat >"$spec" <<EOF

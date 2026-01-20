@@ -47,7 +47,7 @@ setup_file() {
 # bats test_tags=dump,restore,samples,compbio,gromacs
 @test "Dump/Restore: GROMACS MD Simulation" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/gromacs-simple-example.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/gromacs-simple-example.yaml" "$NAMESPACE" "gromacs")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
 }
@@ -55,7 +55,7 @@ setup_file() {
 # bats test_tags=dump,restore,samples,compbio,openmm
 @test "Dump/Restore: OpenMM MD Simulation" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/openmm.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/openmm.yaml" "$NAMESPACE" "openmm")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
 }
@@ -72,7 +72,7 @@ setup_file() {
 # bats test_tags=dump,restore,samples,deepspeed,training
 @test "Dump/Restore: DeepSpeed Training" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-deepspeed-train.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-deepspeed-train.yaml" "$NAMESPACE" "deepspeed")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 60
 }
@@ -80,7 +80,7 @@ setup_file() {
 # bats test_tags=dump,restore,samples,torch,training
 @test "Dump/Restore: PyTorch Training" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-pytorch-cifar100.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-pytorch-cifar100.yaml" "$NAMESPACE" "pytorch")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
@@ -88,7 +88,7 @@ setup_file() {
 # bats test_tags=dump,restore,samples,llamafactory,training,finetuning
 @test "Dump/Restore: LlamaFactory LLM FineTuning" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-llamafactory-lora-sft.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-llamafactory-lora-sft.yaml" "$NAMESPACE" "llamafactory")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 300 300 "$NAMESPACE" "step" 300 10
 }
@@ -96,7 +96,7 @@ setup_file() {
 # bats test_tags=dump,restore,samples,training,multi,deepspeed
 @test "Dump/Restore: Multi-GPU DeepSpeed Training" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml" "$NAMESPACE" "deepspeed-2gpu")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 60
 }
@@ -104,7 +104,7 @@ setup_file() {
 # bats test_tags=dump,restore,samples,training,multi,torch
 @test "Dump/Restore: Multi-GPU PyTorch Training" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-4xGPU-pytorch-cifar100.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-4xGPU-pytorch-cifar100.yaml" "$NAMESPACE" "pytorch-4gpu")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
@@ -112,7 +112,7 @@ setup_file() {
 # bats test_tags=dump,restore,samples,training,multi,llamafactory
 @test "Dump/Restore: Multi-GPU LlamaFactory LLM FineTuning" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-llamafactory-lora-sft.yaml")
+    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-llamafactory-lora-sft.yaml" "$NAMESPACE" "llamafactory-2gpu")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 }
