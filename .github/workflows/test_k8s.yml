@@ -300,7 +300,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          TEST_LOG_FILE="k8s-tests-${{ matrix.platform }}-${{ matrix.compute }}-${{ matrix.arch }}-${{ matrix.cr }}-${{ matrix.storage }}.log"
+          TEST_LOG_FILE="k8s-tests-${{ matrix.platform }}-${{ matrix.compute }}-${{ matrix.arch }}-${{ matrix.cr }}.log"
           touch "$TEST_LOG_FILE"
           {
             HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
