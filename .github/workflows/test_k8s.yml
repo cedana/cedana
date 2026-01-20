@@ -161,7 +161,7 @@ jobs:
           - platform: Nebius
             arch: arm64
           - platform: Nebius
-            cr: streamer
+            cr: default
           - platform: Nebius
             storage: storage/s3
           - platform: Nebius
