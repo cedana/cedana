@@ -16,7 +16,7 @@ func CheckConfig() types.Check {
 			components = append(components, &daemon.HealthCheckComponent{
 				Name:   "AWS AccessKeyID",
 				Data:   "not set",
-				Errors: []string{"AWS AccessKeyID is not set in the configuration"},
+				Warnings: []string{"AWS AccessKeyID is not set in the configuration"},
 			})
 		} else {
 			components = append(components, &daemon.HealthCheckComponent{
@@ -28,7 +28,7 @@ func CheckConfig() types.Check {
 			components = append(components, &daemon.HealthCheckComponent{
 				Name:   "AWS SecretAccessKey",
 				Data:   "not set",
-				Errors: []string{"AWS SecretAccessKey is not set in the configuration"},
+				Warnings: []string{"AWS SecretAccessKey is not set in the configuration"},
 			})
 		} else {
 			components = append(components, &daemon.HealthCheckComponent{

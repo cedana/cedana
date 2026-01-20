@@ -155,6 +155,7 @@ var runCmd = &cobra.Command{
 
 			code, err := cedana.Run(req)
 			if err != nil {
+				cedana.Finalize()
 				cedana.Wait()
 				return utils.GRPCErrorColored(err)
 			}

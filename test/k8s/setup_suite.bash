@@ -71,7 +71,7 @@ setup_suite() {
     debug_log "Connected to $PROVIDER cluster: $(kubectl config current-context)"
 
     # Start tailing logs in background
-    tail_all_logs "$CEDANA_NAMESPACE" 300 &
+    tail_all_logs "$CEDANA_NAMESPACE" 600 &
     TAIL_PID=$!
 
     # Install Cedana helm chart unless skipped
@@ -80,13 +80,16 @@ setup_suite() {
             debug_log "Registering cluster '$CLUSTER_NAME' with propagator..."
             CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
             export CLUSTER_ID
+            info_log "======================================="
             info_log "Cluster registered with ID: $CLUSTER_ID"
             info_log "Logs for this cluster can be viewed at:"
-            info log_url_cluster "$CEDANA_URL" "$CLUSTER_ID"
+            info_log "$(log_url_cluster "$CEDANA_URL" "$CLUSTER_ID")"
+            info_log "======================================="
         else
             debug_log "Using provided cluster ID: $CLUSTER_ID"
         fi
 
+        helm_uninstall_cedana "$CEDANA_NAMESPACE"
         helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
     else
         debug_log "Skipping helm install (SKIP_HELM=1)"
@@ -101,12 +104,12 @@ setup_suite() {
         fi
     fi
 
-    wait_for_ready "$CEDANA_NAMESPACE" 300
+    wait_for_ready "$CEDANA_NAMESPACE" 600
 
     # Restart log tailing (as it can be broken on kubelet restart)
     if [ -n "$TAIL_PID" ]; then
-        kill -"$TAIL_PID" 2>/dev/null || true
-        tail_all_logs "$CEDANA_NAMESPACE" 300 &
+        pkill -P "$TAIL_PID" 2>/dev/null || true
+        tail_all_logs "$CEDANA_NAMESPACE" 120 &
         TAIL_PID=$!
     fi
 
@@ -117,7 +120,7 @@ setup_suite() {
 teardown_suite() {
     # Stop log tailing
     if [ -n "$TAIL_PID" ]; then
-        kill -"$TAIL_PID" 2>/dev/null || true
+        pkill -P "$TAIL_PID" 2>/dev/null || true
     fi
 
     # Clean up test namespace

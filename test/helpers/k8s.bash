@@ -5,7 +5,7 @@
 ##########################
 
 install_kubectl() {
-    if command -v kubectl &> /dev/null; then
+    if command -v kubectl &>/dev/null; then
         debug_log "kubectl is already installed"
         return 0
     fi
@@ -15,7 +15,7 @@ install_kubectl() {
         x86_64)
             KC_ARCH="amd64"
             ;;
-        aarch64|arm64)
+        aarch64 | arm64)
             KC_ARCH="arm64"
             ;;
         *)
@@ -30,8 +30,8 @@ install_kubectl() {
     debug_log "kubectl installed"
 }
 
-install_k9s () {
-    if command -v k9s &> /dev/null; then
+install_k9s() {
+    if command -v k9s &>/dev/null; then
         debug_log "k9s is already installed"
         return 0
     fi
@@ -41,7 +41,7 @@ install_k9s () {
         x86_64)
             K9S_ARCH="amd64"
             ;;
-        aarch64|arm64)
+        aarch64 | arm64)
             K9S_ARCH="arm64"
             ;;
         *)
@@ -77,111 +77,6 @@ setup_samples() {
     debug_log "SAMPLES_DIR is set to $SAMPLES_DIR"
 }
 
-# Generate a new spec from an existing one with a new name and namespace.
-new_spec () {
-    local spec="$1"
-    local newname="$2"
-    local newnamespace="${3:-$NAMESPACE}"
-
-    local newspec="/tmp/${newname}.yaml"
-
-    # Get the oldname from the first "name:" line
-    local oldname
-    oldname=$(grep -m1 '^[[:space:]]*name:' "$spec" | sed -E 's/^[[:space:]]*name:[[:space:]]*"?([^"]+)"?/\1/')
-
-    local oldnamespace
-    oldnamespace=$(grep -m1 '^[[:space:]]*namespace:' "$spec" | sed -E 's/^[[:space:]]*namespace:[[:space:]]*"?([^"]+)"?/\1/')
-
-    # Replace all 'name: <oldname>' patterns with the quoted newname
-    sed -E "s/^([[:space:]\-]*name:[[:space:]]*)\"?$oldname\"?/\1\"$newname\"/g" "$spec" > "$newspec"
-
-    # If oldnamespace is not empty, replace it; otherwise, add namespace under metadata
-    if [[ -n "$oldnamespace" ]]; then
-        sed -i -E "s/^([[:space:]]*namespace:[[:space:]]*)\"?$oldnamespace\"?/\1\"$newnamespace\"/g" "$newspec"
-    else
-        sed -i -E "/^metadata:/a\  namespace: \"$newnamespace\"" "$newspec"
-    fi
-
-    echo "$newspec"
-}
-
-cmd_pod_spec () {
-    local image="$1"
-    local args="$2"
-    local namespace="${3:-$NAMESPACE}"
-
-    local name
-    name=test-$(unix_nano)
-
-    local spec=/tmp/pod-${name}.yaml
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: "$namespace"
-  labels:
-    app: "$name"
-spec:
-  containers:
-  - name: "$name"
-    image: $image
-    command: ["/bin/sh", "-c"]
-EOF
-
-    if [[ -n "$args" ]]; then
-        # Print args as multi-line block, indent each line correctly
-        printf "    args:\n" >> "$spec"
-        printf "      - |\n" >> "$spec"
-        while IFS= read -r line; do
-            printf "        %s\n" "$line" >> "$spec"
-        done <<< "$args"
-    fi
-
-    echo "$spec"
-}
-
-cmd_pod_spec_gpu () {
-    local image="$1"
-    local args="$2"
-    local gpus="${3:-1}"
-    local namespace="${4:-$NAMESPACE}"
-
-    local name
-    name=test-cuda-$(unix_nano)
-
-    local spec=/tmp/pod-${name}.yaml
-    cat > "$spec" << EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: "$namespace"
-  labels:
-    app: "$name"
-spec:
-  runtimeClassName: cedana
-  containers:
-  - name: "$name"
-    image: $image
-    command: ["/bin/sh", "-c"]
-    resources:
-      limits:
-        nvidia.com/gpu: "$gpus"
-EOF
-
-    if [[ -n "$args" ]]; then
-        # Print args as multi-line block, indent each line correctly
-        printf "    args:\n" >> "$spec"
-        printf "      - |\n" >> "$spec"
-        while IFS= read -r line; do
-            printf "        %s\n" "$line" >> "$spec"
-        done <<< "$args"
-    fi
-
-    echo "$spec"
-}
-
 # Use an existing pod spec file, modify its namespace to the
 # test namespace, and return the new spec path.
 pod_spec() {
@@ -209,18 +104,133 @@ pod_spec() {
     fi
 
     local temp_spec="/tmp/test-spec-${unique_id}.yaml"
+    cp "$source_file" "$temp_spec"
 
-    sed -e "s/namespace: default/namespace: $namespace/g" \
+    sed -i \
+        -e "/^metadata:/,/^[^ ]/ s/^  name:[[:space:]]*.*/  name: $unique_id/" \
+        -e "/^metadata:/,/^[^ ]/ s/^  generateName:[[:space:]]*.*/  name: $unique_id/" \
+        -e "s/namespace: default/namespace: $namespace/g" \
         -e "s/namespace: .*/namespace: $namespace/g" \
-        "$source_file" > "$temp_spec"
+        "$temp_spec"
 
     if ! grep -q "namespace:" "$temp_spec"; then
         sed -i '/^metadata:/a\  namespace: '"$namespace"'' "$temp_spec"
     fi
 
+    debug cat "$temp_spec"
+
     echo "$temp_spec"
 }
 
+cmd_pod_spec() {
+    local image="$1"
+    local args="$2"
+    local namespace="${3:-$NAMESPACE}"
+
+    local name
+    name=test-$(unix_nano)
+
+    local spec=/tmp/pod-${name}.yaml
+    cat >"$spec" <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  labels:
+    app: "$name"
+spec:
+  containers:
+  - name: "$name"
+    image: $image
+    command: ["/bin/sh", "-c"]
+EOF
+
+    if [[ -n "$args" ]]; then
+        # Print args as multi-line block, indent each line correctly
+        printf "    args:\n" >>"$spec"
+        printf "      - |\n" >>"$spec"
+        while IFS= read -r line; do
+            printf "        %s\n" "$line" >>"$spec"
+        done <<<"$args"
+    fi
+
+    echo "$spec"
+}
+
+cmd_pod_spec_gpu() {
+    local image="$1"
+    local args="$2"
+    local gpus="${3:-1}"
+    local namespace="${4:-$NAMESPACE}"
+
+    local name
+    name=test-cuda-$(unix_nano)
+
+    local spec=/tmp/pod-${name}.yaml
+    cat >"$spec" <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  labels:
+    app: "$name"
+spec:
+  runtimeClassName: cedana
+  containers:
+  - name: "$name"
+    image: $image
+    command: ["/bin/sh", "-c"]
+    resources:
+      limits:
+        nvidia.com/gpu: "$gpus"
+EOF
+
+    if [[ -n "$args" ]]; then
+        # Print args as multi-line block, indent each line correctly
+        printf "    args:\n" >>"$spec"
+        printf "      - |\n" >>"$spec"
+        while IFS= read -r line; do
+            printf "        %s\n" "$line" >>"$spec"
+        done <<<"$args"
+    fi
+
+    echo "$spec"
+}
+
+cmd_pvc_spec() {
+    local size="$1"
+    local name="$2"
+    local storage_class="$3"
+    local namespace="${4:-$NAMESPACE}"
+
+    if [[ -z "$name" ]]; then
+        name="pvc-$(unix_nano)"
+    fi
+
+    local spec=/tmp/pvc-${name}.yaml
+    cat >"$spec" <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: $size
+EOF
+
+    # Use default StorageClass when omitted
+    if [[ -n "$storage_class" ]]; then
+        printf "  storageClassName: %s\n" "$storage_class" >>"$spec"
+    fi
+
+    echo "$spec"
+}
 
 # List all restored pods in a given namespace.
 # Does a simple filter on pod names containing "restored".
@@ -234,6 +244,8 @@ get_restored_pod() {
     local name="$1"
     local namespace="${2:-$NAMESPACE}"
 
+    name=${name%%-restored}
+
     local restored_pods
     restored_pods=$(list_restored_pods "$namespace")
 
@@ -245,7 +257,6 @@ get_restored_pod() {
         fi
     done
 
-    error_log "No restored pods found for original pod $name"
     return 1
 }
 
@@ -278,7 +289,7 @@ validate_pod() {
                 break
             fi
             sleep $stable_check_interval
-            ((elapsed+=stable_check_interval))
+            ((elapsed += stable_check_interval))
         done
 
         if $ready_consistently; then
@@ -323,7 +334,9 @@ tail_all_logs() {
 
     debug_log "Tailing all logs in namespace $namespace"
 
-    debug "kubectl get pods -n $namespace -o name | xargs -P0 -I{} kubectl logs -n $namespace -f --tail $tail {}"
+    kubectl get pods -n "$namespace" -o name | while IFS= read -r pod; do
+        debug kubectl logs -n "$namespace" -f --tail "$tail" "$pod" &
+    done
 }
 
 # Logs of all pods in a given namespace, waiting for them to be Running first.
@@ -467,12 +480,14 @@ is_gpu_available() {
 get_required_gpus() {
     local spec="$1"
     local gpu_count
-    gpu_count=$(grep -o "nvidia.com/gpu.*[0-9]" "$spec" 2>/dev/null | grep -o "[0-9]*" | awk '{sum+=$1} END {print sum}')
+    # Only count GPU limits (not requests) to avoid double-counting
+    # Look for "nvidia.com/gpu: N" under a "limits:" section
+    gpu_count=$(awk '/limits:/,/requests:|env:|^[^ ]/ {if (/nvidia\.com\/gpu:/) print $NF}' "$spec" 2>/dev/null | awk '{sum+=$1} END {print sum}')
     echo "${gpu_count:-0}"
 }
 
 # Get pod name from a created resource
-get_created_pod_name() {
+get_created_pod() {
     local spec="$1"
     local namespace="$2"
     local timeout="${3:-60}"
@@ -508,9 +523,13 @@ get_created_pod_name() {
 #            Actions are separated by underscores and executed in order.
 #            Valid actions: DEPLOY, DUMP, RESTORE
 # @param $2: Pod spec file path
-# @param $3: Dump wait time (optional, defaults to 5)
-# @param $4: Pod timeout (optional, defaults to 300)
-# @param $5: Namespace (optional, defaults to $NAMESPACE)
+# @param $3: Pod timeout (optional, defaults to 60)
+# @param $4: Dump wait time in seconds (optional, defaults to 5) - ignored if dump_trigger is set
+# @param $5: Dump timeout (optional, defaults to 30)
+# @param $6: Namespace (optional, defaults to $NAMESPACE)
+# @param $7: Dump trigger string (optional) - if set, waits for this string in logs instead of using dump_wait_time
+# @param $8: Trigger timeout in seconds (optional, defaults to 300) - only used if dump_trigger is set
+# @param $9: Post-trigger wait time in seconds (optional, defaults to 0) - additional wait after trigger is found
 test_pod_spec() {
     local action_sequence="$1"
     local spec="$2"
@@ -518,6 +537,9 @@ test_pod_spec() {
     local dump_wait_time="${4:-5}"
     local dump_timeout="${5:-30}"
     local namespace="${6:-$NAMESPACE}"
+    local dump_trigger="${7:-}"
+    local trigger_timeout="${8:-300}"
+    local post_trigger_wait="${9:-0}"
 
     local required_gpus
     required_gpus=$(get_required_gpus "$spec")
@@ -534,7 +556,7 @@ test_pod_spec() {
     debug_log "Container name from spec: $container_name"
 
     # Parse actions from the sequence (split by underscore)
-    IFS='_' read -ra actions <<< "$action_sequence"
+    IFS='_' read -ra actions <<<"$action_sequence"
 
     local name=""
     local original_name=""
@@ -557,7 +579,7 @@ test_pod_spec() {
                     kubectl apply -f "$spec"
                 fi
 
-                name=$(get_created_pod_name "$spec" "$namespace" 60)
+                name=$(get_created_pod "$spec" "$namespace" 30)
                 if [ -z "$name" ]; then
                     error="Failed to get pod name"
                     break
@@ -583,7 +605,19 @@ test_pod_spec() {
                     break
                 fi
 
-                sleep "$dump_wait_time"
+                # Wait for log trigger if provided, otherwise use fixed sleep
+                if [ -n "$dump_trigger" ]; then
+                    wait_for_log_trigger "$name" "$dump_trigger" "$trigger_timeout" "$namespace" || {
+                        error="Timeout waiting for dump trigger '$dump_trigger' in pod $name"
+                        break
+                    }
+                    if [ "$post_trigger_wait" -gt 0 ]; then
+                        debug_log "Waiting ${post_trigger_wait}s after trigger before dump..."
+                        sleep "$post_trigger_wait"
+                    fi
+                else
+                    sleep "$dump_wait_time"
+                fi
 
                 debug_log "Dumping pod $name..."
                 local pod_id
@@ -610,6 +644,15 @@ test_pod_spec() {
                 }
 
                 debug_log "Dumped pod $name successfully (action_id: $action_id)"
+
+                if [ -n "$dump_trigger" ]; then
+                    debug_log "Verifying pod $name resumes after checkpoint..."
+                    wait_for_new_log_trigger "$name" "$dump_trigger" 300 "$namespace" || {
+                        error="Pod $name did not resume training after checkpoint (no new '$dump_trigger' in logs)"
+                        break
+                    }
+                    debug_log "Pod $name successfully resumed after checkpoint"
+                fi
                 ;;
 
             RESTORE)
@@ -642,7 +685,7 @@ test_pod_spec() {
                     break
                 }
 
-                name=$(wait_for_cmd 60 get_restored_pod "$original_name" "$namespace")
+                name=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
 
                 debug_log "Restore starting for $name..."
 
@@ -674,4 +717,70 @@ test_pod_spec() {
     else
         return 0
     fi
+}
+
+# Wait for a specific string to appear in pod logs.
+# @param $1: Pod name
+# @param $2: Trigger string to grep for
+# @param $3: Timeout in seconds (optional, defaults to 300)
+# @param $4: Namespace (optional, defaults to $NAMESPACE)
+# Returns: 0 if trigger found, 1 if timeout
+wait_for_log_trigger() {
+    local name="$1"
+    local trigger="$2"
+    local timeout="${3:-300}"
+    local namespace="${4:-$NAMESPACE}"
+    local poll_interval=2
+
+    debug_log "Waiting for trigger '$trigger' in pod $name logs (timeout: ${timeout}s)"
+
+    local elapsed=0
+    while [ $elapsed -lt "$timeout" ]; do
+        if kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -qi "$trigger"; then
+            debug_log "Found trigger '$trigger' in pod $name after ${elapsed}s"
+            return 0
+        fi
+        sleep $poll_interval
+        ((elapsed += poll_interval))
+    done
+
+    error_log "Timeout waiting for trigger '$trigger' in pod $name logs after ${timeout}s"
+    return 1
+}
+
+# Wait for a new occurrence of a trigger string in pod logs (after checkpoint).
+# Tests for successful unfreeze
+# @param $1: Pod name
+# @param $2: Trigger string to grep for
+# @param $3: Timeout in seconds (optional, defaults to 300)
+# @param $4: Namespace (optional, defaults to $NAMESPACE)
+# Returns: 0 if new trigger found, 1 if timeout
+wait_for_new_log_trigger() {
+    local name="$1"
+    local trigger="$2"
+    local timeout="${3:-300}"
+    local namespace="${4:-$NAMESPACE}"
+    local poll_interval=2
+
+    debug_log "Waiting for NEW trigger '$trigger' in pod $name logs (timeout: ${timeout}s)"
+
+    local initial_count
+    initial_count=$(kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -c "$trigger" || echo "0")
+    debug_log "Initial count of '$trigger' in logs: $initial_count"
+
+    local elapsed=0
+    while [ $elapsed -lt "$timeout" ]; do
+        local current_count
+        current_count=$(kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -c "$trigger" || echo "0")
+
+        if [ "$current_count" -gt "$initial_count" ]; then
+            debug_log "Found NEW trigger '$trigger' in pod $name after ${elapsed}s (count: $initial_count -> $current_count)"
+            return 0
+        fi
+        sleep $poll_interval
+        ((elapsed += poll_interval))
+    done
+
+    error_log "Timeout waiting for NEW trigger '$trigger' in pod $name logs after ${timeout}s"
+    return 1
 }

@@ -6,10 +6,6 @@ The Cedana daemon exposes a gRPC interface. Please check [daemon.proto](https://
 
 ### SDK
 
-#### Golang
-
-For Go, we export a friendly [client package](https://github.com/cedana/cedana/tree/main/pkg/client), which has good defaults.
-
-#### Other languages
+For Golang, we export a friendly [client package](https://github.com/cedana/cedana/tree/main/pkg/client), which has good defaults.
 
 For other languages, you can directly import SDKs from our [Buf respository](https://buf.build/cedana/cedana/sdks/main:protobuf).

@@ -77,7 +77,7 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }
 
-# bats test_tags=dump,restore,samples
+# bats test_tags=dump,restore,samples,multicontainer
 @test "Dump/Restore: CUDA Multi-container Vector Addition" {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vector-add-multicontainer.yaml")

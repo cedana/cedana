@@ -61,7 +61,7 @@ jobs:
           - arm64
     if: inputs.cedana || inputs.image
     container:
-      image: golang:1.25rc3-bullseye
+      image: golang:1.25-rc-bullseye
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
@@ -121,7 +121,7 @@ jobs:
           - arm64
     if: inputs.plugins || inputs.image
     container:
-      image: golang:1.25rc3-bullseye
+      image: golang:1.25-rc-bullseye
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}

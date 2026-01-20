@@ -30,15 +30,16 @@ func StartTiming(ctx context.Context, f ...any) (childCtx context.Context, end f
 	start := time.Now()
 	childCtx, span := otel.Tracer(metrics.TRACER_NAME).Start(ctx, data.Name)
 
+	childCtx, cancel := context.WithCancel(context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, data))
+
 	end = func() {
 		duration := time.Since(start)
 		span.End()
 		data.Duration = duration.Nanoseconds()
+		cancel()
 
 		log.Trace().Str("in", data.Name).Msgf("spent %s", duration)
 	}
-
-	childCtx = context.WithValue(childCtx, keys.PROFILING_CONTEXT_KEY, data)
 
 	return childCtx, end
 }

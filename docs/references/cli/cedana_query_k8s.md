@@ -1,9 +1,9 @@
 ## cedana query k8s
 
-Query k8s containers
+Query Kubernetes pods and containers
 
 ```
-cedana query k8s [flags]
+cedana query k8s <name1> [<name2> ...] [flags]
 ```
 
 ### Options
@@ -11,9 +11,7 @@ cedana query k8s [flags]
 ```
       --container-type string   container type (container, sandbox)
   -h, --help                    help for k8s
-      --name strings            pod name(s)
       --namespace string        pod namespace
-      --root string             root
 ```
 
 ### Options inherited from parent commands
@@ -22,8 +20,10 @@ cedana query k8s [flags]
       --address string      address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)
       --config string       one-time config JSON string (merge with existing config)
       --config-dir string   custom config directory
+  -i, --inspect             view details of first result
       --profiling           enable profiling/show profiling data
       --protocol string     protocol to use (TCP, UNIX, VSOCK)
+  -t, --tree                include entire process tree
 ```
 
 ### SEE ALSO
