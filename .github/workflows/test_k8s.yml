@@ -298,56 +298,69 @@ jobs:
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
           NB_CLUSTER_NAME: ${{ env.NB_CLUSTER_NAME }}-${{ matrix.arch }}
         run: |
-          HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
-          HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
-          CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
-          CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
-          HELM_CHART=/tmp/helm-chart
+          set -o pipefail
 
-          export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
-          export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
-          if [ "$GPU" = "true" ]; then
-            export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
-          fi
-          if [ "$STREAMER" = "true" ]; then
-            export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
-          fi
+          TEST_LOG_FILE="k8s-tests-${{ matrix.platform }}-${{ matrix.compute }}-${{ matrix.arch }}-${{ matrix.cr }}-${{ matrix.storage }}.log"
 
-          # Map platform names to provider names
-          case "$PLATFORM" in
-            K3s)  PROVIDER="k3s" ;;
-            EKS)  PROVIDER="aws" ;;
-            GKE)  PROVIDER="gcp" ;;
-            Nebius) PROVIDER="nebius" ;;
-            *)    PROVIDER="generic" ;;
-          esac
+          {
+            HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
+            HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
+            CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
+            CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
+            HELM_CHART=/tmp/helm-chart
 
-          TAGS="k8s"
-          if [ "$GPU" = "1" ]; then
-            TAGS="${TAGS},gpu"
-          else
-            TAGS="${TAGS},!gpu"
-          fi
-          if [ "$LARGE" = "0" ]; then
-            TAGS="${TAGS},!samples,!large"
-          fi
-          # Nebius only runs large GPU workloads (skip small tests)
-          if [ "$PROVIDER" = "nebius" ]; then
-            TAGS="${TAGS},large"
-          fi
+            export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
+            export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
+            if [ "$GPU" = "true" ]; then
+              export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+            fi
+            if [ "$STREAMER" = "true" ]; then
+              export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
+            fi
 
-          make test-k8s \
-            TAGS=$TAGS \
-            PROVIDER=$PROVIDER \
-            GPU=$GPU \
-            FORMATTER=$FORMATTER \
-            DEBUG=$DEBUG \
-            PARALLELISM=$PARALLELISM \
-            CONTROLLER_REPO=$CONTROLLER_REPO \
-            CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
-            HELPER_REPO=$HELPER_REPO \
-            HELPER_DIGEST=$HELPER_DIGEST \
-            HELM_CHART=$HELM_CHART
+            case "$PLATFORM" in
+              K3s)  PROVIDER="k3s" ;;
+              EKS)  PROVIDER="aws" ;;
+              GKE)  PROVIDER="gcp" ;;
+              Nebius) PROVIDER="nebius" ;;
+              *)    PROVIDER="generic" ;;
+            esac
+
+            TAGS="k8s"
+            if [ "$GPU" = "1" ]; then
+              TAGS="${TAGS},gpu"
+            else
+              TAGS="${TAGS},!gpu"
+            fi
+            if [ "$LARGE" = "0" ]; then
+              TAGS="${TAGS},!samples,!large"
+            fi
+            if [ "$PROVIDER" = "nebius" ]; then
+              TAGS="${TAGS},large"
+            fi
+
+            make test-k8s \
+              TAGS=$TAGS \
+              PROVIDER=$PROVIDER \
+              GPU=$GPU \
+              FORMATTER=$FORMATTER \
+              DEBUG=$DEBUG \
+              PARALLELISM=$PARALLELISM \
+              CONTROLLER_REPO=$CONTROLLER_REPO \
+              CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
+              HELPER_REPO=$HELPER_REPO \
+              HELPER_DIGEST=$HELPER_DIGEST \
+              HELM_CHART=$HELM_CHART
+          } 2>&1 | tee "$TEST_LOG_FILE"
+
+
+      - name: Upload k8s test logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k8s-logs-${{ matrix.platform }}-${{ matrix.compute }}-${{ matrix.arch }}-${{ matrix.cr }}-${{ matrix.storage }}
+          path: k8s-tests-*.log
+          retention-days: 30
 
       - name: Setup node
         if: always()
