@@ -54,6 +54,7 @@ on:
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_LOG_LEVEL: debug
   CEDANA_PROFILING_ENABLED: true
   CEDANA_METRICS_ENABLED: true
@@ -349,6 +350,10 @@ jobs:
             TAGS="${TAGS},spot"
           else
             TAGS="${TAGS},!spot"
+          fi
+          # Nebius only runs large GPU workloads (skip small tests)
+          if [ "$PROVIDER" = "nebius" ]; then
+            TAGS="${TAGS},large"
           fi
 
           make test-k8s \
