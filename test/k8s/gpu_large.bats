@@ -12,6 +12,23 @@ setup_file() {
     if [ "${GPU:-0}" != "1" ]; then
         skip "GPU tests disabled (set GPU=1)"
     fi
+    debug_log "Creating dgtest-pvc"
+    spec=$(cmd_pvc_spec 50Gi dgtest-pvc)
+    kubectl apply -f "$spec"
+    sleep 10
+    debug_log "dgtest-pvc has been applied"
+
+    # Create HuggingFace token secret for LLM tests
+    if [ -n "$HF_TOKEN" ]; then
+        debug_log "Creating hf-token-secret"
+        kubectl create secret generic hf-token-secret \
+            --from-literal=HF_TOKEN="$HF_TOKEN" \
+            -n "$NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+        debug_log "hf-token-secret has been created"
+    else
+        debug_log "HF_TOKEN not set, skipping hf-token-secret creation"
+    fi
 }
 
 #################################################
@@ -47,7 +64,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow-cifar100.yaml")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10  
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
 
 # bats test_tags=dump,restore,samples,deepspeed,training
