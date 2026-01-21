@@ -10,7 +10,7 @@ fi
 export APP_NAME="cedana"
 export APP_PATH="/usr/local/bin/$APP_NAME"
 export SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
-export IO_URING=${IO_URING:-true}
+export IO_URING=${IO_URING:-false}
 
 USER=$(whoami)
 export USER
