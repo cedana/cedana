@@ -191,8 +191,8 @@ jobs:
             # curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/criu-alpha/raw/versions/${VERSION}/cuda-checkpoint-${ARCH}
           fi
           mv criu-${ARCH} criu
-          mv cuda_plugin.so-${ARCH} cuda_plugin.so
-          mv cuda-checkpoint-${ARCH} cuda-checkpoint
+          # mv cuda_plugin.so-${ARCH} cuda_plugin.so
+          # mv cuda-checkpoint-${ARCH} cuda-checkpoint
           echo $VERSION > criu-version.txt
 
       - name: Upload CRIU
