@@ -127,7 +127,7 @@ jobs:
         run: |
           mv cedana cedana-${{ matrix.arch }}
           cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish \
-            --name cedana \
+            --name cedana-${{ matrix.arch }} \
             --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
             --version ${{ github.head_ref || github.ref_name }} \
             --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 5
@@ -176,7 +176,7 @@ jobs:
         run: |
           mv libcedana-${{ env.PLUGIN }}.so libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}
           cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --republish \
-            --name libcedana-${{ env.PLUGIN }}.so \
+            --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} \
             --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
             --version ${{ github.head_ref || github.ref_name }} \
             --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
@@ -356,17 +356,17 @@ jobs:
         run: |
           mkdir current
           cd current
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/cedana-$ARCH/versions/$TAG/cedana
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-runc.so-$ARCH/versions/$TAG/libcedana-runc.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-slurm.so-$ARCH/versions/$TAG/libcedana-slurm.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-s3.so-$ARCH/versions/$TAG/libcedana-storage-s3.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$TAG/libcedana-storage-gcs.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/cedana-$ARCH/versions/$TAG/cedana-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-runc.so-$ARCH/versions/$TAG/libcedana-runc.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-slurm.so-$ARCH/versions/$TAG/libcedana-slurm.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-s3.so-$ARCH/versions/$TAG/libcedana-storage-s3.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$TAG/libcedana-storage-gcs.so-$ARCH
 
       - name: Download previous binary
         id: download-previous
@@ -378,17 +378,17 @@ jobs:
         run: |
           mkdir previous
           cd previous
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/cedana-$ARCH/versions/$TAG/cedana || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-runc.so-$ARCH/versions/$TAG/libcedana-runc.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-slurm.so-$ARCH/versions/$TAG/libcedana-slurm.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-s3.so-$ARCH/versions/$TAG/libcedana-storage-s3.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$TAG/libcedana-storage-gcs.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/cedana-$ARCH/versions/$TAG/cedana-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-runc.so-$ARCH/versions/$TAG/libcedana-runc.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-slurm.so-$ARCH/versions/$TAG/libcedana-slurm.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-s3.so-$ARCH/versions/$TAG/libcedana-storage-s3.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$TAG/libcedana-storage-gcs.so-$ARCH || true
 
       - name: Generate summary
         id: summary
