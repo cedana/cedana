@@ -22,7 +22,7 @@ on:
         default: false
       platform:
         type: string
-        description: "Platform to run tests on (K3s, EKS, GKE, Nebius)"
+        description: "Platform to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter)"
         required: false
         default: K3s
       large:
@@ -71,11 +71,15 @@ env:
   NB_SA_PRIVATE_KEY: ${{ secrets.NB_SA_PRIVATE_KEY }}
   NB_SA_PRIVATE_KEY_PATH: ${{ secrets.NB_SA_PRIVATE_KEY_PATH }}
   EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+  EKS_KARPENTER_CLUSTER: ${{ vars.EKS_KARPENTER_CLUSTER }}
+  # Contains the common tag used by all vpc subnets
+  EKS_KARPENTER_SUBNET_SELECTOR: ${{ secrets.EKS_KARPENTER_SUBNET_SELECTOR }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
   DEBUG: 1 # bats debug logging (enable if unstable)
+
 
 jobs:
   propagator-connectivity:
@@ -166,7 +170,17 @@ jobs:
             storage: storage/s3
           - platform: Nebius
             storage: storage/cedana
-      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 1 || 9999 }}
+
+          - platform: EKS-Karpenter
+            compute: CUDA
+          - platform: EKS-Karpenter
+            arch: arm64
+          - platform: EKS-Karpenter
+            cr: streamer
+          - platform: EKS-Karpenter
+            storage: storage/local
+
+      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' || inputs.platform == 'EKS-Karpenter') && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
@@ -299,68 +313,62 @@ jobs:
           NB_CLUSTER_NAME: ${{ env.NB_CLUSTER_NAME }}-${{ matrix.arch }}
         shell: bash
         run: |
-          set -o pipefail
-          TEST_LOG_FILE="/tmp/k8s-tests-${{ matrix.platform }}-${{ matrix.compute }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}.log"
-          touch "$TEST_LOG_FILE"
-          {
-            HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
-            HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
-            CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
-            CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
-            HELM_CHART=/tmp/helm-chart
+          HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
+          HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
+          CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
+          CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
+          HELM_CHART=/tmp/helm-chart
 
-            export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
-            export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
-            if [ "$GPU" = "true" ]; then
-              export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
-            fi
-            if [ "$STREAMER" = "true" ]; then
-              export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
-            fi
+          export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
+          export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
+          if [ "$GPU" = "true" ]; then
+            export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+          fi
+          if [ "$STREAMER" = "true" ]; then
+            export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
+          fi
 
-            case "$PLATFORM" in
-              K3s)  PROVIDER="k3s" ;;
-              EKS)  PROVIDER="aws" ;;
-              GKE)  PROVIDER="gcp" ;;
-              Nebius) PROVIDER="nebius" ;;
-              *)    PROVIDER="generic" ;;
-            esac
+          # Map platform names to provider names
+          case "$PLATFORM" in
+            K3s)  PROVIDER="k3s" ;;
+            EKS)  PROVIDER="aws" ;;
+            EKS-Karpenter) PROVIDER="eks-karpenter" ;;
+            GKE)  PROVIDER="gcp" ;;
+            Nebius) PROVIDER="nebius" ;;
+            *)    PROVIDER="generic" ;;
+          esac
 
-            TAGS="k8s"
-            if [ "$GPU" = "1" ]; then
-              TAGS="${TAGS},gpu"
-            else
-              TAGS="${TAGS},!gpu"
-            fi
-            if [ "$LARGE" = "0" ]; then
-              TAGS="${TAGS},!samples,!large"
-            fi
-            if [ "$PROVIDER" = "nebius" ]; then
-              TAGS="${TAGS},large"
-            fi
+          TAGS="k8s"
+          if [ "$GPU" = "1" ]; then
+            TAGS="${TAGS},gpu"
+          else
+            TAGS="${TAGS},!gpu"
+          fi
+          if [ "$LARGE" = "0" ]; then
+            TAGS="${TAGS},!samples,!large"
+          fi
+          if [ "$PLATFORM" = "EKS-Karpenter" ]; then
+            TAGS="${TAGS},spot"
+          else
+            TAGS="${TAGS},!spot"
+          fi
+          # Nebius only runs large GPU workloads (skip small tests)
+          if [ "$PROVIDER" = "nebius" ]; then
+            TAGS="${TAGS},large"
+          fi
 
-            make test-k8s \
-              TAGS=$TAGS \
-              PROVIDER=$PROVIDER \
-              GPU=$GPU \
-              FORMATTER=$FORMATTER \
-              DEBUG=$DEBUG \
-              PARALLELISM=$PARALLELISM \
-              CONTROLLER_REPO=$CONTROLLER_REPO \
-              CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
-              HELPER_REPO=$HELPER_REPO \
-              HELPER_DIGEST=$HELPER_DIGEST \
-              HELM_CHART=$HELM_CHART
-          } 2>&1 | tee "$TEST_LOG_FILE"
-
-
-      - name: Upload k8s test logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: k8s-tests-${{ matrix.platform }}-${{ matrix.compute }}-${{ matrix.arch }}-${{ github.run_id }}-${{ github.run_attempt }}.log
-          path: /tmp/k8s-tests-*.log
-          retention-days: 30
+          make test-k8s \
+            TAGS=$TAGS \
+            PROVIDER=$PROVIDER \
+            GPU=$GPU \
+            FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=$PARALLELISM \
+            CONTROLLER_REPO=$CONTROLLER_REPO \
+            CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
+            HELPER_REPO=$HELPER_REPO \
+            HELPER_DIGEST=$HELPER_DIGEST \
+            HELM_CHART=$HELM_CHART
 
       - name: Setup node
         if: always()
@@ -416,6 +424,8 @@ jobs:
           - platform: GKE
             arch: arm64
           - platform: Nebius
+            arch: arm64
+          - platform: EKS-Karpenter
             arch: arm64
     steps:
       - name: Download report
