@@ -374,16 +374,16 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    # Get only Running pods
-    local running_pods
-    running_pods=$(kubectl get pods -n "$namespace" --field-selector=status.phase=Running -o name 2>/dev/null)
+    # Get all pods
+    local pods
+    pods=$(kubectl get pods -n "$namespace" -o name 2>/dev/null)
 
-    if [ -z "$running_pods" ]; then
+    if [ -z "$pods" ]; then
         debug_log "No Running pods found in namespace $namespace"
         return 0
     fi
 
-    echo "$running_pods" | xargs -r kubectl wait --for=condition=Ready -n "$namespace" --timeout="$timeout"s || {
+    echo "$pods" | xargs -r kubectl wait --for=condition=Ready -n "$namespace" --timeout="$timeout"s || {
         error_log "Failed to wait for all pods in namespace $namespace to be Ready"
         for pod in $(kubectl get pods -n "$namespace" -o name); do
             error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
