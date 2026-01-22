@@ -125,6 +125,7 @@ jobs:
 
       - name: Push package to Cloudsmith
         run: |
+          mv cedana cedana-${{ matrix.arch }}
           cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish \
             --name cedana \
             --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
@@ -173,6 +174,7 @@ jobs:
 
       - name: Push package to Cloudsmith
         run: |
+          mv libcedana-${{ env.PLUGIN }}.so libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}
           cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --republish \
             --name libcedana-${{ env.PLUGIN }}.so \
             --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
