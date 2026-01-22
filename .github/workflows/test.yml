@@ -467,6 +467,22 @@ jobs:
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
+  eks-karpenter:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
+    secrets: inherit
+    concurrency: test-k8s-karpenter # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: EKS-Karpenter
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
+      parallelism: ${{ inputs.parallelism }}
+      post_summary: false # Will post consolidated summary instead
+
   gke:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml

@@ -130,7 +130,7 @@ jobs:
             --name cedana-${{ matrix.arch }} \
             --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
             --version ${{ github.head_ref || github.ref_name }} \
-            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 5
+            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
 
   cloudsmith-plugin:
     name: Cloudsmith
@@ -179,7 +179,7 @@ jobs:
             --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} \
             --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
             --version ${{ github.head_ref || github.ref_name }} \
-            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1.0
+            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
 
   dockerhub:
     name: DockerHub (multi-arch)
