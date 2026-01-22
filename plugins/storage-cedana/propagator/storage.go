@@ -36,11 +36,11 @@ func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) 
 
 	downloadUrl, err := s.Files().ByPath(path).Get(ctx, nil)
 	if err != nil {
-		switch v := err.(type) {
-		case *models.HttpError:
-			return nil, fmt.Errorf("failed to get download URL: %s", *v.GetMessage())
+		switch e := err.(type) {
+		case *models.ApiError:
+			return nil, fmt.Errorf("%d: %s", e.ResponseStatusCode, e.Message)
 		default:
-			return nil, fmt.Errorf("failed to get download URL: %v", err)
+			return nil, err
 		}
 	}
 
@@ -55,11 +55,11 @@ func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, erro
 
 	uploadUrl, err := s.Files().ByPath(path).Put(ctx, nil)
 	if err != nil {
-		switch v := err.(type) {
-		case *models.HttpError:
-			return nil, fmt.Errorf("failed to get upload URL: %s", *v.GetMessage())
+		switch e := err.(type) {
+		case *models.ApiError:
+			return nil, fmt.Errorf("%d: %s", e.ResponseStatusCode, e.Message)
 		default:
-			return nil, fmt.Errorf("failed to get upload URL: %v", err)
+			return nil, err
 		}
 	}
 
@@ -92,11 +92,11 @@ func (s *Storage) ReadDir(ctx context.Context, path string) ([]string, error) {
 
 	list, err := s.Files().Dir().ByPath(path).Get(ctx, nil)
 	if err != nil {
-		switch v := err.(type) {
-		case *models.HttpError:
-			return nil, fmt.Errorf("failed to list directory: %s", *v.GetMessage())
+		switch e := err.(type) {
+		case *models.ApiError:
+			return nil, fmt.Errorf("%d: %s", e.ResponseStatusCode, e.Message)
 		default:
-			return nil, fmt.Errorf("failed to list directory: %v", err)
+			return nil, err
 		}
 	}
 	return list, nil

@@ -53,11 +53,14 @@ func init() {
 		StringP(flags.AddressFlag.Full, flags.AddressFlag.Short, "", "address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)")
 	rootCmd.PersistentFlags().
 		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
+	rootCmd.PersistentFlags().
+		StringP(flags.ProfilingPathFlag.Full, flags.ProfilingFlag.Short, "", "path to write profiling JSON to (if enabled)")
 
 	// Bind to config
 	viper.BindPFlag("protocol", rootCmd.PersistentFlags().Lookup(flags.ProtocolFlag.Full))
 	viper.BindPFlag("address", rootCmd.PersistentFlags().Lookup(flags.AddressFlag.Full))
 	viper.BindPFlag("profiling.enabled", rootCmd.PersistentFlags().Lookup(flags.ProfilingFlag.Full))
+	viper.BindPFlag("profiling.path", rootCmd.PersistentFlags().Lookup(flags.ProfilingPathFlag.Full))
 }
 
 var rootCmd = &cobra.Command{

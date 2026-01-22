@@ -139,22 +139,23 @@ type checkpointOverrides struct {
 }
 
 type checkpointInfo struct {
-	ActionId       string        `json:"action_id"`
-	PodId          string        `json:"pod_id"`
-	CheckpointId   string        `json:"checkpoint_id"`
-	CheckpointName string        `json:"checkpoint_name"`
-	Status         string        `json:"status"`
-	Path           string        `json:"path"`
-	GPU            bool          `json:"gpu"`
-	Platform       string        `json:"platform"`
-	ProfilingInfo  profilingInfo `json:"profiling_info"`
-	ContainerOrder int           `json:"container_order"`
+	ActionId       string `json:"action_id"`
+	PodId          string `json:"pod_id"`
+	CheckpointId   string `json:"checkpoint_id"`
+	CheckpointName string `json:"checkpoint_name"`
+	Status         string `json:"status"`
+	Path           string `json:"path"`
+	GPU            bool   `json:"gpu"`
+	Platform       string `json:"platform"`
+	Info           info   `json:"info"`
+	ContainerOrder int    `json:"container_order"`
 }
 
-type profilingInfo struct {
-	Raw           *profiling.Data `json:"raw"`
+type info struct {
+	Profiling     *profiling.Data `json:"profiling"`
 	TotalDuration int64           `json:"total_duration"`
 	TotalIO       int64           `json:"total_io"`
+	Error         string          `json:"error,omitempty"`
 }
 
 type imageSecret struct {
@@ -379,9 +380,11 @@ func (es *EventStream) publishCheckpoint(
 		PodId:          podId,
 		CheckpointId:   checkpointId,
 		ContainerOrder: containerOrder,
+		Info:           info{},
 	}
 	if dumpErr != nil {
 		ci.Status = "error"
+		ci.Info.Error = dumpErr.Error() // TODO: Capture more related logs
 	} else {
 		ci.Status = "success"
 	}
@@ -415,12 +418,9 @@ func (es *EventStream) publishCheckpoint(
 				totalIO += component.IO
 			}
 		}
-		profilingInfo := profilingInfo{
-			Raw:           profilingData,
-			TotalDuration: totalDuration,
-			TotalIO:       totalIO,
-		}
-		ci.ProfilingInfo = profilingInfo
+		ci.Info.Profiling = profilingData
+		ci.Info.TotalDuration = totalDuration
+		ci.Info.TotalIO = totalIO
 	}
 	data, err := json.Marshal(ci)
 	if err != nil {
