@@ -53,16 +53,16 @@ install_yum_packages() {
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     case "$ID" in
-    debian | ubuntu | pop)
-        install_apt_packages
-        ;;
-    rhel | centos | fedora | amzn)
-        install_yum_packages
-        ;;
-    *)
-        echo "Unknown distribution"
-        exit 1
-        ;;
+        debian | ubuntu | pop)
+            install_apt_packages
+            ;;
+        rhel | centos | fedora | amzn)
+            install_yum_packages
+            ;;
+        *)
+            echo "Unknown distribution"
+            exit 1
+            ;;
     esac
 elif [ -f /etc/debian_version ]; then
     install_apt_packages
@@ -76,16 +76,16 @@ fi
 # Hack - yq is needed to configure kubelet, but not available in all distros
 bash
 case "$(uname -m)" in
-x86_64)
-    wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
-    ;;
-arm64 | aarch64)
-    wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
-    ;;
-*)
-    echo "Unsupported architecture: $(uname -m)"
-    exit 1
-    ;;
+    x86_64)
+        wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+        ;;
+    arm64 | aarch64)
+        wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
+        ;;
+    *)
+        echo "Unsupported architecture: $(uname -m)"
+        exit 1
+        ;;
 esac
 chmod +x /usr/local/bin/yq
 
@@ -103,7 +103,7 @@ run_step() {
 run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
 run_step "install plugins" "$DIR/k8s-install-plugins.sh"     # install the plugins (including shim)
 run_step "configure shm" "$DIR/shm-configure.sh"             # configure shm
-run_step "configure io_uring" "$DIR/io_uring-configure.sh"   # configure io_uring
+run_step "configure io_uring" "$DIR/io-uring-configure.sh"   # configure io_uring
 
 if [ "$ENV" != "production" ]; then
     pkill -f 'cedana daemon' || true
