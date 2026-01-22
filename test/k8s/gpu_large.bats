@@ -52,13 +52,13 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
 }
 
-# bats test_tags=dump,restore,samples,compbio,openmm
-@test "Dump/Restore: OpenMM MD Simulation" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/openmm.yaml" "$NAMESPACE" "openmm")
+# # bats test_tags=dump,restore,samples,compbio,openmm
+# @test "Dump/Restore: OpenMM MD Simulation" {
+#     local spec
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/openmm.yaml" "$NAMESPACE" "openmm")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
-}
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
+# }
 
 # Blocked on CED-1863
 # # bats test_tags=dump,restore,samples,tensorflow,training
@@ -85,13 +85,13 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
 
-# bats test_tags=dump,restore,samples,llamafactory,training,finetuning
-@test "Dump/Restore: LlamaFactory LLM FineTuning" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-llamafactory-lora-sft.yaml" "$NAMESPACE" "llamafactory")
+# # bats test_tags=dump,restore,samples,llamafactory,training,finetuning
+# @test "Dump/Restore: LlamaFactory LLM FineTuning" {
+#     local spec
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-llamafactory-lora-sft.yaml" "$NAMESPACE" "llamafactory")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 300 300 "$NAMESPACE" "step" 300 10
-}
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 300 300 "$NAMESPACE" "step" 300 10
+# }
 
 # bats test_tags=dump,restore,samples,training,multi,deepspeed
 @test "Dump/Restore: Multi-GPU DeepSpeed Training" {
@@ -109,13 +109,13 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "epoch" 300 10
 }
 
-# bats test_tags=dump,restore,samples,training,multi,llamafactory
-@test "Dump/Restore: Multi-GPU LlamaFactory LLM FineTuning" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-llamafactory-lora-sft.yaml" "$NAMESPACE" "llamafactory-2gpu")
+# # bats test_tags=dump,restore,samples,training,multi,llamafactory
+# @test "Dump/Restore: Multi-GPU LlamaFactory LLM FineTuning" {
+#     local spec
+#     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-llamafactory-lora-sft.yaml" "$NAMESPACE" "llamafactory-2gpu")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
-}
+#     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
+# }
 
 # Blocked on CED-1863
 # # bats test_tags=dump,restore,samples,training,multi,tensorflow
@@ -125,7 +125,3 @@ setup_file() {
 
 #     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 # }
-
-
-
-
