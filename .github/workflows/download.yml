@@ -71,6 +71,7 @@ jobs:
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-alpha/raw/versions/${VERSION}/cedana-${ARCH}
           fi
+          mv cedana-${ARCH} cedana
           echo $VERSION > cedana-version.txt
 
       - name: Upload cedana
@@ -149,6 +150,7 @@ jobs:
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-alpha/raw/versions/${VERSION}/libcedana-${PLUGIN}.so-${ARCH}
           fi
+          mv libcedana-${PLUGIN}.so-${ARCH} libcedana-${PLUGIN}.so
           echo $VERSION > plugins-version.txt
 
       - name: Upload plugin
@@ -180,10 +182,17 @@ jobs:
           cd criu
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/criu/raw/versions/${VERSION}/criu-${ARCH}
+            # curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/criu/raw/versions/${VERSION}/cuda_plugin.so-${ARCH}
+            # curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/criu/raw/versions/${VERSION}/cuda-checkpoint-${ARCH}
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/criu-alpha/raw/versions/${VERSION}/criu-${ARCH}
+            # curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/criu-alpha/raw/versions/${VERSION}/cuda_plugin.so-${ARCH}
+            # curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/criu-alpha/raw/versions/${VERSION}/cuda-checkpoint-${ARCH}
           fi
+          mv criu-${ARCH} criu
+          mv cuda_plugin.so-${ARCH} cuda_plugin.so
+          mv cuda-checkpoint-${ARCH} cuda-checkpoint
           echo $VERSION > criu-version.txt
 
       - name: Upload CRIU
@@ -214,11 +223,16 @@ jobs:
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-gpu/raw/versions/${VERSION}/cedana-gpu-controller-${ARCH}
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-gpu/raw/versions/${VERSION}/libcedana-gpu.so-${ARCH}
+            curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-gpu/raw/versions/${VERSION}/libcedana-gpu-tracer.so-${ARCH}
           else
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-gpu-alpha/raw/versions/${VERSION}/cedana-gpu-controller-${ARCH}
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-gpu-alpha/raw/versions/${VERSION}/libcedana-gpu.so-${ARCH}
+            curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-gpu-alpha/raw/versions/${VERSION}/libcedana-gpu-tracer.so-${ARCH}
           fi
+          mv cedana-gpu-controller-${ARCH} cedana-gpu-controller
+          mv libcedana-gpu.so-${ARCH} libcedana-gpu.so
+          mv libcedana-gpu-tracer.so-${ARCH} libcedana-gpu-tracer.so
           echo $VERSION > gpu-version.txt
 
       - name: Upload artifacts
@@ -252,6 +266,7 @@ jobs:
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-image-streamer-alpha/raw/versions/${VERSION}/cedana-image-streamer-${ARCH}
           fi
+          mv cedana-image-streamer-${ARCH} cedana-image-streamer
           echo $VERSION > streamer-version.txt
 
       - name: Upload artifacts
@@ -330,6 +345,7 @@ jobs:
             VERSION=$(echo $VERSION | sed 's/\//-/g')
             curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-runtime-shim-alpha/raw/versions/${VERSION}/cedana-shim-runc-v2-${ARCH}
           fi
+          mv cedana-shim-runc-v2-${ARCH} cedana-shim-runc-v2
           echo $VERSION > containerd-runtime-version.txt
           cd -
           # TODO: Can add more runtimes here in the future
