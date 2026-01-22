@@ -22,7 +22,7 @@ on:
         default: false
       platform:
         type: string
-        description: "Platform to run tests on (K3s, EKS, GKE, Nebius)"
+        description: "Platform to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter)"
         required: false
         default: K3s
       large:
@@ -54,6 +54,7 @@ on:
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_LOG_LEVEL: debug
   CEDANA_PROFILING_ENABLED: true
   CEDANA_METRICS_ENABLED: true
@@ -70,11 +71,15 @@ env:
   NB_SA_PRIVATE_KEY: ${{ secrets.NB_SA_PRIVATE_KEY }}
   NB_SA_PRIVATE_KEY_PATH: ${{ secrets.NB_SA_PRIVATE_KEY_PATH }}
   EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+  EKS_KARPENTER_CLUSTER: ${{ vars.EKS_KARPENTER_CLUSTER }}
+  # Contains the common tag used by all vpc subnets
+  EKS_KARPENTER_SUBNET_SELECTOR: ${{ secrets.EKS_KARPENTER_SUBNET_SELECTOR }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
   DEBUG: 0 # bats debug logging (enable if unstable)
+
 
 jobs:
   propagator-connectivity:
@@ -165,7 +170,17 @@ jobs:
             storage: storage/s3
           - platform: Nebius
             storage: storage/cedana
-      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' ) && 1 || 9999 }}
+
+          - platform: EKS-Karpenter
+            compute: CUDA
+          - platform: EKS-Karpenter
+            arch: arm64
+          - platform: EKS-Karpenter
+            cr: streamer
+          - platform: EKS-Karpenter
+            storage: storage/local
+
+      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' || inputs.platform == 'EKS-Karpenter') && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
@@ -316,6 +331,7 @@ jobs:
           case "$PLATFORM" in
             K3s)  PROVIDER="k3s" ;;
             EKS)  PROVIDER="aws" ;;
+            EKS-Karpenter) PROVIDER="eks-karpenter" ;;
             GKE)  PROVIDER="gcp" ;;
             Nebius) PROVIDER="nebius" ;;
             *)    PROVIDER="generic" ;;
@@ -329,6 +345,15 @@ jobs:
           fi
           if [ "$LARGE" = "0" ]; then
             TAGS="${TAGS},!samples,!large"
+          fi
+          if [ "$PLATFORM" = "EKS-Karpenter" ]; then
+            TAGS="${TAGS},spot"
+          else
+            TAGS="${TAGS},!spot"
+          fi
+          # Nebius only runs large GPU workloads (skip small tests)
+          if [ "$PROVIDER" = "nebius" ]; then
+            TAGS="${TAGS},large"
           fi
 
           make test-k8s \
@@ -398,6 +423,8 @@ jobs:
           - platform: GKE
             arch: arm64
           - platform: Nebius
+            arch: arm64
+          - platform: EKS-Karpenter
             arch: arm64
     steps:
       - name: Download report

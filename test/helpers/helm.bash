@@ -37,7 +37,6 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
     helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
     helm_cmd="$helm_cmd --set config.checkpointCompression=$CEDANA_CHECKPOINT_COMPRESSION"
-    helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     helm_cmd="$helm_cmd --set config.awsAccessKeyId=$AWS_ACCESS_KEY_ID"
     helm_cmd="$helm_cmd --set config.awsSecretAccessKey=$AWS_SECRET_ACCESS_KEY"
     helm_cmd="$helm_cmd --set config.awsRegion=$AWS_REGION"
@@ -81,6 +80,9 @@ helm_install_cedana() {
     fi
     if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
+    fi
+    if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
+        helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     fi
 
     helm_cmd="$helm_cmd --wait --timeout=5m"
