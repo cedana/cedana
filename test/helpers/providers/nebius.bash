@@ -152,6 +152,23 @@ setup_gpu_operator() {
     debug_log "NVIDIA GPU operator installed successfully"
 }
 
+delete_nebius_disks() {
+    debug_log "Fetching disk name to be deleted ..."
+    volume=$(kubectl get pvc -n "$NAMESPACE" -o jsonpath='{.spec.volumeName}{"\n"}')
+    debug_log "Fetching disk id ..."
+    disk=$(nebius compute disk get-by-name --name "$volume")
+    # Make sure that all pods are deleted before deleting pvc
+    kubectl delete po --all -n "$NAMESPACE"
+    debug_log "Deleting dgtest-pvc ..."
+    spec=$(cmd_pvc_spec 50Gi dgtest-pvc)
+    kubectl delete -f "$spec"
+    sleep 10
+    debug_log "dgtest-pvc has been deleted"
+    debug_log "Deleting unused nebius disk ..."
+    nebius compute disk delete --id "$disk"
+    debug_log "Unused nebius disk has been deleted"
+}
+
 setup_cluster() {
     _install_nebius_cli
     _configure_nebius_credentials
@@ -174,8 +191,9 @@ setup_cluster() {
 }
 
 teardown_cluster() {
+    debug_log "Tearing down unused storage disks..."
+    delete_nebius_disks
     debug_log "Tearing down Nebius cluster..."
-
     delete_mk8s_cluster
 
     debug_log "Nebius cluster teardown complete"
