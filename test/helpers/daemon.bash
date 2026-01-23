@@ -83,6 +83,7 @@ teardown_daemon() {
 start_daemon_at() {
     local sock=$1
     id=$(basename "$sock")
+    debug_log "Starting daemon at socket $sock with config $CEDANA_CONFIG_DIR/config.json"
     cedana daemon start --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
     wait_for_start "$sock"
 }
@@ -106,6 +107,7 @@ stop_daemon_at() {
         debug_log "Socket $sock does not exist, skipping stop"
         return 0
     fi
+    debug_log "Stopping daemon at socket $sock"
     kill_at_sock "$sock" TERM
     wait_for_stop "$sock"
 }
