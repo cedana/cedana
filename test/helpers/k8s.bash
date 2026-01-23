@@ -402,18 +402,24 @@ wait_for_ready() {
         return 0
     fi
 
-    echo "$pods" | xargs -r kubectl wait --for=condition=Ready -n "$namespace" --timeout="$timeout"s || {
-        error_log "Failed to wait for all pods in namespace $namespace to be Ready"
-        for pod in $(kubectl get pods -n "$namespace" -o name); do
-            error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
-            kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
-                error_log "$line"
-            done
-            error_log "Logs from pod $pod in namespace $namespace:"
-            error kubectl logs "$pod" -n "$namespace" --tail=1000 || true
-        done
-        return 1
-    }
+    for pod in $pods; do
+        kubectl wait -n "$namespace" \
+            --for=condition=Ready "$pod" --timeout="${timeout}s" ||
+            kubectl wait -n "$namespace" \
+                --for=jsonpath='{.status.phase}'=Succeeded "$pod" --timeout=1s ||
+            {
+                error_log "Failed to wait for all pods in namespace $namespace to be Ready"
+                for failed_pod in $(kubectl get pods -n "$namespace" -o name); do
+                    error_log "Pod $failed_pod status: $(kubectl get "$failed_pod" -n "$namespace" -o jsonpath='{.status.phase}')"
+                    kubectl describe "$failed_pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
+                        error_log "$line"
+                    done
+                    error_log "Logs from pod $failed_pod in namespace $namespace:"
+                    error_log "$(kubectl logs "$failed_pod" -n "$namespace" --tail=1000 2>&1 || true)"
+                done
+                return 1
+            }
+    done
 
     debug_log "All pods in namespace $namespace are Ready"
 }
