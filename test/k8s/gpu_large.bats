@@ -126,13 +126,3 @@ setup_file() {
 #     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 300 10
 # }
 #
-
-teardown_file() {
-    # Make sure that all pods are deleted before deleting pvc
-    kubectl delete po --all -n "$NAMESPACE"
-    debug_log "Deleting dgtest-pvc"
-    spec=$(cmd_pvc_spec 50Gi dgtest-pvc)
-    kubectl delete -f "$spec"
-    sleep 10
-    debug_log "dgtest-pvc has been deleted"
-}
