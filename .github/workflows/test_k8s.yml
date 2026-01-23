@@ -322,7 +322,7 @@ jobs:
           export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
           export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
           if [ "$GPU" = "true" ]; then
-            export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+            export CEDANA_PLUGINS_GPU_VERSION=v0.7.0
           fi
           if [ "$STREAMER" = "true" ]; then
             export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
