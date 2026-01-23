@@ -410,7 +410,7 @@ wait_for_ready() {
                 error_log "$line"
             done
             error_log "Logs from pod $pod in namespace $namespace:"
-            error kubectl logs "$pod" -n "$namespace" --tail=1000 || true
+            error_log kubectl logs "$pod" -n "$namespace" --tail=1000 || true
         done
         return 1
     }
