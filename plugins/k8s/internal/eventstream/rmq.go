@@ -278,6 +278,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			log.Debug().Msg("no pods found for checkpoint request")
 			return rabbitmq.Ack
 		}
+		podUID := string(queryResp.K8S.Pods[0].UID)
 		containers := queryResp.K8S.Pods[0].Containerd
 		if len(containers) == 0 {
 			log.Trace().Msg("no containers found in pod for checkpoint request")
@@ -399,7 +400,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				}
 				es.publishCheckpoint(
 					log.WithContext(ctx),
-					req.PodName[0],
+					podUID,
 					req.ActionId,
 					checkpointIdMap[i],
 					nil,
@@ -429,7 +430,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				}
 				es.publishCheckpoint(
 					log.WithContext(ctx),
-					req.PodName[0],
+					podUID,
 					req.ActionId,
 					checkpointIdMap[i],
 					profiling,
@@ -634,11 +635,10 @@ func (es *EventStream) freezeMultiPod(ctx context.Context, pod *k8s.Pod, req *ch
 	if (len(containers)) == 0 {
 		return fmt.Errorf("no containers found in pod")
 	}
-
-	podName := pod.Name
+	targetPodID := string(pod.GetUID())
 
 	log := log.With().
-		Str("pod", podName).
+		Str("pod", targetPodID).
 		Str("action_id", req.ActionId).
 		Logger()
 
@@ -752,7 +752,7 @@ func (es *EventStream) freezeMultiPod(ctx context.Context, pod *k8s.Pod, req *ch
 			// for tracking if individual containers failed -> publish to propagator
 			es.publishCheckpoint(
 				log.WithContext(ctx),
-				podName,
+				targetPodID,
 				req.ActionId,
 				state.checkpointIdMap[i],
 				nil, "", nil, i,
@@ -766,21 +766,21 @@ func (es *EventStream) freezeMultiPod(ctx context.Context, pod *k8s.Pod, req *ch
 	log.Info().Msg("[multinode] all containers frozen successfully")
 
 	// state stored for DUMP phase
-	stateKey := fmt.Sprintf("%s:%s", req.ActionId, podName)
+	stateKey := fmt.Sprintf("%s:%s", req.ActionId, targetPodID)
 	multiNodeStates.Store(stateKey, state)
 
 	return nil
 }
 
 func (es *EventStream) dumpMultiPod(ctx context.Context, pod *k8s.Pod, req *checkpointReq) error {
-	podName := pod.Name
+	targetPodID := string(pod.GetUID())
 
 	log := log.With().
-		Str("pod", podName).
+		Str("pod", targetPodID).
 		Str("action_id", req.ActionId).
 		Logger()
 
-	stateKey := fmt.Sprintf("%s:%s", req.ActionId, podName)
+	stateKey := fmt.Sprintf("%s:%s", req.ActionId, targetPodID)
 	stateVal, ok := multiNodeStates.Load(stateKey)
 	if !ok {
 		return fmt.Errorf("no freeze state found for pod - was FREEZE called first?")
@@ -805,7 +805,7 @@ func (es *EventStream) dumpMultiPod(ctx context.Context, pod *k8s.Pod, req *chec
 
 			es.publishCheckpoint(
 				log.WithContext(ctx),
-				podName,
+				targetPodID,
 				req.ActionId,
 				state.checkpointIdMap[i],
 				profiling,
