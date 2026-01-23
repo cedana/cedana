@@ -53,7 +53,7 @@ _configure_nebius_credentials() {
     debug_log "Configuring Nebius credentials..."
 
     export NB_SA_PROFILE_NAME="github-actions"
-    printf '%s' "$NB_SA_PRIVATE_KEY" > "$NB_SA_PRIVATE_KEY_PATH"
+    printf '%s' "$NB_SA_PRIVATE_KEY" >"$NB_SA_PRIVATE_KEY_PATH"
     chmod 600 "$NB_SA_PRIVATE_KEY_PATH"
 
     nebius profile create \
@@ -71,8 +71,8 @@ _create_nebius_mk8s() {
     debug_log "Creating Nebius mk8s cluster..."
 
     NB_SUBNET_ID=$(nebius vpc subnet list \
-            --format json \
-        | jq -r '.items[0].metadata.id')
+        --format json |
+        jq -r '.items[0].metadata.id')
     export NB_SUBNET_ID
 
     NB_CLUSTER_ID=$(
@@ -85,9 +85,9 @@ _create_nebius_mk8s() {
         debug_log "Cluster already exists, skip creation..."
     else
         NB_CLUSTER_ID=$(nebius mk8s cluster create \
-                --name "$NB_CLUSTER_NAME" \
-                --control-plane-subnet-id "$NB_SUBNET_ID" \
-                '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
+            --name "$NB_CLUSTER_NAME" \
+            --control-plane-subnet-id "$NB_SUBNET_ID" \
+            '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
             --format json | jq -r '.metadata.id')
     fi
     export NB_CLUSTER_ID
@@ -121,31 +121,6 @@ create_nodegroup() {
     export NB_NODEGROUP_ID
 }
 
-delete_nodegroup() {
-    local nodegroup_name="${1:-github-ci-Nebius}"
-
-    debug_log "Deleting Nebius node-group..."
-
-    export NB_NODEGROUP_NAME="$nodegroup_name"
-    NB_CLUSTER_ID=$(
-        nebius mk8s cluster get-by-name \
-            --name "$NB_CLUSTER_NAME" \
-            --format json | jq -r '.metadata.id'
-    )
-    local nodegroup_id
-    nodegroup_id=$(nebius mk8s node-group get-by-name \
-            --parent-id "$NB_CLUSTER_ID" \
-        --name "$NB_NODEGROUP_NAME" --format json | jq -r '.metadata.id')
-
-    if [ -z "$nodegroup_id" ] || [ "$nodegroup_id" = "null" ]; then
-        debug_log "Cluster Node-group does not exist, skipping deletion..."
-    else
-        debug_log "Deleting node-group..."
-        nebius mk8s node-group delete --id "$nodegroup_id"
-        debug_log "Nebius node-group has been deleted"
-    fi
-}
-
 delete_mk8s_cluster() {
     local cluster_id
     cluster_id=$(nebius mk8s cluster get-by-name \
@@ -163,16 +138,16 @@ delete_mk8s_cluster() {
 setup_gpu_operator() {
     debug_log "Installing NVIDIA GPU operator..."
 
-    helm repo add nvidia https://helm.ngc.nvidia.com/nvidia \
-        && helm repo update
+    helm repo add nvidia https://helm.ngc.nvidia.com/nvidia &&
+        helm repo update
 
     helm upgrade -i --wait gpu-operator \
         -n "$GPU_OPERATOR_NAMESPACE" --create-namespace \
         nvidia/gpu-operator \
         --version="$GPU_OPERATOR_VERSION" --set driver.version="$GPU_OPERATOR_DRIVER_VERSION"
 
-    wait_for_ready "$GPU_OPERATOR_NAMESPACE" 120
-    wait_for_cmd 120 is_gpu_available 1
+    wait_for_ready "$GPU_OPERATOR_NAMESPACE" 300
+    wait_for_cmd 300 is_gpu_available 1
 
     debug_log "NVIDIA GPU operator installed successfully"
 }
@@ -200,22 +175,6 @@ setup_cluster() {
 
 teardown_cluster() {
     debug_log "Tearing down Nebius cluster..."
-
-    # Delete the H100 nodegroup
-    NB_NODEGROUP_NAME="github-ci"
-    NB_NODE_COUNT="2"
-    NB_GPU_PRESET="1gpu-16vcpu-200gb"
-    # 1TB disk size
-    NB_NODE_DISK_SIZE="1099511627776"
-    delete_nodegroup
-
-    # Delete the H100 multi-gpu nodegroup
-    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
-    NB_NODE_COUNT="1"
-    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
-    # 128GB disk size
-    NB_NODE_DISK_SIZE="137438953472"
-    delete_nodegroup
 
     delete_mk8s_cluster
 
