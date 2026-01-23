@@ -128,7 +128,8 @@ setup_file() {
 #
 
 teardown_file() {
-    # Helps us clear unattached disks on Nebius
+    # Make sure that all pods are deleted before deleting pvc
+    kubectl delete po --all -n "$NAMESPACE"
     debug_log "Deleting dgtest-pvc"
     spec=$(cmd_pvc_spec 50Gi dgtest-pvc)
     kubectl delete -f "$spec"

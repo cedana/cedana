@@ -78,7 +78,7 @@ env:
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 1 # bats debug logging (enable if unstable)
+  DEBUG: 0 # bats debug logging (enable if unstable)
 
 
 jobs:
@@ -311,7 +311,6 @@ jobs:
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
           NB_CLUSTER_NAME: ${{ env.NB_CLUSTER_NAME }}-${{ matrix.arch }}
-        shell: bash
         run: |
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
@@ -322,7 +321,7 @@ jobs:
           export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
           export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
           if [ "$GPU" = "true" ]; then
-            export CEDANA_PLUGINS_GPU_VERSION=v0.7.0
+            export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
           fi
           if [ "$STREAMER" = "true" ]; then
             export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
