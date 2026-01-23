@@ -79,7 +79,7 @@ case "$(uname -m)" in
     x86_64)
         wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
         ;;
-    arm64|aarch64)
+    arm64 | aarch64)
         wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
         ;;
     *)
@@ -103,6 +103,7 @@ run_step() {
 run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
 run_step "install plugins" "$DIR/k8s-install-plugins.sh"     # install the plugins (including shim)
 run_step "configure shm" "$DIR/shm-configure.sh"             # configure shm
+run_step "configure io_uring" "$DIR/io-uring-configure.sh"   # configure io_uring
 
 if [ "$ENV" != "production" ]; then
     pkill -f 'cedana daemon' || true
