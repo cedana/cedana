@@ -156,7 +156,7 @@ delete_nebius_disks() {
     debug_log "Fetching disk name to be deleted ..."
     volume=$(kubectl get pvc -n "$NAMESPACE" -o jsonpath='{.spec.volumeName}{"\n"}')
     debug_log "Fetching disk id ..."
-    disk=$(nebius compute disk get-by-name --name "$volume")
+    disk_id=$(nebius compute disk get-by-name --name "$volume" --format json | jq -r '.id')
     # Make sure that all pods are deleted before deleting pvc
     kubectl delete po --all -n "$NAMESPACE"
     debug_log "Deleting dgtest-pvc ..."
@@ -165,7 +165,7 @@ delete_nebius_disks() {
     sleep 10
     debug_log "dgtest-pvc has been deleted"
     debug_log "Deleting unused nebius disk ..."
-    nebius compute disk delete --id "$disk"
+    nebius compute disk delete --id "$disk_id"
     debug_log "Unused nebius disk has been deleted"
 }
 
