@@ -127,7 +127,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 4 --dir cedana://ci
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
 
     debug cedana restore process --path "$dump_file" --pid-file "$pid_file" --no-server &
 

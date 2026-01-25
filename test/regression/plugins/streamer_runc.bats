@@ -45,7 +45,7 @@ teardown_file() {
 
     run cedana dump runc "$id" --streams 1 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
 
@@ -62,7 +62,7 @@ teardown_file() {
 
     run cedana dump runc "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -80,7 +80,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -101,7 +101,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -126,7 +126,7 @@ teardown_file() {
 
     run cedana dump runc "$id" --streams 1 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
 
@@ -145,7 +145,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -168,7 +168,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -194,7 +194,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"

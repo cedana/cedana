@@ -48,7 +48,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 1
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
 
@@ -66,7 +66,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 4
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
@@ -91,7 +91,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 1
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
 
@@ -118,7 +118,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 4
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
@@ -149,7 +149,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 4
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
