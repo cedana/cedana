@@ -50,7 +50,7 @@ teardown_file() {
 
     cedana dump job "$jid"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     sleep 5

@@ -12,16 +12,16 @@ install_kubectl() {
     debug_log "Installing kubectl..."
     ARCH=$(uname -m)
     case "$ARCH" in
-    x86_64)
-        KC_ARCH="amd64"
-        ;;
-    aarch64 | arm64)
-        KC_ARCH="arm64"
-        ;;
-    *)
-        error_log "Unsupported architecture for kubectl: $ARCH"
-        return 1
-        ;;
+        x86_64)
+            KC_ARCH="amd64"
+            ;;
+        aarch64 | arm64)
+            KC_ARCH="arm64"
+            ;;
+        *)
+            error_log "Unsupported architecture for kubectl: $ARCH"
+            return 1
+            ;;
     esac
     curl -Lo /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/$KC_ARCH/kubectl
     install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
@@ -38,16 +38,16 @@ install_k9s() {
     debug_log "Installing k9s..."
     ARCH=$(uname -m)
     case "$ARCH" in
-    x86_64)
-        K9S_ARCH="amd64"
-        ;;
-    aarch64 | arm64)
-        K9S_ARCH="arm64"
-        ;;
-    *)
-        error_log "Unsupported architecture for k9s: $ARCH"
-        return 1
-        ;;
+        x86_64)
+            K9S_ARCH="amd64"
+            ;;
+        aarch64 | arm64)
+            K9S_ARCH="arm64"
+            ;;
+        *)
+            error_log "Unsupported architecture for k9s: $ARCH"
+            return 1
+            ;;
     esac
     wget -q https://github.com/derailed/k9s/releases/latest/download/k9s_linux_"$K9S_ARCH".deb -O /tmp/k9s.deb
     apt install -y /tmp/k9s.deb
@@ -374,9 +374,9 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    # Get all pods
+    # Get all pods excluding Completed ones
     local pods
-    pods=$(kubectl get pods -n "$namespace" -o name 2>/dev/null)
+    pods=$(kubectl get pods -n "$namespace" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase != "Succeeded") | "pod/" + .metadata.name')
 
     if [ -z "$pods" ]; then
         debug_log "No Running pods found in namespace $namespace"
@@ -386,12 +386,16 @@ wait_for_ready() {
     echo "$pods" | xargs -r kubectl wait --for=condition=Ready -n "$namespace" --timeout="$timeout"s || {
         error_log "Failed to wait for all pods in namespace $namespace to be Ready"
         for pod in $(kubectl get pods -n "$namespace" -o name); do
-            error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
-            kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
-                error_log "$line"
-            done
-            error_log "Logs from pod $pod in namespace $namespace:"
-            error kubectl logs "$pod" -n "$namespace" --tail=1000 --
+            local phase
+            phase=$(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')
+            if [ "$phase" != "Succeeded" ]; then
+                error_log "Pod $pod status: $phase"
+                kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
+                    error_log "$line"
+                done
+                error_log "Logs from pod $pod in namespace $namespace:"
+                error kubectl logs "$pod" -n "$namespace" --tail=1000 --
+            fi
         done
         return 1
     }
@@ -566,139 +570,139 @@ test_pod_spec() {
 
     for action in "${actions[@]}"; do
         case "$action" in
-        DEPLOY)
-            if [ "$deployed" = true ]; then
-                error="Cannot DEPLOY twice - pod already deployed"
-                break
-            fi
-
-            debug_log "Deploying from $spec..."
-            if grep -q "generateName:" "$spec"; then
-                kubectl create -f "$spec"
-            else
-                kubectl apply -f "$spec"
-            fi
-
-            name=$(get_created_pod "$spec" "$namespace" 30)
-            if [ -z "$name" ]; then
-                error="Failed to get pod name"
-                break
-            fi
-
-            validate_pod "$name" "$pod_timeout" || {
-                error="Pod $name failed to become Ready"
-                break
-            }
-
-            debug_log "Deployed pod $name successfully"
-            original_name="$name"
-            deployed=true
-            ;;
-
-        DUMP)
-            if [ "$deployed" = false ]; then
-                error="Cannot DUMP - no pod deployed yet"
-                break
-            fi
-            if [ -z "$name" ]; then
-                error="Cannot DUMP - no active pod"
-                break
-            fi
-
-            # Wait for log trigger if provided, otherwise use fixed sleep
-            if [ -n "$dump_trigger" ]; then
-                wait_for_log_trigger "$name" "$dump_trigger" "$trigger_timeout" "$namespace" || {
-                    error="Timeout waiting for dump trigger '$dump_trigger' in pod $name"
+            DEPLOY)
+                if [ "$deployed" = true ]; then
+                    error="Cannot DEPLOY twice - pod already deployed"
                     break
-                }
-                if [ "$post_trigger_wait" -gt 0 ]; then
-                    debug_log "Waiting ${post_trigger_wait}s after trigger before dump..."
-                    sleep "$post_trigger_wait"
                 fi
-            else
-                sleep "$dump_wait_time"
-            fi
 
-            debug_log "Dumping pod $name..."
-            local pod_id
-            pod_id=$(get_pod_id "$name" "$namespace")
+                debug_log "Deploying from $spec..."
+                if grep -q "generateName:" "$spec"; then
+                    kubectl create -f "$spec"
+                else
+                    kubectl apply -f "$spec"
+                fi
 
-            local checkpoint_output
-            checkpoint_output=$(checkpoint_pod "$pod_id")
-            local checkpoint_status=$?
+                name=$(get_created_pod "$spec" "$namespace" 30)
+                if [ -z "$name" ]; then
+                    error="Failed to get pod name"
+                    break
+                fi
 
-            if [ $checkpoint_status -ne 0 ]; then
-                error="Checkpoint failed: $checkpoint_output"
-                break
-            fi
-
-            action_id="$checkpoint_output"
-            validate_action_id "$action_id" || {
-                error="Invalid action ID: $action_id"
-                break
-            }
-
-            poll_action_status "$action_id" "checkpoint" "$dump_timeout" || {
-                error="Checkpoint action $action_id did not complete successfully"
-                break
-            }
-
-            debug_log "Dumped pod $name successfully (action_id: $action_id)"
-
-            if [ -n "$dump_trigger" ]; then
-                debug_log "Verifying pod $name resumes after checkpoint..."
-                wait_for_new_log_trigger "$name" "$dump_trigger" 300 "$namespace" || {
-                    error="Pod $name did not resume training after checkpoint (no new '$dump_trigger' in logs)"
+                validate_pod "$name" "$pod_timeout" || {
+                    error="Pod $name failed to become Ready"
                     break
                 }
-                debug_log "Pod $name successfully resumed after checkpoint"
-            fi
-            ;;
 
-        RESTORE)
-            if [ -z "$action_id" ]; then
-                error="Cannot RESTORE - no checkpoint action ID available"
+                debug_log "Deployed pod $name successfully"
+                original_name="$name"
+                deployed=true
+                ;;
+
+            DUMP)
+                if [ "$deployed" = false ]; then
+                    error="Cannot DUMP - no pod deployed yet"
+                    break
+                fi
+                if [ -z "$name" ]; then
+                    error="Cannot DUMP - no active pod"
+                    break
+                fi
+
+                # Wait for log trigger if provided, otherwise use fixed sleep
+                if [ -n "$dump_trigger" ]; then
+                    wait_for_log_trigger "$name" "$dump_trigger" "$trigger_timeout" "$namespace" || {
+                        error="Timeout waiting for dump trigger '$dump_trigger' in pod $name"
+                        break
+                    }
+                    if [ "$post_trigger_wait" -gt 0 ]; then
+                        debug_log "Waiting ${post_trigger_wait}s after trigger before dump..."
+                        sleep "$post_trigger_wait"
+                    fi
+                else
+                    sleep "$dump_wait_time"
+                fi
+
+                debug_log "Dumping pod $name..."
+                local pod_id
+                pod_id=$(get_pod_id "$name" "$namespace")
+
+                local checkpoint_output
+                checkpoint_output=$(checkpoint_pod "$pod_id")
+                local checkpoint_status=$?
+
+                if [ $checkpoint_status -ne 0 ]; then
+                    error="Checkpoint failed: $checkpoint_output"
+                    break
+                fi
+
+                action_id="$checkpoint_output"
+                validate_action_id "$action_id" || {
+                    error="Invalid action ID: $action_id"
+                    break
+                }
+
+                poll_action_status "$action_id" "checkpoint" "$dump_timeout" || {
+                    error="Checkpoint action $action_id did not complete successfully"
+                    break
+                }
+
+                debug_log "Dumped pod $name successfully (action_id: $action_id)"
+
+                if [ -n "$dump_trigger" ]; then
+                    debug_log "Verifying pod $name resumes after checkpoint..."
+                    wait_for_new_log_trigger "$name" "$dump_trigger" 300 "$namespace" || {
+                        error="Pod $name did not resume training after checkpoint (no new '$dump_trigger' in logs)"
+                        break
+                    }
+                    debug_log "Pod $name successfully resumed after checkpoint"
+                fi
+                ;;
+
+            RESTORE)
+                if [ -z "$action_id" ]; then
+                    error="Cannot RESTORE - no checkpoint action ID available"
+                    break
+                fi
+
+                debug_log "Deleting pod $name before restore..."
+                kubectl delete pod "$name" -n "$namespace" --wait=true || {
+                    error="Failed to delete pod $name before restore"
+                    break
+                }
+                deployed=false
+
+                debug_log "Restoring pod from action_id $action_id..."
+
+                local restore_output
+                restore_output=$(restore_pod "$action_id" "$CLUSTER_ID")
+                local restore_status=$?
+
+                if [ $restore_status -ne 0 ]; then
+                    error="Restore failed: $restore_output"
+                    break
+                fi
+
+                local restore_action_id="$restore_output"
+                validate_action_id "$restore_action_id" || {
+                    error="Invalid restore action ID: $restore_action_id"
+                    break
+                }
+
+                name=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
+
+                debug_log "Restore starting for $name..."
+
+                validate_pod "$name" "$pod_timeout"
+                debug_log "Restored pod $name successfully"
+                original_name="$name"
+                deployed=true
+                ;;
+
+            *)
+                error="Unknown action: $action"
                 break
-            fi
-
-            debug_log "Deleting pod $name before restore..."
-            kubectl delete pod "$name" -n "$namespace" --wait=true || {
-                error="Failed to delete pod $name before restore"
-                break
-            }
-            deployed=false
-
-            debug_log "Restoring pod from action_id $action_id..."
-
-            local restore_output
-            restore_output=$(restore_pod "$action_id" "$CLUSTER_ID")
-            local restore_status=$?
-
-            if [ $restore_status -ne 0 ]; then
-                error="Restore failed: $restore_output"
-                break
-            fi
-
-            local restore_action_id="$restore_output"
-            validate_action_id "$restore_action_id" || {
-                error="Invalid restore action ID: $restore_action_id"
-                break
-            }
-
-            name=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
-
-            debug_log "Restore starting for $name..."
-
-            validate_pod "$name" "$pod_timeout"
-            debug_log "Restored pod $name successfully"
-            original_name="$name"
-            deployed=true
-            ;;
-
-        *)
-            error="Unknown action: $action"
-            break
-            ;;
+                ;;
         esac
     done
 
@@ -834,7 +838,7 @@ wait_for_spot_node() {
     local elapsed=0
     local poll_interval=5
 
-    while [ $elapsed -lt $timeout ]; do
+    while [ $elapsed -lt "$timeout" ]; do
         local node_name
         node_name=$(get_pod_node "$pod_name" "$namespace")
 
