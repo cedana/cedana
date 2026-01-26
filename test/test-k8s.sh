@@ -22,7 +22,7 @@ OPTIONS:
     -l, --list-tags     List all available tags from bats files and exit
     -i, --interactive   Interactive mode to select tags
     -g, --gpu           Enable GPU tests (sets GPU=1)
-    -c, --chaos         Run chaos/stress tests
+    -c, --chaos         Run chaos/stress tests (manual tests, not run in CI)
     --chaos-duration N  Chaos test duration in seconds (default: 120)
     -s, --stream        Stream output in real-time (use pretty formatter instead of tap13)
     -p, --parallelism N Number of parallel test jobs (default: 1)
@@ -62,7 +62,7 @@ get_all_tags() {
             IFS=',' read -ra file_tags <<<"${BASH_REMATCH[1]}"
             tags+=("${file_tags[@]}")
         fi
-    done < <(grep -h "bats file_tags=" "$script_dir"/k8s/*.bats 2>/dev/null || true)
+    done < <(grep -h "bats file_tags=" "$script_dir"/k8s/*.bats "$script_dir"/k8s/*.bats.manual 2>/dev/null || true)
 
     # Extract test_tags
     while IFS= read -r line; do
@@ -71,7 +71,7 @@ get_all_tags() {
             IFS=',' read -ra test_tags <<<"${BASH_REMATCH[1]}"
             tags+=("${test_tags[@]}")
         fi
-    done < <(grep -h "bats test_tags=" "$script_dir"/k8s/*.bats 2>/dev/null || true)
+    done < <(grep -h "bats test_tags=" "$script_dir"/k8s/*.bats "$script_dir"/k8s/*.bats.manual 2>/dev/null || true)
 
     # Sort and deduplicate
     printf '%s\n' "${tags[@]}" | sort -u
@@ -187,6 +187,7 @@ CHAOS_DURATION="${CHAOS_DURATION:-120}"
 STREAM_OUTPUT=0
 INTERACTIVE=0
 LIST_TAGS=0
+CHAOS_MODE=0
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -209,6 +210,8 @@ while [[ $# -gt 0 ]]; do
         ;;
     -c | --chaos)
         TAGS="k8s,chaos"
+        # Chaos tests are in .bats.manual files, need to run them explicitly
+        CHAOS_MODE=1
         shift
         ;;
     --chaos-duration)
@@ -435,6 +438,15 @@ else
     FORMATTER_ARGS="--formatter tap13"
 fi
 
+# Determine which test files to run
+if [[ $CHAOS_MODE -eq 1 ]]; then
+    # Chaos tests are in .bats.manual files
+    TEST_FILES="k8s/*.bats.manual"
+else
+    # Regular tests are in .bats files
+    TEST_FILES="-r k8s"
+fi
+
 bats \
     $FILTER_ARGS \
     --jobs "$PARALLELISM" \
@@ -442,7 +454,7 @@ bats \
     --print-output-on-failure \
     --timing \
     $FORMATTER_ARGS \
-    -r k8s
+    $TEST_FILES
 
 TEST_EXIT_CODE=$?
 
