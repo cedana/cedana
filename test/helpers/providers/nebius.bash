@@ -154,7 +154,7 @@ setup_gpu_operator() {
 
 delete_nebius_disks() {
     debug_log "Fetching disk name to be deleted ..."
-    volume=$(kubectl get pvc -n "$NAMESPACE" -o jsonpath='{.spec.volumeName}{"\n"}')
+    volume=$(kubectl get pvc dgtest-pvc -n "$NAMESPACE" -o jsonpath='{.spec.volumeName}{"\n"}')
     debug_log "Fetching disk id ..."
     disk_id=$(nebius compute disk get-by-name --name "$volume" --format json | jq -r '.id')
     # Make sure that all pods are deleted before deleting pvc
