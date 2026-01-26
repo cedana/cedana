@@ -186,7 +186,7 @@ type checkpointReq struct {
 	PodName              []string             `json:"pod_name,omitempty"`
 	Namespace            string               `json:"namespace,omitempty"`
 	ClusterID            string               `json:"cluster_id,omitempty"`
-	AllInCedanaNamespace bool                 `json:"all_in_cedana_namespace,omitempty"`
+	AllInNamespace       bool                 `json:"all_in_namespace,omitempty"`
 	ActionId             string               `json:"action_id,omitempty"`
 	Kind                 string               `json:"kind,omitempty"`
 	Reason               string               `json:"reason,omitempty"`
