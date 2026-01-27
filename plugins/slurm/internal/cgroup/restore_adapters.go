@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
 	"github.com/opencontainers/cgroups"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
