@@ -74,8 +74,8 @@ jobs:
     secrets: inherit
     with:
       github: ${{ inputs.github }}
-      cloudsmith: ${{ inputs.cloudsmith }}
-      cloudsmith_repo: ${{ inputs.cloudsmith_repo }}
+      aws_s3: ${{ inputs.cloudsmith }}
+      aws_s3_path: ${{ inputs.cloudsmith_repo }}
       dockerhub: ${{ inputs.dockerhub }}
       dockerhub_latest: ${{ inputs.dockerhub_latest }}
       post_summary: ${{ inputs.post_summary }}
