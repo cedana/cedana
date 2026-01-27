@@ -146,7 +146,7 @@ setup_gpu_operator() {
         nvidia/gpu-operator \
         --version="$GPU_OPERATOR_VERSION" --set driver.version="$GPU_OPERATOR_DRIVER_VERSION"
 
-    sleep 120
+    wait_for_ready "$GPU_OPERATOR_NAMESPACE" 120
     wait_for_cmd 120 is_gpu_available 1
 
     debug_log "NVIDIA GPU operator installed successfully"
