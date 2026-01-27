@@ -128,11 +128,6 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
@@ -145,10 +140,7 @@ jobs:
           aws s3 cp \
             cedana-${{ matrix.arch }} \
             s3://cedana-bin/${{ inputs.aws_s3_path }}//cedana-${{ matrix.arch }} \
-            --metadata \
-              arch=${{ matrix.arch }},\
-              ref=${REF},\
-              sha=${SHA}
+            --metadata arch=${{ matrix.arch }},ref=${REF},sha=${SHA}
 
   aws_s3_plugin:
     name: AWS S3 Plugin Upload
@@ -196,14 +188,13 @@ jobs:
         run: |
           REF="${{ github.head_ref || github.ref_name }}"
           SHA="${{ github.sha }}"
-
+          PLUGIN_NAME="${{ matrix.plugin }}"
+          # Sanitize plugin name by replacing slashes with hiphens
+          PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
           aws s3 cp \
-            libcedana-${{ env.PLUGIN }}.so \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}//libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} \
-            --metadata \
-              arch=${{ matrix.arch }},\
-              ref=${REF},\
-              sha=${SHA}
+          libcedana-${PLUGIN_SAFE}.so \
+          s3://cedana-bin/${{ inputs.aws_s3_path }}//libcedana-${PLUGIN_SAFE}.so-${{ matrix.arch }} \
+          --metadata arch=${{ matrix.arch }},ref=${REF},sha=${SHA}
 
   dockerhub:
     name: DockerHub (multi-arch)
