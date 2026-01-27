@@ -405,12 +405,16 @@ wait_for_ready() {
     echo "$pods" | xargs -r kubectl wait --for=condition=Ready -n "$namespace" --timeout="$timeout"s || {
         error_log "Failed to wait for all pods in namespace $namespace to be Ready"
         for pod in $(kubectl get pods -n "$namespace" -o name); do
-            error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
-            kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
-                error_log "$line"
-            done
-            error_log "Logs from pod $pod in namespace $namespace:"
-            error kubectl logs "$pod" -n "$namespace" --tail=1000 || true
+            local phase
+            phase=$(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')
+            if [ "$phase" != "Succeeded" ]; then
+                error_log "Pod $pod status: $phase"
+                kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
+                    error_log "$line"
+                done
+                error_log "Logs from pod $pod in namespace $namespace:"
+                error kubectl logs "$pod" -n "$namespace" --tail=1000 --
+            fi
         done
         return 1
     }
