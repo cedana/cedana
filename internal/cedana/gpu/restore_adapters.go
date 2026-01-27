@@ -145,10 +145,29 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
+			hostmemRegex := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
 			interceptorLogRegex := regexp.MustCompile(INTERCEPTOR_LOG_FILE_PATTERN)
 			tracerLogRegex := regexp.MustCompile(TRACER_LOG_FILE_PATTERN)
 
-			if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
+			if matches := hostmemRegex.FindStringSubmatch(path); id != "" && len(matches) == 3 {
+				pid, err = strconv.Atoi(matches[2])
+				if err != nil {
+					err = status.Errorf(codes.Internal, "failed to parse PID from hostmem file path %s: %v", path, err)
+					return false
+				}
+				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
+				
+				// Create hostmem file in host path (not using inherit FD)
+				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o644)
+				if createErr != nil {
+					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
+					return false
+				}
+				hostmemFile.Close()
+				log.Debug().Str("path", newPath).Msg("created hostmem file in host path")
+				
+				return true // Don't inherit FD for hostmem, just create the file
+			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
 				if err != nil {

@@ -469,41 +469,6 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
 	var restoreErr chan error
 	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		// Create hostmem files in host path before CRIU restore
-		checkpointDir := opts.GetImagesDir()
-		miscDirHost := fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id)
-
-		log.Debug().Str("dir", checkpointDir).Msg("reading checkpoint directory for hostmem files")
-
-		// Ensure the misc directory exists on host
-		if err := os.MkdirAll(miscDirHost, 0o755); err != nil {
-			log.Error().Err(err).Str("dir", miscDirHost).Msg("failed to create misc directory")
-			return fmt.Errorf("failed to create misc directory: %w", err)
-		}
-
-		// Read checkpoint directory for hostmem files
-		entries, err := os.ReadDir(checkpointDir)
-		if err != nil {
-			log.Warn().Err(err).Str("dir", checkpointDir).Msg("failed to read checkpoint directory")
-		} else {
-			hostmemPattern := regexp.MustCompile(`^gpu-hostmem-`)
-			for _, entry := range entries {
-				if hostmemPattern.MatchString(entry.Name()) {
-					dstPath := miscDirHost + "/" + entry.Name()
-
-					// Just create the file in host path
-					file, err := os.Create(dstPath)
-					if err != nil {
-						log.Error().Err(err).Str("dst", dstPath).Msg("failed to create hostmem file")
-						return fmt.Errorf("failed to create hostmem file %s: %w", dstPath, err)
-					}
-					file.Close()
-
-					log.Debug().Str("dst", dstPath).Msg("created hostmem file in host path")
-				}
-			}
-		}
-
 		restoreErr = make(chan error, 1)
 		go func() {
 			defer close(restoreErr)
