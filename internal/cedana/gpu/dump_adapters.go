@@ -2,9 +2,12 @@ package gpu
 
 import (
 	"context"
+	"fmt"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -37,6 +40,14 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			state.GPUID = id
 			state.GPUEnabled = true
+
+			if req.Criu == nil {
+				req.Criu = &criu.CriuOpts{}
+			}
+
+			miscDirContainer := fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, "container")
+			req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:cedana-gpu-misc", miscDirContainer))
+			log.Debug().Str("container", miscDirContainer).Msg("adding external mount for GPU misc directory on dump")
 
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id))

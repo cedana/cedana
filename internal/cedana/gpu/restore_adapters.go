@@ -123,6 +123,13 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		var toClose []*os.File
 		var logDir string
 
+		// Add external mount for GPU misc directory
+		if id != "" {
+			miscDirHost := fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id)
+			req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[cedana-gpu-misc]:%s", miscDirHost))
+			log.Debug().Str("host", miscDirHost).Msg("adding external mount for GPU misc directory on restore")
+		}
+
 		// Inherit hostmem files as well, if any
 		utils.WalkTree(state, "OpenFiles", "Children", func(file *daemon.File) bool {
 			path := file.Path
@@ -138,18 +145,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
-			hostmemRegex := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
 			interceptorLogRegex := regexp.MustCompile(INTERCEPTOR_LOG_FILE_PATTERN)
 			tracerLogRegex := regexp.MustCompile(TRACER_LOG_FILE_PATTERN)
 
-			if matches := hostmemRegex.FindStringSubmatch(path); id != "" && len(matches) == 3 {
-				pid, err = strconv.Atoi(matches[2])
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to parse PID from hostmem file path %s: %v", path, err)
-					return false
-				}
-				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
-			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
+			if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
 				if err != nil {
