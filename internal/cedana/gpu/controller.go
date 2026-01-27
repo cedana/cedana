@@ -472,13 +472,15 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		// Create hostmem files in host path before CRIU restore
 		checkpointDir := opts.GetImagesDir()
 		miscDirHost := fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id)
-		
+
+		log.Debug().Str("dir", checkpointDir).Msg("reading checkpoint directory for hostmem files")
+
 		// Ensure the misc directory exists on host
 		if err := os.MkdirAll(miscDirHost, 0o755); err != nil {
 			log.Error().Err(err).Str("dir", miscDirHost).Msg("failed to create misc directory")
 			return fmt.Errorf("failed to create misc directory: %w", err)
 		}
-		
+
 		// Read checkpoint directory for hostmem files
 		entries, err := os.ReadDir(checkpointDir)
 		if err != nil {
@@ -488,7 +490,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			for _, entry := range entries {
 				if hostmemPattern.MatchString(entry.Name()) {
 					dstPath := miscDirHost + "/" + entry.Name()
-					
+
 					// Just create the file in host path
 					file, err := os.Create(dstPath)
 					if err != nil {
@@ -496,12 +498,12 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 						return fmt.Errorf("failed to create hostmem file %s: %w", dstPath, err)
 					}
 					file.Close()
-					
+
 					log.Debug().Str("dst", dstPath).Msg("created hostmem file in host path")
 				}
 			}
 		}
-		
+
 		restoreErr = make(chan error, 1)
 		go func() {
 			defer close(restoreErr)
