@@ -18,7 +18,6 @@ helm_install_cedana() {
     local namespace="$2"
 
     debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
-    sleep 30 # avoid helm install before nvidia controller setup on node
     local helm_cmd
 
     # Use upgrade --install for idempotent installs
@@ -92,7 +91,6 @@ helm_install_cedana() {
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
     }
-    sleep 30
     debug_log "Helm chart installed"
 }
 
