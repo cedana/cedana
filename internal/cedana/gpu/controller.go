@@ -486,7 +486,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		if err != nil {
 			log.Warn().Err(err).Str("dir", checkpointDir).Msg("failed to read checkpoint directory")
 		} else {
-			hostmemPattern := regexp.MustCompile(`^hostmem-\d+$`)
+			hostmemPattern := regexp.MustCompile(`^gpu-hostmem-`)
 			for _, entry := range entries {
 				if hostmemPattern.MatchString(entry.Name()) {
 					dstPath := miscDirHost + "/" + entry.Name()
