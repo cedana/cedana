@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 install_helm() {
-    if command -v helm &> /dev/null; then
+    if command -v helm &>/dev/null; then
         debug_log "helm is already installed"
         return 0
     fi
@@ -18,7 +18,6 @@ helm_install_cedana() {
     local namespace="$2"
 
     debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
-
     local helm_cmd
 
     # Use upgrade --install for idempotent installs
@@ -92,7 +91,6 @@ helm_install_cedana() {
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
     }
-
     debug_log "Helm chart installed"
 }
 
