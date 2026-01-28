@@ -393,7 +393,7 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    # Get all pods excluding jobs and Completed pods
+    # Get all pods excluding Completed pods
     local pods
     pods=$(kubectl get pods -n "$namespace" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase != "Succeeded") | "pod/" + .metadata.name')
 
@@ -404,7 +404,7 @@ wait_for_ready() {
 
     local end=$((SECONDS + timeout))
     local bad_pods
-    # Check if all pods are in Completed/Running/Ready state
+    # Check if all pods are in Completed/Ready state
     while ((SECONDS < end)); do
         bad_pods=$(kubectl get pods -n "$namespace" -o json | jq -r '
         .items[]
@@ -421,7 +421,7 @@ wait_for_ready() {
     ')
 
         if [ -z "$bad_pods" ]; then
-            debug_log "All pods in namespace $namespace are Ready or Succeeded"
+            debug_log "All pods in namespace $namespace are Ready"
             return 0
         fi
 
