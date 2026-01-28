@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"regexp"
@@ -151,31 +152,29 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
 
 				// Read the checkpoint hostmem file to get the size
-				checkpointDir := req.Criu.GetImagesDir()
-				if checkpointDir == "" {
-					checkpointDir = req.Criu.GetImagesDir()
+				hostmemCkptFile, err := opts.DumpFs.Open("gpu-hostmem-0-0")
+				if err != nil {
+					err = status.Errorf(codes.Internal, "failed to open checkpoint hostmem file gpu-hostmem-0-0: %v", err)
+					return false
 				}
-				checkpointHostmemPath := fmt.Sprintf("%s/gpu-hostmem-0-0", checkpointDir)
-				var hostMemSegSize uint64
-				hostmemData, readErr := os.ReadFile(checkpointHostmemPath)
-				if readErr != nil {
-					log.Warn().Err(readErr).Str("path", checkpointHostmemPath).Msg("failed to read checkpoint hostmem file")
-				} else if len(hostmemData) >= 8 {
-					// First 8 bytes contain the size (size_t on 64-bit systems)
-					hostMemSegSize = uint64(hostmemData[0]) | uint64(hostmemData[1])<<8 |
-						uint64(hostmemData[2])<<16 | uint64(hostmemData[3])<<24 |
-						uint64(hostmemData[4])<<32 | uint64(hostmemData[5])<<40 |
-						uint64(hostmemData[6])<<48 | uint64(hostmemData[7])<<56
+				defer hostmemCkptFile.Close()
+
+				sizeBuffer := make([]byte, 8)
+				_, err = hostmemCkptFile.ReadAt(sizeBuffer, 0)
+				if err != nil && err.Error() != "EOF" {
+					err = status.Errorf(codes.Internal, "failed to read size from checkpoint hostmem file gpu-hostmem-0-0: %v", err)
+					return false
 				}
+				hostMemSegSize := binary.LittleEndian.Uint64(sizeBuffer)
 
 				// Create hostmem file in host path (not using inherit FD)
-				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o666)
+				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 				if createErr != nil {
 					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
 					return false
 				}
 
-				if err = os.Chmod(newPath, 0o666); err != nil {
+				if err = hostmemFile.Chmod(0o666); err != nil {
 					hostmemFile.Close()
 					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, err)
 					return false
