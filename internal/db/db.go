@@ -73,7 +73,7 @@ func (UnimplementedDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*d
 	return nil, errors.New("unimplemented")
 }
 
-func (UnimplementedDB) ListCheckpointsByJID(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
+func (UnimplementedDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
 	return nil, errors.New("unimplemented")
 }
 

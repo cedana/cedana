@@ -68,6 +68,9 @@ func New(address, protocol string) (*Client, error) {
 		}
 		parts := strings.Split(address, ":")
 		contextId, err := strconv.ParseUint(parts[0], 10, 32)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse vsock address: %w", err)
+		}
 		port, err := strconv.ParseUint(parts[1], 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse vsock address: %w", err)
