@@ -80,7 +80,7 @@ func RestoreSlurmScript(next types.Restore) types.Restore {
 
 		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
 			if path := f.GetPath(); filepath.Base(path) == SLURM_SCRIPT_FILE {
-				contents, err := slurm_utils.LoadScriptFromDump(path, opts.DumpFs)
+				contents, err := slurm_utils.LoadScriptFromDump(SLURM_SCRIPT_FILE, opts.DumpFs)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to load slurm script from dump %s", path)
 					return false
@@ -92,7 +92,7 @@ func RestoreSlurmScript(next types.Restore) types.Restore {
 					return false
 				}
 
-				err = os.WriteFile(path, contents, 0755)
+				err = os.WriteFile(path, contents, 0700)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to restore slurm script file %s", path)
 					return false

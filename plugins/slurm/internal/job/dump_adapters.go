@@ -59,6 +59,13 @@ func SetPIDForDump(next types.Dump) types.Dump {
 			resp.State.PID = pid
 		}
 
+		state := resp.GetState()
+
+		err = utils.FillProcessState(ctx, state.PID, state, true)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to fill process state: %v", err)
+		}
+
 		return next(ctx, opts, resp, req)
 	}
 }
