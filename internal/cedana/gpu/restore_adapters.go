@@ -1,7 +1,9 @@
 package gpu
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"regexp"
@@ -18,6 +20,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -149,6 +152,91 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
+
+				// Find the checkpoint hostmem file by matching the hostmem name in metadata
+				// Checkpoint file format: size(8) + baseAddr(8) + segName(128) + data
+				expectedSegName := fmt.Sprintf("hostmem-%d", pid)
+				var hostMemSegSize uint64
+				found := false
+
+				// Try to find matching checkpoint file (workerIndex=0, contextIndex 0-9)
+				matches, err := afero.Glob(opts.DumpFs, "gpu-hostmem-*")
+				if err == nil {
+					for _, filename := range matches {
+						tempFile, openErr := opts.DumpFs.Open(filename)
+						if openErr != nil {
+							continue
+						}
+
+						// Read metadata: size(8) + baseAddr(8) + segName(128)
+						metadataBuffer := make([]byte, 144) // 8 + 8 + 128
+						_, readErr := tempFile.Read(metadataBuffer)
+						tempFile.Close()
+						if readErr != nil && readErr.Error() != "EOF" {
+							continue
+						}
+
+						// Extract segName from bytes 16-144
+						segNameBytes := metadataBuffer[16:144]
+						// Find null terminator
+						nullIdx := bytes.IndexByte(segNameBytes, 0)
+						var segName string
+						if nullIdx >= 0 {
+							segName = string(segNameBytes[:nullIdx])
+						} else {
+							segName = string(segNameBytes)
+						}
+
+						// strip the leading `/`
+						segName = strings.TrimSpace(segName)
+						segName = strings.TrimPrefix(segName, "/")
+
+						log.Debug().Str("file", filename).Str("segName", segName).Str("expected", expectedSegName).Msg("checking hostmem checkpoint file")
+
+						if segName == expectedSegName {
+							// Found the right file, extract size from first 8 bytes
+							hostMemSegSize = binary.LittleEndian.Uint64(metadataBuffer[0:8])
+							found = true
+							log.Debug().Str("file", filename).Str("segName", segName).Uint64("size", hostMemSegSize).Msg("found matching hostmem checkpoint file")
+							break
+						}
+					}
+				}
+
+				if !found {
+					err = status.Errorf(codes.Internal, "failed to find checkpoint hostmem file for %s (expected segName: %s)", path, expectedSegName)
+					return false
+				}
+
+				// Create hostmem file in host path (not using inherit FD)
+				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+				if createErr != nil {
+					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
+					return false
+				}
+
+				defer hostmemFile.Close()
+
+				if err = hostmemFile.Chmod(0o666); err != nil {
+					hostmemFile.Close()
+					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, err)
+					return false
+				}
+
+				// Truncate to the correct size
+				if hostMemSegSize > 0 {
+					truncErr := hostmemFile.Truncate(int64(hostMemSegSize))
+					if truncErr != nil {
+						hostmemFile.Close()
+						err = status.Errorf(codes.Internal, "failed to truncate hostmem file %s to size %d: %v", newPath, hostMemSegSize, truncErr)
+						return false
+					}
+					log.Debug().Str("path", newPath).Uint64("size", hostMemSegSize).Msg("created and truncated hostmem file in host path")
+				} else {
+					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
+				}
+
+				return true // Don't inherit FD for hostmem, just create the file
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
