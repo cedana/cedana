@@ -215,6 +215,8 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 
+				defer hostmemFile.Close()
+
 				if err = hostmemFile.Chmod(0o666); err != nil {
 					hostmemFile.Close()
 					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, err)
@@ -233,8 +235,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				} else {
 					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
 				}
-
-				hostmemFile.Close()
 
 				return true // Don't inherit FD for hostmem, just create the file
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
