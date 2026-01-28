@@ -176,7 +176,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				}
 				
 				// Create hostmem file in host path (not using inherit FD)
-				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o644)
+				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o666)
 				if createErr != nil {
 					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
 					return false
