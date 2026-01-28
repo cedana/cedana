@@ -38,6 +38,7 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			state.GPUID = id
 			state.GPUEnabled = true
 
+			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
 
 			return next(ctx, opts, resp, req)
