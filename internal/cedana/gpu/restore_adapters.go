@@ -157,14 +157,41 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				}
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
 				
+				// Read the checkpoint hostmem file to get the size
+				checkpointHostmemPath := fmt.Sprintf("%s/gpu-hostmem-0-0", req.CheckpointDir)
+				var hostMemSegSize uint64
+				hostmemData, readErr := os.ReadFile(checkpointHostmemPath)
+				if readErr != nil {
+					log.Warn().Err(readErr).Str("path", checkpointHostmemPath).Msg("failed to read checkpoint hostmem file")
+				} else if len(hostmemData) >= 8 {
+					// First 8 bytes contain the size (size_t on 64-bit systems)
+					hostMemSegSize = uint64(hostmemData[0]) | uint64(hostmemData[1])<<8 | 
+						uint64(hostmemData[2])<<16 | uint64(hostmemData[3])<<24 |
+						uint64(hostmemData[4])<<32 | uint64(hostmemData[5])<<40 |
+						uint64(hostmemData[6])<<48 | uint64(hostmemData[7])<<56
+				}
+				
 				// Create hostmem file in host path (not using inherit FD)
 				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o644)
 				if createErr != nil {
 					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
 					return false
 				}
+				
+				// Truncate to the correct size
+				if hostMemSegSize > 0 {
+					truncErr := hostmemFile.Truncate(int64(hostMemSegSize))
+					if truncErr != nil {
+						hostmemFile.Close()
+						err = status.Errorf(codes.Internal, "failed to truncate hostmem file %s to size %d: %v", newPath, hostMemSegSize, truncErr)
+						return false
+					}
+					log.Debug().Str("path", newPath).Uint64("size", hostMemSegSize).Msg("created and truncated hostmem file in host path")
+				} else {
+					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
+				}
+				
 				hostmemFile.Close()
-				log.Debug().Str("path", newPath).Msg("created hostmem file in host path")
 				
 				return true // Don't inherit FD for hostmem, just create the file
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
