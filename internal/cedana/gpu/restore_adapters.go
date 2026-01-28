@@ -156,7 +156,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
-				
+
 				// Read the checkpoint hostmem file to get the size
 				checkpointDir := req.Criu.GetImagesDir()
 				if checkpointDir == "" {
@@ -169,19 +169,25 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					log.Warn().Err(readErr).Str("path", checkpointHostmemPath).Msg("failed to read checkpoint hostmem file")
 				} else if len(hostmemData) >= 8 {
 					// First 8 bytes contain the size (size_t on 64-bit systems)
-					hostMemSegSize = uint64(hostmemData[0]) | uint64(hostmemData[1])<<8 | 
+					hostMemSegSize = uint64(hostmemData[0]) | uint64(hostmemData[1])<<8 |
 						uint64(hostmemData[2])<<16 | uint64(hostmemData[3])<<24 |
 						uint64(hostmemData[4])<<32 | uint64(hostmemData[5])<<40 |
 						uint64(hostmemData[6])<<48 | uint64(hostmemData[7])<<56
 				}
-				
+
 				// Create hostmem file in host path (not using inherit FD)
 				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o666)
 				if createErr != nil {
 					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
 					return false
 				}
-				
+
+				if err = os.Chmod(newPath, 0o666); err != nil {
+					hostmemFile.Close()
+					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, err)
+					return false
+				}
+
 				// Truncate to the correct size
 				if hostMemSegSize > 0 {
 					truncErr := hostmemFile.Truncate(int64(hostMemSegSize))
@@ -194,9 +200,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				} else {
 					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
 				}
-				
+
 				hostmemFile.Close()
-				
+
 				return true // Don't inherit FD for hostmem, just create the file
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
