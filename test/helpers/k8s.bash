@@ -393,9 +393,9 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    # Get all pods excluding Completed ones
+    # Get all pods excluding jobs and Completed pods
     local pods
-    pods=$(kubectl get pods -n "$namespace" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase != "Succeeded") | "pod/" + .metadata.name')
+    pods=$(kubectl get pods -n "$namespace" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase != "Succeeded" or .metadata.ownerReferences[]?.kind != "Job") | "pod/" + .metadata.name')
 
     if [ -z "$pods" ]; then
         debug_log "No Running pods found in namespace $namespace"
