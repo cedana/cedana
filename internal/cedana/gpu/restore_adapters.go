@@ -158,7 +158,11 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
 				
 				// Read the checkpoint hostmem file to get the size
-				checkpointHostmemPath := fmt.Sprintf("%s/gpu-hostmem-0-0", req.CheckpointDir)
+				checkpointDir := req.Criu.GetImagesDir()
+				if checkpointDir == "" {
+					checkpointDir = req.Criu.GetImagesDir()
+				}
+				checkpointHostmemPath := fmt.Sprintf("%s/gpu-hostmem-0-0", checkpointDir)
 				var hostMemSegSize uint64
 				hostmemData, readErr := os.ReadFile(checkpointHostmemPath)
 				if readErr != nil {
