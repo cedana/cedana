@@ -123,13 +123,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		var toClose []*os.File
 		var logDir string
 
-		// Add external mount for GPU misc directory
-		if id != "" {
-			miscDirHost := fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id)
-			req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[cedana-gpu-misc]:%s", miscDirHost))
-			log.Debug().Str("host", miscDirHost).Msg("adding external mount for GPU misc directory on restore")
-		}
-
 		// Inherit hostmem files as well, if any
 		utils.WalkTree(state, "OpenFiles", "Children", func(file *daemon.File) bool {
 			path := file.Path
