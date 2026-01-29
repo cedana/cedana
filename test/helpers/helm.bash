@@ -83,6 +83,9 @@ helm_install_cedana() {
     if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     fi
+    if [ -n "$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK" ]; then
+        helm_cmd="$helm_cmd --set config.gpuSkipNvidiaRuntimeHook=$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK"
+    fi
 
     helm_cmd="$helm_cmd --wait --timeout=5m"
 
