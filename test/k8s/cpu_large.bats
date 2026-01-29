@@ -8,15 +8,6 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
-setup_file() {
-    debug_log "Setting up CPU large tests..."
-    setup_samples
-    if [ -z "$SAMPLES_DIR" ]; then
-        skip "SAMPLES_DIR not available, cannot run cedana-samples tests"
-    fi
-    debug_log "SAMPLES_DIR: $SAMPLES_DIR"
-}
-
 #####################################################
 # Large Cedana Samples (ML Training, Scientific HPC) #
 #####################################################
@@ -50,7 +41,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/numpy-matrix-ops.yaml" "$NAMESPACE" "numpy")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "Matrix"
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" 
 }
 
 # bats test_tags=dump,restore,samples,hpc,linpack
@@ -58,7 +49,7 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/hpl-linpack.yaml" "$NAMESPACE" "linpack")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "problem" 
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" 
 }
 
 # bats test_tags=dump,restore,samples,compbio,lammps
@@ -66,5 +57,5 @@ setup_file() {
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/lammps-molecular-dynamics.yaml" "$NAMESPACE" "lammps")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" "step" 
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"  
 }
