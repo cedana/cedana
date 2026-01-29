@@ -114,6 +114,7 @@ setup_suite() {
     fi
 
     # Create test namespace
+    delete_namespace "$NAMESPACE"
     create_namespace "$NAMESPACE"
 }
 
