@@ -200,7 +200,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 	fi
 
 test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
-	if [ -f /.dockerenv ] || [ "$${PROVIDER,,}" != "k3s" ]; then \
+	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		if [ "$(TAGS)" = "" ]; then \
