@@ -34,8 +34,9 @@ type (
 			Stdout io.Writer
 			Stderr io.Writer
 		}
-		ExtraFiles   []*os.File
-		InheritFdMap map[string]int32
+		ExtraFiles            []*os.File
+		InheritFdMap          map[string]int32
+		ExternalBindMountsMap map[string]string
 	}
 
 	Dump      = Handler[daemon.DumpReq, daemon.DumpResp]

@@ -376,8 +376,12 @@ func AddMountsForRestore(next types.Restore) types.Restore {
 
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
 			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
+				if opts.ExternalBindMountsMap[m.MountPoint] != "" { // already marked
+					return true
+				}
 				log.Debug().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
 				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.Root))
+				opts.ExternalBindMountsMap[m.MountPoint] = m.Root
 			}
 			return true
 		})

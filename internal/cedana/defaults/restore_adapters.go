@@ -21,6 +21,7 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		req.Criu.RstSibling = proto.Bool(true) // always restore as a child
 
 		opts.InheritFdMap = make(map[string]int32)
+		opts.ExternalBindMountsMap = make(map[string]string)
 
 		return next(ctx, opts, resp, req)
 	}
