@@ -80,7 +80,6 @@ env:
   RETRIES: 1
   DEBUG: 0 # bats debug logging (enable if unstable)
 
-
 jobs:
   propagator-connectivity:
     name: Propagator Connectivity (${{ inputs.platform }})
