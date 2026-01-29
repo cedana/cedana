@@ -393,7 +393,7 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    # Get all pods excluding Completed ones
+    # Get all pods excluding Completed pods
     local pods
     pods=$(kubectl get pods -n "$namespace" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase != "Succeeded") | "pod/" + .metadata.name')
 
@@ -402,24 +402,45 @@ wait_for_ready() {
         return 0
     fi
 
-    echo "$pods" | xargs -r kubectl wait --for=condition=Ready -n "$namespace" --timeout="$timeout"s || {
-        error_log "Failed to wait for all pods in namespace $namespace to be Ready"
-        for pod in $(kubectl get pods -n "$namespace" -o name); do
-            local phase
-            phase=$(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')
-            if [ "$phase" != "Succeeded" ]; then
-                error_log "Pod $pod status: $phase"
-                kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
-                    error_log "$line"
-                done
-                error_log "Logs from pod $pod in namespace $namespace:"
-                error kubectl logs "$pod" -n "$namespace" --tail=1000 --
-            fi
-        done
-        return 1
-    }
+    local end=$((SECONDS + timeout))
+    local bad_pods
+    # Check if all pods are in Completed/Ready state
+    while ((SECONDS < end)); do
+        bad_pods=$(kubectl get pods -n "$namespace" -o json | jq -r '
+        .items[]
+        | select(
+            .status.phase != "Succeeded"
+            and (
+                .status.phase != "Running"
+                or (
+                    (.status.conditions[]? | select(.type=="Ready").status) != "True"
+                )
+            )
+        )
+        | .metadata.name
+    ')
 
-    debug_log "All pods in namespace $namespace are Ready"
+        if [ -z "$bad_pods" ]; then
+            debug_log "All pods in namespace $namespace are Ready"
+            return 0
+        fi
+
+        sleep 2
+    done
+    error_log "Failed to wait for all pods in namespace $namespace to be Ready"
+    for pod in $(kubectl get pods -n "$namespace" -o name); do
+        local phase
+        phase=$(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')
+        if [ "$phase" != "Succeeded" ]; then
+            error_log "Pod $pod status: $phase"
+            kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
+                error_log "$line"
+            done
+            error_log "Logs from pod $pod in namespace $namespace:"
+            error kubectl logs "$pod" -n "$namespace" --tail=1000 --
+        fi
+    done
+    return 1
 }
 
 create_namespace() {
