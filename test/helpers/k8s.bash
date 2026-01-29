@@ -751,9 +751,9 @@ test_pod_spec() {
     fi
 
     # Fetch Pod logs before Deleting
-    if [ -n "$name" ]; then
+    if [ -n "$error" ] && [ -n "$name" ]; then
         debug_log "Fetching logs from pod $name..."
-        info kubectl logs "$name" -n "$namespace" --tail=500 || true
+        error kubectl logs "$name" -n "$namespace" --tail=500 || true
     fi
 
     # Clean up the final pod
