@@ -20,6 +20,11 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
+      test_propagator_image:
+        type: string
+        description: "The branch, tag, or SHA for the propagator v2 to use"
+        required: false
+        default: "cedana/cedana-propagator-v2:v2.0.2.0"
       platform:
         type: string
         description: "Platform to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter)"
@@ -109,6 +114,31 @@ jobs:
       ) }}
     timeout-minutes: 240
     needs: propagator-connectivity
+    services:
+      postgres:
+        image: 'postgres:17'
+        env:
+          POSTGRES_USER: myuser
+          POSTGRES_PASSWORD: mypassword
+          POSTGRES_DB: cedana
+        ports:
+          - "5432:5432"
+      rabbitmq:
+        image: 'rabbitmq:3-management'
+        env:
+          RABBITMQ_DEFAULT_USER: myuser
+          RABBITMQ_DEFAULT_PASS: mypassword
+        ports:
+          - "5672:5672"
+      propagator_v2:
+        image: ${{ inputs.test_propagator_image }}
+        env:
+          CEDANA_AUTH_TOKEN: 853067670EBBF147808357CFF73BC03366357CFF73BC00EBBF14780885303366
+          TEST_MODE: true
+          # Note: 'postgres' and 'rabbitmq' match the service names above
+          POSTGRES_DB_URI: "postgresql://myuser:mypassword@postgres:5432/cedana"
+          DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/cedana"
+          RABBITMQ_URI: "amqp://myuser:mypassword@rabbitmq:5672"
     strategy:
       fail-fast: ${{ inputs.platform != 'K3s' }} # save minutes on cloud providers
       matrix:
