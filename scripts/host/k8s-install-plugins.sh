@@ -21,6 +21,9 @@ CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
+# XXX: We always install the GPU plugin because the race w/ gpu-operator (if the cluster is using it)
+# is not worth defending against. In any case, the resources check on using gpus in the yaml will prevent
+# a GPU pod from being scheduled.
 PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
     containerd/runtime-runc@$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION \
