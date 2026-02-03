@@ -208,8 +208,13 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 
+				hostFs := opts.HostFs
+				if hostFs == nil {
+					hostFs = afero.NewOsFs()
+				}
+
 				// Create hostmem file in host path (not using inherit FD)
-				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+				hostmemFile, createErr := hostFs.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 				if createErr != nil {
 					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
 					return false
@@ -217,9 +222,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 				defer hostmemFile.Close()
 
-				if err = hostmemFile.Chmod(0o666); err != nil {
+				chmodErr := hostFs.Chmod(newPath, 0o666)
+				if chmodErr != nil {
 					hostmemFile.Close()
-					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, err)
+					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, chmodErr)
 					return false
 				}
 

@@ -26,6 +26,7 @@ type (
 		Lifetime     context.Context
 		Storage      cedana_io.Storage // Direct R/W access to underlying storage of the dump (use DumpFs instead)
 		DumpFs       afero.Fs          // Full filesystem to use for any dump/restore operations
+		HostFs       afero.Fs          // Filesystem for host operations (defaults to OS filesystem if nil)
 		FdStore      *sync.Map
 		Serverless   bool // Whether the operation is being performed in serverless mode
 
