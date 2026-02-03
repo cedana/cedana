@@ -30,11 +30,13 @@ PLUGINS=" \
     containerd@$CEDANA_PLUGINS_NATIVE_VERSION \
     runc@$CEDANA_PLUGINS_NATIVE_VERSION"
 
+PLUGINS_TO_REMOVE=""
+
 if [ "$CEDANA_PLUGINS_GPU_VERSION" != "none" ]; then
     PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
+else
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE gpu"
 fi
-
-PLUGINS_TO_REMOVE=""
 
 # check if a storage plugin is required
 if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
