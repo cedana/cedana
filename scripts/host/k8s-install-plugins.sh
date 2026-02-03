@@ -103,7 +103,7 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
 
     if [[ "$PLUGINS_TO_REMOVE" != "" ]]; then
         # shellcheck disable=SC2086
-        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE &>/dev/null || true
+        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE
     fi
 fi
 
