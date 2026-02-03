@@ -85,18 +85,26 @@ var setupCmd = &cobra.Command{
 			),
 		)
 		if err != nil {
+			log.Error().Err(err).Msg("failed to setup daemon")
 			return fmt.Errorf("error setting up host: %w", err)
 		}
 
 		cedana, err = client.New(config.Global.Address, config.Global.Protocol)
 		if err != nil {
+			log.Error().Err(err).Msg("failed to create client")
 			return fmt.Errorf("error creating client: %w", err)
 		}
 		defer cedana.Close()
 
 		propagator = cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
 
-		return startHelper(ctx)
+		err = startHelper(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to start helper")
+			return fmt.Errorf("error starting helper: %w", err)
+		}
+
+		return nil
 	},
 }
 
@@ -116,13 +124,19 @@ var destroyCmd = &cobra.Command{
 			metrics.Init(ctx, wg, "cedana-helper", version.Version)
 		}
 
-		return destroyDaemon(
+		err := destroyDaemon(
 			ctx,
 			logging.Writer(
 				log.With().Str("operation", "destroy").Logger().WithContext(ctx),
 				zerolog.DebugLevel,
 			),
 		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to destroy daemon")
+			return fmt.Errorf("error destroying host: %w", err)
+		}
+
+		return nil
 	},
 }
 
