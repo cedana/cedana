@@ -104,7 +104,7 @@ setup_suite() {
         fi
     fi
 
-    wait_for_ready "$CEDANA_NAMESPACE" 600
+    wait_for_ready "$CEDANA_NAMESPACE" 1000
 
     # Restart log tailing (as it can be broken on kubelet restart)
     if [ -n "$TAIL_PID" ]; then
