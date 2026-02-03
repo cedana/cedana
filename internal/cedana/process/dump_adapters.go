@@ -174,10 +174,10 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 
 			if external {
 				if f.IsTTY {
-					log.Debug().Str("path", f.Path).Uint64("rdev", f.Rdev).Uint64("dev", f.Dev).Msg("marking TTY file as external")
+					log.Trace().Str("path", f.Path).Uint64("rdev", f.Rdev).Uint64("dev", f.Dev).Msg("marking TTY file as external")
 					req.Criu.External = append(req.Criu.External, fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev))
 				} else {
-					log.Debug().Str("path", f.Path).Uint64("mount_id", f.MountID).Uint64("inode", f.Inode).Msg("marking file as external")
+					log.Trace().Str("path", f.Path).Uint64("mount_id", f.MountID).Uint64("inode", f.Inode).Msg("marking file as external")
 					req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
 				}
 			}
