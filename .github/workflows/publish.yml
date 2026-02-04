@@ -197,6 +197,75 @@ jobs:
           s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so-${{ matrix.arch }} \
           --metadata arch=${{ matrix.arch }},ref=${REF},sha=${SHA}
 
+  aws_s3_metadata:
+    name: Generate Plugin metadata.json
+    if: inputs.aws_s3
+    runs-on: ubuntu-latest
+    needs: aws_s3_plugin
+
+    steps:
+      - name: Download all plugin artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate metadata.json
+        run: |
+          set -euo pipefail
+
+          PLUGIN_DIR=${{ inputs.aws_s3_path }}
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
+          NOW="$(date -Is)"
+
+          jq -n \
+            --arg name ${{ .inputs.aws_s3_path }} \
+            --arg version "$REF_SAFE" \
+            --arg published_at "$NOW" \
+            '{
+              name: $name,
+              type: "Supported",
+              status: "Available",
+              version: $version,
+              published_at: $published_at,
+              binaries: []
+            }' > metadata.json
+
+
+          find artifacts -type f -name 'libcedana-*.so-*' | while read -r file; do
+            fname=$(basename "$file")
+            arch="${fname##*-}"
+
+            size=$(stat -c %s "$file")
+            sha=$(sha256sum "$file" | cut -d' ' -f1)
+
+
+            jq \
+              --arg name "$fname" \
+              --arg arch "$arch" \
+              --arg key "$PLUGIN_DIR/$fname" \
+              --arg checksum "sha256:$sha" \
+              --argjson size "$size" \
+              '.binaries += [{
+                name: $name,
+                arch: $arch,
+                object_key: $key,
+                checksum: $checksum,
+                size: $size
+              }]' metadata.json > tmp.json && mv tmp.json metadata.json
+          done
+
+      - name: Upload metadata.json to S3
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - run: |
+          aws s3 cp metadata.json s3://cedana-bin/${{ inputs.aws_s3_path }}/metadata.json \
+            --content-type application/json
+
   dockerhub:
     name: DockerHub (multi-arch)
     if: inputs.dockerhub

@@ -188,7 +188,7 @@ jobs:
             s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/criu-${{ matrix.arch }} \
             criu/criu
 
-          echo "${REF}" > criu/criu-version.txt
+          echo "${REF_SAFE}" > criu/criu-version.txt
 
       - name: Upload CRIU
         uses: actions/upload-artifact@v4
