@@ -24,7 +24,7 @@ on:
         type: string
         description: "The branch, tag, or SHA for the propagator v2 to use"
         required: false
-        default: "cedana/cedana-propagator-v2:v2.0.2.0"
+        default: "cedana/cedana-propagator-test-v2:swarnim-feat-unit-testing"
       platform:
         type: string
         description: "Platform to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter)"
