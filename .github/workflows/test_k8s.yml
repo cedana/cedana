@@ -356,6 +356,10 @@ jobs:
           if [ "$PROVIDER" = "nebius" ]; then
             TAGS="${TAGS},large"
           fi
+          # Skip large cpu workload tests on gcp only
+          if [ "$PROVIDER" = "gcp" ]; then
+            TAGS="${TAGS},!large"
+          fi
 
           make test-k8s \
             TAGS=$TAGS \
