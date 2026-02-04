@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-
+  "buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
@@ -156,6 +156,56 @@ func startHelper(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// multinode comms
+	go func() {
+		log.Info().Msg("Starting IP Event Bridge (Daemon -> RabbitMQ)")
+
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			streamClient, err := cedana.MonitorIPEvents(ctx, &daemon.MonitorIPEventsReq{})
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to subscribe to daemon IP events, retrying in 2s...")
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			for {
+				msg, err := streamClient.Recv()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					log.Error().Err(err).Msg("Stream disconnected")
+					break
+				}
+
+				log.Info().Msgf("Bridging IP Map to Propagator: %s", msg.CheckpointId)
+
+				err = stream.PublishIPEvent(ctx, msg)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to publish to RabbitMQ")
+				}
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	go func() {
+		log.Info().Msg("Starting Global Map Consumer (RabbitMQ -> Daemon)")
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			err := stream.StartGlobalMapConsumer(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Global Map Consumer failed, retrying in 2s...")
+				time.Sleep(2 * time.Second)
+			}
+		}
+	}()
+	// end of multinode comms
 
 	go func() {
 		defer cancel() // Event Stream failure SHOULD kill the helper

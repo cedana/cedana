@@ -47,6 +47,9 @@ type Server struct {
 	version string
 
 	daemongrpc.UnimplementedDaemonServer
+
+	ipEventCh   chan *daemon.IPReportReq
+	pendingMaps sync.Map
 }
 
 type ServeOpts struct {
@@ -116,6 +119,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 		jobs:         jobManager,
 		host:         host,
 		version:      opts.Version,
+		ipEventCh:    make(chan *daemon.IPReportReq, config.DEFAULT_MULTINODE_BUFFER),
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)

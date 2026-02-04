@@ -18,6 +18,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	cedanagosdk "github.com/cedana/cedana-go-sdk"
+	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -38,6 +39,7 @@ type EventStream struct {
 	checkpoints       *rabbitmq.Publisher
 	containerdAddress string
 	*rabbitmq.Conn
+	pendingRestores sync.Map
 }
 
 func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string) (*EventStream, error) {
@@ -158,12 +160,10 @@ func (es *EventStream) StartMultiPodConsumer(ctx context.Context) error {
 
 		podsHandled, err := es.handleMultiNodeAction(ctx, action, req)
 
-		// send response for each pod handled -> am thinking could have multiple allocated to same node
+		// send response for each pod handled -> could have multiple allocated to same node
 		if msg.ReplyTo != "" {
 			if podsHandled == 0 {
 				// If this node has no pods, it shouldn't send anything
-				// because Rust isn't expecting a message from "every node",
-				// it's expecting a message for "every pod".
 				return rabbitmq.Ack
 			}
 
@@ -182,15 +182,15 @@ func (es *EventStream) StartMultiPodConsumer(ctx context.Context) error {
 /////////////
 
 type checkpointReq struct {
-	PodID                []string             `json:"pod_id,omitempty"`
-	PodName              []string             `json:"pod_name,omitempty"`
-	Namespace            string               `json:"namespace,omitempty"`
-	ClusterID            string               `json:"cluster_id,omitempty"`
-	AllInNamespace       bool                 `json:"all_in_namespace,omitempty"`
-	ActionId             string               `json:"action_id,omitempty"`
-	Kind                 string               `json:"kind,omitempty"`
-	Reason               string               `json:"reason,omitempty"`
-	Overrides            *checkpointOverrides `json:"overrides,omitempty"`
+	PodID          []string             `json:"pod_id,omitempty"`
+	PodName        []string             `json:"pod_name,omitempty"`
+	Namespace      string               `json:"namespace,omitempty"`
+	ClusterID      string               `json:"cluster_id,omitempty"`
+	AllInNamespace bool                 `json:"all_in_namespace,omitempty"`
+	ActionId       string               `json:"action_id,omitempty"`
+	Kind           string               `json:"kind,omitempty"`
+	Reason         string               `json:"reason,omitempty"`
+	Overrides      *checkpointOverrides `json:"overrides,omitempty"`
 }
 
 type checkpointOverrides struct {
@@ -239,6 +239,13 @@ type multiNodePodState struct {
 	imageMap        map[int]string
 	dumpReqs        []*daemon.DumpReq
 	imageSecret     *imageSecret
+}
+
+type GlobalMapEntry struct {
+	OriginalIP string `json:"original_ip"`
+	CurrentIP  string `json:"current_ip"`
+	PodName    string `json:"pod_name"`
+	Namespace  string `json:"namespace"`
 }
 
 // keyed by action ID + pod name
@@ -565,6 +572,9 @@ func (es *EventStream) handleMultiNodeAction(ctx context.Context, action string,
 		Str("namespace", req.Namespace).
 		Logger()
 
+  config.Global.Multinode_buffer_size = len(req.PodName)
+  log.Info().Int("buffer size", config.Global.Multinode_buffer_size).Msg("[multinode] channel buffer updated")
+
 	// instead of ckpt single pod, we pass whole list to query local daemon for all pod names in the list
 	query := &daemon.QueryReq{
 		Type: "k8s",
@@ -623,7 +633,7 @@ func (es *EventStream) handleMultiNodeAction(ctx context.Context, action string,
 	// Check if any pod failed
 	for err := range errChan {
 		if err != nil {
-			return podsFound, err // Return count even on error so propagator knows
+			return podsFound, err // Return count even w error so propagator knows
 		}
 	}
 
@@ -891,4 +901,58 @@ func (es *EventStream) sendMultiNodeResponseToPropagator(ctx context.Context, re
 		rabbitmq.WithPublishOptionsExchange(""),
 		rabbitmq.WithPublishOptionsCorrelationID(correlationId),
 	)
+}
+
+func (es *EventStream) PublishIPEvent(ctx context.Context, req *daemon.IPReportReq) error {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	routingKey := fmt.Sprintf("ip-report-%s", config.Global.ClusterID)
+
+	return es.checkpoints.Publish(
+		body,
+		[]string{routingKey},
+		rabbitmq.WithPublishOptionsContentType("application/json"),
+		rabbitmq.WithPublishOptionsExchange(""),
+	)
+}
+
+func (es *EventStream) StartGlobalMapConsumer(ctx context.Context) error {
+	consumer, err := rabbitmq.NewConsumer(
+		es.Conn,
+		"",
+		rabbitmq.WithConsumerOptionsExchangeName("network_map_fanout"),
+		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_multinode_helper"),
+	)
+	if err != nil {
+		return err
+	}
+
+	return consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
+		var globalMapMsg struct {
+			ClusterID string                  `json:"cluster_id"`
+			Entries   []cedana.GlobalMapEntry `json:"entries"`
+		}
+
+		if err := json.Unmarshal(msg.Body, &globalMapMsg); err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal global map")
+			return rabbitmq.NackDiscard
+		}
+
+		_, err := es.cedana.SubmitGlobalMap(ctx, &daemon.GlobalMapReq{
+			ClusterId: globalMapMsg.ClusterID,
+			Entries:   globalMapMsg.Entries,
+    })
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to submit global map to daemon")
+			return rabbitmq.NackRequeue
+		}
+
+		log.Info().Msgf("Submitted global map for cluster %s", globalMapMsg.ClusterID)
+		return rabbitmq.Ack
+	})
 }

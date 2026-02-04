@@ -373,6 +373,28 @@ func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty, opts ...
 	return resp, utils.GRPCErrorColored(err)
 }
 
+func (c *Client) ReportIPMapping(ctx context.Context, args *daemon.IPReportReq, opts ...grpc.CallOption) (*daemon.IPReportResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	opts = addDefaultOptions(opts)
+	resp, err := c.daemonClient.ReportIPMapping(ctx, args, opts...)
+	return resp, utils.GRPCErrorColored(err)
+}
+
+func (c *Client) MonitorIPEvents(ctx context.Context, args *daemon.MonitorIPEventsReq, opts ...grpc.CallOption) (daemon.Daemon_MonitorIPEventsClient, error) {
+	opts = addDefaultOptions(opts)
+	stream, err := c.daemonClient.MonitorIPEvents(ctx, args, opts...)
+	return stream, utils.GRPCErrorColored(err)
+}
+
+func (c *Client) SubmitGlobalMap(ctx context.Context, args *daemon.GlobalMapReq, opts ...grpc.CallOption) (*daemon.GlobalMapResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
+	defer cancel()
+	opts = addDefaultOptions(opts)
+	resp, err := c.daemonClient.SubmitGlobalMap(ctx, args, opts...)
+	return resp, utils.GRPCErrorColored(err)
+}
+
 ///////////////////
 //    Helpers    //
 ///////////////////
