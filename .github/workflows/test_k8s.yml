@@ -144,7 +144,6 @@ jobs:
           DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/cedana"
           RABBITMQ_URI: "amqp://myuser:mypassword@rabbitmq:5672"
           BUCKET_NAME: cedana-checkpoints-storage
-          DUCKDB_DIR: "./duckdb"
         options: --health-cmd "curl -f http://localhost:1324/v2/scalar || exit 1" --health-interval 5s --health-timeout 3s --health-retries 10
     strategy:
       fail-fast: ${{ inputs.platform != 'K3s' }} # save minutes on cloud providers
