@@ -219,7 +219,7 @@ jobs:
           NOW="$(date -Is)"
 
           jq -n \
-            --arg name ${{ .inputs.aws_s3_path }} \
+            --arg name ${{ inputs.aws_s3_path }} \
             --arg version "$REF_SAFE" \
             --arg published_at "$NOW" \
             '{
