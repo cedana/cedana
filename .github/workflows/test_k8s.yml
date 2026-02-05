@@ -83,7 +83,7 @@ env:
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging (enable if unstable)
+  DEBUG: ${{ vars.DEBUG_K8S }}
 
 jobs:
   propagator-connectivity:
@@ -368,8 +368,10 @@ jobs:
 
           export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
           export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
-          if [ "$GPU" = "true" ]; then
+          if [ "$GPU" = "1" ]; then
             export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+          else
+            export CEDANA_PLUGINS_GPU_VERSION=none
           fi
           if [ "$STREAMER" = "true" ]; then
             export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
@@ -402,6 +404,10 @@ jobs:
           # Nebius only runs large GPU workloads (skip small tests)
           if [ "$PROVIDER" = "nebius" ]; then
             TAGS="${TAGS},large"
+          fi
+          # Skip large cpu workload tests on gcp only
+          if [ "$PROVIDER" = "gcp" ]; then
+            TAGS="${TAGS},!large"
           fi
 
           make test-k8s \

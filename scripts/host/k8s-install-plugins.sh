@@ -28,10 +28,15 @@ PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
     containerd/runtime-runc@$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION \
     containerd@$CEDANA_PLUGINS_NATIVE_VERSION \
-    runc@$CEDANA_PLUGINS_NATIVE_VERSION \
-    gpu@$CEDANA_PLUGINS_GPU_VERSION"
+    runc@$CEDANA_PLUGINS_NATIVE_VERSION"
 
 PLUGINS_TO_REMOVE=""
+
+if [ "$CEDANA_PLUGINS_GPU_VERSION" != "none" ]; then
+    PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
+else
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE gpu"
+fi
 
 # check if a storage plugin is required
 if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
@@ -54,7 +59,9 @@ else
     PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE streamer"
 fi
 
-# if gpu driver present then add gpu plugin
+# If gpu driver present then add gpu plugin
+# NOTE: This is no longer used to conditionally add the gpu plugin, but we still
+# log the driver version here for informational purposes.
 if [ "$ENV" == "k3s" ]; then
     if command -v nvidia-smi >/dev/null 2>&1; then
         echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
@@ -96,7 +103,7 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
 
     if [[ "$PLUGINS_TO_REMOVE" != "" ]]; then
         # shellcheck disable=SC2086
-        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE &>/dev/null || true
+        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE || true
     fi
 fi
 

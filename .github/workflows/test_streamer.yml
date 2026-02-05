@@ -61,7 +61,7 @@ env:
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging
+  DEBUG: ${{ vars.DEBUG_REGRESSION }}
 
 jobs:
   streamer:
