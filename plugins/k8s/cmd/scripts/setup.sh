@@ -21,6 +21,8 @@ cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/lib/libcedana*.so /host/usr/local/lib/
 cp /Makefile /host/cedana/Makefile
 
+rm -rf /host/root/.cedana/ # since this is a fresh install
+
 CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-"info"}
 CEDANA_LOG_LEVEL_NO_SERVER=${CEDANA_LOG_LEVEL_NO_SERVER:-"info"}
 
@@ -55,8 +57,6 @@ CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CLUSTER_ID=${CEDANA_CLUSTER_ID:-""}
 
 CONTAINERD_ADDRESS=${CONTAINERD_ADDRESS:-"/run/containerd/containerd.sock"}
-
-rm -rf /host/root/.cedana/ # since this is a fresh install
 
 # Enter chroot environment on the host
 env \
