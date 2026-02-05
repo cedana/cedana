@@ -127,6 +127,9 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
       - name: Set plugin name
         env:
@@ -171,6 +174,9 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -206,6 +212,9 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -250,6 +259,9 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -330,6 +342,9 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
