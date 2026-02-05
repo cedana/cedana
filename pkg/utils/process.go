@@ -140,6 +140,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 					MountPoint: m.Mountpoint,
 					Options:    m.Options,
 					FSType:     m.FSType,
+					Source:     m.Source,
 				})
 			}
 		}

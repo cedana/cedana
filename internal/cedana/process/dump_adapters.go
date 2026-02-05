@@ -154,9 +154,9 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		internalMounts := make(map[uint64]any)
+		mounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			internalMounts[m.ID] = nil
+			mounts[m.ID] = nil
 			return true
 		})
 
@@ -168,7 +168,7 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
-			_, internal := internalMounts[f.MountID]
+			_, internal := mounts[f.MountID]
 
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
