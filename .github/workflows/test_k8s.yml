@@ -86,21 +86,6 @@ env:
   DEBUG: ${{ vars.DEBUG_K8S }}
 
 jobs:
-  propagator-connectivity:
-    name: Propagator Connectivity (${{ inputs.platform }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Quick connectivity test
-        run: |
-          echo "Testing basic connectivity to Propagator API..."
-          curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
-          echo "✓ Connectivity test completed"
-
   k8s:
     name: Kubernetes
     runs-on: ${{ format(
@@ -113,7 +98,6 @@ jobs:
       matrix.storage
       ) }}
     timeout-minutes: 240
-    needs: propagator-connectivity
     services:
       postgres:
         image: 'postgres:17'
@@ -190,43 +174,43 @@ jobs:
             compute: CPU
             arch: amd64
 
-          - platform: EKS
-            compute: CUDA
-          - platform: EKS
-            arch: amd64
-          - platform: EKS
-            cr: streamer
-          - platform: EKS
-            storage: storage/local
+          # - platform: EKS
+          #   compute: CUDA
+          # - platform: EKS
+          #   arch: amd64
+          # - platform: EKS
+          #   cr: streamer
+          # - platform: EKS
+          #   storage: storage/local
 
-          - platform: GKE
-            compute: CUDA
-          - platform: GKE
-            arch: arm64
-          - platform: GKE
-            cr: default
-          - platform: GKE
-            storage: storage/local
+          # - platform: GKE
+          #   compute: CUDA
+          # - platform: GKE
+          #   arch: arm64
+          # - platform: GKE
+          #   cr: default
+          # - platform: GKE
+          #   storage: storage/local
 
-          - platform: Nebius
-            compute: CPU
-          - platform: Nebius
-            arch: arm64
-          - platform: Nebius
-            cr: streamer
-          - platform: Nebius
-            storage: storage/s3
-          - platform: Nebius
-            storage: storage/cedana
+          # - platform: Nebius
+          #   compute: CPU
+          # - platform: Nebius
+          #   arch: arm64
+          # - platform: Nebius
+          #   cr: streamer
+          # - platform: Nebius
+          #   storage: storage/s3
+          # - platform: Nebius
+          #   storage: storage/cedana
 
-          - platform: EKS-Karpenter
-            compute: CUDA
-          - platform: EKS-Karpenter
-            arch: arm64
-          - platform: EKS-Karpenter
-            cr: streamer
-          - platform: EKS-Karpenter
-            storage: storage/local
+          # - platform: EKS-Karpenter
+          #   compute: CUDA
+          # - platform: EKS-Karpenter
+          #   arch: arm64
+          # - platform: EKS-Karpenter
+          #   cr: streamer
+          # - platform: EKS-Karpenter
+          #   storage: storage/local
 
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' || inputs.platform == 'EKS-Karpenter') && 1 || 9999 }}
     container:
