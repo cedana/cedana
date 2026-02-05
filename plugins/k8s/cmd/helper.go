@@ -10,8 +10,9 @@ import (
 	"strings"
 	"sync"
 	"time"
-  "buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/client"
+
+  multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
+  "github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
@@ -179,7 +180,7 @@ func startHelper(ctx context.Context) error {
 			if ctx.Err() != nil {
 				return
 			}
-			streamClient, err := cedana.MonitorIPEvents(ctx, &daemon.MonitorIPEventsReq{})
+			streamClient, err := cedana.MonitorIPEvents(ctx, &multinode.MonitorIPEventsReq{})
 			if err != nil {
 				log.Warn().Err(err).Msg("Failed to subscribe to daemon IP events, retrying in 2s...")
 				time.Sleep(2 * time.Second)

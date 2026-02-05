@@ -19,7 +19,6 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	cedanagosdk "github.com/cedana/cedana-go-sdk"
-	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
