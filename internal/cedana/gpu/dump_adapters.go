@@ -16,9 +16,10 @@ import (
 // NOTE: Add any other known NVIDIA GPU mount paths here.
 var NVIDIA_MOUNTS_PATTERN = regexp.MustCompile(
 	`^(` +
-		`/driver/nvidia/gpus|` +
-		`/dev/nvidia\d+|` +
 		`/nvidia|` +
+		`/dev/nvidia\d+|` +
+		`/driver/nvidia/gpus|` +
+		`/run/nvidia|` +
 		`/usr/bin/nv|` +
 		`/usr/lib/firmware/nvidia|` +
 		`/usr/lib/libcuda|` +
