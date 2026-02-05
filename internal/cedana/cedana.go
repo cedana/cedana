@@ -13,7 +13,6 @@ import (
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/version"
-	"github.com/rs/zerolog/log"
 )
 
 // Cedana implements all the capabilities that can be run without a server.
@@ -40,8 +39,6 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	if config.Global.Metrics {
 		metrics.Init(ctx, wg, "cedana", version.Version)
 	}
-
-	log.Debug().Interface("config", config.Global).Msg("using config")
 
 	pluginManager := plugins.NewLocalManager()
 
