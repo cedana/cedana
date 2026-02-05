@@ -77,8 +77,6 @@ var QueryCmd = &cobra.Command{
 
 		tableWriter.SetColumnConfigs([]table.ColumnConfig{
 			{Name: "Sandbox ID", AutoMerge: true},
-			{Name: "Name", AutoMerge: true},
-			{Name: "Namespace", AutoMerge: true},
 		})
 		tableWriter.SortBy([]table.SortBy{
 			{Name: "Name", Mode: table.Asc},
