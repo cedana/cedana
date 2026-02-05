@@ -76,6 +76,8 @@ helm_install_cedana() {
     fi
     if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+    elif [ "${GPU:-0}" != "1" ]; then
+        helm_cmd="$helm_cmd --set config.pluginsGpuVersion=none"
     fi
     if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
