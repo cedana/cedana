@@ -242,13 +242,6 @@ type multiNodePodState struct {
 	imageSecret     *imageSecret
 }
 
-type GlobalMapEntry struct {
-	OriginalIP string `json:"original_ip"`
-	CurrentIP  string `json:"current_ip"`
-	PodName    string `json:"pod_name"`
-	Namespace  string `json:"namespace"`
-}
-
 // keyed by action ID + pod name
 var multiNodeStates = sync.Map{}
 
@@ -936,7 +929,7 @@ func (es *EventStream) StartGlobalMapConsumer(ctx context.Context) error {
 	return consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
 		var globalMapMsg struct {
 			ClusterID string                  `json:"cluster_id"`
-			Entries   []cedana.GlobalMapEntry `json:"entries"`
+			Entries   []*multinode.GlobalMapEntry `json:"entries"`
 		}
 
 		if err := json.Unmarshal(msg.Body, &globalMapMsg); err != nil {
@@ -944,7 +937,7 @@ func (es *EventStream) StartGlobalMapConsumer(ctx context.Context) error {
 			return rabbitmq.NackDiscard
 		}
 
-		_, err := es.cedana.SubmitGlobalMap(ctx, &daemon.GlobalMapReq{
+		_, err := es.cedana.SubmitGlobalMap(ctx, &multinode.GlobalMapReq{
 			ClusterId: globalMapMsg.ClusterID,
 			Entries:   globalMapMsg.Entries,
     })

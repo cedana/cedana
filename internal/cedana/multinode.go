@@ -17,13 +17,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type GlobalMapEntry struct {
-	OriginalIP string `json:"original_ip"`
-	CurrentIP  string `json:"current_ip"`
-	PodName    string `json:"pod_name"`
-	Namespace  string `json:"namespace"`
-}
-
 type clusterWaiters struct {
   mu sync.Mutex
   channels []chan []*multinode.GlobalMapEntry
