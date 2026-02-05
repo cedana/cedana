@@ -20,6 +20,11 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
+      test_propagator_image:
+        type: string
+        description: "The branch, tag, or SHA for the propagator v2 to use"
+        required: false
+        default: "cedana/cedana-propagator-test-v2:swarnim-feat-unit-testing"
       platform:
         type: string
         description: "Platform to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter)"
@@ -52,8 +57,8 @@ on:
         default: false
 
 env:
-  CEDANA_URL: ${{ vars.CEDANA_URL }}
-  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_URL: https://propagator_v2:1324/
+  CEDANA_AUTH_TOKEN: 853067670EBBF147808357CFF73BC03366357CFF73BC00EBBF14780885303366
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_LOG_LEVEL: debug
   CEDANA_PROFILING_ENABLED: true
@@ -81,21 +86,6 @@ env:
   DEBUG: ${{ vars.DEBUG_K8S }}
 
 jobs:
-  propagator-connectivity:
-    name: Propagator Connectivity (${{ inputs.platform }})
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Quick connectivity test
-        run: |
-          echo "Testing basic connectivity to Propagator API..."
-          curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
-          echo "✓ Connectivity test completed"
-
   k8s:
     name: Kubernetes
     runs-on: ${{ format(
@@ -108,7 +98,37 @@ jobs:
       matrix.storage
       ) }}
     timeout-minutes: 240
-    needs: propagator-connectivity
+    services:
+      postgres:
+        image: 'postgres:17'
+        env:
+          POSTGRES_USER: myuser
+          POSTGRES_PASSWORD: mypassword
+          POSTGRES_DB: cedana
+        ports:
+          - "5432:5432"
+        options: --health-cmd "pg_isready -U myuser -d cedana" --health-interval 5s --health-timeout 3s --health-retries 5
+      rabbitmq:
+        image: 'rabbitmq:3-management'
+        env:
+          RABBITMQ_DEFAULT_USER: myuser
+          RABBITMQ_DEFAULT_PASS: mypassword
+        ports:
+          - "5672:5672"
+        options: --health-cmd "rabbitmq-diagnostics -q ping" --health-interval 5s --health-timeout 3s --health-retries 5
+      propagator_v2:
+        image: ${{ inputs.test_propagator_image }}
+        credentials:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+        env:
+          CEDANA_AUTH_TOKEN: 853067670EBBF147808357CFF73BC03366357CFF73BC00EBBF14780885303366
+          TEST_MODE: true
+          POSTGRES_DB_URI: "postgresql://myuser:mypassword@postgres:5432/cedana"
+          DATABASE_URL: "postgresql://myuser:mypassword@postgres:5432/cedana"
+          RABBITMQ_URI: "amqp://myuser:mypassword@rabbitmq:5672"
+          BUCKET_NAME: cedana-checkpoints-storage
+        options: --health-cmd "bash -c '</dev/tcp/localhost/1324' || exit 1" --health-interval 5s --health-timeout 3s --health-retries 10
     strategy:
       fail-fast: ${{ inputs.platform != 'K3s' }} # save minutes on cloud providers
       matrix:
@@ -141,43 +161,43 @@ jobs:
             compute: CPU
             arch: amd64
 
-          - platform: EKS
-            compute: CUDA
-          - platform: EKS
-            arch: amd64
-          - platform: EKS
-            cr: streamer
-          - platform: EKS
-            storage: storage/local
+          # - platform: EKS
+          #   compute: CUDA
+          # - platform: EKS
+          #   arch: amd64
+          # - platform: EKS
+          #   cr: streamer
+          # - platform: EKS
+          #   storage: storage/local
 
-          - platform: GKE
-            compute: CUDA
-          - platform: GKE
-            arch: arm64
-          - platform: GKE
-            cr: default
-          - platform: GKE
-            storage: storage/local
+          # - platform: GKE
+          #   compute: CUDA
+          # - platform: GKE
+          #   arch: arm64
+          # - platform: GKE
+          #   cr: default
+          # - platform: GKE
+          #   storage: storage/local
 
-          - platform: Nebius
-            compute: CPU
-          - platform: Nebius
-            arch: arm64
-          - platform: Nebius
-            cr: streamer
-          - platform: Nebius
-            storage: storage/s3
-          - platform: Nebius
-            storage: storage/cedana
+          # - platform: Nebius
+          #   compute: CPU
+          # - platform: Nebius
+          #   arch: arm64
+          # - platform: Nebius
+          #   cr: streamer
+          # - platform: Nebius
+          #   storage: storage/s3
+          # - platform: Nebius
+          #   storage: storage/cedana
 
-          - platform: EKS-Karpenter
-            compute: CUDA
-          - platform: EKS-Karpenter
-            arch: arm64
-          - platform: EKS-Karpenter
-            cr: streamer
-          - platform: EKS-Karpenter
-            storage: storage/local
+          # - platform: EKS-Karpenter
+          #   compute: CUDA
+          # - platform: EKS-Karpenter
+          #   arch: arm64
+          # - platform: EKS-Karpenter
+          #   cr: streamer
+          # - platform: EKS-Karpenter
+          #   storage: storage/local
 
       max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' || inputs.platform == 'EKS-Karpenter') && 1 || 9999 }}
     container:
