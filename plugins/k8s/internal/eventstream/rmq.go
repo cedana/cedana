@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+  multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
@@ -903,7 +904,7 @@ func (es *EventStream) sendMultiNodeResponseToPropagator(ctx context.Context, re
 	)
 }
 
-func (es *EventStream) PublishIPEvent(ctx context.Context, req *daemon.IPReportReq) error {
+func (es *EventStream) PublishIPEvent(ctx context.Context, req *multinode.IPReportReq) error {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return err

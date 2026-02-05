@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+  multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
@@ -373,21 +374,21 @@ func (c *Client) ReloadPlugins(ctx context.Context, args *daemon.Empty, opts ...
 	return resp, utils.GRPCErrorColored(err)
 }
 
-func (c *Client) ReportIPMapping(ctx context.Context, args *daemon.IPReportReq, opts ...grpc.CallOption) (*daemon.IPReportResp, error) {
+func (c *Client) RegisterRestoredIP(ctx context.Context, args *multinode.IPReportReq, opts ...grpc.CallOption) (*multinode.IPReportResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	opts = addDefaultOptions(opts)
-	resp, err := c.daemonClient.ReportIPMapping(ctx, args, opts...)
+	resp, err := c.daemonClient.RegisterRestoredIP(ctx, args, opts...)
 	return resp, utils.GRPCErrorColored(err)
 }
 
-func (c *Client) MonitorIPEvents(ctx context.Context, args *daemon.MonitorIPEventsReq, opts ...grpc.CallOption) (daemon.Daemon_MonitorIPEventsClient, error) {
+func (c *Client) MonitorIPEvents(ctx context.Context, args *multinode.MonitorIPEventsReq, opts ...grpc.CallOption) (grpc.ServerStreamingClient[multinode.IPReportReq], error) {
 	opts = addDefaultOptions(opts)
 	stream, err := c.daemonClient.MonitorIPEvents(ctx, args, opts...)
 	return stream, utils.GRPCErrorColored(err)
 }
 
-func (c *Client) SubmitGlobalMap(ctx context.Context, args *daemon.GlobalMapReq, opts ...grpc.CallOption) (*daemon.GlobalMapResp, error) {
+func (c *Client) SubmitGlobalMap(ctx context.Context, args *multinode.GlobalMapReq, opts ...grpc.CallOption) (*multinode.GlobalMapResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
 	defer cancel()
 	opts = addDefaultOptions(opts)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+  multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/gpu"
@@ -27,6 +28,7 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/reflection"
+
 )
 
 // Server is the main server struct that holds all the components of the Cedana server.
@@ -48,7 +50,7 @@ type Server struct {
 
 	daemongrpc.UnimplementedDaemonServer
 
-	ipEventCh   chan *daemon.IPReportReq
+	ipEventCh   chan *multinode.IPReportReq
 	pendingMaps sync.Map
 }
 
@@ -119,7 +121,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 		jobs:         jobManager,
 		host:         host,
 		version:      opts.Version,
-		ipEventCh:    make(chan *daemon.IPReportReq, config.DEFAULT_MULTINODE_BUFFER),
+		ipEventCh:    make(chan *multinode.IPReportReq, config.DEFAULT_MULTINODE_BUFFER),
 	}
 
 	daemongrpc.RegisterDaemonServer(server.grpcServer, server)

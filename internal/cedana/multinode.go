@@ -11,8 +11,9 @@ import (
 	"strings"
   "sync"
 
+  "buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
+  multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
   "github.com/cedana/cedana/pkg/config"
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/rs/zerolog/log"
 )
 
@@ -25,13 +26,13 @@ type GlobalMapEntry struct {
 
 type clusterWaiters struct {
   mu sync.Mutex
-  channels []chan []GlobalMapEntry
+  channels []chan []*multinode.GlobalMapEntry
 }
 
-func (s *Server) ReportIPMapping(ctx context.Context, req *daemon.IPReportReq) (*daemon.IPReportResp, error) {
-	answerCh := make(chan []GlobalMapEntry, 1)
+func (s *Server) RegisterRestoredIP(ctx context.Context, req *multinode.IPReportReq) (*multinode.IPReportResp, error) {
+	answerCh := make(chan []*multinode.GlobalMapEntry, 1)
   val, _ := s.pendingMaps.LoadOrStore(config.Global.ClusterID, &clusterWaiters{
-    channels: make([]chan []GlobalMapEntry, 0),
+    channels: make([]chan []*multinode.GlobalMapEntry, 0),
   })
 
   waiters := val.(*clusterWaiters)
@@ -69,13 +70,13 @@ func (s *Server) ReportIPMapping(ctx context.Context, req *daemon.IPReportReq) (
 
 		mappings := make(map[string]string)
 		for _, entry := range entries {
-			mappings[entry.OriginalIP] = entry.CurrentIP
+			mappings[entry.OriginalIp] = entry.CurrentIp
 			if err := updateEtcHosts(entry); err != nil {
 				log.Warn().Err(err).Msgf("[multinode] Failed to update /etc/hosts for %s", entry.PodName)
 			}
 		}
 		if err := setupMultinodeEBPF(mappings); err != nil {
-			return &daemon.IPReportResp{
+			return &multinode.IPReportResp{
 				Success: false,
 				Message: fmt.Sprintf("[multinode] eBPF setup failed: %v", err),
 			}, nil
@@ -83,10 +84,10 @@ func (s *Server) ReportIPMapping(ctx context.Context, req *daemon.IPReportReq) (
     log.Info().Msg("eBPF configured successfully")
 	}
 
-	return &daemon.IPReportResp{Success: true}, nil
+	return &multinode.IPReportResp{Success: true}, nil
 }
 
-func (s *Server) MonitorIPEvents(_ *daemon.MonitorIPEventsReq, stream daemon.Daemon_MonitorIPEventsServer) error {
+func (s *Server) MonitorIPEvents(_ *multinode.MonitorIPEventsReq, stream daemongrpc.Daemon_MonitorIPEventsServer) error {
 	log.Info().Msg("[multinode] Helper connected to IP Event Monitor")
 
 	for {
@@ -102,7 +103,7 @@ func (s *Server) MonitorIPEvents(_ *daemon.MonitorIPEventsReq, stream daemon.Dae
 	}
 }
 
-func (s *Server) SubmitGlobalMap(ctx context.Context, req *daemon.GlobalMapReq) (*daemon.GlobalMapResp, error) {
+func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapReq) (*multinode.GlobalMapResp, error) {
 	val, ok := s.pendingMaps.Load(req.ClusterId)
 	if !ok {
 		return nil, fmt.Errorf("[multinode] no pending restore found for cluster %s", req.ClusterId)
@@ -126,7 +127,7 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *daemon.GlobalMapReq) 
     }
   }
 
-	return &daemon.GlobalMapResp{Success: true}, nil
+	return &multinode.GlobalMapResp{Success: true}, nil
 }
 
 func setupMultinodeEBPF(mappings map[string]string) error {
@@ -141,7 +142,7 @@ func setupMultinodeEBPF(mappings map[string]string) error {
 	return nil
 }
 
-func updateEtcHosts(entry GlobalMapEntry) error {
+func updateEtcHosts(entry *multinode.GlobalMapEntry) error {
 	hostsPath := "/etc/hosts"
 
   if launcher := strings.Contains(entry.PodName, "-launcher"); launcher {
@@ -151,7 +152,7 @@ func updateEtcHosts(entry GlobalMapEntry) error {
   log.Info().Msgf("[multinode] Job name idenitifed as ", jobName)
 
 	fqdn := fmt.Sprintf("%s.%s.%s.svc", entry.PodName, jobName, entry.Namespace)
-	newLine := fmt.Sprintf("%s\t%s\n", entry.OriginalIP, fqdn)
+	newLine := fmt.Sprintf("%s\t%s\n", entry.OriginalIp, fqdn)
 
 	f, err := os.OpenFile(hostsPath, os.O_APPEND|os.O_RDWR, 0644)
 	if err != nil {
@@ -161,7 +162,7 @@ func updateEtcHosts(entry GlobalMapEntry) error {
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		if strings.Contains(scanner.Text(), fqdn) || strings.Contains(scanner.Text(), entry.OriginalIP) {
+		if strings.Contains(scanner.Text(), fqdn) || strings.Contains(scanner.Text(), entry.OriginalIp) {
 			log.Debug().Msgf("[multinode] Hosts entry for %s already exists, skipping", fqdn)
 			return nil
 		}
@@ -171,6 +172,6 @@ func updateEtcHosts(entry GlobalMapEntry) error {
 		return fmt.Errorf("[multinode] failed to write to hosts file: %v", err)
 	}
 
-	log.Info().Msgf("[multinode] Added %s -> %s to /etc/hosts", entry.OriginalIP, fqdn)
+	log.Info().Msgf("[multinode] Added %s -> %s to /etc/hosts", entry.OriginalIp, fqdn)
 	return nil
 }
