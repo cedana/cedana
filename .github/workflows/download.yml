@@ -69,7 +69,7 @@ jobs:
           cd cedana
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
-          aws s3 cp s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/cedana-${{ matrix.arch }}
+          aws s3 cp s3://cedana-bin/${{ inputs.cedana_version }}/${REF_SAFE}/cedana-${{ matrix.arch }}
           echo "${REF}" > cedana-version.txt
 
       - name: Upload cedana
@@ -148,7 +148,7 @@ jobs:
           PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so-${{ matrix.arch }} \
+            s3://cedana-bin/${{ inputs.cedana_version }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so-${{ matrix.arch }} \
             libcedana-${PLUGIN_SAFE}.so
 
           echo "${REF}" > plugin-version.txt
@@ -185,7 +185,7 @@ jobs:
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/criu-${{ matrix.arch }} \
+            s3://cedana-bin/${{ inputs.criu_version }}/${REF_SAFE}/criu-${{ matrix.arch }} \
             criu/criu
 
           echo "${REF_SAFE}" > criu/criu-version.txt
@@ -221,15 +221,15 @@ jobs:
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/cedana-gpu-controller-${{ matrix.arch }} \
+            s3://cedana-bin/${{ inputs.gpu_version }}/${REF_SAFE}/cedana-gpu-controller-${{ matrix.arch }} \
             gpu/cedana-gpu-controller
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/libcedana-gpu.so-${{ matrix.arch }} \
+            s3://cedana-bin/${{ inputs.gpu_version }}/${REF_SAFE}/libcedana-gpu.so-${{ matrix.arch }} \
             gpu/libcedana-gpu.so
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/libcedana-gpu-tracer.so-${{ matrix.arch }} \
+            s3://cedana-bin/${{ inputs.gpu_version }}/${REF_SAFE}/libcedana-gpu-tracer.so-${{ matrix.arch }} \
             gpu/libcedana-gpu-tracer.so
 
           echo "${REF}" > gpu/gpu-version.txt
@@ -264,7 +264,7 @@ jobs:
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/cedana-image-streamer-${{ matrix.arch }} \
+            s3://cedana-bin/${{ inputs.streamer_version }}/${REF_SAFE}/cedana-image-streamer-${{ matrix.arch }} \
             streamer/cedana-image-streamer
 
           echo "${REF}" > streamer/streamer-version.txt
@@ -345,7 +345,7 @@ jobs:
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${REF_SAFE}/cedana-shim-runc-v2-${{ matrix.arch }} \
+            s3://cedana-bin/${{ inputs.containerd_runtime_version }}/${REF_SAFE}/cedana-shim-runc-v2-${{ matrix.arch }} \
             containerd-runtime-runc/cedana-shim-runc-v2
 
           echo "${REF}" > containerd-runtime-runc/containerd-runtime-version.txt
