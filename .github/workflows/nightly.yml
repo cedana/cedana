@@ -37,6 +37,7 @@ jobs:
     needs: download
     secrets: inherit
     with:
+      ref: ${{ github.ref }}
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
       runner: 8cpu # use larger runner

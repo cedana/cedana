@@ -25,6 +25,9 @@ case "$PROVIDER" in
     aws|eks|EKS)
         PROVIDER="aws"
         ;;
+    eks-karpenter|EKS-Karpenter|EKS_KARPENTER)
+        PROVIDER="eks-karpenter"
+        ;;
     gcp|gke|GKE)
         PROVIDER="gcp"
         ;;
@@ -48,6 +51,9 @@ PROVIDERS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 case "$PROVIDER" in
     aws)
         source "${PROVIDERS_DIR}/aws.bash"
+        ;;
+    eks-karpenter)
+        source "${PROVIDERS_DIR}/eks-karpenter.bash"
         ;;
     gcp)
         source "${PROVIDERS_DIR}/gcp.bash"

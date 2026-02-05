@@ -65,12 +65,21 @@ jobs:
         run: |
           mkdir -p cedana
           cd cedana
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana/raw/names/cedana-$ARCH/versions/$VERSION/cedana
+            REPO="cedana/cedana"
           else
-            VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-alpha/raw/names/cedana-$ARCH/versions/$VERSION/cedana
+            REPO="cedana/cedana-alpha"
           fi
+          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-${ARCH}"
+          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-${ARCH}/versions/${VERSION}/cedana"
+
+          # Try first URL, if 404 then try alternative URL
+          if ! curl -1Lf -O "$URL1"; then
+            echo "Primary URL failed, trying alternative URL..."
+            curl -1Lf -o cedana-${ARCH} "$URL2"
+          fi
+          mv cedana-${ARCH} cedana
           echo $VERSION > cedana-version.txt
 
       - name: Upload cedana
@@ -143,12 +152,21 @@ jobs:
           VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
           ARCH: ${{ matrix.arch }}
         run: |
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so
+            REPO="cedana/cedana"
           else
-            VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/${API_KEY}/cedana/cedana-alpha/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so
+            REPO="cedana/cedana-alpha"
           fi
+          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-${PLUGIN}.so-${ARCH}"
+          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so"
+
+          # Try first URL, if 404 then try alternative URL
+          if ! curl -1Lf -O "$URL1"; then
+            echo "Primary URL failed, trying alternative URL..."
+            curl -1Lf -o libcedana-${PLUGIN}.so-${ARCH} "$URL2"
+          fi
+          mv libcedana-${PLUGIN}.so-${ARCH} libcedana-${PLUGIN}.so
           echo $VERSION > plugins-version.txt
 
       - name: Upload plugin
@@ -178,12 +196,21 @@ jobs:
         run: |
           mkdir -p criu
           cd criu
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu/raw/names/criu-$ARCH/versions/$VERSION/criu
+            REPO="cedana/criu"
           else
-            VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/criu-alpha/raw/names/criu-$ARCH/versions/$VERSION/criu
+            REPO="cedana/criu-alpha"
           fi
+          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/criu-${ARCH}"
+          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/criu-${ARCH}/versions/${VERSION}/criu"
+
+          # Try first URL, if 404 then try alternative URL
+          if ! curl -1Lf -O "$URL1"; then
+            echo "Primary URL failed, trying alternative URL..."
+            curl -1Lf -o criu-${ARCH} "$URL2"
+          fi
+          mv criu-${ARCH} criu
           echo $VERSION > criu-version.txt
 
       - name: Upload CRIU
@@ -211,14 +238,40 @@ jobs:
         run: |
           mkdir -p gpu
           cd gpu
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/cedana-gpu-controller-$ARCH/versions/$VERSION/cedana-gpu-controller
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu/raw/names/libcedana-gpu.so-$ARCH/versions/$VERSION/libcedana-gpu.so
+            REPO="cedana/cedana-gpu"
           else
-            VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/names/cedana-gpu-controller-$ARCH/versions/$VERSION/cedana-gpu-controller
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-gpu-alpha/raw/names/libcedana-gpu.so-$ARCH/versions/$VERSION/libcedana-gpu.so
+            REPO="cedana/cedana-gpu-alpha"
           fi
+
+          # Download cedana-gpu-controller with fallback
+          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-gpu-controller-${ARCH}"
+          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-gpu-controller-${ARCH}/versions/${VERSION}/cedana-gpu-controller"
+          if ! curl -1Lf -O "$URL1"; then
+            echo "Primary URL failed for cedana-gpu-controller, trying alternative URL..."
+            curl -1Lf -o cedana-gpu-controller-${ARCH} "$URL2"
+          fi
+
+          # Download libcedana-gpu.so with fallback
+          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-gpu.so-${ARCH}"
+          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-gpu.so-${ARCH}/versions/${VERSION}/libcedana-gpu.so"
+          if ! curl -1Lf -O "$URL1"; then
+            echo "Primary URL failed for libcedana-gpu.so, trying alternative URL..."
+            curl -1Lf -o libcedana-gpu.so-${ARCH} "$URL2"
+          fi
+
+          # Download libcedana-gpu-tracer.so with fallback
+          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-gpu-tracer.so-${ARCH}"
+          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-gpu-tracer.so-${ARCH}/versions/${VERSION}/libcedana-gpu-tracer.so"
+          if ! curl -1Lf -O "$URL1"; then
+            echo "Primary URL failed for libcedana-gpu-tracer.so, trying alternative URL..."
+            curl -1Lf -o libcedana-gpu-tracer.so-${ARCH} "$URL2"
+          fi
+
+          mv cedana-gpu-controller-${ARCH} cedana-gpu-controller
+          mv libcedana-gpu.so-${ARCH} libcedana-gpu.so
+          mv libcedana-gpu-tracer.so-${ARCH} libcedana-gpu-tracer.so
           echo $VERSION > gpu-version.txt
 
       - name: Upload artifacts
@@ -246,12 +299,21 @@ jobs:
         run: |
           mkdir -p streamer
           cd streamer
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer/raw/names/cedana-image-streamer-$ARCH/versions/$VERSION/cedana-image-streamer
+            REPO="cedana/cedana-image-streamer"
           else
-            VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-image-streamer-alpha/raw/names/cedana-image-streamer-$ARCH/versions/$VERSION/cedana-image-streamer
+            REPO="cedana/cedana-image-streamer-alpha"
           fi
+          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-image-streamer-${ARCH}"
+          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-image-streamer-${ARCH}/versions/${VERSION}/cedana-image-streamer"
+
+          # Try first URL, if 404 then try alternative URL
+          if ! curl -1Lf -O "$URL1"; then
+            echo "Primary URL failed, trying alternative URL..."
+            curl -1Lf -o cedana-image-streamer-${ARCH} "$URL2"
+          fi
+          mv cedana-image-streamer-${ARCH} cedana-image-streamer
           echo $VERSION > streamer-version.txt
 
       - name: Upload artifacts
@@ -324,12 +386,21 @@ jobs:
         run: |
           mkdir -p containerd-runtime-runc
           cd containerd-runtime-runc
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
+            REPO="cedana/cedana-runtime-shim"
           else
-            VERSION=$(echo $VERSION | sed 's/\//-/g')
-            curl -1Lf -O https://dl.cloudsmith.io/$API_KEY/cedana/cedana-runtime-shim-alpha/raw/names/cedana-shim-runc-v2-$ARCH/versions/$VERSION/cedana-shim-runc-v2
+            REPO="cedana/cedana-runtime-shim-alpha"
           fi
+          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-shim-runc-v2-${ARCH}"
+          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-shim-runc-v2-${ARCH}/versions/${VERSION}/cedana-shim-runc-v2"
+
+          # Try first URL, if 404 then try alternative URL
+          if ! curl -1Lf -O "$URL1"; then
+            echo "Primary URL failed, trying alternative URL..."
+            curl -1Lf -o cedana-shim-runc-v2-${ARCH} "$URL2"
+          fi
+          mv cedana-shim-runc-v2-${ARCH} cedana-shim-runc-v2
           echo $VERSION > containerd-runtime-version.txt
           cd -
           # TODO: Can add more runtimes here in the future
@@ -368,3 +439,4 @@ jobs:
         with:
           name: helm-chart
           path: cedana-helm
+

@@ -130,10 +130,10 @@ HELM_CHART?=""
 FORMATTER?=pretty
 BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
-				--output /tmp --report-formatter $(FORMATTER)
+				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) \
-				--output /tmp --report-formatter $(FORMATTER)
+				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 
 test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
@@ -200,7 +200,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 	fi
 
 test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
-	if [ -f /.dockerenv ] || [ "$${PROVIDER,,}" != "k3s" ]; then \
+	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -317,6 +317,7 @@ PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' 
 PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+RUSH_BIN_COPY=find /usr/local/bin -type f -name 'rush' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
 DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --entrypoint tail --name=$(DOCKER_TEST_CONTAINER_NAME) \
@@ -333,6 +334,7 @@ DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE)
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_BIN_COPY_CRIU) && \
+						$(RUSH_BIN_COPY) && \
 						$(HELM_CHART_COPY) >/dev/null
 DOCKER_TEST_CREATE_NO_PLUGINS=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null

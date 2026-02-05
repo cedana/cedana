@@ -65,7 +65,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging
+  DEBUG: ${{ vars.DEBUG_REGRESSION }}
 
 jobs:
   unit:
@@ -461,6 +461,22 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: EKS
+      runner: ${{ inputs.runner }}
+      large: ${{ inputs.large }}
+      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
+      parallelism: ${{ inputs.parallelism }}
+      post_summary: false # Will post consolidated summary instead
+
+  eks-karpenter:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
+    secrets: inherit
+    concurrency: test-k8s-karpenter # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: EKS-Karpenter
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
@@ -486,7 +502,7 @@ jobs:
   nebius:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius on nightly (when large=true)
+    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius when large=true
     secrets: inherit
     concurrency: test-k8s-nebius # Since the cluster is reused
     with:
@@ -552,10 +568,179 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Generate AI summary of failures
+        id: ai-summary
+        if: ${{ inputs.post_summary_slack != '' }}
+        continue-on-error: true
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+        run: |
+          # Check if there are any failures
+          FAILED=$(find report -name "*.json" -exec jq -r '.results.summary.failed // 0' {} \; | awk '{s+=$1} END {print s}')
+          if [ "$FAILED" -gt 0 ]; then
+            echo "Found $FAILED failures, generating AI summary..."
+            # Flatten all JSON reports into a single directory for merging
+            # (ctrf merge doesn't search recursively)
+            mkdir -p /tmp/ctrf-reports
+            find report -name "*.json" -exec cp {} /tmp/ctrf-reports/ \;
+            # Merge all CTRF reports into one
+            npx ctrf merge /tmp/ctrf-reports -o merged-report.json -d /tmp --keep-reports
+            npx ai-ctrf gemini "/tmp/merged-report.json" --consolidate --model gemini-2.0-flash \
+              --additionalPromptContext "Focus on identifying root causes and common patterns across failures. Be concise." \
+              > /tmp/ai-summary.txt 2>&1 || true
+            if [ -f /tmp/ai-summary.txt ] && [ -s /tmp/ai-summary.txt ]; then
+              # Escape for GitHub Actions output
+              SUMMARY=$(cat /tmp/ai-summary.txt | head -c 2000)
+              echo "summary<<EOFSUM" >> $GITHUB_OUTPUT
+              echo "$SUMMARY" >> $GITHUB_OUTPUT
+              echo "EOFSUM" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "No failures, skipping AI summary"
+          fi
+
       - name: Post report to Slack
         if: ${{ inputs.post_summary_slack != '' }}
         env:
           SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || secrets.SLACK_WEBHOOK_URL_TESTS }}
           TITLE: "Test results (${{ matrix.arch }})"
+          BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          AI_SUMMARY: ${{ steps.ai-summary.outputs.summary }}
+          ARCH: ${{ matrix.arch }}
+          # Job results to detect failures without reports
+          JOB_RESULTS: ${{ toJSON(needs) }}
         run: |
-          npx slack-ctrf results "report/**/*.json" --title "$TITLE" --prefix ${{ github.repository }}
+          node - <<'EOF'
+          const fs = require('fs');
+          const path = require('path');
+          const https = require('https');
+          const http = require('http');
+
+          // Find all CTRF JSON files
+          function findFiles(dir, pattern) {
+            let results = [];
+            for (const file of fs.readdirSync(dir, { withFileTypes: true })) {
+              const fullPath = path.join(dir, file.name);
+              if (file.isDirectory()) {
+                results = results.concat(findFiles(fullPath, pattern));
+              } else if (file.name.endsWith('.json')) {
+                results.push(fullPath);
+              }
+            }
+            return results;
+          }
+
+          const files = findFiles('report', '.json');
+          const groups = {};
+          let totalPassed = 0, totalFailed = 0, totalSkipped = 0, totalTests = 0;
+
+          // Parse each report and group by reportName
+          for (const file of files) {
+            try {
+              const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+              const reportName = data.results?.environment?.reportName || data.reportName || path.basename(file, '.json');
+              const summary = data.results?.summary || {};
+
+              if (!groups[reportName]) {
+                groups[reportName] = { passed: 0, failed: 0, skipped: 0, tests: 0 };
+              }
+              groups[reportName].passed += summary.passed || 0;
+              groups[reportName].failed += summary.failed || 0;
+              groups[reportName].skipped += summary.skipped || 0;
+              groups[reportName].tests += summary.tests || 0;
+
+              totalPassed += summary.passed || 0;
+              totalFailed += summary.failed || 0;
+              totalSkipped += summary.skipped || 0;
+              totalTests += summary.tests || 0;
+            } catch (e) {
+              console.error(`Error parsing ${file}:`, e.message);
+            }
+          }
+
+          const statusEmoji = totalFailed > 0 ? ':x:' : ':white_check_mark:';
+          const title = process.env.TITLE || 'Test Results';
+
+          // Build group lines
+          const groupLines = Object.entries(groups)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([name, s]) => {
+              const icon = s.failed > 0 ? ':x:' : ':white_check_mark:';
+              let line = `${icon} *${name}*: ${s.passed}/${s.tests} passed`;
+              if (s.failed > 0) line += ` (${s.failed} failed)`;
+              if (s.skipped > 0) line += ` (${s.skipped} skipped)`;
+              return line;
+            })
+            .join('\n');
+
+          // Check for jobs that failed without producing reports
+          let crashedJobs = [];
+          const arch = process.env.ARCH || 'unknown';
+          // Map job IDs to display names and patterns that should appear in report names
+          const jobConfig = {
+            'basic': { displayName: 'Basic', pattern: 'basic' },
+            'plugin': { displayName: null, pattern: null }, // plugin has many sub-reports, skip crash detection
+            'streamer': { displayName: 'Streamer (CPU)', pattern: 'streamer' },
+            'gpu': { displayName: 'CUDA', pattern: 'cuda' },
+            'k3s': { displayName: 'Kubernetes (K3s, CPU)', pattern: 'k3s' },
+            'eks': { displayName: 'Kubernetes (EKS, CPU)', pattern: 'eks' },
+            'gke': { displayName: 'Kubernetes (GKE, CPU)', pattern: 'gke' },
+            'nebius': { displayName: 'Kubernetes (Nebius, GPU)', pattern: 'nebius' },
+          };
+          try {
+            const jobResults = JSON.parse(process.env.JOB_RESULTS || '{}');
+            for (const [job, data] of Object.entries(jobResults)) {
+              if (data.result === 'failure') {
+                const config = jobConfig[job];
+                if (!config || config.pattern === null) continue; // Skip jobs we can't reliably detect
+                // Check if we have any report for this job
+                const hasReport = Object.keys(groups).some(name =>
+                  name.toLowerCase().includes(config.pattern || job.toLowerCase())
+                );
+                if (!hasReport) {
+                  crashedJobs.push({ id: job, displayName: config.displayName });
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing job results:', e.message);
+          }
+
+          // Adjust status if there are crashed jobs
+          const hasCrashedJobs = crashedJobs.length > 0;
+          const finalStatusEmoji = (totalFailed > 0 || hasCrashedJobs) ? ':x:' : ':white_check_mark:';
+
+          const blocks = [
+            { type: 'header', text: { type: 'plain_text', text: title, emoji: true } },
+            { type: 'section', text: { type: 'mrkdwn', text: `${finalStatusEmoji} *${totalPassed}* passed  |  :x: *${totalFailed}* failed  |  :fast_forward: *${totalSkipped}* skipped` } },
+            { type: 'divider' },
+            { type: 'section', text: { type: 'mrkdwn', text: groupLines || 'No test results found' } },
+          ];
+
+          // Add crashed jobs section if any
+          if (hasCrashedJobs) {
+            const crashedLines = crashedJobs.map(j => `:boom: *${j.displayName} (${arch})*: crashed before tests ran`).join('\n');
+            blocks.push({ type: 'section', text: { type: 'mrkdwn', text: crashedLines } });
+          }
+
+          // Add AI summary if available and there were failures
+          const aiSummary = process.env.AI_SUMMARY;
+          if (aiSummary && (totalFailed > 0 || hasCrashedJobs)) {
+            blocks.push({ type: 'divider' });
+            blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:robot_face: *AI Analysis:*\n${aiSummary}` } });
+          }
+
+          blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: `<${process.env.BUILD_URL}|View Run> | Branch: \`${process.env.BRANCH}\`` }] });
+
+          const payload = { blocks };
+
+          // Post to Slack
+          const webhookUrl = new URL(process.env.SLACK_WEBHOOK_URL);
+          const client = webhookUrl.protocol === 'https:' ? https : http;
+          const req = client.request(webhookUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, (res) => {
+            console.log(`Slack response: ${res.statusCode}`);
+          });
+          req.write(JSON.stringify(payload));
+          req.end();
+          EOF

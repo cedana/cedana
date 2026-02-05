@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 install_helm() {
-    if command -v helm &> /dev/null; then
+    if command -v helm &>/dev/null; then
         debug_log "helm is already installed"
         return 0
     fi
@@ -18,7 +18,6 @@ helm_install_cedana() {
     local namespace="$2"
 
     debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
-
     local helm_cmd
 
     # Use upgrade --install for idempotent installs
@@ -37,7 +36,6 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
     helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
     helm_cmd="$helm_cmd --set config.checkpointCompression=$CEDANA_CHECKPOINT_COMPRESSION"
-    helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     helm_cmd="$helm_cmd --set config.awsAccessKeyId=$AWS_ACCESS_KEY_ID"
     helm_cmd="$helm_cmd --set config.awsSecretAccessKey=$AWS_SECRET_ACCESS_KEY"
     helm_cmd="$helm_cmd --set config.awsRegion=$AWS_REGION"
@@ -82,6 +80,9 @@ helm_install_cedana() {
     if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
     fi
+    if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
+        helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
+    fi
 
     helm_cmd="$helm_cmd --wait --timeout=5m"
 
@@ -90,7 +91,6 @@ helm_install_cedana() {
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
     }
-
     debug_log "Helm chart installed"
 }
 

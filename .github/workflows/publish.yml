@@ -118,68 +118,19 @@ jobs:
         with:
           name: cedana-${{ matrix.arch }}
 
-      - name: Wait before trying
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push cedana to Cloudsmith
-        id: push-cedana
-        uses: cloudsmith-io/action@master
-        continue-on-error: true
+      - name: Install Cloudsmith CLI
+        uses: cloudsmith-io/cloudsmith-cli-action@v2
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "${{ inputs.cloudsmith_repo }}"
-          file: "cedana"
-          name: "cedana-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
-      # XXX: Cloudsmith is very flaky with parallel uploads. Since we don't want to waste CI minutes
-      # by retrying the whole job, we just wait a bit and try again once.
-
-      - name: Wait before retrying
-        if: steps.push-cedana.outcome == 'failure'
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push cedana to Cloudsmith
-        id: push-cedana-2
-        if: steps.push-cedana.outcome == 'failure'
-        uses: cloudsmith-io/action@master
-        continue-on-error: true
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "${{ inputs.cloudsmith_repo }}"
-          file: "cedana"
-          name: "cedana-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-
-      - name: Wait before retrying
-        if: steps.push-cedana-2.outcome == 'failure'
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push cedana to Cloudsmith
-        id: push-cedana-3
-        if: steps.push-cedana-2.outcome == 'failure'
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: "${{ inputs.cloudsmith_repo }}"
-          file: "cedana"
-          name: "cedana-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+      - name: Push package to Cloudsmith
+        run: |
+          mv cedana cedana-${{ matrix.arch }}
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish \
+            --name cedana-${{ matrix.arch }} \
+            --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
+            --version ${{ github.head_ref || github.ref_name }} \
+            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
 
   cloudsmith-plugin:
     name: Cloudsmith
@@ -216,68 +167,19 @@ jobs:
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
 
-      - name: Wait before trying
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
-        id: push-plugin
-        uses: cloudsmith-io/action@master
-        continue-on-error: true
+      - name: Install Cloudsmith CLI
+        uses: cloudsmith-io/cloudsmith-cli-action@v2
         with:
           api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-${{ env.PLUGIN }}.so"
-          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
 
-      # XXX: Cloudsmith is very flaky with parallel uploads. Since we don't want to waste CI minutes
-      # by retrying the whole job, we just wait a bit and try again once.
-
-      - name: Wait before retrying
-        if: steps.push-plugin.outcome == 'failure'
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
-        id: push-plugin-2
-        if: steps.push-plugin.outcome == 'failure'
-        uses: cloudsmith-io/action@master
-        continue-on-error: true
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-${{ env.PLUGIN }}.so"
-          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
-
-      - name: Wait before retrying
-        if: steps.push-plugin-2.outcome == 'failure'
-        run: sleep $((RANDOM % 6 + 5))
-
-      - name: Push plugin ${{ matrix.plugin }} to Cloudsmith
-        id: push-plugin-3
-        if: steps.push-plugin-2.outcome == 'failure'
-        uses: cloudsmith-io/action@master
-        with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
-          command: "push"
-          format: "raw"
-          owner: "cedana"
-          repo: ${{ inputs.cloudsmith_repo }}
-          file: "libcedana-${{ env.PLUGIN }}.so"
-          name: "libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}"
-          version: ${{ github.head_ref || github.ref_name }}
-          republish: "true"
-          tags: ${{ matrix.arch }}, ${{ github.head_ref || github.ref_name }}, ${{ github.sha }}
+      - name: Push package to Cloudsmith
+        run: |
+          mv libcedana-${{ env.PLUGIN }}.so libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --republish \
+            --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} \
+            --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
+            --version ${{ github.head_ref || github.ref_name }} \
+            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
 
   dockerhub:
     name: DockerHub (multi-arch)
@@ -454,17 +356,17 @@ jobs:
         run: |
           mkdir current
           cd current
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/cedana-$ARCH/versions/$TAG/cedana
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-runc.so-$ARCH/versions/$TAG/libcedana-runc.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-slurm.so-$ARCH/versions/$TAG/libcedana-slurm.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-s3.so-$ARCH/versions/$TAG/libcedana-storage-s3.so
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$TAG/libcedana-storage-gcs.so
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/cedana-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-runc.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-containerd.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-crio.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-k8s.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-slurm.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-kata.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-cloud-hypervisor.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-cedana.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-s3.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-gcs.so-$ARCH
 
       - name: Download previous binary
         id: download-previous
@@ -476,17 +378,17 @@ jobs:
         run: |
           mkdir previous
           cd previous
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/cedana-$ARCH/versions/$TAG/cedana || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-runc.so-$ARCH/versions/$TAG/libcedana-runc.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-containerd.so-$ARCH/versions/$TAG/libcedana-containerd.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-crio.so-$ARCH/versions/$TAG/libcedana-crio.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-k8s.so-$ARCH/versions/$TAG/libcedana-k8s.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-slurm.so-$ARCH/versions/$TAG/libcedana-slurm.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-kata.so-$ARCH/versions/$TAG/libcedana-kata.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-cloud-hypervisor.so-$ARCH/versions/$TAG/libcedana-cloud-hypervisor.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-cedana.so-$ARCH/versions/$TAG/libcedana-storage-cedana.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-s3.so-$ARCH/versions/$TAG/libcedana-storage-s3.so || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/names/libcedana-storage-gcs.so-$ARCH/versions/$TAG/libcedana-storage-gcs.so || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/cedana-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-runc.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-containerd.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-crio.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-k8s.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-slurm.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-kata.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-cloud-hypervisor.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-cedana.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-s3.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-gcs.so-$ARCH || true
 
       - name: Generate summary
         id: summary

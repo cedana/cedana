@@ -200,7 +200,7 @@ teardown_file() {
 
     run cedana dump runc "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     runc delete "$jid"

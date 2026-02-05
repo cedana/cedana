@@ -4,12 +4,12 @@ set -eo pipefail
 
 # get the directory of the script
 SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE"  ]; do
-    DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
+while [ -h "$SOURCE" ]; do
+    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
     SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /*  ]] && SOURCE="$DIR/$SOURCE"
+    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
 done
-DIR="$( cd -P "$( dirname "$SOURCE"  )" >/dev/null 2>&1 && pwd  )"
+DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
@@ -21,6 +21,9 @@ CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
+# XXX: We always install the GPU plugin because the race w/ gpu-operator (if the cluster is using it)
+# is not worth defending against. In any case, the resources check on using gpus in the yaml will prevent
+# a GPU pod from being scheduled.
 PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
     containerd/runtime-runc@$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION \
@@ -28,6 +31,12 @@ PLUGINS=" \
     runc@$CEDANA_PLUGINS_NATIVE_VERSION"
 
 PLUGINS_TO_REMOVE=""
+
+if [ "$CEDANA_PLUGINS_GPU_VERSION" != "none" ]; then
+    PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
+else
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE gpu"
+fi
 
 # check if a storage plugin is required
 if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
@@ -50,10 +59,11 @@ else
     PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE streamer"
 fi
 
-# if gpu driver present then add gpu plugin
+# If gpu driver present then add gpu plugin
+# NOTE: This is no longer used to conditionally add the gpu plugin, but we still
+# log the driver version here for informational purposes.
 if [ "$ENV" == "k3s" ]; then
     if command -v nvidia-smi >/dev/null 2>&1; then
-        PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
         echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
         if /sbin/ldconfig -p | grep -q libcuda.so.1; then
             echo "CUDA driver library found!"
@@ -64,7 +74,6 @@ elif [ -d /proc/driver/nvidia/gpus/ ]; then
         # Check if the NVIDIA driver is installed by checking the version
         # as nvidia-smi is not installed by GPU Operator
         if [ -r /proc/driver/nvidia/version ] || command -v nvidia-smi >/dev/null 2>&1; then
-            PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
             echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
             if command -v nvidia-smi >/dev/null 2>&1; then
                 echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
@@ -74,7 +83,6 @@ elif [ -d /proc/driver/nvidia/gpus/ ]; then
             fi
         fi
     else
-        PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
         echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
         # Bind mount /dev/shm to /run/nvidia/driver/dev/shm
         # This is required for the gpu-controller to work when chrooted into /run/nvidia/driver path
@@ -95,13 +103,13 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
 
     if [[ "$PLUGINS_TO_REMOVE" != "" ]]; then
         # shellcheck disable=SC2086
-        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE &>/dev/null || true
+        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE || true
     fi
 fi
 
 # Improve streaming performance
-echo 0 > /proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
-echo 4194304 > /proc/sys/fs/pipe-max-size # change pipe max size to 4MiB
+echo 0 >/proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
+echo 4194304 >/proc/sys/fs/pipe-max-size  # change pipe max size to 4MiB
 
 #####################################################
 # Setup containerd runtime configuration for cedana #
@@ -146,7 +154,7 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
         TARGET_CONFIG="$CONFD_DIR/999-cedana.toml"
         echo "Copying existing config from $LAST_CONFD_FILE to $TARGET_CONFIG"
         cp "$LAST_CONFD_FILE" "$TARGET_CONFIG"
-        echo "" >> "$TARGET_CONFIG"
+        echo "" >>"$TARGET_CONFIG"
     else
         # Directly add to main config if no conf.d files exist, so that when NVIDIA plugin is added
         # later it can copy from this and not miss the cedana config.
@@ -156,7 +164,7 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
 
     if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
         echo "Adding cedana runtime config to $TARGET_CONFIG"
-        cat >> "$TARGET_CONFIG" <<'END_CAT'
+        cat >>"$TARGET_CONFIG" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
@@ -187,7 +195,7 @@ elif [ "$CONTAINERD_VERSION" = "3" ]; then
 
     if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
         echo "Creating cedana runtime config at $TARGET_CONFIG"
-        cat > "$TARGET_CONFIG" <<'END_CAT'
+        cat >"$TARGET_CONFIG" <<'END_CAT'
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"

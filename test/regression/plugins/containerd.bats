@@ -130,7 +130,7 @@ teardown_file() {
 
     run cedana dump containerd "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run ctr task kill "$id"
@@ -149,7 +149,7 @@ teardown_file() {
 
     run cedana dump containerd "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run ctr task kill "$id"
@@ -168,7 +168,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --image "$new_image"
     assert_success
-    dump_file=$(echo "$output" | tail -n 1  | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run cedana kill "$jid"
@@ -259,7 +259,7 @@ teardown_file() {
 
     run cedana dump containerd "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     ctr container delete "$id"
 
@@ -281,7 +281,7 @@ teardown_file() {
 
     run cedana dump containerd "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     ctr container delete "$id"
 
@@ -302,7 +302,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | tail -n 1  | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     debug cedana restore job "$jid" --path "$dump_file"
