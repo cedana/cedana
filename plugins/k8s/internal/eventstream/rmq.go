@@ -913,13 +913,20 @@ func (es *EventStream) PublishIPEvent(ctx context.Context, req *multinode.IPRepo
 }
 
 func (es *EventStream) StartGlobalMapConsumer(ctx context.Context) error {
-	consumer, err := rabbitmq.NewConsumer(
+  queueName := "cedana_multinode_helper-" + rand.Text();
+  consumer, err := rabbitmq.NewConsumer(
 		es.Conn,
-		"",
+		queueName,
 		rabbitmq.WithConsumerOptionsExchangeName("network_map_fanout"),
+    rabbitmq.WithConsumerOptionsConcurrency(10),
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_multinode_helper"),
+  	rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
+			RoutingKey:     "",
+			BindingOptions: rabbitmq.BindingOptions{},
+		}),
 	)
 	if err != nil {
 		return err
