@@ -11,7 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cedana/cedana/pkg/client"
+  multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
+  "github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
@@ -171,46 +172,107 @@ func startHelper(ctx context.Context) error {
 		return err
 	}
 
+	// multinode comms
 	go func() {
-		defer cancel()
+		log.Info().Msg("Starting IP Event Bridge (Daemon -> RabbitMQ)")
+
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			streamClient, err := cedana.MonitorIPEvents(ctx, &multinode.MonitorIPEventsReq{})
+			if err != nil {
+				log.Warn().Err(err).Msg("Failed to subscribe to daemon IP events, retrying in 2s...")
+				time.Sleep(2 * time.Second)
+				continue
+			}
+			for {
+				msg, err := streamClient.Recv()
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					log.Error().Err(err).Msg("Stream disconnected")
+					break
+				}
+
+				log.Info().Msgf("Bridging IP Map to Propagator: %s", msg.CheckpointId)
+
+				err = stream.PublishIPEvent(ctx, msg)
+				if err != nil {
+					log.Error().Err(err).Msg("Failed to publish to RabbitMQ")
+				}
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}()
+
+	go func() {
+		log.Info().Msg("Starting Global Map Consumer (RabbitMQ -> Daemon)")
+		for {
+			if ctx.Err() != nil {
+				return
+			}
+			err := stream.StartGlobalMapConsumer(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("Global Map Consumer failed, retrying in 2s...")
+				time.Sleep(2 * time.Second)
+			}
+		}
+	}()
+	// end of multinode comms
+
+	go func() {
+		defer cancel() // Event Stream failure SHOULD kill the helper
 		defer stream.Close()
-		log.Debug().Msg("listening on event stream for checkpoint requests")
 		err := stream.StartCheckpointsPublisher(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup checkpoint publisher")
 			return
 		}
+
+		go func() {
+			err := stream.StartMultiPodConsumer(ctx)
+			if err != nil {
+				log.Error().Err(err).Msg("[multinode] failed to setup checkpoint request consumer")
+				return
+			}
+		}()
+
+		log.Debug().Msg("listening on event stream for checkpoint requests")
 		err = stream.StartCheckpointsConsumer(ctx)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
+			log.Error().Err(err).Msg("failed to setup checkpoint request consumer")
 			return
 		}
 	}()
 
 	go func() {
-		defer cancel()
 		file, err := os.Open(DAEMON_LOG_PATH)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to open daemon logs")
+			log.Warn().Err(err).Msg("failed to open daemon logs (daemon may not be started)")
 			return
 		}
 		defer file.Close()
 
 		reader := bufio.NewReader(file)
 		for {
-			line, err := reader.ReadString('\n')
-			if err != nil {
-				if err == io.EOF {
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				log.Error().Err(err).Msg("Error reading from cedana-daemon.log")
+			select {
+			case <-ctx.Done():
 				return
-			}
-			trimmed := strings.TrimSpace(line)
-			if len(trimmed) > 0 {
-				// we don't use the log function as the logs should have their own timing data
-				fmt.Println(trimmed)
+			default:
+				line, err := reader.ReadString('\n')
+				if err != nil {
+					if err == io.EOF {
+						time.Sleep(1 * time.Second)
+						continue
+					}
+					return
+				}
+				trimmed := strings.TrimSpace(line)
+				if len(trimmed) > 0 {
+					fmt.Println(trimmed)
+				}
 			}
 		}
 	}()
