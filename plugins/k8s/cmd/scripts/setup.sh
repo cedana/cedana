@@ -21,6 +21,8 @@ cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/lib/libcedana*.so /host/usr/local/lib/
 cp /Makefile /host/cedana/Makefile
 
+rm -rf /host/root/.cedana/ # since this is a fresh install
+
 CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-"info"}
 CEDANA_LOG_LEVEL_NO_SERVER=${CEDANA_LOG_LEVEL_NO_SERVER:-"info"}
 
@@ -40,6 +42,7 @@ CEDANA_CHECKPOINT_ASYNC=${CEDANA_CHECKPOINT_ASYNC:-false}
 CEDANA_GPU_POOL_SIZE=${CEDANA_GPU_POOL_SIZE:-1}
 CEDANA_GPU_SHM_SIZE=${CEDANA_GPU_SHM_SIZE:-8589934592} # 8GB
 CEDANA_GPU_LD_LIB_PATH=${CEDANA_GPU_LD_LIB_PATH:-"/run/nvidia/driver/usr/lib/x86_64-linux-gnu"}
+CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK=${CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK:-false}
 
 # WARN: DO NOT CHANGE. In Kubernetes, cgroups are created/managed by the kubelet.
 CEDANA_CRIU_MANAGE_CGROUPS=${CEDANA_CRIU_MANAGE_CGROUPS:-"cg_none"}
@@ -54,8 +57,6 @@ CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CLUSTER_ID=${CEDANA_CLUSTER_ID:-""}
 
 CONTAINERD_ADDRESS=${CONTAINERD_ADDRESS:-"/run/containerd/containerd.sock"}
-
-rm -rf /host/root/.cedana/ # since this is a fresh install
 
 # Enter chroot environment on the host
 env \
@@ -76,6 +77,7 @@ env \
     CEDANA_GPU_POOL_SIZE="$CEDANA_GPU_POOL_SIZE" \
     CEDANA_GPU_SHM_SIZE="$CEDANA_GPU_SHM_SIZE" \
     CEDANA_GPU_LD_LIB_PATH="$CEDANA_GPU_LD_LIB_PATH" \
+    CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK="$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK" \
     CEDANA_CRIU_MANAGE_CGROUPS="$CEDANA_CRIU_MANAGE_CGROUPS" \
     CEDANA_PLUGINS_BUILDS="$CEDANA_PLUGINS_BUILDS" \
     CEDANA_PLUGINS_NATIVE_VERSION="$CEDANA_PLUGINS_NATIVE_VERSION" \

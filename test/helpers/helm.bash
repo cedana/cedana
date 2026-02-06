@@ -76,12 +76,17 @@ helm_install_cedana() {
     fi
     if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+    elif [ "${GPU:-0}" != "1" ]; then
+        helm_cmd="$helm_cmd --set config.pluginsGpuVersion=none"
     fi
     if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
     fi
     if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
+    fi
+    if [ -n "$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK" ]; then
+        helm_cmd="$helm_cmd --set config.gpuSkipNvidiaRuntimeHook=$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK"
     fi
 
     helm_cmd="$helm_cmd --wait --timeout=5m"

@@ -302,6 +302,7 @@ jobs:
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || (matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci') }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
+          CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK: ${{ matrix.platform == 'K3s' && 'true' || 'false' }} # K3s has issues with nvidia-container-runtime hook as it runs inside a container
           PLATFORM: ${{ matrix.platform }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
@@ -321,8 +322,6 @@ jobs:
           export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
           if [ "$GPU" = "1" ]; then
             export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
-          else
-            export CEDANA_PLUGINS_GPU_VERSION=none
           fi
           if [ "$STREAMER" = "true" ]; then
             export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
