@@ -269,14 +269,24 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
+
       - name: Download streamer from S3
+        env:
+          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
+          set -euo pipefail
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+            aws_s3_path="cedana/cedana"
+          else
+            aws_s3_path="cedana/cedana-alpha"
+          fi
           mkdir -p streamer
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.streamer_version }}/${REF_SAFE}/cedana-image-streamer-${{ matrix.arch }} \
+            s3://cedana-bin/${aws_s3_path}/${VERSION}/cedana-image-streamer-${{ matrix.arch }} \
             streamer/cedana-image-streamer
 
           echo "${REF}" > streamer/streamer-version.txt
