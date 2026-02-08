@@ -17,14 +17,14 @@ on:
         description: "Publish to GitHub releases"
         required: false
         default: false
-      cloudsmith:
+      aws_s3:
         type: boolean
-        description: "Publish to Cloudsmith"
+        description: "Publish to AWS S3"
         required: false
         default: false
-      cloudsmith_repo:
+      aws_s3_path:
         type: string
-        description: "Cloudsmith repository to publish to"
+        description: "S3 path to publish to"
         required: false
         default: cedana
       dockerhub:
@@ -101,9 +101,9 @@ jobs:
               --repo="$GITHUB_REPOSITORY" \
               *.tar.gz \
 
-  cloudsmith:
-    name: Cloudsmith
-    if: inputs.cloudsmith
+  aws_s3:
+    name: AWS S3 Upload
+    if: inputs.aws_s3
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -111,30 +111,37 @@ jobs:
         arch:
           - amd64
           - arm64
+
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
+
     steps:
       - name: Download binary
         uses: actions/download-artifact@v4
-        id: download-binary
         with:
           name: cedana-${{ matrix.arch }}
 
-      - name: Install Cloudsmith CLI
-        uses: cloudsmith-io/cloudsmith-cli-action@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-      - name: Push package to Cloudsmith
+      - name: Upload to S3
         run: |
-          mv cedana cedana-${{ matrix.arch }}
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish \
-            --name cedana-${{ matrix.arch }} \
-            --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
-            --version ${{ github.head_ref || github.ref_name }} \
-            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
+          REF="${{ github.head_ref || github.ref_name }}"
+          SHA="${{ github.sha }}"
 
-  cloudsmith-plugin:
-    name: Cloudsmith
-    if: inputs.cloudsmith
+          aws s3 cp \
+            cedana \
+            s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/cedana \
+            --metadata arch=${{ matrix.arch }},ref=${REF},sha=${SHA}
+
+  aws_s3_plugin:
+    name: AWS S3 Plugin Upload
+    if: inputs.aws_s3
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -167,19 +174,96 @@ jobs:
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
 
-      - name: Install Cloudsmith CLI
-        uses: cloudsmith-io/cloudsmith-cli-action@v2
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
 
-      - name: Push package to Cloudsmith
+      - name: Upload to S3
         run: |
-          mv libcedana-${{ env.PLUGIN }}.so libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }}
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} --republish \
-            --name libcedana-${{ env.PLUGIN }}.so-${{ matrix.arch }} \
-            --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
-            --version ${{ github.head_ref || github.ref_name }} \
-            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
+          SHA="${{ github.sha }}"
+          PLUGIN_NAME="${{ matrix.plugin }}"
+          # Sanitize plugin name by replacing slashes with hiphens
+          PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
+          aws s3 cp \
+          libcedana-${PLUGIN_SAFE}.so \
+          s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so \
+          --metadata arch=${{ matrix.arch }},ref=${REF},sha=${SHA}
+
+  aws_s3_metadata:
+    name: Generate Plugin registry_map.json
+    if: inputs.aws_s3
+    runs-on: ubuntu-latest
+    needs: aws_s3_plugin
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+          - arm64
+
+    steps:
+      - name: Download all plugin artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: plugin-${{ matrix.arch }}-*
+          path: artifacts
+
+      - name: Upload metadata.json to S3
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Generate registry_map.json
+        run: |
+          set -euo pipefail
+
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
+          ARCH="${{ matrix.arch }}"
+
+          jq -n \
+            --arg arch "$ARCH" \
+            '{ arch: $arch, plugins: {} }' \
+            > registry_map.json
+
+          find artifacts/plugin-${ARCH}-* -type f -name "libcedana-*.so" | while read -r file; do
+            fname="$(basename "$file")"
+
+            plugin="${fname#libcedana-}"
+            plugin="${plugin%.so}"
+
+            checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
+
+            jq \
+              --arg plugin "$plugin" \
+              --arg name "$fname" \
+              --arg checksum "$checksum" \
+              '
+              .plugins[$plugin] |=
+                (
+                  . // {
+                    type: "SUPPORTED",
+                    libraries: []
+                  }
+                )
+              | .plugins[$plugin].libraries += [{
+                  name: $name,
+                  checksum: $checksum
+                }]
+              ' registry_map.json > tmp.json && mv tmp.json registry_map.json
+          done
+
+          aws s3 cp \
+            registry_map.json \
+            s3://cedana-bin/${{ inputs.aws_s3_path }}/${ARCH}/${REF_SAFE}/registry_map.json \
+            --content-type application/json
 
   dockerhub:
     name: DockerHub (multi-arch)
@@ -316,101 +400,57 @@ jobs:
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}@sha256:%s ' *)
 
-  post-summary:
-    name: Post Summary
-    runs-on: ubuntu-latest
-    needs: ["github", "cloudsmith", "dockerhub"]
-    if: inputs.post_summary
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
+  # post-summary:
+  #   name: Post Summary
+  #   runs-on: ubuntu-latest
+  #   needs: ["github", "cloudsmith", "dockerhub"]
+  #   if: inputs.post_summary
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v4
+  #       with:
+  #         fetch-depth: 0
+  #         fetch-tags: true
 
-      - name: Get tag
-        id: tag
-        run: |
-          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '1p')
+  #     - name: Get tag
+  #       id: tag
+  #       run: |
+  #         echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '1p')
 
-      - name: Get previous tag
-        id: previous-tag
-        run: |
-          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '2p')
+  #     - name: Get previous tag
+  #       id: previous-tag
+  #       run: |
+  #         echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '2p')
 
-      - name: Get release info
-        id: release-info
-        uses: pozetroninc/github-action-get-latest-release@master
-        with:
-          token: ${{ github.token }}
-          excludes: draft
-          repository: ${{ github.repository }}
+  #     - name: Get release info
+  #       id: release-info
+  #       uses: pozetroninc/github-action-get-latest-release@master
+  #       with:
+  #         token: ${{ github.token }}
+  #         excludes: draft
+  #         repository: ${{ github.repository }}
 
-      - name: Download binaries
-        id: download
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          TAG: ${{ steps.tag.outputs.tag }}
-          ARCH: amd64
-          REPO: ${{ inputs.cloudsmith_repo }}
-        run: |
-          mkdir current
-          cd current
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/cedana-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-runc.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-containerd.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-crio.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-k8s.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-slurm.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-kata.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-cloud-hypervisor.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-cedana.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-s3.so-$ARCH
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-gcs.so-$ARCH
+  #     - name: Generate summary
+  #       id: summary
+  #       env:
+  #         RELEASE_TITLE: "cedana"
+  #         RELEASE_DESCRIPTION: "**${{ steps.tag.outputs.tag }}**"
+  #         RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
+  #         RELEASE_BODY: "${{ steps.release-info.outputs.description }}"
+  #         TAG: ${{ steps.tag.outputs.tag }}
+  #         BINARIES_DIR: current
+  #         PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
+  #         PREVIOUS_BINARIES_DIR: previous
+  #       run: |
+  #         echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
+  #         echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
 
-      - name: Download previous binary
-        id: download-previous
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          TAG: ${{ steps.previous-tag.outputs.tag }}
-          ARCH: amd64
-          REPO: ${{ inputs.cloudsmith_repo }}
-        run: |
-          mkdir previous
-          cd previous
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/cedana-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-runc.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-containerd.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-crio.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-k8s.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-slurm.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-kata.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-cloud-hypervisor.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-cedana.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-s3.so-$ARCH || true
-          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-gcs.so-$ARCH || true
-
-      - name: Generate summary
-        id: summary
-        env:
-          RELEASE_TITLE: "cedana"
-          RELEASE_DESCRIPTION: "**${{ steps.tag.outputs.tag }}**"
-          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
-          RELEASE_BODY: "${{ steps.release-info.outputs.description }}"
-          TAG: ${{ steps.tag.outputs.tag }}
-          BINARIES_DIR: current
-          PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
-          PREVIOUS_BINARIES_DIR: previous
-        run: |
-          echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
-          echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
-
-      - name: Post summary
-        id: slack-patch
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        with:
-          payload: |
-            ${{ steps.summary.outputs.slack-summary }}
+  #     - name: Post summary
+  #       id: slack-patch
+  #       uses: slackapi/slack-github-action@v1.26.0
+  #       env:
+  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
+  #         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+  #       with:
+  #         payload: |
+  #           ${{ steps.summary.outputs.slack-summary }}
