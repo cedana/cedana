@@ -67,6 +67,7 @@ func (s *Server) RegisterRestoredIP(ctx context.Context, req *multinode.IPReport
 			//}
 		}
 		if err := setupMultinodeEBPF(mappings); err != nil {
+      log.Error().Err(err).Msg("[multinode] eBPF setup FAILED")
 			return &multinode.IPReportResp{
 				Success: false,
 				Message: fmt.Sprintf("[multinode] eBPF setup failed: %v", err),
@@ -122,11 +123,19 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 }
 
 func setupMultinodeEBPF(mappings map[string]string) error {
-	mappingsJSON, _ := json.Marshal(mappings)
-	cmd := exec.Command("chroot", "/host", "multinode-ctl", "setup", "--interface", "eth0", "--clear")
+	mappingsJSON, err := json.Marshal(mappings)
+  if err != nil {
+		log.Error().Err(err).Msg("[multinode] Failed to marshal mappings")
+		return fmt.Errorf("failed to marshal mappings: %w", err)
+	}
+  log.Info().Msgf("[multinode] Marshaled JSON: %s", string(mappingsJSON))
+	cmd := exec.Command("multinode-ctl", "setup", "--interface", "eth0", "--clear")
 	cmd.Stdin = bytes.NewReader(mappingsJSON)
+  log.Info().Msg("[multinode] Executing multinode-ctl command...")
 	output, err := cmd.CombinedOutput()
+  log.Info().Msgf("[multinode] multinode-ctl output: %s", string(output))
 	if err != nil {
+    log.Error().Err(err).Msgf("[multinode] multinode-ctl command failed: %s", string(output))
 		return fmt.Errorf("multinode-ctl failed: %w, output: %s", err, output)
 	}
 	log.Info().Msgf("eBPF configured with %d mappings", len(mappings))
