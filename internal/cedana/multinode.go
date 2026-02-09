@@ -150,12 +150,12 @@ func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) error {
 	log.Info().Msgf("[multinode] Job name idenitifed as %s", jobName)
 
 	fqdn := fmt.Sprintf("%s.%s.%s.svc", entry.PodName, jobName, entry.Namespace)
-	newLine := fmt.Sprintf("%s\t%s\n", entry.OriginalIp, fqdn)
+	newLine := fmt.Sprintf("%s\t%s\t%s", entry.OriginalIp, fqdn, entry.PodName)
 
-	script := fmt.Sprintf("grep -qF '%s' /etc/hosts || echo -e '%s' >> /etc/hosts", fqdn, newLine)
+	script := fmt.Sprintf("grep -qF '%s' /etc/hosts || printf '%%s\\n' '%s' >> /etc/hosts", fqdn, newLine)
 
 	cmd := exec.Command("nsenter", "-t", fmt.Sprintf("%d", containerPID), "-m", "-u", "--",
-		"sh", "-c", script)
+    "/bin/sh", "-c", script)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
