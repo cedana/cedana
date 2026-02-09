@@ -62,12 +62,12 @@ func (s *Server) RegisterRestoredIP(ctx context.Context, req *multinode.IPReport
 		mappings := make(map[string]string)
 		for _, entry := range entries {
 			mappings[entry.OriginalIp] = entry.CurrentIp
-			//if err := updateEtcHosts(entry, req.Pid); err != nil {
-		  //	log.Warn().Err(err).Msgf("[multinode] Failed to update /etc/hosts for %s", entry.PodName)
-			//}
+			if err := updateEtcHosts(entry, req.Pid); err != nil {
+				log.Warn().Err(err).Msgf("[multinode] Failed to update /etc/hosts for %s", entry.PodName)
+			}
 		}
 		if err := setupMultinodeEBPF(mappings); err != nil {
-      log.Error().Err(err).Msg("[multinode] eBPF setup FAILED")
+			log.Error().Err(err).Msg("[multinode] eBPF setup FAILED")
 			return &multinode.IPReportResp{
 				Success: false,
 				Message: fmt.Sprintf("[multinode] eBPF setup failed: %v", err),
@@ -124,18 +124,18 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 
 func setupMultinodeEBPF(mappings map[string]string) error {
 	mappingsJSON, err := json.Marshal(mappings)
-  if err != nil {
+	if err != nil {
 		log.Error().Err(err).Msg("[multinode] Failed to marshal mappings")
 		return fmt.Errorf("failed to marshal mappings: %w", err)
 	}
-  log.Info().Msgf("[multinode] Marshaled JSON: %s", string(mappingsJSON))
+	log.Info().Msgf("[multinode] Marshaled JSON: %s", string(mappingsJSON))
 	cmd := exec.Command("multinode-ctl", "setup", "--interface", "eth0", "--clear")
 	cmd.Stdin = bytes.NewReader(mappingsJSON)
-  log.Info().Msg("[multinode] Executing multinode-ctl command...")
+	log.Info().Msg("[multinode] Executing multinode-ctl command...")
 	output, err := cmd.CombinedOutput()
-  log.Info().Msgf("[multinode] multinode-ctl output: %s", string(output))
+	log.Info().Msgf("[multinode] multinode-ctl output: %s", string(output))
 	if err != nil {
-    log.Error().Err(err).Msgf("[multinode] multinode-ctl command failed: %s", string(output))
+		log.Error().Err(err).Msgf("[multinode] multinode-ctl command failed: %s", string(output))
 		return fmt.Errorf("multinode-ctl failed: %w, output: %s", err, output)
 	}
 	log.Info().Msgf("eBPF configured with %d mappings", len(mappings))
@@ -152,16 +152,16 @@ func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) error {
 	fqdn := fmt.Sprintf("%s.%s.%s.svc", entry.PodName, jobName, entry.Namespace)
 	newLine := fmt.Sprintf("%s\t%s\n", entry.OriginalIp, fqdn)
 
-	cmd := exec.Command("nsenter", "-t", fmt.Sprintf("%d", containerPID), "-m", "--",
-		"sh", "-c",
-		fmt.Sprintf("echo '%s' >> /etc/hosts", newLine))
+	script := fmt.Sprintf("grep -qF '%s' /etc/hosts || echo -e '%s' >> /etc/hosts", fqdn, newLine)
+
+	cmd := exec.Command("nsenter", "-t", fmt.Sprintf("%d", containerPID), "-m", "-u", "--",
+		"sh", "-c", script)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("[multinode] nsenter failed: %w, output: %s", err, output)
+		return fmt.Errorf("nsenter failed: %w, output: %s", err, output)
 	}
 
-	log.Info().Msgf("[multinode] Added %s -> %s to /etc/hosts in container %d",
-		entry.OriginalIp, fqdn, containerPID)
+	log.Info().Msgf("[multinode] Injected %s -> %s into PID %d", entry.OriginalIp, fqdn, containerPID)
 	return nil
 }
