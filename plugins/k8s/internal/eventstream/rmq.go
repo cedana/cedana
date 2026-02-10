@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-  multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
+	multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	cedanagosdk "github.com/cedana/cedana-go-sdk"
 	"github.com/cedana/cedana/pkg/client"
@@ -565,8 +565,8 @@ func (es *EventStream) handleMultiNodeAction(ctx context.Context, action string,
 		Str("namespace", req.Namespace).
 		Logger()
 
-  config.Global.Multinode_buffer_size = len(req.PodName)
-  log.Info().Int("buffer size", config.Global.Multinode_buffer_size).Msg("[multinode] channel buffer updated")
+	config.Global.Multinode_buffer_size = len(req.PodName)
+	log.Info().Int("buffer size", config.Global.Multinode_buffer_size).Msg("[multinode] channel buffer updated")
 
 	// instead of ckpt single pod, we pass whole list to query local daemon for all pod names in the list
 	query := &daemon.QueryReq{
@@ -913,16 +913,16 @@ func (es *EventStream) PublishIPEvent(ctx context.Context, req *multinode.IPRepo
 }
 
 func (es *EventStream) StartGlobalMapConsumer(ctx context.Context) error {
-  queueName := "cedana_multinode_helper-" + rand.Text();
-  consumer, err := rabbitmq.NewConsumer(
+	queueName := "cedana_multinode_helper-" + rand.Text()
+	consumer, err := rabbitmq.NewConsumer(
 		es.Conn,
 		queueName,
 		rabbitmq.WithConsumerOptionsExchangeName("network_map_fanout"),
-    rabbitmq.WithConsumerOptionsConcurrency(10),
+		rabbitmq.WithConsumerOptionsConcurrency(10),
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_multinode_helper"),
-  	rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsRoutingKey(""),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
 			RoutingKey:     "",
 			BindingOptions: rabbitmq.BindingOptions{},
@@ -934,7 +934,7 @@ func (es *EventStream) StartGlobalMapConsumer(ctx context.Context) error {
 
 	return consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
 		var globalMapMsg struct {
-			ClusterID string                  `json:"cluster_id"`
+			ClusterID string                      `json:"cluster_id"`
 			Entries   []*multinode.GlobalMapEntry `json:"entries"`
 		}
 
@@ -946,9 +946,12 @@ func (es *EventStream) StartGlobalMapConsumer(ctx context.Context) error {
 		_, err := es.cedana.SubmitGlobalMap(ctx, &multinode.GlobalMapReq{
 			ClusterId: globalMapMsg.ClusterID,
 			Entries:   globalMapMsg.Entries,
-    })
+		})
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to submit global map to daemon")
+			if strings.Contains(err.Error(), "no pending restore found") {
+				log.Warn().Msg("Received global map for a cluster that isn't waiting. Discarding.")
+				return rabbitmq.Ack // ack so removed from queue
+			}
 			return rabbitmq.NackRequeue
 		}
 
