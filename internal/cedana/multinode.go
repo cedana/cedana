@@ -55,7 +55,8 @@ func (s *Server) RegisterRestoredIP(ctx context.Context, req *multinode.IPReport
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		log.Warn().Str("checkpoint_id", req.CheckpointId).Msg("[multinode] gRPC context canceled, eBPF/hosts will be applied via SubmitGlobalMap")
+		return &multinode.IPReportResp{Success: true}, nil
 	case <-answerCh:
 		log.Info().Msg("[multinode] Successfully completed setup for pod")
 		return &multinode.IPReportResp{Success: true}, nil
@@ -79,9 +80,9 @@ func (s *Server) MonitorIPEvents(_ *multinode.MonitorIPEventsReq, stream daemong
 }
 
 func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapReq) (*multinode.GlobalMapResp, error) {
-	val, ok := s.pendingMaps.Load(req.ClusterId)
+	val, ok := s.pendingMaps.Load(config.Global.ClusterID)
 	if !ok {
-		return nil, fmt.Errorf("[multinode] no pending restore found for cluster %s", req.ClusterId)
+		return nil, fmt.Errorf("[multinode] no pending restore found for cluster %s", config.Global.ClusterID)
 	}
 
 	waiters := val.(*clusterWaiters)
@@ -89,7 +90,7 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 	defer waiters.mu.Unlock()
 
 	log.Info().
-		Str("cluster_id", req.ClusterId).
+		Str("cluster_id", config.Global.ClusterID).
 		Int("pids_to_update", len(waiters.pids)).
 		Msg("[multinode] Global Map arrived. Configuring system...")
 
@@ -117,7 +118,7 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 		}
 	}
 
-	s.pendingMaps.Delete(req.ClusterId)
+	s.pendingMaps.Delete(config.Global.ClusterID)
 
 	return &multinode.GlobalMapResp{Success: true}, nil
 }
