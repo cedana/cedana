@@ -468,8 +468,10 @@ set_runtime_class() {
     echo "$temp_spec"
 }
 
-# Modify epochs in a pytorch training spec
-# Looks for --epochs N pattern and replaces it
+# Modify epochs in a training spec
+# Handles multiple epoch patterns:
+#   --epochs N (PyTorch, TensorFlow CLI)
+#   num_train_epochs=N (Hugging Face Transformers)
 set_epochs() {
     local spec="$1"
     local epochs="$2"
@@ -479,6 +481,8 @@ set_epochs() {
 
     # Replace --epochs N with new value
     sed -i "s/--epochs [0-9]\+/--epochs $epochs/g" "$temp_spec"
+    # Replace num_train_epochs=N with new value (Hugging Face style)
+    sed -i "s/num_train_epochs=[0-9]\+/num_train_epochs=$epochs/g" "$temp_spec"
 
     echo "$temp_spec"
 }
