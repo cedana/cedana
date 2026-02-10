@@ -152,7 +152,7 @@ func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) error {
 		}
 	}
 	fqdn := fmt.Sprintf("%s.%s.%s.svc", entry.PodName, baseName, entry.Namespace)
-	newLine := fmt.Sprintf("%s\t%s\t%s", entry.OriginalIp, fqdn, entry.PodName)
+	newLine := fmt.Sprintf("%s\t%s", entry.OriginalIp, fqdn)
 
 	script := fmt.Sprintf("grep -qF '%s' /etc/hosts || printf '%%s\\n' '%s' >> /etc/hosts", fqdn, newLine)
 
