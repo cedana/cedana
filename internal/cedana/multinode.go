@@ -18,17 +18,20 @@ import (
 type clusterWaiters struct {
 	mu       sync.Mutex
 	channels []chan []*multinode.GlobalMapEntry
+	pids     []int64
 }
 
 func (s *Server) RegisterRestoredIP(ctx context.Context, req *multinode.IPReportReq) (*multinode.IPReportResp, error) {
 	answerCh := make(chan []*multinode.GlobalMapEntry, 1)
 	val, _ := s.pendingMaps.LoadOrStore(config.Global.ClusterID, &clusterWaiters{
 		channels: make([]chan []*multinode.GlobalMapEntry, 0),
+		pids:     make([]int64, 0),
 	})
 
 	waiters := val.(*clusterWaiters)
 	waiters.mu.Lock()
 	waiters.channels = append(waiters.channels, answerCh)
+	waiters.pids = append(waiters.pids, req.Pid) // race fix -> arriving map can still trigger eBPF
 	waiters.mu.Unlock()
 
 	defer func() {
@@ -38,9 +41,6 @@ func (s *Server) RegisterRestoredIP(ctx context.Context, req *multinode.IPReport
 				waiters.channels = append(waiters.channels[:i], waiters.channels[i+1:]...)
 				break
 			}
-		}
-		if len(waiters.channels) == 0 {
-			s.pendingMaps.Delete(config.Global.ClusterID)
 		}
 		waiters.mu.Unlock()
 	}()
@@ -56,27 +56,10 @@ func (s *Server) RegisterRestoredIP(ctx context.Context, req *multinode.IPReport
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case entries := <-answerCh:
-		log.Info().Int("entries", len(entries)).Msg("[multinode] Received global map")
-
-		mappings := make(map[string]string)
-		for _, entry := range entries {
-			mappings[entry.OriginalIp] = entry.CurrentIp
-			if err := updateEtcHosts(entry, req.Pid); err != nil {
-				log.Warn().Err(err).Msgf("[multinode] Failed to update /etc/hosts for %s", entry.PodName)
-			}
-		}
-		if err := setupMultinodeEBPF(mappings); err != nil {
-			log.Error().Err(err).Msg("[multinode] eBPF setup FAILED")
-			return &multinode.IPReportResp{
-				Success: false,
-				Message: fmt.Sprintf("[multinode] eBPF setup failed: %v", err),
-			}, nil
-		}
-		log.Info().Msg("eBPF configured successfully")
+	case <-answerCh:
+		log.Info().Msg("[multinode] Successfully completed setup for pod")
+		return &multinode.IPReportResp{Success: true}, nil
 	}
-
-	return &multinode.IPReportResp{Success: true}, nil
 }
 
 func (s *Server) MonitorIPEvents(_ *multinode.MonitorIPEventsReq, stream daemongrpc.Daemon_MonitorIPEventsServer) error {
@@ -107,17 +90,34 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 
 	log.Info().
 		Str("cluster_id", req.ClusterId).
-		Int("waiting_pods", len(waiters.channels)).
-		Int("entries", len(req.Entries)).
-		Msg("[multinode] Broadcasting global map to all waiting pods")
+		Int("pids_to_update", len(waiters.pids)).
+		Msg("[multinode] Global Map arrived. Configuring system...")
+
+	mappings := make(map[string]string)
+	for _, entry := range req.Entries {
+		mappings[entry.OriginalIp] = entry.CurrentIp
+	}
+
+	for _, pid := range waiters.pids { // even if the gRPC call dies, PIDs are in this list
+		for _, entry := range req.Entries {
+			if err := updateEtcHosts(entry, pid); err != nil {
+				log.Warn().Err(err).Int64("pid", pid).Msg("[multinode] Failed late update of /etc/hosts")
+			}
+		}
+	}
+
+	if err := setupMultinodeEBPF(mappings); err != nil {
+		log.Error().Err(err).Msg("[multinode] eBPF setup FAILED")
+	}
 
 	for _, ch := range waiters.channels {
 		select {
 		case ch <- req.Entries:
 		default:
-			log.Warn().Msg("[multinode] Failed to send to a waiting channel (full)")
 		}
 	}
+
+	s.pendingMaps.Delete(req.ClusterId)
 
 	return &multinode.GlobalMapResp{Success: true}, nil
 }
@@ -151,7 +151,7 @@ func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) error {
 		}
 	}
 	fqdn := fmt.Sprintf("%s.%s.%s.svc", entry.PodName, baseName, entry.Namespace)
-	newLine := fmt.Sprintf("%s\\t%s\\t%s", entry.OriginalIp, fqdn, entry.PodName)
+	newLine := fmt.Sprintf("%s\t%s\t%s", entry.OriginalIp, fqdn, entry.PodName)
 
 	script := fmt.Sprintf("grep -qF '%s' /etc/hosts || printf '%%s\\n' '%s' >> /etc/hosts", fqdn, newLine)
 
