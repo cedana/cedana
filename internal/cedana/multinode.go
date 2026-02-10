@@ -143,25 +143,31 @@ func setupMultinodeEBPF(mappings map[string]string) error {
 }
 
 func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) error {
-	if launcher := strings.Contains(entry.PodName, "-launcher"); launcher {
-		return nil
+	baseName := entry.PodName
+	for _, suffix := range []string{"-worker", "-launcher"} {
+		if idx := strings.LastIndex(baseName, suffix); idx != -1 {
+			baseName = baseName[:idx]
+			break
+		}
 	}
-	jobName := strings.TrimSuffix(entry.PodName, "-worker")
-	log.Info().Msgf("[multinode] Job name idenitifed as %s", jobName)
-
-	fqdn := fmt.Sprintf("%s.%s.%s.svc", entry.PodName, jobName, entry.Namespace)
-	newLine := fmt.Sprintf("%s\t%s\t%s", entry.OriginalIp, fqdn, entry.PodName)
+	fqdn := fmt.Sprintf("%s.%s.%s.svc", entry.PodName, baseName, entry.Namespace)
+	newLine := fmt.Sprintf("%s\\t%s\\t%s", entry.OriginalIp, fqdn, entry.PodName)
 
 	script := fmt.Sprintf("grep -qF '%s' /etc/hosts || printf '%%s\\n' '%s' >> /etc/hosts", fqdn, newLine)
 
+	log.Info().
+		Int64("pid", containerPID).
+		Str("pod", entry.PodName).
+		Str("fqdn", fqdn).
+		Msg("[multinode] Injecting host entry")
+
 	cmd := exec.Command("nsenter", "-t", fmt.Sprintf("%d", containerPID), "-m", "-u", "--",
-    "/bin/sh", "-c", script)
+		"/bin/sh", "-c", script)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("nsenter failed: %w, output: %s", err, output)
+		return fmt.Errorf("nsenter failed (PID %d): %w, output: %s", containerPID, err, output)
 	}
 
-	log.Info().Msgf("[multinode] Injected %s -> %s into PID %d", entry.OriginalIp, fqdn, containerPID)
 	return nil
 }
