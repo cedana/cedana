@@ -346,6 +346,81 @@ func (fs *Fs) Name() string {
 	return fs.dir
 }
 
+func (fs *Fs) Glob(pattern string) ([]string, error) {
+	if fs.mode != READ_ONLY {
+		return nil, fmt.Errorf("glob failed: streaming filesystem not open for reading")
+	}
+
+	regexPattern := globToRegex(pattern)
+
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: regexPattern}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal glob request: %w", err)
+	}
+
+	size := len(data)
+	var sizeBuf [4]byte
+	binary.LittleEndian.PutUint32(sizeBuf[:], uint32(size))
+	_, err = fs.conn.Write(sizeBuf[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to write size to glob request: %w", err)
+	}
+	_, err = fs.conn.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write data to glob request: %w", err)
+	}
+
+	resp := &img_streamer.ImgStreamerListReplyEntry{}
+	var respSizeBuf [4]byte
+	_, err = fs.conn.Read(respSizeBuf[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read size from glob response: %w", err)
+	}
+	respSize := binary.LittleEndian.Uint32(respSizeBuf[:])
+	respData := make([]byte, respSize)
+	n, err := fs.conn.Read(respData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read data from glob response: %w", err)
+	}
+	if n != int(respSize) {
+		return nil, fmt.Errorf("failed to read data from glob response: expected %d bytes, got %d", respSize, n)
+	}
+	err = proto.Unmarshal(respData, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal glob response: %w", err)
+	}
+
+	return resp.Filenames, nil
+}
+
+func globToRegex(pattern string) string {
+	var result strings.Builder
+	result.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '*':
+			if i+1 < len(pattern) && pattern[i+1] == '*' {
+				result.WriteString(".*")
+				i++
+			} else {
+				result.WriteString("[^/]*")
+			}
+		case '?':
+			result.WriteString(".")
+		case '.', '+', '(', ')', '|', '^', '$', '@', '%', '{', '}', '\\':
+			result.WriteString("\\")
+			result.WriteByte(pattern[i])
+		case '[', ']':
+			result.WriteByte(pattern[i])
+		default:
+			result.WriteByte(pattern[i])
+		}
+	}
+	result.WriteString("$")
+	return result.String()
+}
+
 ////////////////////
 // Helper Methods //
 ////////////////////
