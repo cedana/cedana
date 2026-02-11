@@ -132,6 +132,7 @@ jobs:
       - name: Upload to S3
         run: |
           REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
           SHA="${{ github.sha }}"
 
           aws s3 cp \
