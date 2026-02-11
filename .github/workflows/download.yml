@@ -182,7 +182,7 @@ jobs:
           aws-region: us-east-1
       - name: Download CRIU from S3
         env:
-          aws_s3_criu_path: ${{ inputs.criu_version == 'main' && 'criu' || 'criu_alpha' }}
+          aws_s3_criu_path: ${{ inputs.criu_version == 'main' && 'criu' || 'criu-alpha' }}
         run: |
           set -euo pipefail
           mkdir -p criu
