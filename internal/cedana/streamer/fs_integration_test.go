@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/internal/cedana/filesystem"
+	"github.com/spf13/afero"
 )
 
-// TestGlobIntegration tests glob pattern matching in streaming fs.
-func TestGlobIntegration(t *testing.T) {
+func TestAferoGlobIntegration(t *testing.T) {
 	streamerBinary := "/usr/local/bin/cedana-image-streamer"
 	if _, err := os.Stat(streamerBinary); os.IsNotExist(err) {
 		t.Skipf("streamer binary not found at %s, skipping integration test", streamerBinary)
@@ -55,7 +55,6 @@ func TestGlobIntegration(t *testing.T) {
 		"gpu-checkpoint-0": "checkpoint 0",
 	}
 
-	// create testfiles simulating a dump
 	for filename, content := range testFiles {
 		file, err := dumpFs.Create(filename)
 		if err != nil {
@@ -70,12 +69,10 @@ func TestGlobIntegration(t *testing.T) {
 		}
 	}
 
-	// wait for io to finish
 	if err := waitDump(); err != nil {
 		t.Fatalf("dump wait failed: %v", err)
 	}
 
-	// dump files sharded from streaming
 	shardFiles, err := os.ReadDir(shardDir)
 	if err != nil {
 		t.Fatalf("failed to read shard dir: %v", err)
@@ -93,8 +90,7 @@ func TestGlobIntegration(t *testing.T) {
 		t.Fatal("No data written to shards! Dump may have failed.")
 	}
 
-	// this is for simulating restore and reading from streaming shards
-	t.Log("Serve - reading files from shards and testing Glob")
+	t.Log("Phase 2: Serve - reading files from shards and testing afero.Glob")
 	restoreFs, waitRestore, err := NewStreamingFs(
 		ctx,
 		streamerBinary,
@@ -111,7 +107,6 @@ func TestGlobIntegration(t *testing.T) {
 
 	sockPath := filepath.Join(serveDir, "streamer-serve.sock")
 	for i := range 50 {
-		// here we wait for streamer socket to be ready
 		if _, err := os.Stat(sockPath); err == nil {
 			t.Logf("Streamer socket ready after %d ms", i*10)
 			break
@@ -123,52 +118,72 @@ func TestGlobIntegration(t *testing.T) {
 		t.Fatalf("Streamer socket never appeared: %v", err)
 	}
 
-	// time.Sleep(100 * time.Millisecond)
+	t.Log("Testing afero.Glob patterns...")
 
-	t.Log("Testing glob patterns...")
+	tests := []struct {
+		pattern       string
+		description   string
+		expectedFiles []string
+	}{
+		{
+			pattern:       "*",
+			description:   "all files",
+			expectedFiles: []string{"gpu-hostmem-0", "gpu-hostmem-1", "gpu-hostmem-2", "other-file.img", "gpu-checkpoint-0"},
+		},
+		{
+			pattern:       "gpu-hostmem-*",
+			description:   "gpu-hostmem files",
+			expectedFiles: []string{"gpu-hostmem-0", "gpu-hostmem-1", "gpu-hostmem-2"},
+		},
+		{
+			pattern:       "*.img",
+			description:   "img files",
+			expectedFiles: []string{"other-file.img"},
+		},
+	}
 
-	allFiles, err := restoreFs.Glob("*")
+	for _, tt := range tests {
+		t.Run(tt.description, func(t *testing.T) {
+			t.Logf("Testing afero.Glob pattern: %s", tt.pattern)
+			matches, err := afero.Glob(restoreFs, tt.pattern)
+			if err != nil {
+				t.Fatalf("afero.Glob(%q) failed: %v", tt.pattern, err)
+			}
+
+			t.Logf("Got matches: %v", matches)
+
+			if len(matches) == 0 && len(tt.expectedFiles) > 0 {
+				t.Errorf("afero.Glob(%q) returned empty results, expected %d files: %v",
+					tt.pattern, len(tt.expectedFiles), tt.expectedFiles)
+				return
+			}
+
+			if len(matches) != len(tt.expectedFiles) {
+				t.Errorf("afero.Glob(%q) = %d matches, want %d. Got: %v",
+					tt.pattern, len(matches), len(tt.expectedFiles), matches)
+			}
+
+			matchMap := make(map[string]bool)
+			for _, match := range matches {
+				matchMap[match] = true
+			}
+
+			for _, expected := range tt.expectedFiles {
+				if !matchMap[expected] {
+					t.Errorf("afero.Glob(%q) missing expected file %q. Got: %v",
+						tt.pattern, expected, matches)
+				}
+			}
+		})
+	}
+
+	t.Log("Testing file content retrieval for all matched files...")
+	allMatches, err := restoreFs.Glob("*")
 	if err != nil {
-		t.Fatalf("Glob('*') failed: %v", err)
-	}
-	t.Logf("All files (*): %v", allFiles)
-
-	gpuHostmemMatches, err := restoreFs.Glob("gpu-hostmem-*")
-	if err != nil {
-		t.Fatalf("Glob('gpu-hostmem-*') failed: %v", err)
-	}
-	t.Logf("gpu-hostmem-* matches: %v", gpuHostmemMatches)
-
-	if len(gpuHostmemMatches) != 3 {
-		t.Errorf("Expected 3 gpu-hostmem-* matches, got %d: %v", len(gpuHostmemMatches), gpuHostmemMatches)
+		t.Fatalf("Failed to glob all files: %v", err)
 	}
 
-	imgMatches, err := restoreFs.Glob("*.img")
-	if err != nil {
-		t.Fatalf("Glob('*.img') failed: %v", err)
-	}
-	t.Logf("*.img matches: %v", imgMatches)
-
-	if len(imgMatches) != 1 {
-		t.Errorf("Expected 1 *.img match, got %d: %v", len(imgMatches), imgMatches)
-	}
-
-	checkpointMatches, err := restoreFs.Glob("gpu-checkpoint-*")
-	if err != nil {
-		t.Fatalf("Glob('gpu-checkpoint-*') failed: %v", err)
-	}
-	t.Logf("gpu-checkpoint-* matches: %v", checkpointMatches)
-
-	if len(checkpointMatches) != 1 {
-		t.Errorf("Expected 1 gpu-checkpoint-* match, got %d: %v", len(checkpointMatches), checkpointMatches)
-	}
-
-	if len(allFiles) != len(testFiles) {
-		t.Errorf("Expected %d total files, got %d: %v", len(testFiles), len(allFiles), allFiles)
-	}
-
-	t.Log("Testing file content retrieval via Glob...")
-	for _, filename := range gpuHostmemMatches {
+	for _, filename := range allMatches {
 		file, err := restoreFs.Open(filename)
 		if err != nil {
 			t.Errorf("failed to open %s: %v", filename, err)

@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -48,9 +49,11 @@ const (
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
 // using the streamer plugin.
 type Fs struct {
-	mode Mode
-	conn *net.UnixConn
-	dir  string
+	mode      Mode
+	conn      *net.UnixConn
+	dir       string
+	globCache map[string][]string // Cache glob results since streamer state is consumed
+	globMutex sync.Mutex
 }
 
 // For READ_ONLY mode, compression is automatically determined.
@@ -220,7 +223,12 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
 	}
 
-	fs = &Fs{mode, nil, imagesDir}
+	fs = &Fs{
+		mode:      mode,
+		conn:      nil,
+		dir:       imagesDir,
+		globCache: make(map[string][]string),
+	}
 
 	// Clean up on exit
 	wg.Go(func() {
@@ -291,15 +299,21 @@ func (fs *Fs) Create(name string) (afero.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &File{name, fs.mode, fd}, nil
+	return &File{name: name, mode: fs.mode, pipe: fd, fs: fs}, nil
 }
 
 func (fs *Fs) Open(name string) (afero.File, error) {
+	// Special case: opening root directory for listing
+	if (name == "." || name == "/" || name == "") && fs.mode == READ_ONLY {
+		// Return a virtual directory file that supports Readdirnames
+		return &File{name: name, mode: fs.mode, pipe: -1, fs: fs}, nil
+	}
+
 	fd, err := fs.openFd(name)
 	if err != nil {
 		return nil, err
 	}
-	return &File{name, fs.mode, fd}, nil
+	return &File{name: name, mode: fs.mode, pipe: fd, fs: fs}, nil
 }
 
 func (fs *Fs) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
@@ -327,8 +341,22 @@ func (fs *Fs) MkdirAll(path string, perm os.FileMode) error {
 }
 
 func (fs *Fs) Stat(name string) (os.FileInfo, error) {
+	if (name == "." || name == "/" || name == "") && fs.mode == READ_ONLY {
+		return &dirInfo{name: name}, nil
+	}
 	return nil, fmt.Errorf("not implemented for streaming")
 }
+
+type dirInfo struct {
+	name string
+}
+
+func (d *dirInfo) Name() string       { return d.name }
+func (d *dirInfo) Size() int64        { return 0 }
+func (d *dirInfo) Mode() os.FileMode  { return os.ModeDir | 0o755 }
+func (d *dirInfo) ModTime() time.Time { return time.Time{} }
+func (d *dirInfo) IsDir() bool        { return true }
+func (d *dirInfo) Sys() interface{}   { return nil }
 
 func (fs *Fs) Chown(name string, uid, gid int) error {
 	return fmt.Errorf("not implemented for streaming")
@@ -350,6 +378,14 @@ func (fs *Fs) Glob(pattern string) ([]string, error) {
 	if fs.mode != READ_ONLY {
 		return nil, fmt.Errorf("glob failed: streaming filesystem not open for reading")
 	}
+
+	// Check cache first
+	fs.globMutex.Lock()
+	if cached, ok := fs.globCache[pattern]; ok {
+		fs.globMutex.Unlock()
+		return cached, nil
+	}
+	fs.globMutex.Unlock()
 
 	regexPattern := globToRegex(pattern)
 
@@ -379,7 +415,7 @@ func (fs *Fs) Glob(pattern string) ([]string, error) {
 	}
 	respSize := binary.LittleEndian.Uint32(respSizeBuf[:])
 	respData := make([]byte, respSize)
-	n, err := fs.conn.Read(respData)
+	n, err := io.ReadFull(fs.conn, respData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read data from glob response: %w", err)
 	}
@@ -390,6 +426,11 @@ func (fs *Fs) Glob(pattern string) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal glob response: %w", err)
 	}
+
+	// cache the result
+	fs.globMutex.Lock()
+	fs.globCache[pattern] = resp.Filenames
+	fs.globMutex.Unlock()
 
 	return resp.Filenames, nil
 }
