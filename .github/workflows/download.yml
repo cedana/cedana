@@ -190,7 +190,7 @@ jobs:
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${ aws_s3_criu_path }/${{ matrix.arch }}/${{ inputs.criu_version }}/criu \
+            s3://cedana-bin/${aws_s3_criu_path}/${{ matrix.arch }}/${{ inputs.criu_version }}/criu \
             criu/criu
 
       - name: Upload CRIU
@@ -227,9 +227,9 @@ jobs:
           set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
-            aws_s3_path="cedana"
+            aws_s3_path="cedana-gpu"
           else
-            aws_s3_path="cedana-alpha"
+            aws_s3_path="cedana-gpu-alpha"
           fi
           mkdir -p gpu
           REF="${{ github.head_ref || github.ref_name }}"
@@ -281,9 +281,9 @@ jobs:
           set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            aws_s3_path="cedana"
+            aws_s3_path="cedana-image-streamer"
           else
-            aws_s3_path="cedana-alpha"
+            aws_s3_path="cedana-image-streamer-alpha"
           fi
           mkdir -p streamer
           REF="${{ github.head_ref || github.ref_name }}"
@@ -372,9 +372,9 @@ jobs:
           set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            aws_s3_path="cedana"
+            aws_s3_path="cedana-runtime-shim"
           else
-            aws_s3_path="cedana-alpha"
+            aws_s3_path="cedana-runtime-shim-alpha"
           fi
           mkdir -p containerd-runtime-runc
           REF="${{ github.head_ref || github.ref_name }}"
