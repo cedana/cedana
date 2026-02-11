@@ -181,13 +181,16 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       - name: Download CRIU from S3
+        env:
+          aws_s3_criu_path: ${{ inputs.criu_version == 'main' && 'criu' || "criu_alpha" }}
         run: |
+          set -euo pipefail
           mkdir -p criu
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.criu_version }}/${{ matrix.arch }}/${REF_SAFE}/criu \
+            s3://cedana-bin/${ aws_s3_criu_path }/${{ matrix.arch }}/${{ inputs.criu_version }}/criu \
             criu/criu
 
       - name: Upload CRIU
@@ -218,21 +221,30 @@ jobs:
           aws-region: us-east-1
 
       - name: Download GPU binaries from S3
+        env:
+          VERSION: ${{ inputs.gpu_version == 'release' && 'latest' || inputs.gpu_version }}
         run: |
+          set -euo pipefail
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+            aws_s3_path="cedana"
+          else
+            aws_s3_path="cedana-alpha"
+          fi
           mkdir -p gpu
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.gpu_version }}/${{ matrix.arch }}/${REF_SAFE}/cedana-gpu-controller \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-gpu-controller \
             gpu/cedana-gpu-controller
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.gpu_version }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-gpu.so \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/libcedana-gpu.so \
             gpu/libcedana-gpu.so
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.gpu_version }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-gpu-tracer.so \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/libcedana-gpu-tracer.so \
             gpu/libcedana-gpu-tracer.so
 
       - name: Upload artifacts
@@ -264,14 +276,14 @@ jobs:
 
       - name: Download streamer from S3
         env:
-          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
+          VERSION: ${{ inputs.streamer_version == 'release' && 'latest' || inputs.streamer_version }}
         run: |
           set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            aws_s3_path="cedana/cedana"
+            aws_s3_path="cedana"
           else
-            aws_s3_path="cedana/cedana-alpha"
+            aws_s3_path="cedana-alpha"
           fi
           mkdir -p streamer
           REF="${{ github.head_ref || github.ref_name }}"
@@ -354,13 +366,22 @@ jobs:
           aws-region: us-east-1
 
       - name: Download runtime from S3
+        env:
+          VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
         run: |
+          set -euo pipefail
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+            aws_s3_path="cedana"
+          else
+            aws_s3_path="cedana-alpha"
+          fi
           mkdir -p containerd-runtime-runc
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
-            s3://cedana-bin/${{ inputs.containerd_runtime_version }}/${{ matrix.arch }}/${REF_SAFE}/cedana-shim-runc-v2 \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-shim-runc-v2 \
             containerd-runtime-runc/cedana-shim-runc-v2
 
       - name: Upload runtime runc artifacts
