@@ -100,15 +100,14 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 	}
 
 	for _, pid := range waiters.pids { // even if the gRPC call dies, PIDs are in this list
+		if err := setupMultinodeEBPF(mappings, pid); err != nil {
+			log.Error().Err(err).Msg("[multinode] eBPF setup FAILED")
+		}
 		for _, entry := range req.Entries {
 			if err := updateEtcHosts(entry, pid); err != nil {
 				log.Warn().Err(err).Int64("pid", pid).Msg("[multinode] Failed late update of /etc/hosts")
 			}
 		}
-	}
-
-	if err := setupMultinodeEBPF(mappings); err != nil {
-		log.Error().Err(err).Msg("[multinode] eBPF setup FAILED")
 	}
 
 	for _, ch := range waiters.channels {
@@ -123,14 +122,14 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 	return &multinode.GlobalMapResp{Success: true}, nil
 }
 
-func setupMultinodeEBPF(mappings map[string]string) error {
+func setupMultinodeEBPF(mappings map[string]string, containerPID int64) error {
 	mappingsJSON, err := json.Marshal(mappings)
 	if err != nil {
 		log.Error().Err(err).Msg("[multinode] Failed to marshal mappings")
 		return fmt.Errorf("failed to marshal mappings: %w", err)
 	}
 	log.Info().Msgf("[multinode] Marshaled JSON: %s", string(mappingsJSON))
-	cmd := exec.Command("multinode-ctl", "setup", "--interface", "eth0", "--clear")
+	cmd := exec.Command("multinode-ctl", "setup", "--interface", "eth0", "--pid", fmt.Sprintf("%d", containerPID), "--clear")
 	cmd.Stdin = bytes.NewReader(mappingsJSON)
 	log.Info().Msg("[multinode] Executing multinode-ctl command...")
 	output, err := cmd.CombinedOutput()
@@ -142,6 +141,10 @@ func setupMultinodeEBPF(mappings map[string]string) error {
 	log.Info().Msgf("eBPF configured with %d mappings", len(mappings))
 	return nil
 }
+
+/////////////////
+//// Helpers ////
+////////////////
 
 func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) error {
 	baseName := entry.PodName
