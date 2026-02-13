@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	go_io "io"
+
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
@@ -17,6 +19,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -101,10 +104,23 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			path := req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
 			compress := func(ctx context.Context) (err error) {
-				tarball, err := storage.Create(ctx, path)
+				isFuse, err := isFuseFS(imagesDirectory, !storage.IsRemote())
+				if err != nil {
+					return fmt.Errorf("failed to determine filesystem type: %w", err)
+				}
+
+				var tarball go_io.WriteCloser
+				var tmpPath string
+				if isFuse {
+					tmpPath = filepath.Join("/tmp", req.Name+".tar"+ext)
+					tarball, err = storage.Create(ctx, tmpPath)
+				} else {
+					tarball, err = storage.Create(ctx, path)
+				}
 				if err != nil {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
+
 				defer func() {
 					err = errors.Join(err, tarball.Close())
 				}()
@@ -112,11 +128,37 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
+
 				err = io.Tar(imagesDirectory, tarball, compression)
 				if err != nil {
 					storage.Delete(ctx, path)
 					os.RemoveAll(imagesDirectory)
 					return fmt.Errorf("failed to create tarball: %w", err)
+				}
+
+				if isFuse {
+					tarball, err := os.Open(tmpPath)
+					if err != nil {
+						return fmt.Errorf("failed to open temporary tarball: %w", err)
+					}
+					defer func() {
+						err = errors.Join(err, tarball.Close())
+					}()
+
+					dstTarball, err := os.Create(path)
+					if err != nil {
+						return fmt.Errorf("failed to create destination tarball: %w", err)
+					}
+					defer func() {
+						err = errors.Join(err, dstTarball.Close())
+					}()
+
+					_, err = go_io.Copy(dstTarball, tarball)
+					if err != nil {
+						return fmt.Errorf("failed to copy tarball to destination: %w", err)
+					}
+
+					os.Remove(tmpPath)
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
@@ -182,4 +224,23 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 		return next(ctx, opts, resp, req)
 	}
+}
+
+func isFuseFS(path string, stat bool) (bool, error) {
+	if !stat {
+		return false, nil
+	}
+	var statfs unix.Statfs_t
+	if err := unix.Statfs(path, &statfs); err != nil {
+		return false, fmt.Errorf("failed to get statfs for %s: %w", path, err)
+	}
+
+	// FUSE magic number is 0x65735546
+	// https://github.com/torvalds/linux/blob/master/include/uapi/linux/magic.h#L39
+	const FUSE_SUPER_MAGIC = 0x65735546
+	if statfs.Type == FUSE_SUPER_MAGIC {
+		return true, nil
+	}
+
+	return false, nil
 }
