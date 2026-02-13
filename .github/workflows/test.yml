@@ -89,6 +89,7 @@ jobs:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
+          submodules: recursive
           fetch-tags: true
 
       - name: Download binary
@@ -102,6 +103,11 @@ jobs:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
+
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer-${{ matrix.arch }}
 
       - name: Make executable
         run: |
