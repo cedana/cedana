@@ -140,7 +140,7 @@ test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
-	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
+	$(GOCMD) test -v $(GOMODULE)/... -bench=. -benchmem
 
 test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \

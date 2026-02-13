@@ -347,17 +347,6 @@ func (fs *Fs) Stat(name string) (os.FileInfo, error) {
 	return nil, fmt.Errorf("not implemented for streaming")
 }
 
-type dirInfo struct {
-	name string
-}
-
-func (d *dirInfo) Name() string       { return d.name }
-func (d *dirInfo) Size() int64        { return 0 }
-func (d *dirInfo) Mode() os.FileMode  { return os.ModeDir | 0o755 }
-func (d *dirInfo) ModTime() time.Time { return time.Time{} }
-func (d *dirInfo) IsDir() bool        { return true }
-func (d *dirInfo) Sys() interface{}   { return nil }
-
 func (fs *Fs) Chown(name string, uid, gid int) error {
 	return fmt.Errorf("not implemented for streaming")
 }
@@ -374,7 +363,7 @@ func (fs *Fs) Name() string {
 	return fs.dir
 }
 
-func (fs *Fs) Glob(pattern string) ([]string, error) {
+func (fs *Fs) glob(pattern string) ([]string, error) {
 	if fs.mode != READ_ONLY {
 		return nil, fmt.Errorf("glob failed: streaming filesystem not open for reading")
 	}

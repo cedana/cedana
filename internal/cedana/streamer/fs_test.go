@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/afero"
 )
 
-func TestAferoGlobIntegration(t *testing.T) {
+func TestGlob(t *testing.T) {
 	streamerBinary := "/usr/local/bin/cedana-image-streamer"
 	if _, err := os.Stat(streamerBinary); os.IsNotExist(err) {
 		t.Skipf("streamer binary not found at %s, skipping integration test", streamerBinary)
@@ -178,7 +178,7 @@ func TestAferoGlobIntegration(t *testing.T) {
 	}
 
 	t.Log("Testing file content retrieval for all matched files...")
-	allMatches, err := restoreFs.Glob("*")
+	allMatches, err := restoreFs.glob("*")
 	if err != nil {
 		t.Fatalf("Failed to glob all files: %v", err)
 	}

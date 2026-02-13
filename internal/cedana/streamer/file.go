@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"syscall"
+	"time"
 )
 
 // Implementation of the afero.File interface that uses streaming as the backend
@@ -15,6 +16,10 @@ type File struct {
 	fs        *Fs      // reference to parent filesystem for directory operations
 	dirNames  []string // cached directory listing
 	dirOffset int      // current position in directory listing
+}
+
+type dirInfo struct {
+	name string
 }
 
 func (f *File) Name() string {
@@ -93,21 +98,21 @@ func (f *File) Readdirnames(n int) ([]string, error) {
 	if f.mode != READ_ONLY {
 		return nil, fmt.Errorf("readdirnames: not open for reading")
 	}
-	
+
 	if f.name != "." && f.name != "/" && f.name != "" {
 		return nil, fmt.Errorf("readdirnames: only root directory supported")
 	}
-	
+
 	// Lazy load directory listing using Glob
 	if f.dirNames == nil && f.fs != nil {
-		names, err := f.fs.Glob("*")
+		names, err := f.fs.glob("*")
 		if err != nil {
 			return nil, fmt.Errorf("readdirnames: failed to list files: %w", err)
 		}
 		f.dirNames = names
 		f.dirOffset = 0
 	}
-	
+
 	// Return all remaining names if n <= 0
 	if n <= 0 {
 		names := f.dirNames[f.dirOffset:]
@@ -117,17 +122,14 @@ func (f *File) Readdirnames(n int) ([]string, error) {
 		}
 		return names, nil
 	}
-	
+
 	// Return up to n names
 	if f.dirOffset >= len(f.dirNames) {
 		return nil, io.EOF
 	}
-	
-	end := f.dirOffset + n
-	if end > len(f.dirNames) {
-		end = len(f.dirNames)
-	}
-	
+
+	end := min(f.dirOffset+n, len(f.dirNames))
+
 	names := f.dirNames[f.dirOffset:end]
 	f.dirOffset = end
 	return names, nil
@@ -141,3 +143,9 @@ func (f *File) Sync() error {
 	return fmt.Errorf("not implemented for streaming")
 }
 
+func (d *dirInfo) Name() string       { return d.name }
+func (d *dirInfo) Size() int64        { return 0 }
+func (d *dirInfo) Mode() os.FileMode  { return os.ModeDir | 0o755 }
+func (d *dirInfo) ModTime() time.Time { return time.Time{} }
+func (d *dirInfo) IsDir() bool        { return true }
+func (d *dirInfo) Sys() interface{}   { return nil }
