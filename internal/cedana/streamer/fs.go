@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -48,9 +49,11 @@ const (
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
 // using the streamer plugin.
 type Fs struct {
-	mode Mode
-	conn *net.UnixConn
-	dir  string
+	mode      Mode
+	conn      *net.UnixConn
+	dir       string
+	globCache map[string][]string // Cache glob results since streamer state is consumed
+	globMutex sync.Mutex
 }
 
 // For READ_ONLY mode, compression is automatically determined.
@@ -220,7 +223,12 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
 	}
 
-	fs = &Fs{mode, nil, imagesDir}
+	fs = &Fs{
+		mode:      mode,
+		conn:      nil,
+		dir:       imagesDir,
+		globCache: make(map[string][]string),
+	}
 
 	// Clean up on exit
 	wg.Go(func() {
@@ -291,15 +299,21 @@ func (fs *Fs) Create(name string) (afero.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &File{name, fs.mode, fd}, nil
+	return &File{name: name, mode: fs.mode, pipe: fd, fs: fs}, nil
 }
 
 func (fs *Fs) Open(name string) (afero.File, error) {
+	// Special case: opening root directory for listing
+	if (name == "." || name == "/" || name == "") && fs.mode == READ_ONLY {
+		// Return a virtual directory file that supports Readdirnames
+		return &File{name: name, mode: fs.mode, pipe: -1, fs: fs}, nil
+	}
+
 	fd, err := fs.openFd(name)
 	if err != nil {
 		return nil, err
 	}
-	return &File{name, fs.mode, fd}, nil
+	return &File{name: name, mode: fs.mode, pipe: fd, fs: fs}, nil
 }
 
 func (fs *Fs) OpenFile(name string, flag int, perm os.FileMode) (afero.File, error) {
@@ -327,6 +341,9 @@ func (fs *Fs) MkdirAll(path string, perm os.FileMode) error {
 }
 
 func (fs *Fs) Stat(name string) (os.FileInfo, error) {
+	if (name == "." || name == "/" || name == "") && fs.mode == READ_ONLY {
+		return &dirInfo{name: name}, nil
+	}
 	return nil, fmt.Errorf("not implemented for streaming")
 }
 
@@ -344,6 +361,94 @@ func (fs *Fs) Chtimes(name string, atime, mtime time.Time) error {
 
 func (fs *Fs) Name() string {
 	return fs.dir
+}
+
+func (fs *Fs) glob(pattern string) ([]string, error) {
+	if fs.mode != READ_ONLY {
+		return nil, fmt.Errorf("glob failed: streaming filesystem not open for reading")
+	}
+
+	// Check cache first
+	fs.globMutex.Lock()
+	if cached, ok := fs.globCache[pattern]; ok {
+		fs.globMutex.Unlock()
+		return cached, nil
+	}
+	fs.globMutex.Unlock()
+
+	regexPattern := globToRegex(pattern)
+
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: regexPattern}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal glob request: %w", err)
+	}
+
+	size := len(data)
+	var sizeBuf [4]byte
+	binary.LittleEndian.PutUint32(sizeBuf[:], uint32(size))
+	_, err = fs.conn.Write(sizeBuf[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to write size to glob request: %w", err)
+	}
+	_, err = fs.conn.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to write data to glob request: %w", err)
+	}
+
+	resp := &img_streamer.ImgStreamerListReplyEntry{}
+	var respSizeBuf [4]byte
+	_, err = fs.conn.Read(respSizeBuf[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read size from glob response: %w", err)
+	}
+	respSize := binary.LittleEndian.Uint32(respSizeBuf[:])
+	respData := make([]byte, respSize)
+	n, err := io.ReadFull(fs.conn, respData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read data from glob response: %w", err)
+	}
+	if n != int(respSize) {
+		return nil, fmt.Errorf("failed to read data from glob response: expected %d bytes, got %d", respSize, n)
+	}
+	err = proto.Unmarshal(respData, resp)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal glob response: %w", err)
+	}
+
+	// cache the result
+	fs.globMutex.Lock()
+	fs.globCache[pattern] = resp.Filenames
+	fs.globMutex.Unlock()
+
+	return resp.Filenames, nil
+}
+
+func globToRegex(pattern string) string {
+	var result strings.Builder
+	result.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '*':
+			if i+1 < len(pattern) && pattern[i+1] == '*' {
+				result.WriteString(".*")
+				i++
+			} else {
+				result.WriteString("[^/]*")
+			}
+		case '?':
+			result.WriteString(".")
+		case '.', '+', '(', ')', '|', '^', '$', '@', '%', '{', '}', '\\':
+			result.WriteString("\\")
+			result.WriteByte(pattern[i])
+		case '[', ']':
+			result.WriteByte(pattern[i])
+		default:
+			result.WriteByte(pattern[i])
+		}
+	}
+	result.WriteString("$")
+	return result.String()
 }
 
 ////////////////////

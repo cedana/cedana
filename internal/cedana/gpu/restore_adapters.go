@@ -217,9 +217,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 				defer hostmemFile.Close()
 
-				if err = hostmemFile.Chmod(0o666); err != nil {
+				chmodErr := os.Chmod(newPath, 0o666)
+				if chmodErr != nil {
 					hostmemFile.Close()
-					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, err)
+					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, chmodErr)
 					return false
 				}
 
