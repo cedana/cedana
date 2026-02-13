@@ -19,7 +19,7 @@ import (
 
 const (
 	CRIU_DUMP_LOG_FILE  = "criu-dump.log"
-	GHOST_FILE_MAX_SIZE = 200 * utils.MEBIBYTE
+	GHOST_FILE_MAX_SIZE = 800 * utils.MEBIBYTE
 )
 
 // Returns a CRIU dump handler for the server

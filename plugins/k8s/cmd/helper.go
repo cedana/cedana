@@ -173,7 +173,11 @@ func startHelper(ctx context.Context) error {
 
 	go func() {
 		defer cancel()
-		defer stream.Close()
+		defer func() {
+			if err := stream.Close(); err != nil {
+				log.Error().Err(err).Msg("failed to close checkpoint event stream")
+			}
+		}()
 		log.Debug().Msg("listening on event stream for checkpoint requests")
 		err := stream.StartCheckpointsPublisher(ctx)
 		if err != nil {
