@@ -100,25 +100,13 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 	}
 
 	// only calling eBPF setup once per node -> multiple times for TC
-	if len(waiters.pids) > 0 {
-		firstPID := waiters.pids[0]
-		if err := setupMultinodeEBPF(mappings, firstPID, false); err != nil {
+	for _, pid := range waiters.pids { // even if the gRPC call dies, PIDs are in this list
+		if err := setupMultinodeEBPF(mappings, pid); err != nil {
 			log.Error().Err(err).Msg("[multinode] eBPF setup failed")
 		} else {
-			log.Info().Int64("pid", firstPID).Msg("[multinode] eBPF (XDP + TC) setup successful")
+			log.Info().Int64("pid", pid).Msg("[multinode] eBPF (XDP + TC) setup successful")
 		}
-		for i := 1; i < len(waiters.pids); i++ { // for additional PIDs on same node, skip XDP
-			additionalPID := waiters.pids[i]
-			if err := setupMultinodeEBPF(mappings, additionalPID, true); err != nil {
-				log.Error().Err(err).Msg("[multinode] TC setup failed for additional container")
-			} else {
-				log.Info().Int64("pid", additionalPID).Msg("[multinode] TC configured successfully -> skipping XDP for additional container (already attached to host)")
-			}
-		}
-	}
-
-	for _, pid := range waiters.pids { // even if the gRPC call dies, PIDs are in this list
-		for _, entry := range req.Entries {
+    for _, entry := range req.Entries {
 			if err := updateEtcHosts(entry, pid); err != nil {
 				log.Warn().Err(err).Int64("pid", pid).Msg("[multinode] Failed late update of /etc/hosts")
 			}
@@ -137,7 +125,7 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 	return &multinode.GlobalMapResp{Success: true}, nil
 }
 
-func setupMultinodeEBPF(mappings map[string]string, containerPID int64, skipXDP bool) error {
+func setupMultinodeEBPF(mappings map[string]string, containerPID int64) error {
 	mappingsJSON, err := json.Marshal(mappings)
 	if err != nil {
 		log.Error().Err(err).Msg("[multinode] Failed to marshal mappings")
@@ -145,25 +133,18 @@ func setupMultinodeEBPF(mappings map[string]string, containerPID int64, skipXDP 
 	}
 	log.Info().Msgf("[multinode] Marshaled JSON: %s", string(mappingsJSON))
 
-	args := []string{"setup", "--interface", "eth0", "--pid", fmt.Sprintf("%d", containerPID), "--clear"}
-	if skipXDP {
-		args = append(args, "--skip-xdp")
-	}
+	args := []string{"setup", "--interface", "eth0", "--pid", fmt.Sprintf("%d", containerPID), "--clear", "--skip-xdp-if-attached"}
 
 	cmd := exec.Command("multinode-ctl", args...)
 	cmd.Stdin = bytes.NewReader(mappingsJSON)
-	if skipXDP {
-		log.Info().Msg("[multinode] Executing multinode-ctl command (TC only)...")
-	} else {
-		log.Info().Msg("[multinode] Executing multinode-ctl command (XDP + TC)...")
-	}
+	log.Info().Msg("[multinode] Executing multinode-ctl command (XDP + TC)...")
 	output, err := cmd.CombinedOutput()
 	log.Info().Msgf("[multinode] multinode-ctl output: %s", string(output))
 	if err != nil {
 		log.Error().Err(err).Msgf("[multinode] multinode-ctl command failed: %s", string(output))
 		return fmt.Errorf("multinode-ctl failed: %w, output: %s", err, output)
 	}
-	log.Info().Msgf("eBPF configured with %d mappings (skipXDP = %v)", len(mappings), skipXDP)
+	log.Info().Msgf("eBPF configured with %d mappings", len(mappings))
 	return nil
 }
 
