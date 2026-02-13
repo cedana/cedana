@@ -91,6 +91,7 @@ jobs:
           fetch-depth: 0
           submodules: recursive
           fetch-tags: true
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
         uses: actions/download-artifact@v4
