@@ -104,10 +104,12 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			path := req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
 			compress := func(ctx context.Context) (err error) {
-				isFuse, err := isFuseFS(imagesDirectory, !storage.IsRemote())
+				isFuse, err := isFuseFS(req.Dir, !storage.IsRemote())
 				if err != nil {
 					return fmt.Errorf("failed to determine filesystem type: %w", err)
 				}
+
+				log.Debug().Str("path", path).Str("compression", compression).Bool("is_fuse", isFuse).Msg("starting compression of dump")
 
 				var tarball go_io.WriteCloser
 				var tmpPath string
