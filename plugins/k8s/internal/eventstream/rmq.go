@@ -355,6 +355,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				dumpReq.Dir = req.Overrides.Directory
 				dumpReq.Streams = int32(req.Overrides.Streams)
 				dumpReq.Async = req.Overrides.Async
+				dumpReq.AsyncDir = req.Overrides.AsyncDir
 			}
 			log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
 			dumpReqs = append(dumpReqs, dumpReq)

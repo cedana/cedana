@@ -46,7 +46,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 		async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
 
-		// If remote storage, we instead use a temporary directory for CRIU
+		// If remote storage, and an asyncDir is specified, we use that. Otherwise we use a temporary directory for CRIU
 		if storage.IsRemote() {
 			dir = os.TempDir()
 		}
