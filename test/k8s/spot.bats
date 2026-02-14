@@ -54,5 +54,5 @@ setup_file() {
     validate_pod "$restored_name" 300
 
     # Cleanup
-    kubectl delete pod "$restored_name" -n "$NAMESPACE" --ignore-not-found=true
+    kubectl delete pod "$restored_name" -n "$NAMESPACE" --ignore-not-found=true --wait=true
 }
