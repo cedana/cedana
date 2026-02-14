@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 
-	go_io "io"
-
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
@@ -111,18 +109,10 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				log.Debug().Str("path", path).Str("compression", compression).Bool("is_fuse", isFuse).Msg("starting compression of dump")
 
-				var tarball go_io.WriteCloser
-				var tmpPath string
-				if isFuse {
-					tmpPath = filepath.Join("/tmp", req.Name+".tar"+ext)
-					tarball, err = storage.Create(ctx, tmpPath)
-				} else {
-					tarball, err = storage.Create(ctx, path)
-				}
+				tarball, err := storage.Create(ctx, path)
 				if err != nil {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
-
 				defer func() {
 					err = errors.Join(err, tarball.Close())
 				}()
@@ -131,36 +121,11 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
 
-				err = io.Tar(imagesDirectory, tarball, compression)
+				err = io.Tar(imagesDirectory, tarball, compression, isFuse)
 				if err != nil {
 					storage.Delete(ctx, path)
 					os.RemoveAll(imagesDirectory)
 					return fmt.Errorf("failed to create tarball: %w", err)
-				}
-
-				if isFuse {
-					tarball, err := os.Open(tmpPath)
-					if err != nil {
-						return fmt.Errorf("failed to open temporary tarball: %w", err)
-					}
-					defer func() {
-						err = errors.Join(err, tarball.Close())
-					}()
-
-					dstTarball, err := os.Create(path)
-					if err != nil {
-						return fmt.Errorf("failed to create destination tarball: %w", err)
-					}
-					defer func() {
-						err = errors.Join(err, dstTarball.Close())
-					}()
-
-					_, err = go_io.Copy(dstTarball, tarball)
-					if err != nil {
-						return fmt.Errorf("failed to copy tarball to destination: %w", err)
-					}
-
-					os.Remove(tmpPath)
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
