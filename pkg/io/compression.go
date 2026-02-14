@@ -56,45 +56,66 @@ func (a *AsyncVirtioWriter) Close() error {
 }
 
 func NewOptimizedCompressionWriter(baseWriter io.Writer, compression string, isFuse bool) (io.WriteCloser, error) {
-	var targetWriter io.Writer = baseWriter
-	var flushers []func() error
-
-	if isFuse {
-		bw := bufio.NewWriterSize(baseWriter, 1024*1024)
-		targetWriter = bw
-		flushers = append(flushers, bw.Flush)
+	if !isFuse {
+		return NewCompressionWriter(baseWriter, compression)
 	}
+
+	pr, pw := io.Pipe()
+	done := make(chan error, 1)
+
+	go func() {
+		defer func() {
+			if closer, ok := baseWriter.(io.Closer); ok {
+				closer.Close()
+			}
+		}()
+		buf := make([]byte, 1024*1024)
+		_, err := io.CopyBuffer(baseWriter, pr, buf)
+		done <- err
+	}()
+
+	bufferedPipeWriter := bufio.NewWriterSize(pw, 1024*1024)
 
 	var compressor io.WriteCloser
 	switch compression {
 	case "lz4":
-		compressor = lz4.NewWriter(targetWriter)
+		compressor = lz4.NewWriter(bufferedPipeWriter) // Points to buffer
 	case "gzip", "gz":
-		compressor = gzip.NewWriter(targetWriter)
-	case "tar", "none", "":
-		compressor = NopWriteCloser{targetWriter}
+		compressor = gzip.NewWriter(bufferedPipeWriter) // Points to buffer
 	default:
-		return nil, fmt.Errorf("unsupported compression: %s", compression)
+		compressor = NopWriteCloser{bufferedPipeWriter} // Points to buffer
 	}
 
-	return &stackCloser{
+	return &asyncStackCloser{
 		WriteCloser: compressor,
-		flushers:    flushers,
+		bufPipeW:    bufferedPipeWriter, // New field
+		pipeW:       pw,
+		done:        done,
 	}, nil
 }
 
-type stackCloser struct {
+type asyncStackCloser struct {
 	io.WriteCloser
-	flushers []func() error
+	bufPipeW *bufio.Writer // The surge tank
+	pipeW    *io.PipeWriter
+	done     chan error
 }
 
-func (s *stackCloser) Close() error {
-	// compression then flush
+func (s *asyncStackCloser) Close() error {
 	err := s.WriteCloser.Close()
-	for _, flush := range s.flushers {
-		if fErr := flush(); fErr != nil && err == nil {
+
+	if s.bufPipeW != nil {
+		if fErr := s.bufPipeW.Flush(); fErr != nil && err == nil {
 			err = fErr
 		}
+	}
+
+	s.pipeW.Close()
+
+	workerErr := <-s.done
+
+	if err == nil {
+		return workerErr
 	}
 	return err
 }
