@@ -100,6 +100,66 @@ run_step() {
     echo "--- Completed: $name ---"
 }
 
+CONTAINERD_VERSION="${CONTAINERD_VERSION:-2.1.0}"
+
+upgrade_containerd() {
+    local current_version
+    current_version=$(containerd --version 2>/dev/null | awk '{print $3}' | sed 's/^v//')
+
+    if [ "$current_version" = "$CONTAINERD_VERSION" ]; then
+        echo "containerd is already at version $CONTAINERD_VERSION"
+        return 0
+    fi
+
+    echo "Upgrading containerd from $current_version to $CONTAINERD_VERSION"
+
+    local arch
+    case "$(uname -m)" in
+        x86_64)
+            arch="amd64"
+            ;;
+        aarch64 | arm64)
+            arch="arm64"
+            ;;
+        *)
+            echo "Unsupported architecture: $(uname -m)" >&2
+            return 1
+            ;;
+    esac
+
+    local tmp_dir
+    tmp_dir=$(mktemp -d)
+    trap "rm -rf $tmp_dir" EXIT
+
+    local tarball="containerd-${CONTAINERD_VERSION}-linux-${arch}.tar.gz"
+    local url="https://github.com/containerd/containerd/releases/download/v${CONTAINERD_VERSION}/${tarball}"
+
+    echo "Downloading containerd $CONTAINERD_VERSION..."
+    if ! curl -fsSL "$url" -o "$tmp_dir/$tarball"; then
+        echo "Failed to download containerd" >&2
+        return 1
+    fi
+
+    echo "Extracting containerd..."
+    tar -xzf "$tmp_dir/$tarball" -C "$tmp_dir"
+
+    echo "Stopping containerd, installing binaries, and restarting..."
+    systemctl stop containerd
+    cp -f "$tmp_dir"/bin/* /usr/bin/
+    systemctl start containerd
+
+    # Verify the upgrade
+    local new_version
+    new_version=$(containerd --version | awk '{print $3}' | sed 's/^v//')
+    if [ "$new_version" = "$CONTAINERD_VERSION" ]; then
+        echo "Successfully upgraded containerd to $CONTAINERD_VERSION"
+    else
+        echo "Warning: Expected version $CONTAINERD_VERSION but got $new_version" >&2
+        return 1
+    fi
+}
+
+run_step "upgrade containerd" upgrade_containerd              # upgrade containerd for CDI support
 run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
 run_step "install plugins" "$DIR/k8s-install-plugins.sh"     # install the plugins (including shim)
 run_step "configure shm" "$DIR/shm-configure.sh"             # configure shm
