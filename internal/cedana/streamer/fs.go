@@ -504,8 +504,23 @@ func (fs *Fs) openFd(name string) (int, error) {
 		if err != nil {
 			return 0, fmt.Errorf("failed to unmarshal response: %w", err)
 		}
-		if !resp.Exists {
-			return 0, fmt.Errorf("file does not exist: %s", name)
+		if !resp.HasStatus() {
+			if !resp.Exists {
+				return 0, fmt.Errorf("file does not exist: %s", name)
+			}
+		} else {
+			switch resp.GetStatus() {
+			case img_streamer.FileStatus_DOES_NOT_EXIST:
+				return 0, fmt.Errorf("file does not exist: %s", name)
+			case img_streamer.FileStatus_NOT_READY:
+				// The only file daemon wants from streamer is
+				// STATE_FILE (process_state.json), which is
+				// ALWAYS READY.
+				return 0, fmt.Errorf("file not ready: %s", name)
+			case img_streamer.FileStatus_READY:
+			default:
+				return 0, fmt.Errorf("recieved invalid file status from streamer")
+			}
 		}
 	}
 
