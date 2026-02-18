@@ -634,8 +634,6 @@ test_pod_spec() {
                     break
                 }
 
-                sleep inf
-
                 debug_log "Deployed pod $name successfully"
                 original_name="$name"
                 deployed=true
