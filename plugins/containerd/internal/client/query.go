@@ -64,15 +64,7 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 			Namespace: query.Namespace,
 		}
 
-		task, err := c.Task(ctx, nil) // Ensure task is loaded to get accurate info
-		if err != nil {
-			resp.Messages = append(resp.Messages, fmt.Sprintf("%s: failed to get task: %v", c.ID(), err))
-			continue
-		}
-
-		resp.States = append(resp.States, &daemon.ProcessState{
-			PID: task.Pid(),
-		})
+		var state *daemon.ProcessState
 
 		// Fetch lower-level runtime info
 
@@ -80,7 +72,7 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 		plugin := containerd_utils.PluginForRuntime(runtime)
 		root := containerd_utils.RootFromPlugin(plugin, query.Namespace)
 
-		features.QueryHandler.IfAvailable(func(_ string, query types.Query) error {
+		err = features.QueryHandler.IfAvailable(func(_ string, query types.Query) error {
 			switch plugin {
 			case "runc":
 				r, err := query(ctx, &daemon.QueryReq{
@@ -95,15 +87,19 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 					return err
 				}
 				resp.Messages = append(resp.Messages, r.Messages...)
-				resp.States = append(resp.States, r.States...)
 				if len(r.Runc.Containers) > 0 {
 					container.Runc = r.Runc.Containers[0]
+					state = r.States[0]
+				} else {
+					return fmt.Errorf("no runc container found for %s", container.ID)
 				}
 			}
 			return nil
 		}, plugin)
-
-		resp.Containerd.Containers = append(resp.Containerd.Containers, container)
+		if err == nil {
+			resp.Containerd.Containers = append(resp.Containerd.Containers, container)
+			resp.States = append(resp.States, state)
+		}
 	}
 
 	return resp, nil

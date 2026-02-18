@@ -53,10 +53,11 @@ func (c *ContainerdClient) Query(ctx context.Context, req *daemon.QueryReq) (res
 	for _, name := range req.K8S.Names {
 		namesMap[name] = true
 	}
+	states := []*daemon.ProcessState{}
 
-	resp = &daemon.QueryResp{K8S: &k8s.QueryResp{}, Messages: containerResps.Messages, States: containerResps.States}
+	resp = &daemon.QueryResp{K8S: &k8s.QueryResp{}, Messages: containerResps.Messages}
 
-	for _, container := range containerResps.Containerd.Containers {
+	for i, container := range containerResps.Containerd.Containers {
 		runtime := containerd_utils.Runtime(container)
 
 		switch runtime {
@@ -85,7 +86,14 @@ func (c *ContainerdClient) Query(ctx context.Context, req *daemon.QueryReq) (res
 		}
 
 		if len(namesMap) > 0 {
-			if _, ok := namesMap[info.Name]; !ok {
+			found := false
+			for prefix := range namesMap {
+				if len(info.Name) >= len(prefix) && info.Name[:len(prefix)] == prefix {
+					found = true
+					break
+				}
+			}
+			if !found {
 				continue
 			}
 		}
@@ -108,6 +116,7 @@ func (c *ContainerdClient) Query(ctx context.Context, req *daemon.QueryReq) (res
 		}
 
 		pod.Containerd = append(pod.Containerd, container)
+		states = append(states, containerResps.States[i])
 	}
 
 	for _, pod := range podMap {
@@ -115,6 +124,7 @@ func (c *ContainerdClient) Query(ctx context.Context, req *daemon.QueryReq) (res
 	}
 
 	resp.K8S.Pods = pods
+	resp.States = states
 
 	return resp, nil
 }

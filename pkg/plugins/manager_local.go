@@ -300,7 +300,7 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 				continue
 			}
 
-			msgs <- style.NegativeColors.Sprintf("Removed %s", name)
+			msgs <- style.WarningColors.Sprintf("Removed %s", name)
 			removed <- 1
 		}
 	}()
