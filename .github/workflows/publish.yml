@@ -401,57 +401,57 @@ jobs:
           docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
             $(printf '${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}@sha256:%s ' *)
 
-  # post-summary:
-  #   name: Post Summary
-  #   runs-on: ubuntu-latest
-  #   needs: ["github", "cloudsmith", "dockerhub"]
-  #   if: inputs.post_summary
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #       with:
-  #         fetch-depth: 0
-  #         fetch-tags: true
+  post-summary:
+    name: Post Summary
+    runs-on: ubuntu-latest
+    needs: ["github", "aws_s3", "dockerhub"]
+    if: inputs.post_summary
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
-  #     - name: Get tag
-  #       id: tag
-  #       run: |
-  #         echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '1p')
+      - name: Get tag
+        id: tag
+        run: |
+          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '1p')
 
-  #     - name: Get previous tag
-  #       id: previous-tag
-  #       run: |
-  #         echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '2p')
+      - name: Get previous tag
+        id: previous-tag
+        run: |
+          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '2p')
 
-  #     - name: Get release info
-  #       id: release-info
-  #       uses: pozetroninc/github-action-get-latest-release@master
-  #       with:
-  #         token: ${{ github.token }}
-  #         excludes: draft
-  #         repository: ${{ github.repository }}
+      - name: Get release info
+        id: release-info
+        uses: pozetroninc/github-action-get-latest-release@master
+        with:
+          token: ${{ github.token }}
+          excludes: draft
+          repository: ${{ github.repository }}
 
-  #     - name: Generate summary
-  #       id: summary
-  #       env:
-  #         RELEASE_TITLE: "cedana"
-  #         RELEASE_DESCRIPTION: "**${{ steps.tag.outputs.tag }}**"
-  #         RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
-  #         RELEASE_BODY: "${{ steps.release-info.outputs.description }}"
-  #         TAG: ${{ steps.tag.outputs.tag }}
-  #         BINARIES_DIR: current
-  #         PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
-  #         PREVIOUS_BINARIES_DIR: previous
-  #       run: |
-  #         echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
-  #         echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
+      - name: Generate summary
+        id: summary
+        env:
+          RELEASE_TITLE: "cedana"
+          RELEASE_DESCRIPTION: "**${{ steps.tag.outputs.tag }}**"
+          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
+          RELEASE_BODY: "${{ steps.release-info.outputs.description }}"
+          TAG: ${{ steps.tag.outputs.tag }}
+          BINARIES_DIR: current
+          PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
+          PREVIOUS_BINARIES_DIR: previous
+        run: |
+          echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
+          echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
 
-  #     - name: Post summary
-  #       id: slack-patch
-  #       uses: slackapi/slack-github-action@v1.26.0
-  #       env:
-  #         SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
-  #         SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-  #       with:
-  #         payload: |
-  #           ${{ steps.summary.outputs.slack-summary }}
+      - name: Post summary
+        id: slack-patch
+        uses: slackapi/slack-github-action@v1.26.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            ${{ steps.summary.outputs.slack-summary }}
