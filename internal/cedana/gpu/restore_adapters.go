@@ -179,10 +179,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 						// Extract segName from bytes 16-144
 						segNameBytes := metadataBuffer[16:144]
 						// Find null terminator
-						nullIdx := bytes.IndexByte(segNameBytes, 0)
+						before, _, ok0 := bytes.Cut(segNameBytes, []byte{0})
 						var segName string
-						if nullIdx >= 0 {
-							segName = string(segNameBytes[:nullIdx])
+						if ok0 {
+							segName = string(before)
 						} else {
 							segName = string(segNameBytes)
 						}
@@ -248,12 +248,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
@@ -264,12 +268,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else {
 				return true // not a file we care about
 			}

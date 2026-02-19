@@ -102,8 +102,6 @@ type (
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 		// SockDir is the directory to use for the GPU sockets
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
-		// Track metrics associated with observability
-		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 		// LdLibPath holds any additional directories to search for GPU libraries
