@@ -246,12 +246,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
@@ -262,12 +266,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else {
 				return true // not a file we care about
 			}
