@@ -120,8 +120,25 @@ if [ "$ENV" != "production" ]; then
     exit 0
 fi
 
+# Detect MicroK8s
+IS_MICROK8S=false
+if command -v microk8s >/dev/null 2>&1 || [ -d "/var/snap/microk8s" ]; then
+    IS_MICROK8S=true
+    echo "Detected MicroK8s installation"
+fi
+
 # k8s path - detect containerd config version
-PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+# MicroK8s uses a different path for containerd config
+if [ "$IS_MICROK8S" = true ]; then
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/var/snap/microk8s/current/args/containerd.toml"}
+else
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+fi
+
+if [ ! -f "$PATH_CONTAINERD_CONFIG" ]; then
+    echo "ERROR: Containerd config not found at $PATH_CONTAINERD_CONFIG" >&2
+    exit 1
+fi
 
 # Detect containerd config version
 CONTAINERD_VERSION=""
@@ -136,7 +153,12 @@ fi
 
 echo "Detected containerd config version $CONTAINERD_VERSION"
 
-CONFD_DIR="/etc/containerd/conf.d"
+# Set conf.d directory based on environment
+if [ "$IS_MICROK8S" = true ]; then
+    CONFD_DIR="/var/snap/microk8s/current/args/conf.d"
+else
+    CONFD_DIR="/etc/containerd/conf.d"
+fi
 
 if [ "$CONTAINERD_VERSION" = "2" ]; then
     # Version 2: Copy last conf.d file (excluding 999-cedana.toml) if exists, then add config
@@ -181,15 +203,16 @@ elif [ "$CONTAINERD_VERSION" = "3" ]; then
     mkdir -p "$CONFD_DIR"
 
     # Ensure imports line exists in main config
-    if ! grep -q 'imports = \[.*"/etc/containerd/conf.d/\*\.toml".*\]' "$PATH_CONTAINERD_CONFIG"; then
+    CONFD_IMPORT_PATTERN="$CONFD_DIR/*.toml"
+    if ! grep -q "imports = \\[.*\"$CONFD_DIR/\\*\\.toml\".*\\]" "$PATH_CONTAINERD_CONFIG"; then
         echo "Adding imports to $PATH_CONTAINERD_CONFIG"
         # Check if imports line already exists but doesn't include conf.d
         if grep -q '^imports = \[' "$PATH_CONTAINERD_CONFIG"; then
             # Modify existing imports line to add conf.d
-            sed -i 's|^imports = \[\(.*\)\]|imports = [\1, "/etc/containerd/conf.d/*.toml"]|' "$PATH_CONTAINERD_CONFIG"
+            sed -i "s|^imports = \\[\\(.*\\)\\]|imports = [\\1, \"$CONFD_IMPORT_PATTERN\"]|" "$PATH_CONTAINERD_CONFIG"
         else
             # Add imports line at the top after version line
-            sed -i '/^version = 3/a imports = ["/etc/containerd/conf.d/*.toml"]' "$PATH_CONTAINERD_CONFIG"
+            sed -i "/^version = 3/a imports = [\"$CONFD_IMPORT_PATTERN\"]" "$PATH_CONTAINERD_CONFIG"
         fi
     fi
 
@@ -206,4 +229,8 @@ END_CAT
 fi
 
 echo "Restarting containerd to pick up the new runtime configuration..."
-(systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
+if [ "$IS_MICROK8S" = true ]; then
+    (microk8s stop && microk8s start && echo "Restarted MicroK8s") || echo "Failed to restart MicroK8s, please restart manually with: microk8s stop && microk8s start"
+else
+    (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
+fi
