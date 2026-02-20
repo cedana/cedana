@@ -3,7 +3,6 @@ package defaults
 import (
 	"context"
 	"os"
-	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
@@ -18,8 +17,20 @@ const (
 
 var (
 	DEFAULT_ADDRESS  = getDefaultContainerdAddress()
-	BASE_RUNTIME_DIR = filepath.Dir(DEFAULT_ADDRESS)
+	BASE_RUNTIME_DIR = getDefaultRuntimeDir()
 )
+
+func getDefaultRuntimeDir() string {
+	// Check env var first
+	if dir := utils.Getenv(os.Environ(), "CONTAINERD_RUNTIME_DIR", ""); dir != "" {
+		return dir
+	}
+	// Runc state is always stored under /run/containerd, regardless of
+	// where the containerd socket is located (e.g., MicroK8s uses
+	// /var/snap/microk8s/common/run/containerd.sock for the socket but
+	// /run/containerd/runc for runc state)
+	return "/run/containerd"
+}
 
 func getDefaultContainerdAddress() string {
 	// Check env var first
