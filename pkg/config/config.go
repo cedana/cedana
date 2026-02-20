@@ -63,7 +63,7 @@ const (
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
 	DEFAULT_PLUGINS_BUILDS  = "release"
 
-  DEFAULT_MULTINODE_BUFFER = 100
+	DEFAULT_MULTINODE_BUFFER = 100
 )
 
 // The default global config. This will get overwritten
@@ -113,7 +113,7 @@ var Global Config = Config{
 		BinDir: DEFAULT_PLUGINS_BIN_DIR,
 		Builds: DEFAULT_PLUGINS_BUILDS,
 	},
-  Multinode_buffer_size: DEFAULT_MULTINODE_BUFFER,
+	Multinode_buffer_size: DEFAULT_MULTINODE_BUFFER,
 }
 
 // The current config directory, set during Init

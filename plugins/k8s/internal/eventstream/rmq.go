@@ -572,7 +572,7 @@ func (es *EventStream) handleMultiNodeAction(ctx context.Context, action string,
 	query := &daemon.QueryReq{
 		Type: "k8s",
 		K8S: &k8s.QueryReq{
-			Names:         req.PodName, // pass entire list
+			Names:         req.PodName,
 			Namespace:     req.Namespace,
 			ContainerType: "container",
 		},
@@ -828,14 +828,14 @@ func (es *EventStream) dumpMultiPod(ctx context.Context, pod *k8s.Pod, req *chec
 }
 
 func (es *EventStream) unfreezeMultiPod(ctx context.Context, pod *k8s.Pod, req *checkpointReq) error {
-	podName := pod.Name
+	targetPodID := string(pod.GetUID())
 
 	log := log.With().
-		Str("pod", podName).
+		Str("pod", targetPodID).
 		Str("action_id", req.ActionId).
 		Logger()
 
-	stateKey := fmt.Sprintf("%s:%s", req.ActionId, podName)
+	stateKey := fmt.Sprintf("%s:%s", req.ActionId, targetPodID)
 	stateVal, ok := multiNodeStates.Load(stateKey)
 	if !ok {
 		return fmt.Errorf("no state found for pod - was FREEZE called first?")
