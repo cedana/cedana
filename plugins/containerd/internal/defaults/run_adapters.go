@@ -17,9 +17,22 @@ const (
 )
 
 var (
-	DEFAULT_ADDRESS  = utils.Getenv(os.Environ(), "CONTAINERD_ADDRESS", "/run/containerd/containerd.sock")
+	DEFAULT_ADDRESS  = getDefaultContainerdAddress()
 	BASE_RUNTIME_DIR = filepath.Dir(DEFAULT_ADDRESS)
 )
+
+func getDefaultContainerdAddress() string {
+	// Check env var first
+	if addr := utils.Getenv(os.Environ(), "CONTAINERD_ADDRESS", ""); addr != "" {
+		return addr
+	}
+	// Auto-detect MicroK8s
+	if _, err := os.Stat("/var/snap/microk8s"); err == nil {
+		return "/var/snap/microk8s/common/run/containerd.sock"
+	}
+	// Default
+	return "/run/containerd/containerd.sock"
+}
 
 func FillMissingRunDefaults(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
