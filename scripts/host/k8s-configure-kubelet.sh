@@ -105,13 +105,24 @@ if [ "$IS_MICROK8S" = true ]; then
     echo "Updated MicroK8s kubelet config:"
     cat "$MICROK8S_KUBELET_ARGS"
 
-    echo "Restarting MicroK8s to apply kubelet changes..."
-    if microk8s stop && microk8s start; then
-        echo "MicroK8s restarted successfully"
-    else
-        echo "ERROR: Failed to restart MicroK8s; please restart manually with: microk8s stop && microk8s start" >&2
-        exit 1
-    fi
+    # For MicroK8s, kubelet reads args on startup, so it needs a restart to pick up changes.
+    # However, from within a container we may not have access to restart commands.
+    # The kubelet will pick up the new config on next MicroK8s restart.
+    echo "MicroK8s kubelet config updated. Changes will take effect on next kubelet restart."
+    echo "To apply immediately, run on the host: sudo snap restart microk8s"
+
+    # Try to restart if we can, but don't fail if we can't
+    {
+        if command -v microk8s >/dev/null 2>&1; then
+            microk8s stop && microk8s start && echo "MicroK8s restarted successfully"
+        elif command -v snap >/dev/null 2>&1; then
+            snap restart microk8s && echo "MicroK8s restarted via snap"
+        elif systemctl restart snap.microk8s.daemon-kubelet 2>/dev/null; then
+            echo "Restarted MicroK8s kubelet via systemctl"
+        else
+            echo "Note: Automatic restart not available from this context"
+        fi
+    } || true
 
     exit 0
 fi

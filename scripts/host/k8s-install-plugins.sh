@@ -230,7 +230,23 @@ fi
 
 echo "Restarting containerd to pick up the new runtime configuration..."
 if [ "$IS_MICROK8S" = true ]; then
-    (microk8s stop && microk8s start && echo "Restarted MicroK8s") || echo "Failed to restart MicroK8s, please restart manually with: microk8s stop && microk8s start"
+    # MicroK8s runs containerd via snap. From within a container we may not have access to restart commands.
+    # The containerd will pick up the new config on next MicroK8s restart.
+    echo "MicroK8s containerd config updated. Changes will take effect on next containerd restart."
+    echo "To apply immediately, run on the host: sudo snap restart microk8s"
+
+    # Try to restart if we can, but don't fail if we can't
+    {
+        if command -v microk8s >/dev/null 2>&1; then
+            microk8s stop && microk8s start && echo "MicroK8s restarted successfully"
+        elif command -v snap >/dev/null 2>&1; then
+            snap restart microk8s && echo "MicroK8s restarted via snap"
+        elif systemctl restart snap.microk8s.daemon-containerd 2>/dev/null; then
+            echo "Restarted MicroK8s containerd via systemctl"
+        else
+            echo "Note: Automatic restart not available from this context"
+        fi
+    } || true
 else
     (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
 fi
