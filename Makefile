@@ -8,8 +8,6 @@ GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
 
-DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
-
 ifndef VERBOSE
 .SILENT:
 endif
@@ -27,6 +25,7 @@ GO_MOD_FILES=go.sum go.mod
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
+DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
 cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
