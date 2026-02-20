@@ -64,9 +64,11 @@ if [ -z "$CONTAINERD_ADDRESS" ]; then
 fi
 
 # Detect MicroK8s containerd config path
+# MicroK8s regenerates containerd.toml from containerd-template.toml on restart
+# We must modify the template, not the generated file
 if [ -z "$CONTAINERD_CONFIG_PATH" ]; then
     if [ -d "/host/var/snap/microk8s" ]; then
-        CONTAINERD_CONFIG_PATH="/var/snap/microk8s/current/args/containerd.toml"
+        CONTAINERD_CONFIG_PATH="/var/snap/microk8s/current/args/containerd-template.toml"
         echo "Detected MicroK8s, using containerd config: $CONTAINERD_CONFIG_PATH"
     fi
 fi
