@@ -32,7 +32,8 @@ if [ -d "/var/snap/microk8s" ]; then
 
     # Set containerd address for MicroK8s if not already set
     export CONTAINERD_ADDRESS="${CONTAINERD_ADDRESS:-/var/snap/microk8s/common/run/containerd.sock}"
-    export CONTAINERD_CONFIG_PATH="${CONTAINERD_CONFIG_PATH:-/var/snap/microk8s/current/args/containerd.toml}"
+    # MicroK8s regenerates containerd.toml from containerd-template.toml on restart
+    export CONTAINERD_CONFIG_PATH="${CONTAINERD_CONFIG_PATH:-/var/snap/microk8s/current/args/containerd-template.toml}"
 fi
 
 # Define packages for YUM and APT

@@ -128,9 +128,11 @@ if command -v microk8s >/dev/null 2>&1 || [ -d "/var/snap/microk8s" ]; then
 fi
 
 # k8s path - detect containerd config version
-# MicroK8s uses a different path for containerd config
+# MicroK8s uses a template file that gets processed on restart, so we must modify the template
 if [ "$IS_MICROK8S" = true ]; then
-    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/var/snap/microk8s/current/args/containerd.toml"}
+    # MicroK8s regenerates containerd.toml from containerd-template.toml on restart
+    # We must modify the template, not the generated file
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/var/snap/microk8s/current/args/containerd-template.toml"}
 else
     PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
 fi
