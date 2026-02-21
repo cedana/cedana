@@ -179,10 +179,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 						// Extract segName from bytes 16-144
 						segNameBytes := metadataBuffer[16:144]
 						// Find null terminator
-						nullIdx := bytes.IndexByte(segNameBytes, 0)
+						before, _, ok := bytes.Cut(segNameBytes, []byte{0})
 						var segName string
-						if nullIdx >= 0 {
-							segName = string(segNameBytes[:nullIdx])
+						if ok {
+							segName = string(before)
 						} else {
 							segName = string(segNameBytes)
 						}
@@ -236,8 +236,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				} else {
 					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
 				}
-
-				return true // Don't inherit FD for hostmem, just create the file
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
