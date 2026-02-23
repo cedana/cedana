@@ -21,15 +21,15 @@ var NVIDIA_MOUNTS_PATTERN = regexp.MustCompile(
 		`/driver/nvidia/gpus|` +
 		`/run/nvidia|` +
 		`/usr/bin/nv|` +
-		`/usr/lib/firmware/nvidia|` +
+		`/usr/lib/firmware/nv|` +
 		`/usr/lib/libcuda|` +
 		`/usr/lib64/libcuda|` +
-		`/usr/lib/libnvidia|` +
-		`/usr/lib64/libnvidia|` +
+		`/usr/lib/libnv|` +
+		`/usr/lib64/libnv|` +
 		`/usr/lib/x86_64-linux-gnu/libcuda|` +
 		`/usr/lib64/x86_64-linux-gnu/libcuda|` +
-		`/usr/lib/x86_64-linux-gnu/libnvidia|` +
-		`/usr/lib64/x86_64-linux-gnu/libnvidia` +
+		`/usr/lib/x86_64-linux-gnu/libnv|` +
+		`/usr/lib64/x86_64-linux-gnu/libnv` +
 		`)`,
 )
 
