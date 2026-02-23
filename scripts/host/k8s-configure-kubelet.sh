@@ -34,6 +34,13 @@ if ! check_tool "yq"; then
     exit 1
 fi
 
+# Detect MicroK8s
+IS_MICROK8S=false
+if command -v microk8s >/dev/null 2>&1 || [ -d "/var/snap/microk8s" ]; then
+    IS_MICROK8S=true
+    echo "Detected MicroK8s installation"
+fi
+
 # Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
 
@@ -75,6 +82,52 @@ get_kubelet_arg_value() {
     done
 }
 
+# Handle MicroK8s separately since it uses snap and different paths
+if [ "$IS_MICROK8S" = true ]; then
+    MICROK8S_KUBELET_ARGS="/var/snap/microk8s/current/args/kubelet"
+
+    if [ ! -f "$MICROK8S_KUBELET_ARGS" ]; then
+        echo "ERROR: MicroK8s kubelet args file not found at $MICROK8S_KUBELET_ARGS" >&2
+        exit 1
+    fi
+
+    echo "Configuring MicroK8s kubelet at $MICROK8S_KUBELET_ARGS"
+
+    # Check if --runtime-request-timeout is already set
+    if grep -q -- '--runtime-request-timeout' "$MICROK8S_KUBELET_ARGS"; then
+        echo "Updating existing --runtime-request-timeout in $MICROK8S_KUBELET_ARGS"
+        sed -i "s/--runtime-request-timeout=[^ ]*/--runtime-request-timeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT/" "$MICROK8S_KUBELET_ARGS"
+    else
+        echo "Adding --runtime-request-timeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT to $MICROK8S_KUBELET_ARGS"
+        echo "--runtime-request-timeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT" >> "$MICROK8S_KUBELET_ARGS"
+    fi
+
+    echo "Updated MicroK8s kubelet config:"
+    cat "$MICROK8S_KUBELET_ARGS"
+
+    # For MicroK8s, kubelet reads args on startup, so it needs a restart to pick up changes.
+    # However, from within a container we may not have access to restart commands.
+    # The kubelet will pick up the new config on next MicroK8s restart.
+    echo "MicroK8s kubelet config updated. Changes will take effect on next kubelet restart."
+    echo "To apply immediately, run on the host: sudo snap restart microk8s"
+
+    # Try to restart if we can, but don't fail if we can't
+    {
+        if command -v microk8s >/dev/null 2>&1; then
+            microk8s stop && microk8s start && echo "MicroK8s restarted successfully"
+        elif command -v snap >/dev/null 2>&1; then
+            snap restart microk8s && echo "MicroK8s restarted via snap"
+        elif systemctl restart snap.microk8s.daemon-kubelet 2>/dev/null; then
+            echo "Restarted MicroK8s kubelet via systemctl"
+        else
+            echo "Note: Automatic restart not available from this context"
+        fi
+    } || true
+
+    exit 0
+fi
+
+# Standard Kubernetes kubelet detection (non-MicroK8s)
 KUBELET_PID=$(pidof kubelet || true)
 if [ -z "$KUBELET_PID" ]; then
     echo "kubelet is not running" >&2

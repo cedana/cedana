@@ -13,6 +13,29 @@ DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
 
 source "$DIR"/utils.sh
 
+# Detect MicroK8s and add its binaries to PATH / create symlinks
+if [ -d "/var/snap/microk8s" ]; then
+    echo "Detected MicroK8s installation"
+
+    # Find the current microk8s snap path
+    MICROK8S_SNAP="/snap/microk8s/current"
+    if [ -d "$MICROK8S_SNAP/bin" ]; then
+        # Add MicroK8s bin to PATH for this script
+        export PATH="$MICROK8S_SNAP/bin:$PATH"
+
+        # Create symlinks for runc if it exists in MicroK8s but not in standard locations
+        if [ -x "$MICROK8S_SNAP/bin/runc" ] && [ ! -x "/usr/local/bin/runc" ] && [ ! -x "/usr/bin/runc" ]; then
+            echo "Creating symlink for MicroK8s runc"
+            ln -sf "$MICROK8S_SNAP/bin/runc" /usr/local/bin/runc
+        fi
+    fi
+
+    # Set containerd address for MicroK8s if not already set
+    export CONTAINERD_ADDRESS="${CONTAINERD_ADDRESS:-/var/snap/microk8s/common/run/containerd.sock}"
+    # MicroK8s regenerates containerd.toml from containerd-template.toml on restart
+    export CONTAINERD_CONFIG_PATH="${CONTAINERD_CONFIG_PATH:-/var/snap/microk8s/current/args/containerd-template.toml}"
+fi
+
 # Define packages for YUM and APT
 YUM_PACKAGES=(
     wget git make

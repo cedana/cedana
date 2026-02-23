@@ -120,8 +120,27 @@ if [ "$ENV" != "production" ]; then
     exit 0
 fi
 
+# Detect MicroK8s
+IS_MICROK8S=false
+if command -v microk8s >/dev/null 2>&1 || [ -d "/var/snap/microk8s" ]; then
+    IS_MICROK8S=true
+    echo "Detected MicroK8s installation"
+fi
+
 # k8s path - detect containerd config version
-PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+# MicroK8s uses a template file that gets processed on restart, so we must modify the template
+if [ "$IS_MICROK8S" = true ]; then
+    # MicroK8s regenerates containerd.toml from containerd-template.toml on restart
+    # We must modify the template, not the generated file
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/var/snap/microk8s/current/args/containerd-template.toml"}
+else
+    PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+fi
+
+if [ ! -f "$PATH_CONTAINERD_CONFIG" ]; then
+    echo "ERROR: Containerd config not found at $PATH_CONTAINERD_CONFIG" >&2
+    exit 1
+fi
 
 # Detect containerd config version
 CONTAINERD_VERSION=""
@@ -136,7 +155,12 @@ fi
 
 echo "Detected containerd config version $CONTAINERD_VERSION"
 
-CONFD_DIR="/etc/containerd/conf.d"
+# Set conf.d directory based on environment
+if [ "$IS_MICROK8S" = true ]; then
+    CONFD_DIR="/var/snap/microk8s/current/args/conf.d"
+else
+    CONFD_DIR="/etc/containerd/conf.d"
+fi
 
 if [ "$CONTAINERD_VERSION" = "2" ]; then
     # Version 2: Copy last conf.d file (excluding 999-cedana.toml) if exists, then add config
@@ -181,15 +205,16 @@ elif [ "$CONTAINERD_VERSION" = "3" ]; then
     mkdir -p "$CONFD_DIR"
 
     # Ensure imports line exists in main config
-    if ! grep -q 'imports = \[.*"/etc/containerd/conf.d/\*\.toml".*\]' "$PATH_CONTAINERD_CONFIG"; then
+    CONFD_IMPORT_PATTERN="$CONFD_DIR/*.toml"
+    if ! grep -q "imports = \\[.*\"$CONFD_DIR/\\*\\.toml\".*\\]" "$PATH_CONTAINERD_CONFIG"; then
         echo "Adding imports to $PATH_CONTAINERD_CONFIG"
         # Check if imports line already exists but doesn't include conf.d
         if grep -q '^imports = \[' "$PATH_CONTAINERD_CONFIG"; then
             # Modify existing imports line to add conf.d
-            sed -i 's|^imports = \[\(.*\)\]|imports = [\1, "/etc/containerd/conf.d/*.toml"]|' "$PATH_CONTAINERD_CONFIG"
+            sed -i "s|^imports = \\[\\(.*\\)\\]|imports = [\\1, \"$CONFD_IMPORT_PATTERN\"]|" "$PATH_CONTAINERD_CONFIG"
         else
             # Add imports line at the top after version line
-            sed -i '/^version = 3/a imports = ["/etc/containerd/conf.d/*.toml"]' "$PATH_CONTAINERD_CONFIG"
+            sed -i "/^version = 3/a imports = [\"$CONFD_IMPORT_PATTERN\"]" "$PATH_CONTAINERD_CONFIG"
         fi
     fi
 
@@ -206,4 +231,24 @@ END_CAT
 fi
 
 echo "Restarting containerd to pick up the new runtime configuration..."
-(systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
+if [ "$IS_MICROK8S" = true ]; then
+    # MicroK8s runs containerd via snap. From within a container we may not have access to restart commands.
+    # The containerd will pick up the new config on next MicroK8s restart.
+    echo "MicroK8s containerd config updated. Changes will take effect on next containerd restart."
+    echo "To apply immediately, run on the host: sudo snap restart microk8s"
+
+    # Try to restart if we can, but don't fail if we can't
+    {
+        if command -v microk8s >/dev/null 2>&1; then
+            microk8s stop && microk8s start && echo "MicroK8s restarted successfully"
+        elif command -v snap >/dev/null 2>&1; then
+            snap restart microk8s && echo "MicroK8s restarted via snap"
+        elif systemctl restart snap.microk8s.daemon-containerd 2>/dev/null; then
+            echo "Restarted MicroK8s containerd via systemctl"
+        else
+            echo "Note: Automatic restart not available from this context"
+        fi
+    } || true
+else
+    (systemctl restart containerd && echo "Restarted containerd") || echo "Failed to restart containerd, please restart containerd on the node manually to add cedana runtime"
+fi

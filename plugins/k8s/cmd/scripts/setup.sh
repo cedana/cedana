@@ -53,7 +53,25 @@ CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 
 CEDANA_CLUSTER_ID=${CEDANA_CLUSTER_ID:-""}
 
-CONTAINERD_ADDRESS=${CONTAINERD_ADDRESS:-"/run/containerd/containerd.sock"}
+# Detect MicroK8s and set appropriate containerd address
+if [ -z "$CONTAINERD_ADDRESS" ]; then
+    if [ -d "/host/var/snap/microk8s" ]; then
+        CONTAINERD_ADDRESS="/var/snap/microk8s/common/run/containerd.sock"
+        echo "Detected MicroK8s, using containerd socket: $CONTAINERD_ADDRESS"
+    else
+        CONTAINERD_ADDRESS="/run/containerd/containerd.sock"
+    fi
+fi
+
+# Detect MicroK8s containerd config path
+# MicroK8s regenerates containerd.toml from containerd-template.toml on restart
+# We must modify the template, not the generated file
+if [ -z "$CONTAINERD_CONFIG_PATH" ]; then
+    if [ -d "/host/var/snap/microk8s" ]; then
+        CONTAINERD_CONFIG_PATH="/var/snap/microk8s/current/args/containerd-template.toml"
+        echo "Detected MicroK8s, using containerd config: $CONTAINERD_CONFIG_PATH"
+    fi
+fi
 
 rm -rf /host/root/.cedana/ # since this is a fresh install
 

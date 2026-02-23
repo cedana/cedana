@@ -52,6 +52,11 @@ func init() {
 	HelperCmd.AddCommand(destroyCmd)
 	if addr := os.Getenv("CONTAINERD_ADDRESS"); addr != "" {
 		containerdAddress = addr
+	} else {
+		// Auto-detect MicroK8s
+		if _, err := os.Stat("/var/snap/microk8s"); err == nil {
+			containerdAddress = "/var/snap/microk8s/common/run/containerd.sock"
+		}
 	}
 }
 
