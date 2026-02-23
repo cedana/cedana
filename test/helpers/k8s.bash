@@ -295,12 +295,15 @@ validate_pod() {
 
     debug_log "Waiting for pod $name in namespace $namespace to become Ready"
 
-    # Fails the pod validation immediately if pod is not in Pending/ContainerCreating/Running state
     phase=$(kubectl get pod "$name" -n "$namespace" -o jsonpath='{.status.phase}')
     waiting_reason=$(kubectl get pod "$name" -n "$namespace" \
         -o jsonpath='{.status.containerStatuses[0].state.waiting.reason}' 2>/dev/null)
 
-    if [[ "$phase" != "Pending" && ! ("$phase" == "Running" && "$waiting_reason" == "ContainerCreating") ]]; then
+    # Fails the pod validation immediately if pod is not in Pending/ContainerCreating/Running state
+    if [[ "$phase" != "Pending" &&
+        ! ("$phase" == "Running" &&
+        ("$waiting_reason" == "ContainerCreating" || -z "$waiting_reason")) ]] \
+        ; then
         error_log "Pod $name entered unexpected state: phase=$phase reason=$waiting_reason"
         error_log "Dumping diagnostics immediately."
 
