@@ -416,12 +416,61 @@ jobs:
       - name: Get tag
         id: tag
         run: |
-          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '1p')
+          echo "tag=$(git tag --sort=-creatordate | sed -n '1p')" >> $GITHUB_OUTPUT
 
       - name: Get previous tag
         id: previous-tag
         run: |
-          echo ::set-output name=tag::$(git tag --sort=-creatordate | sed -n '2p')
+          echo "tag=$(git tag --sort=-creatordate | sed -n '2p')" >> $GITHUB_OUTPUT
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download previous plugin binaries from S3
+        run: |
+          set -euo pipefail
+
+          PREVIOUS_TAG="${{ steps.previous-tag.outputs.tag }}"
+
+          PREVIOUS_BASE="s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${PREVIOUS_TAG}"
+
+          mkdir -p previous
+
+          aws s3 cp "$PREVIOUS_BASE/libcedana-cloud-hypervisor.so" previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-containerd.so"       previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-crio.so"             previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-k8s.so"              previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-kata.so"             previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-runc.so"             previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-slurm.so"            previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-storage-cedana.so"   previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-storage-gcs.so"      previous/
+          aws s3 cp "$PREVIOUS_BASE/libcedana-storage-s3.so"       previous/
+
+      - name: Download current plugin binaries from S3
+        run: |
+          set -euo pipefail
+
+          CURRENT_TAG="${{ steps.tag.outputs.tag }}"
+
+          CURRENT_BASE="s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${CURRENT_TAG}"
+
+          mkdir -p current
+
+          aws s3 cp "$CURRENT_BASE/libcedana-cloud-hypervisor.so" current/
+          aws s3 cp "$CURRENT_BASE/libcedana-containerd.so"       current/
+          aws s3 cp "$CURRENT_BASE/libcedana-crio.so"             current/
+          aws s3 cp "$CURRENT_BASE/libcedana-k8s.so"              current/
+          aws s3 cp "$CURRENT_BASE/libcedana-kata.so"             current/
+          aws s3 cp "$CURRENT_BASE/libcedana-runc.so"             current/
+          aws s3 cp "$CURRENT_BASE/libcedana-slurm.so"            current/
+          aws s3 cp "$CURRENT_BASE/libcedana-storage-cedana.so"   current/
+          aws s3 cp "$CURRENT_BASE/libcedana-storage-gcs.so"      current/
+          aws s3 cp "$CURRENT_BASE/libcedana-storage-s3.so"       current/
 
       - name: Get release info
         id: release-info
