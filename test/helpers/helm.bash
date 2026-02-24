@@ -92,6 +92,7 @@ helm_install_cedana() {
         return 1
     }
     debug_log "Helm chart installed"
+    sleep 3000
 }
 
 helm_is_cedana_installed() {
