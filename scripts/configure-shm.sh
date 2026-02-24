@@ -1,6 +1,8 @@
-#!/bin/bash
-
 set -eo pipefail
+
+if [ -f utils.sh ]; then
+    source utils.sh
+fi
 
 # Configure /dev/shm size
 # This script increases the shared memory size

@@ -1,17 +1,4 @@
-#!/bin/bash
-
 set -eo pipefail
-
-# get the directory of the script
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do
-    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-    SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
-done
-DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-
-source "$DIR"/utils.sh
 
 if [ "$ENV" != "production" ]; then
     echo "Running in non-production environment; skipping kubelet configuration update" >&2

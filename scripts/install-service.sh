@@ -1,29 +1,21 @@
-#!/bin/bash
-
 set -eo pipefail
 
-# get the directory of the script
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do
-    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-    SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
-done
-DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-
-source "$DIR"/utils.sh
+if [ -f utils.sh ]; then
+    source utils.sh
+fi
 
 DAEMON_ARGS=""
 
 if ! test -f "$APP_PATH"; then
-    echo "No binary found. Have you run make install?" >&2
+    echo "No binary found" >&2
     exit 1
 fi
 
 # check if systemctl is available
-if ! command -v systemctl &>/dev/null; then
-    echo "No systemctl on this system." >&2
-    exit 1
+if ! command -v systemctl &>/dev/null || ! systemctl is-system-running &>/dev/null; then
+    echo "No systemd. Starting cedana daemon directly without service setup..." >&2
+    $APP_PATH daemon start &>/var/log/cedana-daemon.log &
+    exit
 fi
 
 for arg in "$@"; do
