@@ -29,7 +29,8 @@ var NVIDIA_MOUNTS_PATTERN = regexp.MustCompile(
 		`/usr/lib/x86_64-linux-gnu/libcuda|` +
 		`/usr/lib64/x86_64-linux-gnu/libcuda|` +
 		`/usr/lib/x86_64-linux-gnu/libnv|` +
-		`/usr/lib64/x86_64-linux-gnu/libnv` +
+		`/usr/lib64/x86_64-linux-gnu/libnv|` +
+		`.*nvidia.*` +
 		`)`,
 )
 
