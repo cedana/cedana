@@ -179,7 +179,7 @@ func NewStreamingFs(
 
 	switch mode {
 	case READ_ONLY:
-		args = append(args, "--shard-fds", strings.Join(shardFds, ","), "serve")
+               args = append(args, "--memory-limit", "500", "--shard-fds", strings.Join(shardFds, ","), "serve")
 		extraFiles = readFds
 	case WRITE_ONLY:
 		args = append(args, "--shard-fds", strings.Join(shardFds, ","), "capture")
