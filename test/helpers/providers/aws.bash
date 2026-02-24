@@ -25,8 +25,8 @@ _install_aws_cli() {
     local arch
     arch=$(uname -m)
 
-    debug curl "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" -o "/tmp/awscli.zip"
-    debug unzip /tmp/awscli.zip -d /tmp
+    debug curl -s "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" -o "/tmp/awscli.zip"
+    debug unzip -q /tmp/awscli.zip -d /tmp
     /tmp/aws/install --update
     rm -rf /tmp/awscli.zip /tmp/aws
     debug_log "AWS CLI installed"

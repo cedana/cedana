@@ -68,6 +68,7 @@ reset-db: ## Reset the local database
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
 	rm -rf ~/.cedana
+	$(SUDO) rm -rf /root/.cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
@@ -139,7 +140,7 @@ test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
-	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
+	$(GOCMD) test -v $(GOMODULE)/... -bench=. -benchmem
 
 test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
@@ -200,7 +201,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 	fi
 
 test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
-	if [ -f /.dockerenv ] || [ "$${PROVIDER,,}" != "k3s" ]; then \
+	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		if [ "$(TAGS)" = "" ]; then \

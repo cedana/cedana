@@ -65,7 +65,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging
+  DEBUG: ${{ vars.DEBUG_REGRESSION }}
 
 jobs:
   unit:
@@ -89,7 +89,9 @@ jobs:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
+          submodules: recursive
           fetch-tags: true
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
         uses: actions/download-artifact@v4
@@ -102,6 +104,11 @@ jobs:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
+
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer-${{ matrix.arch }}
 
       - name: Make executable
         run: |

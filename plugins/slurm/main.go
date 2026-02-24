@@ -33,13 +33,13 @@ var (
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
 
+		job.SetPIDForDump,
+
 		job.GetSlurmJobForDump,
 		job.DumpSlurmScript,
 
 		cgroup.UseCgroupFreezerIfAvailableForDump,
 		network.LockNetworkBeforeDump,
-
-		job.SetPIDForDump,
 	}
 
 	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{
