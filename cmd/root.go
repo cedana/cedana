@@ -9,7 +9,6 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -99,10 +98,8 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute(ctx context.Context, version string) error {
-	ctx = log.With().Str("context", "cmd").Logger().WithContext(ctx)
-
 	rootCmd.Version = version
-	revision := getRevision()
+	revision := GetRevision()
 	versionTemplate := rootCmd.VersionTemplate()
 	if revision != "" {
 		versionTemplate = fmt.Sprintf("git: %s\n%s", revision, versionTemplate)
