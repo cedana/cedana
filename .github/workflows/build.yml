@@ -61,12 +61,17 @@ jobs:
           - arm64
     if: inputs.cedana || inputs.image
     container:
-      image: golang:1.25-rc-bullseye
+      image: rockylinux:8
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
+
+      - name: Install dependencies
+        run: |
+          dnf install -y git make gcc
+
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -78,6 +83,12 @@ jobs:
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -121,12 +132,17 @@ jobs:
           - arm64
     if: inputs.plugins || inputs.image
     container:
-      image: golang:1.25-rc-bullseye
+      image: rockylinux:8
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
+
+      - name: Install dependencies
+        run: |
+          dnf install -y git make gcc
+
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -138,6 +154,12 @@ jobs:
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
