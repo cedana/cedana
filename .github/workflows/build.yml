@@ -68,22 +68,6 @@ jobs:
     steps:
       - uses: runs-on/action@v2
 
-      - name: Install dependencies
-        run: |
-          dnf install -y git make gcc
-
-      - name: Install Go
-        run: |
-          ARCH=$(uname -m)
-          if [ "$ARCH" = "x86_64" ]; then
-            GOARCH="amd64"
-          elif [ "$ARCH" = "aarch64" ]; then
-            GOARCH="arm64"
-          fi
-          curl -LO https://go.dev/dl/go1.25rc1.linux-${GOARCH}.tar.gz
-          tar -C /usr/local -xzf go1.25rc1.linux-${GOARCH}.tar.gz
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
-
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -95,6 +79,12 @@ jobs:
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -145,22 +135,6 @@ jobs:
     steps:
       - uses: runs-on/action@v2
 
-      - name: Install dependencies
-        run: |
-          dnf install -y git make gcc
-
-      - name: Install Go
-        run: |
-          ARCH=$(uname -m)
-          if [ "$ARCH" = "x86_64" ]; then
-            GOARCH="amd64"
-          elif [ "$ARCH" = "aarch64" ]; then
-            GOARCH="arm64"
-          fi
-          curl -LO https://go.dev/dl/go1.25rc1.linux-${GOARCH}.tar.gz
-          tar -C /usr/local -xzf go1.25rc1.linux-${GOARCH}.tar.gz
-          echo "/usr/local/go/bin" >> $GITHUB_PATH
-
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -172,6 +146,12 @@ jobs:
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
