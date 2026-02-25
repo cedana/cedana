@@ -1,5 +1,8 @@
-#!/bin/bash
-set -e
+set -euo pipefail
+
+if [ -f utils.sh ]; then
+    source utils.sh
+fi
 
 if [ "$DISABLE_IO_URING" = "true" ]; then
     echo "Attempting to disable IO Uring using sysctl..."

@@ -27,11 +27,6 @@ apt-get install -y --no-install-recommends software-properties-common make sudo
 rm -rf /var/lib/apt/lists/*
 EOT
 
-RUN mkdir -p /usr/local/bin /scripts
-
-ADD ./Makefile /
-ADD ./scripts/ /scripts
-
 COPY --from=builder /app/libcedana*.so /usr/local/lib/
 COPY --from=builder /app/cedana /usr/local/bin/
 RUN chmod +x /usr/local/bin/cedana
