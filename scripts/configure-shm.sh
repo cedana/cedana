@@ -1,7 +1,8 @@
 set -euo pipefail
 
-if [ -f utils.sh ]; then
-    source utils.sh
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+    source "$SCRIPT_DIR/utils.sh"
 fi
 
 # Configure /dev/shm size

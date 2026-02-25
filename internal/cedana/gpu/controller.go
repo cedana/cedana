@@ -259,7 +259,8 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 
 	cmd.Stderr = c.ErrBuf
 	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stdout
-		cmd.Stdout = logging.Writer(log.With().Str("ID", id).Str("plugin", "gpu").Logger().WithContext(ctx), zerolog.TraceLevel)
+		logger := log.With().Str("ID", id).Str("plugin", "gpu").Logger().Level(zerolog.DebugLevel)
+		cmd.Stdout = logging.Writer(&logger)
 	}
 
 	existingLD := os.Getenv("LD_LIBRARY_PATH")

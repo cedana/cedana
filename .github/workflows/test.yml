@@ -229,6 +229,48 @@ jobs:
           path: |
             /tmp/report*.json
 
+  script:
+    name: Script
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        name:
+          - install-deps
+          - install-service
+          - reset-service
+          - configure-shm
+          - configure-io-uring
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - uses: runs-on/action@v1
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cedana-${{ matrix.arch }}
+
+      - name: Run k8s setup host
+        env:
+          CEDANA_PLUGINS_BUILDS: local # change to alpha to test plugin downloads
+        run: |
+          sudo chmod +x ./cedana
+          sudo cp ./cedana /usr/local/bin/
+          sudo \
+            ENV="CI" \
+            CEDANA_URL="${CEDANA_URL}" \
+            CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}" \
+            CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL}" \
+            CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS}" \
+            /cedana/scripts/host/${{ matrix.name }}.sh
+
   plugin:
     name: Plugin
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/tag=${{ matrix.plugin }}/extras=s3-cache
