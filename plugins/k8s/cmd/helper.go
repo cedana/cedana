@@ -68,8 +68,8 @@ var setupCmd = &cobra.Command{
 		err = script.Run(
 			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
 			script.Chroot("/host", scripts.ResetService),
-			k8scripts.Install,
 			script.Chroot("/host", scripts.InstallDeps),
+			k8scripts.Install,
 			script.Chroot("/host", k8scripts.InstallPlugins),
 			script.Chroot("/host", k8scripts.ConfigureKubelet),
 			script.Chroot("/host", scripts.ConfigureShm),
@@ -117,13 +117,13 @@ var destroyCmd = &cobra.Command{
 		}
 
 		err := script.Run(
-			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
+			log.With().Str("operation", "destroy").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
 			script.Chroot("/host", scripts.ResetService),
 			k8scripts.Uninstall,
 		)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to destroy daemon")
-			return fmt.Errorf("error destroying host: %w", err)
+			log.Error().Err(err).Msg("failed to uninstall cedana")
+			return fmt.Errorf("error uninstalling: %w", err)
 		}
 
 		return nil

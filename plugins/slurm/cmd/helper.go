@@ -3,19 +3,19 @@ package cmd
 import (
 	"context"
 	_ "embed"
+	"fmt"
 	"sync"
 
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/metrics"
+	"github.com/cedana/cedana/pkg/script"
 	"github.com/cedana/cedana/pkg/version"
+	slurmscripts "github.com/cedana/cedana/plugins/slurm/scripts"
+	"github.com/cedana/cedana/scripts"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
-
-//go:embed scripts/setup.sh
-var setupScript string
-
-//go:embed scripts/cleanup.sh
-var cleanupScript string
 
 func init() {
 	HelperCmd.AddCommand(setupCmd)
@@ -44,17 +44,20 @@ var setupCmd = &cobra.Command{
 			metrics.Init(ctx, wg, "cedana-slurm", version.Version)
 		}
 
-// 		err = setupDaemon(
-// 			ctx,
-// 			logging.Writer(
-// 				log.With().Str("operation", "setup").Logger().WithContext(ctx),
-// 				zerolog.DebugLevel,
-// 			),
-// 		)
-// 		if err != nil {
-// 			log.Error().Err(err).Msg("failed to setup daemon")
-// 			return fmt.Errorf("error setting up host: %w", err)
-// 		}
+		err = script.Run(
+			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
+			scripts.ResetService,
+			scripts.InstallDeps,
+			slurmscripts.Install,
+			slurmscripts.InstallPlugins,
+			scripts.ConfigureShm,
+			scripts.ConfigureIoUring,
+			scripts.InstallService,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup daemon")
+			return fmt.Errorf("error setting up host: %w", err)
+		}
 
 		return nil
 	},
@@ -76,17 +79,15 @@ var destroyCmd = &cobra.Command{
 			metrics.Init(ctx, wg, "cedana-helper", version.Version)
 		}
 
-// 		err := destroyDaemon(
-// 			ctx,
-// 			logging.Writer(
-// 				log.With().Str("operation", "destroy").Logger().WithContext(ctx),
-// 				zerolog.DebugLevel,
-// 			),
-// 		)
-// 		if err != nil {
-// 			log.Error().Err(err).Msg("failed to destroy daemon")
-// 			return fmt.Errorf("error destroying host: %w", err)
-// 		}
+		err := script.Run(
+			log.With().Str("operation", "destroy").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
+			script.Chroot("/host", scripts.ResetService),
+			slurmscripts.Uninstall,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to uninstall cedana")
+			return fmt.Errorf("error uninstalling: %w", err)
+		}
 
 		return nil
 	},
