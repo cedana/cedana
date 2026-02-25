@@ -1,7 +1,6 @@
 set -euo pipefail
 
-cedana-slurm destroy
-cedana-slurm monitoring destroy
+cedana-slurm destroy || true
 
 # Remove config
 rm -rf ~/.cedana/
