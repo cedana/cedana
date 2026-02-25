@@ -1,15 +1,19 @@
 #!/bin/bash
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [ -f "$SCRIPT_DIR/utils.sh" ]; then
-    source "$SCRIPT_DIR/utils.sh"
+# Source utils.sh if running as a standalone script (BASH_SOURCE is set)
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+        source "$SCRIPT_DIR/utils.sh"
+    fi
 fi
 
-if ! command -v systemctl &>/dev/null || ! systemctl is-system-running &>/dev/null; then
+# check if systemd is available and running
+if ! systemctl status &>/dev/null; then
     pkill -f "$APP_PATH daemon start" || true
     echo "No systemd. Killed any running cedana daemon processes, but no service to remove."
-    exit 0
+    exit
 fi
 
 if [ -f "$SERVICE_FILE" ]; then
@@ -23,5 +27,4 @@ if [ -f "$SERVICE_FILE" ]; then
 else
     pkill -f "$APP_PATH daemon start" || true
     echo "No systemd service found, but killed any running cedana daemon processes just in case."
-    exit 0
 fi

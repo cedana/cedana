@@ -50,11 +50,12 @@ const (
 
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
-	DEFAULT_GPU_POOL_SIZE = 0
-	DEFAULT_GPU_LOG_DIR   = "/tmp"
-	DEFAULT_GPU_SOCK_DIR  = "/tmp"
-	DEFAULT_GPU_SHM_SIZE  = 8 * utils.GIBIBYTE
-	DEFAULT_GPU_DEBUG     = false
+	DEFAULT_GPU_POOL_SIZE                = 0
+	DEFAULT_GPU_LOG_DIR                  = "/tmp"
+	DEFAULT_GPU_SOCK_DIR                 = "/tmp"
+	DEFAULT_GPU_SHM_SIZE                 = 8 * utils.GIBIBYTE
+	DEFAULT_GPU_DEBUG                    = false
+	DEFAULT_GPU_SKIP_NVIDIA_RUNTIME_HOOK = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -96,11 +97,12 @@ var Global Config = Config{
 		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,
 	},
 	GPU: GPU{
-		PoolSize: DEFAULT_GPU_POOL_SIZE,
-		LogDir:   DEFAULT_GPU_LOG_DIR,
-		SockDir:  DEFAULT_GPU_SOCK_DIR,
-		ShmSize:  DEFAULT_GPU_SHM_SIZE,
-		Debug:    DEFAULT_GPU_DEBUG,
+		PoolSize:              DEFAULT_GPU_POOL_SIZE,
+		LogDir:                DEFAULT_GPU_LOG_DIR,
+		SockDir:               DEFAULT_GPU_SOCK_DIR,
+		ShmSize:               DEFAULT_GPU_SHM_SIZE,
+		Debug:                 DEFAULT_GPU_DEBUG,
+		SkipNvidiaRuntimeHook: DEFAULT_GPU_SKIP_NVIDIA_RUNTIME_HOOK,
 	},
 	CRIU: CRIU{
 		LeaveRunning:  DEFAULT_CRIU_LEAVE_RUNNING,
@@ -119,7 +121,10 @@ var Dir string
 func init() {
 	setDefaults()
 	bindEnvVars()
-	viper.Unmarshal(&Global)
+	err := viper.Unmarshal(&Global)
+	if err != nil {
+		panic(err)
+	}
 }
 
 type InitArgs struct {
@@ -171,7 +176,12 @@ func Init(args InitArgs) error {
 			return fmt.Errorf("Provided config string is invalid: %w", err)
 		}
 	} else {
-		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
+		err = viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
+		if err != nil {
+			if _, ok := err.(viper.ConfigFileAlreadyExistsError); !ok {
+				return fmt.Errorf("Failed to write config file: %w", err)
+			}
+		}
 	}
 
 	err = viper.UnmarshalExact(&Global)
@@ -184,12 +194,12 @@ func Init(args InitArgs) error {
 
 // Loads the global defaults into viper
 func setDefaults() {
+	viper.SetTypeByDefaultValue(true)
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		defaultVal := utils.GetValue(Global, field)
 		viper.SetDefault(tag, defaultVal)
 	}
-	viper.SetTypeByDefaultValue(true)
 }
 
 // Add bindings for env vars so env vars can be used as backup
@@ -199,6 +209,8 @@ func setDefaults() {
 //
 // Example: The field `cli.wait_for_ready` will bind to env var `CEDANA_CLI_WAIT_FOR_READY`.
 func bindEnvVars() {
+	viper.SetEnvPrefix(ENV_PREFIX)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		envVar := ENV_PREFIX + "_" + strings.ToUpper(strings.ReplaceAll(tag, ".", "_"))
