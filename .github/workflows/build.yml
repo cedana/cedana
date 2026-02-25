@@ -68,6 +68,10 @@ jobs:
     steps:
       - uses: runs-on/action@v2
 
+      - name: Install dependencies
+        run: |
+          dnf install -y git make gcc
+
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -134,6 +138,10 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
+
+      - name: Install dependencies
+        run: |
+          dnf install -y git make gcc
 
       - uses: actions/checkout@v4
         with:
