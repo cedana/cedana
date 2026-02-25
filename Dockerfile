@@ -6,6 +6,11 @@ ARG ALL_PLUGINS=0
 ARG VERSION
 ARG GO_VERSION=1.25rc1
 
+# Install deps
+RUN <<EOT
+dnf install -y git make gcc
+EOT
+
 # Install Golang
 RUN <<EOT
 ARCH=$(uname -m)
