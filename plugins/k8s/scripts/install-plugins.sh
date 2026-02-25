@@ -1,17 +1,4 @@
-#!/bin/bash
-
-set -eo pipefail
-
-# get the directory of the script
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do
-    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-    SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
-done
-DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-
-source "$DIR"/utils.sh
+set -euo pipefail
 
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
@@ -99,7 +86,7 @@ fi
 # Install all plugins
 if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
     # shellcheck disable=SC2086
-    "$APP_PATH" plugin install $PLUGINS
+    $APP_PATH plugin install $PLUGINS
 
     if [[ "$PLUGINS_TO_REMOVE" != "" ]]; then
         # shellcheck disable=SC2086

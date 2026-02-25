@@ -8,8 +8,6 @@ GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
 
-DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
-
 ifndef VERBOSE
 .SILENT:
 endif
@@ -27,6 +25,7 @@ GO_MOD_FILES=go.sum go.mod
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
+DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
 cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
@@ -46,16 +45,16 @@ $(INSTALL_BIN_DIR)/$(BINARY): $(OUT_DIR)/$(BINARY)
 start: $(INSTALL_BIN_DIR)/$(BINARY) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
-install-systemd: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the systemd daemon
-	@echo "Installing systemd service..."
-	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
+install-service: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the daemon as a service
+	@echo "Installing service..."
+	$(SUDO) $(SCRIPTS_DIR)/install-service.sh
 
-reset-systemd: ## Reset the systemd daemon
-	@echo "Stopping systemd service..."
-	$(SUDO) $(SCRIPTS_DIR)/host/systemd-reset.sh ;\
+reset-service: ## Reset the daemon service
+	@echo "Stopping service..."
+	$(SUDO) $(SCRIPTS_DIR)/reset-service.sh
 	sleep 1
 
-reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
+reset: reset-service reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	$(SUDO) pkill $(BINARY) || true
 	rm -f $(OUT_DIR)/$(BINARY)
