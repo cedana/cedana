@@ -101,9 +101,9 @@ var Registry = []Plugin{
 		Name: "slurm/wlm",
 		Type: EXTERNAL,
 		Libraries: []Binary{
-			{Name: "libslurm-cedana.so", InstallDir: "/usr/lib/slurm"},
-			{Name: "task_cedana.so", InstallDir: "/usr/lib/slurm"},
-			{Name: "cli_filter_cedana.so", InstallDir: "/usr/lib/slurm"},
+			{Name: "libslurm-cedana.so"},
+			{Name: "task_cedana.so"},
+			{Name: "cli_filter_cedana.so"},
 		},
 		Binaries: []Binary{{Name: "cedana-slurm"}},
 	},
