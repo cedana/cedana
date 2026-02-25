@@ -269,7 +269,7 @@ jobs:
             CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}" \
             CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL}" \
             CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS}" \
-            /cedana/scripts/host/${{ matrix.name }}.sh
+            scripts/${{ matrix.name }}.sh
 
   plugin:
     name: Plugin
