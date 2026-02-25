@@ -68,6 +68,10 @@ jobs:
     steps:
       - uses: runs-on/action@v2
 
+      - name: Install dependencies
+        run: |
+          dnf install -y git make gcc
+
       - name: Install Go
         run: |
           ARCH=$(uname -m)
@@ -140,6 +144,10 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
+
+      - name: Install dependencies
+        run: |
+          dnf install -y git make gcc
 
       - name: Install Go
         run: |
