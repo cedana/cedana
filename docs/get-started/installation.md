@@ -109,7 +109,7 @@ sudo cedana daemon start
 If you're a _systemd_ user, you may also install it as a service (if built from source):
 
 ```sh
-make install-systemd
+make install-service
 ```
 
 {% hint style="info" %}
