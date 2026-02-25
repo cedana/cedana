@@ -1,3 +1,4 @@
+#!/bin/bash
 set -euo pipefail
 
 cedana-slurm destroy || true

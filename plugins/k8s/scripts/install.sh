@@ -1,3 +1,4 @@
+#!/bin/bash
 set -euo pipefail
 
 # Load the binaries and libraries into the host's filesystem

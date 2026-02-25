@@ -1,3 +1,4 @@
+#!/bin/bash
 set -euo pipefail
 
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
