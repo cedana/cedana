@@ -66,4 +66,6 @@ if [ "$ENV" != "production" ]; then
     exit 0
 fi
 
+# Since slurm/wlm plugin is now installed
 cedana-slurm setup
+cedana-slurm monitoring setup
