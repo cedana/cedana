@@ -9,6 +9,7 @@ import (
 
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/scripts"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,9 +34,13 @@ func runScript(ctx context.Context, script string) error {
 	logger := log.Ctx(ctx)
 
 	if logger != nil {
+		loggerErr := logger.Level(zerolog.WarnLevel)
+
 		writer := logging.Writer(logger)
+		writerErr := logging.Writer(&loggerErr)
+
 		cmd.Stdout = writer
-		cmd.Stderr = writer
+		cmd.Stderr = writerErr
 	} else {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
