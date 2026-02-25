@@ -1,4 +1,4 @@
-set -eo pipefail
+set -euo pipefail
 
 if [ -f utils.sh ]; then
     source utils.sh

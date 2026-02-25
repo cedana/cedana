@@ -1,4 +1,4 @@
-set -eo pipefail
+set -euo pipefail
 
 # Load the binaries and libraries into the host's filesystem
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana

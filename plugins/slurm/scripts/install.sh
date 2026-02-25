@@ -1,4 +1,4 @@
-set -eo pipefail
+set -euo pipefail
 
 # NOTE: This is called from a Cedana binary so assuming it's already installed
 

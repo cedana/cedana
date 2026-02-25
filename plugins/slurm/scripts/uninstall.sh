@@ -1,4 +1,4 @@
-set -eo pipefail
+set -euo pipefail
 
 # Remove config
 rm -rf ~/.cedana/

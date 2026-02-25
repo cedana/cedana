@@ -41,7 +41,7 @@ Check out [Cedana vs. CRIU CUDA for GPU Checkpoint/Restore](https://app.gitbook.
 ### Single process
 
 {% hint style="info" %}
-Cedana GPU checkpoint/restore is only possible for managed processes/containers, i.e., those that are spawned using `cedana run --gpu-enabled` or managed using `cedana manage --gpu-enabled` (see [managed process/container](../managed.md)).
+Cedana GPU checkpoint/restore is only possible for managed processes/containers, i.e., those that are spawned using `cedana run --gpu-enabled` or managed using `cedana manage --gpu-enabled` (see [managed process/container](../managed.md)). If you don't want to run as a managed process/container, you can use `ceadna run --no-server` that will spawn the process/container as a child process of the CLI instead of the daemon.
 {% endhint %}
 
 1. You may clone the [cedana-samples repository](https://github.com/cedana/cedana-samples) for some example GPU workloads.
