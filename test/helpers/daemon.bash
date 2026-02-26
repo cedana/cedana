@@ -3,7 +3,7 @@
 # This is a helper file assumes its users are in the same directory as the Makefile
 
 export CEDANA_PROTOCOL=${CEDANA_PROTOCOL:-unix}
-export CEDANA_REMOTE=${CEDANA_REMOTE:-false}
+export CEDANA_DB_REMOTE=${CEDANA_DB_REMOTE:-false}
 export CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-debug}
 export CEDANA_LOG_LEVEL_NO_SERVER=$CEDANA_LOG_LEVEL
 export CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-false}
