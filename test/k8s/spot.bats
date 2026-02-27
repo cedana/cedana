@@ -32,7 +32,6 @@ setup_file() {
     validate_pod "$name" 300
 
     # Let workload run, then checkpoint
-    sleep 30
     local pod_id
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
     local action_id

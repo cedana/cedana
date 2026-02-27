@@ -41,6 +41,8 @@ func init() {
 	if addr := os.Getenv("CONTAINERD_ADDRESS"); addr != "" {
 		containerdAddress = addr
 	}
+
+	script.Source(scripts.Utils)
 }
 
 var HelperCmd = &cobra.Command{

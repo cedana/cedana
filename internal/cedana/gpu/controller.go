@@ -19,11 +19,13 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/gofrs/flock"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -225,11 +227,6 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 
 	log.Debug().Str("ID", id).Msg("spawning new GPU controller")
 
-	observability := ""
-	if config.Global.GPU.Observability {
-		observability = "--observability"
-	}
-
 	c = &controller{
 		ID:     id,
 		ErrBuf: &bytes.Buffer{},
@@ -237,20 +234,20 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		GID:    uint32(os.Getgid()),
 	}
 
-	logDir, err := EnsureLogDir(id, c.UID, c.GID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
-	}
-
 	cmd := exec.Command(
 		binary,
 		id,
-		observability,
-		"--log-dir",
-		logDir,
 		"--sock-dir",
 		config.Global.GPU.SockDir,
 	)
+
+	if config.Global.GPU.LogDir != "" {
+		logDir, err := EnsureLogDir(id, c.UID, c.GID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
+		}
+		cmd.Args = append(cmd.Args, "--log-dir", logDir)
+	}
 
 	// We create a new process group and session to essentially daemonize the controller process.
 	// So that workers of the controller can all be signaled together.
@@ -261,6 +258,10 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	}
 
 	cmd.Stderr = c.ErrBuf
+	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stdout
+		logger := log.With().Str("ID", id).Str("plugin", "gpu").Logger().Level(zerolog.DebugLevel)
+		cmd.Stdout = logging.Writer(&logger)
+	}
 
 	existingLD := os.Getenv("LD_LIBRARY_PATH")
 	ldPath := config.Global.GPU.LdLibPath

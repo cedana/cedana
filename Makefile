@@ -66,8 +66,7 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana
-	$(SUDO) rm -rf /root/.cedana
+	$(SUDO) rm -rf /etc/cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
@@ -347,7 +346,11 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null
 
-docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
+ifeq ($(PREBUILT_BINARIES),1)
+docker: cedana plugins ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
+else
+docker:
+endif
 	@echo "Building helper Docker image..."
 	docker buildx build --platform $(PLATFORM) \
 		--build-arg PREBUILT_BINARIES=$(PREBUILT_BINARIES) \
@@ -355,7 +358,7 @@ docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERS
 		--build-arg VERSION=$(VERSION) \
 		-t $(DOCKER_IMAGE) --load . ;\
 
-docker-push: ## Push the helper Docker image (DOCKER_IMAGE=<image>)
+docker-push: docker ## Push the helper Docker image (DOCKER_IMAGE=<image>)
 	@echo "Pushing helper Docker image..."
 	docker push $(DOCKER_IMAGE)
 

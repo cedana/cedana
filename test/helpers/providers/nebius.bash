@@ -71,8 +71,8 @@ _create_nebius_mk8s() {
     debug_log "Creating Nebius mk8s cluster..."
 
     NB_SUBNET_ID=$(nebius vpc subnet list \
-        --format json |
-        jq -r '.items[0].metadata.id')
+            --format json |
+    jq -r '.items[0].metadata.id')
     export NB_SUBNET_ID
 
     NB_CLUSTER_ID=$(
@@ -85,9 +85,9 @@ _create_nebius_mk8s() {
         debug_log "Cluster already exists, skip creation..."
     else
         NB_CLUSTER_ID=$(nebius mk8s cluster create \
-            --name "$NB_CLUSTER_NAME" \
-            --control-plane-subnet-id "$NB_SUBNET_ID" \
-            '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
+                --name "$NB_CLUSTER_NAME" \
+                --control-plane-subnet-id "$NB_SUBNET_ID" \
+                '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
             --format json | jq -r '.metadata.id')
     fi
     export NB_CLUSTER_ID
@@ -139,7 +139,7 @@ setup_gpu_operator() {
     debug_log "Installing NVIDIA GPU operator..."
 
     helm repo add nvidia https://helm.ngc.nvidia.com/nvidia &&
-        helm repo update
+    helm repo update
 
     helm upgrade -i --wait gpu-operator \
         -n "$GPU_OPERATOR_NAMESPACE" --create-namespace \
@@ -161,8 +161,7 @@ delete_nebius_disks() {
     kubectl delete po --all -n "$NAMESPACE"
     debug_log "Deleting dgtest-pvc ..."
     spec=$(cmd_pvc_spec 50Gi dgtest-pvc)
-    kubectl delete -f "$spec"
-    sleep 10
+    kubectl delete -f "$spec" --wait
     debug_log "dgtest-pvc has been deleted"
     debug_log "Deleting unused nebius disk ..."
     nebius compute disk delete --id "$disk_id"

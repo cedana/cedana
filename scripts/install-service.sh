@@ -1,67 +1,36 @@
+#!/bin/bash
 set -euo pipefail
 
-if [ -f utils.sh ]; then
-    source utils.sh
+# Source utils.sh if running as a standalone script (BASH_SOURCE is set)
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+        source "$SCRIPT_DIR/utils.sh"
+    fi
 fi
-
-DAEMON_ARGS=""
 
 if ! test -f "$APP_PATH"; then
     echo "No binary found" >&2
     exit 1
 fi
 
-# check if systemctl is available
-if ! command -v systemctl &>/dev/null || ! systemctl is-system-running &>/dev/null; then
-    echo "No systemd. Starting cedana daemon directly without service setup..." >&2
-    $APP_PATH daemon start &>/var/log/cedana-daemon.log &
+# check if systemd is available and running
+if ! systemctl status &>/dev/null; then
+    echo "Systemd not available. Starting $APP_NAME daemon directly without service setup..." >&2
+    $APP_PATH daemon start &> "$LOG_PATH" &
     exit
 fi
-
-for arg in "$@"; do
-    if [[ $arg == --args=* ]]; then
-        value="${arg#*=}"
-        echo "Daemon args: $value"
-        DAEMON_ARGS="$value"
-    fi
-    if [ "$CEDANA_METRICS_ENABLED" == "true" ]; then
-        echo "Metrics enabled..."
-    fi
-done
 
 if test -f "$SERVICE_FILE"; then
     echo "Restarting $APP_NAME..."
 fi
 
 echo "Creating $SERVICE_FILE..."
-cat <<EOF | $SUDO_USE tee "$SERVICE_FILE" >/dev/null
+cat <<EOF | tee "$SERVICE_FILE" >/dev/null
 [Unit]
-Description=Cedana Checkpointing Daemon
+Description=Cedana Daemon
 [Service]
-Environment=USER=$USER
-Environment=PATH=/cedana/bin:$PATH
-Environment=CEDANA_LOG_LEVEL="$CEDANA_LOG_LEVEL"
-Environment=CEDANA_LOG_LEVEL_NO_SERVER="$CEDANA_LOG_LEVEL_NO_SERVER"
-Environment=CEDANA_URL="$CEDANA_URL"
-Environment=CEDANA_AUTH_TOKEN="$CEDANA_AUTH_TOKEN"
-Environment=CEDANA_ADDRESS="$CEDANA_ADDRESS"
-Environment=CEDANA_PROTOCOL="$CEDANA_PROTOCOL"
-Environment=CEDANA_DB_REMOTE="$CEDANA_DB_REMOTE"
-Environment=CEDANA_CLIENT_WAIT_FOR_READY="$CEDANA_CLIENT_WAIT_FOR_READY"
-Environment=CEDANA_PROFILING_ENABLED="$CEDANA_PROFILING_ENABLED"
-Environment=CEDANA_METRICS_ENABLED="$CEDANA_METRICS_ENABLED"
-Environment=CEDANA_CHECKPOINT_DIR="$CEDANA_CHECKPOINT_DIR"
-Environment=CEDANA_CHECKPOINT_STREAMS="$CEDANA_CHECKPOINT_STREAMS"
-Environment=CEDANA_CHECKPOINT_COMPRESSION="$CEDANA_CHECKPOINT_COMPRESSION"
-Environment=CEDANA_CHECKPOINT_ASYNC="$CEDANA_CHECKPOINT_ASYNC"
-Environment=CEDANA_GPU_POOL_SIZE="$CEDANA_GPU_POOL_SIZE"
-Environment=CEDANA_GPU_SHM_SIZE="$CEDANA_GPU_SHM_SIZE"
-Environment=CEDANA_GPU_LD_LIB_PATH="$CEDANA_GPU_LD_LIB_PATH"
-Environment=CEDANA_CRIU_MANAGE_CGROUPS="$CEDANA_CRIU_MANAGE_CGROUPS"
-Environment=CEDANA_CLUSTER_ID="$CEDANA_CLUSTER_ID"
-Environment=CONTAINERD_ADDRESS="$CONTAINERD_ADDRESS"
-Environment=CONTAINERD_CONFIG_PATH="$CONTAINERD_CONFIG_PATH"
-ExecStart=$APP_PATH daemon start $DAEMON_ARGS
+ExecStart=$APP_PATH daemon start
 User=root
 Group=root
 Restart=no
@@ -70,14 +39,14 @@ Restart=no
 WantedBy=multi-user.target
 
 [Service]
-StandardError=append:/var/log/cedana-daemon.log
-StandardOutput=append:/var/log/cedana-daemon.log
+StandardError=append:$LOG_PATH
+StandardOutput=append:$LOG_PATH
 EOF
 
 echo "Reloading systemd..."
-$SUDO_USE systemctl daemon-reload
+systemctl daemon-reload
 
 echo "Enabling and starting $APP_NAME service..."
-$SUDO_USE systemctl enable "$APP_NAME".service
-$SUDO_USE systemctl start "$APP_NAME".service
+systemctl enable "$APP_NAME".service
+systemctl start "$APP_NAME".service
 echo "$APP_NAME service setup complete."

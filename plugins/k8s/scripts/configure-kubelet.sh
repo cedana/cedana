@@ -1,4 +1,7 @@
+#!/bin/bash
 set -euo pipefail
+
+check_root
 
 if [ "$ENV" != "production" ]; then
     echo "Running in non-production environment; skipping kubelet configuration update" >&2

@@ -31,6 +31,7 @@ func init() {
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(freezeCmd)
 	rootCmd.AddCommand(unfreezeCmd)
+	rootCmd.AddCommand(versionCmd)
 
 	// Add helper cmds from plugins
 	features.HelperCmds.IfAvailable(
@@ -45,6 +46,8 @@ func init() {
 		String(flags.ConfigFlag.Full, "", "one-time config JSON string (merge with existing config)")
 	rootCmd.PersistentFlags().String(flags.ConfigDirFlag.Full, "", "custom config directory")
 	rootCmd.MarkPersistentFlagDirname(flags.ConfigDirFlag.Full)
+	rootCmd.PersistentFlags().
+		Bool(flags.InitConfig.Full, false, "initialize config file with defaults and env var overrides")
 	rootCmd.MarkFlagsMutuallyExclusive(flags.ConfigFlag.Full, flags.ConfigDirFlag.Full)
 	rootCmd.PersistentFlags().
 		StringP(flags.ProtocolFlag.Full, flags.ProtocolFlag.Short, "", "protocol to use (TCP, UNIX, VSOCK)")
@@ -76,7 +79,8 @@ var rootCmd = &cobra.Command{
 		"\nInstance Brokerage, Orchestration and Migration System." +
 		"\nProperty of Cedana, Corp.\n",
 
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+		initConfig, _ := cmd.Flags().GetBool(flags.InitConfig.Full)
 		conf, _ := cmd.Flags().GetString(flags.ConfigFlag.Full)
 		confDir, _ := cmd.Flags().GetString(flags.ConfigDirFlag.Full)
 
@@ -84,16 +88,33 @@ var rootCmd = &cobra.Command{
 			confDir = os.Getenv("CEDANA_CONFIG_DIR")
 		}
 
-		if err := config.Init(config.InitArgs{
-			Config:    conf,
-			ConfigDir: confDir,
-		}); err != nil {
+		if initConfig {
+			err = config.Init(config.Args{
+				Config:    conf,
+				ConfigDir: confDir,
+			})
+		} else {
+			err = config.Load(config.Args{
+				Config:    conf,
+				ConfigDir: confDir,
+			})
+		}
+
+		if err != nil {
 			return fmt.Errorf("Failed to initialize config: %w", err)
 		}
 
 		logging.SetLogger(logging.ConsoleWriter)
 
 		return nil
+	},
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version of Cedana",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(rootCmd.Version)
 	},
 }
 
