@@ -83,7 +83,7 @@ var destroyCmd = &cobra.Command{
 
 		err := script.Run(
 			log.With().Str("operation", "destroy").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
-			script.Chroot("/host", scripts.ResetService),
+			scripts.ResetService,
 			slurmscripts.Uninstall,
 		)
 		if err != nil {
