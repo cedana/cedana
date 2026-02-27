@@ -20,6 +20,8 @@ import (
 func init() {
 	HelperCmd.AddCommand(setupCmd)
 	HelperCmd.AddCommand(destroyCmd)
+
+	script.Source(scripts.Utils)
 }
 
 var HelperCmd = &cobra.Command{

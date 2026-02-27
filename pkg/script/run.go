@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	"github.com/cedana/cedana/pkg/logging"
-	"github.com/cedana/cedana/scripts"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 const SHELL = "/bin/bash"
+
+var sourceScript string
 
 func Run(ctx context.Context, scripts ...string) error {
 	for _, script := range scripts {
@@ -26,11 +27,12 @@ func Run(ctx context.Context, scripts ...string) error {
 }
 
 func runScript(ctx context.Context, script string) error {
-	cleanedScript := removeShebang(script)
-	scriptWithUtils := scripts.Utils + "\n" + cleanedScript
+	script = removeShebang(script)
+
+	script = sourceScript + "\n" + script
 
 	cmd := exec.CommandContext(ctx, SHELL)
-	cmd.Stdin = strings.NewReader(scriptWithUtils)
+	cmd.Stdin = strings.NewReader(script)
 
 	logger := log.Ctx(ctx)
 
@@ -50,10 +52,16 @@ func runScript(ctx context.Context, script string) error {
 	return cmd.Run()
 }
 
+func Source(scripts ...string) {
+	for _, script := range scripts {
+		sourceScript += script + "\n"
+	}
+}
+
 // Chroot wraps a script to execute within a chroot environment
 func Chroot(path string, script string) string {
-	cleanedScript := removeShebang(script)
-	return fmt.Sprintf(`chroot %s %s -c %s`, path, SHELL, escapeShellArg(scripts.Utils+"\n"+cleanedScript))
+	script = removeShebang(script)
+	return fmt.Sprintf(`chroot %s %s -c %s`, path, SHELL, escapeShellArg(sourceScript+"\n"+script))
 }
 
 // removeShebang removes the shebang line from a script if present
@@ -74,4 +82,3 @@ func escapeShellArg(arg string) string {
 	escaped := strings.ReplaceAll(arg, "'", "'\\''")
 	return "'" + escaped + "'"
 }
-
