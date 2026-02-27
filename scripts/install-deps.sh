@@ -9,6 +9,8 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
+check_root
+
 # Define packages for YUM and APT
 YUM_PACKAGES=(
     wget git make

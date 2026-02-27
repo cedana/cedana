@@ -9,6 +9,8 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
+check_root
+
 if ! test -f "$APP_PATH"; then
     echo "No binary found" >&2
     exit 1
@@ -26,7 +28,7 @@ if test -f "$SERVICE_FILE"; then
 fi
 
 echo "Creating $SERVICE_FILE..."
-cat <<EOF | $SUDO_USE tee "$SERVICE_FILE" >/dev/null
+cat <<EOF | tee "$SERVICE_FILE" >/dev/null
 [Unit]
 Description=Cedana Daemon
 [Service]
@@ -44,9 +46,9 @@ StandardOutput=append:/var/log/cedana-daemon.log
 EOF
 
 echo "Reloading systemd..."
-$SUDO_USE systemctl daemon-reload
+systemctl daemon-reload
 
 echo "Enabling and starting $APP_NAME service..."
-$SUDO_USE systemctl enable "$APP_NAME".service
-$SUDO_USE systemctl start "$APP_NAME".service
+systemctl enable "$APP_NAME".service
+systemctl start "$APP_NAME".service
 echo "$APP_NAME service setup complete."

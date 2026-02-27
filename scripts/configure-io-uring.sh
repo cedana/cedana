@@ -9,11 +9,13 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
+check_root
+
 if [ "${DISABLE_IO_URING:-false}" = "true" ]; then
     echo "Attempting to disable IO Uring using sysctl..."
     if sysctl -a 2>/dev/null | grep -q kernel.io_uring_disabled; then
         echo "Found kernel.io_uring_disabled sysctl parameter"
-        if sudo sysctl -w kernel.io_uring_disabled=2; then
+        if sysctl -w kernel.io_uring_disabled=2; then
             echo "IO Uring disabled successfully (kernel.io_uring_disabled=2)"
         else
             echo "ERROR: Failed to set kernel.io_uring_disabled=2 (sysctl command failed)"

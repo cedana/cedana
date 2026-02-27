@@ -2,11 +2,6 @@
 
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 
-SUDO_USE="sudo -E"
-if ! which sudo &>/dev/null; then
-    export SUDO_USE=""
-fi
-
 export APP_NAME="cedana"
 export APP_PATH="/usr/local/bin/$APP_NAME"
 export SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
@@ -22,3 +17,10 @@ elif [ -f /.dockerenv ]; then
     ENV="docker"
 fi
 export ENV
+
+check_root() {
+    if [[ "$EUID" -ne 0 ]]; then
+        echo "This script must be run as root" >&2
+        exit 1
+    fi
+}
