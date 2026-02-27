@@ -5,7 +5,7 @@ set -euo pipefail
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/lib/libcedana*.so /host/usr/local/lib/
 
-# Reset config since it's a fresh install
-rm -rf /host/root/.cedana/
+# Re-initialize config since it's a fresh install
+chroot /host /usr/local/bin/cedana --init-config version
 
 echo "Installed Cedana into the host filesystem"

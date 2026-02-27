@@ -53,6 +53,7 @@ var (
 	// Parent flags
 	AddressFlag   = Flag{Full: "address"}
 	ProtocolFlag  = Flag{Full: "protocol"}
+	InitConfig    = Flag{Full: "init-config"}
 	ConfigFlag    = Flag{Full: "config"}
 	ConfigDirFlag = Flag{Full: "config-dir"}
 	DBFlag        = Flag{Full: "db"}

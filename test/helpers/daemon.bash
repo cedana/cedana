@@ -85,7 +85,7 @@ start_daemon_at() {
     local sock=$1
     id=$(basename "$sock")
     debug_log "Starting daemon at socket $sock with config $CEDANA_CONFIG_DIR/config.json"
-    cedana daemon start --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
+    cedana daemon start --init-config --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
     wait_for_start "$sock"
 }
 

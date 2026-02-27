@@ -3,9 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"os/user"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/utils"
@@ -13,7 +10,7 @@ import (
 )
 
 const (
-	DIR_NAME   = ".cedana"
+	DIR_PATH   = "/etc/cedana"
 	FILE_NAME  = "config"
 	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
@@ -127,40 +124,26 @@ func init() {
 	}
 }
 
-type InitArgs struct {
+type Args struct {
 	Config    string
 	ConfigDir string
 }
 
-func Init(args InitArgs) error {
-	user, err := user.Current()
-	if err != nil {
-		return err
+func Load(args ...Args) (err error) {
+	var a Args
+	if len(args) > 0 {
+		a = args[0]
 	}
 
-	if args.ConfigDir == "" {
-		homeDir := user.HomeDir
-		Dir = filepath.Join(homeDir, DIR_NAME)
+	if a.ConfigDir == "" {
+		Dir = DIR_PATH
 	} else {
-		Dir = args.ConfigDir
+		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
-
-	// Create config directory if it does not exist
-	_, err = os.Stat(Dir)
-	if os.IsNotExist(err) {
-		err = os.MkdirAll(Dir, DIR_PERM)
-		if err != nil {
-			return err
-		}
-	}
-	uid, _ := strconv.Atoi(user.Uid)
-	gid, _ := strconv.Atoi(user.Gid)
-	os.Chown(Dir, uid, gid)
 
 	err = viper.ReadInConfig()
 	if err != nil {
@@ -169,19 +152,61 @@ func Init(args InitArgs) error {
 		}
 	}
 
-	if args.Config != "" {
-		reader := strings.NewReader(args.Config)
+	if a.Config != "" {
+		reader := strings.NewReader(a.Config)
 		err = viper.MergeConfig(reader)
 		if err != nil {
 			return fmt.Errorf("Provided config string is invalid: %w", err)
 		}
+	}
+
+	err = viper.UnmarshalExact(&Global)
+	if err != nil {
+		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
+	}
+
+	return nil
+}
+
+// Init initializes and writes the config file. Overwrites any existing config file, and the values
+// used are from the global defaults overridden by env vars.
+func Init(args ...Args) error {
+	var a Args
+	if len(args) > 0 {
+		a = args[0]
+	}
+
+	if a.ConfigDir == "" {
+		Dir = DIR_PATH
 	} else {
-		err = viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
+		Dir = a.ConfigDir
+	}
+
+	viper.AddConfigPath(Dir)
+	viper.SetConfigPermissions(FILE_PERM)
+	viper.SetConfigType(FILE_TYPE)
+	viper.SetConfigName(FILE_NAME)
+
+	// Create config directory if it does not exist
+	_, err := os.Stat(Dir)
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(Dir, DIR_PERM)
 		if err != nil {
-			if _, ok := err.(viper.ConfigFileAlreadyExistsError); !ok {
-				return fmt.Errorf("Failed to write config file: %w", err)
-			}
+			return err
 		}
+	}
+
+	if a.Config != "" {
+		reader := strings.NewReader(a.Config)
+		err = viper.MergeConfig(reader)
+		if err != nil {
+			return fmt.Errorf("Provided config string is invalid: %w", err)
+		}
+	}
+
+	err = viper.WriteConfig() // Will only overwrite if file does not exist, ignore other errors
+	if err != nil {
+		return fmt.Errorf("Failed to write config file: %w", err)
 	}
 
 	err = viper.UnmarshalExact(&Global)
