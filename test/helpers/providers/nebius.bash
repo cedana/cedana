@@ -179,7 +179,6 @@ setup_cluster() {
     NB_NODE_COUNT="1"
     NB_GPU_PRESET="8gpu-128vcpu-1600gb"
     NB_NODE_DISK_SIZE="137438953472"
-    create_nodegroup
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
     nebius mk8s cluster get-credentials --id "$NB_CLUSTER_ID" --external

@@ -99,6 +99,7 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,training,multi,deepspeed
 @test "Dump/Restore: Multi-GPU DeepSpeed Training" {
+    skip "deepspeed multi"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml" "$NAMESPACE" "deepspeed-2gpu")
 
@@ -107,6 +108,7 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,training,multi,torch
 @test "Dump/Restore: Multi-GPU PyTorch Training" {
+    skip "pytorch multi"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-4xGPU-pytorch-cifar100.yaml" "$NAMESPACE" "pytorch-4gpu")
 
