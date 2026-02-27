@@ -192,9 +192,7 @@ setup_cluster() {
 
 teardown_cluster() {
     debug_log "Tearing down unused storage disks..."
-    delete_nebius_disks
     debug_log "Tearing down Nebius cluster..."
-    delete_mk8s_cluster
 
     debug_log "Nebius cluster teardown complete"
 }
