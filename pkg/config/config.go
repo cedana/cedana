@@ -204,9 +204,12 @@ func Init(args ...Args) error {
 		}
 	}
 
-	err = viper.WriteConfig() // Will only overwrite if file does not exist, ignore other errors
+	err = viper.SafeWriteConfig()
 	if err != nil {
-		return fmt.Errorf("Failed to write config file: %w", err)
+		err = viper.WriteConfig()
+		if err != nil {
+			return fmt.Errorf("Failed to write config file: %w", err)
+		}
 	}
 
 	err = viper.UnmarshalExact(&Global)
