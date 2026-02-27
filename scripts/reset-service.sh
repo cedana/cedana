@@ -14,7 +14,7 @@ check_root
 # check if systemd is available and running
 if ! systemctl status &>/dev/null; then
     pkill -f "$APP_PATH daemon start" || true
-    echo "No systemd. Killed any running cedana daemon processes, but no service to remove."
+    echo "No systemd. Killed any running processes, but no service to remove."
     exit
 fi
 
@@ -23,10 +23,10 @@ if [ -f "$SERVICE_FILE" ]; then
     systemctl stop "$APP_NAME".service
 
     # truncate the logs
-    echo -n > /var/log/cedana-daemon.log
+    echo -n > "$LOG_PATH"
 
     rm -f "$SERVICE_FILE"
 else
     pkill -f "$APP_PATH daemon start" || true
-    echo "No systemd service found, but killed any running cedana daemon processes just in case."
+    echo "No systemd service found, but killed any running processes just in case."
 fi
