@@ -135,14 +135,14 @@ teardown_suite() {
 
     # Uninstall helm chart unless skipped
     if [ "${SKIP_HELM:-0}" != "1" ]; then
-        helm_uninstall_cedana "$CEDANA_NAMESPACE"
+        debug_log "Skipping cluster deregistration"
     else
         debug_log "Skipping helm uninstall"
     fi
 
     # Deregister cluster (only if we registered it)
     if [ -n "$CLUSTER_ID" ] && [ "${SKIP_HELM:-0}" != "1" ]; then
-        deregister_cluster "$CLUSTER_ID"
+        debug_log "Skipping cluster deregistration"
     else
         debug_log "Skipping cluster deregistration"
     fi
