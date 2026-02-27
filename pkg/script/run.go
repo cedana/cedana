@@ -36,17 +36,15 @@ func runScript(ctx context.Context, script string) error {
 
 	logger := log.Ctx(ctx)
 
-	if logger != nil {
-		loggerErr := logger.Level(zerolog.WarnLevel)
-
-		writer := logging.Writer(logger)
-		writerErr := logging.Writer(&loggerErr)
-
-		cmd.Stdout = writer
-		cmd.Stderr = writerErr
-	} else {
+	if logger.GetLevel() == zerolog.Disabled {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+	} else {
+		loggerErr := logger.Level(zerolog.WarnLevel)
+		writer := logging.Writer(logger)
+		writerErr := logging.Writer(&loggerErr)
+		cmd.Stdout = writer
+		cmd.Stderr = writerErr
 	}
 
 	return cmd.Run()
