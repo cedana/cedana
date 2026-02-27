@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+check_root
+
 # Remove config
 rm -rf /host/etc/cedana
 
@@ -11,5 +13,5 @@ rm -rf /host/run/*cedana*
 rm -rf /host/dev/shm/*cedana*
 
 # Remove all binaries and libraries from the host's filesystem
-rm -f /host/usr/local/lib/libcedana*.so
-rm -f /host/usr/local/bin/cedana
+rm -f /host/usr/local/lib/*cedana*
+rm -f /host/usr/local/bin/*cedana*

@@ -1,6 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
+check_root
+
 # Load the binaries and libraries into the host's filesystem
 cp /usr/local/bin/cedana /host/usr/local/bin/cedana
 cp /usr/local/lib/libcedana*.so /host/usr/local/lib/
