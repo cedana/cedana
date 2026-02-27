@@ -100,6 +100,7 @@ jobs:
           gh release upload --clobber "$tag" \
               --repo="$GITHUB_REPOSITORY" \
               *.tar.gz \
+              scripts/install-release.sh
 
   cloudsmith:
     name: Cloudsmith
@@ -129,6 +130,14 @@ jobs:
           cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish \
             --name cedana-${{ matrix.arch }} \
             --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
+            --version ${{ github.head_ref || github.ref_name }} \
+            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
+
+      - name: Push install-release.sh to Cloudsmith
+        run: |
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} scripts/install-release.sh --republish \
+            --name install-release.sh \
+            --tags ${{ github.head_ref || github.ref_name }},${{ github.sha }} \
             --version ${{ github.head_ref || github.ref_name }} \
             --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
 

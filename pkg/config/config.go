@@ -127,6 +127,7 @@ func init() {
 type Args struct {
 	Config    string
 	ConfigDir string
+	Merge     bool
 }
 
 func Load(args ...Args) (err error) {
@@ -193,6 +194,15 @@ func Init(args ...Args) error {
 		err = os.MkdirAll(Dir, DIR_PERM)
 		if err != nil {
 			return err
+		}
+	}
+
+	if a.Merge {
+		err = viper.ReadInConfig()
+		if err != nil {
+			if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+				return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
+			}
 		}
 	}
 

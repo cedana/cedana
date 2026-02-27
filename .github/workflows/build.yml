@@ -102,6 +102,12 @@ jobs:
           make cedana VERSION=$VERSION -j $(nproc)
           echo $VERSION > ./cedana-version.txt
 
+      - id: "inject-version"
+        name: Inject VERSION into install-release.sh
+        run: |
+          VERSION="${{ github.head_ref || github.ref_name }}"
+          sed -i "s|^VERSION=\${VERSION:-\".*\"}|VERSION=\${VERSION:-\"$VERSION\"}|" scripts/install-release.sh
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -109,6 +115,7 @@ jobs:
           path: |
             ./cedana
             ./cedana-version.txt
+            scripts/install-release.sh
 
   plugin:
     name: Plugin

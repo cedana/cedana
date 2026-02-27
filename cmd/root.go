@@ -48,6 +48,8 @@ func init() {
 	rootCmd.MarkPersistentFlagDirname(flags.ConfigDirFlag.Full)
 	rootCmd.PersistentFlags().
 		Bool(flags.InitConfig.Full, false, "initialize config file with defaults and env var overrides")
+	rootCmd.PersistentFlags().
+		Bool(flags.MergeConfig.Full, false, "same as --init-config but does not overwrite existing config file, only merges new values into it")
 	rootCmd.MarkFlagsMutuallyExclusive(flags.ConfigFlag.Full, flags.ConfigDirFlag.Full)
 	rootCmd.PersistentFlags().
 		StringP(flags.ProtocolFlag.Full, flags.ProtocolFlag.Short, "", "protocol to use (TCP, UNIX, VSOCK)")
@@ -81,6 +83,7 @@ var rootCmd = &cobra.Command{
 
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
 		initConfig, _ := cmd.Flags().GetBool(flags.InitConfig.Full)
+		mergeConfig, _ := cmd.Flags().GetBool(flags.MergeConfig.Full)
 		conf, _ := cmd.Flags().GetString(flags.ConfigFlag.Full)
 		confDir, _ := cmd.Flags().GetString(flags.ConfigDirFlag.Full)
 
@@ -88,10 +91,11 @@ var rootCmd = &cobra.Command{
 			confDir = os.Getenv("CEDANA_CONFIG_DIR")
 		}
 
-		if initConfig {
+		if initConfig || mergeConfig {
 			err = config.Init(config.Args{
 				Config:    conf,
 				ConfigDir: confDir,
+				Merge:     mergeConfig,
 			})
 		} else {
 			err = config.Load(config.Args{
