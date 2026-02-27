@@ -30,7 +30,7 @@ cat <<EOF | $SUDO_USE tee "$SERVICE_FILE" >/dev/null
 [Unit]
 Description=Cedana Daemon
 [Service]
-ExecStart=$APP_PATH daemon start $DAEMON_ARGS
+ExecStart=$APP_PATH daemon start
 User=root
 Group=root
 Restart=no
