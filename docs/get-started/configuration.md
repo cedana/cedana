@@ -1,9 +1,10 @@
 # Configuration
 
-Cedana configuration lives in your home directory, specifically in `~/.cedana/config.json`. This file is automatically created the first time you use a Cedana command. You can also create it manually.
+Cedana configuration lives in `/etc/cedana/config.json`. You can initialize this file with default values by using the `--init-config` flag. Any configuration in environment variables will override the default values when this file is initialized.
 
 ## Environment variables
-You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
+
+You may also override the configuration file using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
 
 ## [Config](../../pkg/config/types.go#L10-L36)
 

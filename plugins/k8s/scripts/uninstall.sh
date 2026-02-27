@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Remove config
-rm -rf /host/root/.cedana/
+rm -rf /host/etc/cedana
 
 # Remove temporary files and logs
 rm -rf /host/var/log/*cedana*

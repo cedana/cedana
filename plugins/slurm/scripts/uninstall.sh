@@ -4,7 +4,7 @@ set -euo pipefail
 cedana-slurm destroy || true
 
 # Remove config
-rm -rf ~/.cedana/
+rm -rf /etc/cedana
 
 # Remove temporary files and logs
 rm -rf /var/log/*cedana*

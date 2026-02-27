@@ -66,8 +66,7 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana
-	$(SUDO) rm -rf /root/.cedana
+	$(SUDO) rm -rf /etc/cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
