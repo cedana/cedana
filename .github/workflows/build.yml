@@ -70,7 +70,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          dnf install -y git make gcc
+          dnf install -y git make gcc findutils
 
       - uses: actions/checkout@v4
         with:
@@ -148,7 +148,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          dnf install -y git make gcc
+          dnf install -y git make gcc findutils
 
       - uses: actions/checkout@v4
         with:

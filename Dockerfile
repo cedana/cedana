@@ -8,7 +8,7 @@ ARG GO_VERSION=1.25rc1
 
 # Install deps
 RUN <<EOT
-dnf install -y git make gcc
+dnf install -y git make gcc findutils
 EOT
 
 # Install Golang
