@@ -9,8 +9,6 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
-check_root
-
 if ! test -f "$APP_PATH"; then
     echo "No binary found" >&2
     exit 1
@@ -18,8 +16,8 @@ fi
 
 # check if systemd is available and running
 if ! systemctl status &>/dev/null; then
-    echo "Systemd not available. Starting cedana daemon directly without service setup..." >&2
-    $APP_PATH daemon start &>/var/log/cedana-daemon.log &
+    echo "Systemd not available. Starting $APP_NAME daemon directly without service setup..." >&2
+    $APP_PATH daemon start &> "$LOG_PATH" &
     exit
 fi
 
@@ -41,8 +39,8 @@ Restart=no
 WantedBy=multi-user.target
 
 [Service]
-StandardError=append:/var/log/cedana-daemon.log
-StandardOutput=append:/var/log/cedana-daemon.log
+StandardError=append:$LOG_PATH
+StandardOutput=append:$LOG_PATH
 EOF
 
 echo "Reloading systemd..."
