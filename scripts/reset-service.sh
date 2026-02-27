@@ -26,6 +26,9 @@ if [ -f "$SERVICE_FILE" ]; then
     echo -n > "$LOG_PATH"
 
     rm -f "$SERVICE_FILE"
+
+    echo "Reloading systemd..."
+    systemctl daemon-reload
 else
     pkill -f "$APP_PATH daemon start" || true
     echo "No systemd service found, but killed any running processes just in case."
