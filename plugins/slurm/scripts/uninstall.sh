@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-cedana-slurm destroy || true
+cedana-slurm cleanup || true
 
 # Remove config
 rm -rf /etc/cedana
