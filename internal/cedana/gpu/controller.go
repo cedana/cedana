@@ -306,11 +306,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	c.PID = uint32(cmd.Process.Pid)
 	c.ParentPID = uint32(os.Getpid())
 
-	err = c.Sync(ctx, true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to GPU controller: %w", err)
-	}
-
+	c.Sync(ctx, true)
 	return c, err
 }
 
