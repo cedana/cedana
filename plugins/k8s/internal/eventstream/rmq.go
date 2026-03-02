@@ -42,6 +42,15 @@ type EventStream struct {
 	pendingRestores sync.Map
 }
 
+var defaultDumpOpts = &criu.CriuOpts{
+	LeaveRunning:      proto.Bool(true),
+	TcpEstablished:    proto.Bool(true),
+	TcpSkipInFlight:   proto.Bool(true),
+	LinkRemap:         proto.Bool(true),
+	ManageCgroups:     proto.Bool(true),
+	ManageCgroupsMode: criu.CriuCgMode_CG_NONE.Enum(),
+}
+
 func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string) (*EventStream, error) {
 	if cedana == nil {
 		return nil, fmt.Errorf("cedana client is nil")
@@ -341,12 +350,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			dumpReq := &daemon.DumpReq{
 				Name: checkpointIdMap[i],
 				Type: "containerd",
-				Criu: &criu.CriuOpts{
-					LeaveRunning:    proto.Bool(true),
-					TcpEstablished:  proto.Bool(true),
-					TcpSkipInFlight: proto.Bool(true),
-					LinkRemap:       proto.Bool(true),
-				},
+				Criu: defaultDumpOpts,
 				Details: &daemon.Details{
 					Containerd: container,
 				},

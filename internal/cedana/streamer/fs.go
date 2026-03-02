@@ -376,9 +376,7 @@ func (fs *Fs) glob(pattern string) ([]string, error) {
 	}
 	fs.globMutex.Unlock()
 
-	regexPattern := globToRegex(pattern)
-
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: regexPattern}
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: pattern}
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal glob request: %w", err)
@@ -422,33 +420,6 @@ func (fs *Fs) glob(pattern string) ([]string, error) {
 	fs.globMutex.Unlock()
 
 	return resp.Filenames, nil
-}
-
-func globToRegex(pattern string) string {
-	var result strings.Builder
-	result.WriteString("^")
-	for i := 0; i < len(pattern); i++ {
-		switch pattern[i] {
-		case '*':
-			if i+1 < len(pattern) && pattern[i+1] == '*' {
-				result.WriteString(".*")
-				i++
-			} else {
-				result.WriteString("[^/]*")
-			}
-		case '?':
-			result.WriteString(".")
-		case '.', '+', '(', ')', '|', '^', '$', '@', '%', '{', '}', '\\':
-			result.WriteString("\\")
-			result.WriteByte(pattern[i])
-		case '[', ']':
-			result.WriteByte(pattern[i])
-		default:
-			result.WriteByte(pattern[i])
-		}
-	}
-	result.WriteString("$")
-	return result.String()
 }
 
 ////////////////////

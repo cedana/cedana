@@ -1,17 +1,15 @@
 #!/bin/bash
+set -euo pipefail
 
-set -eo pipefail
+# Source utils.sh if running as a standalone script (BASH_SOURCE is set)
+if [ -n "${BASH_SOURCE[0]:-}" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR/utils.sh" ]; then
+        source "$SCRIPT_DIR/utils.sh"
+    fi
+fi
 
-# get the directory of the script
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do
-    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-    SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
-done
-DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-
-source "$DIR"/utils.sh
+check_root
 
 # Define packages for YUM and APT
 YUM_PACKAGES=(
@@ -88,27 +86,3 @@ case "$(uname -m)" in
         ;;
 esac
 chmod +x /usr/local/bin/yq
-
-run_step() {
-    local name="$1"
-    shift
-    echo "=== Running: $name ==="
-    if ! "$@"; then
-        echo "Step failed: $name " >&2
-        exit 1
-    fi
-    echo "--- Completed: $name ---"
-}
-
-run_step "configure kubelet" "$DIR/k8s-configure-kubelet.sh" # configure kubelet
-run_step "install plugins" "$DIR/k8s-install-plugins.sh"     # install the plugins (including shim)
-run_step "configure shm" "$DIR/shm-configure.sh"             # configure shm
-run_step "configure io_uring" "$DIR/io-uring-configure.sh"   # configure io_uring
-
-if [ "$ENV" != "production" ]; then
-    pkill -f 'cedana daemon' || true
-    $APP_PATH daemon start &>/var/log/cedana-daemon.log &
-else
-    "$DIR"/systemd-reset.sh
-    "$DIR"/systemd-install.sh
-fi

@@ -36,8 +36,6 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 				return next(ctx, opts, resp, req)
 			}
 
-			next = next.With(InheritFilesForRestore)
-
 			if !opts.Plugins.IsInstalled("gpu") {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to restore GPU support")
 			}
@@ -62,6 +60,8 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 					return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
 				}
 			}
+
+			next = next.With(InheritFilesForRestore, AddMountsForRestore)
 
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
@@ -117,9 +117,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			})
 		}
 
-		internalMounts := make(map[uint64]any)
+		mounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			internalMounts[m.ID] = nil
+			mounts[m.ID] = nil
 			return true
 		})
 
@@ -137,7 +137,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			isPipe := strings.HasPrefix(file.Path, "pipe")
 			isSocket := strings.HasPrefix(file.Path, "socket")
 			isAnon := strings.HasPrefix(file.Path, "anon_inode")
-			_, internal := internalMounts[file.MountID]
+			_, internal := mounts[file.MountID]
 
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
@@ -179,10 +179,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 						// Extract segName from bytes 16-144
 						segNameBytes := metadataBuffer[16:144]
 						// Find null terminator
-						nullIdx := bytes.IndexByte(segNameBytes, 0)
+						before, _, ok := bytes.Cut(segNameBytes, []byte{0})
 						var segName string
-						if nullIdx >= 0 {
-							segName = string(segNameBytes[:nullIdx])
+						if ok {
+							segName = string(before)
 						} else {
 							segName = string(segNameBytes)
 						}
@@ -236,8 +236,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				} else {
 					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
 				}
-
-				return true // Don't inherit FD for hostmem, just create the file
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
@@ -248,12 +246,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
@@ -264,12 +266,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else {
 				return true // not a file we care about
 			}
@@ -359,6 +365,29 @@ func InterceptionRestore(next types.Restore) types.Restore {
 		}
 
 		log.Info().Str("plugin", "gpu").Str("ID", id).Str("type", t).Msg("restoring GPU interception")
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+// Adapter that tells CRIU about the external GPU mounts.
+func AddMountsForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"missing state. at least PID is required in resp.state",
+			)
+		}
+
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
+				log.Trace().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.Root))
+			}
+			return true
+		})
 
 		return next(ctx, opts, resp, req)
 	}
