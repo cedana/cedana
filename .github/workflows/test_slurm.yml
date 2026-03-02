@@ -191,7 +191,7 @@ jobs:
           sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
 
       - name: Install ansible
-        run: pip3 install ansible sshpass
+        run: sudo apt-get update -qq && sudo apt-get install -y ansible sshpass
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"

@@ -32,10 +32,18 @@ setup_slurm_cluster() {
     # Install ansible if not available
     if ! command -v ansible-playbook &>/dev/null; then
         debug_log "Installing ansible..."
-        pip3 install ansible sshpass 2>/dev/null || pip install ansible sshpass 2>/dev/null || {
-            error_log "Failed to install ansible"
-            return 1
-        }
+        if command -v apt-get &>/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y ansible sshpass || {
+                error_log "Failed to install ansible via apt"
+                return 1
+            }
+        else
+            pip3 install --break-system-packages ansible sshpass 2>/dev/null \
+                || pip install --break-system-packages ansible sshpass 2>/dev/null || {
+                error_log "Failed to install ansible"
+                return 1
+            }
+        fi
     fi
 
     debug_log "Running docker-deploy.sh from $SLURM_ANSIBLE_DIR..."
