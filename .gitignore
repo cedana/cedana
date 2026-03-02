@@ -2,6 +2,8 @@ cedana
 !internal/cedana
 *.so
 client_config.yaml
+perf_results
+perf-results/
 
 .gitconfig
 .vscode/*
