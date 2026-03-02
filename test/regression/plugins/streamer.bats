@@ -55,7 +55,7 @@ teardown_file() {
     assert_success
     assert_exists "/tmp/$name"
     assert_exists "/tmp/$name/img-0"
-    assert_exists "$dump_file/img-1"
+    assert_exists "/tmp/$name/img-1"
 
     run kill $pid
 }
