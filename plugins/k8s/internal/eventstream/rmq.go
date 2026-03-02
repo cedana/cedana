@@ -54,7 +54,7 @@ var defaultDumpOpts = &criu.CriuOpts{
 	ManageCgroupsMode: criu.CriuCgMode_CG_NONE.Enum(),
 }
 
-const queueExpiry = int32((30 * time.Minute) / time.Millisecond)
+var queryExpiryMs = 30 * time.Minute.Milliseconds()
 
 func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string) (*EventStream, error) {
 	if cedana == nil {
@@ -116,7 +116,7 @@ func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
 		rabbitmq.WithConsumerOptionsQueueExclusive,
 		rabbitmq.WithConsumerOptionsQueueAutoDelete,
 		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
-			"x-expires": queueExpiry,
+			"x-expires": queryExpiryMs,
 		}),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
 			RoutingKey:     "",
