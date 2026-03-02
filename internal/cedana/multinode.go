@@ -55,8 +55,8 @@ func (s *Server) RegisterRestoredIP(ctx context.Context, req *multinode.IPReport
 
 	select {
 	case <-ctx.Done():
-		log.Warn().Str("checkpoint_id", req.CheckpointId).Msg("[multinode] gRPC context canceled, eBPF/hosts will be applied via SubmitGlobalMap")
-		return &multinode.IPReportResp{Success: true}, nil
+		log.Warn().Err(ctx.Err()).Msg("[multinode] Context closed -> eBPF/hosts applied through SubmitGlobalMap")
+		return &multinode.IPReportResp{Success: false}, ctx.Err()
 	case <-answerCh:
 		log.Info().Msg("[multinode] Successfully completed setup for pod")
 		return &multinode.IPReportResp{Success: true}, nil
@@ -106,7 +106,7 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 		} else {
 			log.Info().Int64("pid", pid).Msg("[multinode] eBPF (XDP + TC) setup successful")
 		}
-    for _, entry := range req.Entries {
+		for _, entry := range req.Entries {
 			if err := updateEtcHosts(entry, pid); err != nil {
 				log.Warn().Err(err).Int64("pid", pid).Msg("[multinode] Failed late update of /etc/hosts")
 			}
