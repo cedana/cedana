@@ -110,11 +110,11 @@ setup_suite() {
     wait_for_ready "$CEDANA_NAMESPACE" 600
 
     # Restart log tailing (as it can be broken on kubelet restart)
-    if [ -n "$TAIL_PID" ]; then
-        pkill -P "$TAIL_PID" 2>/dev/null || true
-        tail_all_logs "$CEDANA_NAMESPACE" 120 &
-        TAIL_PID=$!
-    fi
+    # if [ -n "$TAIL_PID" ]; then
+    #     pkill -P "$TAIL_PID" 2>/dev/null || true
+    #     tail_all_logs "$CEDANA_NAMESPACE" 120 &
+    #     TAIL_PID=$!
+    # fi
 
     # Create test namespace
     delete_namespace "$NAMESPACE"
