@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
@@ -107,9 +108,27 @@ func (s *Server) SubmitGlobalMap(ctx context.Context, req *multinode.GlobalMapRe
 			log.Info().Int64("pid", pid).Msg("[multinode] eBPF (XDP + TC) setup successful")
 		}
 		for _, entry := range req.Entries {
-			if err := updateEtcHosts(entry, pid); err != nil {
-				log.Warn().Err(err).Int64("pid", pid).Msg("[multinode] Failed late update of /etc/hosts")
-			}
+			go func(e *multinode.GlobalMapEntry, p int64) {
+				// update /etc/hosts after success returned to grpc so res continues, but before workload starts
+				const maxAttempts = 60
+				confirmed := false
+				for i := 0; i < maxAttempts; i++ {
+					if injected, err := updateEtcHosts(e, p); err != nil {
+						log.Warn().Err(err).Int("attempt", i).Msg("[multinode] Host injection attempt failed")
+					} else if injected {
+						log.Info().
+							Int64("pid", p).
+							Str("pod", e.PodName).
+							Int("attempt", i).
+							Msg("[multinode] Host entry confirmed injected")
+						confirmed = true
+					}
+					time.Sleep(100 * time.Millisecond) // guard against kubelet overwrite -> re-check
+				}
+				if !confirmed {
+					log.Error().Int64("pid", p).Str("pod", e.PodName).Int("attempts", maxAttempts).Msg("[multinode] Host entry never injected")
+				}
+			}(entry, pid)
 		}
 	}
 
@@ -152,7 +171,10 @@ func setupMultinodeEBPF(mappings map[string]string, containerPID int64) error {
 //// Helpers ////
 ////////////////
 
-func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) error {
+/*
+updateEtchHosts is used to create a local DNS lookup table, overriding external DNS settings which we don't even restore
+*/
+func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) (bool, error) {
 	baseName := entry.PodName
 	for _, suffix := range []string{"-worker", "-launcher"} {
 		if idx := strings.LastIndex(baseName, suffix); idx != -1 {
@@ -163,21 +185,30 @@ func updateEtcHosts(entry *multinode.GlobalMapEntry, containerPID int64) error {
 	fqdn := fmt.Sprintf("%s.%s.%s.svc", entry.PodName, baseName, entry.Namespace)
 	newLine := fmt.Sprintf("%s\t%s", entry.OriginalIp, fqdn)
 
-	script := fmt.Sprintf("grep -qF '%s' /etc/hosts || printf '%%s\\n' '%s' >> /etc/hosts", fqdn, newLine)
+	// Two-step: check first, then inject only if missing
+	checkScript := fmt.Sprintf("grep -qF '%s' /etc/hosts", fqdn)
+	checkCmd := exec.Command("nsenter", "-t", fmt.Sprintf("%d", containerPID), "-m", "-u", "--",
+		"/bin/sh", "-c", checkScript)
+
+	if err := checkCmd.Run(); err == nil {
+		return false, nil // silent success
+	}
+
+	injectScript := fmt.Sprintf("printf '%%s\\n' '%s' >> /etc/hosts", newLine) // not found -> head
+	injectCmd := exec.Command("nsenter", "-t", fmt.Sprintf("%d", containerPID), "-m", "-u", "--",
+		"/bin/sh", "-c", injectScript)
+
+	output, err := injectCmd.CombinedOutput()
+	if err != nil {
+		return false, fmt.Errorf("nsenter inject failed (PID %d): %w, output: %s", containerPID, err, output)
+	}
 
 	log.Info().
 		Int64("pid", containerPID).
 		Str("pod", entry.PodName).
 		Str("fqdn", fqdn).
-		Msg("[multinode] Injecting host entry")
+		Str("ip", entry.OriginalIp).
+		Msg("[multinode] Injected host entry")
 
-	cmd := exec.Command("nsenter", "-t", fmt.Sprintf("%d", containerPID), "-m", "-u", "--",
-		"/bin/sh", "-c", script)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("nsenter failed (PID %d): %w, output: %s", containerPID, err, output)
-	}
-
-	return nil
+	return true, nil
 }
