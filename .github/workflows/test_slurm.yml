@@ -61,6 +61,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: pretty
+  TERM: dumb
   RETRIES: 1
   DEBUG: ${{ vars.DEBUG_SLURM }}
 
