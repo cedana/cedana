@@ -61,7 +61,7 @@ type (
 		// Streams specifies the number of parallel streams to use when checkpointing.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
 		// The amount of memory streamer is allowed to use (in MB)
-		StreamerMemoryLimit uint64 `json:"streamer_memory_limit" key:"streamer_memory_limit" yaml:"streamer_memory_limit" mapstructure:"streamer_memory_limit"`
+		StreamerMemoryLimitMb uint64 `json:"streamer_memory_limit_mb" key:"streamer_memory_limit_mb" yaml:"streamer_memory_limit_mb" mapstructure:"streamer_memory_limit_mb"`
 		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
 		// checkpoint reqeust to return early.
 		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
