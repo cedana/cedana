@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -25,19 +24,9 @@ func GetSlurmJobForDump(next types.Dump) types.Dump {
 		jid := req.GetDetails().GetSlurm().GetJobID()
 		hostname := req.GetDetails().GetSlurm().GetHostname()
 
-		paths := []string{
-			fmt.Sprintf("/system.slice/%s_slurmstepd.scope/job_%d/step_batch/user/task_special", hostname, jid),
-			fmt.Sprintf("/system.slice/slurmstepd.scope/job_%d/step_batch/user/task_special", jid),
-		}
-		var path string
-		for _, p := range paths {
-			if _, err := os.Stat("/sys/fs/cgroup" + p); err == nil {
-				path = p
-				break
-			}
-		}
-		if path == "" {
-			return nil, status.Errorf(codes.NotFound, "cgroup path for slurm job %d does not exist: %s", jid, path)
+		path, err := GetJobCgroupPath(hostname, jid)
+		if err != nil {
+			return nil, err
 		}
 
 		config := &cgroups.Cgroup{
