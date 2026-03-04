@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -257,10 +258,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		GidMappingsEnableSetgroups: false, // Avoid permission issues when running as non-root user
 	}
 
-	cmd.Stderr = c.ErrBuf
-	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stdout
+	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stderr
 		logger := log.With().Str("ID", id).Str("plugin", "gpu").Logger().Level(zerolog.DebugLevel)
-		cmd.Stdout = logging.Writer(&logger)
+		cmd.Stderr = io.MultiWriter(logging.Writer(&logger), c.ErrBuf)
+	} else {
+		cmd.Stderr = c.ErrBuf
 	}
 
 	existingLD := os.Getenv("LD_LIBRARY_PATH")
