@@ -143,7 +143,7 @@ jobs:
       - name: Push install-release.sh to Cloudsmith
         if: matrix.arch == 'amd64' # only push once as it's architecture independent
         run: |
-          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} scripts/install-release.sh --republish \
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} install-release.sh --republish \
             --name install-release.sh \
             --tags ${{ github.head_ref || github.ref_name }},${{ github.sha }} \
             --version ${{ github.head_ref || github.ref_name }} \
