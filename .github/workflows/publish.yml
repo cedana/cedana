@@ -124,7 +124,7 @@ jobs:
         uses: actions/download-artifact@v4
         id: download-scripts
         with:
-          name: cedana-script-${{ matrix.arch }}
+          name: cedana-scripts-${{ matrix.arch }}
 
       - name: Install Cloudsmith CLI
         uses: cloudsmith-io/cloudsmith-cli-action@v2
