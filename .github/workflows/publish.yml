@@ -69,6 +69,12 @@ jobs:
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
+      - name: Download scripts
+        uses: actions/download-artifact@v4
+        id: download-scripts
+        with:
+          name: cedana-scripts-${{ matrix.arch }}
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: inputs.debug
@@ -100,7 +106,7 @@ jobs:
           gh release upload --clobber "$tag" \
               --repo="$GITHUB_REPOSITORY" \
               *.tar.gz \
-              scripts/install-release.sh
+              install-release.sh
 
   cloudsmith:
     name: Cloudsmith
