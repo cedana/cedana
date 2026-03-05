@@ -9,6 +9,26 @@ CEDANA_SLURM_DIR="${CEDANA_SLURM_DIR:-}"
 # Job data directory for sbatch files and output
 SLURM_DATA_DIR="${SLURM_DATA_DIR:-/data}"
 
+# Name of the SLURM controller Docker container (set by docker-deploy.sh)
+SLURM_CONTROLLER_CONTAINER="${SLURM_CONTROLLER_CONTAINER:-slurm-controller}"
+
+# Number of compute nodes — must match docker-deploy.sh COMPUTE_NODES
+COMPUTE_NODES="${COMPUTE_NODES:-1}"
+
+# Build compute node name list dynamically
+_slurm_compute_containers() {
+    local names=()
+    for i in $(seq 1 "$COMPUTE_NODES"); do
+        names+=("slurm-compute-$(printf '%02d' "$i")")
+    done
+    echo "${names[@]}"
+}
+
+# Run a command inside the SLURM controller container.
+slurm_exec() {
+    docker exec -i "$SLURM_CONTROLLER_CONTAINER" "$@"
+}
+
 ##############################
 # Service management helpers
 ##############################
@@ -53,255 +73,53 @@ _svc_stop() {
 }
 
 ##############################
-# Cluster setup (pure bash, single-node, replicates ansible roles exactly)
+# Cluster setup via docker-deploy.sh + ansible (SLURM only)
 ##############################
 
 setup_slurm_cluster() {
-    local SLURM_VERSION="25.05.5"
-    local SLURM_USER="slurm"
-    local SLURM_GROUP="slurm"
-    local SLURM_UID="981"
-    local SLURM_GID="981"
-    local MUNGE_USER="munge"
-    local MUNGE_GROUP="munge"
-    local SLURM_CONF_DIR="/etc/slurm"
-    local SLURM_LOG_DIR="/var/log/slurm"
-    local SLURM_SPOOL_DIR="/var/spool/slurm"
-    local SLURM_STATE_DIR="/var/spool/slurm/ctld"
+    local ansible_dir="${CEDANA_SLURM_DIR}/ansible"
 
-    debug_log "Setting up SLURM ${SLURM_VERSION} (pure bash, single-node)..."
+    info_log "Setting up SLURM cluster via docker-deploy.sh (SLURM only)..."
 
-    sudo bash -c 'printf "#!/bin/sh\nexit 101\n" > /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d' 2>/dev/null || true
-
-    debug_log "Creating slurm/munge users..."
-    getent group  "$MUNGE_GROUP"  &>/dev/null || sudo groupadd --system "$MUNGE_GROUP"
-    getent passwd "$MUNGE_USER"   &>/dev/null || sudo useradd  --gid "$MUNGE_GROUP" \
-        --shell /sbin/nologin --no-create-home --system "$MUNGE_USER"
-    getent group  "$SLURM_GROUP"  &>/dev/null || sudo groupadd --gid "$SLURM_GID" "$SLURM_GROUP"
-    getent passwd "$SLURM_USER"   &>/dev/null || sudo useradd  --uid "$SLURM_UID" --gid "$SLURM_GROUP" \
-        --shell /bin/bash --home /var/lib/slurm --create-home --system "$SLURM_USER"
-
-    debug_log "Installing SLURM build dependencies..."
-    sudo apt-get update -qq
-    sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        gcc g++ make bzip2 wget \
-        munge libmunge-dev \
-        libreadline-dev libpam0g-dev libssl-dev \
-        libhwloc-dev libnuma-dev liblua5.3-dev \
-        libncurses-dev liblz4-dev libdbus-1-dev \
-        libmariadb-dev libmariadb-dev-compat \
-        python3
-
-    debug_log "Configuring munge..."
-    for d in /etc/munge /var/log/munge /var/lib/munge; do
-        sudo mkdir -p "$d"
-        sudo chown "${MUNGE_USER}:${MUNGE_GROUP}" "$d"
-        sudo chmod 0700 "$d"
-    done
-    sudo mkdir -p /run/munge
-    sudo chown "${MUNGE_USER}:${MUNGE_GROUP}" /run/munge
-    sudo chmod 0755 /run/munge
-
-    if [ ! -f /etc/munge/munge.key ]; then
-        sudo /usr/sbin/create-munge-key -f
-    fi
-    sudo chown "${MUNGE_USER}:${MUNGE_GROUP}" /etc/munge/munge.key
-    sudo chmod 0400 /etc/munge/munge.key
-
-    _svc_start munge /usr/sbin/munged
-
-    debug_log "Verifying munge..."
-    local munge_ok=false
-    for _i in $(seq 1 15); do
-        if munge -n 2>/dev/null | unmunge &>/dev/null; then
-            munge_ok=true; break
-        fi
-        sleep 1
-    done
-    if [ "$munge_ok" = false ]; then
-        error_log "Munge self-test failed after 15s — aborting"
-        sudo cat /var/log/munge/munged.log 2>/dev/null || true
+    if ! command -v docker &>/dev/null; then
+        error_log "Docker CLI not found. Ensure /var/run/docker.sock is mounted into the CI container."
         return 1
     fi
-    debug_log "Munge OK"
 
-    for dir in "$SLURM_CONF_DIR" "$SLURM_LOG_DIR" "$SLURM_SPOOL_DIR" "$SLURM_STATE_DIR"; do
-        sudo mkdir -p "$dir"
-        sudo chown "${SLURM_USER}:${SLURM_GROUP}" "$dir"
-        sudo chmod 0755 "$dir"
-    done
-    sudo mkdir -p /usr/lib64/slurm /usr/lib/slurm /run/slurmd
-    sudo chown "${SLURM_USER}:${SLURM_GROUP}" /run/slurmd
+    # Stream docker-deploy.sh output live to the terminal (fd 3 = direct output in BATS)
+    pushd "$ansible_dir" > /dev/null
+    ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&3 2>&1
+    local rc=$?
+    popd > /dev/null
 
-    if [ ! -f /usr/sbin/slurmctld ]; then
-        local tarball="/tmp/slurm-${SLURM_VERSION}.tar.bz2"
-        local srcdir="/tmp/slurm-${SLURM_VERSION}"
-
-        debug_log "Downloading SLURM ${SLURM_VERSION}..."
-        wget -q "https://download.schedmd.com/slurm/slurm-${SLURM_VERSION}.tar.bz2" -O "$tarball"
-        tar -xjf "$tarball" -C /tmp
-
-        debug_log "Configuring SLURM..."
-        pushd "$srcdir" > /dev/null
-        MYSQL_CONFIG=/usr/bin/mysql_config \
-            ./configure --prefix=/usr \
-                        --sysconfdir="$SLURM_CONF_DIR" \
-                        --with-systemdsystemunitdir=/usr/lib/systemd/system \
-            2>&1 | tail -5
-
-        debug_log "Building SLURM (this takes a few minutes)..."
-        make -j"$(nproc)" 2>&1 | tail -5
-        sudo make install 2>&1 | tail -5
-        popd > /dev/null
-
-        sudo rm -rf "$srcdir" "$tarball"
-        sudo ldconfig
-        debug_log "SLURM ${SLURM_VERSION} installed"
-    else
-        debug_log "SLURM already installed, skipping build"
+    if [ $rc -ne 0 ]; then
+        error_log "docker-deploy.sh failed (exit $rc)"
+        return 1
     fi
 
-    local hostname
-    hostname=$(hostname -s)
-    local cpus sockets cores_per_socket threads_per_core mem_mb real_mem
-    cpus=$(nproc)
-    sockets=$(lscpu | awk '/^Socket\(s\):/ {print $NF}')
-    cores_per_socket=$(lscpu | awk '/^Core\(s\) per socket:/ {print $NF}')
-    threads_per_core=$(lscpu | awk '/^Thread\(s\) per core:/ {print $NF}')
-    mem_mb=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
-    real_mem=$(( mem_mb * 95 / 100 ))
-
-    debug_log "Generating slurm.conf for ${hostname} (${cpus} CPUs, ${real_mem} MB)..."
-    sudo tee "$SLURM_CONF_DIR/slurm.conf" > /dev/null <<EOF
-ClusterName=cedana-test-cluster
-SlurmctldHost=${hostname}
-AuthType=auth/munge
-CryptoType=crypto/munge
-PlugStackConfig=${SLURM_CONF_DIR}/plugstack.conf
-ProctrackType=proctrack/cgroup
-ReturnToService=2
-SlurmctldPidFile=/run/slurmctld.pid
-SlurmctldPort=6817
-SlurmdPidFile=/run/slurmd/slurmd.pid
-SlurmdPort=6818
-SlurmdSpoolDir=${SLURM_SPOOL_DIR}
-SlurmUser=${SLURM_USER}
-StateSaveLocation=${SLURM_STATE_DIR}
-TaskPlugin=task/affinity,task/cgroup
-
-InactiveLimit=0
-KillWait=30
-MinJobAge=300
-SlurmctldTimeout=120
-SlurmdTimeout=300
-Waittime=0
-
-SchedulerType=sched/backfill
-SelectType=select/cons_tres
-
-JobCompType=jobcomp/none
-JobAcctGatherFrequency=30
-SlurmctldDebug=info
-SlurmctldLogFile=${SLURM_LOG_DIR}/slurmctld.log
-SlurmdDebug=info
-SlurmdLogFile=${SLURM_LOG_DIR}/slurmd.log
-
-NodeName=${hostname} CPUs=${cpus} Boards=1 SocketsPerBoard=${sockets} CoresPerSocket=${cores_per_socket} ThreadsPerCore=${threads_per_core} RealMemory=${real_mem}
-PartitionName=debug Nodes=ALL Default=YES MaxTime=INFINITE State=UP
-EOF
-    sudo chown "${SLURM_USER}:${SLURM_GROUP}" "$SLURM_CONF_DIR/slurm.conf"
-
-    sudo touch "$SLURM_CONF_DIR/plugstack.conf"
-    sudo chown "${SLURM_USER}:${SLURM_GROUP}" "$SLURM_CONF_DIR/plugstack.conf"
-
-    sudo tee "$SLURM_CONF_DIR/cgroup.conf" > /dev/null <<'EOF'
-ConstrainCores=yes
-ConstrainRAMSpace=yes
-ConstrainSwapSpace=yes
-ConstrainDevices=yes
-EOF
-    sudo chown "${SLURM_USER}:${SLURM_GROUP}" "$SLURM_CONF_DIR/cgroup.conf"
-
-    sudo mkdir -p /usr/lib/systemd/system
-    sudo tee /usr/lib/systemd/system/slurmctld.service > /dev/null <<'EOF'
-[Unit]
-Description=Slurm controller daemon
-After=network.target munge.service
-Requires=munge.service
-
-[Service]
-Type=forking
-EnvironmentFile=-/etc/sysconfig/slurmctld
-ExecStart=/usr/sbin/slurmctld $SLURMCTLD_OPTIONS
-ExecReload=/bin/kill -HUP $MAINPID
-PIDFile=/run/slurmctld.pid
-LimitNOFILE=65536
-LimitMEMLOCK=infinity
-LimitSTACK=infinity
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    sudo tee /usr/lib/systemd/system/slurmd.service > /dev/null <<'EOF'
-[Unit]
-Description=Slurm node daemon
-After=network.target munge.service
-Requires=munge.service
-
-[Service]
-Type=forking
-EnvironmentFile=-/etc/default/slurmd
-ExecStart=/usr/sbin/slurmd $SLURMD_OPTIONS
-ExecReload=/bin/kill -HUP $MAINPID
-PIDFile=/run/slurmd/slurmd.pid
-RuntimeDirectory=slurmd
-RuntimeDirectoryMode=0755
-KillMode=process
-LimitNOFILE=131072
-LimitMEMLOCK=infinity
-LimitSTACK=infinity
-Delegate=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    debug_log "Starting slurmctld..."
-    _svc_start slurmctld /usr/sbin/slurmctld
-
-    debug_log "Starting slurmd..."
-    _svc_start slurmd /usr/sbin/slurmd
-
-    wait_for_slurm_ready 180
-    debug_log "SLURM cluster is ready"
+    info_log "SLURM cluster is ready"
 }
 
 teardown_slurm_cluster() {
-    debug_log "Stopping SLURM services..."
-    _svc_stop slurmctld
-    _svc_stop slurmd
-    _svc_stop cedana-slurm
-    sudo pkill -f 'cedana daemon start' 2>/dev/null || true
-    sudo pkill -x munged 2>/dev/null || true
+    debug_log "Tearing down SLURM cluster (Docker containers)..."
+    docker rm -f slurm-controller $(seq 1 "$COMPUTE_NODES" | xargs -I{} printf 'slurm-compute-%02d ' {}) 2>/dev/null || true
+    docker network rm slurm-net 2>/dev/null || true
 }
 
 wait_for_slurm_ready() {
     local timeout=${1:-120}
     local elapsed=0
 
-    debug_log "Waiting for SLURM to be ready..."
+    info_log "Waiting for SLURM nodes to be ready (timeout ${timeout}s)..."
 
     while [ $elapsed -lt $timeout ]; do
-        scontrol update nodename=ALL state=resume 2>/dev/null || true
-
         local node_state
-        node_state=$(sinfo -h -o '%T' 2>/dev/null | head -1)
-        debug_log "Node state: ${node_state:-<no response>}"
+        node_state=$(slurm_exec sinfo -h -o '%T' 2>/dev/null | head -1)
+        info_log "  [${elapsed}s] node state: ${node_state:-<no response>}"
 
         if echo "$node_state" | grep -qiE 'idle|mixed|alloc'; then
             debug_log "SLURM nodes are ready"
-            sinfo
+            slurm_exec sinfo
             return 0
         fi
         sleep 5
@@ -310,17 +128,20 @@ wait_for_slurm_ready() {
 
     error_log "SLURM not ready after ${timeout}s"
     echo "=== sinfo ==="
-    sinfo 2>/dev/null || echo "(sinfo unavailable)"
+    slurm_exec sinfo 2>/dev/null || echo "(sinfo unavailable)"
     echo "=== scontrol show nodes ==="
-    scontrol show nodes 2>/dev/null || echo "(scontrol unavailable)"
+    slurm_exec scontrol show nodes 2>/dev/null || echo "(scontrol unavailable)"
     echo "=== processes ==="
-    pgrep -xa 'slurmctld|slurmd|munged' 2>/dev/null || echo "(none running)"
+    docker exec "$SLURM_CONTROLLER_CONTAINER" pgrep -xa 'slurmctld|slurmd|munged' 2>/dev/null || echo "(none running)"
     echo "=== slurmctld.log (last 40 lines) ==="
-    sudo tail -40 /var/log/slurm/slurmctld.log 2>/dev/null || true
-    echo "=== slurmd.log (last 40 lines) ==="
-    sudo tail -40 /var/log/slurm/slurmd.log 2>/dev/null || true
+    docker exec "$SLURM_CONTROLLER_CONTAINER" tail -40 /var/log/slurm/slurmctld.log 2>/dev/null || true
+    echo "=== slurmd.log on compute nodes (last 40 lines) ==="
+    for c in $(_slurm_compute_containers); do
+        echo "--- $c ---"
+        docker exec "$c" tail -40 /var/log/slurm/slurmd.log 2>/dev/null || echo "(log unavailable on $c)"
+    done
     echo "=== munged.log (last 20 lines) ==="
-    sudo tail -20 /var/log/munge/munged.log 2>/dev/null || true
+    docker exec "$SLURM_CONTROLLER_CONTAINER" tail -20 /var/log/munge/munged.log 2>/dev/null || true
     return 1
 }
 
@@ -328,101 +149,169 @@ wait_for_slurm_ready() {
 # Cedana Installation in Cluster
 ##############################
 
-# Install cedana binary, plugins, and slurm binaries onto the host.
-# Ansible provisions SLURM-only (--skip-tags cedana); this installs the freshly-built
-# CI artifacts so the test exercises the actual build under test.
+# Install cedana binary, plugins, and slurm binaries into the SLURM Docker containers.
 install_cedana_in_slurm() {
-    debug_log "Installing cedana..."
+    info_log "Installing cedana into SLURM cluster containers..."
 
-    if command -v cedana &>/dev/null; then
-        sudo cp "$(which cedana)" /usr/local/bin/cedana
-        sudo chmod +x /usr/local/bin/cedana
-    fi
+    local all_containers=("$SLURM_CONTROLLER_CONTAINER")
+    local compute_containers=()
+    # shellcheck disable=SC2207
+    compute_containers=($(_slurm_compute_containers))
+    all_containers+=("${compute_containers[@]}")
 
-    for lib in /usr/local/lib/libcedana-*.so; do
-        [ -f "$lib" ] && sudo cp "$lib" "/usr/local/lib/$(basename "$lib")"
+    info_log "Copying cedana + criu binaries into containers..."
+    local cedana_bin criu_bin
+    cedana_bin=$(which cedana 2>/dev/null) || { error_log "cedana binary not found in PATH"; return 1; }
+    criu_bin=$(which criu 2>/dev/null) || { error_log "criu binary not found in PATH"; return 1; }
+
+    for c in "${all_containers[@]}"; do
+        docker cp "$cedana_bin" "${c}:/usr/local/bin/cedana" || { error_log "Failed to copy cedana into $c"; return 1; }
+        docker exec "$c" chmod +x /usr/local/bin/cedana || { error_log "Failed to chmod cedana in $c"; return 1; }
+        docker cp "$criu_bin" "${c}:/usr/local/bin/criu" || { error_log "Failed to copy criu into $c"; return 1; }
+        docker exec "$c" chmod +x /usr/local/bin/criu || { error_log "Failed to chmod criu in $c"; return 1; }
     done
 
-    if command -v criu &>/dev/null; then
-        sudo cp "$(which criu)" /usr/local/bin/criu
-        sudo chmod +x /usr/local/bin/criu
-    fi
-
-    if [ -n "${CEDANA_SLURM_BIN:-}" ] && [ -f "$CEDANA_SLURM_BIN" ]; then
-        sudo cp "$CEDANA_SLURM_BIN" /usr/local/bin/cedana-slurm
-        sudo chmod +x /usr/local/bin/cedana-slurm
-    fi
-
-    for so in libslurm-cedana.so task_cedana.so cli_filter_cedana.so; do
-        [ -f "/usr/local/lib/$so" ] || true  # already in place from artifact download
+    info_log "Copying host-installed plugin libraries into containers..."
+    for so in /usr/local/lib/libcedana-*.so; do
+        [ -f "$so" ] || continue
+        for c in "${all_containers[@]}"; do
+            docker cp "$so" "${c}:/usr/local/lib/$(basename "$so")" || { error_log "Failed to copy $so into $c"; return 1; }
+        done
     done
 
-    cedana plugin install criu gpu slurm 2>/dev/null || true
-    cedana slurm setup 2>/dev/null || true
-
-    # Add task/cedana to TaskPlugin in slurm.conf if not already there
-    if ! grep -q 'task/cedana' /etc/slurm/slurm.conf 2>/dev/null; then
-        sudo sed -i 's/^TaskPlugin=.*/&,task\/cedana/' /etc/slurm/slurm.conf
+    info_log "Copying CI-built slurm/wlm artifacts into containers..."
+    for so in task_cedana.so libslurm-cedana.so cli_filter_cedana.so; do
+        local sopath="/usr/local/lib/${so}"
+        [ -f "$sopath" ] || continue
+        for c in "${all_containers[@]}"; do
+            docker cp "$sopath" "${c}:/usr/local/lib/${so}" || { error_log "Failed to copy $so into $c"; return 1; }
+        done
+    done
+    if [ -f "/usr/local/bin/cedana-slurm" ]; then
+        for c in "${all_containers[@]}"; do
+            docker cp /usr/local/bin/cedana-slurm "${c}:/usr/local/bin/cedana-slurm" || { error_log "Failed to copy cedana-slurm into $c"; return 1; }
+            docker exec "$c" chmod +x /usr/local/bin/cedana-slurm || { error_log "Failed to chmod cedana-slurm in $c"; return 1; }
+        done
     fi
 
-    sudo mkdir -p /etc/cedana
-    cedana --init-config version 2>/dev/null || true
+    info_log "Configuring SLURM to load cedana plugins (setup.sh equivalent) on all nodes..."
+    for c in "${all_containers[@]}"; do
+        info_log "  SLURM plugin setup on $c:"
+        docker exec -i "$c" bash << 'SETUP_EOF' >&3 2>&1 || { error_log "SLURM plugin setup failed on $c"; return 1; }
+set -euo pipefail
+PLUGIN_DIR=$(scontrol show config 2>/dev/null | grep PluginDir | awk '{print $3}')
+if [ -z "$PLUGIN_DIR" ]; then
+    echo "ERROR: Could not determine SLURM PluginDir" >&2
+    exit 1
+fi
+echo "SLURM PluginDir: $PLUGIN_DIR"
 
-    if ! pgrep -f 'cedana daemon start' &>/dev/null; then
-        debug_log "Starting cedana daemon..."
-        sudo -E cedana daemon start --init-config 2>&1 &
-        disown
-        sleep 3
-    fi
+chmod 755 /usr/local/lib/task_cedana.so /usr/local/lib/libslurm-cedana.so /usr/local/lib/cli_filter_cedana.so
+cp /usr/local/lib/task_cedana.so /usr/local/lib/cli_filter_cedana.so "$PLUGIN_DIR/"
+cp /usr/local/lib/libslurm-cedana.so "$PLUGIN_DIR/spank_cedana.so"
+ldconfig
 
-    _svc_stop slurmctld; _svc_stop slurmd
-    _svc_start slurmctld "/usr/sbin/slurmctld"
-    _svc_start slurmd    "/usr/sbin/slurmd"
+SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
+PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | grep PlugStackConfig | awk '{print $3}')
+PLUGSTACK_CONF="${PLUGSTACK_CONF:-/etc/slurm/plugstack.conf}"
+
+if grep -q "TaskPlugin=" "$SLURM_CONF" && ! grep -q "task/cedana" "$SLURM_CONF"; then
+    sed -i 's|^\(TaskPlugin=.*\)|\1,task/cedana|' "$SLURM_CONF"
+    echo "Added task/cedana to TaskPlugin"
+fi
+if ! grep -q "cli_filter/cedana" "$SLURM_CONF"; then
+    echo "CliFilterPlugins=cli_filter/cedana" >> "$SLURM_CONF"
+    echo "Added CliFilterPlugins=cli_filter/cedana"
+fi
+if ! grep -q "spank_cedana.so" "$PLUGSTACK_CONF" 2>/dev/null; then
+    echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
+    echo "Added spank_cedana.so to $PLUGSTACK_CONF"
+fi
+SETUP_EOF
+    done
+
+    info_log "Starting cedana daemon on all nodes..."
+    for c in "${all_containers[@]}"; do
+        docker exec "$c" mkdir -p /etc/cedana
+        docker exec \
+            -e CEDANA_URL="${CEDANA_URL:-}" \
+            -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+            -e CEDANA_ADDRESS="/run/cedana.sock" \
+            -e CEDANA_PROTOCOL="unix" \
+            -e CEDANA_DB_REMOTE="true" \
+            -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
+            -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
+            "$c" \
+            bash -c "cedana --init-config version" || { error_log "cedana --init-config failed on $c"; return 1; }
+
+        docker exec -d \
+            -e CEDANA_URL="${CEDANA_URL:-}" \
+            -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+            -e CEDANA_ADDRESS="/run/cedana.sock" \
+            -e CEDANA_PROTOCOL="unix" \
+            -e CEDANA_DB_REMOTE="true" \
+            -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
+            -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
+            -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
+            "$c" \
+            /usr/local/bin/cedana daemon start --init-config
+    done
     sleep 5
 
-    debug_log "Cedana installed"
+    info_log "Waiting for cedana daemon socket on all nodes..."
+    for c in "${all_containers[@]}"; do
+        local waited=0
+        while [ $waited -lt 30 ]; do
+            if docker exec "$c" test -S /run/cedana.sock 2>/dev/null; then
+                info_log "  $c: cedana socket ready (${waited}s)"
+                break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if [ $waited -ge 30 ]; then
+            info_log "  WARNING: cedana socket not ready on $c after 30s — proceeding anyway"
+        fi
+    done
+
+    info_log "Restarting SLURM services to load task_cedana plugin..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        bash -c "systemctl restart slurmctld || (pkill slurmctld; sleep 1; slurmctld)" \
+        || { error_log "Failed to restart slurmctld on $SLURM_CONTROLLER_CONTAINER"; return 1; }
+    for c in "${compute_containers[@]}"; do
+        docker exec "$c" \
+            bash -c "systemctl restart slurmd || (pkill slurmd; sleep 1; slurmd)" \
+            || { error_log "Failed to restart slurmd on $c"; return 1; }
+    done
+    sleep 5
+
+    wait_for_slurm_ready 180
+    info_log "Cedana installed in SLURM cluster"
 }
 
-# Install and start cedana-slurm daemon.
 start_cedana_slurm_daemon() {
-    debug_log "Starting cedana-slurm daemon..."
+    debug_log "Starting cedana-slurm daemon in controller container..."
 
-    sudo install -m 0600 -o root /dev/null /etc/cedana-slurm.env
-    printf 'CEDANA_URL=%s\nCEDANA_AUTH_TOKEN=%s\nRABBITMQ_URL=%s\nCEDANA_LOG_LEVEL=%s\n' \
-        "${CEDANA_URL:-}" \
-        "${CEDANA_AUTH_TOKEN:-}" \
-        "${RABBITMQ_URL:-}" \
-        "${CEDANA_LOG_LEVEL:-debug}" \
-        | sudo tee /etc/cedana-slurm.env > /dev/null
+    if [ -n "${CEDANA_SLURM_BIN:-}" ] && [ -f "$CEDANA_SLURM_BIN" ]; then
+        docker cp "$CEDANA_SLURM_BIN" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana-slurm"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/cedana-slurm
+    fi
 
-    sudo tee /etc/systemd/system/cedana-slurm.service > /dev/null <<'UNIT'
-[Unit]
-Description=Cedana Slurm Daemon
-After=network.target slurmctld.service
-
-[Service]
-Type=simple
-EnvironmentFile=/etc/cedana-slurm.env
-ExecStart=/usr/local/bin/cedana-slurm daemon start
-Restart=on-failure
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-UNIT
-
-    sudo systemctl daemon-reload 2>/dev/null || true
-    _svc_start cedana-slurm /usr/local/bin/cedana-slurm daemon start
+    docker exec -d \
+        -e CEDANA_URL="${CEDANA_URL:-}" \
+        -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+        -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
+        "$SLURM_CONTROLLER_CONTAINER" \
+        bash -c 'cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1'
 
     sleep 3
-    # Check if running
-    if pgrep -f "cedana-slurm daemon" &>/dev/null; then
+    if docker exec "$SLURM_CONTROLLER_CONTAINER" pgrep -f 'cedana-slurm daemon' &>/dev/null; then
         debug_log "cedana-slurm daemon is running"
     else
-        debug_log "WARNING: cedana-slurm daemon may not be running"
-        sudo systemctl status cedana-slurm --no-pager 2>/dev/null || true
+        error_log "cedana-slurm daemon failed to start on $SLURM_CONTROLLER_CONTAINER"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" tail -20 /var/log/cedana-slurm.log
+        return 1
     fi
-    debug_log "cedana-slurm daemon started"
 }
 
 ##############################
@@ -430,24 +319,22 @@ UNIT
 ##############################
 
 # Submit an sbatch job to the SLURM cluster
-# @param $1: Path to sbatch file (local)
+# @param $1: Path to sbatch file (any path ending in .../slurm/cpu/foo.sbatch)
 # Returns: SLURM job ID
 slurm_submit_job() {
     local sbatch_file="$1"
 
-    if [ ! -f "$sbatch_file" ]; then
-        error_log "sbatch file not found: $sbatch_file"
-        return 1
-    fi
-
-    local filename
-    filename=$(basename "$sbatch_file")
-
-    sudo mkdir -p "$SLURM_DATA_DIR"
-    sudo cp "$sbatch_file" "${SLURM_DATA_DIR}/${filename}"
+    local rel_path filename container_chdir
+    rel_path="${sbatch_file#*/slurm/}"
+    filename="$(basename "$rel_path")"
+    container_chdir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
+    debug_log "Submitting: cd $container_chdir && sbatch $filename"
 
     local output
-    output=$(sbatch --parsable "${SLURM_DATA_DIR}/${filename}" 2>&1)
+    output=$(slurm_exec sbatch --parsable \
+        --overcommit --cpus-per-task=1 --mem=0 \
+        --chdir="${container_chdir}" \
+        "${container_chdir}/${filename}" 2>&1)
     local exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
@@ -458,8 +345,51 @@ slurm_submit_job() {
     local job_id
     job_id=$(echo "$output" | tail -1 | tr -d '[:space:]')
 
-    debug_log "Submitted job $filename -> SLURM job ID: $job_id"
+    debug_log "Submitted job $container_chdir/$filename -> SLURM job ID: $job_id"
     echo "$job_id"
+}
+
+_dump_job_failure_info() {
+    local job_id="${1:-}"
+
+    echo "=== sacct (last 10 jobs) ==="
+    slurm_exec sacct --noheader -a \
+        --format=JobID,JobName,State,ExitCode,DerivedExitCode,Reason,NodeList,Submit,Start,End \
+        -P 2>/dev/null | tail -10 || true
+
+    if [ -n "$job_id" ]; then
+        echo "=== scontrol show job $job_id ==="
+        slurm_exec scontrol show job "$job_id" 2>/dev/null || true
+
+        echo "=== job output files (compute nodes) ==="
+        for c in $(_slurm_compute_containers); do
+            for f in $(docker exec "$c" find "${SLURM_DATA_DIR}" \
+                    -name "*-${job_id}.*" 2>/dev/null); do
+                echo "--- $c:$f ---"
+                docker exec "$c" cat "$f" 2>/dev/null || true
+            done
+        done
+    fi
+
+    echo "=== slurmctld.log (last 50 lines) ==="
+    docker exec "$SLURM_CONTROLLER_CONTAINER" tail -50 /var/log/slurm/slurmctld.log 2>/dev/null || true
+
+    echo "=== slurmd.log on compute nodes (last 50 lines) ==="
+    for c in $(_slurm_compute_containers); do
+        echo "--- $c ---"
+        docker exec "$c" tail -50 /var/log/slurm/slurmd.log 2>/dev/null || echo "(unavailable)"
+    done
+
+    echo "=== cedana daemon log on compute nodes (last 30 lines) ==="
+    for c in $(_slurm_compute_containers); do
+        echo "--- $c ---"
+        docker exec "$c" journalctl -u cedana --no-pager -n 30 2>/dev/null \
+            || docker exec "$c" tail -30 /var/log/cedana.log 2>/dev/null \
+            || echo "(no cedana log available)"
+    done
+
+    echo "=== cedana-slurm daemon log (controller, last 30 lines) ==="
+    docker exec "$SLURM_CONTROLLER_CONTAINER" tail -30 /var/log/cedana-slurm.log 2>/dev/null || true
 }
 
 # Wait for a SLURM job to reach a specific state
@@ -474,7 +404,7 @@ wait_for_slurm_job_state() {
 
     while [ $elapsed -lt $timeout ]; do
         local state
-        state=$(scontrol show job "$job_id" 2>/dev/null \
+        state=$(slurm_exec scontrol show job "$job_id" 2>/dev/null \
             | grep -oP 'JobState=\K\S+' || echo "UNKNOWN")
 
         debug_log "Job $job_id state: $state (want: $target_state)"
@@ -487,6 +417,7 @@ wait_for_slurm_job_state() {
             COMPLETED|FAILED|CANCELLED|TIMEOUT|NODE_FAIL)
                 if [ "$state" != "$target_state" ]; then
                     error_log "Job $job_id reached terminal state $state (expected $target_state)"
+                    _dump_job_failure_info "$job_id"
                     return 1
                 fi
                 ;;
@@ -504,25 +435,25 @@ wait_for_slurm_job_state() {
 # @param $1: SLURM job ID
 get_slurm_job_node() {
     local job_id="$1"
-    scontrol show job "$job_id" 2>/dev/null \
+    slurm_exec scontrol show job "$job_id" 2>/dev/null \
         | grep -oP 'BatchHost=\K\S+' | head -1
 }
 
 get_slurm_job_info() {
     local job_id="$1"
-    scontrol show job "$job_id" -o 2>/dev/null
+    slurm_exec scontrol show job "$job_id" -o 2>/dev/null
 }
 
 cancel_slurm_job() {
     local job_id="$1"
-    scancel "$job_id" 2>/dev/null || true
+    slurm_exec scancel "$job_id" 2>/dev/null || true
 }
 
 get_slurm_job_output() {
     local job_id="$1"
     local job_name="${2:-}"
     if [ -n "$job_name" ]; then
-        cat "${SLURM_DATA_DIR}/${job_name}-${job_id}.out" 2>/dev/null || true
+        docker exec "$SLURM_CONTROLLER_CONTAINER" cat "${SLURM_DATA_DIR}/${job_name}-${job_id}.out" 2>/dev/null || true
     fi
 }
 
@@ -640,7 +571,7 @@ test_slurm_job() {
                 # The restored job gets a new SLURM job ID
                 # Find the most recent job from squeue
                 local new_job_id
-                new_job_id=$(squeue -h -o "%i" --sort=-V 2>/dev/null | head -1)
+                new_job_id=$(slurm_exec squeue -h -o "%i" --sort=-V 2>/dev/null | head -1)
                 if [ -n "$new_job_id" ] && [ "$new_job_id" != "$job_id" ]; then
                     job_id="$new_job_id"
                     debug_log "Restored job has new ID: $job_id"
@@ -669,8 +600,9 @@ test_slurm_job() {
 
     if [ -n "$error" ]; then
         error_log "$error"
-        squeue 2>/dev/null || true
-        sinfo 2>/dev/null || true
+        slurm_exec squeue 2>/dev/null || true
+        slurm_exec sinfo 2>/dev/null || true
+        _dump_job_failure_info "${job_id:-}"
         return 1
     fi
 
@@ -682,29 +614,21 @@ test_slurm_job() {
 ##############################
 
 setup_slurm_samples() {
-    debug_log "Setting up SLURM_SAMPLES_DIR..."
-    if [ -z "${SLURM_SAMPLES_DIR:-}" ]; then
-        if [ -d "../cedana-samples/slurm" ]; then
-            SLURM_SAMPLES_DIR="../cedana-samples/slurm"
-        elif [ -d "/cedana-samples/slurm" ]; then
-            SLURM_SAMPLES_DIR="/cedana-samples/slurm"
-        elif [ -d "/tmp/cedana-samples/slurm" ]; then
-            SLURM_SAMPLES_DIR="/tmp/cedana-samples/slurm"
-        else
-            if git clone --depth 1 https://github.com/cedana/cedana-samples.git /tmp/cedana-samples 2>/dev/null; then
-                SLURM_SAMPLES_DIR="/tmp/cedana-samples/slurm"
-            else
-                SLURM_SAMPLES_DIR=""
-            fi
-        fi
-    fi
-    export SLURM_SAMPLES_DIR
-    debug_log "SLURM_SAMPLES_DIR is set to $SLURM_SAMPLES_DIR"
+    local samples_root
+    samples_root="$(dirname "${SLURM_SAMPLES_DIR:-}")"
 
-    # Copy workloads into the cluster
-    if [ -n "$SLURM_SAMPLES_DIR" ] && [ -d "$SLURM_SAMPLES_DIR" ]; then
-        sudo mkdir -p "${SLURM_DATA_DIR}/slurm-samples"
-        sudo cp -r "$SLURM_SAMPLES_DIR/." "${SLURM_DATA_DIR}/slurm-samples/"
-        debug_log "Copied slurm samples to ${SLURM_DATA_DIR}/slurm-samples"
+    if [ -z "$SLURM_SAMPLES_DIR" ] || [ ! -d "$SLURM_SAMPLES_DIR" ]; then
+        error_log "SLURM_SAMPLES_DIR not set or not found at ${SLURM_SAMPLES_DIR:-<unset>} (check cedana-samples checkout)"
+        return 1
     fi
+
+    info_log "Copying cedana-samples into cluster nodes..."
+    for c in "$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers); do
+        docker exec "$c" mkdir -p /data
+        docker cp "$samples_root" "${c}:/data/" || {
+            error_log "Failed to copy cedana-samples into container $c"
+            return 1
+        }
+    done
+    info_log "cedana-samples ready in all cluster nodes"
 }

@@ -49,7 +49,7 @@ on:
         type: string
         description: "cedana-slurm version to download (branch, tag, or 'release')"
         required: false
-        default: "main"
+        default: "fix/docker.yml"
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -111,7 +111,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: runs-on/action@v1
 
@@ -190,6 +190,13 @@ jobs:
           sudo cp slurm-bin/build/libslurm-cedana.so /usr/local/lib/libslurm-cedana.so
           sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
           sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
+
+      - name: Install ansible and Docker CLI
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            docker.io ansible python3-docker
+          ansible-galaxy collection install community.docker 2>/dev/null || true
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
