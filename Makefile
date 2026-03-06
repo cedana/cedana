@@ -134,7 +134,7 @@ BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 
-test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test: test-unit test-regression test-k8s test-slurm ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
@@ -267,6 +267,21 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				$$MAKE_ADDITIONAL_OPTS ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
+	fi
+
+test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+	echo "Running slurm e2e tests..." ;\
+	echo "Parallelism: $(PARALLELISM)" ;\
+	if [ "$(TAGS)" = "" ]; then \
+		$(BATS_CMD) -r test/slurm ; status=$$? ;\
+	else \
+		$(BATS_CMD_TAGS) -r test/slurm ; status=$$? ;\
+	fi ;\
+	if [ $$status -ne 0 ]; then \
+		echo "Slurm e2e tests failed" ;\
+		exit $$status ;\
+	else \
+		echo "All slurm e2e tests passed!" ;\
 	fi
 
 test-enter: ## Enter the test environment

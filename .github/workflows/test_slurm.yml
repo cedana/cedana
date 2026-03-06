@@ -1,0 +1,307 @@
+name: Test Slurm
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        description: "The branch, tag, or SHA to run on"
+        required: false
+        default: ""
+      debug:
+        type: boolean
+        description: "Run with debugging enabled"
+        required: false
+        default: false
+      large:
+        type: boolean
+        description: "Run large tests"
+        required: false
+        default: false
+      runner:
+        type: string
+        description: "Runner machine for CPU tests"
+        required: false
+        default: 2cpu
+      runner_gpu:
+        type: string
+        description: "Runner machine for GPU tests"
+        required: false
+        default: 4cpu-16g-1xT4
+      parallelism:
+        type: number
+        description: "Parallelism for running tests"
+        required: false
+        default: 1
+      post_summary:
+        type: boolean
+        description: "Post test summary"
+        required: false
+        default: false
+      slurm_version:
+        type: string
+        description: "cedana-slurm version to download (branch, tag, or 'release')"
+        required: false
+        default: "fix/docker.yml"
+
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  CEDANA_PROFILING_ENABLED: true
+  CEDANA_METRICS_ENABLED: true
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  FORMATTER: pretty
+  TERM: dumb
+  RETRIES: 1
+  DEBUG: ${{ vars.DEBUG_SLURM }}
+
+jobs:
+  propagator-connectivity:
+    name: Propagator Connectivity (Slurm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Quick connectivity test
+        run: |
+          echo "Testing basic connectivity to Propagator API..."
+          curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
+          echo "✓ Connectivity test completed"
+
+  slurm:
+    name: Slurm
+    runs-on: ${{ format(
+      'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}/extras=s3-cache',
+      github.run_id,
+      matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
+      matrix.arch,
+      matrix.compute == 'CUDA' && '-cuda-12-4' || '',
+      matrix.storage
+      ) }}
+    timeout-minutes: 120
+    needs: propagator-connectivity
+    strategy:
+      fail-fast: false
+      matrix:
+        compute:
+          - CPU
+          - CUDA
+        storage:
+          - storage/cedana
+        arch:
+          - amd64
+        exclude:
+          - compute: CUDA
+            arch: arm64
+    container:
+      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
+    steps:
+      - uses: runs-on/action@v1
+
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Checkout cedana-slurm
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-slurm
+          ref: ${{ inputs.slurm_version }}
+          path: cedana-slurm
+          token: ${{ secrets.GIT_CI_PAT }}
+
+      - name: Checkout cedana-samples
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-samples
+          path: cedana-samples
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana-${{ matrix.arch }}
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
+
+      - name: Download CRIU
+        uses: actions/download-artifact@v4
+        with:
+          name: criu-${{ matrix.arch }}
+
+      - name: Download slurm binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: slurm-${{ matrix.arch }}
+          path: slurm-bin
+
+      - name: Download GPU plugin
+        if: ${{ matrix.compute == 'CUDA' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu-${{ matrix.arch }}
+
+      - name: Pre-install plugins
+        env:
+          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+          make install
+          sudo -E cedana plugin install \
+            criu \
+            runc \
+            slurm \
+            storage/cedana \
+            storage/s3
+          if [ "$GPU" = "true" ]; then
+            sudo -E cedana plugin install gpu
+          fi
+
+      - name: Install slurm binaries
+        run: |
+          chmod +x slurm-bin/build/cedana-slurm
+          sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
+          sudo cp slurm-bin/build/libslurm-cedana.so /usr/local/lib/libslurm-cedana.so
+          sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
+          sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
+
+      - name: Install ansible and Docker CLI
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            docker.io ansible python3-docker
+          ansible-galaxy collection install community.docker 2>/dev/null || true
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Run slurm tests
+        env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          LARGE: ${{ inputs.large && '1' || '0' }}
+          PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
+        run: |
+          TAGS="slurm"
+          if [ "$GPU" = "1" ]; then
+            TAGS="${TAGS},gpu"
+          else
+            TAGS="${TAGS},!gpu"
+          fi
+          if [ "$LARGE" = "0" ]; then
+            TAGS="${TAGS},!large"
+          fi
+
+          make test-slurm \
+            TAGS=$TAGS \
+            GPU=$GPU \
+            FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=$PARALLELISM
+
+      - name: Setup node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate report
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report.xml" -t bats -o /tmp/report.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, ${{ matrix.arch }})"
+
+      - name: Set sanitized storage
+        if: always()
+        env:
+          STORAGE: ${{ matrix.storage }}
+        run: |
+          STORAGE=$(echo $STORAGE | sed 's/\//-/g')
+          echo "STORAGE=$STORAGE" >> $GITHUB_ENV
+
+      - name: Upload report
+        if: always()
+        id: upload-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.arch }}-slurm-${{ env.STORAGE }}-${{ matrix.compute }}
+          path: |
+            /tmp/report*.json
+
+  post-summary:
+    name: Post Summary
+    if: inputs.post_summary && always()
+    needs: slurm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+    steps:
+      - name: Download report
+        id: download-report
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-report-${{ matrix.arch }}-slurm*
+          path: report
+
+      - name: Post report
+        uses: ctrf-io/github-test-reporter@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          report-path: report/**/*.json
+          github-report: true
+          failed-folded-report: true
+          summary: true
+          pull-request: true
+          title: Slurm (${{ matrix.arch }})
+          update-comment: true
+          overwrite-comment: true
+          comment-tag: test-report-slurm-${{ matrix.arch }}
+          group-by: "suite"
+          always-group-by: true
+          upload-artifact: true
+          artifact-name: ctrf-report-slurm-${{ matrix.arch }}
