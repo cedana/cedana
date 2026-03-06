@@ -28,10 +28,11 @@ const (
 	DEFAULT_LOG_LEVEL           = "info"
 	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
-	DEFAULT_CHECKPOINT_COMPRESSION = "none"
-	DEFAULT_CHECKPOINT_DIR         = "/tmp"
-	DEFAULT_CHECKPOINT_STREAMS     = 0
-	DEFAULT_CHECKPOINT_ASYNC       = false
+	DEFAULT_CHECKPOINT_COMPRESSION              = "none"
+	DEFAULT_CHECKPOINT_DIR                      = "/tmp"
+	DEFAULT_CHECKPOINT_STREAMS                  = 0
+	DEFAULT_CHECKPOINT_ASYNC                    = false
+	DEFAULT_CHECKPOINT_STREAMER_MEMORY_LIMIT_MB = 4000
 
 	DEFAULT_DB_REMOTE = false
 	DEFAULT_DB_PATH   = "/tmp/cedana.db"
@@ -72,10 +73,11 @@ var Global Config = Config{
 	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Metrics:          DEFAULT_METRICS,
 	Checkpoint: Checkpoint{
-		Dir:         DEFAULT_CHECKPOINT_DIR,
-		Compression: DEFAULT_CHECKPOINT_COMPRESSION,
-		Streams:     DEFAULT_CHECKPOINT_STREAMS,
-		Async:       DEFAULT_CHECKPOINT_ASYNC,
+		Dir:                 DEFAULT_CHECKPOINT_DIR,
+		Compression:         DEFAULT_CHECKPOINT_COMPRESSION,
+		Streams:             DEFAULT_CHECKPOINT_STREAMS,
+		Async:               DEFAULT_CHECKPOINT_ASYNC,
+		StreamerMemoryLimitMb: DEFAULT_CHECKPOINT_STREAMER_MEMORY_LIMIT_MB,
 	},
 	DB: DB{
 		Remote: DEFAULT_DB_REMOTE,
