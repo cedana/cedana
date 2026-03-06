@@ -266,13 +266,6 @@ jobs:
           workload_identity_provider: ${{ env.WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ env.SERVICE_ACCOUNT }}
 
-      - name: Push results
-        if: inputs.push_results
-        env:
-          GCLOUD_PROJECT: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
-          BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
-        run: ./bench results push
-
       - name: Pull last results
         env:
           GCLOUD_PROJECT: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
@@ -280,9 +273,16 @@ jobs:
         run: |
           runtime_args=""
           for runtime in $(jq -r '.runtimes.list | keys[]' bench.json); do
-            runtime_args="$runtime_args --runtime $runtime:2"
+            runtime_args="$runtime_args --runtime $runtime"
           done
           ./bench results pull $runtime_args -f
+
+      - name: Push results
+        if: inputs.push_results
+        env:
+          GCLOUD_PROJECT: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
+          BIGQUERY_RESULTS_DATASET: ${{ inputs.results_dataset }}
+        run: ./bench results push
 
       - name: Plot comparison (runtime)
         if: inputs.comparison_runtime
