@@ -6,9 +6,9 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251009084235-8dc16543509d.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251217045538-a7aca122d469.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20251217045538-7c29e0988c5e.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.6.0-00000000000000-35a6b961b424.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-4fccc639692d.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251217045538-54cc2971c322.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.1-00000000000000-ce263b5f42e9.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-ce263b5f42e9.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.11-00000000000000-cca2a0bf5b85.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
@@ -57,8 +57,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.40.0
 	golang.org/x/net v0.47.0
 	golang.org/x/sys v0.40.0
-	google.golang.org/grpc v1.77.0
-	google.golang.org/protobuf v1.36.10
+	google.golang.org/grpc v1.78.0
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
 )
 
