@@ -95,6 +95,22 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
+# bats test_tags=dump,hostmem
+@test "[$GPU_INFO] dump GPU container (vector add hostmem)" {
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
+
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    run cedana job kill "$jid"
+}
+
+
 # bats test_tags=dump
 @test "[$GPU_INFO] dump GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
@@ -164,6 +180,63 @@ teardown_file() {
     run cedana job delete "$jid"
 }
 
+# bats test_tags=restore,hostmem
+@test "[$GPU_INFO] restore GPU container (vector add hostmem)" {
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
+
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+    run cedana job delete "$jid"
+}
+
+# bats test_tags=restore,crcr,hostmem
+@test "[$GPU_INFO] restore->dump->restore GPU container (vector add hostmem)" {
+    jid=$(unix_nano)
+    bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
+
+    cedana run runc --bundle "$bundle" --jid "$jid" --gpu-enabled
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+    run cedana job delete "$jid"
+}
+
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU container (mem throughput saxpy)" {
     jid=$(unix_nano)
@@ -200,7 +273,7 @@ teardown_file() {
 
     run cedana dump runc "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     runc delete "$jid"

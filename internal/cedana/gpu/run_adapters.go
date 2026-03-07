@@ -201,7 +201,6 @@ func ProcessInterception(next types.Run) types.Run {
 			return nil, status.Errorf(codes.Internal, "failed to create symlink for GPU library: %s", err)
 		}
 
-		req.Env = append(req.Env, "NCCL_SHM_DISABLE=1") // Disable for now to avoid conflicts with NCCL's shm usage
 		req.Env = append(req.Env, "CEDANA_GPU_ID="+id)
 		req.Env = append(req.Env, "CEDANA_GPU_LOG_DIR="+logDir)
 		req.Env = append(req.Env, fmt.Sprintf("LD_PRELOAD=%s:%s", libSymlink, utils.Getenv(req.Env, "LD_PRELOAD")))

@@ -4,10 +4,8 @@ package logging
 
 import (
 	"bytes"
-	"context"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 type LogWriter struct {
@@ -15,10 +13,10 @@ type LogWriter struct {
 	level  zerolog.Level
 }
 
-func Writer(ctx context.Context, level zerolog.Level) *LogWriter {
+func Writer(logger *zerolog.Logger) *LogWriter {
 	return &LogWriter{
-		level:  level,
-		logger: log.Ctx(ctx),
+		level:  logger.GetLevel(),
+		logger: logger,
 	}
 }
 

@@ -55,6 +55,9 @@ export CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-system}"
 export TAIL_PID=""
 
 setup_suite() {
+    check_env CEDANA_URL
+    check_env CEDANA_AUTH_TOKEN
+
     install_kubectl
     install_helm
     install_k9s
@@ -83,7 +86,7 @@ setup_suite() {
             info_log "======================================="
             info_log "Cluster registered with ID: $CLUSTER_ID"
             info_log "Logs for this cluster can be viewed at:"
-            info_log "$(log_url_cluster "$CEDANA_URL" "$CLUSTER_ID")"
+            info log_url_cluster "$CEDANA_URL" "$CLUSTER_ID"
             info_log "======================================="
         else
             debug_log "Using provided cluster ID: $CLUSTER_ID"
@@ -114,6 +117,7 @@ setup_suite() {
     fi
 
     # Create test namespace
+    delete_namespace "$NAMESPACE"
     create_namespace "$NAMESPACE"
 }
 

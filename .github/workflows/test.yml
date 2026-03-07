@@ -65,7 +65,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging
+  DEBUG: ${{ vars.DEBUG_REGRESSION }}
 
 jobs:
   unit:
@@ -89,7 +89,9 @@ jobs:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
+          submodules: recursive
           fetch-tags: true
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
         uses: actions/download-artifact@v4
@@ -102,6 +104,11 @@ jobs:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
+
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer-${{ matrix.arch }}
 
       - name: Make executable
         run: |
@@ -116,47 +123,6 @@ jobs:
 
       - name: Run unit tests
         run: make test-unit
-
-  script:
-    name: Script
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
-    strategy:
-      fail-fast: false
-      matrix:
-        name:
-          - k8s-setup-host
-          # - slurm-setup-host
-        arch:
-          - amd64
-          - arm64
-    steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: cedana-${{ matrix.arch }}
-
-      - name: Run k8s setup host
-        env:
-          CEDANA_PLUGINS_BUILDS: local # change to alpha to test plugin downloads
-        run: |
-          sudo chmod +x ./cedana
-          sudo cp ./cedana /usr/local/bin/
-          sudo mkdir -p /cedana/scripts/host
-          sudo cp -r ./scripts/host/* /cedana/scripts/host
-          sudo \
-            ENV="CI" \
-            CEDANA_URL="${CEDANA_URL}" \
-            CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}" \
-            CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL}" \
-            CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS}" \
-            /cedana/scripts/host/${{ matrix.name }}.sh
 
   basic:
     name: Basic
@@ -262,6 +228,48 @@ jobs:
           name: test-report-${{ matrix.arch }}
           path: |
             /tmp/report*.json
+
+  script:
+    name: Script
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
+    strategy:
+      fail-fast: false
+      matrix:
+        name:
+          - install-deps
+          - install-service
+          - reset-service
+          - configure-shm
+          - configure-io-uring
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - uses: runs-on/action@v1
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cedana-${{ matrix.arch }}
+
+      - name: Run k8s setup host
+        env:
+          CEDANA_PLUGINS_BUILDS: local # change to alpha to test plugin downloads
+        run: |
+          sudo chmod +x ./cedana
+          sudo cp ./cedana /usr/local/bin/
+          sudo \
+            ENV="CI" \
+            CEDANA_URL="${CEDANA_URL}" \
+            CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}" \
+            CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL}" \
+            CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS}" \
+            scripts/${{ matrix.name }}.sh
 
   plugin:
     name: Plugin
@@ -467,6 +475,22 @@ jobs:
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
+  eks-karpenter:
+    name: Kubernetes
+    uses: ./.github/workflows/test_k8s.yml
+    if: ${{ inputs.kubernetes }}
+    secrets: inherit
+    concurrency: test-k8s-karpenter # Since the cluster is reused
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      platform: EKS-Karpenter
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
+      parallelism: ${{ inputs.parallelism }}
+      post_summary: false # Will post consolidated summary instead
+
   gke:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
@@ -563,8 +587,12 @@ jobs:
           FAILED=$(find report -name "*.json" -exec jq -r '.results.summary.failed // 0' {} \; | awk '{s+=$1} END {print s}')
           if [ "$FAILED" -gt 0 ]; then
             echo "Found $FAILED failures, generating AI summary..."
+            # Flatten all JSON reports into a single directory for merging
+            # (ctrf merge doesn't search recursively)
+            mkdir -p /tmp/ctrf-reports
+            find report -name "*.json" -exec cp {} /tmp/ctrf-reports/ \;
             # Merge all CTRF reports into one
-            npx ctrf merge report -o /tmp/merged-report.json
+            npx ctrf merge /tmp/ctrf-reports -o merged-report.json -d /tmp --keep-reports
             npx ai-ctrf gemini "/tmp/merged-report.json" --consolidate --model gemini-2.0-flash \
               --additionalPromptContext "Focus on identifying root causes and common patterns across failures. Be concise." \
               > /tmp/ai-summary.txt 2>&1 || true
@@ -587,6 +615,7 @@ jobs:
           BUILD_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           BRANCH: ${{ github.head_ref || github.ref_name }}
           AI_SUMMARY: ${{ steps.ai-summary.outputs.summary }}
+          ARCH: ${{ matrix.arch }}
           # Job results to detect failures without reports
           JOB_RESULTS: ${{ toJSON(needs) }}
         run: |
@@ -655,16 +684,30 @@ jobs:
 
           // Check for jobs that failed without producing reports
           let crashedJobs = [];
+          const arch = process.env.ARCH || 'unknown';
+          // Map job IDs to display names and patterns that should appear in report names
+          const jobConfig = {
+            'basic': { displayName: 'Basic', pattern: 'basic' },
+            'plugin': { displayName: null, pattern: null }, // plugin has many sub-reports, skip crash detection
+            'streamer': { displayName: 'Streamer (CPU)', pattern: 'streamer' },
+            'gpu': { displayName: 'CUDA', pattern: 'cuda' },
+            'k3s': { displayName: 'Kubernetes (K3s, CPU)', pattern: 'k3s' },
+            'eks': { displayName: 'Kubernetes (EKS, CPU)', pattern: 'eks' },
+            'gke': { displayName: 'Kubernetes (GKE, CPU)', pattern: 'gke' },
+            'nebius': { displayName: 'Kubernetes (Nebius, GPU)', pattern: 'nebius' },
+          };
           try {
             const jobResults = JSON.parse(process.env.JOB_RESULTS || '{}');
             for (const [job, data] of Object.entries(jobResults)) {
               if (data.result === 'failure') {
+                const config = jobConfig[job];
+                if (!config || config.pattern === null) continue; // Skip jobs we can't reliably detect
                 // Check if we have any report for this job
                 const hasReport = Object.keys(groups).some(name =>
-                  name.toLowerCase().includes(job.toLowerCase())
+                  name.toLowerCase().includes(config.pattern || job.toLowerCase())
                 );
                 if (!hasReport) {
-                  crashedJobs.push(job);
+                  crashedJobs.push({ id: job, displayName: config.displayName });
                 }
               }
             }
@@ -685,7 +728,7 @@ jobs:
 
           // Add crashed jobs section if any
           if (hasCrashedJobs) {
-            const crashedLines = crashedJobs.map(j => `:boom: *${j}*: crashed before tests ran`).join('\n');
+            const crashedLines = crashedJobs.map(j => `:boom: *${j.displayName} (${arch})*: crashed before tests ran`).join('\n');
             blocks.push({ type: 'section', text: { type: 'mrkdwn', text: crashedLines } });
           }
 

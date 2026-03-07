@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 install_helm() {
-    if command -v helm &> /dev/null; then
+    if command -v helm &>/dev/null; then
         debug_log "helm is already installed"
         return 0
     fi
@@ -18,7 +18,6 @@ helm_install_cedana() {
     local namespace="$2"
 
     debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
-
     local helm_cmd
 
     # Use upgrade --install for idempotent installs
@@ -75,14 +74,21 @@ helm_install_cedana() {
     if [ -n "$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsContainerdRuntimeVersion=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION"
     fi
-    if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+    if [ "$GPU" == "1" ]; then
+        if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+        fi
+    else
+        helm_cmd="$helm_cmd --set config.pluginsGpuVersion=none"
     fi
     if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
     fi
     if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
+    fi
+    if [ -n "$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK" ]; then
+        helm_cmd="$helm_cmd --set config.gpuSkipNvidiaRuntimeHook=$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK"
     fi
 
     helm_cmd="$helm_cmd --wait --timeout=5m"
@@ -92,7 +98,6 @@ helm_install_cedana() {
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
     }
-
     debug_log "Helm chart installed"
 }
 
@@ -121,6 +126,7 @@ helm_uninstall_cedana() {
     debug_log "Waiting for all pods in $namespace namespace to terminate..."
 
     wait_for_cmd_fail 120 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
+    wait_for_cmd_fail 30 "kubectl get namespaces | grep -q $namespace"
 
     debug_log "Helm chart uninstalled successfully"
 }

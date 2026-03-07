@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -25,9 +24,9 @@ func GetSlurmJobForDump(next types.Dump) types.Dump {
 		jid := req.GetDetails().GetSlurm().GetJobID()
 		hostname := req.GetDetails().GetSlurm().GetHostname()
 
-		path := fmt.Sprintf("/system.slice/%s_slurmstepd.scope/job_%d/step_batch/user/task_special", hostname, jid)
-		if _, err := os.Stat("/sys/fs/cgroup" + path); os.IsNotExist(err) {
-			return nil, status.Errorf(codes.NotFound, "cgroup path for slurm job %d does not exist: %s", jid, path)
+		path, err := GetJobCgroupPath(hostname, jid)
+		if err != nil {
+			return nil, err
 		}
 
 		config := &cgroups.Cgroup{
@@ -57,6 +56,13 @@ func SetPIDForDump(next types.Dump) types.Dump {
 				return nil, status.Errorf(codes.NotFound, "failed to get PID from slurm details")
 			}
 			resp.State.PID = pid
+		}
+
+		state := resp.GetState()
+
+		err = utils.FillProcessState(ctx, state.PID, state, true)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to fill process state: %v", err)
 		}
 
 		return next(ctx, opts, resp, req)

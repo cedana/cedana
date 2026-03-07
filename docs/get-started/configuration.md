@@ -1,9 +1,10 @@
 # Configuration
 
-Cedana configuration lives in your home directory, specifically in `~/.cedana/config.json`. This file is automatically created the first time you use a Cedana command. You can also create it manually.
+Cedana configuration lives in `/etc/cedana/config.json`. You can initialize this file with default values by using the `--init-config` flag. Any configuration in environment variables will override the default values when this file is initialized.
 
 ## Environment variables
-You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
+
+You may also override the configuration file using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
 
 ## [Config](../../pkg/config/types.go#L10-L36)
 
@@ -113,14 +114,14 @@ type GPU struct {
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 		// SockDir is the directory to use for the GPU sockets
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
-		// Track metrics associated with observability
-		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 		// LdLibPath holds any additional directories to search for GPU libraries
 		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
+    // SkipNvidiaRuntimeHook always skips the nvidia-container-runtime-hook when spawning GPU containers
+    SkipNvidiaRuntimeHook bool `json:"skip_nvidia_runtime_hook" key:"skip_nvidia_runtime_hook" yaml:"skip_nvidia_runtime_hook" mapstructure:"skip_nvidia_runtime_hook"`
 }
 ```
 

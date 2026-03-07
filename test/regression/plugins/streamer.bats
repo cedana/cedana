@@ -37,7 +37,7 @@ teardown_file() {
 
     run cedana dump process $pid --streams 1 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
 
@@ -249,7 +249,7 @@ teardown_file() {
 
     run cedana dump process $pid --streams 1 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
 

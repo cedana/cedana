@@ -22,8 +22,8 @@ func CopyNotify(dst io.Writer, src io.Reader) chan error {
 
 // Tar creates a tarball from the provided sources and writes it to the destination.
 // FIXME: Works only with files, not directories in the tarball.
-func Tar(src string, dst io.Writer, compression string) (err error) {
-	writer, err := NewCompressionWriter(dst, compression)
+func Tar(src string, dst io.Writer, compression string, isFuse bool) (err error) {
+	writer, err := NewOptimizedCompressionWriter(dst, compression, isFuse)
 	if err != nil {
 		return err
 	}

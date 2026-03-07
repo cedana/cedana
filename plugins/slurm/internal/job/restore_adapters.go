@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -31,9 +30,9 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		hostname := details.GetHostname()
 		parent := details.GetParentPID()
 
-		path := fmt.Sprintf("/system.slice/%s_slurmstepd.scope/job_%d/step_batch/user/task_special", hostname, jid)
-		if _, err := os.Stat("/sys/fs/cgroup" + path); os.IsNotExist(err) {
-			return nil, status.Errorf(codes.NotFound, "cgroup path for slurm job %d does not exist: %s", jid, path)
+		path, err := GetJobCgroupPath(hostname, jid)
+		if err != nil {
+			return nil, err
 		}
 
 		// Set the new job PID to be the PID of the restored process
@@ -80,7 +79,7 @@ func RestoreSlurmScript(next types.Restore) types.Restore {
 
 		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
 			if path := f.GetPath(); filepath.Base(path) == SLURM_SCRIPT_FILE {
-				contents, err := slurm_utils.LoadScriptFromDump(path, opts.DumpFs)
+				contents, err := slurm_utils.LoadScriptFromDump(SLURM_SCRIPT_FILE, opts.DumpFs)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to load slurm script from dump %s", path)
 					return false
@@ -92,7 +91,7 @@ func RestoreSlurmScript(next types.Restore) types.Restore {
 					return false
 				}
 
-				err = os.WriteFile(path, contents, 0755)
+				err = os.WriteFile(path, contents, 0700)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to restore slurm script file %s", path)
 					return false

@@ -17,10 +17,10 @@ export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 setup_file() {
     # FIXME: test is broken
     skip "disabled until test itself is fixed"
-    export CEDANA_GPU_SHM_SIZE=$((8*GIBIBYTE)) # Since workloads here are large
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
+    export CEDANA_GPU_SHM_SIZE=$((8*GIBIBYTE)) # Since workloads here are large
     setup_file_daemon
     do_once install_requirements
     do_once download_hf_models
@@ -50,7 +50,7 @@ teardown_file() {
 
     cedana dump job "$jid"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     sleep 5

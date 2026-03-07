@@ -6,7 +6,9 @@ import (
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/jedib0t/go-pretty/v6/text"
+	"github.com/spf13/cobra"
 
+	"github.com/cedana/cedana/plugins/slurm/cmd"
 	"github.com/cedana/cedana/plugins/slurm/internal/cgroup"
 	"github.com/cedana/cedana/plugins/slurm/internal/defaults"
 	"github.com/cedana/cedana/plugins/slurm/internal/job"
@@ -21,7 +23,10 @@ import (
 // loaded from ldflag definitions
 var Version string = "dev"
 
-var CmdTheme text.Colors = style.HighLevelRuntimeColors
+var (
+	HelperCmds []*cobra.Command = []*cobra.Command{cmd.HelperCmd}
+	CmdTheme   text.Colors      = style.HighLevelRuntimeColors
+)
 
 var (
 	KillSignal = syscall.SIGKILL
@@ -33,13 +38,13 @@ var (
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
 
+		job.SetPIDForDump,
+
 		job.GetSlurmJobForDump,
 		job.DumpSlurmScript,
 
 		cgroup.UseCgroupFreezerIfAvailableForDump,
 		network.LockNetworkBeforeDump,
-
-		job.SetPIDForDump,
 	}
 
 	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{

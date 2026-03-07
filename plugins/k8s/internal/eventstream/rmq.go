@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,11 +35,26 @@ type EventStream struct {
 	cedana     *client.Client
 	propagator *cedanagosdk.ApiClient
 
-	url               string
-	checkpoints       *rabbitmq.Publisher
-	containerdAddress string
+	url                string
+	checkpoints        *rabbitmq.Publisher
+	checkpointRequests *rabbitmq.Consumer
+	containerdAddress  string
+	lifecycleMu        sync.RWMutex
+	closeOnce          sync.Once
+	closeErr           error
 	*rabbitmq.Conn
 }
+
+var defaultDumpOpts = &criu.CriuOpts{
+	LeaveRunning:      proto.Bool(true),
+	TcpEstablished:    proto.Bool(true),
+	TcpSkipInFlight:   proto.Bool(true),
+	LinkRemap:         proto.Bool(true),
+	ManageCgroups:     proto.Bool(true),
+	ManageCgroupsMode: criu.CriuCgMode_CG_NONE.Enum(),
+}
+
+var queryExpiryMs = 30 * time.Minute.Milliseconds()
 
 func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string) (*EventStream, error) {
 	if cedana == nil {
@@ -80,9 +96,16 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 }
 
 func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
 	queueName := "cedana_daemon_helper-" + rand.Text()
 	consumer, err := rabbitmq.NewConsumer(
-		es.Conn,
+		conn,
 		queueName,
 		rabbitmq.WithConsumerOptionsExchangeName("daemon_broadcast_request"),
 		rabbitmq.WithConsumerOptionsConcurrency(10),
@@ -90,6 +113,11 @@ func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
 		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsQueueExclusive,
+		rabbitmq.WithConsumerOptionsQueueAutoDelete,
+		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+			"x-expires": queryExpiryMs,
+		}),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
 			RoutingKey:     "",
 			BindingOptions: rabbitmq.BindingOptions{},
@@ -98,22 +126,90 @@ func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = consumer.Run(es.checkpointHandler(ctx))
-	if err != nil {
+
+	es.lifecycleMu.Lock()
+	if es.Conn == nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.checkpointRequests != nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("checkpoints consumer is already running")
+	}
+	es.checkpointRequests = consumer
+	es.lifecycleMu.Unlock()
+
+	defer func() {
+		es.lifecycleMu.Lock()
+		if es.checkpointRequests == consumer {
+			es.checkpointRequests = nil
+		}
+		es.lifecycleMu.Unlock()
+	}()
+
+	if err := consumer.Run(es.checkpointHandler(ctx)); err != nil {
+		consumer.Close()
 		return err
 	}
 	return nil
 }
 
 func (es *EventStream) StartCheckpointsPublisher(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
 	publisher, err := rabbitmq.NewPublisher(
-		es.Conn,
+		conn,
 	)
 	if err != nil {
 		return err
 	}
+
+	es.lifecycleMu.Lock()
+	defer es.lifecycleMu.Unlock()
+	if es.Conn == nil {
+		publisher.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.checkpoints != nil {
+		publisher.Close()
+		return fmt.Errorf("checkpoints publisher is already running")
+	}
 	es.checkpoints = publisher
 	return nil
+}
+
+func (es *EventStream) Close() error {
+	es.closeOnce.Do(func() {
+		es.lifecycleMu.Lock()
+		consumer := es.checkpointRequests
+		publisher := es.checkpoints
+		conn := es.Conn
+		es.checkpointRequests = nil
+		es.checkpoints = nil
+		es.Conn = nil
+		es.lifecycleMu.Unlock()
+
+		if consumer != nil {
+			consumer.Close()
+		}
+		if publisher != nil {
+			publisher.Close()
+		}
+		if conn != nil {
+			if err := conn.Close(); err != nil {
+				es.closeErr = errors.Join(es.closeErr, fmt.Errorf("failed to close rabbitmq connection: %w", err))
+			}
+		}
+	})
+
+	return es.closeErr
 }
 
 /////////////
@@ -254,12 +350,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			dumpReq := &daemon.DumpReq{
 				Name: checkpointIdMap[i],
 				Type: "containerd",
-				Criu: &criu.CriuOpts{
-					LeaveRunning:    proto.Bool(true),
-					TcpEstablished:  proto.Bool(true),
-					TcpSkipInFlight: proto.Bool(true),
-					LinkRemap:       proto.Bool(true),
-				},
+				Criu: defaultDumpOpts,
 				Details: &daemon.Details{
 					Containerd: container,
 				},
@@ -375,6 +466,13 @@ func (es *EventStream) publishCheckpoint(
 	dumpErr error,
 ) error {
 	log := *log.Ctx(ctx)
+	es.lifecycleMu.RLock()
+	publisher := es.checkpoints
+	es.lifecycleMu.RUnlock()
+	if publisher == nil {
+		return fmt.Errorf("checkpoints publisher is not initialized")
+	}
+
 	ci := checkpointInfo{
 		ActionId:       actionId,
 		PodId:          podId,
@@ -426,7 +524,7 @@ func (es *EventStream) publishCheckpoint(
 	if err != nil {
 		return err
 	}
-	err = es.checkpoints.Publish(data, []string{"checkpoint_response"})
+	err = publisher.Publish(data, []string{"checkpoint_response"})
 	if err != nil {
 		return err
 	}

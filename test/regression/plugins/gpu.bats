@@ -103,6 +103,21 @@ teardown_file() {
     rm -rf "$dump_file"
 }
 
+# bats test_tags=dump,hostmem
+@test "[$GPU_INFO] dump GPU process (vector add hostmem)" {
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add_host
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"
+}
+
 # bats test_tags=dump
 @test "[$GPU_INFO] dump GPU process (mem throughput saxpy)" {
     jid=$(unix_nano)
@@ -170,6 +185,61 @@ teardown_file() {
     rm -rf "$dump_file"
 }
 
+# bats test_tags=restore,hostmem
+@test "[$GPU_INFO] restore GPU process (vector add hostmem)" {
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add_host
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"
+}
+
+# bats test_tags=restore,crcr,hostmem
+@test "[$GPU_INFO] restore->dump->restore GPU process (vector add hostmem)" {
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add_host
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"
+}
+
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU process (mem throughput saxpy)" {
     jid=$(unix_nano)
@@ -206,7 +276,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     debug cedana restore process --path "$dump_file" --pid-file "$pid_file" --no-server &

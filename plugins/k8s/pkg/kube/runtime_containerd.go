@@ -26,7 +26,7 @@ func (c *ContainerdClient) String() string {
 	return "containerd"
 }
 
-func (c *ContainerdClient) Pods(ctx context.Context, req *k8s.QueryReq) (resp *k8s.QueryResp, err error) {
+func (c *ContainerdClient) Query(ctx context.Context, req *daemon.QueryReq) (resp *daemon.QueryResp, err error) {
 	var query types.Query
 
 	err = features.QueryHandler.IfAvailable(func(_ string, containerQuery types.Query) error {
@@ -50,40 +50,57 @@ func (c *ContainerdClient) Pods(ctx context.Context, req *k8s.QueryReq) (resp *k
 	pods := []*k8s.Pod{}
 	podMap := make(map[string]*k8s.Pod)
 	namesMap := make(map[string]bool)
-	for _, name := range req.Names {
+	for _, name := range req.K8S.Names {
 		namesMap[name] = true
 	}
+	states := []*daemon.ProcessState{}
 
-	for _, container := range containerResps.Containerd.Containers {
+	resp = &daemon.QueryResp{K8S: &k8s.QueryResp{}, Messages: containerResps.Messages}
+
+	for i, container := range containerResps.Containerd.Containers {
 		runtime := containerd_utils.Runtime(container)
 
 		switch runtime {
 		case "runc":
 			runc := container.Runc
 			if runc == nil {
-				return nil, fmt.Errorf("container %s is missing lower runtime details", container.ID)
+				resp.Messages = append(resp.Messages, fmt.Sprintf("%s: missing runc details", container.ID))
+				continue
 			}
 			spec, err := runc_utils.LoadSpec(filepath.Join(runc.Bundle, runc_utils.SpecConfigFile))
 			if err != nil {
-				return nil, fmt.Errorf("failed to load runc spec for container %s: %v", container.ID, err)
+				resp.Messages = append(resp.Messages, fmt.Sprintf("%s: failed to load runc spec: %v", container.ID, err))
+				continue
 			}
 			info, err = PodInfoFromRunc(spec)
 			if err != nil {
-				return nil, fmt.Errorf("failed to get pod info from runc container %s: %v", container.ID, err)
+				resp.Messages = append(resp.Messages, fmt.Sprintf("%s: failed to get pod info from runc container: %v", container.ID, err))
+				continue
 			}
+		case "unsupported":
+			resp.Messages = append(resp.Messages, fmt.Sprintf("%s: unsupported lower runtime", container.ID))
+			continue
 		default:
-			return nil, fmt.Errorf("unsupported lower runtime: %s", runtime)
+			resp.Messages = append(resp.Messages, fmt.Sprintf("%s: unsupported lower runtime `%s`", container.ID, runtime))
+			continue
 		}
 
 		if len(namesMap) > 0 {
-			if _, ok := namesMap[info.Name]; !ok {
+			found := false
+			for prefix := range namesMap {
+				if len(info.Name) >= len(prefix) && info.Name[:len(prefix)] == prefix {
+					found = true
+					break
+				}
+			}
+			if !found {
 				continue
 			}
 		}
-		if req.Namespace != "" && req.Namespace != info.Namespace {
+		if req.K8S.Namespace != "" && req.K8S.Namespace != info.Namespace {
 			continue
 		}
-		if req.ContainerType != "" && req.ContainerType != info.Type {
+		if req.K8S.ContainerType != "" && req.K8S.ContainerType != info.Type {
 			continue
 		}
 
@@ -99,11 +116,15 @@ func (c *ContainerdClient) Pods(ctx context.Context, req *k8s.QueryReq) (resp *k
 		}
 
 		pod.Containerd = append(pod.Containerd, container)
+		states = append(states, containerResps.States[i])
 	}
 
 	for _, pod := range podMap {
 		pods = append(pods, pod)
 	}
 
-	return &k8s.QueryResp{Pods: pods}, nil
+	resp.K8S.Pods = pods
+	resp.States = states
+
+	return resp, nil
 }

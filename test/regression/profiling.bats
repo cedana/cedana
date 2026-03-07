@@ -113,7 +113,7 @@ teardown_file() {
     assert_success
     refute_output --partial "total"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
 
     run cedana restore process --path "$dump_file" --profiling=false
     assert_success
@@ -149,7 +149,7 @@ teardown_file() {
     assert_success
     refute_output --partial "total"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
 
     run cedana restore process --path "$dump_file" --profiling=false --no-server
     assert_success

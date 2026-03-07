@@ -1,7 +1,9 @@
 package gpu
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"regexp"
@@ -18,6 +20,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -32,8 +35,6 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 			if !state.GPUEnabled {
 				return next(ctx, opts, resp, req)
 			}
-
-			next = next.With(InheritFilesForRestore)
 
 			if !opts.Plugins.IsInstalled("gpu") {
 				return nil, status.Errorf(codes.FailedPrecondition, "Please install the GPU plugin to restore GPU support")
@@ -59,6 +60,8 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 					return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
 				}
 			}
+
+			next = next.With(InheritFilesForRestore, AddMountsForRestore)
 
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
@@ -114,9 +117,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			})
 		}
 
-		internalMounts := make(map[uint64]any)
+		mounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			internalMounts[m.ID] = nil
+			mounts[m.ID] = nil
 			return true
 		})
 
@@ -134,7 +137,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			isPipe := strings.HasPrefix(file.Path, "pipe")
 			isSocket := strings.HasPrefix(file.Path, "socket")
 			isAnon := strings.HasPrefix(file.Path, "anon_inode")
-			_, internal := internalMounts[file.MountID]
+			_, internal := mounts[file.MountID]
 
 			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
 
@@ -149,6 +152,90 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
+
+				// Find the checkpoint hostmem file by matching the hostmem name in metadata
+				// Checkpoint file format: size(8) + baseAddr(8) + segName(128) + data
+				expectedSegName := fmt.Sprintf("hostmem-%d", pid)
+				var hostMemSegSize uint64
+				found := false
+
+				// Try to find matching checkpoint file (workerIndex=0, contextIndex 0-9)
+				matches, err := afero.Glob(opts.DumpFs, "gpu-hostmem-*")
+				if err == nil {
+					for _, filename := range matches {
+						tempFile, openErr := opts.DumpFs.Open(filename)
+						if openErr != nil {
+							continue
+						}
+
+						// Read metadata: size(8) + baseAddr(8) + segName(128)
+						metadataBuffer := make([]byte, 144) // 8 + 8 + 128
+						_, readErr := tempFile.Read(metadataBuffer)
+						tempFile.Close()
+						if readErr != nil && readErr.Error() != "EOF" {
+							continue
+						}
+
+						// Extract segName from bytes 16-144
+						segNameBytes := metadataBuffer[16:144]
+						// Find null terminator
+						before, _, ok := bytes.Cut(segNameBytes, []byte{0})
+						var segName string
+						if ok {
+							segName = string(before)
+						} else {
+							segName = string(segNameBytes)
+						}
+
+						// strip the leading `/`
+						segName = strings.TrimSpace(segName)
+						segName = strings.TrimPrefix(segName, "/")
+
+						log.Debug().Str("file", filename).Str("segName", segName).Str("expected", expectedSegName).Msg("checking hostmem checkpoint file")
+
+						if segName == expectedSegName {
+							// Found the right file, extract size from first 8 bytes
+							hostMemSegSize = binary.LittleEndian.Uint64(metadataBuffer[0:8])
+							found = true
+							log.Debug().Str("file", filename).Str("segName", segName).Uint64("size", hostMemSegSize).Msg("found matching hostmem checkpoint file")
+							break
+						}
+					}
+				}
+
+				if !found {
+					err = status.Errorf(codes.Internal, "failed to find checkpoint hostmem file for %s (expected segName: %s)", path, expectedSegName)
+					return false
+				}
+
+				// Create hostmem file in host path (not using inherit FD)
+				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+				if createErr != nil {
+					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
+					return false
+				}
+
+				defer hostmemFile.Close()
+
+				chmodErr := os.Chmod(newPath, 0o666)
+				if chmodErr != nil {
+					hostmemFile.Close()
+					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, chmodErr)
+					return false
+				}
+
+				// Truncate to the correct size
+				if hostMemSegSize > 0 {
+					truncErr := hostmemFile.Truncate(int64(hostMemSegSize))
+					if truncErr != nil {
+						hostmemFile.Close()
+						err = status.Errorf(codes.Internal, "failed to truncate hostmem file %s to size %d: %v", newPath, hostMemSegSize, truncErr)
+						return false
+					}
+					log.Debug().Str("path", newPath).Uint64("size", hostMemSegSize).Msg("created and truncated hostmem file in host path")
+				} else {
+					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
+				}
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
@@ -159,12 +246,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
@@ -175,12 +266,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else {
 				return true // not a file we care about
 			}
@@ -270,6 +365,29 @@ func InterceptionRestore(next types.Restore) types.Restore {
 		}
 
 		log.Info().Str("plugin", "gpu").Str("ID", id).Str("type", t).Msg("restoring GPU interception")
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+// Adapter that tells CRIU about the external GPU mounts.
+func AddMountsForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"missing state. at least PID is required in resp.state",
+			)
+		}
+
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
+				log.Trace().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.Root))
+			}
+			return true
+		})
 
 		return next(ctx, opts, resp, req)
 	}

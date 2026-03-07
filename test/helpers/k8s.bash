@@ -79,9 +79,12 @@ setup_samples() {
 
 # Use an existing pod spec file, modify its namespace to the
 # test namespace, and return the new spec path.
+# Optional third parameter: workload name to include in the pod name
+# e.g., pod_spec "/path/to/spec.yaml" "test" "gromacs" -> test-cuda-gromacs-1737394521234567890
 pod_spec() {
     local source_file="$1"
     local namespace="${2:-$NAMESPACE}"
+    local workload_name="${3:-}"
 
     # Check if source file exists
     if [ ! -f "$source_file" ]; then
@@ -90,9 +93,15 @@ pod_spec() {
     fi
 
     local unique_id
-    unique_id="test-$(unix_nano)"
+    local prefix="test"
     if grep -q "nvidia.com/gpu" "$source_file"; then
-        unique_id="test-cuda-$(unix_nano)"
+        prefix="test-cuda"
+    fi
+
+    if [ -n "$workload_name" ]; then
+        unique_id="${prefix}-${workload_name}-$(unix_nano)"
+    else
+        unique_id="${prefix}-$(unix_nano)"
     fi
 
     # Check if the spec is a Pod
@@ -126,9 +135,14 @@ cmd_pod_spec() {
     local image="$1"
     local args="$2"
     local namespace="${3:-$NAMESPACE}"
+    local workload_name="${4:-}"
 
     local name
-    name=test-$(unix_nano)
+    if [ -n "$workload_name" ]; then
+        name="test-${workload_name}-$(unix_nano)"
+    else
+        name="test-$(unix_nano)"
+    fi
 
     local spec=/tmp/pod-${name}.yaml
     cat >"$spec" <<EOF
@@ -163,9 +177,14 @@ cmd_pod_spec_gpu() {
     local args="$2"
     local gpus="${3:-1}"
     local namespace="${4:-$NAMESPACE}"
+    local workload_name="${5:-}"
 
     local name
-    name=test-cuda-$(unix_nano)
+    if [ -n "$workload_name" ]; then
+        name="test-cuda-${workload_name}-$(unix_nano)"
+    else
+        name="test-cuda-$(unix_nano)"
+    fi
 
     local spec=/tmp/pod-${name}.yaml
     cat >"$spec" <<EOF
@@ -374,29 +393,54 @@ wait_for_ready() {
 
     debug_log "Waiting for all pods in namespace $namespace to be Ready (timeout: $timeout seconds)"
 
-    # Get only Running pods
-    local running_pods
-    running_pods=$(kubectl get pods -n "$namespace" --field-selector=status.phase=Running -o name 2>/dev/null)
+    # Get all pods excluding Completed pods
+    local pods
+    pods=$(kubectl get pods -n "$namespace" -o json 2>/dev/null | jq -r '.items[] | select(.status.phase != "Succeeded") | "pod/" + .metadata.name')
 
-    if [ -z "$running_pods" ]; then
+    if [ -z "$pods" ]; then
         debug_log "No Running pods found in namespace $namespace"
         return 0
     fi
 
-    echo "$running_pods" | xargs -r kubectl wait --for=condition=Ready -n "$namespace" --timeout="$timeout"s || {
-        error_log "Failed to wait for all pods in namespace $namespace to be Ready"
-        for pod in $(kubectl get pods -n "$namespace" -o name); do
-            error_log "Pod $pod status: $(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')"
+    local end=$((SECONDS + timeout))
+    local bad_pods
+    # Check if all pods are in Completed/Ready state
+    while ((SECONDS < end)); do
+        bad_pods=$(kubectl get pods -n "$namespace" -o json | jq -r '
+        .items[]
+        | select(
+            .status.phase != "Succeeded"
+            and (
+                .status.phase != "Running"
+                or (
+                    (.status.conditions[]? | select(.type=="Ready").status) != "True"
+                )
+            )
+        )
+        | .metadata.name
+    ')
+
+        if [ -z "$bad_pods" ]; then
+            debug_log "All pods in namespace $namespace are Ready"
+            return 0
+        fi
+
+        sleep 2
+    done
+    error_log "Failed to wait for all pods in namespace $namespace to be Ready"
+    for pod in $(kubectl get pods -n "$namespace" -o name); do
+        local phase
+        phase=$(kubectl get "$pod" -n "$namespace" -o jsonpath='{.status.phase}')
+        if [ "$phase" != "Succeeded" ]; then
+            error_log "Pod $pod status: $phase"
             kubectl describe "$pod" -n "$namespace" | awk '/^Events:/,0' | while read -r line; do
                 error_log "$line"
             done
             error_log "Logs from pod $pod in namespace $namespace:"
             error kubectl logs "$pod" -n "$namespace" --tail=1000 --
-        done
-        return 1
-    }
-
-    debug_log "All pods in namespace $namespace are Ready"
+        fi
+    done
+    return 1
 }
 
 create_namespace() {
@@ -706,6 +750,12 @@ test_pod_spec() {
         error_log "$error"
     fi
 
+    # Fetch Pod logs before Deleting
+    if [ -n "$error" ] && [ -n "$name" ]; then
+        debug_log "Fetching logs from pod $name..."
+        error kubectl logs "$name" -n "$namespace" --tail=500 || true
+    fi
+
     # Clean up the final pod
     if [ -n "$name" ]; then
         debug_log "Cleaning up pod $name..."
@@ -765,13 +815,15 @@ wait_for_new_log_trigger() {
     debug_log "Waiting for NEW trigger '$trigger' in pod $name logs (timeout: ${timeout}s)"
 
     local initial_count
-    initial_count=$(kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -c "$trigger" || echo "0")
+    initial_count=$(kubectl logs "$name" -n "$namespace" --all-containers=true 2>/dev/null | grep -ci "$trigger" || echo "0")
+    initial_count=${initial_count##*$'\n'} # Take last line only (handles multi-container output)
     debug_log "Initial count of '$trigger' in logs: $initial_count"
 
     local elapsed=0
     while [ $elapsed -lt "$timeout" ]; do
         local current_count
-        current_count=$(kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -c "$trigger" || echo "0")
+        current_count=$(kubectl logs "$name" -n "$namespace" --all-containers=true 2>/dev/null | grep -ci "$trigger" || echo "0")
+        current_count=${current_count##*$'\n'} # Take last line only (handles multi-container output)
 
         if [ "$current_count" -gt "$initial_count" ]; then
             debug_log "Found NEW trigger '$trigger' in pod $name after ${elapsed}s (count: $initial_count -> $current_count)"
@@ -783,4 +835,188 @@ wait_for_new_log_trigger() {
 
     error_log "Timeout waiting for NEW trigger '$trigger' in pod $name logs after ${timeout}s"
     return 1
+}
+
+# Simulate spot interruption by terminating the EC2 instance
+simulate_spot_interruption() {
+    local node_name="$1"
+
+    if [ -z "$node_name" ]; then
+        error_log "simulate_spot_interruption requires node_name"
+        return 1
+    fi
+
+    debug_log "Simulating spot interruption for node $node_name..."
+
+    # Get the EC2 instance ID from the node's provider ID
+    local provider_id
+    provider_id=$(kubectl get node "$node_name" -o jsonpath='{.spec.providerID}')
+
+    local instance_id
+    instance_id=$(echo "$provider_id" | sed 's|.*/||')
+
+    if [ -z "$instance_id" ]; then
+        error_log "Failed to get instance ID for node $node_name"
+        return 1
+    fi
+
+    debug_log "Terminating EC2 instance $instance_id..."
+
+    aws ec2 terminate-instances --instance-ids "$instance_id" --region "$AWS_REGION"
+
+    debug_log "Spot interruption simulated for instance $instance_id (node $node_name)"
+}
+
+# Get the node where a pod is running
+get_pod_node() {
+    local pod_name="$1"
+    local namespace="${2:-$NAMESPACE}"
+
+    kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.spec.nodeName}' 2>/dev/null
+}
+
+# Wait for a pod to be scheduled on a Karpenter-provisioned spot node
+wait_for_spot_node() {
+    local pod_name="$1"
+    local namespace="${2:-$NAMESPACE}"
+    local timeout="${3:-300}"
+
+    debug_log "Waiting for pod $pod_name to be scheduled on spot node (timeout: ${timeout}s)..."
+
+    local elapsed=0
+    local poll_interval=5
+
+    while [ $elapsed -lt "$timeout" ]; do
+        local node_name
+        node_name=$(get_pod_node "$pod_name" "$namespace")
+
+        if [ -n "$node_name" ]; then
+            # Verify it's a spot instance via Karpenter label
+            local capacity_type
+            capacity_type=$(kubectl get node "$node_name" -o jsonpath='{.metadata.labels.karpenter\.sh/capacity-type}' 2>/dev/null)
+
+            if [ "$capacity_type" = "spot" ]; then
+                debug_log "Pod $pod_name scheduled on spot node $node_name"
+                echo "$node_name"
+                return 0
+            elif [ -n "$capacity_type" ]; then
+                debug_log "Pod scheduled on $capacity_type node, waiting for spot..."
+            fi
+        fi
+
+        sleep $poll_interval
+        ((elapsed += poll_interval))
+    done
+
+    error_log "Timeout waiting for pod $pod_name to be scheduled on spot node"
+    return 1
+}
+
+# Create a pod spec with spot tolerations and affinity
+spot_pod_spec() {
+    local image="$1"
+    local args="$2"
+    local namespace="${3:-$NAMESPACE}"
+
+    local name
+    name=test-spot-$(unix_nano)
+
+    local spec=/tmp/pod-${name}.yaml
+    cat >"$spec" <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  labels:
+    app: "$name"
+    cedana.ai/spot-test: "true"
+spec:
+  tolerations:
+    - key: "cedana.ai/spot-test"
+      operator: "Equal"
+      value: "true"
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: karpenter.sh/capacity-type
+                operator: In
+                values: ["spot"]
+  containers:
+  - name: "$name"
+    image: $image
+    command: ["/bin/sh", "-c"]
+    resources:
+      requests:
+        cpu: "500m"
+        memory: "512Mi"
+EOF
+
+    if [[ -n "$args" ]]; then
+        printf "    args:\n" >>"$spec"
+        printf "      - |\n" >>"$spec"
+        while IFS= read -r line; do
+            printf "        %s\n" "$line" >>"$spec"
+        done <<<"$args"
+    fi
+
+    echo "$spec"
+}
+
+# Create a GPU pod spec with spot tolerations
+spot_pod_spec_gpu() {
+    local image="$1"
+    local args="$2"
+    local gpus="${3:-1}"
+    local namespace="${4:-$NAMESPACE}"
+
+    local name
+    name=test-spot-cuda-$(unix_nano)
+
+    local spec=/tmp/pod-${name}.yaml
+    cat >"$spec" <<EOF
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "$name"
+  namespace: "$namespace"
+  labels:
+    app: "$name"
+    cedana.ai/spot-test: "true"
+spec:
+  runtimeClassName: cedana
+  tolerations:
+    - key: "cedana.ai/spot-test"
+      operator: "Equal"
+      value: "true"
+      effect: NoSchedule
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: karpenter.sh/capacity-type
+                operator: In
+                values: ["spot"]
+  containers:
+  - name: "$name"
+    image: $image
+    command: ["/bin/sh", "-c"]
+    resources:
+      limits:
+        nvidia.com/gpu: "$gpus"
+EOF
+
+    if [[ -n "$args" ]]; then
+        printf "    args:\n" >>"$spec"
+        printf "      - |\n" >>"$spec"
+        while IFS= read -r line; do
+            printf "        %s\n" "$line" >>"$spec"
+        done <<<"$args"
+    fi
+
+    echo "$spec"
 }
