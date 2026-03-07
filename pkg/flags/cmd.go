@@ -51,12 +51,13 @@ var (
 	LinkRemapFlag       = Flag{Full: "link-remap"}
 
 	// Parent flags
-	AddressFlag   = Flag{Full: "address"}
-	ProtocolFlag  = Flag{Full: "protocol"}
-	InitConfig    = Flag{Full: "init-config"}
-	MergeConfig   = Flag{Full: "merge-config"}
-	ConfigFlag    = Flag{Full: "config"}
-	ConfigDirFlag = Flag{Full: "config-dir"}
-	DBFlag        = Flag{Full: "db"}
-	ProfilingFlag = Flag{Full: "profiling"}
+	AddressFlag       = Flag{Full: "address"}
+	ProtocolFlag      = Flag{Full: "protocol"}
+	InitConfig        = Flag{Full: "init-config"}
+	MergeConfig       = Flag{Full: "merge-config"}
+	ConfigFlag        = Flag{Full: "config"}
+	ConfigDirFlag     = Flag{Full: "config-dir"}
+	DBFlag            = Flag{Full: "db"}
+	ProfilingFlag     = Flag{Full: "profiling"}
+	ProfilingPathFlag = Flag{Full: "profiling-path"}
 )
