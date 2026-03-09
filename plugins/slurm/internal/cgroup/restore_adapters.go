@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -41,6 +40,15 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 			req.Criu.ManageCgroups = &manageCgroups
 		}
 
+		// GetPaths() returns absolute filesystem paths (e.g., /sys/fs/cgroup/cpu/slurm/...).
+		// GetCgroups().Path is the relative cgroup path within each controller hierarchy,
+		// which is what CRIU expects for cg_root.
+		cgroupConfig, err := manager.GetCgroups()
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get cgroup config: %v", err)
+		}
+		relativePath := cgroupConfig.Path
+
 		callback := &criu.NotifyCallback{
 			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
 				paths := manager.GetPaths()
@@ -54,15 +62,13 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 				// ensure the new cgroup hierarchy exists
 				for _, p := range paths {
-					cgroupPath := filepath.Join("/sys/fs/cgroup", p)
-
-					if _, statErr := os.Stat(cgroupPath); os.IsNotExist(statErr) {
-						log.Trace().Msgf("creating cgroup path: %s\n", cgroupPath)
-						if err := os.MkdirAll(cgroupPath, 0755); err != nil {
-							return fmt.Errorf("failed to create cgroup path %s: %v", cgroupPath, err)
+					if _, statErr := os.Stat(p); os.IsNotExist(statErr) {
+						log.Trace().Msgf("creating cgroup path: %s\n", p)
+						if err := os.MkdirAll(p, 0755); err != nil {
+							return fmt.Errorf("failed to create cgroup path %s: %v", p, err)
 						}
 					} else {
-						log.Trace().Msgf("cgroup path already exists: %s\n", cgroupPath)
+						log.Trace().Msgf("cgroup path already exists: %s\n", p)
 					}
 				}
 
@@ -74,13 +80,14 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 				log.Trace().Msgf("applied cgroups to CRIU process %d\n", criuPid)
 
 				// set CgRoot to tell CRIU where to place restored processes
-				for c, p := range paths {
+				// CRIU expects paths relative to each controller's mount point
+				for c := range paths {
 					cgroupRoot := &criu_proto.CgroupRoot{
 						Ctrl: proto.String(c),
-						Path: proto.String(p),
+						Path: proto.String(relativePath),
 					}
 					req.Criu.CgRoot = append(req.Criu.CgRoot, cgroupRoot)
-					log.Trace().Msgf("set CgRoot for controller %s: %s\n", c, p)
+					log.Trace().Msgf("set CgRoot for controller %s: %s\n", c, relativePath)
 				}
 
 				return nil

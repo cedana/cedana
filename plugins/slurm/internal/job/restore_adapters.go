@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -31,9 +30,9 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		hostname := details.GetHostname()
 		parent := details.GetParentPID()
 
-		path := fmt.Sprintf("/system.slice/%s_slurmstepd.scope/job_%d/step_batch/user/task_special", hostname, jid)
-		if _, err := os.Stat("/sys/fs/cgroup" + path); os.IsNotExist(err) {
-			return nil, status.Errorf(codes.NotFound, "cgroup path for slurm job %d does not exist: %s", jid, path)
+		path, err := GetJobCgroupPath(hostname, jid)
+		if err != nil {
+			return nil, err
 		}
 
 		// Set the new job PID to be the PID of the restored process
