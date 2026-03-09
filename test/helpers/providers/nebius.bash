@@ -22,7 +22,7 @@ export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
 export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
 export GPU_OPERATOR_DRIVER_VERSION="${GPU_OPERATOR_DRIVER_VERSION:-570.195.03}"
 export NB_NODEGROUP_NAME="${NB_NODEGROUP_NAME:-github-ci}"
-export NB_NODE_COUNT="${NB_NODE_COUNT:-2}"
+export NB_NODE_COUNT="${NB_NODE_COUNT:-1}"
 export NB_NODE_DISK_SIZE="${NB_NODE_DISK_SIZE:-1099511627776}"
 export NB_GPU_PRESET="${NB_GPU_PRESET:-1gpu-16vcpu-200gb}"
 export NB_GPU_PLATFORM="${NB_GPU_PLATFORM:-gpu-h100-sxm}"
@@ -173,12 +173,6 @@ setup_cluster() {
     _install_nebius_cli
     _configure_nebius_credentials
     _create_nebius_mk8s
-    create_nodegroup
-    debug_log "Creating nebius multi_gpu nodegroup ..."
-    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
-    NB_NODE_COUNT="1"
-    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
-    NB_NODE_DISK_SIZE="137438953472"
     create_nodegroup
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
