@@ -38,7 +38,6 @@ setup_file() {
 # Blocked on CED-1864
 # bats test_tags=dump,restore,samples,llm,vllm,inference
 @test "Dump/Restore: vLLM Llama 8B Inference" {
-    skip "Blocked on CED-1864"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vllm-llama-3.1-8b.yaml")
 
@@ -56,7 +55,6 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,compbio,openmm
 @test "Dump/Restore: OpenMM MD Simulation" {
-    skip "Blocked, skipping..."
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/openmm.yaml" "$NAMESPACE" "openmm")
 
@@ -66,7 +64,6 @@ setup_file() {
 # Blocked on CED-1863
 # bats test_tags=dump,restore,samples,tensorflow,training
 @test "Dump/Restore: TensorFlow Training" {
-    skip "Blocked on CED-1863"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow-cifar100.yaml")
 
@@ -91,7 +88,6 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,llamafactory,training,finetuning
 @test "Dump/Restore: LlamaFactory LLM FineTuning" {
-    skip "Blocked on known LlamaFactory checkpoint/restore issues"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-llamafactory-lora-sft.yaml" "$NAMESPACE" "llamafactory")
 
