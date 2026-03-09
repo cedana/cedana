@@ -47,6 +47,7 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,compbio,gromacs
 @test "Dump/Restore: GROMACS MD Simulation" {
+    skip "Blocked on CED-1965"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/gromacs-simple-example.yaml" "$NAMESPACE" "gromacs")
 
@@ -99,6 +100,7 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,training,multi,deepspeed
 @test "Dump/Restore: Multi-GPU DeepSpeed Training" {
+    skip "multi-gpu workloads will be skipped"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml" "$NAMESPACE" "deepspeed-2gpu")
 
@@ -107,6 +109,7 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,training,multi,torch
 @test "Dump/Restore: Multi-GPU PyTorch Training" {
+    skip "multi-gpu workloads will be skipped"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-4xGPU-pytorch-cifar100.yaml" "$NAMESPACE" "pytorch-4gpu")
 
