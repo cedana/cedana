@@ -163,6 +163,21 @@ func setupMultinodeEBPF(mappings map[string]string, containerPID int64) error {
 		log.Error().Err(err).Msgf("[multinode] multinode-ctl command failed: %s", string(output))
 		return fmt.Errorf("multinode-ctl failed: %w, output: %s", err, output)
 	}
+	go func(mappingsJSON []byte, containerPID int64) {
+		log.Info().Msgf("[multinode] Setting up detached sync process...")
+		args := []string{"sync", "--pid", fmt.Sprintf("%d", containerPID)}
+		syncCmd := exec.Command("multinode-ctl", args...)
+		syncCmd.Stdin = bytes.NewReader(mappingsJSON)
+		output, err := syncCmd.CombinedOutput()
+		log.Info().Msgf("[multinode] detached sync output: %s", string(output))
+		if err != nil {
+			log.Error().Err(err).Msgf("[multinode] multinode-ctl sync command failed: %s", string(output))
+			return
+		}
+		log.Info().Msgf("[multinode] Detached sync process completed", len(mappings))
+		return
+	}(mappingsJSON, containerPID)
+
 	log.Info().Msgf("eBPF configured with %d mappings", len(mappings))
 	return nil
 }
