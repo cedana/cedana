@@ -367,6 +367,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	log := log.With().Str("plugin", "gpu").Str("ID", id).Logger()
 
 	callback.InitializeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		pid := uint32(opts.GetPid())
+		log := log.With().Uint32("PID", pid).Logger()
+
 		controller := p.Get(id)
 		if controller == nil {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
