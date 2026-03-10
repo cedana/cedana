@@ -73,10 +73,10 @@ var Global Config = Config{
 	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Metrics:          DEFAULT_METRICS,
 	Checkpoint: Checkpoint{
-		Dir:                 DEFAULT_CHECKPOINT_DIR,
-		Compression:         DEFAULT_CHECKPOINT_COMPRESSION,
-		Streams:             DEFAULT_CHECKPOINT_STREAMS,
-		Async:               DEFAULT_CHECKPOINT_ASYNC,
+		Dir:                   DEFAULT_CHECKPOINT_DIR,
+		Compression:           DEFAULT_CHECKPOINT_COMPRESSION,
+		Streams:               DEFAULT_CHECKPOINT_STREAMS,
+		Async:                 DEFAULT_CHECKPOINT_ASYNC,
 		StreamerMemoryLimitMb: DEFAULT_CHECKPOINT_STREAMER_MEMORY_LIMIT_MB,
 	},
 	DB: DB{

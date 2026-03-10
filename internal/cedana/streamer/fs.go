@@ -46,6 +46,7 @@ const (
 	IMG_FILE_FORMATTER = "img-%d"
 	CONNECTION_TIMEOUT = 5 * time.Minute
 	PIPE_SIZE          = 4 * utils.MEBIBYTE
+	RETRY_INTERVAL     = 25 * time.Millisecond
 )
 
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
@@ -441,6 +442,46 @@ func (m Mode) String() string {
 	}
 }
 
+/* retries until streamer is ready */
+func (fs *Fs) waitForStreamerReady(name string) error {
+	resp := &img_streamer.ImgStreamerReplyEntry{}
+	var sizeBuf [4]byte
+	_, err := fs.conn.Read(sizeBuf[:])
+	if err != nil {
+		return fmt.Errorf("failed to read size from file response: %w", err)
+	}
+	size := binary.LittleEndian.Uint32(sizeBuf[:])
+	data := make([]byte, size)
+	n, err := fs.conn.Read(data)
+	if err != nil {
+		return fmt.Errorf("failed to read data from file response: %w", err)
+	}
+	if n != int(size) {
+		return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
+	}
+	err = proto.Unmarshal(data, resp)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if !resp.HasStatus() {
+		if !resp.Exists {
+			return fmt.Errorf("file does not exist: %s", name)
+		}
+	} else {
+		switch resp.GetStatus() {
+		case img_streamer.FileStatus_DOES_NOT_EXIST:
+			return fmt.Errorf("file does not exist: %s", name)
+		case img_streamer.FileStatus_NOT_READY:
+			time.Sleep(RETRY_INTERVAL)
+			return fs.waitForStreamerReady(name)
+		case img_streamer.FileStatus_READY:
+		default:
+			return fmt.Errorf("recieved invalid file status from streamer")
+		}
+	}
+	return nil
+}
+
 // Opens a pair of file descriptors for reading and writing through the streamer
 func (fs *Fs) openFd(name string) (int, error) {
 	fds := make([]int, 2)
@@ -489,42 +530,9 @@ func (fs *Fs) openFd(name string) (int, error) {
 
 	// If read-only, read for msg from streamer if file exists
 	if fs.mode == READ_ONLY {
-		resp := &img_streamer.ImgStreamerReplyEntry{}
-		var sizeBuf [4]byte
-		_, err = fs.conn.Read(sizeBuf[:])
+		err = fs.waitForStreamerReady(name)
 		if err != nil {
-			return 0, fmt.Errorf("failed to read size from file response: %w", err)
-		}
-		size := binary.LittleEndian.Uint32(sizeBuf[:])
-		data := make([]byte, size)
-		n, err := fs.conn.Read(data)
-		if err != nil {
-			return 0, fmt.Errorf("failed to read data from file response: %w", err)
-		}
-		if n != int(size) {
-			return 0, fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
-		}
-		err = proto.Unmarshal(data, resp)
-		if err != nil {
-			return 0, fmt.Errorf("failed to unmarshal response: %w", err)
-		}
-		if !resp.HasStatus() {
-			if !resp.Exists {
-				return 0, fmt.Errorf("file does not exist: %s", name)
-			}
-		} else {
-			switch resp.GetStatus() {
-			case img_streamer.FileStatus_DOES_NOT_EXIST:
-				return 0, fmt.Errorf("file does not exist: %s", name)
-			case img_streamer.FileStatus_NOT_READY:
-				// The only file daemon wants from streamer is
-				// STATE_FILE (process_state.json), which is
-				// ALWAYS READY.
-				return 0, fmt.Errorf("file not ready: %s", name)
-			case img_streamer.FileStatus_READY:
-			default:
-				return 0, fmt.Errorf("recieved invalid file status from streamer")
-			}
+			return 0, err
 		}
 	}
 
