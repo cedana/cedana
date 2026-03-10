@@ -49,7 +49,7 @@ on:
         type: string
         description: "cedana-slurm version to download (branch, tag, or 'release')"
         required: false
-        default: "fix/docker.yml"
+        default: "main"
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
