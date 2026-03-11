@@ -38,6 +38,7 @@ setup_file() {
 # Blocked on CED-1864
 # bats test_tags=dump,restore,samples,llm,vllm,inference
 @test "Dump/Restore: vLLM Llama 8B Inference" {
+    skip "Blocked on CED-1864"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-vllm-llama-3.1-8b.yaml")
 
@@ -61,7 +62,6 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
 }
 
-# Blocked on CED-1863
 # bats test_tags=dump,restore,samples,tensorflow,training
 @test "Dump/Restore: TensorFlow Training" {
     local spec
