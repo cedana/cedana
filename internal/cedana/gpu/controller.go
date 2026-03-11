@@ -366,13 +366,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 	log := log.With().Str("plugin", "gpu").Str("ID", id).Logger()
 
-	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
-	// do the GPU dump in parallel to CRIU dump.
-	var dumpErr chan error
-	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
-		defer cancel()
-
+	callback.InitializeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		pid := uint32(opts.GetPid())
 		log := log.With().Uint32("PID", pid).Logger()
 
@@ -385,6 +379,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
 		controller.Termination.Lock()
 
+		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
+		defer cancel()
+
 		log.Info().Msg("GPU freeze starting")
 
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})
@@ -395,6 +392,21 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 		log.Info().Msg("GPU freeze complete")
 
+		return nil
+	}
+
+	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
+	// do the GPU dump in parallel to CRIU dump.
+	var dumpErr chan error
+	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		pid := uint32(opts.GetPid())
+		log := log.With().Uint32("PID", pid).Logger()
+
+		controller := p.Get(id)
+		if controller == nil {
+			return fmt.Errorf("GPU controller not found, is the process still running?")
+		}
+
 		// Begin GPU dump in parallel to CRIU dump
 
 		dumpErr = make(chan error, 1)
@@ -402,7 +414,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		go func() {
 			defer close(dumpErr)
 
-			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
+			waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
 			log.Info().Msg("GPU dump starting")
@@ -417,6 +429,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
 				return
 			}
+
 			log.Info().Msg("GPU dump complete")
 		}()
 		if PARALLEL_DUMP {
