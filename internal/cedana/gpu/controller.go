@@ -394,18 +394,18 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
 
-		// Cancel on early termination
-		go func() {
-			<-controller.Terminated
-			cancel()
-		}()
-
 		// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
 		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
 		controller.Termination.Lock()
 
 		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
 		defer cancel()
+
+		// Cancel on early termination
+		go func() {
+			<-controller.Terminated
+			cancel()
+		}()
 
 		log.Info().Msg("GPU freeze starting")
 
