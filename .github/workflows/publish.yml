@@ -69,6 +69,12 @@ jobs:
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
+      - name: Download scripts
+        uses: actions/download-artifact@v4
+        id: download-scripts
+        with:
+          name: cedana-scripts-${{ matrix.arch }}
+
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: inputs.debug
@@ -100,6 +106,7 @@ jobs:
           gh release upload --clobber "$tag" \
               --repo="$GITHUB_REPOSITORY" \
               *.tar.gz \
+              install-release.sh
 
   cloudsmith:
     name: Cloudsmith
@@ -118,6 +125,13 @@ jobs:
         with:
           name: cedana-${{ matrix.arch }}
 
+      - name: Download scripts
+        if: matrix.arch == 'amd64' # only download once as it's architecture independent
+        uses: actions/download-artifact@v4
+        id: download-scripts
+        with:
+          name: cedana-scripts-${{ matrix.arch }}
+
       - name: Install Cloudsmith CLI
         uses: cloudsmith-io/cloudsmith-cli-action@v2
         with:
@@ -129,6 +143,15 @@ jobs:
           cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} cedana-${{ matrix.arch }} --republish \
             --name cedana-${{ matrix.arch }} \
             --tags ${{ matrix.arch }},${{ github.head_ref || github.ref_name }},${{ github.sha }} \
+            --version ${{ github.head_ref || github.ref_name }} \
+            --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
+
+      - name: Push install-release.sh to Cloudsmith
+        if: matrix.arch == 'amd64' # only push once as it's architecture independent
+        run: |
+          cloudsmith push raw cedana/${{ inputs.cloudsmith_repo }} install-release.sh --republish \
+            --name install-release.sh \
+            --tags ${{ github.head_ref || github.ref_name }},${{ github.sha }} \
             --version ${{ github.head_ref || github.ref_name }} \
             --sync-attempts 5 --error-retry-max 5 --error-retry-backoff 1
 

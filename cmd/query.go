@@ -106,7 +106,7 @@ var queryCmd = &cobra.Command{
 
 		if len(resp.States) > 0 && !inspect {
 			fmt.Println()
-			fmt.Printf("Use `%s --%s` for details on the first result\n", cmd.CalledAs(), flags.InspectFlag.Full)
+			fmt.Printf("Use `%s <ID> --%s` for details on a specific result\n", cmd.CalledAs(), flags.InspectFlag.Full)
 		}
 
 		return nil

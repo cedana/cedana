@@ -1,17 +1,7 @@
 #!/bin/bash
+set -euo pipefail
 
-set -eo pipefail
-
-# get the directory of the script
-SOURCE="${BASH_SOURCE[0]}"
-while [ -h "$SOURCE" ]; do
-    DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-    SOURCE="$(readlink "$SOURCE")"
-    [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
-done
-DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
-
-source "$DIR"/utils.sh
+check_root
 
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
@@ -19,6 +9,7 @@ CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=${CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
+CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
 # XXX: We always install the GPU plugin because the race w/ gpu-operator (if the cluster is using it)
@@ -62,14 +53,7 @@ fi
 # If gpu driver present then add gpu plugin
 # NOTE: This is no longer used to conditionally add the gpu plugin, but we still
 # log the driver version here for informational purposes.
-if [ "$ENV" == "k3s" ]; then
-    if command -v nvidia-smi >/dev/null 2>&1; then
-        echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
-        if /sbin/ldconfig -p | grep -q libcuda.so.1; then
-            echo "CUDA driver library found!"
-        fi
-    fi
-elif [ -d /proc/driver/nvidia/gpus/ ]; then
+if [ -d /proc/driver/nvidia/gpus/ ]; then
     if [ ! -d /run/driver/nvidia ]; then
         # Check if the NVIDIA driver is installed by checking the version
         # as nvidia-smi is not installed by GPU Operator
@@ -97,13 +81,14 @@ END_CHROOT
 fi
 
 # Install all plugins
-if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$PLUGINS" != "" ]]; then
-    # shellcheck disable=SC2086
-    "$APP_PATH" plugin install $PLUGINS
-
+if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
+    if [[ "$PLUGINS" != "" ]]; then
+        # shellcheck disable=SC2086
+        $APP_PATH plugin install $PLUGINS
+    fi
     if [[ "$PLUGINS_TO_REMOVE" != "" ]]; then
         # shellcheck disable=SC2086
-        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE || true
+        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE 2>/dev/null || true
     fi
 fi
 
@@ -116,18 +101,18 @@ echo 4194304 >/proc/sys/fs/pipe-max-size  # change pipe max size to 4MiB
 #####################################################
 
 if [ "$ENV" != "production" ]; then
-    echo "Non-production environment detected, skipping containerd runtime configuration"
+    echo "Non-production environment detected, skipping containerd runtime configuration" >&2
     exit 0
 fi
 
 # k8s path - detect containerd config version
-PATH_CONTAINERD_CONFIG=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+CONTAINERD_CONFIG_PATH=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
 
 # Detect containerd config version
 CONTAINERD_VERSION=""
-if grep -q 'version = 2' "$PATH_CONTAINERD_CONFIG"; then
+if grep -q 'version = 2' "$CONTAINERD_CONFIG_PATH"; then
     CONTAINERD_VERSION=2
-elif grep -q 'version = 3' "$PATH_CONTAINERD_CONFIG"; then
+elif grep -q 'version = 3' "$CONTAINERD_CONFIG_PATH"; then
     CONTAINERD_VERSION=3
 else
     echo "ERROR: Unsupported containerd config version. Only version 2 and 3 are supported." >&2
@@ -158,8 +143,8 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
     else
         # Directly add to main config if no conf.d files exist, so that when NVIDIA plugin is added
         # later it can copy from this and not miss the cedana config.
-        echo "No existing conf.d files found, will directly add to $PATH_CONTAINERD_CONFIG"
-        TARGET_CONFIG="$PATH_CONTAINERD_CONFIG"
+        echo "No existing conf.d files found, will directly add to $CONTAINERD_CONFIG_PATH"
+        TARGET_CONFIG="$CONTAINERD_CONFIG_PATH"
     fi
 
     if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
@@ -181,15 +166,15 @@ elif [ "$CONTAINERD_VERSION" = "3" ]; then
     mkdir -p "$CONFD_DIR"
 
     # Ensure imports line exists in main config
-    if ! grep -q 'imports = \[.*"/etc/containerd/conf.d/\*\.toml".*\]' "$PATH_CONTAINERD_CONFIG"; then
-        echo "Adding imports to $PATH_CONTAINERD_CONFIG"
+    if ! grep -q 'imports = \[.*"/etc/containerd/conf.d/\*\.toml".*\]' "$CONTAINERD_CONFIG_PATH"; then
+        echo "Adding imports to $CONTAINERD_CONFIG_PATH"
         # Check if imports line already exists but doesn't include conf.d
-        if grep -q '^imports = \[' "$PATH_CONTAINERD_CONFIG"; then
+        if grep -q '^imports = \[' "$CONTAINERD_CONFIG_PATH"; then
             # Modify existing imports line to add conf.d
-            sed -i 's|^imports = \[\(.*\)\]|imports = [\1, "/etc/containerd/conf.d/*.toml"]|' "$PATH_CONTAINERD_CONFIG"
+            sed -i 's|^imports = \[\(.*\)\]|imports = [\1, "/etc/containerd/conf.d/*.toml"]|' "$CONTAINERD_CONFIG_PATH"
         else
             # Add imports line at the top after version line
-            sed -i '/^version = 3/a imports = ["/etc/containerd/conf.d/*.toml"]' "$PATH_CONTAINERD_CONFIG"
+            sed -i '/^version = 3/a imports = ["/etc/containerd/conf.d/*.toml"]' "$CONTAINERD_CONFIG_PATH"
         fi
     fi
 

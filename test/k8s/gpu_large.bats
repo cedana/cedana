@@ -15,7 +15,6 @@ setup_file() {
     debug_log "Creating dgtest-pvc"
     spec=$(cmd_pvc_spec 50Gi dgtest-pvc)
     kubectl apply -f "$spec"
-    sleep 10
     debug_log "dgtest-pvc has been applied"
 
     # Create HuggingFace token secret for LLM tests

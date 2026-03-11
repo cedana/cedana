@@ -1,9 +1,27 @@
 # syntax=docker/dockerfile:1.6
-FROM golang:1.25-rc-bullseye as builder
+FROM rockylinux:8 as builder
 
 ARG PREBUILT_BINARIES=0
 ARG ALL_PLUGINS=0
 ARG VERSION
+ARG GO_VERSION=1.25rc1
+
+# Install deps
+RUN <<EOT
+dnf install -y git make gcc findutils
+EOT
+
+# Install Golang
+RUN <<EOT
+ARCH=$(uname -m)
+if [ "$ARCH" = "x86_64" ]; then
+  GOARCH="amd64"
+elif [ "$ARCH" = "aarch64" ]; then
+  GOARCH="arm64"
+fi
+curl -LO https://go.dev/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz
+tar -C /usr/local -xzf go${GO_VERSION}.linux-${GOARCH}.tar.gz
+EOT
 
 ADD . /app
 WORKDIR /app
@@ -26,11 +44,6 @@ apt-get update
 apt-get install -y --no-install-recommends software-properties-common make sudo
 rm -rf /var/lib/apt/lists/*
 EOT
-
-RUN mkdir -p /usr/local/bin /scripts
-
-ADD ./Makefile /
-ADD ./scripts/ /scripts
 
 COPY --from=builder /app/libcedana*.so /usr/local/lib/
 COPY --from=builder /app/cedana /usr/local/bin/

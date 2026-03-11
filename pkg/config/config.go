@@ -3,9 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"os/user"
-	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/utils"
@@ -13,7 +10,7 @@ import (
 )
 
 const (
-	DIR_NAME   = ".cedana"
+	DIR_PATH   = "/etc/cedana"
 	FILE_NAME  = "config"
 	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
@@ -50,11 +47,12 @@ const (
 
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
-	DEFAULT_GPU_POOL_SIZE = 0
-	DEFAULT_GPU_LOG_DIR   = "/tmp"
-	DEFAULT_GPU_SOCK_DIR  = "/tmp"
-	DEFAULT_GPU_SHM_SIZE  = 8 * utils.GIBIBYTE
-	DEFAULT_GPU_DEBUG     = false
+	DEFAULT_GPU_POOL_SIZE                = 0
+	DEFAULT_GPU_LOG_DIR                  = "/tmp"
+	DEFAULT_GPU_SOCK_DIR                 = "/tmp"
+	DEFAULT_GPU_SHM_SIZE                 = 8 * utils.GIBIBYTE
+	DEFAULT_GPU_DEBUG                    = false
+	DEFAULT_GPU_SKIP_NVIDIA_RUNTIME_HOOK = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -96,11 +94,12 @@ var Global Config = Config{
 		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,
 	},
 	GPU: GPU{
-		PoolSize: DEFAULT_GPU_POOL_SIZE,
-		LogDir:   DEFAULT_GPU_LOG_DIR,
-		SockDir:  DEFAULT_GPU_SOCK_DIR,
-		ShmSize:  DEFAULT_GPU_SHM_SIZE,
-		Debug:    DEFAULT_GPU_DEBUG,
+		PoolSize:              DEFAULT_GPU_POOL_SIZE,
+		LogDir:                DEFAULT_GPU_LOG_DIR,
+		SockDir:               DEFAULT_GPU_SOCK_DIR,
+		ShmSize:               DEFAULT_GPU_SHM_SIZE,
+		Debug:                 DEFAULT_GPU_DEBUG,
+		SkipNvidiaRuntimeHook: DEFAULT_GPU_SKIP_NVIDIA_RUNTIME_HOOK,
 	},
 	CRIU: CRIU{
 		LeaveRunning:  DEFAULT_CRIU_LEAVE_RUNNING,
@@ -119,43 +118,33 @@ var Dir string
 func init() {
 	setDefaults()
 	bindEnvVars()
-	viper.Unmarshal(&Global)
+	err := viper.Unmarshal(&Global)
+	if err != nil {
+		panic(err)
+	}
 }
 
-type InitArgs struct {
+type Args struct {
 	Config    string
 	ConfigDir string
+	Merge     bool
 }
 
-func Init(args InitArgs) error {
-	user, err := user.Current()
-	if err != nil {
-		return err
+func Load(args ...Args) (err error) {
+	var a Args
+	if len(args) > 0 {
+		a = args[0]
 	}
 
-	if args.ConfigDir == "" {
-		homeDir := user.HomeDir
-		Dir = filepath.Join(homeDir, DIR_NAME)
+	if a.ConfigDir == "" {
+		Dir = DIR_PATH
 	} else {
-		Dir = args.ConfigDir
+		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
-
-	// Create config directory if it does not exist
-	_, err = os.Stat(Dir)
-	if os.IsNotExist(err) {
-		err = os.MkdirAll(Dir, DIR_PERM)
-		if err != nil {
-			return err
-		}
-	}
-	uid, _ := strconv.Atoi(user.Uid)
-	gid, _ := strconv.Atoi(user.Gid)
-	os.Chown(Dir, uid, gid)
 
 	err = viper.ReadInConfig()
 	if err != nil {
@@ -164,14 +153,73 @@ func Init(args InitArgs) error {
 		}
 	}
 
-	if args.Config != "" {
-		reader := strings.NewReader(args.Config)
+	if a.Config != "" {
+		reader := strings.NewReader(a.Config)
 		err = viper.MergeConfig(reader)
 		if err != nil {
 			return fmt.Errorf("Provided config string is invalid: %w", err)
 		}
+	}
+
+	err = viper.UnmarshalExact(&Global)
+	if err != nil {
+		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
+	}
+
+	return nil
+}
+
+// Init initializes and writes the config file. Overwrites any existing config file, and the values
+// used are from the global defaults overridden by env vars.
+func Init(args ...Args) error {
+	var a Args
+	if len(args) > 0 {
+		a = args[0]
+	}
+
+	if a.ConfigDir == "" {
+		Dir = DIR_PATH
 	} else {
-		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
+		Dir = a.ConfigDir
+	}
+
+	viper.AddConfigPath(Dir)
+	viper.SetConfigPermissions(FILE_PERM)
+	viper.SetConfigType(FILE_TYPE)
+	viper.SetConfigName(FILE_NAME)
+
+	// Create config directory if it does not exist
+	_, err := os.Stat(Dir)
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(Dir, DIR_PERM)
+		if err != nil {
+			return err
+		}
+	}
+
+	if a.Merge {
+		err = viper.ReadInConfig()
+		if err != nil {
+			if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+				return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
+			}
+		}
+	}
+
+	if a.Config != "" {
+		reader := strings.NewReader(a.Config)
+		err = viper.MergeConfig(reader)
+		if err != nil {
+			return fmt.Errorf("Provided config string is invalid: %w", err)
+		}
+	}
+
+	err = viper.SafeWriteConfig()
+	if err != nil {
+		err = viper.WriteConfig()
+		if err != nil {
+			return fmt.Errorf("Failed to write config file: %w", err)
+		}
 	}
 
 	err = viper.UnmarshalExact(&Global)
@@ -184,12 +232,12 @@ func Init(args InitArgs) error {
 
 // Loads the global defaults into viper
 func setDefaults() {
+	viper.SetTypeByDefaultValue(true)
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		defaultVal := utils.GetValue(Global, field)
 		viper.SetDefault(tag, defaultVal)
 	}
-	viper.SetTypeByDefaultValue(true)
 }
 
 // Add bindings for env vars so env vars can be used as backup
@@ -199,6 +247,8 @@ func setDefaults() {
 //
 // Example: The field `cli.wait_for_ready` will bind to env var `CEDANA_CLI_WAIT_FOR_READY`.
 func bindEnvVars() {
+	viper.SetEnvPrefix(ENV_PREFIX)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		envVar := ENV_PREFIX + "_" + strings.ToUpper(strings.ReplaceAll(tag, ".", "_"))

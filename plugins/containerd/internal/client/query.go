@@ -53,7 +53,7 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 	for _, c := range containers {
 		info, err := c.Info(ctx)
 		if err != nil {
-			resp.Messages = append(resp.Messages, fmt.Sprintf("Container %s: failed to get info: %v", c.ID(), err))
+			resp.Messages = append(resp.Messages, fmt.Sprintf("%s: failed to get info: %v", c.ID(), err))
 			continue
 		}
 
@@ -64,15 +64,7 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 			Namespace: query.Namespace,
 		}
 
-		task, err := c.Task(ctx, nil) // Ensure task is loaded to get accurate info
-		if err != nil {
-			resp.Messages = append(resp.Messages, fmt.Sprintf("Container %s: failed to get task: %v", c.ID(), err))
-			continue
-		}
-
-		resp.States = append(resp.States, &daemon.ProcessState{
-			PID: task.Pid(),
-		})
+		var state *daemon.ProcessState
 
 		// Fetch lower-level runtime info
 
@@ -83,7 +75,7 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 		err = features.QueryHandler.IfAvailable(func(_ string, query types.Query) error {
 			switch plugin {
 			case "runc":
-				resp, err := query(ctx, &daemon.QueryReq{
+				r, err := query(ctx, &daemon.QueryReq{
 					Type: "runc",
 					Runc: &runc_proto.QueryReq{
 						IDs:  []string{container.ID},
@@ -91,22 +83,23 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 					},
 				})
 				if err != nil {
-					return fmt.Errorf("runc query failed: %v", err)
+					resp.Messages = append(resp.Messages, fmt.Sprintf("%s: failed to query runc: %v", container.ID, err))
+					return err
 				}
-				if len(resp.Runc.Containers) == 0 {
-					resp.Messages = append(resp.Messages, fmt.Sprintf("Container %s: runc container not found", container.ID))
-					return fmt.Errorf("runc container not found")
+				resp.Messages = append(resp.Messages, r.Messages...)
+				if len(r.Runc.Containers) > 0 {
+					container.Runc = r.Runc.Containers[0]
+					state = r.States[0]
+				} else {
+					return fmt.Errorf("no runc container found for %s", container.ID)
 				}
-				container.Runc = resp.Runc.Containers[0]
 			}
 			return nil
 		}, plugin)
-		if err != nil {
-			resp.Messages = append(resp.Messages, fmt.Sprintf("Container %s: %v", container.ID, err))
-		} else {
+		if err == nil {
+			resp.Containerd.Containers = append(resp.Containerd.Containers, container)
+			resp.States = append(resp.States, state)
 		}
-
-		resp.Containerd.Containers = append(resp.Containerd.Containers, container)
 	}
 
 	return resp, nil

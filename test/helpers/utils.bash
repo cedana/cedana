@@ -153,7 +153,7 @@ wait_for_no_pid() {
 # Wait for a cmd to start returning zero exit code, then return the output.
 wait_for_cmd() {
     local timeout=${1:-60}
-    local interval=1
+    local interval=2
     shift 1
     local elapsed=0
     debug_log "Waiting for '$*' (timeout: $timeout seconds)"
@@ -186,7 +186,7 @@ wait_for_cmd() {
 # Same as wait_for_cmd, but waits for the command to fail instead of succeed.
 wait_for_cmd_fail() {
     local timeout=${1:-60}
-    local interval=1
+    local interval=2
     shift 1
     local elapsed=0
     debug_log "Waiting for '$*' to fail (timeout: $timeout seconds)"

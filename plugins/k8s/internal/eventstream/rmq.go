@@ -45,6 +45,17 @@ type EventStream struct {
 	*rabbitmq.Conn
 }
 
+var defaultDumpOpts = &criu.CriuOpts{
+	LeaveRunning:      proto.Bool(true),
+	TcpEstablished:    proto.Bool(true),
+	TcpSkipInFlight:   proto.Bool(true),
+	LinkRemap:         proto.Bool(true),
+	ManageCgroups:     proto.Bool(true),
+	ManageCgroupsMode: criu.CriuCgMode_CG_NONE.Enum(),
+}
+
+var queryExpiryMs = 30 * time.Minute.Milliseconds()
+
 func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string) (*EventStream, error) {
 	if cedana == nil {
 		return nil, fmt.Errorf("cedana client is nil")
@@ -102,6 +113,11 @@ func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
 		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsQueueExclusive,
+		rabbitmq.WithConsumerOptionsQueueAutoDelete,
+		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+			"x-expires": queryExpiryMs,
+		}),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
 			RoutingKey:     "",
 			BindingOptions: rabbitmq.BindingOptions{},
@@ -333,12 +349,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			dumpReq := &daemon.DumpReq{
 				Name: checkpointIdMap[i],
 				Type: "containerd",
-				Criu: &criu.CriuOpts{
-					LeaveRunning:    proto.Bool(true),
-					TcpEstablished:  proto.Bool(true),
-					TcpSkipInFlight: proto.Bool(true),
-					LinkRemap:       proto.Bool(true),
-				},
+				Criu: defaultDumpOpts,
 				Details: &daemon.Details{
 					Containerd: container,
 				},
