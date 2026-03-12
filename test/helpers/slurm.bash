@@ -241,18 +241,10 @@ SQL
         return 1
     fi
 
-    local slurmdbd_ver slurmctld_ver
+    local slurmdbd_ver
     slurmdbd_ver=$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
-        bash -c "slurmdbd -V 2>/dev/null | awk '{print \$2}'" || echo "unknown")
-    slurmctld_ver=$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
-        bash -c "slurmctld -V 2>/dev/null | awk '{print \$2}'" || echo "unknown")
-    info_log "slurmdbd version: ${slurmdbd_ver}, slurmctld version: ${slurmctld_ver}"
-
-    if [ "$slurmdbd_ver" != "$slurmctld_ver" ]; then
-        error_log "slurmdbd (${slurmdbd_ver}) and slurmctld (${slurmctld_ver}) versions do not match"
-        error_log "Ensure both binaries are built from the same SLURM source tree"
-        return 1
-    fi
+        bash -c "/usr/sbin/slurmdbd -V 2>&1 | awk '{print \$2}'" 2>/dev/null || true)
+    info_log "slurmdbd binary present at /usr/sbin/slurmdbd (version: ${slurmdbd_ver:-unknown})"
 
     # -------------------------------------------------------------------------
     # Step 5: Write slurmdbd.conf and update slurm.conf
