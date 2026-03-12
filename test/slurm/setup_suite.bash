@@ -45,6 +45,27 @@ setup_suite() {
     # Setup SLURM cluster
     setup_slurm_cluster
 
+    # Setup SLURM accounting (MySQL + slurmdbd)
+    setup_slurm_accounting
+
+    if [ -z "${SLURM_SAMPLES_DIR:-}" ]; then
+        if [ -d "../cedana-samples/slurm" ]; then
+            export SLURM_SAMPLES_DIR="../cedana-samples/slurm"
+        elif [ -d "/cedana-samples/slurm" ]; then
+            export SLURM_SAMPLES_DIR="/cedana-samples/slurm"
+        elif [ -d "/tmp/cedana-samples/slurm" ]; then
+            export SLURM_SAMPLES_DIR="/tmp/cedana-samples/slurm"
+        elif [ -d "${GITHUB_WORKSPACE:-}/cedana-samples/slurm" ]; then
+            export SLURM_SAMPLES_DIR="${GITHUB_WORKSPACE}/cedana-samples/slurm"
+        else
+            export SLURM_SAMPLES_DIR="/data/cedana-samples/slurm"
+        fi
+    fi
+    debug_log "Using SLURM_SAMPLES_DIR: $SLURM_SAMPLES_DIR"
+    info_log "SLURM_SAMPLES_DIR contents:"
+    ls -la "$SLURM_SAMPLES_DIR" 2>&1 | head -10 >&3 || true
+
+
     # Setup samples (clone cedana-samples if needed)
     setup_slurm_samples
 

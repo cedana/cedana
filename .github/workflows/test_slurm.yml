@@ -130,12 +130,6 @@ jobs:
           path: cedana-slurm
           token: ${{ secrets.GIT_CI_PAT }}
 
-      - name: Checkout cedana-samples
-        uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana-samples
-          path: cedana-samples
-
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
@@ -168,6 +162,7 @@ jobs:
       - name: Pre-install plugins
         env:
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
+          CEDANA_PLUGINS_BUILDS: alpha
         run: |
           chmod +x ./cedana*
           chmod +x ./criu

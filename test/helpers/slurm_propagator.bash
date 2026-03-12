@@ -19,6 +19,20 @@ if [ -n "${CEDANA_URL:-}" ]; then
 fi
 PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}"
 
+validate_action_id() {
+    local id="$1"
+    id="${id//\"/}"
+
+    if [[ "$id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+        debug_log "Valid action ID: $id"
+    else
+        error_log "Error: Invalid action ID: $id"
+        return 1
+    fi
+
+    return 0
+}
+
 ##############################
 # Slurm Cluster Registration
 ##############################
@@ -87,16 +101,14 @@ deregister_slurm_cluster() {
 #############################
 
 # Checkpoint a slurm job via propagator API
-# @param $1: Job ID (slurm job ID string or UUID)
-# @param $2: Job name (optional)
-# @param $3: Kind (simple|rootfs|rootfsonly, default: simple)
-# @param $4: Reason (heartbeat|manual, default: manual)
+# @param $1: Job ID (slurm numeric ID)
+# @param $2: Kind (simple|rootfs|rootfsonly, default: simple)
+# @param $3: Reason (heartbeat|manual, default: manual)
 # Returns: Action ID (UUID)
 checkpoint_slurm_job() {
     local job_id="$1"
-    local job_name="${2:-}"
-    local kind="${3:-simple}"
-    local reason="${4:-manual}"
+    local kind="${2:-simple}"
+    local reason="${3:-manual}"
 
     if [ -z "$job_id" ]; then
         error_log "checkpoint_slurm_job requires job_id"
@@ -108,17 +120,12 @@ checkpoint_slurm_job() {
     local payload
     payload=$(jq -n \
             --arg job_id "$job_id" \
+            --arg job_name "job_$job_id" \
             --arg kind "$kind" \
             --arg reason "$reason" \
-            '{
-                "job_id": $job_id,
-                "kind": $kind,
-                "reason": $reason
-            }')
+            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind, "reason": $reason}')
 
-    if [ -n "$job_name" ]; then
-        payload=$(echo "$payload" | jq --arg job_name "$job_name" '. + {"job_name": $job_name}')
-    fi
+    info_log "Checkpoint request payload: $payload"
 
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoint/job" \
@@ -129,6 +136,8 @@ checkpoint_slurm_job() {
 
     local http_code="${response: -3}"
     local body="${response%???}"
+
+    info_log "Checkpoint response (HTTP $http_code): $body"
 
     if [ "$http_code" -eq 200 ]; then
         echo "$body"
@@ -247,7 +256,13 @@ poll_slurm_action_status() {
                     ;;
             esac
         else
-            debug_log "Warning: Status check failed (HTTP $http_code) (attempt $i/$max_attempts)"
+            # Try to extract status from error response body
+            local error_status
+            error_status=$(echo "$body" | jq -r '.status // "unknown"' 2>/dev/null)
+            if [ "$error_status" != "unknown" ] && [ "$error_status" != "null" ]; then
+                status="$error_status"
+            fi
+            debug_log "Warning: Status check failed (HTTP $http_code), body: $body (attempt $i/$max_attempts)"
         fi
 
         sleep $interval

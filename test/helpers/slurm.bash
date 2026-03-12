@@ -106,6 +106,198 @@ teardown_slurm_cluster() {
     docker network rm slurm-net 2>/dev/null || true
 }
 
+##############################
+# SLURM Accounting Setup
+##############################
+
+# Install and configure MySQL + slurmdbd for SLURM accounting
+setup_slurm_accounting() {
+    info_log "Setting up SLURM accounting (MySQL + slurmdbd)..."
+    
+    local mysql_root_password="${SLURM_MYSQL_ROOT_PASSWORD:-slurmroot123}"
+    local slurm_db_name="${SLURM_DB_NAME:-slurm_acct_db}"
+    local slurm_db_user="${SLURM_DB_USER:-slurm}"
+    local slurm_db_pass="${SLURM_DB_PASSWORD:-slurmdb123}"
+    
+    info_log "Installing MariaDB on controller..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        apt-get update -qq && \
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mariadb-server python3-pymysql && \
+        mkdir -p /var/run/mysqld && \
+        chown mysql:mysql /var/run/mysqld
+    " || { error_log "Failed to install MariaDB on controller"; return 1; }
+    
+    info_log "Starting MariaDB..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        # Initialize MariaDB data directory if needed
+        if [ ! -d /var/lib/mysql/mysql ]; then
+            mysql_install_db --user=mysql --basedir=/usr --datadir=/var/lib/mysql 2>/dev/null || true
+        fi
+        
+        # Start MariaDB normally
+        mysqld_safe --bind-address=127.0.0.1 &
+        
+        # Wait for MariaDB to be ready
+        for i in {1..30}; do
+            if mysqladmin ping 2>/dev/null; then
+                break
+            fi
+            sleep 1
+        done
+        
+        # Set root password (fresh install has no password)
+        mysql -u root -e \"ALTER USER 'root'@'localhost' IDENTIFIED BY '$mysql_root_password'; FLUSH PRIVILEGES;\" 2>/dev/null || \
+        mysql -u root -p'$mysql_root_password' -e \"SELECT 1;\" 2>/dev/null || {
+            echo 'Failed to set MariaDB root password'
+            exit 1
+        }
+        
+        sleep 2
+    " || { error_log "Failed to start MariaDB"; return 1; }
+    
+    info_log "Creating slurm accounting database..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mysql -u root -p'$mysql_root_password' -e \"
+            CREATE DATABASE IF NOT EXISTS $slurm_db_name;
+            CREATE USER IF NOT EXISTS '$slurm_db_user'@'localhost' IDENTIFIED BY '$slurm_db_pass';
+            CREATE USER IF NOT EXISTS '$slurm_db_user'@'127.0.0.1' IDENTIFIED BY '$slurm_db_pass';
+            GRANT ALL PRIVILEGES ON $slurm_db_name.* TO '$slurm_db_user'@'localhost';
+            GRANT ALL PRIVILEGES ON $slurm_db_name.* TO '$slurm_db_user'@'127.0.0.1';
+            FLUSH PRIVILEGES;
+        \"
+    " || { error_log "Failed to create slurm database"; return 1; }
+    
+    info_log "Installing slurmdbd..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        apt-get install -y -qq slurmdbd || apt-get install -y -qq slurm-slurmdbd
+    " || { error_log "Failed to install slurmdbd"; return 1; }
+    
+    info_log "Creating slurmdbd.conf..."
+    docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash << 'DBD_EOF' || { error_log "Failed to create slurmdbd.conf"; return 1; }
+cat > /etc/slurm/slurmdbd.conf << 'EOF'
+# SLURM DBD Configuration
+AuthType=auth/munge
+DbdAddr=localhost
+DbdHost=localhost
+DbdPort=6819
+SlurmUser=slurm
+DebugLevel=4
+LogFile=/var/log/slurm/slurmdbd.log
+PidFile=/var/run/slurmdbd.pid
+
+# Database configuration
+StorageType=accounting_storage/mysql
+StorageHost=localhost
+StoragePort=3306
+StorageUser=slurm
+StoragePass=slurmdb123
+StorageLoc=slurm_acct_db
+EOF
+
+chown slurm:slurm /etc/slurm/slurmdbd.conf
+chmod 600 /etc/slurm/slurmdbd.conf
+DBD_EOF
+    
+    info_log "Starting slurmdbd..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mkdir -p /var/run/slurmdbd /var/log/slurm
+        chown slurm:slurm /var/run/slurmdbd
+        slurmdbd -D &
+        sleep 5
+        
+        # Check if slurmdbd is running
+        if ! pgrep -x slurmdbd >/dev/null; then
+            echo 'ERROR: slurmdbd failed to start'
+            cat /var/log/slurm/slurmdbd.log 2>/dev/null | tail -20 || true
+            exit 1
+        fi
+        
+        # Wait for slurmdbd port to be ready
+        for i in {1..10}; do
+            if nc -z localhost 6819 2>/dev/null; then
+                echo 'slurmdbd is ready on port 6819'
+                break
+            fi
+            sleep 1
+        done
+    " || { error_log "Failed to start slurmdbd"; return 1; }
+    
+    info_log "Enabling accounting in slurm.conf..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        # Add accounting storage type
+        if ! grep -q 'AccountingStorageType' /etc/slurm/slurm.conf; then
+            echo 'AccountingStorageType=accounting_storage/slurmdbd' >> /etc/slurm/slurm.conf
+        fi
+        
+        # Add accounting storage host
+        if ! grep -q 'AccountingStorageHost' /etc/slurm/slurm.conf; then
+            echo 'AccountingStorageHost=localhost' >> /etc/slurm/slurm.conf
+        fi
+        
+        # Add accounting storage port
+        if ! grep -q 'AccountingStoragePort' /etc/slurm/slurm.conf; then
+            echo 'AccountingStoragePort=6819' >> /etc/slurm/slurm.conf
+        fi
+        
+        # Enable job accounting gathering
+        if ! grep -q 'JobAcctGatherType' /etc/slurm/slurm.conf; then
+            echo 'JobAcctGatherType=jobacct_gather/linux' >> /etc/slurm/slurm.conf
+        fi
+    " || { error_log "Failed to update slurm.conf for accounting"; return 1; }
+    
+    info_log "Ensuring slurm spool directories exist..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mkdir -p /var/spool/slurmctld /var/spool/slurmd
+        chown slurm:slurm /var/spool/slurmctld /var/spool/slurmd
+    " || true
+
+    info_log "Restarting slurmctld to apply accounting configuration (without enforce)..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        systemctl restart slurmctld || (pkill slurmctld; sleep 1; slurmctld)
+        sleep 5
+    " || { error_log "Failed to restart slurmctld"; return 1; }
+    
+    info_log "Initializing accounting database..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        # Wait a moment for slurmdbd and slurmctld to sync
+        sleep 5
+        
+        # Retry adding the cluster until slurmctld and slurmdbd are fully communicating
+        cluster_added=false
+        for i in {1..30}; do
+            if sacctmgr -i add cluster cluster 2>/dev/null; then
+                cluster_added=true
+                break
+            fi
+            sleep 2
+        done
+        
+        if [ \"\$cluster_added\" = false ]; then
+            echo \"Failed to add cluster to accounting database after 60 seconds\" >&2
+            exit 1
+        fi
+        
+        # Create default account
+        sacctmgr -i add account default Description='Default Account' 2>/dev/null || true
+        
+        # Add root user
+        sacctmgr -i add user root Account=default AdminLevel=Admin 2>/dev/null || true
+    " || { error_log "Failed to initialize accounting database"; return 1; }
+    
+    info_log "Enforcing accounting in slurm.conf..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        # Set accounting storage enforce
+        if ! grep -q 'AccountingStorageEnforce' /etc/slurm/slurm.conf; then
+            echo 'AccountingStorageEnforce=associations,limits,qos' >> /etc/slurm/slurm.conf
+        fi
+        
+        systemctl restart slurmctld || (pkill slurmctld; sleep 1; slurmctld)
+        sleep 3
+    " || { error_log "Failed to enforce accounting in slurm.conf"; return 1; }
+    
+    info_log "SLURM accounting setup complete"
+}
+
 wait_for_slurm_ready() {
     local timeout=${1:-120}
     local elapsed=0
@@ -159,6 +351,14 @@ install_cedana_in_slurm() {
     compute_containers=($(_slurm_compute_containers))
     all_containers+=("${compute_containers[@]}")
 
+    info_log "Installing CRIU runtime dependencies in containers..."
+    for c in "${all_containers[@]}"; do
+        docker exec "$c" bash -c "apt-get update -qq && apt-get install -y -qq libprotobuf-c1 libnet1 libgnutls30 libnl-3-200 libbsd0 libcap2 python3 python3-pip" || {
+            error_log "Failed to install dependencies in $c"
+            return 1
+        }
+    done
+
     info_log "Copying cedana + criu binaries into containers..."
     local cedana_bin criu_bin
     cedana_bin=$(which cedana 2>/dev/null) || { error_log "cedana binary not found in PATH"; return 1; }
@@ -194,25 +394,27 @@ install_cedana_in_slurm() {
         done
     fi
 
-    info_log "Configuring SLURM to load cedana plugins (setup.sh equivalent) on all nodes..."
-    for c in "${all_containers[@]}"; do
-        info_log "  SLURM plugin setup on $c:"
-        docker exec -i "$c" bash << 'SETUP_EOF' >&3 2>&1 || { error_log "SLURM plugin setup failed on $c"; return 1; }
+    info_log "Configuring SLURM to load cedana plugins on controller..."
+    docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash << 'SETUP_EOF' >&3 2>&1 || { error_log "SLURM plugin setup failed on controller"; return 1; }
 set -euo pipefail
-PLUGIN_DIR=$(scontrol show config 2>/dev/null | grep PluginDir | awk '{print $3}')
+PLUGIN_DIR=$(scontrol show config 2>/dev/null | grep PluginDir | awk '{print $3}' || true)
 if [ -z "$PLUGIN_DIR" ]; then
     echo "ERROR: Could not determine SLURM PluginDir" >&2
     exit 1
 fi
 echo "SLURM PluginDir: $PLUGIN_DIR"
 
-chmod 755 /usr/local/lib/task_cedana.so /usr/local/lib/libslurm-cedana.so /usr/local/lib/cli_filter_cedana.so
-cp /usr/local/lib/task_cedana.so /usr/local/lib/cli_filter_cedana.so "$PLUGIN_DIR/"
-cp /usr/local/lib/libslurm-cedana.so "$PLUGIN_DIR/spank_cedana.so"
+for f in /usr/local/lib/task_cedana.so /usr/local/lib/libslurm-cedana.so /usr/local/lib/cli_filter_cedana.so; do
+    if [ -f "$f" ]; then chmod 755 "$f"; fi
+done
+for f in /usr/local/lib/task_cedana.so /usr/local/lib/cli_filter_cedana.so; do
+    if [ -f "$f" ]; then cp "$f" "$PLUGIN_DIR/"; fi
+done
+if [ -f /usr/local/lib/libslurm-cedana.so ]; then cp /usr/local/lib/libslurm-cedana.so "$PLUGIN_DIR/spank_cedana.so"; fi
 ldconfig
 
 SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
-PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | grep PlugStackConfig | awk '{print $3}')
+PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | grep PlugStackConfig | awk '{print $3}' || true)
 PLUGSTACK_CONF="${PLUGSTACK_CONF:-/etc/slurm/plugstack.conf}"
 
 if grep -q "TaskPlugin=" "$SLURM_CONF" && ! grep -q "task/cedana" "$SLURM_CONF"; then
@@ -223,11 +425,33 @@ if ! grep -q "cli_filter/cedana" "$SLURM_CONF"; then
     echo "CliFilterPlugins=cli_filter/cedana" >> "$SLURM_CONF"
     echo "Added CliFilterPlugins=cli_filter/cedana"
 fi
-if ! grep -q "spank_cedana.so" "$PLUGSTACK_CONF" 2>/dev/null; then
-    echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
-    echo "Added spank_cedana.so to $PLUGSTACK_CONF"
+if [ -f /usr/local/lib/libslurm-cedana.so ]; then
+    if ! grep -q "spank_cedana.so" "$PLUGSTACK_CONF" 2>/dev/null; then
+        echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
+        echo "Added spank_cedana.so to $PLUGSTACK_CONF"
+    fi
 fi
 SETUP_EOF
+
+    # Copy plugins to compute nodes (but don't configure - controller handles config)
+    info_log "Copying cedana plugins to compute nodes..."
+    for c in "${compute_containers[@]}"; do
+        docker exec -i "$c" bash << 'COMPUTE_EOF' >&3 2>&1 || { error_log "Plugin setup failed on $c"; return 1; }
+set -euo pipefail
+PLUGIN_DIR=$(scontrol show config 2>/dev/null | grep PluginDir | awk '{print $3}' || true)
+if [ -z "$PLUGIN_DIR" ]; then
+    echo "ERROR: Could not determine SLURM PluginDir on $c" >&2
+    exit 1
+fi
+for f in /usr/local/lib/task_cedana.so /usr/local/lib/libslurm-cedana.so /usr/local/lib/cli_filter_cedana.so; do
+    if [ -f "$f" ]; then chmod 755 "$f"; fi
+done
+for f in /usr/local/lib/task_cedana.so /usr/local/lib/cli_filter_cedana.so; do
+    if [ -f "$f" ]; then cp "$f" "$PLUGIN_DIR/"; fi
+done
+if [ -f /usr/local/lib/libslurm-cedana.so ]; then cp /usr/local/lib/libslurm-cedana.so "$PLUGIN_DIR/spank_cedana.so"; fi
+echo "Plugins installed on $(hostname)"
+COMPUTE_EOF
     done
 
     info_log "Starting cedana daemon on all nodes..."
@@ -254,7 +478,7 @@ SETUP_EOF
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
             "$c" \
-            /usr/local/bin/cedana daemon start --init-config
+            bash -c "/usr/local/bin/cedana daemon start --init-config >/var/log/cedana.log 2>&1"
     done
     sleep 5
 
@@ -284,6 +508,50 @@ SETUP_EOF
             || { error_log "Failed to restart slurmd on $c"; return 1; }
     done
     sleep 5
+
+    info_log "=== SPANK Plugin Diagnostics ==="
+    for c in "${compute_containers[@]}"; do
+        info_log "--- Checking SPANK plugin on $c ---"
+        docker exec "$c" bash -c '
+            echo "PlugStack config:"
+            cat /etc/slurm/plugstack.conf 2>/dev/null || echo "NOT FOUND"
+            echo ""
+            echo "SPANK plugin file:"
+            ls -la /usr/lib/slurm/spank_cedana.so 2>/dev/null || echo "NOT FOUND"
+            echo ""
+            echo "Plugin dependencies:"
+            ldd /usr/lib/slurm/spank_cedana.so 2>/dev/null || echo "ldd failed"
+            echo ""
+            echo "SLURM config:"
+            scontrol show config 2>/dev/null | grep -i plugstack || echo "No PlugStackConfig in slurm.conf"
+        ' >&3 || true
+    done
+    info_log "=== End SPANK Plugin Diagnostics ==="
+
+    info_log "Starting cedana-slurm daemon on compute nodes..."
+    for c in "${compute_containers[@]}"; do
+        docker exec -d \
+            -e CEDANA_URL="${CEDANA_URL:-}" \
+            -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+            -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
+            "$c" \
+            bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
+            error_log "Failed to start cedana-slurm daemon on $c"
+            return 1
+        }
+        info_log "cedana-slurm daemon started on $c"
+    done
+
+    sleep 3
+    for c in "${compute_containers[@]}"; do
+        if docker exec "$c" pgrep -f 'cedana-slurm daemon' &>/dev/null; then
+            info_log "cedana-slurm daemon is running on $c"
+        else
+            error_log "cedana-slurm daemon failed to start on $c"
+            docker exec "$c" tail -20 /var/log/cedana-slurm.log
+            return 1
+        fi
+    done
 
     wait_for_slurm_ready 180
     info_log "Cedana installed in SLURM cluster"
@@ -324,17 +592,14 @@ start_cedana_slurm_daemon() {
 slurm_submit_job() {
     local sbatch_file="$1"
 
-    local rel_path filename container_chdir
+    local rel_path container_dir container_file
     rel_path="${sbatch_file#*/slurm/}"
-    filename="$(basename "$rel_path")"
-    container_chdir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
-    debug_log "Submitting: cd $container_chdir && sbatch $filename"
+    container_dir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
+    container_file="$(basename "$rel_path")"
+    debug_log "Submitting: cd $container_dir && sbatch $container_file"
 
     local output
-    output=$(slurm_exec sbatch --parsable \
-        --overcommit --cpus-per-task=1 --mem=0 \
-        --chdir="${container_chdir}" \
-        "${container_chdir}/${filename}" 2>&1)
+    output=$(slurm_exec bash -c "cd '$container_dir' && sbatch --parsable --overcommit --cpus-per-task=1 --mem=0 '$container_file'" 2>&1)
     local exit_code=$?
 
     if [ $exit_code -ne 0 ]; then
@@ -343,9 +608,9 @@ slurm_submit_job() {
     fi
 
     local job_id
-    job_id=$(echo "$output" | tail -1 | tr -d '[:space:]')
+    job_id=$(echo "$output" | tail -1 | cut -d';' -f1 | tr -d '[:space:]')
 
-    debug_log "Submitted job $container_chdir/$filename -> SLURM job ID: $job_id"
+    debug_log "Submitted job $container_dir/$container_file -> SLURM job ID: $job_id"
     echo "$job_id"
 }
 
@@ -383,8 +648,7 @@ _dump_job_failure_info() {
     echo "=== cedana daemon log on compute nodes (last 30 lines) ==="
     for c in $(_slurm_compute_containers); do
         echo "--- $c ---"
-        docker exec "$c" journalctl -u cedana --no-pager -n 30 2>/dev/null \
-            || docker exec "$c" tail -30 /var/log/cedana.log 2>/dev/null \
+        docker exec "$c" tail -30 /var/log/cedana.log 2>/dev/null \
             || echo "(no cedana log available)"
     done
 
@@ -514,9 +778,13 @@ test_slurm_job() {
                     break
                 fi
 
-                debug_log "Checkpointing slurm job $job_id via propagator..."
+                info_log "Checkpointing slurm job $job_id via propagator..."
+                local slurm_job_name
+                slurm_job_name=$(slurm_exec scontrol show job "$job_id" 2>/dev/null \
+                    | grep -o 'JobName=[^ ]*' | cut -d= -f2)
+
                 local checkpoint_output
-                checkpoint_output=$(checkpoint_slurm_job "$job_id")
+                checkpoint_output=$(checkpoint_slurm_job "$slurm_job_name")
                 local checkpoint_status=$?
 
                 if [ $checkpoint_status -ne 0 ]; then
@@ -614,21 +882,24 @@ test_slurm_job() {
 ##############################
 
 setup_slurm_samples() {
-    local samples_root
-    samples_root="$(dirname "${SLURM_SAMPLES_DIR:-}")"
+    info_log "Cloning cedana-samples into cluster nodes..."
 
-    if [ -z "$SLURM_SAMPLES_DIR" ] || [ ! -d "$SLURM_SAMPLES_DIR" ]; then
-        error_log "SLURM_SAMPLES_DIR not set or not found at ${SLURM_SAMPLES_DIR:-<unset>} (check cedana-samples checkout)"
-        return 1
-    fi
-
-    info_log "Copying cedana-samples into cluster nodes..."
     for c in "$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers); do
-        docker exec "$c" mkdir -p /data
-        docker cp "$samples_root" "${c}:/data/" || {
-            error_log "Failed to copy cedana-samples into container $c"
+        docker exec "$c" bash -c '
+            apt-get install -y -qq git 2>/dev/null
+            rm -rf /data/cedana-samples
+            mkdir -p /data
+            git clone --depth 1 https://github.com/cedana/cedana-samples.git /data/cedana-samples
+        ' || {
+            error_log "Failed to clone cedana-samples into container $c"
             return 1
         }
+
+        info_log "Verifying cloned structure in container $c:"
+        docker exec "$c" ls -la /data/cedana-samples/ 2>&1 | head -20 >&3 || true
+        docker exec "$c" test -d /data/cedana-samples/slurm/cpu && \
+            info_log "  slurm/cpu directory found in $c" || \
+            error_log "  slurm/cpu directory NOT found in $c"
     done
     info_log "cedana-samples ready in all cluster nodes"
 }
