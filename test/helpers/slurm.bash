@@ -590,7 +590,12 @@ COMPUTE_EOF
     for c in "${all_containers[@]}"; do
         docker exec "$c" mkdir -p /etc/cedana
 
-        # Initialise config
+        docker exec "$c" bash -c "
+            pkill -f 'cedana daemon' 2>/dev/null || true
+            sleep 1
+            rm -f /run/cedana.sock
+        " || true
+
         docker exec \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -599,13 +604,12 @@ COMPUTE_EOF
             -e CEDANA_DB_REMOTE="true" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-            "$c" cedana --init-config version ||
+            "$c" cedana --merge-config version ||
             {
-                error_log "cedana --init-config failed on $c"
+                error_log "cedana --merge-config failed on $c"
                 return 1
             }
 
-        # Launch daemon in the background
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -615,11 +619,10 @@ COMPUTE_EOF
             -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-            "$c" bash -c "/usr/local/bin/cedana daemon start --init-config \
+            "$c" bash -c "/usr/local/bin/cedana daemon start \
                 >/var/log/cedana.log 2>&1"
     done
 
-    # Wait for cedana socket on every node
     info_log "Waiting for cedana daemon socket on all nodes..."
     for c in "${all_containers[@]}"; do
         local waited=0
@@ -670,6 +673,45 @@ COMPUTE_EOF
         ' >&3 || true
     done
     info_log "=== End SPANK Plugin Diagnostics ==="
+
+    # -------------------------------------------------------------------------
+    # Restart cedana daemon on all nodes after SLURM is up
+    # -------------------------------------------------------------------------
+    info_log "Restarting cedana daemon on all nodes (post-SLURM restart)..."
+    for c in "${all_containers[@]}"; do
+        docker exec "$c" bash -c "
+            pkill -f 'cedana daemon' 2>/dev/null || true
+            sleep 1
+            rm -f /run/cedana.sock
+        " || true
+
+        docker exec -d \
+            -e CEDANA_URL="${CEDANA_URL:-}" \
+            -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+            -e CEDANA_ADDRESS="/run/cedana.sock" \
+            -e CEDANA_PROTOCOL="unix" \
+            -e CEDANA_DB_REMOTE="true" \
+            -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
+            -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
+            -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
+            "$c" bash -c "/usr/local/bin/cedana daemon start \
+                >/var/log/cedana.log 2>&1"
+    done
+
+    info_log "Waiting for cedana daemon socket on all nodes (post-SLURM)..."
+    for c in "${all_containers[@]}"; do
+        local waited=0
+        while [ "$waited" -lt 30 ]; do
+            docker exec "$c" test -S /run/cedana.sock 2>/dev/null && break
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if [ "$waited" -ge 30 ]; then
+            info_log "WARNING: cedana socket not ready on $c after 30s — proceeding"
+        else
+            info_log "  $c: cedana socket ready post-restart (${waited}s)"
+        fi
+    done
 
     # -------------------------------------------------------------------------
     # Start cedana-slurm daemon on compute nodes
