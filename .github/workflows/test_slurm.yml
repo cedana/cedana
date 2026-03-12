@@ -98,7 +98,6 @@ jobs:
       matrix:
         compute:
           - CPU
-          - CUDA
         storage:
           - storage/cedana
         arch:

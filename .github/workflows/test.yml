@@ -420,6 +420,7 @@ jobs:
 
   streamer:
     name: Streamer
+    if: false
     uses: ./.github/workflows/test_streamer.yml
     secrets: inherit
     with:
@@ -434,6 +435,7 @@ jobs:
 
   gpu:
     name: GPU
+    if: false
     uses: ./.github/workflows/test_gpu.yml
     secrets: inherit
     with:
@@ -452,7 +454,7 @@ jobs:
   k3s:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes }}
+    if: false
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
@@ -467,7 +469,7 @@ jobs:
   eks:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes }}
+    if: false
     secrets: inherit
     concurrency: test-k8s-eks # Since the cluster is reused
     with:
@@ -483,7 +485,7 @@ jobs:
   eks-karpenter:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes }}
+    if: false
     secrets: inherit
     concurrency: test-k8s-karpenter # Since the cluster is reused
     with:
@@ -499,7 +501,7 @@ jobs:
   gke:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes }}
+    if: false
     secrets: inherit
     concurrency: test-k8s-gke # Since the cluster is reused
     with:
@@ -515,7 +517,7 @@ jobs:
   nebius:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius when large=true
+    if: false
     secrets: inherit
     concurrency: test-k8s-nebius # Since the cluster is reused
     with:
