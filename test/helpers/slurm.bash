@@ -231,16 +231,28 @@ SQL
     }
 
     # -------------------------------------------------------------------------
-    # Step 4: Install slurmdbd package
+    # Step 4: Verify slurmdbd binary is present (installed from source by ansible)
     # -------------------------------------------------------------------------
-    info_log "[4/7] Installing slurmdbd..."
-    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-        apt-get install -y -qq slurmdbd 2>/dev/null || \
-        apt-get install -y -qq slurm-slurmdbd 2>/dev/null
-    " || {
-        error_log "Failed to install slurmdbd package"
+
+    info_log "[4/7] Verifying slurmdbd binary (must be pre-installed from source)..."
+    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "test -x /usr/sbin/slurmdbd" 2>/dev/null; then
+        error_log "slurmdbd binary not found at /usr/sbin/slurmdbd"
+        error_log "Expected it to be installed by the ansible source build (setup_slurm_cluster)"
         return 1
-    }
+    fi
+
+    local slurmdbd_ver slurmctld_ver
+    slurmdbd_ver=$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        bash -c "slurmdbd -V 2>/dev/null | awk '{print \$2}'" || echo "unknown")
+    slurmctld_ver=$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        bash -c "slurmctld -V 2>/dev/null | awk '{print \$2}'" || echo "unknown")
+    info_log "slurmdbd version: ${slurmdbd_ver}, slurmctld version: ${slurmctld_ver}"
+
+    if [ "$slurmdbd_ver" != "$slurmctld_ver" ]; then
+        error_log "slurmdbd (${slurmdbd_ver}) and slurmctld (${slurmctld_ver}) versions do not match"
+        error_log "Ensure both binaries are built from the same SLURM source tree"
+        return 1
+    fi
 
     # -------------------------------------------------------------------------
     # Step 5: Write slurmdbd.conf and update slurm.conf
