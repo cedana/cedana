@@ -34,8 +34,8 @@ type Manager interface {
 	// Exists checks if a job with the given JID exists.
 	Exists(jid string) bool
 
-  // Find returns a job with the given PID.
-  Find(pid uint32) *Job
+	// Find returns a job with the given PID.
+	Find(pid uint32) *Job
 
 	// Starts managing a running job, updating state once it exits.
 	// Since this runs in background, it should be called with a waitgroup,
@@ -74,4 +74,10 @@ type Manager interface {
 
 	// Sync is used to force the manager to sync its state with the underlying storage.
 	Sync(ctx context.Context) error
+
+	ReserveStorageForJob(ctx context.Context, jid string) (uint64, error)
+
+	ReserveStorageAmount(ctx context.Context, amount uint64) error
+
+	FreeStorage(ctx context.Context, amount uint64)
 }

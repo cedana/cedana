@@ -15,6 +15,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/internal/db"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
@@ -32,6 +33,8 @@ type ManagerLazy struct {
 	checkpoints        sync.Map
 	deletedJobs        sync.Map // to keep track of deleted jobs
 	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
+	storageUsedMutex   sync.Mutex
+	storageUsed        uint64
 
 	host    *daemon.Host
 	plugins plugins.Manager
@@ -422,6 +425,35 @@ func (m *ManagerLazy) DeleteCheckpoint(id string) {
 
 func (m *ManagerLazy) Sync(ctx context.Context) error {
 	return m.syncWithDB(ctx, action{initialize, ""})
+}
+
+func (m *ManagerLazy) ReserveStorageForJob(ctx context.Context, jid string) (uint64, error) {
+	latestCheckpoint := m.GetLatestCheckpoint(jid)
+	var reserveAmount uint64 = 250 * utils.MEBIBYTE
+	if latestCheckpoint != nil && latestCheckpoint.GetSize() > 0 {
+		reserveAmount = uint64(latestCheckpoint.GetSize())
+	}
+	err := m.ReserveStorageAmount(ctx, reserveAmount)
+	if err != nil {
+		return 0, nil
+	}
+	return reserveAmount, nil
+}
+
+func (m *ManagerLazy) ReserveStorageAmount(ctx context.Context, amount uint64) error {
+	m.storageUsedMutex.Lock()
+	defer m.storageUsedMutex.Unlock()
+	if amount+m.storageUsed > config.Global.LocalStorageLimitGB*utils.GIBIBYTE {
+		return fmt.Errorf("not enough storage for checkpoint")
+	}
+	m.storageUsed += amount
+	return nil
+}
+
+func (m *ManagerLazy) FreeStorage(ctx context.Context, amount uint64) {
+	m.storageUsedMutex.Lock()
+	defer m.storageUsedMutex.Unlock()
+	m.storageUsed -= amount
 }
 
 ////////////////////////

@@ -47,6 +47,9 @@ func Gibibytes(bytes int64) int64 {
 
 // SizeFromPath returns the size of the file or directory at the provided path.
 func SizeFromPath(path string) int64 {
+	if strings.Contains(path, "://") {
+		return 0
+	}
 	var size int64
 	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
 		if err != nil {
