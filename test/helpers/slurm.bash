@@ -243,39 +243,32 @@ DBD_EOF
         if ! grep -q 'JobAcctGatherType' /etc/slurm/slurm.conf; then
             echo 'JobAcctGatherType=jobacct_gather/linux' >> /etc/slurm/slurm.conf
         fi
+        
+        # Set accounting storage enforce
+        if ! grep -q 'AccountingStorageEnforce' /etc/slurm/slurm.conf; then
+            echo 'AccountingStorageEnforce=associations,limits,qos' >> /etc/slurm/slurm.conf
+        fi
     " || { error_log "Failed to update slurm.conf for accounting"; return 1; }
-    
-    info_log "Ensuring slurm spool directories exist..."
-    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-        mkdir -p /var/spool/slurmctld /var/spool/slurmd
-        chown slurm:slurm /var/spool/slurmctld /var/spool/slurmd
-    " || true
 
-    info_log "Restarting slurmctld to apply accounting configuration (without enforce)..."
-    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-        systemctl restart slurmctld || (pkill slurmctld; sleep 1; slurmctld)
-        sleep 5
-    " || { error_log "Failed to restart slurmctld"; return 1; }
-    
     info_log "Initializing accounting database..."
     docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-        # Wait a moment for slurmdbd and slurmctld to sync
-        sleep 5
-        
-        # Retry adding the cluster until slurmctld and slurmdbd are fully communicating
-        cluster_added=false
+        # Wait until slurmdbd is fully initialized and accepting sacctmgr connections
+        slurmdbd_ready=false
         for i in {1..30}; do
-            if sacctmgr -i add cluster cluster 2>/dev/null; then
-                cluster_added=true
+            if sacctmgr show cluster 2>/dev/null; then
+                slurmdbd_ready=true
                 break
             fi
             sleep 2
         done
         
-        if [ \"\$cluster_added\" = false ]; then
-            echo \"Failed to add cluster to accounting database after 60 seconds\" >&2
+        if [ \"\$slurmdbd_ready\" = false ]; then
+            echo \"Failed to connect to slurmdbd via sacctmgr after 60 seconds\" >&2
             exit 1
         fi
+        
+        # Add cluster to accounting
+        sacctmgr -i add cluster cluster 2>/dev/null || true
         
         # Create default account
         sacctmgr -i add account default Description='Default Account' 2>/dev/null || true
@@ -284,16 +277,17 @@ DBD_EOF
         sacctmgr -i add user root Account=default AdminLevel=Admin 2>/dev/null || true
     " || { error_log "Failed to initialize accounting database"; return 1; }
     
-    info_log "Enforcing accounting in slurm.conf..."
+    info_log "Ensuring slurm spool directories exist..."
     docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-        # Set accounting storage enforce
-        if ! grep -q 'AccountingStorageEnforce' /etc/slurm/slurm.conf; then
-            echo 'AccountingStorageEnforce=associations,limits,qos' >> /etc/slurm/slurm.conf
-        fi
-        
+        mkdir -p /var/spool/slurmctld /var/spool/slurmd
+        chown slurm:slurm /var/spool/slurmctld /var/spool/slurmd
+    " || true
+
+    info_log "Restarting slurmctld to apply accounting configuration..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
         systemctl restart slurmctld || (pkill slurmctld; sleep 1; slurmctld)
-        sleep 3
-    " || { error_log "Failed to enforce accounting in slurm.conf"; return 1; }
+        sleep 5
+    " || { error_log "Failed to restart slurmctld"; return 1; }
     
     info_log "SLURM accounting setup complete"
 }
