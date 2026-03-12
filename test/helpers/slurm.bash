@@ -221,34 +221,32 @@ DBD_EOF
             sleep 1
         done
     " || { error_log "Failed to start slurmdbd"; return 1; }
-    
-    info_log "Enabling accounting in slurm.conf..."
+
+    info_log "Configuring slurm.conf for database..."
     docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-        # Add accounting storage type
+        # Add accounting storage type to base conf so sacctmgr can read it
         if ! grep -q 'AccountingStorageType' /etc/slurm/slurm.conf; then
             echo 'AccountingStorageType=accounting_storage/slurmdbd' >> /etc/slurm/slurm.conf
         fi
-        
-        # Add accounting storage host
         if ! grep -q 'AccountingStorageHost' /etc/slurm/slurm.conf; then
             echo 'AccountingStorageHost=localhost' >> /etc/slurm/slurm.conf
         fi
-        
-        # Add accounting storage port
         if ! grep -q 'AccountingStoragePort' /etc/slurm/slurm.conf; then
             echo 'AccountingStoragePort=6819' >> /etc/slurm/slurm.conf
         fi
-        
-        # Enable job accounting gathering
-        if ! grep -q 'JobAcctGatherType' /etc/slurm/slurm.conf; then
-            echo 'JobAcctGatherType=jobacct_gather/linux' >> /etc/slurm/slurm.conf
-        fi
-        
-        # Set accounting storage enforce
-        if ! grep -q 'AccountingStorageEnforce' /etc/slurm/slurm.conf; then
-            echo 'AccountingStorageEnforce=associations,limits,qos' >> /etc/slurm/slurm.conf
-        fi
-    " || { error_log "Failed to update slurm.conf for accounting"; return 1; }
+    " || { error_log "Failed to configure slurm.conf"; return 1; }
+    
+    info_log "Ensuring slurm spool directories exist..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mkdir -p /var/spool/slurmctld /var/spool/slurmd
+        chown slurm:slurm /var/spool/slurmctld /var/spool/slurmd
+    " || true
+
+    info_log "Starting slurmctld initially (without enforcement)..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        systemctl restart slurmctld || (pkill slurmctld; sleep 1; slurmctld)
+        sleep 5
+    " || { error_log "Failed to start initial slurmctld"; return 1; }
 
     info_log "Initializing accounting database..."
     docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
@@ -276,14 +274,21 @@ DBD_EOF
         # Add root user
         sacctmgr -i add user root Account=default AdminLevel=Admin 2>/dev/null || true
     " || { error_log "Failed to initialize accounting database"; return 1; }
-    
-    info_log "Ensuring slurm spool directories exist..."
-    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-        mkdir -p /var/spool/slurmctld /var/spool/slurmd
-        chown slurm:slurm /var/spool/slurmctld /var/spool/slurmd
-    " || true
 
-    info_log "Restarting slurmctld to apply accounting configuration..."
+    info_log "Enforcing accounting in slurm.conf..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        # Enable job accounting gathering
+        if ! grep -q 'JobAcctGatherType' /etc/slurm/slurm.conf; then
+            echo 'JobAcctGatherType=jobacct_gather/linux' >> /etc/slurm/slurm.conf
+        fi
+        
+        # Set accounting storage enforce
+        if ! grep -q 'AccountingStorageEnforce' /etc/slurm/slurm.conf; then
+            echo 'AccountingStorageEnforce=associations,limits,qos' >> /etc/slurm/slurm.conf
+        fi
+    " || { error_log "Failed to update slurm.conf for accounting"; return 1; }
+
+    info_log "Restarting slurmctld to apply enforcement..."
     docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
         systemctl restart slurmctld || (pkill slurmctld; sleep 1; slurmctld)
         sleep 5
