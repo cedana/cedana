@@ -65,9 +65,8 @@ setup_suite() {
     info_log "SLURM_SAMPLES_DIR contents:"
     ls -la "$SLURM_SAMPLES_DIR" 2>&1 | head -10 >&3 || true
 
-
     # Setup samples (clone cedana-samples if needed)
-    setup_slurm_samples
+    setup_slurm_samples || return 1
 
     # Register cluster with propagator (unless already provided)
     if [ -z "$SLURM_CLUSTER_ID" ]; then
@@ -85,10 +84,10 @@ setup_suite() {
     install_cedana_in_slurm
 
     # Start cedana-slurm daemon on the controller
-    start_cedana_slurm_daemon "$SLURM_CONTROLLER"
+    start_cedana_slurm_daemon
 
     # Validate propagator connectivity
-    validate_slurm_propagator
+    validate_slurm_propagator || return 1
 
     debug_log "SLURM test suite setup complete"
 }
