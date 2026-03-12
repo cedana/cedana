@@ -313,6 +313,14 @@ EOF
         chown slurm:slurm /var/spool/slurmctld /var/spool/slurmd
     " || true
 
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        STATE_DIR=\$(awk -F= '/^StateSaveLocation/{gsub(/[[:space:]]/, \"\", \$2); print \$2; exit}' \
+            /etc/slurm/slurm.conf 2>/dev/null)
+        STATE_DIR=\"\${STATE_DIR:-/var/spool/slurm/ctld}\"
+        rm -f \"\${STATE_DIR}/clustername\"
+        echo \"Cleared stale ClusterID from \${STATE_DIR}/clustername\"
+    " || true
+
     _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld ||
         {
             error_log "Failed to start slurmctld"
