@@ -283,7 +283,8 @@ EOF
     _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "AccountingStorageType" "accounting_storage/slurmdbd"
     _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "AccountingStorageHost" "localhost"
     _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "AccountingStoragePort" "6819"
-    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "JobAcctGatherType" "jobacct_gather/linux"
+    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "JobCompType" "jobcomp/none"
+    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "JobAcctGatherType" "jobacct_gather/none"
     # Enforcement is added later, after the cluster/account/user records exist
 
     # -------------------------------------------------------------------------
@@ -575,7 +576,28 @@ done
 [ -f /usr/local/lib/libslurm-cedana.so ] && \
     cp /usr/local/lib/libslurm-cedana.so "${PLUGIN_DIR}/spank_cedana.so"
 ldconfig
-echo "Plugins installed on $(hostname)"
+
+# Patch slurm.conf on the compute node — slurmd reads its own copy and will
+# not load task_cedana or cli_filter_cedana unless they appear here too.
+grep -q 'task/cedana' "$SLURM_CONF" || \
+    sed -i 's|^\(TaskPlugin=.*\)|\1,task/cedana|' "$SLURM_CONF"
+grep -q 'cli_filter/cedana' "$SLURM_CONF" || \
+    echo 'CliFilterPlugins=cli_filter/cedana' >> "$SLURM_CONF"
+
+# Suppress the conf-hash mismatch warning — the compute node's slurm.conf now
+# intentionally differs from the controller's by the extra plugin entries.
+grep -q 'NO_CONF_HASH' "$SLURM_CONF" || \
+    echo 'DebugFlags=NO_CONF_HASH' >> "$SLURM_CONF"
+
+# Patch plugstack.conf so slurmd loads the SPANK plugin.
+PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | awk '/^PlugStackConfig/{print $3}' || true)
+PLUGSTACK_CONF="${PLUGSTACK_CONF:-/etc/slurm/plugstack.conf}"
+if [ -f /usr/local/lib/libslurm-cedana.so ]; then
+    grep -q 'spank_cedana.so' "$PLUGSTACK_CONF" 2>/dev/null || \
+        echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
+fi
+
+echo "Plugins and config updated on $(hostname)"
 COMPUTE_EOF
             {
                 error_log "Plugin setup failed on $c"
@@ -992,11 +1014,9 @@ test_slurm_job() {
             }
 
             info_log "Checkpointing SLURM job $job_id via propagator..."
-            local slurm_job_name checkpoint_output checkpoint_status
-            slurm_job_name=$(slurm_exec scontrol show job "$job_id" 2>/dev/null |
-                grep -o 'JobName=[^ ]*' | cut -d= -f2)
+            local checkpoint_output checkpoint_status
 
-            checkpoint_output=$(checkpoint_slurm_job "$slurm_job_name")
+            checkpoint_output=$(checkpoint_slurm_job "$job_id")
             checkpoint_status=$?
             [ "$checkpoint_status" -ne 0 ] && {
                 error="Checkpoint failed: $checkpoint_output"

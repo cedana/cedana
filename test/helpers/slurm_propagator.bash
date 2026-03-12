@@ -227,7 +227,7 @@ poll_slurm_action_status() {
 
     for i in $(seq 1 $max_attempts); do
         local response
-        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/checkpoint/status/${action_id}" \
+        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoints" \
                 -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -w "%{http_code}")
 
@@ -235,34 +235,34 @@ poll_slurm_action_status() {
         local body="${response%???}"
 
         if [ "$http_code" -eq 200 ]; then
-            status=$(echo "$body" | jq -r '.status' 2>/dev/null)
-            debug_log "Action status: $status (attempt $i/$max_attempts)"
 
-            case "$status" in
-                "ready")
-                    debug_log "Slurm $operation action completed successfully"
-                    return 0
-                    ;;
-                "error")
-                    local details
-                    details=$(echo "$body" | jq -r '.details // "No details"' 2>/dev/null)
-                    error_log "Slurm $operation action failed: $details"
-                    return 1
-                    ;;
-                "initialized"|"processing"|"checkpoint_created")
-                    ;;
-                *)
-                    debug_log "Warning: Unknown status '$status', continuing..."
-                    ;;
-            esac
-        else
-            # Try to extract status from error response body
-            local error_status
-            error_status=$(echo "$body" | jq -r '.status // "unknown"' 2>/dev/null)
-            if [ "$error_status" != "unknown" ] && [ "$error_status" != "null" ]; then
-                status="$error_status"
+            local entry_status
+            entry_status=$(echo "$body" | jq -r --arg aid "$action_id" \
+                '.[] | select(.action_id == $aid) | .status' 2>/dev/null | head -1)
+
+            if [ -n "$entry_status" ]; then
+                status="$entry_status"
+                debug_log "Slurm $operation action status: $status (attempt $i/$max_attempts)"
+
+                case "$status" in
+                    "ready")
+                        debug_log "Slurm $operation action completed successfully"
+                        return 0
+                        ;;
+                    "possibly_uploaded"|"deprecated")
+                        error_log "Slurm $operation action failed (checkpoint status: $status)"
+                        return 1
+                        ;;
+                    *)
+                        debug_log "Checkpoint status '$status', continuing..."
+                        ;;
+                esac
+            else
+                status="processing"
+                debug_log "Slurm $operation action not yet in checkpoints list (attempt $i/$max_attempts)"
             fi
-            debug_log "Warning: Status check failed (HTTP $http_code), body: $body (attempt $i/$max_attempts)"
+        else
+            debug_log "Warning: /v2/slurm/checkpoints failed (HTTP $http_code), body: $body (attempt $i/$max_attempts)"
         fi
 
         sleep $interval
