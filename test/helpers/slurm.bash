@@ -197,7 +197,6 @@ EOF
         return 1
     }
 
-    # Set root password — handle both fresh installs (no password) and already-set
     docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
         mysql -u root --connect-expired-password -e \"
             ALTER USER 'root'@'localhost' IDENTIFIED BY '${mysql_root_password}';
@@ -243,14 +242,11 @@ SQL
 
     local slurmdbd_ver
     slurmdbd_ver=$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
-        bash -c "/usr/sbin/slurmdbd -V 2>&1 | awk '{print \$2}'" 2>/dev/null || true)
+        bash -c "/usr/sbin/slurmdbd -V 2>&1 | head -1 | awk '{print \$NF}'" 2>/dev/null || true)
     info_log "slurmdbd binary present at /usr/sbin/slurmdbd (version: ${slurmdbd_ver:-unknown})"
 
     # -------------------------------------------------------------------------
     # Step 5: Write slurmdbd.conf and update slurm.conf
-    #
-    # Both configs are written BEFORE starting any SLURM daemon so that
-    # slurmctld picks up accounting settings on its very first start.
     # -------------------------------------------------------------------------
     info_log "[5/7] Writing configuration files..."
 
@@ -510,9 +506,14 @@ install_cedana_in_slurm() {
     docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash <<'SETUP_EOF' >&3 2>&1 ||
 set -euo pipefail
 
-PLUGIN_DIR=$(scontrol show config 2>/dev/null | awk '/^PluginDir/{print $3}')
-[ -n "$PLUGIN_DIR" ] || { echo "ERROR: Could not determine SLURM PluginDir" >&2; exit 1; }
+SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
+PLUGIN_DIR=$(awk -F= '/^PluginDir/{print $2; exit}' "$SLURM_CONF" 2>/dev/null || true)
+if [ -z "$PLUGIN_DIR" ]; then
+    PLUGIN_DIR=$(scontrol show config 2>/dev/null | awk '/^PluginDir[[:space:]]*=/{print $NF}' || true)
+fi
+PLUGIN_DIR="${PLUGIN_DIR:-/usr/lib/slurm}"
 echo "SLURM PluginDir: $PLUGIN_DIR"
+mkdir -p "$PLUGIN_DIR"
 
 for f in task_cedana.so cli_filter_cedana.so; do
     src="/usr/local/lib/${f}"
@@ -526,8 +527,7 @@ if [ -f /usr/local/lib/libslurm-cedana.so ]; then
 fi
 ldconfig
 
-SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
-PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | awk '/^PlugStackConfig/{print $3}')
+PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | awk '/^PlugStackConfig/{print $3}' || true)
 PLUGSTACK_CONF="${PLUGSTACK_CONF:-/etc/slurm/plugstack.conf}"
 
 grep -q 'task/cedana' "$SLURM_CONF" || \
@@ -552,8 +552,13 @@ SETUP_EOF
     for c in "${compute_containers[@]}"; do
         docker exec -i "$c" bash <<'COMPUTE_EOF' >&3 2>&1 ||
 set -euo pipefail
-PLUGIN_DIR=$(scontrol show config 2>/dev/null | awk '/^PluginDir/{print $3}')
-[ -n "$PLUGIN_DIR" ] || { echo "ERROR: Could not determine SLURM PluginDir" >&2; exit 1; }
+SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
+PLUGIN_DIR=$(awk -F= '/^PluginDir/{print $2; exit}' "$SLURM_CONF" 2>/dev/null || true)
+if [ -z "$PLUGIN_DIR" ]; then
+    PLUGIN_DIR=$(scontrol show config 2>/dev/null | awk '/^PluginDir[[:space:]]*=/{print $NF}' || true)
+fi
+PLUGIN_DIR="${PLUGIN_DIR:-/usr/lib/slurm}"
+mkdir -p "$PLUGIN_DIR"
 for f in task_cedana.so cli_filter_cedana.so; do
     src="/usr/local/lib/${f}"
     [ -f "$src" ] || continue
