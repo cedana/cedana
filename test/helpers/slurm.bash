@@ -117,7 +117,8 @@ setup_slurm_cluster() {
     fi
 
     pushd "$ansible_dir" >/dev/null
-    ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&3 2>&1
+    ANSIBLE_EXTRA_ARGS="-e slurm_cluster_name=cedana_test_cluster" \
+        ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&3 2>&1
     local rc=$?
     popd >/dev/null
 
