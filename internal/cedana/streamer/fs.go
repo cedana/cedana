@@ -77,7 +77,7 @@ func NewStreamingFs(
 	_, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs, "startup")
 	defer end()
 
-	if streams < 1 {
+	if streams < 2 {
 		return nil, nil, fmt.Errorf("invalid number of streams: %d", streams)
 	}
 	var compression string
