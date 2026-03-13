@@ -444,39 +444,42 @@ func (m Mode) String() string {
 
 /* retries until streamer is ready */
 func (fs *Fs) waitForStreamerReady(name string) error {
-	resp := &img_streamer.ImgStreamerReplyEntry{}
-	var sizeBuf [4]byte
-	_, err := fs.conn.Read(sizeBuf[:])
-	if err != nil {
-		return fmt.Errorf("failed to read size from file response: %w", err)
-	}
-	size := binary.LittleEndian.Uint32(sizeBuf[:])
-	data := make([]byte, size)
-	n, err := fs.conn.Read(data)
-	if err != nil {
-		return fmt.Errorf("failed to read data from file response: %w", err)
-	}
-	if n != int(size) {
-		return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
-	}
-	err = proto.Unmarshal(data, resp)
-	if err != nil {
-		return fmt.Errorf("failed to unmarshal response: %w", err)
-	}
-	if !resp.HasStatus() {
-		if !resp.Exists {
-			return fmt.Errorf("file does not exist: %s", name)
+	for {
+		resp := &img_streamer.ImgStreamerReplyEntry{}
+		var sizeBuf [4]byte
+		_, err := fs.conn.Read(sizeBuf[:])
+		if err != nil {
+			return fmt.Errorf("failed to read size from file response: %w", err)
 		}
-	} else {
-		switch resp.GetStatus() {
-		case img_streamer.FileStatus_DOES_NOT_EXIST:
-			return fmt.Errorf("file does not exist: %s", name)
-		case img_streamer.FileStatus_NOT_READY:
-			time.Sleep(RETRY_INTERVAL)
-			return fs.waitForStreamerReady(name)
-		case img_streamer.FileStatus_READY:
-		default:
-			return fmt.Errorf("recieved invalid file status from streamer")
+		size := binary.LittleEndian.Uint32(sizeBuf[:])
+		data := make([]byte, size)
+		n, err := fs.conn.Read(data)
+		if err != nil {
+			return fmt.Errorf("failed to read data from file response: %w", err)
+		}
+		if n != int(size) {
+			return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
+		}
+		err = proto.Unmarshal(data, resp)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+		if !resp.HasStatus() {
+			if !resp.Exists {
+				return fmt.Errorf("file does not exist: %s", name)
+			}
+		} else {
+			status := resp.GetStatus()
+			if status == img_streamer.FileStatus_DOES_NOT_EXIST {
+				return fmt.Errorf("file does not exist: %s", name)
+			} else if status == img_streamer.FileStatus_NOT_READY {
+				time.Sleep(RETRY_INTERVAL)
+				continue
+			} else if status == img_streamer.FileStatus_READY {
+				break
+			} else {
+				return fmt.Errorf("recieved invalid file status from streamer")
+			}
 		}
 	}
 	return nil
