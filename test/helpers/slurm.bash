@@ -442,7 +442,7 @@ install_cedana_in_slurm() {
             apt-get update -qq
             apt-get install -y -qq \
                 libprotobuf-c1 libnet1 libgnutls30 libnl-3-200 \
-                libbsd0 libcap2 python3 python3-pip
+                libbsd0 libcap2 python3 python3-pip python3-venv
         " || {
             error_log "Failed to install dependencies in $c"
             return 1
@@ -818,6 +818,17 @@ setup_slurm_samples() {
             info_log "  slurm/cpu directory found in $c" ||
             error_log "  slurm/cpu directory NOT found in $c"
     done
+
+    info_log "Initializing Python virtual environment..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        python3 -m venv /data/venv
+        /data/venv/bin/pip install --upgrade pip
+    "
+
+    info_log "Patching sbatch files to use venv..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c '
+        find /data/cedana-samples/slurm -name "*.sbatch" -type f -exec sed -i "s|^#!/bin/bash|#!/bin/bash\nsource /data/venv/bin/activate|" {} +
+    '
 
     info_log "cedana-samples ready in all cluster nodes"
 }
