@@ -59,6 +59,7 @@ type (
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 		// Streams specifies the number of parallel streams to use when checkpointing.
+		// Default is 0 for no streaming, a minimum of 2 is required otherwise.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
 		// The amount of memory streamer is allowed to use (in MB)
 		StreamerMemoryLimitMb uint64 `json:"streamer_memory_limit_mb" key:"streamer_memory_limit_mb" yaml:"streamer_memory_limit_mb" mapstructure:"streamer_memory_limit_mb"`
