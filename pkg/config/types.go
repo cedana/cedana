@@ -62,7 +62,7 @@ type (
 		// Default is 0 for no streaming, a minimum of 2 is required otherwise.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
 		// The amount of memory streamer is allowed to use (in MB)
-		StreamerMemoryLimitMb uint64 `json:"streamer_memory_limit_mb" key:"streamer_memory_limit_mb" yaml:"streamer_memory_limit_mb" mapstructure:"streamer_memory_limit_mb"`
+		StreamerMemoryLimit uint64 `json:"streamer_memory_limit" key:"streamer_memory_limit" yaml:"streamer_memory_limit" mapstructure:"streamer_memory_limit"`
 		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
 		// checkpoint reqeust to return early.
 		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`

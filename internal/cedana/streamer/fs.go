@@ -179,7 +179,7 @@ func NewStreamingFs(
 	args := []string{"--images-dir", imagesDir}
 	var extraFiles []*os.File
 	var lastMsg string
-	memoryLimit := strconv.FormatUint(config.Global.Checkpoint.StreamerMemoryLimitMb, 10)
+	memoryLimit := strconv.FormatUint(config.Global.Checkpoint.StreamerMemoryLimit, 10)
 
 	switch mode {
 	case READ_ONLY:
