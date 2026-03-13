@@ -65,7 +65,10 @@ setup_suite() {
     info_log "SLURM_SAMPLES_DIR contents:"
     ls -la "$SLURM_SAMPLES_DIR" 2>&1 | head -10 >&3 || true
 
-    # Setup samples (clone cedana-samples if needed)
+    # Install cedana + plugins into the SLURM cluster (which also installs Python venv dependencies)
+    install_cedana_in_slurm
+
+    # Setup samples (clone cedana-samples and initialize venv)
     setup_slurm_samples || return 1
 
     # Register cluster with propagator (unless already provided)
@@ -79,9 +82,6 @@ setup_suite() {
     else
         debug_log "Using provided SLURM cluster ID: $SLURM_CLUSTER_ID"
     fi
-
-    # Install cedana + plugins into the SLURM cluster
-    install_cedana_in_slurm
 
     # Start cedana-slurm daemon on the controller
     start_cedana_slurm_daemon
