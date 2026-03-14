@@ -30,7 +30,7 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		hostname := details.GetHostname()
 		parent := details.GetParentPID()
 
-		path, err := GetJobCgroupPath(hostname, jid)
+		path, err := GetJobCgroupPath(hostname, jid, parent)
 		if err != nil {
 			return nil, err
 		}
