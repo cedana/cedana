@@ -11,10 +11,6 @@ load ../helpers/slurm_propagator
 # GPU Workloads  #
 ##################
 
-setup_file() {
-    skip "GPU SLURM tests temporarily disabled"
-}
-
 # bats test_tags=dump,restore,gpu
 @test "Dump/Restore: CUDA Vector Add" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-vector-add.sbatch"
