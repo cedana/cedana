@@ -169,6 +169,7 @@ jobs:
           - kata
           - cloud-hypervisor
           - k8s
+          - skypilot
           - slurm
           - storage/cedana
           - storage/s3
@@ -384,6 +385,7 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-containerd.so-$ARCH
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-crio.so-$ARCH
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-k8s.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-skypilot.so-$ARCH
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-slurm.so-$ARCH
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-kata.so-$ARCH
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-cloud-hypervisor.so-$ARCH
@@ -406,6 +408,7 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-containerd.so-$ARCH || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-crio.so-$ARCH || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-k8s.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-skypilot.so-$ARCH || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-slurm.so-$ARCH || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-kata.so-$ARCH || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-cloud-hypervisor.so-$ARCH || true
