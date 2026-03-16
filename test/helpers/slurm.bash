@@ -514,44 +514,59 @@ install_cedana_in_slurm() {
     # -------------------------------------------------------------------------
     if [ "${GPU:-0}" = "1" ]; then
         info_log "Configuring SLURM GPU GRES resources..."
-        for c in "${all_containers[@]}"; do
-            docker exec "$c" bash -c '
+
+        # Detect GPUs on compute nodes and write gres.conf there
+        for c in "${compute_containers[@]}"; do
+            local gpu_count
+            gpu_count=$(docker exec "$c" bash -c 'nvidia-smi -L 2>/dev/null | wc -l' || echo "0")
+            if [ "$gpu_count" -eq 0 ]; then
+                info_log "WARNING: No GPUs detected on $c, skipping GRES config"
+                continue
+            fi
+            info_log "Detected $gpu_count GPU(s) on $c"
+
+            # Write gres.conf on the compute node
+            docker exec "$c" bash -c "
+                mkdir -p /etc/slurm
+                echo '# Auto-generated GPU GRES configuration' > /etc/slurm/gres.conf
+                for i in \$(seq 0 $(($gpu_count - 1))); do
+                    echo \"Name=gpu File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
+                done
+                cat /etc/slurm/gres.conf
+            " || {
+                error_log "Failed to write gres.conf on $c"
+                return 1
+            }
+
+            # Update slurm.conf on the controller: add GresTypes and Gres on NodeName
+            local node_hostname
+            node_hostname=$(docker exec "$c" hostname)
+            docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
                 set -euo pipefail
-                SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
+                SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
 
-                # Detect GPUs via nvidia-smi
-                GPU_COUNT=$(nvidia-smi -L 2>/dev/null | wc -l)
-                if [ "$GPU_COUNT" -eq 0 ]; then
-                    echo "WARNING: nvidia-smi found no GPUs on $(hostname)"
-                    exit 0
-                fi
-                echo "Detected $GPU_COUNT GPU(s) on $(hostname)"
+                # Add GresTypes if not present
+                grep -q '^GresTypes=' \"\$SLURM_CONF\" || \
+                    echo 'GresTypes=gpu' >> \"\$SLURM_CONF\"
 
-                # Add GresTypes to slurm.conf if not present
-                grep -q "^GresTypes=" "$SLURM_CONF" || \
-                    echo "GresTypes=gpu" >> "$SLURM_CONF"
-
-                # Add Gres=gpu:N to the NodeName line for this host
-                HOSTNAME=$(hostname)
-                if grep -q "^NodeName=$HOSTNAME" "$SLURM_CONF"; then
-                    if ! grep "^NodeName=$HOSTNAME" "$SLURM_CONF" | grep -q "Gres="; then
-                        sed -i "s|^\(NodeName=$HOSTNAME.*\)|\1 Gres=gpu:$GPU_COUNT|" "$SLURM_CONF"
+                # Add Gres=gpu:N to the NodeName line
+                if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
+                    if ! grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
+                        sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
                     fi
                 fi
-
-                # Write gres.conf
-                mkdir -p /etc/slurm
-                echo "# Auto-generated GPU GRES configuration" > /etc/slurm/gres.conf
-                for i in $(seq 0 $((GPU_COUNT - 1))); do
-                    echo "Name=gpu File=/dev/nvidia$i" >> /etc/slurm/gres.conf
-                done
-                echo "GRES config written to /etc/slurm/gres.conf:"
-                cat /etc/slurm/gres.conf
-            ' || {
-                error_log "GPU GRES configuration failed on $c"
+                echo 'SLURM GRES config updated on controller for $node_hostname'
+            " || {
+                error_log "Failed to update slurm.conf GRES on controller for $c"
                 return 1
             }
         done
+
+        # Copy gres.conf to the controller too (SLURM requires it)
+        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+            mkdir -p /etc/slurm
+            test -f /etc/slurm/gres.conf || echo '# No local GPUs on controller' > /etc/slurm/gres.conf
+        "
     fi
 
     # -------------------------------------------------------------------------
