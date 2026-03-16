@@ -88,7 +88,7 @@ jobs:
       github.run_id,
       matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
-      matrix.compute == 'CUDA' && '-cuda-12-4' || '',
+      (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
       matrix.storage
       ) }}
     timeout-minutes: 120
