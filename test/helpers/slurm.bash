@@ -510,6 +510,51 @@ install_cedana_in_slurm() {
     fi
 
     # -------------------------------------------------------------------------
+    # Configure GPU GRES if GPU mode is enabled
+    # -------------------------------------------------------------------------
+    if [ "${GPU:-0}" = "1" ]; then
+        info_log "Configuring SLURM GPU GRES resources..."
+        for c in "${all_containers[@]}"; do
+            docker exec "$c" bash -c '
+                set -euo pipefail
+                SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
+
+                # Detect GPUs via nvidia-smi
+                GPU_COUNT=$(nvidia-smi -L 2>/dev/null | wc -l)
+                if [ "$GPU_COUNT" -eq 0 ]; then
+                    echo "WARNING: nvidia-smi found no GPUs on $(hostname)"
+                    exit 0
+                fi
+                echo "Detected $GPU_COUNT GPU(s) on $(hostname)"
+
+                # Add GresTypes to slurm.conf if not present
+                grep -q "^GresTypes=" "$SLURM_CONF" || \
+                    echo "GresTypes=gpu" >> "$SLURM_CONF"
+
+                # Add Gres=gpu:N to the NodeName line for this host
+                HOSTNAME=$(hostname)
+                if grep -q "^NodeName=$HOSTNAME" "$SLURM_CONF"; then
+                    if ! grep "^NodeName=$HOSTNAME" "$SLURM_CONF" | grep -q "Gres="; then
+                        sed -i "s|^\(NodeName=$HOSTNAME.*\)|\1 Gres=gpu:$GPU_COUNT|" "$SLURM_CONF"
+                    fi
+                fi
+
+                # Write gres.conf
+                mkdir -p /etc/slurm
+                echo "# Auto-generated GPU GRES configuration" > /etc/slurm/gres.conf
+                for i in $(seq 0 $((GPU_COUNT - 1))); do
+                    echo "Name=gpu File=/dev/nvidia$i" >> /etc/slurm/gres.conf
+                done
+                echo "GRES config written to /etc/slurm/gres.conf:"
+                cat /etc/slurm/gres.conf
+            ' || {
+                error_log "GPU GRES configuration failed on $c"
+                return 1
+            }
+        done
+    fi
+
+    # -------------------------------------------------------------------------
     # Configure SLURM plugins on the controller
     # -------------------------------------------------------------------------
     info_log "Configuring SLURM to load Cedana plugins (controller)..."
