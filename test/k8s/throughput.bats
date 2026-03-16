@@ -4,49 +4,54 @@
 
 # Throughput Efficiency Test for Cedana
 #
-# This test demonstrates how checkpointing prevents throughput degradation when
-# jobs are preempted in resource-constrained clusters.
+# This test demonstrates how checkpointing prevents job failures when preemptions
+# occur late in job execution, using a wall clock time limit scenario.
 #
-# Scenario: N concurrent jobs competing for M nodes (N > M)
-# - Jobs queue when nodes are full
-# - Running jobs get preempted (spot reclamation, priority preemption, etc.)
-# - Baseline: Jobs restart from scratch → take longer → queue stays backed up
-# - Cedana: Jobs restore from checkpoint → complete faster → queue clears faster
+# Scenario: N jobs with wall clock limits, preempted at regular intervals
+# - Baseline: Jobs restart from 0% → jobs preempted late cannot complete → FAIL
+# - Cedana: Jobs restore from checkpoint → all jobs complete → SUCCESS
 #
-# Key metric: Total wall time from job submission to all jobs complete
-# This captures the queue buildup effect and overall cluster throughput.
+# Key metrics:
+# - Job completion rate (baseline ~30%, cedana 100%)
+# - Number of failed jobs prevented
+# - Total wall time saved
 #
-# Preemption scenarios covered:
-# - Spot/preemptible instance reclamation
-# - Priority-based preemption
-# - Node draining for maintenance
-# - Resource pressure evictions
+# Configuration (all via environment variables):
 #
-# For cedana jobs, we use the propagator API to:
-# 1. Trigger checkpoint before preemption
-# 2. Delete pod to simulate preemption
-# 3. Trigger restore via API
+# Test Structure:
+#   THROUGHPUT_NUM_JOBS              - Number of jobs to run (default: 10)
+#   THROUGHPUT_JOB_DURATION          - Job work duration in seconds (default: 2700 = 45 min)
+#   THROUGHPUT_WALL_CLOCK_LIMIT      - Wall clock limit per job in seconds (default: 3600 = 60 min)
+#   THROUGHPUT_PREEMPT_INTERVAL      - Interval between preemptions in seconds (default: 270 = 4.5 min)
+#                                      Jobs are preempted at: 270s, 540s, 810s, 1080s, etc.
+#   THROUGHPUT_PREEMPTIONS_PER_JOB   - Number of preemptions per job (default: 1)
 #
-# Environment variables:
-#   SATURATION_NUM_JOBS        - Number of concurrent jobs (default: 10)
-#   SATURATION_MIN_DELAY       - Min seconds before preemption (default: 60)
-#   SATURATION_MAX_DELAY       - Max seconds before preemption (default: 180)
-#   THROUGHPUT_WORKLOADS       - Comma-separated workload types (default: monte-carlo-pi)
-#   THROUGHPUT_NAMESPACE       - Test namespace (default: throughput-test)
-#   THROUGHPUT_JOB_TIMEOUT     - Max seconds to wait for job completion (default: 1800)
+# Test Execution:
+#   THROUGHPUT_WORKLOADS             - Comma-separated workload types (default: monte-carlo-pi)
+#   THROUGHPUT_NAMESPACE             - Test namespace (default: throughput-test)
+#   THROUGHPUT_JOB_TIMEOUT           - Max time to wait for all jobs (default: 4200 = 70 min)
+#   THROUGHPUT_CHECKPOINT_TIMEOUT    - Max time to wait for checkpoint (default: 300 = 5 min)
+#   THROUGHPUT_SAMPLES_DIR           - Path to cedana-samples repo (auto-detected)
 #
-# Test design:
-#   - Submit N concurrent jobs competing for limited cluster resources
-#   - Jobs that can't get resources wait in queue (pending)
-#   - Preempt running jobs at random times
-#   - Baseline: Jobs restart from scratch → longer completion → queue backs up
-#   - Cedana: Jobs restore from checkpoint → faster completion → queue clears faster
-#   - Measure total wall time to demonstrate throughput impact
+# Advanced:
+#   THROUGHPUT_STATE_DIR             - Where to store results (default: /tmp/throughput-test-state)
+#   CEDANA_NAMESPACE                 - Cedana system namespace (default: cedana-systems)
 #
-# Resource configuration:
-#   - To simulate "10 jobs on 5 nodes" (queue buildup), configure job YAML with
-#     resource requests matching full node capacity (e.g., all CPU/memory/GPU)
-#   - Kubernetes scheduler naturally creates queue when requests exceed capacity
+# Examples:
+#
+#   # Quick test: 5 jobs, 10 min work, 15 min limit, preempt every 2 min
+#   THROUGHPUT_NUM_JOBS=5 THROUGHPUT_JOB_DURATION=600 \
+#   THROUGHPUT_WALL_CLOCK_LIMIT=900 THROUGHPUT_PREEMPT_INTERVAL=120 \
+#   bats throughput.bats
+#
+#   # Long test: 20 jobs, 60 min work, 90 min limit, preempt every 3 min
+#   THROUGHPUT_NUM_JOBS=20 THROUGHPUT_JOB_DURATION=3600 \
+#   THROUGHPUT_WALL_CLOCK_LIMIT=5400 THROUGHPUT_PREEMPT_INTERVAL=180 \
+#   bats throughput.bats
+#
+#   # Multiple preemptions: 10 jobs, preempt twice per job
+#   THROUGHPUT_NUM_JOBS=10 THROUGHPUT_PREEMPTIONS_PER_JOB=2 \
+#   bats throughput.bats
 
 load ../helpers/utils
 load ../helpers/k8s
@@ -56,19 +61,33 @@ load ../helpers/propagator
 # Configuration
 ################################################################################
 
-THROUGHPUT_WORKLOADS="${THROUGHPUT_WORKLOADS:-monte-carlo-pi}"
-THROUGHPUT_NAMESPACE="${THROUGHPUT_NAMESPACE:-throughput-test}"
-THROUGHPUT_JOB_TIMEOUT="${THROUGHPUT_JOB_TIMEOUT:-4200}"  # Max time to wait for job completion (70 min - safety margin over 60 min)
-THROUGHPUT_CHECKPOINT_TIMEOUT="${THROUGHPUT_CHECKPOINT_TIMEOUT:-300}"  # Max time to wait for checkpoint (5 min for large checkpoints)
+# Test Structure Configuration
+THROUGHPUT_NUM_JOBS="${THROUGHPUT_NUM_JOBS:-10}"                      # Number of jobs to run
+THROUGHPUT_JOB_DURATION="${THROUGHPUT_JOB_DURATION:-2700}"           # Job work duration (seconds) - default: 45 min
+THROUGHPUT_WALL_CLOCK_LIMIT="${THROUGHPUT_WALL_CLOCK_LIMIT:-3600}"  # Wall clock limit per job (seconds) - default: 60 min
+THROUGHPUT_PREEMPT_INTERVAL="${THROUGHPUT_PREEMPT_INTERVAL:-270}"   # Preemption interval (seconds) - default: 4.5 min
+THROUGHPUT_PREEMPTIONS_PER_JOB="${THROUGHPUT_PREEMPTIONS_PER_JOB:-1}" # Number of times to preempt each job
+
+# Test Execution Configuration
+THROUGHPUT_WORKLOADS="${THROUGHPUT_WORKLOADS:-monte-carlo-pi}"      # Workload types
+THROUGHPUT_NAMESPACE="${THROUGHPUT_NAMESPACE:-throughput-test}"     # Test namespace
+THROUGHPUT_JOB_TIMEOUT="${THROUGHPUT_JOB_TIMEOUT:-4200}"           # Max time to wait for all jobs (70 min)
+THROUGHPUT_CHECKPOINT_TIMEOUT="${THROUGHPUT_CHECKPOINT_TIMEOUT:-300}" # Max time to wait for checkpoint (5 min)
 
 # Samples directory - set by setup or environment
 THROUGHPUT_SAMPLES_DIR="${THROUGHPUT_SAMPLES_DIR:-}"
 
-# State directory for metrics collection (fixed name so it persists across tests in a run)
-STATE_DIR="/tmp/throughput-test-state"
+# State directory for metrics collection
+STATE_DIR="${THROUGHPUT_STATE_DIR:-/tmp/throughput-test-state}"
 
 # Cedana namespace for extracting credentials
 CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-systems}"
+
+# Backward compatibility aliases
+SATURATION_NUM_JOBS="${SATURATION_NUM_JOBS:-$THROUGHPUT_NUM_JOBS}"
+SATURATION_PREEMPT_INTERVAL="${SATURATION_PREEMPT_INTERVAL:-$THROUGHPUT_PREEMPT_INTERVAL}"
+SATURATION_JOB_DURATION="${SATURATION_JOB_DURATION:-$THROUGHPUT_JOB_DURATION}"
+SATURATION_WALL_CLOCK_LIMIT="${SATURATION_WALL_CLOCK_LIMIT:-$THROUGHPUT_WALL_CLOCK_LIMIT}"
 
 ################################################################################
 # Setup / Teardown
@@ -122,14 +141,29 @@ setup_file() {
         export PROPAGATOR_AUTH_TOKEN="$CEDANA_AUTH_TOKEN"
     fi
 
-    info_log "Using samples from: $THROUGHPUT_SAMPLES_DIR"
-    info_log "Workloads: $THROUGHPUT_WORKLOADS"
-    info_log "Jobs per workload: $THROUGHPUT_NUM_JOBS"
-    info_log "Preemption delay: ${THROUGHPUT_INTERRUPT_DELAY}s"
+    info_log "╔═══════════════════════════════════════════════════════════════╗"
+    info_log "║         THROUGHPUT TEST CONFIGURATION                         ║"
+    info_log "╠═══════════════════════════════════════════════════════════════╣"
+    info_log "║ Test Structure:                                               ║"
+    info_log "║   Jobs:              ${THROUGHPUT_NUM_JOBS} concurrent jobs"
+    info_log "║   Job duration:      ${THROUGHPUT_JOB_DURATION}s ($((THROUGHPUT_JOB_DURATION/60)) min)"
+    info_log "║   Wall clock limit:  ${THROUGHPUT_WALL_CLOCK_LIMIT}s ($((THROUGHPUT_WALL_CLOCK_LIMIT/60)) min)"
+    info_log "║   Preempt interval:  ${THROUGHPUT_PREEMPT_INTERVAL}s ($((THROUGHPUT_PREEMPT_INTERVAL/60)) min)"
+    info_log "║   Preemptions/job:   ${THROUGHPUT_PREEMPTIONS_PER_JOB}"
+    info_log "║                                                               ║"
+    info_log "║ Test Execution:                                               ║"
+    info_log "║   Workload:          ${THROUGHPUT_WORKLOADS}"
+    info_log "║   Namespace:         ${THROUGHPUT_NAMESPACE}"
+    info_log "║   Timeout:           ${THROUGHPUT_JOB_TIMEOUT}s ($((THROUGHPUT_JOB_TIMEOUT/60)) min)"
+    info_log "║   Samples dir:       ${THROUGHPUT_SAMPLES_DIR}"
+    info_log "║   State dir:         ${STATE_DIR}"
     if [[ -n "$CEDANA_URL" ]]; then
-        info_log "Cedana API: $CEDANA_URL"
-        info_log "Cluster ID: $CLUSTER_ID"
+    info_log "║                                                               ║"
+    info_log "║ Cedana API:                                                   ║"
+    info_log "║   URL:               ${CEDANA_URL}"
+    info_log "║   Cluster ID:        ${CLUSTER_ID}"
     fi
+    info_log "╚═══════════════════════════════════════════════════════════════╝"
 
     create_namespace "$THROUGHPUT_NAMESPACE"
 }
@@ -137,8 +171,9 @@ setup_file() {
 teardown_file() {
     info_log "Cleaning up throughput test..."
 
-    # Generate final report
+    # Generate final reports
     if [[ -d "$STATE_DIR" ]]; then
+        generate_json_report
         generate_report
     fi
 
@@ -149,7 +184,11 @@ teardown_file() {
     sleep 5
     delete_namespace "$THROUGHPUT_NAMESPACE" --force --timeout=120s 2>/dev/null || true
 
-    rm -rf "$STATE_DIR"
+    # Clean up temporary files but preserve results.json
+    if [[ -d "$STATE_DIR" ]]; then
+        rm -rf "$STATE_DIR/baseline" "$STATE_DIR/cedana" "$STATE_DIR/jobs"
+        info_log "Test results preserved in: $STATE_DIR/results.json"
+    fi
 }
 
 ################################################################################
@@ -312,6 +351,54 @@ record_metric() {
     echo "$value" >> "$STATE_DIR/${test_mode}/${workload}_${metric}"
 }
 
+# Record job-level data for JSON output
+record_job_data() {
+    local test_mode="$1"  # baseline or cedana
+    local job_id="$2"
+    local job_name="$3"
+    local start_time="$4"
+    local preemption_time="$5"
+    local completion_time="$6"
+    local status="$7"  # completed, failed, timeout
+    local progress_at_preemption="${8:-0}"
+
+    local json_file="$STATE_DIR/${test_mode}/jobs.json"
+
+    # Create JSON array if doesn't exist
+    if [[ ! -f "$json_file" ]]; then
+        echo "[]" > "$json_file"
+    fi
+
+    # Append job data (using jq if available, otherwise simple append)
+    local job_json=$(cat <<EOF
+{
+  "job_id": $job_id,
+  "job_name": "$job_name",
+  "start_time": $start_time,
+  "preemption_time": $preemption_time,
+  "completion_time": $completion_time,
+  "status": "$status",
+  "progress_at_preemption": $progress_at_preemption
+}
+EOF
+)
+
+    # Simple JSON append (no jq dependency)
+    if command -v jq &> /dev/null; then
+        jq ". += [$job_json]" "$json_file" > "${json_file}.tmp" && mv "${json_file}.tmp" "$json_file"
+    else
+        # Manual JSON array append
+        if [[ $(wc -l < "$json_file") -eq 1 ]]; then
+            # Empty array
+            echo "[$job_json]" > "$json_file"
+        else
+            # Append to array (remove trailing ], add comma, add new entry, close])
+            sed -i '$ d' "$json_file"  # Remove last ]
+            echo ",$job_json]" >> "$json_file"
+        fi
+    fi
+}
+
 get_metric_sum() {
     local test_mode="$1"
     local workload="$2"
@@ -363,6 +450,85 @@ get_preemption_times_list() {
     else
         echo "none"
     fi
+}
+
+generate_json_report() {
+    local output_file="$STATE_DIR/results.json"
+
+    info_log "Generating JSON report: $output_file"
+
+    # Get baseline data
+    local baseline_jobs_json="[]"
+    if [[ -f "$STATE_DIR/baseline/jobs.json" ]]; then
+        baseline_jobs_json=$(cat "$STATE_DIR/baseline/jobs.json")
+    fi
+
+    local baseline_wall=$(get_metric_sum "baseline" "monte-carlo-pi" "saturation_wall_time")
+    local baseline_completed=$(get_metric_sum "baseline" "monte-carlo-pi" "saturation_completed")
+    local baseline_failed=$(get_metric_sum "baseline" "monte-carlo-pi" "saturation_failed")
+    local baseline_jobs=$(get_metric_sum "baseline" "monte-carlo-pi" "saturation_jobs")
+
+    # Get cedana data
+    local cedana_jobs_json="[]"
+    if [[ -f "$STATE_DIR/cedana/jobs.json" ]]; then
+        cedana_jobs_json=$(cat "$STATE_DIR/cedana/jobs.json")
+    fi
+
+    local cedana_wall=$(get_metric_sum "cedana" "monte-carlo-pi" "saturation_wall_time")
+    local cedana_completed=$(get_metric_sum "cedana" "monte-carlo-pi" "saturation_completed")
+    local cedana_failed=$(get_metric_sum "cedana" "monte-carlo-pi" "saturation_failed")
+    local cedana_jobs=$(get_metric_sum "cedana" "monte-carlo-pi" "saturation_jobs")
+
+    # Calculate throughput metrics
+    local baseline_throughput=$(awk "BEGIN {if (${baseline_wall} > 0) print ${baseline_completed}/${baseline_wall}; else print 0}")
+    local cedana_throughput=$(awk "BEGIN {if (${cedana_wall} > 0) print ${cedana_completed}/${cedana_wall}; else print 0}")
+    local throughput_improvement=$(awk "BEGIN {if (${baseline_throughput} > 0) print ((${cedana_throughput} - ${baseline_throughput}) / ${baseline_throughput}) * 100; else print 0}")
+    local time_reduction=$(awk "BEGIN {if (${baseline_wall} > 0) print ((${baseline_wall} - ${cedana_wall}) / ${baseline_wall}) * 100; else print 0}")
+
+    # Create JSON report
+    cat > "$output_file" <<EOF
+{
+  "test_config": {
+    "num_jobs": ${THROUGHPUT_NUM_JOBS},
+    "job_duration_sec": ${THROUGHPUT_JOB_DURATION},
+    "wall_clock_limit_sec": ${THROUGHPUT_WALL_CLOCK_LIMIT},
+    "preemption_interval_sec": ${THROUGHPUT_PREEMPT_INTERVAL},
+    "preemptions_per_job": ${THROUGHPUT_PREEMPTIONS_PER_JOB},
+    "workload": "${THROUGHPUT_WORKLOADS}",
+    "namespace": "${THROUGHPUT_NAMESPACE}"
+  },
+  "baseline": {
+    "total_wall_time_sec": ${baseline_wall},
+    "jobs": ${baseline_jobs_json},
+    "summary": {
+      "total": ${baseline_jobs},
+      "completed": ${baseline_completed},
+      "failed": ${baseline_failed},
+      "completion_rate": $(awk "BEGIN {if (${baseline_jobs} > 0) print ${baseline_completed}/${baseline_jobs}; else print 0}"),
+      "throughput": ${baseline_throughput}
+    }
+  },
+  "cedana": {
+    "total_wall_time_sec": ${cedana_wall},
+    "jobs": ${cedana_jobs_json},
+    "summary": {
+      "total": ${cedana_jobs},
+      "completed": ${cedana_completed},
+      "failed": ${cedana_failed},
+      "completion_rate": $(awk "BEGIN {if (${cedana_jobs} > 0) print ${cedana_completed}/${cedana_jobs}; else print 0}"),
+      "throughput": ${cedana_throughput}
+    }
+  },
+  "performance": {
+    "time_reduction_percent": ${time_reduction},
+    "throughput_improvement_percent": ${throughput_improvement},
+    "additional_jobs_completed": $((cedana_completed - baseline_completed)),
+    "failures_prevented": ${baseline_failed}
+  }
+}
+EOF
+
+    info_log "JSON report saved: $output_file"
 }
 
 generate_report() {
@@ -431,16 +597,36 @@ generate_report() {
 # Throughput Test - Submit many jobs concurrently, measure total throughput
 ################################################################################
 
-# Test configuration
-SATURATION_NUM_JOBS="${SATURATION_NUM_JOBS:-10}"      # Number of concurrent jobs to run
-SATURATION_MIN_DELAY="${SATURATION_MIN_DELAY:-1200}"  # Min seconds before preemption (~20 min, halfway through 45-min job)
-SATURATION_MAX_DELAY="${SATURATION_MAX_DELAY:-1500}"  # Max seconds before preemption (~25 min, halfway through 45-min job)
+# Generate evenly spaced preemption times for jobs
+# With 1 preemption per job: Job 1 at 270s, Job 2 at 540s, etc.
+# With 2 preemptions per job: Job 1 at 270s and 540s, Job 2 at 810s and 1080s, etc.
+get_preemption_times() {
+    local job_index="$1"  # 0-based
+    local num_preemptions="${THROUGHPUT_PREEMPTIONS_PER_JOB}"
+    local interval="${THROUGHPUT_PREEMPT_INTERVAL}"
 
-# Generate random delay between min and max
-random_delay() {
-    local min="$1"
-    local max="$2"
-    echo $((min + RANDOM % (max - min + 1)))
+    # Calculate base offset for this job
+    local base_offset=$((job_index * num_preemptions))
+
+    # Generate preemption times for this job
+    local times=""
+    for i in $(seq 1 "$num_preemptions"); do
+        local preempt_time=$((interval * (base_offset + i)))
+        if [[ -z "$times" ]]; then
+            times="$preempt_time"
+        else
+            times="$times $preempt_time"
+        fi
+    done
+
+    echo "$times"
+}
+
+# Get the first preemption time for a job (for backward compatibility)
+get_preemption_time() {
+    local job_index="$1"  # 0-based
+    local times=$(get_preemption_times "$job_index")
+    echo "${times%% *}"  # Return first time
 }
 
 # Run throughput baseline test - all jobs submitted at once, random preemptions
@@ -466,15 +652,16 @@ run_throughput_baseline() {
     declare -a preempt_delays
     declare -a preempted
 
-    # Submit all jobs at once
-    for i in $(seq 1 "$num_jobs"); do
+    # Submit all jobs at once with evenly spaced preemption schedule
+    for i in $(seq 0 $((num_jobs - 1))); do
         local job_name
         job_name=$(submit_job "$template_file" "$THROUGHPUT_NAMESPACE")
         if [[ -n "$job_name" ]]; then
             job_names+=("$job_name")
-            preempt_delays+=("$(random_delay "$SATURATION_MIN_DELAY" "$SATURATION_MAX_DELAY")")
+            local preempt_time=$(get_preemption_time "$i")
+            preempt_delays+=("$preempt_time")
             preempted+=("false")
-            info_log "[throughput-baseline] Job $i: submitted as $job_name (preempt at ${preempt_delays[-1]}s)"
+            info_log "[throughput-baseline] Job $((i+1)): submitted as $job_name (preempt at ${preempt_time}s = $((preempt_time/60)) min)"
         fi
     done
 
@@ -522,30 +709,57 @@ run_throughput_baseline() {
 
     info_log "[throughput-baseline] All jobs preempted, waiting for completion..."
 
-    # Wait for all jobs to complete
+    # Wait for all jobs to complete or fail
     local completed=0
+    local failed=0
     local timeout=$((THROUGHPUT_JOB_TIMEOUT + 60))
     local wait_start
     wait_start=$(date +%s)
 
-    while [[ $completed -lt ${#job_names[@]} ]]; do
-        completed=0
-        for job_name in "${job_names[@]}"; do
-            local status
-            status=$(kubectl get job "$job_name" -n "$THROUGHPUT_NAMESPACE" \
-                -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null)
-            if [[ "$status" == "True" ]]; then
-                ((completed++)) || true
+    # Track completion status per job
+    declare -a job_completed
+    declare -a job_completion_times
+    for i in "${!job_names[@]}"; do
+        job_completed+=("false")
+        job_completion_times+=(0)
+    done
+
+    while [[ $((completed + failed)) -lt ${#job_names[@]} ]]; do
+        for i in "${!job_names[@]}"; do
+            if [[ "${job_completed[$i]}" == "false" ]]; then
+                local job_name="${job_names[$i]}"
+
+                # Check if succeeded
+                local success_status
+                success_status=$(kubectl get job "$job_name" -n "$THROUGHPUT_NAMESPACE" \
+                    -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null)
+
+                # Check if failed (including DeadlineExceeded)
+                local failed_status
+                failed_status=$(kubectl get job "$job_name" -n "$THROUGHPUT_NAMESPACE" \
+                    -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null)
+
+                if [[ "$success_status" == "True" ]]; then
+                    job_completed[$i]="completed"
+                    job_completion_times[$i]=$(($(date +%s) - start_time))
+                    ((completed++)) || true
+                    info_log "[throughput-baseline] Job $((i+1)) COMPLETED at ${job_completion_times[$i]}s"
+                elif [[ "$failed_status" == "True" ]]; then
+                    job_completed[$i]="failed"
+                    job_completion_times[$i]=$(($(date +%s) - start_time))
+                    ((failed++)) || true
+                    info_log "[throughput-baseline] Job $((i+1)) FAILED at ${job_completion_times[$i]}s"
+                fi
             fi
         done
 
         local wait_elapsed=$(($(date +%s) - wait_start))
         if [[ $wait_elapsed -gt $timeout ]]; then
-            error_log "[throughput-baseline] Timeout waiting for jobs to complete ($completed/${#job_names[@]} done)"
+            error_log "[throughput-baseline] Timeout waiting for jobs ($completed completed, $failed failed, $((${#job_names[@]} - completed - failed)) unknown)"
             break
         fi
 
-        if [[ $completed -lt ${#job_names[@]} ]]; then
+        if [[ $((completed + failed)) -lt ${#job_names[@]} ]]; then
             sleep 5
         fi
     done
@@ -554,12 +768,28 @@ run_throughput_baseline() {
     end_time=$(date +%s)
     local total_wall_time=$((end_time - start_time))
 
-    info_log "[throughput-baseline] Complete: $completed/${#job_names[@]} jobs in ${total_wall_time}s"
+    info_log "[throughput-baseline] Complete: $completed completed, $failed failed, total time ${total_wall_time}s"
 
-    # Record metrics
+    # Record per-job data to JSON
+    for i in "${!job_names[@]}"; do
+        local job_status="${job_completed[$i]}"
+        if [[ "$job_status" == "false" ]]; then
+            job_status="timeout"
+        fi
+
+        # Calculate progress at preemption (time elapsed / job duration * 100)
+        local progress_pct=$(( (preempt_delays[$i] * 100) / SATURATION_JOB_DURATION ))
+
+        record_job_data "baseline" "$((i+1))" "${job_names[$i]}" \
+            "$start_time" "${preempt_delays[$i]}" "${job_completion_times[$i]}" \
+            "$job_status" "$progress_pct"
+    done
+
+    # Record aggregate metrics
     record_metric "baseline" "$workload" "saturation_wall_time" "$total_wall_time"
     record_metric "baseline" "$workload" "saturation_jobs" "$num_jobs"
     record_metric "baseline" "$workload" "saturation_completed" "$completed"
+    record_metric "baseline" "$workload" "saturation_failed" "$failed"
 
     # Cleanup
     for job_name in "${job_names[@]}"; do
@@ -600,8 +830,8 @@ run_throughput_cedana() {
     declare -a preempted
     declare -a action_ids
 
-    # Submit all jobs at once
-    for i in $(seq 1 "$num_jobs"); do
+    # Submit all jobs at once with evenly spaced preemption schedule
+    for i in $(seq 0 $((num_jobs - 1))); do
         local checkpoint_id
         checkpoint_id=$(generate_checkpoint_id)
 
@@ -612,10 +842,11 @@ run_throughput_cedana() {
         job_name=$(submit_job "$job_spec" "$THROUGHPUT_NAMESPACE")
         if [[ -n "$job_name" ]]; then
             job_names+=("$job_name")
-            preempt_delays+=("$(random_delay "$SATURATION_MIN_DELAY" "$SATURATION_MAX_DELAY")")
+            local preempt_time=$(get_preemption_time "$i")
+            preempt_delays+=("$preempt_time")
             preempted+=("false")
             action_ids+=("")
-            info_log "[throughput-cedana] Job $i: submitted as $job_name (preempt at ${preempt_delays[-1]}s)"
+            info_log "[throughput-cedana] Job $((i+1)): submitted as $job_name (preempt at ${preempt_time}s = $((preempt_time/60)) min)"
         fi
     done
 
@@ -691,30 +922,57 @@ run_throughput_cedana() {
 
     info_log "[throughput-cedana] All jobs checkpointed/preempted/restored, waiting for completion..."
 
-    # Wait for all jobs to complete
+    # Wait for all jobs to complete or fail
     local completed=0
+    local failed=0
     local timeout=$((THROUGHPUT_JOB_TIMEOUT + 60))
     local wait_start
     wait_start=$(date +%s)
 
-    while [[ $completed -lt ${#job_names[@]} ]]; do
-        completed=0
-        for job_name in "${job_names[@]}"; do
-            local status
-            status=$(kubectl get job "$job_name" -n "$THROUGHPUT_NAMESPACE" \
-                -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null)
-            if [[ "$status" == "True" ]]; then
-                ((completed++)) || true
+    # Track completion status per job
+    declare -a job_completed
+    declare -a job_completion_times
+    for i in "${!job_names[@]}"; do
+        job_completed+=("false")
+        job_completion_times+=(0)
+    done
+
+    while [[ $((completed + failed)) -lt ${#job_names[@]} ]]; do
+        for i in "${!job_names[@]}"; do
+            if [[ "${job_completed[$i]}" == "false" ]]; then
+                local job_name="${job_names[$i]}"
+
+                # Check if succeeded
+                local success_status
+                success_status=$(kubectl get job "$job_name" -n "$THROUGHPUT_NAMESPACE" \
+                    -o jsonpath='{.status.conditions[?(@.type=="Complete")].status}' 2>/dev/null)
+
+                # Check if failed
+                local failed_status
+                failed_status=$(kubectl get job "$job_name" -n "$THROUGHPUT_NAMESPACE" \
+                    -o jsonpath='{.status.conditions[?(@.type=="Failed")].status}' 2>/dev/null)
+
+                if [[ "$success_status" == "True" ]]; then
+                    job_completed[$i]="completed"
+                    job_completion_times[$i]=$(($(date +%s) - start_time))
+                    ((completed++)) || true
+                    info_log "[throughput-cedana] Job $((i+1)) COMPLETED at ${job_completion_times[$i]}s"
+                elif [[ "$failed_status" == "True" ]]; then
+                    job_completed[$i]="failed"
+                    job_completion_times[$i]=$(($(date +%s) - start_time))
+                    ((failed++)) || true
+                    info_log "[throughput-cedana] Job $((i+1)) FAILED at ${job_completion_times[$i]}s"
+                fi
             fi
         done
 
         local wait_elapsed=$(($(date +%s) - wait_start))
         if [[ $wait_elapsed -gt $timeout ]]; then
-            error_log "[throughput-cedana] Timeout waiting for jobs to complete ($completed/${#job_names[@]} done)"
+            error_log "[throughput-cedana] Timeout waiting for jobs ($completed completed, $failed failed, $((${#job_names[@]} - completed - failed)) unknown)"
             break
         fi
 
-        if [[ $completed -lt ${#job_names[@]} ]]; then
+        if [[ $((completed + failed)) -lt ${#job_names[@]} ]]; then
             sleep 5
         fi
     done
@@ -723,12 +981,28 @@ run_throughput_cedana() {
     end_time=$(date +%s)
     local total_wall_time=$((end_time - start_time))
 
-    info_log "[throughput-cedana] Complete: $completed/${#job_names[@]} jobs in ${total_wall_time}s"
+    info_log "[throughput-cedana] Complete: $completed completed, $failed failed, total time ${total_wall_time}s"
 
-    # Record metrics
+    # Record per-job data to JSON
+    for i in "${!job_names[@]}"; do
+        local job_status="${job_completed[$i]}"
+        if [[ "$job_status" == "false" ]]; then
+            job_status="timeout"
+        fi
+
+        # Calculate progress at preemption
+        local progress_pct=$(( (preempt_delays[$i] * 100) / SATURATION_JOB_DURATION ))
+
+        record_job_data "cedana" "$((i+1))" "${job_names[$i]}" \
+            "$start_time" "${preempt_delays[$i]}" "${job_completion_times[$i]}" \
+            "$job_status" "$progress_pct"
+    done
+
+    # Record aggregate metrics
     record_metric "cedana" "$workload" "saturation_wall_time" "$total_wall_time"
     record_metric "cedana" "$workload" "saturation_jobs" "$num_jobs"
     record_metric "cedana" "$workload" "saturation_completed" "$completed"
+    record_metric "cedana" "$workload" "saturation_failed" "$failed"
 
     # Cleanup
     for job_name in "${job_names[@]}"; do
