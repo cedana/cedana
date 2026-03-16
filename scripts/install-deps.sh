@@ -72,7 +72,6 @@ else
 fi
 
 # Hack - yq is needed to configure kubelet, but not available in all distros
-bash
 case "$(uname -m)" in
     x86_64)
         wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq

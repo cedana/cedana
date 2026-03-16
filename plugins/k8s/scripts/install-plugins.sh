@@ -9,7 +9,7 @@ CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=${CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
-CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
+CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"/tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
 # XXX: We always install the GPU plugin because the race w/ gpu-operator (if the cluster is using it)
@@ -53,14 +53,7 @@ fi
 # If gpu driver present then add gpu plugin
 # NOTE: This is no longer used to conditionally add the gpu plugin, but we still
 # log the driver version here for informational purposes.
-if [ "$ENV" == "k3s" ]; then
-    if command -v nvidia-smi >/dev/null 2>&1; then
-        echo "Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
-        if /sbin/ldconfig -p | grep -q libcuda.so.1; then
-            echo "CUDA driver library found!"
-        fi
-    fi
-elif [ -d /proc/driver/nvidia/gpus/ ]; then
+if [ -d /proc/driver/nvidia/gpus/ ]; then
     if [ ! -d /run/driver/nvidia ]; then
         # Check if the NVIDIA driver is installed by checking the version
         # as nvidia-smi is not installed by GPU Operator
@@ -75,9 +68,9 @@ elif [ -d /proc/driver/nvidia/gpus/ ]; then
         fi
     else
         echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
-        # Bind mount /dev/shm to /run/nvidia/driver/dev/shm
-        # This is required for the gpu-controller to work when chrooted into /run/nvidia/driver path
-        mount --rbind /dev/shm /run/nvidia/driver/dev/shm
+        # Bind mount /dev/shm to /run/driver/nvidia/dev/shm
+        # This is required for the gpu-controller to work when chrooted into /run/driver/nvidia
+        mount --rbind /dev/shm /run/driver/nvidia/dev/shm
         chroot /run/driver/nvidia bash -c <<'END_CHROOT'
             echo "Nvidia Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
             if /sbin/ldconfig -p | grep -q libcuda.so.1; then
@@ -108,7 +101,7 @@ echo 4194304 >/proc/sys/fs/pipe-max-size  # change pipe max size to 4MiB
 #####################################################
 
 if [ "$ENV" != "production" ]; then
-    echo "Non-production environment detected, skipping containerd runtime configuration"
+    echo "Non-production environment detected, skipping containerd runtime configuration" >&2
     exit 0
 fi
 

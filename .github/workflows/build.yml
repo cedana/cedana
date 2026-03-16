@@ -115,6 +115,12 @@ jobs:
           path: |
             ./cedana
             ./cedana-version.txt
+
+      - name: Upload scripts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cedana-scripts-${{ matrix.arch }}
+          path: |
             scripts/install-release.sh
 
   plugin:

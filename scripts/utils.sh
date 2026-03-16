@@ -11,10 +11,8 @@ export DISABLE_IO_URING=${DISABLE_IO_URING:-true}
 USER=$(whoami)
 export USER
 
-ENV=${ENV:-production}
-if pgrep -f "k3s server" >/dev/null 2>&1; then
-    ENV="k3s"
-elif [ -f /.dockerenv ]; then
+ENV=${ENV:-"production"}
+if [ -f /.dockerenv ]; then
     ENV="docker"
 fi
 export ENV
