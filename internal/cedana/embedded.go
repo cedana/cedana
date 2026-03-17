@@ -18,10 +18,6 @@ func NewEmbedded(ctx context.Context, description ...any) (*Embedded, error) {
 	return (*Embedded)(c), nil
 }
 
-func (r *Embedded) Wait() {
-	(*Cedana)(r).Wait()
-}
-
 func (r *Embedded) Finalize() *profiling.Data {
 	return (*Cedana)(r).Finalize()
 }
