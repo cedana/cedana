@@ -34,6 +34,7 @@ var (
 
 func init() {
 	HelperCmd.AddCommand(setupCmd)
+	HelperCmd.AddCommand(startCmd)
 	HelperCmd.AddCommand(destroyCmd)
 
 	script.Source(scripts.Utils)
@@ -45,9 +46,46 @@ var HelperCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 }
 
+// setup installs deps, configures the host, and creates+starts the daemon service. Then exits.
 var setupCmd = &cobra.Command{
 	Use:   "setup",
-	Short: "Setup cedana for SkyPilot and start eventstream consumer",
+	Short: "Setup cedana daemon service for SkyPilot (runs once, then exits)",
+	RunE: func(cmd *cobra.Command, args []string) (err error) {
+		ctx, cancel := context.WithCancel(cmd.Context())
+		wg := &sync.WaitGroup{}
+
+		defer func() {
+			cancel()
+			wg.Wait()
+		}()
+
+		if config.Global.Metrics {
+			metrics.Init(ctx, wg, "cedana-skypilot", version.Version)
+		}
+
+		err = script.Run(
+			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
+			scripts.ResetService,
+			scripts.InstallDeps,
+			skyscripts.Install,
+			scripts.ConfigureShm,
+			scripts.InstallService,
+			skyscripts.InstallHelperService,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup daemon")
+			return fmt.Errorf("error setting up host: %w", err)
+		}
+
+		log.Info().Msg("daemon and helper services installed and started")
+		return nil
+	},
+}
+
+// start runs the long-lived eventstream consumer (meant to be run via systemd).
+var startCmd = &cobra.Command{
+	Use:   "start",
+	Short: "Start the SkyPilot eventstream consumer (long-running)",
 	RunE: func(cmd *cobra.Command, args []string) (err error) {
 		ctx, cancel := context.WithCancel(cmd.Context())
 		wg := &sync.WaitGroup{}
@@ -59,15 +97,6 @@ var setupCmd = &cobra.Command{
 
 		if config.Global.Metrics {
 			metrics.Init(ctx, wg, "cedana-skypilot-helper", version.Version)
-		}
-
-		err = script.Run(
-			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
-			skyscripts.Install,
-		)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to run skypilot setup scripts")
-			return fmt.Errorf("error setting up skypilot: %w", err)
 		}
 
 		cedana, err = client.New(config.Global.Address, config.Global.Protocol)
@@ -151,9 +180,17 @@ func startHelper(ctx context.Context) error {
 
 	go func() {
 		defer cancel()
-		file, err := os.Open(DAEMON_LOG_PATH)
+		// Wait for daemon log file to appear
+		var file *os.File
+		for i := 0; i < 30; i++ {
+			file, err = os.Open(DAEMON_LOG_PATH)
+			if err == nil {
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
 		if err != nil {
-			log.Error().Err(err).Msg("failed to open daemon logs")
+			log.Error().Err(err).Msg("failed to open daemon logs after waiting")
 			return
 		}
 		defer file.Close()

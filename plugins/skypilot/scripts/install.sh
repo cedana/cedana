@@ -1,8 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# SkyPilot plugin install script
-# This runs as part of "cedana skypilot setup" to perform SkyPilot-specific
-# configuration after the main cedana daemon is already running.
+check_root
 
-echo "SkyPilot plugin setup complete"
+# NOTE: This is called from a Cedana binary so assuming it's already installed
+
+# Re-initialize config since it's a fresh install
+/usr/local/bin/cedana --init-config version
+
+echo "Installed Cedana SkyPilot plugin into the host filesystem"
