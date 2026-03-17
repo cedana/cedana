@@ -202,7 +202,31 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Run slurm tests
+      - name: Setup SLURM cluster
+        env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          source test/helpers/slurm_propagator.bash
+
+          setup_slurm_cluster
+          setup_slurm_accounting
+          install_cedana_in_slurm
+          setup_slurm_samples
+
+          CLUSTER_NAME="test-slurm-$(date +%s%N)"
+          SLURM_CLUSTER_ID=$(register_slurm_cluster "$CLUSTER_NAME")
+          echo "SLURM_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+
+          start_cedana_slurm_daemon
+          validate_slurm_propagator
+
+      - name: Run SLURM tests
         env:
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
