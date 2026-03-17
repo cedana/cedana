@@ -442,7 +442,8 @@ install_cedana_in_slurm() {
             apt-get update -qq
             apt-get install -y -qq \
                 libprotobuf-c1 libnet1 libgnutls30 libnl-3-200 \
-                libbsd0 libcap2 python3 python3-pip python3-venv
+                libbsd0 libcap2 libnftables1 iptables \
+                python3 python3-pip python3-venv
         " || {
             error_log "Failed to install dependencies in $c"
             return 1
