@@ -105,7 +105,7 @@ setup_slurm_cluster() {
 
     pushd "$ansible_dir" >/dev/null
     ANSIBLE_EXTRA_ARGS="-e slurm_cluster_name=cedana_test_cluster" \
-        ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&3 2>&1
+        ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&"${OUTPUT_FD}" 2>&1
     local rc=$?
     popd >/dev/null
 
@@ -505,7 +505,7 @@ install_cedana_in_slurm() {
     fi
 
     debug_log "Configuring SLURM to load Cedana plugins (controller)..."
-    docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash <<'SETUP_EOF' >&3 2>&1 ||
+    docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash <<'SETUP_EOF' >&"${OUTPUT_FD}" 2>&1 ||
 set -euo pipefail
 
 SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
@@ -549,7 +549,7 @@ SETUP_EOF
 
     debug_log "Installing Cedana plugins on compute nodes..."
     for c in "${compute_containers[@]}"; do
-        docker exec -i "$c" bash <<'COMPUTE_EOF' >&3 2>&1 ||
+        docker exec -i "$c" bash <<'COMPUTE_EOF' >&"${OUTPUT_FD}" 2>&1 ||
 set -euo pipefail
 SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
 PLUGIN_DIR=$(awk -F= '/^PluginDir/{print $2; exit}' "$SLURM_CONF" 2>/dev/null || true)
@@ -669,7 +669,7 @@ COMPUTE_EOF
             ls -la /usr/lib/slurm/spank_cedana.so 2>/dev/null || echo "NOT FOUND"
             echo ""
             ldd /usr/lib/slurm/spank_cedana.so 2>/dev/null || echo "(ldd failed)"
-        ' >&3 || true
+        ' >&"${OUTPUT_FD}" || true
     done
     debug_log "=== End SPANK Plugin Diagnostics ==="
 
@@ -782,7 +782,7 @@ setup_slurm_samples() {
             return 1
         }
 
-        docker exec "$c" ls -la /data/cedana-samples/ 2>&1 | head -20 >&3 || true
+        docker exec "$c" ls -la /data/cedana-samples/ 2>&1 | head -20 >&"${OUTPUT_FD}" || true
     done
 
     debug_log "Initializing Python virtual environment and patching sbatch files..."

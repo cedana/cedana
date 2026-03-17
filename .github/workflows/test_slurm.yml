@@ -203,6 +203,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Setup SLURM cluster
+        shell: bash
         env:
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
