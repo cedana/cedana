@@ -12,12 +12,14 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -32,6 +34,8 @@ func init() {
 		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump into")
 	dumpCmd.PersistentFlags().
 		StringP(flags.NameFlag.Full, "", "", "name of the dump")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "run without server")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
 	dumpCmd.PersistentFlags().
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
@@ -116,12 +120,12 @@ var dumpCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
-			Dir:           dir,
-			Name:          name,
-			Compression:   compression,
-			Streams:       int32(streams),
-			Criu:          criuOpts,
-			Action:        daemon.DumpAction_DUMP,
+			Dir:         dir,
+			Name:        name,
+			Compression: compression,
+			Streams:     int32(streams),
+			Criu:        criuOpts,
+			Action:      daemon.DumpAction_DUMP,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
@@ -145,21 +149,42 @@ var dumpCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
-		if !ok {
-			return fmt.Errorf("invalid client in context")
-		}
-		defer client.Close()
+		ctx := cmd.Context()
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
 		// Assuming request is now ready to be sent to the server
-		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
+		req, ok := ctx.Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
 		if !ok {
 			return fmt.Errorf("invalid request in context")
 		}
 
-		resp, data, err := client.Dump(cmd.Context(), req)
-		if err != nil {
-			return err
+		var resp *daemon.DumpResp
+		var data *profiling.Data
+
+		if noServer {
+			cedana, err := cedana.New(ctx, "dump")
+			if err != nil {
+				return fmt.Errorf("Error creating root: %v", err)
+			}
+
+			resp, err = cedana.Dump(req)
+			if err != nil {
+				cedana.Finalize()
+				return utils.GRPCErrorColored(err)
+			}
+
+			data = cedana.Finalize()
+		} else {
+			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			if !ok {
+				return fmt.Errorf("invalid client in context")
+			}
+			defer client.Close()
+
+			resp, data, err = client.Dump(ctx, req)
+			if err != nil {
+				return err
+			}
 		}
 
 		if config.Global.Profiling.Enabled && data != nil {

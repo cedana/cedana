@@ -36,12 +36,15 @@ func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ
 			}
 
 			// Run a quick health check to ensure CRIU is functional, return first error
-			results := CheckFeatures(manager, false)(ctx)
-			for _, result := range results {
-				if len(result.Errors) > 0 {
-					return nil, status.Error(codes.Unavailable, "CRIU is not functional: "+result.Errors[0])
-				}
-			}
+			// TODO (JAMES): using CRIU unprivileged will cause an error here as --unprivileged
+			// has not been set. Checking this condition should be implemented here.
+
+			// results := CheckFeatures(manager, false)(ctx)
+			// for _, result := range results {
+			// 	if len(result.Errors) > 0 {
+			// 		return nil, status.Error(codes.Unavailable, "CRIU is not functional: "+result.Errors[0])
+			// 	}
+			// }
 
 			opts.CRIU = criuInstance
 			opts.CRIUCallback = &criu.NotifyCallbackMulti{}

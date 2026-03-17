@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	sdk "github.com/cedana/cedana-go-sdk"
-	"github.com/cedana/cedana-go-sdk/models"
 	"github.com/cedana/cedana-go-sdk/v2"
 	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -36,12 +35,7 @@ func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) 
 
 	downloadUrl, err := s.Files().ByPath(path).Get(ctx, nil)
 	if err != nil {
-		switch v := err.(type) {
-		case *models.HttpError:
-			return nil, fmt.Errorf("failed to get download URL: %s", *v.GetMessage())
-		default:
-			return nil, fmt.Errorf("failed to get download URL: %v", err)
-		}
+		return nil, fmt.Errorf("failed to get download URL: %v", err)
 	}
 
 	return NewDownloadableFile(ctx, *downloadUrl), nil
@@ -55,12 +49,7 @@ func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, erro
 
 	uploadUrl, err := s.Files().ByPath(path).Put(ctx, nil)
 	if err != nil {
-		switch v := err.(type) {
-		case *models.HttpError:
-			return nil, fmt.Errorf("failed to get upload URL: %s", *v.GetMessage())
-		default:
-			return nil, fmt.Errorf("failed to get upload URL: %v", err)
-		}
+		return nil, fmt.Errorf("failed to get upload URL: %v", err)
 	}
 
 	return NewUploadableFile(ctx, *uploadUrl), nil
@@ -92,12 +81,7 @@ func (s *Storage) ReadDir(ctx context.Context, path string) ([]string, error) {
 
 	list, err := s.Files().Dir().ByPath(path).Get(ctx, nil)
 	if err != nil {
-		switch v := err.(type) {
-		case *models.HttpError:
-			return nil, fmt.Errorf("failed to list directory: %s", *v.GetMessage())
-		default:
-			return nil, fmt.Errorf("failed to list directory: %v", err)
-		}
+		return nil, fmt.Errorf("failed to list directory: %v", err)
 	}
 	return list, nil
 }
