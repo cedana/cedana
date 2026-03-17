@@ -93,9 +93,9 @@ var Registry = []Plugin{
 		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},
 	},
 	{
-		Name:      "skypilot",
+		Name:      "bridge",
 		Type:      SUPPORTED,
-		Libraries: []Binary{{Name: "libcedana-skypilot.so"}},
+		Libraries: []Binary{{Name: "libcedana-bridge.so"}},
 	},
 	{
 		Name:      "slurm",
