@@ -86,9 +86,9 @@ jobs:
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}/extras=s3-cache',
       github.run_id,
-      matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
+      matrix.compute == 'GPU' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
-      (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
+      (matrix.compute == 'GPU' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
       matrix.storage
       ) }}
     timeout-minutes: 120
@@ -98,20 +98,20 @@ jobs:
       matrix:
         compute:
           - CPU
-          - CUDA
+          - GPU
         storage:
           - storage/cedana
         arch:
           - amd64
         exclude:
-          - compute: CUDA
+          - compute: GPU
             arch: arm64
     container:
-      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.compute == 'GPU' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
+      options: --privileged --init ${{ matrix.compute == 'GPU' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: runs-on/action@v1
 
@@ -154,14 +154,14 @@ jobs:
           path: slurm-bin
 
       - name: Download GPU plugin
-        if: ${{ matrix.compute == 'CUDA' }}
+        if: ${{ matrix.compute == 'GPU' }}
         uses: actions/download-artifact@v4
         with:
           name: gpu-${{ matrix.arch }}
 
       - name: Pre-install plugins
         env:
-          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
+          GPU: ${{ matrix.compute == 'GPU' && 'true' || 'false' }}
           CEDANA_PLUGINS_BUILDS: alpha
         run: |
           chmod +x ./cedana*
@@ -208,9 +208,9 @@ jobs:
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
           LARGE: ${{ inputs.large && '1' || '0' }}
-          PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
+          PARALLELISM: ${{ matrix.compute == 'GPU' && 1 || inputs.parallelism }}
         run: |
           TAGS="slurm"
           if [ "$GPU" = "1" ]; then
