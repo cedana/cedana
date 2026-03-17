@@ -567,6 +567,14 @@ install_cedana_in_slurm() {
             mkdir -p /etc/slurm
             test -f /etc/slurm/gres.conf || echo '# No local GPUs on controller' > /etc/slurm/gres.conf
         "
+
+        # Sync slurm.conf from controller to all compute nodes so they match
+        for c in "${compute_containers[@]}"; do
+            docker cp "$SLURM_CONTROLLER_CONTAINER:/etc/slurm/slurm.conf" "/tmp/slurm.conf.sync"
+            docker cp "/tmp/slurm.conf.sync" "$c:/etc/slurm/slurm.conf"
+            info_log "Synced slurm.conf to $c"
+        done
+        rm -f /tmp/slurm.conf.sync
     fi
 
     # -------------------------------------------------------------------------
