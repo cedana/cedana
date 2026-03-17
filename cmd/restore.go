@@ -206,7 +206,6 @@ var restoreCmd = &cobra.Command{
 			code, err := cedana.Restore(req)
 			if err != nil {
 				cedana.Finalize()
-				cedana.Wait()
 				return utils.GRPCErrorColored(err)
 			}
 
@@ -214,7 +213,6 @@ var restoreCmd = &cobra.Command{
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}
-			cedana.Wait()
 
 			os.Exit(<-code)
 		} else {
