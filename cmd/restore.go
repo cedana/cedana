@@ -36,7 +36,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "file to write PID to")
 	restoreCmd.PersistentFlags().
-		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "select how to run restores")
+		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "run without server")
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
@@ -216,14 +216,14 @@ var restoreCmd = &cobra.Command{
 
 			os.Exit(<-code)
 		} else {
-			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
 				return fmt.Errorf("invalids client in context")
 			}
 			defer client.Close()
 
 			// Assuming request is now ready to be sent to the server
-			resp, data, err := client.Restore(cmd.Context(), req)
+			resp, data, err := client.Restore(ctx, req)
 			if err != nil {
 				return err
 			}
@@ -234,7 +234,7 @@ var restoreCmd = &cobra.Command{
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {
-				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+				return client.Attach(ctx, &daemon.AttachReq{PID: resp.PID})
 			}
 
 			for _, message := range resp.GetMessages() {

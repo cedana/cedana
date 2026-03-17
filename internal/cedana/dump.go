@@ -78,7 +78,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	return resp, nil
 }
 
-func (s *Embedded) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
+func (s *Cedana) Dump(req *daemon.DumpReq) (*daemon.DumpResp, error) {
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
 
@@ -105,19 +105,19 @@ func (s *Embedded) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpR
 	dump = dump.With(criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins))
 
 	opts := types.Opts{
-		Lifetime: s.lifetime,
-		Plugins:  s.plugins,
-		WG:       s.wg,
+		Lifetime:   s.lifetime,
+		Plugins:    s.plugins,
+		WG:         s.wg,
+		Serverless: true,
 	}
 	resp := &daemon.DumpResp{}
 
-	_, err := dump(ctx, opts, resp, req)
+	_, err := dump(s.lifetime, opts, resp, req)
 	if err != nil {
 		log.Error().Err(err).Str("type", req.Type).Msg("dump failed")
 		return nil, err
 	}
 
-	log.Info().Strs("paths", resp.Paths).Str("type", req.Type).Msg("dump successful")
 	for _, path := range resp.Paths {
 		resp.Messages = append(resp.Messages, "Dumped to "+path)
 	}
