@@ -84,7 +84,6 @@ jobs:
 
   bench:
     name: Bench
-    if: false
     uses: ./.github/workflows/bench.yml
     needs: [publish, download]
     secrets: inherit
