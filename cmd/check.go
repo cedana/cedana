@@ -31,7 +31,6 @@ var checkCmd = &cobra.Command{
 			return fmt.Errorf("Error: failed to create cedana root: %v", err)
 		}
 
-		defer cedana.Wait()
 		defer cedana.Finalize()
 
 		resp, err := cedana.HealthCheck(ctx, &daemon.HealthCheckReq{Full: full})
