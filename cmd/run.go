@@ -156,7 +156,6 @@ var runCmd = &cobra.Command{
 			code, err := cedana.Run(req)
 			if err != nil {
 				cedana.Finalize()
-				cedana.Wait()
 				return utils.GRPCErrorColored(err)
 			}
 
@@ -164,7 +163,6 @@ var runCmd = &cobra.Command{
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}
-			cedana.Wait()
 
 			os.Exit(<-code)
 		} else {
