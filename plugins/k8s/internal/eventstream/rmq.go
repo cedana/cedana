@@ -23,6 +23,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/plugins/k8s/internal/filewatcher"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
@@ -32,12 +33,14 @@ import (
 )
 
 type EventStream struct {
-	cedana     *client.Client
-	propagator *cedanagosdk.ApiClient
+	cedana      *client.Client
+	propagator  *cedanagosdk.ApiClient
+	fileWatcher *filewatcher.FileWatcher
 
 	url                string
 	checkpoints        *rabbitmq.Publisher
 	checkpointRequests *rabbitmq.Consumer
+	fileWatchRequests  *rabbitmq.Consumer
 	containerdAddress  string
 	lifecycleMu        sync.RWMutex
 	closeOnce          sync.Once
@@ -56,7 +59,7 @@ var defaultDumpOpts = &criu.CriuOpts{
 
 var queryExpiryMs = 30 * time.Minute.Milliseconds()
 
-func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string) (*EventStream, error) {
+func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string, fileWatcher *filewatcher.FileWatcher) (*EventStream, error) {
 	if cedana == nil {
 		return nil, fmt.Errorf("cedana client is nil")
 	}
@@ -88,6 +91,7 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 	es := &EventStream{
 		cedana:            cedana,
 		propagator:        propagator,
+		fileWatcher:       fileWatcher,
 		url:               *url,
 		Conn:              conn,
 		containerdAddress: containerdAddress,
@@ -189,15 +193,20 @@ func (es *EventStream) Close() error {
 	es.closeOnce.Do(func() {
 		es.lifecycleMu.Lock()
 		consumer := es.checkpointRequests
+		fileWatchConsumer := es.fileWatchRequests
 		publisher := es.checkpoints
 		conn := es.Conn
 		es.checkpointRequests = nil
+		es.fileWatchRequests = nil
 		es.checkpoints = nil
 		es.Conn = nil
 		es.lifecycleMu.Unlock()
 
 		if consumer != nil {
 			consumer.Close()
+		}
+		if fileWatchConsumer != nil {
+			fileWatchConsumer.Close()
 		}
 		if publisher != nil {
 			publisher.Close()
@@ -256,6 +265,17 @@ type profilingInfo struct {
 type imageSecret struct {
 	ImageSecret string `json:"image_secret"`
 	ImageSource string `json:"image_source"`
+}
+
+// File watch message types
+type fileWatchReq struct {
+	Action      string `json:"action"` // "start" or "stop"
+	PodName     string `json:"pod_name"`
+	Namespace   string `json:"namespace"`
+	TriggerPath string `json:"trigger_path"`
+	OnSuccess   string `json:"on_success"`
+	OnRestore   string `json:"on_restore"`
+	OnFailure   string `json:"on_failure"`
 }
 
 func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
@@ -561,4 +581,113 @@ func (es *EventStream) getImageSecret() (*imageSecret, error) {
 		return nil, fmt.Errorf("invalid image secret received from propagator")
 	}
 	return &secret, nil
+}
+
+// StartFileWatchConsumer starts consuming file watch requests from RabbitMQ
+func (es *EventStream) StartFileWatchConsumer(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
+	queueName := "cedana_daemon_file_watch-" + rand.Text()
+	consumer, err := rabbitmq.NewConsumer(
+		conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsExchangeName("daemon_file_watch_request"),
+		rabbitmq.WithConsumerOptionsConcurrency(10),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
+		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper_file_watch"),
+		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsQueueExclusive,
+		rabbitmq.WithConsumerOptionsQueueAutoDelete,
+		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+			"x-expires": queryExpiryMs,
+		}),
+		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
+			RoutingKey:     "",
+			BindingOptions: rabbitmq.BindingOptions{},
+		}),
+	)
+	if err != nil {
+		return err
+	}
+
+	es.lifecycleMu.Lock()
+	if es.Conn == nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.fileWatchRequests != nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("file watch consumer is already running")
+	}
+	es.fileWatchRequests = consumer
+	es.lifecycleMu.Unlock()
+
+	defer func() {
+		es.lifecycleMu.Lock()
+		if es.fileWatchRequests == consumer {
+			es.fileWatchRequests = nil
+		}
+		es.lifecycleMu.Unlock()
+	}()
+
+	if err := consumer.Run(es.fileWatchHandler(ctx)); err != nil {
+		consumer.Close()
+		return err
+	}
+	return nil
+}
+
+// fileWatchHandler handles file watch requests from RabbitMQ
+func (es *EventStream) fileWatchHandler(ctx context.Context) rabbitmq.Handler {
+	return func(msg rabbitmq.Delivery) rabbitmq.Action {
+		log.Trace().Msgf("received file watch request: %s", string(msg.Body))
+
+		var req fileWatchReq
+		if err := json.Unmarshal(msg.Body, &req); err != nil {
+			log.Error().Err(err).Msg("failed to unmarshal file watch message")
+			return rabbitmq.Ack
+		}
+
+		log := log.With().
+			Str("action", req.Action).
+			Str("pod", req.PodName).
+			Str("namespace", req.Namespace).
+			Str("trigger_path", req.TriggerPath).
+			Logger()
+
+		if es.fileWatcher == nil {
+			log.Error().Msg("file watcher is not initialized")
+			return rabbitmq.Ack
+		}
+
+		switch req.Action {
+		case "start":
+			es.fileWatcher.AddWatch(&filewatcher.PodWatchConfig{
+				Namespace:   req.Namespace,
+				PodName:     req.PodName,
+				TriggerPath: req.TriggerPath,
+				OnSuccess:   req.OnSuccess,
+				OnRestore:   req.OnRestore,
+				OnFailure:   req.OnFailure,
+			})
+			log.Info().Msg("started file watch for pod")
+
+		case "stop":
+			es.fileWatcher.RemoveWatch(req.Namespace, req.PodName)
+			log.Info().Msg("stopped file watch for pod")
+
+		default:
+			log.Warn().Msgf("unknown file watch action: %s", req.Action)
+		}
+
+		return rabbitmq.Ack
+	}
 }

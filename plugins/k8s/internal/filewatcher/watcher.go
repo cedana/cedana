@@ -7,52 +7,77 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"github.com/cedana/cedana/pkg/client"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/rs/zerolog"
 )
 
-// FileWatcher polls for checkpoint trigger files in containers and triggers checkpoint/restore operations
+// PodWatchConfig defines file trigger configuration for a specific pod
+type PodWatchConfig struct {
+	Namespace   string
+	PodName     string
+	TriggerPath string
+	OnSuccess   string
+	OnRestore   string
+	OnFailure   string
+}
+
+// FileWatcher polls for checkpoint trigger files in watched pods
 type FileWatcher struct {
 	client       *client.Client
 	pollInterval time.Duration
-	cfg          config.FileWatching
+	watches      map[string]*PodWatchConfig // key: "namespace/podName"
+	watchesMu    sync.RWMutex
 	log          zerolog.Logger
 }
 
 // New creates a new file watcher
-func New(client *client.Client, cfg config.FileWatching, log zerolog.Logger) (*FileWatcher, error) {
-	if !cfg.Enabled {
-		return nil, fmt.Errorf("file watching is disabled")
-	}
-
-	pollInterval, err := time.ParseDuration(cfg.PollInterval)
-	if err != nil {
-		return nil, fmt.Errorf("invalid poll_interval %q: %w", cfg.PollInterval, err)
-	}
-
-	if cfg.TriggerPath == "" {
-		return nil, fmt.Errorf("trigger_path not configured")
-	}
-
+func New(client *client.Client, log zerolog.Logger) *FileWatcher {
 	return &FileWatcher{
 		client:       client,
-		pollInterval: pollInterval,
-		cfg:          cfg,
+		pollInterval: time.Second, // Fixed 1s poll interval
+		watches:      make(map[string]*PodWatchConfig),
 		log:          log,
-	}, nil
+	}
+}
+
+// AddWatch adds a pod to the watch list
+func (fw *FileWatcher) AddWatch(cfg *PodWatchConfig) {
+	fw.watchesMu.Lock()
+	defer fw.watchesMu.Unlock()
+
+	key := fmt.Sprintf("%s/%s", cfg.Namespace, cfg.PodName)
+	fw.watches[key] = cfg
+	fw.log.Info().
+		Str("pod", cfg.PodName).
+		Str("namespace", cfg.Namespace).
+		Str("trigger_path", cfg.TriggerPath).
+		Msg("added pod to file watch list")
+}
+
+// RemoveWatch removes a pod from the watch list
+func (fw *FileWatcher) RemoveWatch(namespace, podName string) {
+	fw.watchesMu.Lock()
+	defer fw.watchesMu.Unlock()
+
+	key := fmt.Sprintf("%s/%s", namespace, podName)
+	delete(fw.watches, key)
+	fw.log.Info().
+		Str("pod", podName).
+		Str("namespace", namespace).
+		Msg("removed pod from file watch list")
 }
 
 // Start begins watching for trigger files
 func (fw *FileWatcher) Start(ctx context.Context) error {
 	fw.log.Info().
 		Dur("poll_interval", fw.pollInterval).
-		Str("trigger_path", fw.cfg.TriggerPath).
 		Msg("starting file watcher")
 
 	ticker := time.NewTicker(fw.pollInterval)
@@ -71,28 +96,65 @@ func (fw *FileWatcher) Start(ctx context.Context) error {
 }
 
 func (fw *FileWatcher) poll(ctx context.Context) error {
-	// Query all running containers
+	fw.watchesMu.RLock()
+	watches := make(map[string]*PodWatchConfig, len(fw.watches))
+	for k, v := range fw.watches {
+		watches[k] = v
+	}
+	fw.watchesMu.RUnlock()
+
+	if len(watches) == 0 {
+		return nil // No pods to watch
+	}
+
+	// Check each watched pod
+	for _, watch := range watches {
+		if err := fw.checkPod(ctx, watch); err != nil {
+			// If query fails, pod might be deleted - remove from watch list
+			fw.log.Warn().
+				Err(err).
+				Str("pod", watch.PodName).
+				Str("namespace", watch.Namespace).
+				Msg("failed to check pod, removing from watch list")
+			fw.RemoveWatch(watch.Namespace, watch.PodName)
+			continue
+		}
+	}
+
+	return nil
+}
+
+func (fw *FileWatcher) checkPod(ctx context.Context, watch *PodWatchConfig) error {
+	// Query pod using k8s Query (same pattern as eventstream)
 	queryResp, err := fw.client.Query(ctx, &daemon.QueryReq{
-		Type: "containerd",
-		Containerd: &containerd.QueryReq{
-			IDs: []string{}, // Empty = all containers
+		Type: "k8s",
+		K8S: &k8s.QueryReq{
+			Names:         []string{watch.PodName},
+			Namespace:     watch.Namespace,
+			ContainerType: "container",
 		},
 	})
 	if err != nil {
-		return fmt.Errorf("failed to query containers: %w", err)
+		return fmt.Errorf("failed to query pod: %w", err)
 	}
 
-	if queryResp.Containerd == nil || len(queryResp.Containerd.Containers) == 0 {
-		return nil
+	if len(queryResp.K8S.Pods) == 0 {
+		return fmt.Errorf("pod not found")
+	}
+
+	containers := queryResp.K8S.Pods[0].Containerd
+	if len(containers) == 0 {
+		return nil // No containers yet
 	}
 
 	// Check each container for trigger file
-	for _, container := range queryResp.Containerd.Containers {
-		if err := fw.checkTrigger(ctx, container); err != nil {
+	for _, container := range containers {
+		if err := fw.checkTrigger(ctx, container, watch); err != nil {
 			fw.log.Error().
 				Err(err).
 				Str("container_id", container.GetID()).
-				Str("trigger_path", fw.cfg.TriggerPath).
+				Str("pod", watch.PodName).
+				Str("trigger_path", watch.TriggerPath).
 				Msg("failed to check trigger")
 		}
 	}
@@ -100,7 +162,7 @@ func (fw *FileWatcher) poll(ctx context.Context) error {
 	return nil
 }
 
-func (fw *FileWatcher) checkTrigger(ctx context.Context, container *containerd.Containerd) error {
+func (fw *FileWatcher) checkTrigger(ctx context.Context, container *containerd.Containerd, watch *PodWatchConfig) error {
 	// Construct path to file in container's rootfs
 	// For containerd, the rootfs is at <bundle>/rootfs
 	if container.GetRunc() == nil {
@@ -108,7 +170,7 @@ func (fw *FileWatcher) checkTrigger(ctx context.Context, container *containerd.C
 	}
 
 	rootfsPath := filepath.Join(container.GetRunc().GetBundle(), "rootfs")
-	triggerPath := filepath.Join(rootfsPath, fw.cfg.TriggerPath)
+	triggerPath := filepath.Join(rootfsPath, watch.TriggerPath)
 
 	// Check if file exists
 	if _, err := os.Stat(triggerPath); os.IsNotExist(err) {
@@ -120,13 +182,14 @@ func (fw *FileWatcher) checkTrigger(ctx context.Context, container *containerd.C
 	// File exists! Trigger checkpoint
 	fw.log.Info().
 		Str("container_id", container.ID).
-		Str("trigger_path", fw.cfg.TriggerPath).
+		Str("pod", watch.PodName).
+		Str("trigger_path", watch.TriggerPath).
 		Msg("trigger file detected")
 
-	return fw.handleCheckpoint(ctx, container, triggerPath)
+	return fw.handleCheckpoint(ctx, container, watch, triggerPath)
 }
 
-func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containerd.Containerd, triggerPath string) error {
+func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containerd.Containerd, watch *PodWatchConfig, triggerPath string) error {
 	// Query container state to get PID
 	queryResp, err := fw.client.Query(ctx, &daemon.QueryReq{
 		Type: "containerd",
@@ -148,7 +211,7 @@ func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containe
 	dumpReq := &daemon.DumpReq{
 		Name: fmt.Sprintf("file-trigger-%s-%d", container.ID[:12], time.Now().Unix()),
 		Type: "containerd",
-		Dir:  config.Global.Checkpoint.Dir,
+		Dir:  "/tmp", // TODO: get from config or propagator
 		Details: &daemon.Details{
 			Containerd: container,
 		},
@@ -157,7 +220,7 @@ func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containe
 	// Perform checkpoint: Freeze → Dump → Unfreeze
 	fw.log.Info().Str("container_id", container.ID).Msg("freezing container")
 	if _, _, err := fw.client.Freeze(ctx, dumpReq); err != nil {
-		fw.sendSignal(containerPID, fw.cfg.OnFailure, "checkpoint freeze failed")
+		fw.sendSignal(containerPID, watch.OnFailure, "checkpoint freeze failed")
 		return fmt.Errorf("freeze failed: %w", err)
 	}
 
@@ -165,13 +228,13 @@ func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containe
 	dumpResp, _, err := fw.client.Dump(ctx, dumpReq)
 	if err != nil {
 		fw.client.Unfreeze(ctx, dumpReq) // Try to unfreeze
-		fw.sendSignal(containerPID, fw.cfg.OnFailure, "checkpoint dump failed")
+		fw.sendSignal(containerPID, watch.OnFailure, "checkpoint dump failed")
 		return fmt.Errorf("dump failed: %w", err)
 	}
 
 	fw.log.Info().Str("container_id", container.ID).Msg("unfreezing container")
 	if _, _, err := fw.client.Unfreeze(ctx, dumpReq); err != nil {
-		fw.sendSignal(containerPID, fw.cfg.OnFailure, "checkpoint unfreeze failed")
+		fw.sendSignal(containerPID, watch.OnFailure, "checkpoint unfreeze failed")
 		return fmt.Errorf("unfreeze failed: %w", err)
 	}
 
@@ -186,68 +249,7 @@ func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containe
 	}
 
 	// Send success signal
-	fw.sendSignal(containerPID, fw.cfg.OnSuccess, "checkpoint complete")
-
-	return nil
-}
-
-func (fw *FileWatcher) handleRestore(ctx context.Context, container *containerd.Containerd, triggerPath string) error {
-	// Query container state to get PID
-	queryResp, err := fw.client.Query(ctx, &daemon.QueryReq{
-		Type: "containerd",
-		Containerd: &containerd.QueryReq{
-			IDs: []string{container.ID},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("failed to query container: %w", err)
-	}
-
-	if len(queryResp.States) == 0 {
-		return fmt.Errorf("container has no state")
-	}
-
-	placeholderPID := int(queryResp.States[0].PID)
-
-	// Read trigger file to get checkpoint path
-	checkpointPath, err := os.ReadFile(triggerPath)
-	if err != nil {
-		return fmt.Errorf("failed to read checkpoint path from trigger file: %w", err)
-	}
-
-	// Build restore request
-	restoreReq := &daemon.RestoreReq{
-		Type: "containerd",
-		Path: string(checkpointPath),
-		Details: &daemon.Details{
-			Containerd: container,
-		},
-	}
-
-	fw.log.Info().
-		Str("container_id", container.ID).
-		Str("checkpoint_path", string(checkpointPath)).
-		Msg("restoring container")
-
-	restoreResp, _, err := fw.client.Restore(ctx, restoreReq)
-	if err != nil {
-		fw.sendSignal(placeholderPID, fw.cfg.OnFailure, "restore failed")
-		return fmt.Errorf("restore failed: %w", err)
-	}
-
-	fw.log.Info().
-		Str("container_id", container.ID).
-		Int("restored_pid", int(restoreResp.PID)).
-		Msg("restore completed successfully")
-
-	// Remove trigger file
-	if err := os.Remove(triggerPath); err != nil {
-		fw.log.Warn().Err(err).Str("path", triggerPath).Msg("failed to remove trigger file")
-	}
-
-	// Send restore complete signal to the restored process
-	restoredPID := int(restoreResp.PID)
-	fw.sendSignalViaPIDNamespace(placeholderPID, restoredPID, fw.cfg.OnRestore, "restore complete")
+	fw.sendSignal(containerPID, watch.OnSuccess, "checkpoint complete")
 
 	return nil
 }

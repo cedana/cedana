@@ -35,8 +35,6 @@ type (
 		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
-		// File watching settings (for Dynamo-style checkpoint triggers)
-		FileWatching FileWatching `json:"file_watching" key:"file_watching" yaml:"file_watching" mapstructure:"file_watching"`
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
@@ -132,20 +130,5 @@ type (
 		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
 		// Endpoint is a custom AWS endpoint to use (e.g. for S3-compatible storage)
 		Endpoint string `json:"endpoint" key:"endpoint" yaml:"endpoint" mapstructure:"endpoint" env_aliases:"AWS_ENDPOINT"`
-	}
-
-	FileWatching struct {
-		// Enabled sets whether to enable file-based checkpoint triggers
-		Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
-		// PollInterval is how often to check for trigger files (e.g. "1s", "500ms")
-		PollInterval string `json:"poll_interval" key:"poll_interval" yaml:"poll_interval" mapstructure:"poll_interval"`
-		// TriggerPath is the file path to watch for checkpoint triggers (e.g. "/tmp/ready-for-checkpoint")
-		TriggerPath string `json:"trigger_path" key:"trigger_path" yaml:"trigger_path" mapstructure:"trigger_path"`
-		// OnSuccess is the signal to send after successful checkpoint (e.g. "SIGUSR1")
-		OnSuccess string `json:"on_success" key:"on_success" yaml:"on_success" mapstructure:"on_success"`
-		// OnRestore is the signal to send after restore completes (e.g. "SIGCONT")
-		OnRestore string `json:"on_restore" key:"on_restore" yaml:"on_restore" mapstructure:"on_restore"`
-		// OnFailure is the signal to send on failure (e.g. "SIGKILL")
-		OnFailure string `json:"on_failure" key:"on_failure" yaml:"on_failure" mapstructure:"on_failure"`
 	}
 )

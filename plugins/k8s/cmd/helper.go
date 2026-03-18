@@ -139,23 +139,19 @@ func startHelper(ctx context.Context) error {
 
 	log.Info().Str("URL", config.Global.Connection.URL).Msgf("starting helper")
 
-	// Start file watcher if configured
-	if config.Global.FileWatching.Enabled {
-		fw, err := filewatcher.New(cedana, config.Global.FileWatching, log.With().Str("component", "file-watcher").Logger())
-		if err != nil {
-			log.Warn().Err(err).Msg("file watcher disabled")
-		} else {
-			go func() {
-				defer cancel()
-				log.Info().Msg("starting file watcher")
-				if err := fw.Start(ctx); err != nil && err != context.Canceled {
-					log.Error().Err(err).Msg("file watcher error")
-				}
-			}()
-		}
-	}
+	// Create file watcher
+	fw := filewatcher.New(cedana, log.With().Str("component", "file-watcher").Logger())
 
-	stream, err := eventstream.New(ctx, cedana, propagator, containerdAddress)
+	// Start file watcher in background
+	go func() {
+		defer cancel()
+		log.Info().Msg("starting file watcher")
+		if err := fw.Start(ctx); err != nil && err != context.Canceled {
+			log.Error().Err(err).Msg("file watcher error")
+		}
+	}()
+
+	stream, err := eventstream.New(ctx, cedana, propagator, containerdAddress, fw)
 	if err != nil {
 		return err
 	}
@@ -176,6 +172,11 @@ func startHelper(ctx context.Context) error {
 		err = stream.StartCheckpointsConsumer(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
+			return
+		}
+		err = stream.StartFileWatchConsumer(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup file watch request consumer")
 			return
 		}
 	}()

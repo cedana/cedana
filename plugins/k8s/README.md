@@ -41,7 +41,10 @@ helm install cedana cedana-helm/ \
 For Dynamo integration, enable file watching:
 
 ```bash
-helm install cedana cedana-helm/ -f cedana-helm/values-dynamo.yaml
+helm install cedana cedana-helm/ \
+  --set config.authToken=<token> \
+  --set config.clusterId=<cluster> \
+  --set config.fileWatching.enabled=true
 ```
 
 ## Documentation

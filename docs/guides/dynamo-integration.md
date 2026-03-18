@@ -76,12 +76,13 @@ config:
         onFailure: "SIGKILL"
 ```
 
-Or use the provided example:
+Example deployment:
 
 ```bash
-helm install cedana cedana-helm/ -f cedana-helm/values-dynamo.yaml \
+helm install cedana cedana-helm/ \
   --set config.authToken=<token> \
-  --set config.clusterId=<cluster>
+  --set config.clusterId=<cluster> \
+  --set config.fileWatching.enabled=true
 ```
 
 ## How It Works
@@ -247,7 +248,10 @@ triggers:
 
 1. **Deploy Cedana** with file watching enabled:
    ```bash
-   helm install cedana cedana-helm/ -f cedana-helm/values-dynamo.yaml
+   helm install cedana cedana-helm/ \
+     --set config.authToken=<token> \
+     --set config.clusterId=<cluster> \
+     --set config.fileWatching.enabled=true
    ```
 
 2. **Verify** checkpoints work:
