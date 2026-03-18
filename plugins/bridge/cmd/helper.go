@@ -176,6 +176,11 @@ func startHelper(ctx context.Context) error {
 			log.Error().Err(err).Msg("failed to setup checkpoint request consumer")
 			return
 		}
+		err = stream.StartRestoresConsumer(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup restore request consumer")
+			return
+		}
 	}()
 
 	go func() {

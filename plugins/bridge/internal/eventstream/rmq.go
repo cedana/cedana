@@ -164,6 +164,53 @@ func (es *EventStream) StartCheckpointsPublisher(ctx context.Context) error {
 	return nil
 }
 
+func (es *EventStream) StartRestoresConsumer(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
+	queueName := "cedana_bridge_restore-" + rand.Text()
+	consumer, err := rabbitmq.NewConsumer(
+		conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsExchangeName("bridge_restore_request"),
+		rabbitmq.WithConsumerOptionsConcurrency(10),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
+		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_bridge_restore"),
+		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsQueueExclusive,
+		rabbitmq.WithConsumerOptionsQueueAutoDelete,
+		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+			"x-expires": queryExpiryMs,
+		}),
+		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
+			RoutingKey:     "",
+			BindingOptions: rabbitmq.BindingOptions{},
+		}),
+	)
+	if err != nil {
+		return err
+	}
+
+	es.lifecycleMu.Lock()
+	if es.Conn == nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	es.lifecycleMu.Unlock()
+
+	if err := consumer.Run(es.restoreHandler(ctx)); err != nil {
+		consumer.Close()
+		return err
+	}
+	return nil
+}
+
 func (es *EventStream) Close() error {
 	es.closeOnce.Do(func() {
 		es.lifecycleMu.Lock()
@@ -217,6 +264,88 @@ type profilingInfo struct {
 	Raw           *profiling.Data `json:"raw"`
 	TotalDuration int64           `json:"total_duration"`
 	TotalIO       int64           `json:"total_io"`
+}
+
+type restoreReq struct {
+	ActionID      string `json:"action_id"`
+	CheckpointID  string `json:"checkpoint_id"`
+	CheckpointPath string `json:"checkpoint_path"`
+	ClusterID     string `json:"cluster_id"`
+}
+
+type restoreInfo struct {
+	ActionID     string `json:"action_id"`
+	Status       string `json:"status"`
+	CheckpointID string `json:"checkpoint_id"`
+}
+
+func (es *EventStream) restoreHandler(ctx context.Context) rabbitmq.Handler {
+	return func(msg rabbitmq.Delivery) rabbitmq.Action {
+		log.Trace().Msgf("received restore request: %s", string(msg.Body))
+
+		var req restoreReq
+		if err := json.Unmarshal(msg.Body, &req); err != nil {
+			log.Error().Err(err).Msg("failed to unmarshal restore request")
+			return rabbitmq.Ack
+		}
+		log := log.With().Str("action_id", req.ActionID).Str("checkpoint_id", req.CheckpointID).Logger()
+
+		// Execute restore
+		restoreResp, _, err := es.cedana.Restore(ctx, &daemon.RestoreReq{
+			Path: req.CheckpointPath,
+			Details: &daemon.Details{
+				JID: proto.String(req.ActionID), // Using ActionID as JID for restore context
+			},
+		})
+
+		es.publishRestore(ctx, req, err)
+
+		if err != nil {
+			log.Error().Err(err).Msg("failed to restore job")
+			return rabbitmq.Ack
+		}
+
+		log.Info().Msgf("Restore response: %v", restoreResp)
+		return rabbitmq.Ack
+	}
+}
+
+func (es *EventStream) publishRestore(
+	ctx context.Context,
+	req restoreReq,
+	restoreErr error,
+) error {
+	es.lifecycleMu.RLock()
+	publisher := es.checkpoints
+	es.lifecycleMu.RUnlock()
+	if publisher == nil {
+		return fmt.Errorf("checkpoints publisher is not initialized")
+	}
+
+	ri := restoreInfo{
+		ActionID:     req.ActionID,
+		CheckpointID: req.CheckpointID,
+	}
+	if restoreErr != nil {
+		ri.Status = "error"
+	} else {
+		ri.Status = "success"
+	}
+
+	data, err := json.Marshal(ri)
+	if err != nil {
+		return err
+	}
+	err = publisher.Publish(data, []string{"bridge_restore_response"})
+	if err != nil {
+		return err
+	}
+	if restoreErr != nil {
+		log.Error().Err(restoreErr).Msg("restore published with error")
+	} else {
+		log.Info().Msg("restore published successfully")
+	}
+	return nil
 }
 
 func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
