@@ -21,7 +21,7 @@ import (
 type FileWatcher struct {
 	client       *client.Client
 	pollInterval time.Duration
-	triggers     []config.FileTrigger
+	cfg          config.FileWatching
 	log          zerolog.Logger
 }
 
@@ -36,14 +36,14 @@ func New(client *client.Client, cfg config.FileWatching, log zerolog.Logger) (*F
 		return nil, fmt.Errorf("invalid poll_interval %q: %w", cfg.PollInterval, err)
 	}
 
-	if len(cfg.Triggers) == 0 {
-		return nil, fmt.Errorf("no file triggers configured")
+	if cfg.TriggerPath == "" {
+		return nil, fmt.Errorf("trigger_path not configured")
 	}
 
 	return &FileWatcher{
 		client:       client,
 		pollInterval: pollInterval,
-		triggers:     cfg.Triggers,
+		cfg:          cfg,
 		log:          log,
 	}, nil
 }
@@ -52,7 +52,7 @@ func New(client *client.Client, cfg config.FileWatching, log zerolog.Logger) (*F
 func (fw *FileWatcher) Start(ctx context.Context) error {
 	fw.log.Info().
 		Dur("poll_interval", fw.pollInterval).
-		Int("triggers", len(fw.triggers)).
+		Str("trigger_path", fw.cfg.TriggerPath).
 		Msg("starting file watcher")
 
 	ticker := time.NewTicker(fw.pollInterval)
@@ -86,23 +86,21 @@ func (fw *FileWatcher) poll(ctx context.Context) error {
 		return nil
 	}
 
-	// Check each container for trigger files
+	// Check each container for trigger file
 	for _, container := range queryResp.Containerd.Containers {
-		for _, trigger := range fw.triggers {
-			if err := fw.checkTrigger(ctx, container, trigger); err != nil {
-				fw.log.Error().
-					Err(err).
-					Str("container_id", container.GetID()).
-					Str("trigger_path", trigger.Path).
-					Msg("failed to check trigger")
-			}
+		if err := fw.checkTrigger(ctx, container); err != nil {
+			fw.log.Error().
+				Err(err).
+				Str("container_id", container.GetID()).
+				Str("trigger_path", fw.cfg.TriggerPath).
+				Msg("failed to check trigger")
 		}
 	}
 
 	return nil
 }
 
-func (fw *FileWatcher) checkTrigger(ctx context.Context, container *containerd.Containerd, trigger config.FileTrigger) error {
+func (fw *FileWatcher) checkTrigger(ctx context.Context, container *containerd.Containerd) error {
 	// Construct path to file in container's rootfs
 	// For containerd, the rootfs is at <bundle>/rootfs
 	if container.GetRunc() == nil {
@@ -110,7 +108,7 @@ func (fw *FileWatcher) checkTrigger(ctx context.Context, container *containerd.C
 	}
 
 	rootfsPath := filepath.Join(container.GetRunc().GetBundle(), "rootfs")
-	triggerPath := filepath.Join(rootfsPath, trigger.Path)
+	triggerPath := filepath.Join(rootfsPath, fw.cfg.TriggerPath)
 
 	// Check if file exists
 	if _, err := os.Stat(triggerPath); os.IsNotExist(err) {
@@ -119,24 +117,16 @@ func (fw *FileWatcher) checkTrigger(ctx context.Context, container *containerd.C
 		return fmt.Errorf("failed to stat trigger file: %w", err)
 	}
 
-	// File exists! Trigger the action
+	// File exists! Trigger checkpoint
 	fw.log.Info().
 		Str("container_id", container.ID).
-		Str("trigger_path", trigger.Path).
-		Str("action", trigger.Action).
+		Str("trigger_path", fw.cfg.TriggerPath).
 		Msg("trigger file detected")
 
-	switch trigger.Action {
-	case "checkpoint":
-		return fw.handleCheckpoint(ctx, container, trigger, triggerPath)
-	case "restore":
-		return fw.handleRestore(ctx, container, trigger, triggerPath)
-	default:
-		return fmt.Errorf("unknown trigger action: %s", trigger.Action)
-	}
+	return fw.handleCheckpoint(ctx, container, triggerPath)
 }
 
-func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containerd.Containerd, trigger config.FileTrigger, triggerPath string) error {
+func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containerd.Containerd, triggerPath string) error {
 	// Query container state to get PID
 	queryResp, err := fw.client.Query(ctx, &daemon.QueryReq{
 		Type: "containerd",
@@ -167,7 +157,7 @@ func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containe
 	// Perform checkpoint: Freeze → Dump → Unfreeze
 	fw.log.Info().Str("container_id", container.ID).Msg("freezing container")
 	if _, _, err := fw.client.Freeze(ctx, dumpReq); err != nil {
-		fw.sendSignal(containerPID, trigger.OnFailure, "checkpoint freeze failed")
+		fw.sendSignal(containerPID, fw.cfg.OnFailure, "checkpoint freeze failed")
 		return fmt.Errorf("freeze failed: %w", err)
 	}
 
@@ -175,13 +165,13 @@ func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containe
 	dumpResp, _, err := fw.client.Dump(ctx, dumpReq)
 	if err != nil {
 		fw.client.Unfreeze(ctx, dumpReq) // Try to unfreeze
-		fw.sendSignal(containerPID, trigger.OnFailure, "checkpoint dump failed")
+		fw.sendSignal(containerPID, fw.cfg.OnFailure, "checkpoint dump failed")
 		return fmt.Errorf("dump failed: %w", err)
 	}
 
 	fw.log.Info().Str("container_id", container.ID).Msg("unfreezing container")
 	if _, _, err := fw.client.Unfreeze(ctx, dumpReq); err != nil {
-		fw.sendSignal(containerPID, trigger.OnFailure, "checkpoint unfreeze failed")
+		fw.sendSignal(containerPID, fw.cfg.OnFailure, "checkpoint unfreeze failed")
 		return fmt.Errorf("unfreeze failed: %w", err)
 	}
 
@@ -196,12 +186,12 @@ func (fw *FileWatcher) handleCheckpoint(ctx context.Context, container *containe
 	}
 
 	// Send success signal
-	fw.sendSignal(containerPID, trigger.OnSuccess, "checkpoint complete")
+	fw.sendSignal(containerPID, fw.cfg.OnSuccess, "checkpoint complete")
 
 	return nil
 }
 
-func (fw *FileWatcher) handleRestore(ctx context.Context, container *containerd.Containerd, trigger config.FileTrigger, triggerPath string) error {
+func (fw *FileWatcher) handleRestore(ctx context.Context, container *containerd.Containerd, triggerPath string) error {
 	// Query container state to get PID
 	queryResp, err := fw.client.Query(ctx, &daemon.QueryReq{
 		Type: "containerd",
@@ -241,7 +231,7 @@ func (fw *FileWatcher) handleRestore(ctx context.Context, container *containerd.
 
 	restoreResp, _, err := fw.client.Restore(ctx, restoreReq)
 	if err != nil {
-		fw.sendSignal(placeholderPID, trigger.OnFailure, "restore failed")
+		fw.sendSignal(placeholderPID, fw.cfg.OnFailure, "restore failed")
 		return fmt.Errorf("restore failed: %w", err)
 	}
 
@@ -257,7 +247,7 @@ func (fw *FileWatcher) handleRestore(ctx context.Context, container *containerd.
 
 	// Send restore complete signal to the restored process
 	restoredPID := int(restoreResp.PID)
-	fw.sendSignalViaPIDNamespace(placeholderPID, restoredPID, trigger.OnRestore, "restore complete")
+	fw.sendSignalViaPIDNamespace(placeholderPID, restoredPID, fw.cfg.OnRestore, "restore complete")
 
 	return nil
 }

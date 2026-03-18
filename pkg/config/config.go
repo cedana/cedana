@@ -63,6 +63,10 @@ const (
 
 	DEFAULT_FILE_WATCHING_ENABLED       = false
 	DEFAULT_FILE_WATCHING_POLL_INTERVAL = "1s"
+	DEFAULT_FILE_WATCHING_TRIGGER_PATH  = "/tmp/ready-for-checkpoint"
+	DEFAULT_FILE_WATCHING_ON_SUCCESS    = "SIGUSR1"
+	DEFAULT_FILE_WATCHING_ON_RESTORE    = "SIGCONT"
+	DEFAULT_FILE_WATCHING_ON_FAILURE    = "SIGKILL"
 )
 
 // The default global config. This will get overwritten
@@ -116,7 +120,10 @@ var Global Config = Config{
 	FileWatching: FileWatching{
 		Enabled:      DEFAULT_FILE_WATCHING_ENABLED,
 		PollInterval: DEFAULT_FILE_WATCHING_POLL_INTERVAL,
-		Triggers:     []FileTrigger{},
+		TriggerPath:  DEFAULT_FILE_WATCHING_TRIGGER_PATH,
+		OnSuccess:    DEFAULT_FILE_WATCHING_ON_SUCCESS,
+		OnRestore:    DEFAULT_FILE_WATCHING_ON_RESTORE,
+		OnFailure:    DEFAULT_FILE_WATCHING_ON_FAILURE,
 	},
 }
 

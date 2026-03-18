@@ -139,20 +139,13 @@ type (
 		Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
 		// PollInterval is how often to check for trigger files (e.g. "1s", "500ms")
 		PollInterval string `json:"poll_interval" key:"poll_interval" yaml:"poll_interval" mapstructure:"poll_interval"`
-		// Triggers defines file paths to watch and actions to take
-		Triggers []FileTrigger `json:"triggers" key:"triggers" yaml:"triggers" mapstructure:"triggers"`
-	}
-
-	FileTrigger struct {
-		// Path is the file path to watch (relative to container filesystem)
-		Path string `json:"path" key:"path" yaml:"path" mapstructure:"path"`
-		// Action is what to do when file appears (checkpoint, restore)
-		Action string `json:"action" key:"action" yaml:"action" mapstructure:"action"`
-		// OnSuccess is the signal to send on successful checkpoint (SIGUSR1, SIGUSR2, etc)
+		// TriggerPath is the file path to watch for checkpoint triggers (e.g. "/tmp/ready-for-checkpoint")
+		TriggerPath string `json:"trigger_path" key:"trigger_path" yaml:"trigger_path" mapstructure:"trigger_path"`
+		// OnSuccess is the signal to send after successful checkpoint (e.g. "SIGUSR1")
 		OnSuccess string `json:"on_success" key:"on_success" yaml:"on_success" mapstructure:"on_success"`
-		// OnRestore is the signal to send after restore completes (SIGCONT, SIGUSR1, etc)
+		// OnRestore is the signal to send after restore completes (e.g. "SIGCONT")
 		OnRestore string `json:"on_restore" key:"on_restore" yaml:"on_restore" mapstructure:"on_restore"`
-		// OnFailure is the signal to send on failure (SIGKILL, SIGTERM, etc)
+		// OnFailure is the signal to send on failure (e.g. "SIGKILL")
 		OnFailure string `json:"on_failure" key:"on_failure" yaml:"on_failure" mapstructure:"on_failure"`
 	}
 )
