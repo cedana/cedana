@@ -150,6 +150,7 @@ var destroyCmd = &cobra.Command{
 func startHelper(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	var localWG sync.WaitGroup
 
 	log.Info().Str("URL", config.Global.Connection.URL).Msgf("starting bridge helper")
 
@@ -158,29 +159,32 @@ func startHelper(ctx context.Context) error {
 		return err
 	}
 
+	log.Debug().Msg("listening on event stream for checkpoint requests")
+	err = stream.StartCheckpointsPublisher(ctx)
+	if err != nil {
+		return err
+	}
+
+	localWG.Add(2)
 	go func() {
-		defer cancel()
-		defer func() {
-			if err := stream.Close(); err != nil {
-				log.Error().Err(err).Msg("failed to close checkpoint event stream")
-			}
-		}()
-		log.Debug().Msg("listening on event stream for checkpoint requests")
-		err := stream.StartCheckpointsPublisher(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to setup checkpoint publisher")
-			return
-		}
-		err = stream.StartCheckpointsConsumer(ctx)
+		defer localWG.Done()
+		log.Debug().Msg("checkpoint consumer starting")
+		err := stream.StartCheckpointsConsumer(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup checkpoint request consumer")
-			return
+			cancel()
 		}
-		err = stream.StartRestoresConsumer(ctx)
+		log.Debug().Msg("checkpoint consumer stopped")
+	}()
+	go func() {
+		defer localWG.Done()
+		log.Debug().Msg("restore consumer starting")
+		err := stream.StartRestoresConsumer(ctx)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup restore request consumer")
-			return
+			cancel()
 		}
+		log.Debug().Msg("restore consumer stopped")
 	}()
 
 	go func() {
@@ -220,6 +224,10 @@ func startHelper(ctx context.Context) error {
 
 	<-ctx.Done()
 	log.Info().Err(ctx.Err()).Msg("stopping bridge helper")
+	if err := stream.Close(); err != nil {
+		log.Error().Err(err).Msg("failed to close checkpoint event stream")
+	}
+	localWG.Wait()
 
 	return nil
 }

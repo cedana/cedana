@@ -16,6 +16,7 @@ Requires=cedana.service
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/cedana bridge start
+Environment=CEDANA_LOG_LEVEL=debug
 User=root
 Group=root
 Restart=on-failure

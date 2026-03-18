@@ -267,16 +267,18 @@ type profilingInfo struct {
 }
 
 type restoreReq struct {
-	ActionID      string `json:"action_id"`
-	CheckpointID  string `json:"checkpoint_id"`
+	ActionID       string `json:"action_id"`
+	CheckpointID   string `json:"checkpoint_id"`
 	CheckpointPath string `json:"checkpoint_path"`
-	ClusterID     string `json:"cluster_id"`
+	JobID          string `json:"job_id"`
+	ClusterID      string `json:"cluster_id"`
 }
 
 type restoreInfo struct {
 	ActionID     string `json:"action_id"`
 	Status       string `json:"status"`
 	CheckpointID string `json:"checkpoint_id"`
+	Error        string `json:"error,omitempty"`
 }
 
 func (es *EventStream) restoreHandler(ctx context.Context) rabbitmq.Handler {
@@ -288,17 +290,33 @@ func (es *EventStream) restoreHandler(ctx context.Context) rabbitmq.Handler {
 			log.Error().Err(err).Msg("failed to unmarshal restore request")
 			return rabbitmq.Ack
 		}
-		log := log.With().Str("action_id", req.ActionID).Str("checkpoint_id", req.CheckpointID).Logger()
+		log := log.With().Str("action_id", req.ActionID).Str("checkpoint_id", req.CheckpointID).Str("job_id", req.JobID).Str("checkpoint_path", req.CheckpointPath).Logger()
+
+		if req.CheckpointPath == "" {
+			err := fmt.Errorf("missing checkpoint_path in restore request")
+			log.Error().Err(err).Msg("failed to restore job")
+			if publishErr := es.publishRestore(ctx, req, err); publishErr != nil {
+				log.Error().Err(publishErr).Msg("failed to publish restore status")
+			}
+			return rabbitmq.Ack
+		}
+
+		restoreReq := &daemon.RestoreReq{
+			Path: req.CheckpointPath,
+			Type: "process",
+		}
+		if req.JobID != "" {
+			restoreReq.Details = &daemon.Details{JID: proto.String(req.JobID)}
+		} else {
+			log.Warn().Msg("restore request missing job_id; restoring as unmanaged process")
+		}
 
 		// Execute restore
-		restoreResp, _, err := es.cedana.Restore(ctx, &daemon.RestoreReq{
-			Path: req.CheckpointPath,
-			Details: &daemon.Details{
-				JID: proto.String(req.ActionID), // Using ActionID as JID for restore context
-			},
-		})
+		restoreResp, _, err := es.cedana.Restore(ctx, restoreReq)
 
-		es.publishRestore(ctx, req, err)
+		if publishErr := es.publishRestore(ctx, req, err); publishErr != nil {
+			log.Error().Err(publishErr).Msg("failed to publish restore status")
+		}
 
 		if err != nil {
 			log.Error().Err(err).Msg("failed to restore job")
@@ -328,6 +346,7 @@ func (es *EventStream) publishRestore(
 	}
 	if restoreErr != nil {
 		ri.Status = "error"
+		ri.Error = restoreErr.Error()
 	} else {
 		ri.Status = "success"
 	}
@@ -336,7 +355,11 @@ func (es *EventStream) publishRestore(
 	if err != nil {
 		return err
 	}
-	err = publisher.Publish(data, []string{"bridge_restore_response"})
+	err = publisher.Publish(
+		data,
+		[]string{"bridge_restore_response"},
+		rabbitmq.WithPublishOptionsExchange("bridge_restore_response"),
+	)
 	if err != nil {
 		return err
 	}
@@ -467,7 +490,11 @@ func (es *EventStream) publishCheckpoint(
 	if err != nil {
 		return err
 	}
-	err = publisher.Publish(data, []string{"bridge_checkpoint_response"})
+	err = publisher.Publish(
+		data,
+		[]string{"bridge_checkpoint_response"},
+		rabbitmq.WithPublishOptionsExchange("bridge_checkpoint_response"),
+	)
 	if err != nil {
 		return err
 	}
