@@ -60,6 +60,9 @@ const (
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
 	DEFAULT_PLUGINS_BUILDS  = "release"
+
+	DEFAULT_FILE_WATCHING_ENABLED       = false
+	DEFAULT_FILE_WATCHING_POLL_INTERVAL = "1s"
 )
 
 // The default global config. This will get overwritten
@@ -109,6 +112,11 @@ var Global Config = Config{
 		LibDir: DEFAULT_PLUGINS_LIB_DIR,
 		BinDir: DEFAULT_PLUGINS_BIN_DIR,
 		Builds: DEFAULT_PLUGINS_BUILDS,
+	},
+	FileWatching: FileWatching{
+		Enabled:      DEFAULT_FILE_WATCHING_ENABLED,
+		PollInterval: DEFAULT_FILE_WATCHING_POLL_INTERVAL,
+		Triggers:     []FileTrigger{},
 	},
 }
 

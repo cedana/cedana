@@ -17,6 +17,7 @@ import (
 	"github.com/cedana/cedana/pkg/script"
 	"github.com/cedana/cedana/pkg/version"
 	"github.com/cedana/cedana/plugins/k8s/internal/eventstream"
+	"github.com/cedana/cedana/plugins/k8s/internal/filewatcher"
 	k8scripts "github.com/cedana/cedana/plugins/k8s/scripts"
 	"github.com/cedana/cedana/scripts"
 	"github.com/rs/zerolog"
@@ -137,6 +138,22 @@ func startHelper(ctx context.Context) error {
 	defer cancel()
 
 	log.Info().Str("URL", config.Global.Connection.URL).Msgf("starting helper")
+
+	// Start file watcher if configured
+	if config.Global.FileWatching.Enabled {
+		fw, err := filewatcher.New(cedana, config.Global.FileWatching, log.With().Str("component", "file-watcher").Logger())
+		if err != nil {
+			log.Warn().Err(err).Msg("file watcher disabled")
+		} else {
+			go func() {
+				defer cancel()
+				log.Info().Msg("starting file watcher")
+				if err := fw.Start(ctx); err != nil && err != context.Canceled {
+					log.Error().Err(err).Msg("file watcher error")
+				}
+			}()
+		}
+	}
 
 	stream, err := eventstream.New(ctx, cedana, propagator, containerdAddress)
 	if err != nil {

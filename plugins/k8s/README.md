@@ -1,17 +1,50 @@
-## Kubernetes Helper Plugin
+## Kubernetes Plugin
 
-Helper commands to setup inside of a Kubernetes environment.
+This plugin provides Kubernetes integration for Cedana, including DaemonSet helpers, event streaming, and file-based checkpoint triggers.
 
-### `cedana k8s-helper --setup-host`
+## Components
 
-Sets up a node to run Cedana by installing prerequisites, copying binaries, and setting up the service.
+### Helper DaemonSet (`cmd/helper.go`)
 
-### `cedana k8s-helper destroy`
+Helper commands to setup and manage Cedana inside a Kubernetes environment.
 
-Cleans up a node after Cedana is stopped.
+**Commands:**
+- `cedana k8s setup` - Sets up a node by installing prerequisites, binaries, and starting the daemon
+- `cedana k8s destroy` - Cleans up a node after Cedana is stopped
 
-### `cedana k8s-helper --restart`
+**Features:**
+- Installs Cedana daemon on host nodes
+- Starts RabbitMQ event consumer for orchestrated checkpoints
+- Optionally starts file watcher for Dynamo-style triggers (if `file_watching.enabled: true`)
+- Tails daemon logs to stdout
 
-Restarts the Cedana service on the host.
+### File Watcher (`internal/filewatcher/`)
 
-Not needed if running a Cedana AMI.
+Polls container filesystems for trigger files to initiate checkpoints. See [File Watcher README](internal/filewatcher/README.md).
+
+**Use case:** Dynamo (vLLM, SGLang) integration where workers write `/tmp/ready-for-checkpoint` when ready.
+
+### Event Stream (`internal/eventstream/`)
+
+RabbitMQ consumer for processing checkpoint requests from Cedana propagator.
+
+## Deployment
+
+Typically deployed as a DaemonSet via the [cedana-helm chart](https://github.com/cedana/cedana-helm-charts/tree/main/cedana-helm):
+
+```bash
+helm install cedana cedana-helm/ \
+  --set config.authToken=<token> \
+  --set config.clusterId=<cluster>
+```
+
+For Dynamo integration, enable file watching:
+
+```bash
+helm install cedana cedana-helm/ -f cedana-helm/values-dynamo.yaml
+```
+
+## Documentation
+
+- [File Watcher Documentation](internal/filewatcher/README.md)
+- [Dynamo Integration Guide](../../docs/dynamo-integration.md)

@@ -35,6 +35,8 @@ type (
 		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
+		// File watching settings (for Dynamo-style checkpoint triggers)
+		FileWatching FileWatching `json:"file_watching" key:"file_watching" yaml:"file_watching" mapstructure:"file_watching"`
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
@@ -130,5 +132,27 @@ type (
 		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
 		// Endpoint is a custom AWS endpoint to use (e.g. for S3-compatible storage)
 		Endpoint string `json:"endpoint" key:"endpoint" yaml:"endpoint" mapstructure:"endpoint" env_aliases:"AWS_ENDPOINT"`
+	}
+
+	FileWatching struct {
+		// Enabled sets whether to enable file-based checkpoint triggers
+		Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
+		// PollInterval is how often to check for trigger files (e.g. "1s", "500ms")
+		PollInterval string `json:"poll_interval" key:"poll_interval" yaml:"poll_interval" mapstructure:"poll_interval"`
+		// Triggers defines file paths to watch and actions to take
+		Triggers []FileTrigger `json:"triggers" key:"triggers" yaml:"triggers" mapstructure:"triggers"`
+	}
+
+	FileTrigger struct {
+		// Path is the file path to watch (relative to container filesystem)
+		Path string `json:"path" key:"path" yaml:"path" mapstructure:"path"`
+		// Action is what to do when file appears (checkpoint, restore)
+		Action string `json:"action" key:"action" yaml:"action" mapstructure:"action"`
+		// OnSuccess is the signal to send on successful checkpoint (SIGUSR1, SIGUSR2, etc)
+		OnSuccess string `json:"on_success" key:"on_success" yaml:"on_success" mapstructure:"on_success"`
+		// OnRestore is the signal to send after restore completes (SIGCONT, SIGUSR1, etc)
+		OnRestore string `json:"on_restore" key:"on_restore" yaml:"on_restore" mapstructure:"on_restore"`
+		// OnFailure is the signal to send on failure (SIGKILL, SIGTERM, etc)
+		OnFailure string `json:"on_failure" key:"on_failure" yaml:"on_failure" mapstructure:"on_failure"`
 	}
 )
