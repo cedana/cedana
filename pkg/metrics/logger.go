@@ -106,7 +106,7 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 		}
 	})
 
-	logging.AddLogger(sw)
+	logging.Add(sw)
 
 	log.Debug().Str("endpoint", Credentials.Endpoint).Msg("logging initialized")
 
