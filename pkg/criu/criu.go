@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -61,6 +62,10 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	cmd.ExtraFiles = append(extraFiles, srv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
+		AmbientCaps: []uintptr{
+			unix.CAP_SYS_PTRACE,         // Required for CRIU operations
+			unix.CAP_CHECKPOINT_RESTORE, // Required for checkpoint/restore
+		},
 	}
 
 	// Pin this goroutine to its OS thread so that Pdeathsig does not
