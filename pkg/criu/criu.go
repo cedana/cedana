@@ -55,7 +55,17 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	defer srv.Close()
 
 	args := []string{"swrk", strconv.Itoa(3 + len(extraFiles))}
-	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
+
+	// Use strace for DUMP operations to see permission errors
+	var cmd *exec.Cmd
+	if os.Getenv("CEDANA_STRACE_DUMP") == "1" {
+		straceArgs := []string{"-e", "trace=!recvmsg,sendmsg,recvfrom,sendto,read,write", "-o", "/tmp/criu-dump-strace.log", c.swrkPath}
+		straceArgs = append(straceArgs, args...)
+		cmd = exec.CommandContext(ctx, "strace", straceArgs...)
+	} else {
+		cmd = exec.CommandContext(ctx, c.swrkPath, args...)
+	}
+
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -65,6 +75,7 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 		AmbientCaps: []uintptr{
 			unix.CAP_SYS_PTRACE,         // Required for CRIU operations
 			unix.CAP_CHECKPOINT_RESTORE, // Required for checkpoint/restore
+			unix.CAP_SYS_ADMIN,          // Required for CRIU (kernel < 5.9)
 		},
 	}
 
@@ -184,6 +195,12 @@ func (c *Criu) doSwrkWithResp(
 		return nil, err
 	}
 
+	// Sleep only for DUMP requests to allow GDB attach
+	if reqType == criu.CriuReqType_DUMP {
+		fmt.Fprintf(os.Stderr, "CRIU swrk PID for DUMP: %d - sleeping 20s for GDB attach...\n", c.swrkCmd.Process.Pid)
+		time.Sleep(20 * time.Second)
+	}
+
 	defer func() {
 		// append any cleanup errors to the returned error
 		err := c.Cleanup()
@@ -239,6 +256,10 @@ func (c *Criu) doSwrkWithResp(
 		if err != nil {
 			return nil, err
 		}
+
+		// DEBUG: Print CRIU response
+		fmt.Fprintf(os.Stderr, "CRIU Response: success=%v type=%v errno=%v msg=%s\n",
+			resp.GetSuccess(), resp.GetType(), resp.GetCrErrno(), resp.GetCrErrmsg())
 
 		if !resp.GetSuccess() {
 			return resp, fmt.Errorf("operation failed (msg:%s err:%d)",
