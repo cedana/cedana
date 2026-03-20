@@ -9,7 +9,7 @@ CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=${CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
-CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
+CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"/tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
 # XXX: We always install the GPU plugin because the race w/ gpu-operator (if the cluster is using it)
@@ -68,9 +68,9 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
         fi
     else
         echo "Detected NVIDIA GPU! Ensuring CUDA drivers are installed..."
-        # Bind mount /dev/shm to /run/nvidia/driver/dev/shm
-        # This is required for the gpu-controller to work when chrooted into /run/nvidia/driver path
-        mount --rbind /dev/shm /run/nvidia/driver/dev/shm
+        # Bind mount /dev/shm to /run/driver/nvidia/dev/shm
+        # This is required for the gpu-controller to work when chrooted into /run/driver/nvidia
+        mount --rbind /dev/shm /run/driver/nvidia/dev/shm
         chroot /run/driver/nvidia bash -c <<'END_CHROOT'
             echo "Nvidia Driver version is $(nvidia-smi --query-gpu=driver_version --format=csv,noheader)"
             if /sbin/ldconfig -p | grep -q libcuda.so.1; then
