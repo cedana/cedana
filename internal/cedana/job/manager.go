@@ -75,9 +75,12 @@ type Manager interface {
 	// Sync is used to force the manager to sync its state with the underlying storage.
 	Sync(ctx context.Context) error
 
-	ReserveStorageForJob(ctx context.Context, jid string) (uint64, error)
+	// ReserveStorageForJob reserves storage according to the size of the last checkpoint
+	ReserveStorageForJob(ctx context.Context, jid string) (int64, error)
 
-	ReserveStorageAmount(ctx context.Context, amount uint64) error
+	// ReserveStorageAmount reserves amount bytes of storage
+	ReserveStorageAmount(ctx context.Context, amount int64) error
 
-	FreeStorage(ctx context.Context, amount uint64)
+	// FreeStorage frees up amount bytes of storage
+	FreeStorage(ctx context.Context, amount int64)
 }

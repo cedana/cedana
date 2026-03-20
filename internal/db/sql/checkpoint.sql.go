@@ -7,6 +7,7 @@ package sql
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"time"
 )
@@ -41,6 +42,17 @@ DELETE FROM checkpoints WHERE ID = ?
 func (q *Queries) DeleteCheckpoint(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteCheckpoint, id)
 	return err
+}
+
+const getStorageUsed = `-- name: GetStorageUsed :one
+SELECT SUM(size) FROM checkpoints WHERE path NOT LIKE '%://%'
+`
+
+func (q *Queries) GetStorageUsed(ctx context.Context) (sql.NullFloat64, error) {
+	row := q.db.QueryRowContext(ctx, getStorageUsed)
+	var sum sql.NullFloat64
+	err := row.Scan(&sum)
+	return sum, err
 }
 
 const listCheckpoints = `-- name: ListCheckpoints :many

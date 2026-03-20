@@ -34,7 +34,7 @@ type ManagerLazy struct {
 	deletedJobs        sync.Map // to keep track of deleted jobs
 	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
 	storageUsedMutex   sync.Mutex
-	storageUsed        uint64
+	storageUsed        int64
 
 	host    *daemon.Host
 	plugins plugins.Manager
@@ -427,30 +427,33 @@ func (m *ManagerLazy) Sync(ctx context.Context) error {
 	return m.syncWithDB(ctx, action{initialize, ""})
 }
 
-func (m *ManagerLazy) ReserveStorageForJob(ctx context.Context, jid string) (uint64, error) {
+func (m *ManagerLazy) ReserveStorageForJob(ctx context.Context, jid string) (int64, error) {
 	latestCheckpoint := m.GetLatestCheckpoint(jid)
-	var reserveAmount uint64 = 250 * utils.MEBIBYTE
+	var reserveAmount int64 = 250 * utils.MEBIBYTE
 	if latestCheckpoint != nil && latestCheckpoint.GetSize() > 0 {
-		reserveAmount = uint64(latestCheckpoint.GetSize())
+		reserveAmount = latestCheckpoint.GetSize()
 	}
 	err := m.ReserveStorageAmount(ctx, reserveAmount)
 	if err != nil {
-		return 0, nil
+		return 0, err
 	}
 	return reserveAmount, nil
 }
 
-func (m *ManagerLazy) ReserveStorageAmount(ctx context.Context, amount uint64) error {
+func (m *ManagerLazy) ReserveStorageAmount(ctx context.Context, amount int64) error {
 	m.storageUsedMutex.Lock()
 	defer m.storageUsedMutex.Unlock()
-	if amount+m.storageUsed > config.Global.LocalStorageLimitGB*utils.GIBIBYTE {
-		return fmt.Errorf("not enough storage for checkpoint")
+	storageLimit := config.Global.LocalStorageLimit * utils.GIBIBYTE
+	if amount+m.storageUsed > storageLimit {
+		return fmt.Errorf("not enough storage to checkpoint, storage limit: %v, storage used: %v",
+			utils.SizeStr(storageLimit),
+			utils.SizeStr(m.storageUsed))
 	}
 	m.storageUsed += amount
 	return nil
 }
 
-func (m *ManagerLazy) FreeStorage(ctx context.Context, amount uint64) {
+func (m *ManagerLazy) FreeStorage(ctx context.Context, amount int64) {
 	m.storageUsedMutex.Lock()
 	defer m.storageUsedMutex.Unlock()
 	m.storageUsed -= amount
@@ -494,6 +497,18 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 				}
 			}
 		}
+
+		m.storageUsedMutex.Lock()
+		storageUsed, err := m.db.GetStorageUsed(ctx)
+		if err != nil {
+			return err
+		}
+
+		if storageUsed > config.Global.LocalStorageLimit*utils.GIBIBYTE {
+			log.Warn().Msg("cedana has used more storage than the limit")
+		}
+		m.storageUsed = storageUsed
+		m.storageUsedMutex.Unlock()
 
 		// TODO: Can also remove stale jobs from memory. But need to be careful
 		// about race conditions. For now, we just keep them in memory until daemon

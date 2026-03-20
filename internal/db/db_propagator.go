@@ -261,6 +261,10 @@ func (db *PropagatorDB) DeleteCheckpoint(ctx context.Context, id string) error {
 	return nil
 }
 
+func (db *PropagatorDB) GetStorageUsed(ctx context.Context) (int64, error) {
+	return 0, fmt.Errorf("Storage Management is only for local storage")
+}
+
 /////////////
 /// Hosts ///
 /////////////

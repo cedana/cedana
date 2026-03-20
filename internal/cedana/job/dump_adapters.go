@@ -16,6 +16,10 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func storageLimitEnforced(dir string) bool {
+	return config.Global.LocalStorageLimit > 0 && !strings.Contains(dir, "://") && !config.Global.DB.Remote
+}
+
 // Adapter that fills in dump request details based on saved job info.
 // Post-dump, updates the saved job details.
 func ManageDump(jobs Manager) types.Adapter[types.Dump] {
@@ -36,8 +40,8 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.FailedPrecondition, "job %s is not running (status: %s)", jid, job.Status())
 			}
 
-			var reservedAmount uint64
-			if config.Global.LocalStorageLimitGB > 0 && !strings.Contains(req.GetDir(), "://") {
+			var reservedAmount int64
+			if storageLimitEnforced(req.GetDir()) {
 				reservedAmount, err = jobs.ReserveStorageForJob(ctx, jid)
 				if err != nil {
 					return nil, status.Errorf(codes.FailedPrecondition, "do not have enough storage to dump %s job", jid)
@@ -59,15 +63,19 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 
 			code, err = next(ctx, opts, resp, req)
 			if err != nil {
+				// free up the storage we reserved
+				if storageLimitEnforced(req.GetDir()) {
+					jobs.FreeStorage(ctx, reservedAmount)
+				}
 				return code, err
 			}
 
 			job.Sync(resp.GetState())
 
-			if config.Global.LocalStorageLimitGB > 0 && !strings.Contains(req.GetDir(), "://") {
-				var storageUsed uint64
+			if config.Global.LocalStorageLimit > 0 && !strings.Contains(req.GetDir(), "://") && !config.Global.DB.Remote {
+				var storageUsed int64
 				for _, path := range resp.GetPaths() {
-					storageUsed += uint64(utils.SizeFromPath(path))
+					storageUsed += utils.SizeFromPath(path)
 				}
 				if storageUsed > reservedAmount {
 					err = jobs.ReserveStorageAmount(ctx, storageUsed-reservedAmount)

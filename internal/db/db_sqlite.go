@@ -315,6 +315,19 @@ func (db *SqliteDB) DeleteCheckpoint(ctx context.Context, id string) error {
 	return db.queries.DeleteCheckpoint(ctx, id)
 }
 
+func (db *SqliteDB) GetStorageUsed(ctx context.Context) (int64, error) {
+	storageUsed, err := db.queries.GetStorageUsed(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	if !storageUsed.Valid {
+		return 0, nil
+	}
+
+	return int64(storageUsed.Float64), nil
+}
+
 ///////////////
 /// Helpers ///
 ///////////////
