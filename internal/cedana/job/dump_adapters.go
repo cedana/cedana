@@ -72,7 +72,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 
 			job.Sync(resp.GetState())
 
-			if config.Global.LocalStorageLimit > 0 && !strings.Contains(req.GetDir(), "://") && !config.Global.DB.Remote {
+			if storageLimitEnforced(req.GetDir()) {
 				var storageUsed int64
 				for _, path := range resp.GetPaths() {
 					storageUsed += utils.SizeFromPath(path)
