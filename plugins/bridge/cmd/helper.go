@@ -165,6 +165,11 @@ func startHelper(ctx context.Context) error {
 		return err
 	}
 
+	err = stream.StartRestoresPublisher(ctx)
+	if err != nil {
+		return err
+	}
+
 	localWG.Add(2)
 	go func() {
 		defer localWG.Done()
@@ -188,7 +193,6 @@ func startHelper(ctx context.Context) error {
 	}()
 
 	go func() {
-		defer cancel()
 		// Wait for daemon log file to appear
 		var file *os.File
 		for i := 0; i < 30; i++ {
@@ -199,21 +203,27 @@ func startHelper(ctx context.Context) error {
 			time.Sleep(1 * time.Second)
 		}
 		if err != nil {
-			log.Error().Err(err).Msg("failed to open daemon logs after waiting")
+			log.Warn().Err(err).Msg("failed to open daemon logs after waiting; log tailing disabled")
 			return
 		}
 		defer file.Close()
 
 		reader := bufio.NewReader(file)
 		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			line, err := reader.ReadString('\n')
 			if err != nil {
 				if err == io.EOF {
 					time.Sleep(1 * time.Second)
 					continue
 				}
-				log.Error().Err(err).Msg("Error reading from cedana-daemon.log")
-				return
+				log.Warn().Err(err).Msg("error reading from cedana-daemon.log; continuing log tail")
+				time.Sleep(1 * time.Second)
+				continue
 			}
 			trimmed := strings.TrimSpace(line)
 			if len(trimmed) > 0 {

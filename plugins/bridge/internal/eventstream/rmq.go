@@ -28,6 +28,8 @@ type EventStream struct {
 	url                string
 	checkpoints        *rabbitmq.Publisher
 	checkpointRequests *rabbitmq.Consumer
+	restorePublisher   *rabbitmq.Publisher
+	restoreRequests    *rabbitmq.Consumer
 	lifecycleMu        sync.RWMutex
 	closeOnce          sync.Once
 	closeErr           error
@@ -202,7 +204,21 @@ func (es *EventStream) StartRestoresConsumer(ctx context.Context) error {
 		consumer.Close()
 		return fmt.Errorf("rabbitmq connection is closed")
 	}
+	if es.restoreRequests != nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("restore consumer is already running")
+	}
+	es.restoreRequests = consumer
 	es.lifecycleMu.Unlock()
+
+	defer func() {
+		es.lifecycleMu.Lock()
+		if es.restoreRequests == consumer {
+			es.restoreRequests = nil
+		}
+		es.lifecycleMu.Unlock()
+	}()
 
 	if err := consumer.Run(es.restoreHandler(ctx)); err != nil {
 		consumer.Close()
@@ -211,22 +227,61 @@ func (es *EventStream) StartRestoresConsumer(ctx context.Context) error {
 	return nil
 }
 
+func (es *EventStream) StartRestoresPublisher(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
+	publisher, err := rabbitmq.NewPublisher(
+		conn,
+	)
+	if err != nil {
+		return err
+	}
+
+	es.lifecycleMu.Lock()
+	defer es.lifecycleMu.Unlock()
+	if es.Conn == nil {
+		publisher.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.restorePublisher != nil {
+		publisher.Close()
+		return fmt.Errorf("restore publisher is already running")
+	}
+	es.restorePublisher = publisher
+	return nil
+}
+
 func (es *EventStream) Close() error {
 	es.closeOnce.Do(func() {
 		es.lifecycleMu.Lock()
-		consumer := es.checkpointRequests
-		publisher := es.checkpoints
+		chkConsumer := es.checkpointRequests
+		chkPublisher := es.checkpoints
+		rstConsumer := es.restoreRequests
+		rstPublisher := es.restorePublisher
 		conn := es.Conn
 		es.checkpointRequests = nil
 		es.checkpoints = nil
+		es.restoreRequests = nil
+		es.restorePublisher = nil
 		es.Conn = nil
 		es.lifecycleMu.Unlock()
 
-		if consumer != nil {
-			consumer.Close()
+		if chkConsumer != nil {
+			chkConsumer.Close()
 		}
-		if publisher != nil {
-			publisher.Close()
+		if chkPublisher != nil {
+			chkPublisher.Close()
+		}
+		if rstConsumer != nil {
+			rstConsumer.Close()
+		}
+		if rstPublisher != nil {
+			rstPublisher.Close()
 		}
 		if conn != nil {
 			if err := conn.Close(); err != nil {
@@ -334,10 +389,10 @@ func (es *EventStream) publishRestore(
 	restoreErr error,
 ) error {
 	es.lifecycleMu.RLock()
-	publisher := es.checkpoints
+	publisher := es.restorePublisher
 	es.lifecycleMu.RUnlock()
 	if publisher == nil {
-		return fmt.Errorf("checkpoints publisher is not initialized")
+		return fmt.Errorf("restore publisher is not initialized")
 	}
 
 	ri := restoreInfo{
