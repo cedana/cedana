@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -329,6 +330,9 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		return
 	}
 
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
 
 	if !c.Termination.TryLock() {
@@ -356,12 +360,14 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 	if c.PID == 0 {
 		return
 	}
-	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
+
 	if c.ClientConn != nil {
 		c.ClientConn.Close()
 		c.ClientConn = nil
 		c.ControllerClient = nil
 	}
+
+	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
 	if int(c.ParentPID) == os.Getpid() { // If we spawned it, then reap it
 		process, err := os.FindProcess(int(c.PID))
 		if err != nil {
@@ -571,27 +577,27 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	var restoredPid *int32
 	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
 		restoredPid = &pid
-		if restoreErr == nil { // Restore was never started
-			return nil
-		}
-		return utils.GRPCError(<-restoreErr)
+		return nil
 	}
 
+	// Ensure we always wait for GPU restore to finish before finalizing the restore.
 	// Signal the process so it knowns it may have a new PID (only useful for containers which get
 	// restore with a different host PID).
-	callback.PreResumeFunc = func(ctx context.Context) error {
-		if restoredPid == nil {
-			return nil
-		}
-		return syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
-	}
-
-	// Ensure we always wait for GPU restore to finish before finalizing the restore
 	callback.FinalizeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		if restoreErr == nil {
 			return nil
 		}
-		return utils.GRPCError(<-restoreErr)
+		err := syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
+		if err != nil {
+			log.Error().Err(err).Int32("RestoredPID", *restoredPid).Msg("failed to signal restored GPU process with new PID")
+		}
+		err = <-restoreErr
+		if err != nil {
+			// CRIU doesn't kill the process if this post-restore hook fails, so we kill it ourselves.
+			// Because it can't run since the GPU restore failed.
+			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+		}
+		return err
 	}
 
 	return callback
