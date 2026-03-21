@@ -27,11 +27,13 @@ type EventStream struct {
 	propagator *cedanagosdk.ApiClient
 
 	nodeID             string
+	hostname           string
 	url                string
 	checkpoints        *rabbitmq.Publisher
 	checkpointRequests *rabbitmq.Consumer
 	restorePublisher   *rabbitmq.Publisher
 	restoreRequests    *rabbitmq.Consumer
+	presenceRequests   *rabbitmq.Consumer
 	lifecycleMu        sync.RWMutex
 	closeOnce          sync.Once
 	closeErr           error
@@ -80,6 +82,7 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 		cedana:     cedana,
 		propagator: propagator,
 		nodeID:     nodeID,
+		hostname:   hostname,
 		url:        *url,
 		Conn:       conn,
 	}
@@ -266,6 +269,67 @@ func (es *EventStream) StartRestoresPublisher(ctx context.Context) error {
 	return nil
 }
 
+func (es *EventStream) StartPresenceConsumer(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
+	queueName := "cedana_bridge_presence-" + rand.Text()
+	consumer, err := rabbitmq.NewConsumer(
+		conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsExchangeName("bridge_presence_probe"),
+		rabbitmq.WithConsumerOptionsConcurrency(10),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
+		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_bridge_presence"),
+		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsQueueExclusive,
+		rabbitmq.WithConsumerOptionsQueueAutoDelete,
+		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+			"x-expires": queryExpiryMs,
+		}),
+		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
+			RoutingKey:     "",
+			BindingOptions: rabbitmq.BindingOptions{},
+		}),
+	)
+	if err != nil {
+		return err
+	}
+
+	es.lifecycleMu.Lock()
+	if es.Conn == nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.presenceRequests != nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("presence consumer is already running")
+	}
+	es.presenceRequests = consumer
+	es.lifecycleMu.Unlock()
+
+	defer func() {
+		es.lifecycleMu.Lock()
+		if es.presenceRequests == consumer {
+			es.presenceRequests = nil
+		}
+		es.lifecycleMu.Unlock()
+	}()
+
+	if err := consumer.Run(es.presenceHandler(ctx)); err != nil {
+		consumer.Close()
+		return err
+	}
+	return nil
+}
+
 func (es *EventStream) Close() error {
 	es.closeOnce.Do(func() {
 		es.lifecycleMu.Lock()
@@ -273,11 +337,13 @@ func (es *EventStream) Close() error {
 		chkPublisher := es.checkpoints
 		rstConsumer := es.restoreRequests
 		rstPublisher := es.restorePublisher
+		prsConsumer := es.presenceRequests
 		conn := es.Conn
 		es.checkpointRequests = nil
 		es.checkpoints = nil
 		es.restoreRequests = nil
 		es.restorePublisher = nil
+		es.presenceRequests = nil
 		es.Conn = nil
 		es.lifecycleMu.Unlock()
 
@@ -292,6 +358,9 @@ func (es *EventStream) Close() error {
 		}
 		if rstPublisher != nil {
 			rstPublisher.Close()
+		}
+		if prsConsumer != nil {
+			prsConsumer.Close()
 		}
 		if conn != nil {
 			if err := conn.Close(); err != nil {
@@ -345,6 +414,81 @@ type restoreInfo struct {
 	Status       string `json:"status"`
 	CheckpointID string `json:"checkpoint_id"`
 	Error        string `json:"error,omitempty"`
+}
+
+type presenceProbeReq struct {
+	ProbeID string `json:"probe_id"`
+}
+
+type presenceJob struct {
+	JID  string `json:"jid"`
+	Name string `json:"name,omitempty"`
+}
+
+type presenceInfo struct {
+	ProbeID   string        `json:"probe_id"`
+	NodeID    string        `json:"node_id"`
+	Hostname  string        `json:"hostname"`
+	Jobs      []presenceJob `json:"jobs"`
+	Timestamp int64         `json:"timestamp"`
+}
+
+func (es *EventStream) presenceHandler(ctx context.Context) rabbitmq.Handler {
+	return func(msg rabbitmq.Delivery) rabbitmq.Action {
+		var req presenceProbeReq
+		if err := json.Unmarshal(msg.Body, &req); err != nil {
+			log.Error().Err(err).Msg("failed to unmarshal presence probe")
+			return rabbitmq.Ack
+		}
+
+		listResp, err := es.cedana.List(ctx, &daemon.ListReq{})
+		if err != nil {
+			log.Error().Err(err).Msg("failed to list jobs for bridge presence")
+			return rabbitmq.Ack
+		}
+
+		jobs := make([]presenceJob, 0, len(listResp.Jobs))
+		for _, j := range listResp.Jobs {
+			if j.GetState() == nil || !j.GetState().GetIsRunning() {
+				continue
+			}
+			jobs = append(jobs, presenceJob{JID: j.GetJID()})
+		}
+
+		if err := es.publishPresence(ctx, req, jobs); err != nil {
+			log.Error().Err(err).Msg("failed to publish bridge presence response")
+		}
+
+		return rabbitmq.Ack
+	}
+}
+
+func (es *EventStream) publishPresence(ctx context.Context, req presenceProbeReq, jobs []presenceJob) error {
+	es.lifecycleMu.RLock()
+	publisher := es.checkpoints
+	es.lifecycleMu.RUnlock()
+	if publisher == nil {
+		return fmt.Errorf("checkpoints publisher is not initialized")
+	}
+
+	pi := presenceInfo{
+		ProbeID:   req.ProbeID,
+		NodeID:    es.nodeID,
+		Hostname:  es.hostname,
+		Jobs:      jobs,
+		Timestamp: time.Now().Unix(),
+	}
+
+	data, err := json.Marshal(pi)
+	if err != nil {
+		return err
+	}
+
+	return publisher.Publish(
+		data,
+		[]string{"bridge_presence_response"},
+		rabbitmq.WithPublishOptionsExchange("bridge_presence_response"),
+	)
 }
 
 func (es *EventStream) restoreHandler(ctx context.Context) rabbitmq.Handler {

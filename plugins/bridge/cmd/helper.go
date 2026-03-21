@@ -188,7 +188,7 @@ func startHelper(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var localWG sync.WaitGroup
-	errCh := make(chan error, 2)
+	errCh := make(chan error, 3)
 
 	log.Info().Str("URL", config.Global.Connection.URL).Msgf("starting bridge helper")
 
@@ -208,7 +208,7 @@ func startHelper(ctx context.Context) error {
 		return err
 	}
 
-	localWG.Add(2)
+	localWG.Add(3)
 	go func() {
 		defer localWG.Done()
 		log.Debug().Msg("checkpoint consumer starting")
@@ -240,6 +240,22 @@ func startHelper(ctx context.Context) error {
 			cancel()
 		}
 		log.Debug().Msg("restore consumer stopped")
+	}()
+	go func() {
+		defer localWG.Done()
+		log.Debug().Msg("presence consumer starting")
+		err := stream.StartPresenceConsumer(ctx)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to setup presence probe consumer")
+			errCh <- fmt.Errorf("presence consumer failed: %w", err)
+			cancel()
+			return
+		}
+		if ctx.Err() == nil {
+			errCh <- fmt.Errorf("presence consumer stopped unexpectedly")
+			cancel()
+		}
+		log.Debug().Msg("presence consumer stopped")
 	}()
 
 	go func() {
