@@ -25,6 +25,7 @@ type EventStream struct {
 	cedana     *client.Client
 	propagator *cedanagosdk.ApiClient
 
+	nodeID             string
 	url                string
 	checkpoints        *rabbitmq.Publisher
 	checkpointRequests *rabbitmq.Consumer
@@ -70,6 +71,7 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 	es := &EventStream{
 		cedana:     cedana,
 		propagator: propagator,
+		nodeID:     hostname,
 		url:        *url,
 		Conn:       conn,
 	}
@@ -91,16 +93,16 @@ func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
 		rabbitmq.WithConsumerOptionsExchangeName("bridge_broadcast_request"),
 		rabbitmq.WithConsumerOptionsConcurrency(10),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
-		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsExchangeKind("direct"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_bridge"),
-		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsRoutingKey(es.nodeID),
 		rabbitmq.WithConsumerOptionsQueueExclusive,
 		rabbitmq.WithConsumerOptionsQueueAutoDelete,
 		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
 			"x-expires": queryExpiryMs,
 		}),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
-			RoutingKey:     "",
+			RoutingKey:     es.nodeID,
 			BindingOptions: rabbitmq.BindingOptions{},
 		}),
 	)
@@ -299,6 +301,7 @@ func (es *EventStream) Close() error {
 
 type checkpointReq struct {
 	JobID    string `json:"job_id"`
+	NodeID   string `json:"node_id"`
 	JobName  string `json:"job_name"`
 	ActionID string `json:"action_id"`
 	Kind     string `json:"kind"`
@@ -307,6 +310,7 @@ type checkpointReq struct {
 type checkpointInfo struct {
 	ActionID      string        `json:"action_id"`
 	JobID         string        `json:"job_id"`
+	NodeID        string        `json:"node_id"`
 	CheckpointID  string        `json:"checkpoint_id"`
 	Status        string        `json:"status"`
 	Path          string        `json:"path"`
@@ -326,7 +330,6 @@ type restoreReq struct {
 	CheckpointID   string `json:"checkpoint_id"`
 	CheckpointPath string `json:"checkpoint_path"`
 	JobID          string `json:"job_id"`
-	ClusterID      string `json:"cluster_id"`
 }
 
 type restoreInfo struct {
@@ -437,6 +440,15 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		}
 		log := log.With().Str("action_id", req.ActionID).Str("kind", req.Kind).Str("job_id", req.JobID).Logger()
 
+		if req.NodeID == "" {
+			log.Debug().Msg("checkpoint request missing node_id, skipping")
+			return rabbitmq.Ack
+		}
+		if req.NodeID != es.nodeID {
+			log.Debug().Str("target_node_id", req.NodeID).Str("local_node_id", es.nodeID).Msg("checkpoint request not for this node, skipping")
+			return rabbitmq.Ack
+		}
+
 		// List local jobs and find the one matching the requested job ID
 		listResp, err := es.cedana.List(ctx, &daemon.ListReq{})
 		if err != nil {
@@ -505,6 +517,7 @@ func (es *EventStream) publishCheckpoint(
 	ci := checkpointInfo{
 		ActionID:     req.ActionID,
 		JobID:        req.JobID,
+		NodeID:       es.nodeID,
 		CheckpointID: checkpointID,
 	}
 	if dumpErr != nil {
