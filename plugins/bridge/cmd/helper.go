@@ -2,22 +2,32 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
+	"net/url"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/script"
+	"github.com/cedana/cedana/pkg/style"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/cedana/pkg/version"
 	"github.com/cedana/cedana/plugins/bridge/internal/eventstream"
 	bridgescripts "github.com/cedana/cedana/plugins/bridge/scripts"
 	"github.com/cedana/cedana/scripts"
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -36,6 +46,32 @@ func init() {
 	HelperCmd.AddCommand(setupCmd)
 	HelperCmd.AddCommand(startCmd)
 	HelperCmd.AddCommand(destroyCmd)
+	HelperCmd.AddCommand(runCmd)
+	HelperCmd.AddCommand(jobCmd)
+	HelperCmd.AddCommand(nodeCmd)
+
+	runCmd.AddCommand(runProcessCmd)
+	jobCmd.AddCommand(jobListCmd)
+	nodeCmd.AddCommand(nodeListCmd)
+
+	runProcessCmd.Flags().String("jid", "", "job id")
+	runProcessCmd.Flags().String("out", "", "file to forward stdout/err")
+	runProcessCmd.Flags().Bool("attach", false, "attach stdin/out/err")
+
+	jobListCmd.Flags().String("node-id", "", "filter by node id")
+	jobListCmd.Flags().String("hostname", "", "filter by hostname")
+	jobListCmd.Flags().String("status", "", "filter by status")
+	jobListCmd.Flags().Int64("limit", 100, "maximum number of results")
+	jobListCmd.Flags().Int64("offset", 0, "number of results to skip")
+	jobListCmd.Flags().Bool("json", false, "output raw json")
+
+	nodeListCmd.Flags().String("status", "", "filter by status")
+	nodeListCmd.Flags().Int64("limit", 100, "maximum number of results")
+	nodeListCmd.Flags().Int64("offset", 0, "number of results to skip")
+	nodeListCmd.Flags().Bool("json", false, "output raw json")
+
+	HelperCmd.AddCommand(utils.AliasOf(jobListCmd, "jobs"))
+	HelperCmd.AddCommand(utils.AliasOf(nodeListCmd, "nodes"))
 
 	script.Source(scripts.Utils)
 }
@@ -240,4 +276,292 @@ func startHelper(ctx context.Context) error {
 	localWG.Wait()
 
 	return nil
+}
+
+var runCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run Bridge-managed workloads",
+}
+
+var runProcessCmd = &cobra.Command{
+	Use:   "process <path> [args...]",
+	Short: "Run a managed process under Bridge",
+	Args:  cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ced, err := client.New(config.Global.Address, config.Global.Protocol)
+		if err != nil {
+			return fmt.Errorf("error creating client: %w", err)
+		}
+		defer ced.Close()
+
+		jid, _ := cmd.Flags().GetString("jid")
+		if strings.TrimSpace(jid) == "" {
+			return fmt.Errorf("jid is required for bridge run process")
+		}
+		out, _ := cmd.Flags().GetString("out")
+		attach, _ := cmd.Flags().GetBool("attach")
+
+		path := args[0]
+		fullPath, err := exec.LookPath(path)
+		if err != nil {
+			return err
+		}
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("error getting working directory: %w", err)
+		}
+		user, err := utils.GetCredentials()
+		if err != nil {
+			return fmt.Errorf("error getting credentials: %w", err)
+		}
+
+		req := &daemon.RunReq{
+			JID:        jid,
+			Log:        out,
+			GPUEnabled: false,
+			GPUTracing: false,
+			Attachable: attach,
+			Action:     daemon.RunAction_START_NEW,
+			Env:        os.Environ(),
+			UID:        user.Uid,
+			GID:        user.Gid,
+			Groups:     user.Groups,
+			Type:       "process",
+			Details: &daemon.Details{Process: &daemon.Process{
+				Path:       fullPath,
+				Args:       args[1:],
+				WorkingDir: wd,
+			}},
+		}
+
+		resp, _, err := ced.Run(cmd.Context(), req)
+		if err != nil {
+			return err
+		}
+		for _, msg := range resp.GetMessages() {
+			fmt.Println(msg)
+		}
+
+		hostname, err := os.Hostname()
+		if err != nil || strings.TrimSpace(hostname) == "" {
+			hostname = "unknown"
+		}
+		registerReq := map[string]any{
+			"job_id":   jid,
+			"job_name": path,
+			"hostname": hostname,
+		}
+		if err := postPropagatorJSON(cmd.Context(), "/v2/bridge/jobs/register", registerReq, nil); err != nil {
+			return fmt.Errorf("failed to register bridge job identity: %w", err)
+		}
+
+		if attach {
+			return ced.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+		}
+		return nil
+	},
+}
+
+var jobCmd = &cobra.Command{
+	Use:   "job",
+	Short: "Bridge job operations",
+}
+
+var nodeCmd = &cobra.Command{
+	Use:   "node",
+	Short: "Bridge node operations",
+}
+
+type bridgeJobRecord struct {
+	JID      string `json:"jid"`
+	NodeID   string `json:"node_id"`
+	Hostname string `json:"hostname"`
+	Status   string `json:"status"`
+	Name     string `json:"name"`
+}
+
+type bridgeJobsResponse struct {
+	Jobs  []bridgeJobRecord `json:"jobs"`
+	Total int64             `json:"total"`
+}
+
+var jobListCmd = &cobra.Command{
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List Bridge jobs from propagator",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		nodeID, _ := cmd.Flags().GetString("node-id")
+		hostname, _ := cmd.Flags().GetString("hostname")
+		status, _ := cmd.Flags().GetString("status")
+		limit, _ := cmd.Flags().GetInt64("limit")
+		offset, _ := cmd.Flags().GetInt64("offset")
+		rawJSON, _ := cmd.Flags().GetBool("json")
+
+		params := url.Values{}
+		if nodeID != "" {
+			params.Set("node_id", nodeID)
+		}
+		if hostname != "" {
+			params.Set("hostname", hostname)
+		}
+		if status != "" {
+			params.Set("status", status)
+		}
+		params.Set("limit", fmt.Sprintf("%d", limit))
+		params.Set("offset", fmt.Sprintf("%d", offset))
+
+		var resp bridgeJobsResponse
+		if err := getPropagatorJSON(cmd.Context(), "/v2/bridge/jobs?"+params.Encode(), &resp); err != nil {
+			return err
+		}
+
+		if rawJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(resp)
+		}
+
+		if len(resp.Jobs) == 0 {
+			fmt.Println("No bridge jobs found")
+			return nil
+		}
+
+		tw := table.NewWriter()
+		tw.SetStyle(style.TableStyle)
+		tw.SetOutputMirror(os.Stdout)
+		tw.SetColumnConfigs([]table.ColumnConfig{{Name: "Node", Align: text.AlignLeft}, {Name: "Status", Align: text.AlignLeft}})
+		tw.AppendHeader(table.Row{"JID", "Node", "Hostname", "Status", "Name"})
+		for _, j := range resp.Jobs {
+			tw.AppendRow(table.Row{j.JID, j.NodeID, j.Hostname, j.Status, j.Name})
+		}
+		tw.Render()
+		fmt.Printf("\nTotal: %d\n", resp.Total)
+		return nil
+	},
+}
+
+type bridgeNodeRecord struct {
+	NodeID   string `json:"node_id"`
+	Hostname string `json:"hostname"`
+	Status   string `json:"status"`
+	LastSeen string `json:"last_seen"`
+}
+
+type bridgeNodesResponse struct {
+	Nodes []bridgeNodeRecord `json:"nodes"`
+	Total int64              `json:"total"`
+}
+
+var nodeListCmd = &cobra.Command{
+	Use:     "list",
+	Aliases: []string{"ls"},
+	Short:   "List Bridge nodes from propagator",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		status, _ := cmd.Flags().GetString("status")
+		limit, _ := cmd.Flags().GetInt64("limit")
+		offset, _ := cmd.Flags().GetInt64("offset")
+		rawJSON, _ := cmd.Flags().GetBool("json")
+
+		params := url.Values{}
+		if status != "" {
+			params.Set("status", status)
+		}
+		params.Set("limit", fmt.Sprintf("%d", limit))
+		params.Set("offset", fmt.Sprintf("%d", offset))
+
+		var resp bridgeNodesResponse
+		if err := getPropagatorJSON(cmd.Context(), "/v2/bridge/nodes?"+params.Encode(), &resp); err != nil {
+			return err
+		}
+
+		if rawJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(resp)
+		}
+
+		if len(resp.Nodes) == 0 {
+			fmt.Println("No bridge nodes found")
+			return nil
+		}
+
+		tw := table.NewWriter()
+		tw.SetStyle(style.TableStyle)
+		tw.SetOutputMirror(os.Stdout)
+		tw.AppendHeader(table.Row{"Node", "Hostname", "Status", "Last seen"})
+		for _, n := range resp.Nodes {
+			tw.AppendRow(table.Row{n.NodeID, n.Hostname, n.Status, n.LastSeen})
+		}
+		tw.Render()
+		fmt.Printf("\nTotal: %d\n", resp.Total)
+		return nil
+	},
+}
+
+func getPropagatorJSON(ctx context.Context, path string, out any) error {
+	base := strings.TrimRight(config.Global.Connection.URL, "/")
+	base = strings.TrimSuffix(base, "/v1")
+	base = strings.TrimSuffix(base, "/v2")
+	url := base + path
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	if config.Global.Connection.AuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+config.Global.Connection.AuthToken)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("propagator request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+func postPropagatorJSON(ctx context.Context, path string, payload any, out any) error {
+	base := strings.TrimRight(config.Global.Connection.URL, "/")
+	base = strings.TrimSuffix(base, "/v1")
+	base = strings.TrimSuffix(base, "/v2")
+	url := base + path
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	if config.Global.Connection.AuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+config.Global.Connection.AuthToken)
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("propagator request failed (%d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	if out == nil || resp.ContentLength == 0 {
+		return nil
+	}
+
+	return json.NewDecoder(resp.Body).Decode(out)
 }
