@@ -352,7 +352,11 @@ var runProcessCmd = &cobra.Command{
 			"hostname": hostname,
 		}
 		if err := postPropagatorJSON(cmd.Context(), "/v2/bridge/jobs/register", registerReq, nil); err != nil {
-			return fmt.Errorf("failed to register bridge job identity: %w", err)
+			_, killErr := ced.Kill(cmd.Context(), &daemon.KillReq{JIDs: []string{jid}})
+			if killErr != nil {
+				return fmt.Errorf("failed to register bridge job identity: %w (rollback failed for jid %s: %v)", err, jid, killErr)
+			}
+			return fmt.Errorf("failed to register bridge job identity: %w (rolled back started job %s)", err, jid)
 		}
 
 		if attach {
