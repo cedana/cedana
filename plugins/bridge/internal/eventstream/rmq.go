@@ -194,16 +194,16 @@ func (es *EventStream) StartRestoresConsumer(ctx context.Context) error {
 		rabbitmq.WithConsumerOptionsExchangeName("bridge_restore_request"),
 		rabbitmq.WithConsumerOptionsConcurrency(10),
 		rabbitmq.WithConsumerOptionsExchangeDeclare,
-		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsExchangeKind("direct"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_bridge_restore"),
-		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsRoutingKey(es.nodeID),
 		rabbitmq.WithConsumerOptionsQueueExclusive,
 		rabbitmq.WithConsumerOptionsQueueAutoDelete,
 		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
 			"x-expires": queryExpiryMs,
 		}),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
-			RoutingKey:     "",
+			RoutingKey:     es.nodeID,
 			BindingOptions: rabbitmq.BindingOptions{},
 		}),
 	)
@@ -407,6 +407,7 @@ type restoreReq struct {
 	CheckpointID   string `json:"checkpoint_id"`
 	CheckpointPath string `json:"checkpoint_path"`
 	JobID          string `json:"job_id"`
+	TargetNodeID   string `json:"target_node_id,omitempty"`
 }
 
 type restoreInfo struct {
@@ -501,6 +502,11 @@ func (es *EventStream) restoreHandler(ctx context.Context) rabbitmq.Handler {
 			return rabbitmq.Ack
 		}
 		log := log.With().Str("action_id", req.ActionID).Str("checkpoint_id", req.CheckpointID).Str("job_id", req.JobID).Str("checkpoint_path", req.CheckpointPath).Logger()
+
+		if req.TargetNodeID != "" && req.TargetNodeID != es.nodeID {
+			log.Debug().Str("target_node_id", req.TargetNodeID).Str("local_node_id", es.nodeID).Msg("restore request not for this node, skipping")
+			return rabbitmq.Ack
+		}
 
 		if req.CheckpointPath == "" {
 			err := fmt.Errorf("missing checkpoint_path in restore request")
