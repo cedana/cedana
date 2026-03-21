@@ -15,6 +15,7 @@ import (
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/pkg/utils"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
@@ -50,6 +51,13 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 	if err != nil {
 		hostname = "unknown"
 	}
+	nodeID := hostname
+	hostInfo, hostErr := utils.GetHost(ctx)
+	if hostErr != nil {
+		log.Warn().Err(hostErr).Msg("failed to resolve host id for bridge node routing; falling back to hostname")
+	} else if hostInfo != nil && hostInfo.GetID() != "" {
+		nodeID = hostInfo.GetID()
+	}
 	clientName := fmt.Sprintf("cedana-bridge-%s-%d", hostname, time.Now().UnixNano())
 	url, err := propagator.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
 	if err != nil {
@@ -71,7 +79,7 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 	es := &EventStream{
 		cedana:     cedana,
 		propagator: propagator,
-		nodeID:     hostname,
+		nodeID:     nodeID,
 		url:        *url,
 		Conn:       conn,
 	}

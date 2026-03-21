@@ -61,6 +61,7 @@ func init() {
 	jobListCmd.Flags().String("node-id", "", "filter by node id")
 	jobListCmd.Flags().String("hostname", "", "filter by hostname")
 	jobListCmd.Flags().String("status", "", "filter by status")
+	jobListCmd.Flags().Bool("include-stale", false, "include stale jobs")
 	jobListCmd.Flags().Int64("limit", 100, "maximum number of results")
 	jobListCmd.Flags().Int64("offset", 0, "number of results to skip")
 	jobListCmd.Flags().Bool("json", false, "output raw json")
@@ -415,6 +416,7 @@ var jobListCmd = &cobra.Command{
 		nodeID, _ := cmd.Flags().GetString("node-id")
 		hostname, _ := cmd.Flags().GetString("hostname")
 		status, _ := cmd.Flags().GetString("status")
+		includeStale, _ := cmd.Flags().GetBool("include-stale")
 		limit, _ := cmd.Flags().GetInt64("limit")
 		offset, _ := cmd.Flags().GetInt64("offset")
 		rawJSON, _ := cmd.Flags().GetBool("json")
@@ -428,6 +430,9 @@ var jobListCmd = &cobra.Command{
 		}
 		if status != "" {
 			params.Set("status", status)
+		}
+		if includeStale {
+			params.Set("include_stale", "true")
 		}
 		params.Set("limit", fmt.Sprintf("%d", limit))
 		params.Set("offset", fmt.Sprintf("%d", offset))
