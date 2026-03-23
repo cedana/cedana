@@ -498,17 +498,19 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			}
 		}
 
-		m.storageUsedMutex.Lock()
-		storageUsed, err := m.db.GetStorageUsed(ctx)
-		if err != nil {
-			return err
-		}
+		if !config.Global.DB.Remote && config.Global.LocalStorageLimit > 0 {
+			m.storageUsedMutex.Lock()
+			storageUsed, err := m.db.GetStorageUsed(ctx)
+			if err != nil {
+				return err
+			}
 
-		if storageUsed > config.Global.LocalStorageLimit*utils.GIBIBYTE {
-			log.Warn().Msg("cedana has used more storage than the limit")
+			if storageUsed > config.Global.LocalStorageLimit*utils.GIBIBYTE {
+				log.Warn().Msg("cedana has used more storage than the limit")
+			}
+			m.storageUsed = storageUsed
+			m.storageUsedMutex.Unlock()
 		}
-		m.storageUsed = storageUsed
-		m.storageUsedMutex.Unlock()
 
 		// TODO: Can also remove stale jobs from memory. But need to be careful
 		// about race conditions. For now, we just keep them in memory until daemon
