@@ -196,7 +196,7 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 func (s *Server) Stop() {
 	s.grpcServer.GracefulStop()
 	s.listener.Close()
-	s.Wait()
+	s.wg.Wait()
 	log.Info().Msg("stopped server gracefully")
 }
 

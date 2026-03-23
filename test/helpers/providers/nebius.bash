@@ -19,10 +19,10 @@ export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 export NB_CLUSTER_NAME="${NB_CLUSTER_NAME:-cedana-ci-amd64}"
 export NB_SA_PRIVATE_KEY_PATH="${NB_SA_PRIVATE_KEY_PATH:-/tmp/nb_sa_key}"
 export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
-export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.3.4}"
-export GPU_OPERATOR_DRIVER_VERSION="${GPU_OPERATOR_DRIVER_VERSION:-570.195.03}"
+export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.10.0}"
+export GPU_OPERATOR_DRIVER_VERSION="${GPU_OPERATOR_DRIVER_VERSION:-580.95.05}"
 export NB_NODEGROUP_NAME="${NB_NODEGROUP_NAME:-github-ci}"
-export NB_NODE_COUNT="${NB_NODE_COUNT:-2}"
+export NB_NODE_COUNT="${NB_NODE_COUNT:-1}"
 export NB_NODE_DISK_SIZE="${NB_NODE_DISK_SIZE:-1099511627776}"
 export NB_GPU_PRESET="${NB_GPU_PRESET:-1gpu-16vcpu-200gb}"
 export NB_GPU_PLATFORM="${NB_GPU_PLATFORM:-gpu-h100-sxm}"
@@ -71,8 +71,8 @@ _create_nebius_mk8s() {
     debug_log "Creating Nebius mk8s cluster..."
 
     NB_SUBNET_ID=$(nebius vpc subnet list \
-        --format json |
-        jq -r '.items[0].metadata.id')
+            --format json |
+    jq -r '.items[0].metadata.id')
     export NB_SUBNET_ID
 
     NB_CLUSTER_ID=$(
@@ -85,9 +85,9 @@ _create_nebius_mk8s() {
         debug_log "Cluster already exists, skip creation..."
     else
         NB_CLUSTER_ID=$(nebius mk8s cluster create \
-            --name "$NB_CLUSTER_NAME" \
-            --control-plane-subnet-id "$NB_SUBNET_ID" \
-            '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
+                --name "$NB_CLUSTER_NAME" \
+                --control-plane-subnet-id "$NB_SUBNET_ID" \
+                '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
             --format json | jq -r '.metadata.id')
     fi
     export NB_CLUSTER_ID
@@ -139,7 +139,7 @@ setup_gpu_operator() {
     debug_log "Installing NVIDIA GPU operator..."
 
     helm repo add nvidia https://helm.ngc.nvidia.com/nvidia &&
-        helm repo update
+    helm repo update
 
     helm upgrade -i --wait gpu-operator \
         -n "$GPU_OPERATOR_NAMESPACE" --create-namespace \
@@ -152,33 +152,10 @@ setup_gpu_operator() {
     debug_log "NVIDIA GPU operator installed successfully"
 }
 
-delete_nebius_disks() {
-    debug_log "Fetching disk name to be deleted ..."
-    volume=$(kubectl get pvc dgtest-pvc -n "$NAMESPACE" -o jsonpath='{.spec.volumeName}{"\n"}')
-    debug_log "Fetching disk id ..."
-    disk_id=$(nebius compute disk get-by-name --name "$volume" --format json | jq -r '.id')
-    # Make sure that all pods are deleted before deleting pvc
-    kubectl delete po --all -n "$NAMESPACE"
-    debug_log "Deleting dgtest-pvc ..."
-    spec=$(cmd_pvc_spec 50Gi dgtest-pvc)
-    kubectl delete -f "$spec"
-    sleep 10
-    debug_log "dgtest-pvc has been deleted"
-    debug_log "Deleting unused nebius disk ..."
-    nebius compute disk delete --id "$disk_id"
-    debug_log "Unused nebius disk has been deleted"
-}
-
 setup_cluster() {
     _install_nebius_cli
     _configure_nebius_credentials
     _create_nebius_mk8s
-    create_nodegroup
-    debug_log "Creating nebius multi_gpu nodegroup ..."
-    NB_NODEGROUP_NAME="gci-multi-gpu-nebius"
-    NB_NODE_COUNT="1"
-    NB_GPU_PRESET="8gpu-128vcpu-1600gb"
-    NB_NODE_DISK_SIZE="137438953472"
     create_nodegroup
     debug_log "Fetching Nebius mk8s kubeconfig file..."
 
@@ -191,8 +168,6 @@ setup_cluster() {
 }
 
 teardown_cluster() {
-    debug_log "Tearing down unused storage disks..."
-    delete_nebius_disks
     debug_log "Tearing down Nebius cluster..."
     delete_mk8s_cluster
 

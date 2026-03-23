@@ -19,11 +19,13 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/gofrs/flock"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -225,11 +227,6 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 
 	log.Debug().Str("ID", id).Msg("spawning new GPU controller")
 
-	observability := ""
-	if config.Global.GPU.Observability {
-		observability = "--observability"
-	}
-
 	c = &controller{
 		ID:     id,
 		ErrBuf: &bytes.Buffer{},
@@ -237,20 +234,20 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		GID:    uint32(os.Getgid()),
 	}
 
-	logDir, err := EnsureLogDir(id, c.UID, c.GID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
-	}
-
 	cmd := exec.Command(
 		binary,
 		id,
-		observability,
-		"--log-dir",
-		logDir,
 		"--sock-dir",
 		config.Global.GPU.SockDir,
 	)
+
+	if config.Global.GPU.LogDir != "" {
+		logDir, err := EnsureLogDir(id, c.UID, c.GID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
+		}
+		cmd.Args = append(cmd.Args, "--log-dir", logDir)
+	}
 
 	// We create a new process group and session to essentially daemonize the controller process.
 	// So that workers of the controller can all be signaled together.
@@ -261,6 +258,10 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	}
 
 	cmd.Stderr = c.ErrBuf
+	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stdout
+		logger := log.With().Str("ID", id).Str("plugin", "gpu").Logger().Level(zerolog.DebugLevel)
+		cmd.Stdout = logging.Writer(&logger)
+	}
 
 	existingLD := os.Getenv("LD_LIBRARY_PATH")
 	ldPath := config.Global.GPU.LdLibPath
@@ -365,13 +366,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 	log := log.With().Str("plugin", "gpu").Str("ID", id).Logger()
 
-	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
-	// do the GPU dump in parallel to CRIU dump.
-	var dumpErr chan error
-	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
-		defer cancel()
-
+	callback.InitializeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		pid := uint32(opts.GetPid())
 		log := log.With().Uint32("PID", pid).Logger()
 
@@ -384,6 +379,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
 		controller.Termination.Lock()
 
+		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
+		defer cancel()
+
 		log.Info().Msg("GPU freeze starting")
 
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})
@@ -394,6 +392,21 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 		log.Info().Msg("GPU freeze complete")
 
+		return nil
+	}
+
+	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
+	// do the GPU dump in parallel to CRIU dump.
+	var dumpErr chan error
+	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		pid := uint32(opts.GetPid())
+		log := log.With().Uint32("PID", pid).Logger()
+
+		controller := p.Get(id)
+		if controller == nil {
+			return fmt.Errorf("GPU controller not found, is the process still running?")
+		}
+
 		// Begin GPU dump in parallel to CRIU dump
 
 		dumpErr = make(chan error, 1)
@@ -401,7 +414,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		go func() {
 			defer close(dumpErr)
 
-			waitCtx, cancel = context.WithTimeout(ctx, DUMP_TIMEOUT)
+			waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
 			log.Info().Msg("GPU dump starting")
@@ -416,6 +429,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
 				return
 			}
+
 			log.Info().Msg("GPU dump complete")
 		}()
 		if PARALLEL_DUMP {

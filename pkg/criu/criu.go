@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
@@ -62,8 +63,14 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 	}
 
+	// Pin this goroutine to its OS thread so that Pdeathsig does not
+	// fire prematurely due to Go's M:N goroutine scheduling recycling
+	// the thread that spawned swrk. Unlocked in Cleanup.
+	runtime.LockOSThread()
+
 	err = cmd.Start()
 	if err != nil {
+		runtime.UnlockOSThread()
 		clnNet.Close()
 		return err
 	}
@@ -85,9 +92,14 @@ func (c *Criu) Cleanup() error {
 		// XXX: We don't use s.swrkCmd.Wait() because it can hang forever
 		// since the stdin, stdout, and stderr copy might not be over.
 		if _, err := c.swrkCmd.Process.Wait(); err != nil {
-			errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			// ECHILD means the process was already reaped (e.g. by the
+			// embedding process's signal handler or the Go runtime).
+			if !errors.Is(err, syscall.ECHILD) {
+				errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			}
 		}
 		c.swrkCmd = nil
+		runtime.UnlockOSThread()
 	}
 	return errors.Join(errs...)
 }
