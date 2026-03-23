@@ -472,7 +472,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		if PARALLEL_DUMP {
 			return nil
 		}
-		return utils.GRPCError(<-dumpErr)
+		return <-dumpErr
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
@@ -480,7 +480,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		if dumpErr == nil { // Dump was never started
 			return nil
 		}
-		return utils.GRPCError(<-dumpErr)
+		return <-dumpErr
 	}
 
 	callback.FinalizeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
@@ -523,10 +523,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			log.Info().Msg("GPU unfreeze completed")
 		}
 
-		return errors.Join(
-			utils.GRPCError(err),
-			utils.GRPCError(unfreezeErr),
-		)
+		return errors.Join(err, utils.GRPCError(unfreezeErr))
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
@@ -570,7 +567,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		if PARALLEL_RESTORE {
 			return nil
 		}
-		return utils.GRPCError(<-restoreErr)
+		return <-restoreErr
 	}
 
 	// Wait for GPU restore to finish before resuming the process
@@ -580,22 +577,40 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return nil
 	}
 
+	// Signal the process so it knowns it may have a new PID
+	// Only changes for containers - they restore with a different host PID
+	callback.PreResumeFunc = func(ctx context.Context) error {
+		err := syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
+		if err != nil {
+			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
+			// Because it can't run since the GPU restore failed.
+			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+		}
+		return err
+	}
+
+	callback.PostResumeFunc = func(ctx context.Context) error {
+		err := <-restoreErr
+		if err != nil {
+			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
+			// Because it can't run since the GPU restore failed.
+			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+		}
+		return err
+	}
+
 	// Ensure we always wait for GPU restore to finish before finalizing the restore.
-	// Signal the process so it knowns it may have a new PID (only useful for containers which get
-	// restore with a different host PID).
 	callback.FinalizeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		if restoreErr == nil {
 			return nil
 		}
-		err := syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
+		err := <-restoreErr
 		if err != nil {
-			log.Error().Err(err).Int32("RestoredPID", *restoredPid).Msg("failed to signal restored GPU process with new PID")
-		}
-		err = <-restoreErr
-		if err != nil {
-			// CRIU doesn't kill the process if this post-restore hook fails, so we kill it ourselves.
+			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
 			// Because it can't run since the GPU restore failed.
-			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+			if restoredPid != nil {
+				syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+			}
 		}
 		return err
 	}
