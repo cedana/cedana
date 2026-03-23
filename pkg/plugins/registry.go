@@ -104,6 +104,7 @@ var Registry = []Plugin{
 			{Name: "libslurm-cedana.so"},
 			{Name: "task_cedana.so"},
 			{Name: "cli_filter_cedana.so"},
+			{Name: "job_submit_cedana.so"},
 		},
 		Binaries: []Binary{{Name: "cedana-slurm"}},
 	},
