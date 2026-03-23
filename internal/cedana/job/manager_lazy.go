@@ -502,6 +502,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			m.storageUsedMutex.Lock()
 			storageUsed, err := m.db.GetStorageUsed(ctx)
 			if err != nil {
+				m.storageUsedMutex.Unlock()
 				return err
 			}
 
