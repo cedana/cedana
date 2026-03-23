@@ -6,16 +6,13 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	slurmpb "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/slurm"
-	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	slurm_flags "github.com/cedana/cedana/plugins/slurm/pkg/flags"
 	"github.com/spf13/cobra"
-	"google.golang.org/protobuf/proto"
 )
 
 func init() {
-	RestoreCmd.PersistentFlags().
-		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	RestoreCmd.PersistentFlags().
 		StringP(flags.JidFlag.Full, flags.JidFlag.Short, "", "Slurm job id")
 }
@@ -32,7 +29,7 @@ var RestoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		jobID, err := cmd.Flags().GetUint32(flags.JidFlag.Full)
+		jobID, err := cmd.Flags().GetUint32(slurm_flags.JidFlag.Full)
 		if err != nil {
 			return fmt.Errorf("invalid job id: %v", err)
 		}
@@ -49,13 +46,6 @@ var RestoreCmd = &cobra.Command{
 		}}
 
 		req.Path = path
-		req.Criu = &criu.CriuOpts{
-			Unprivileged:   proto.Bool(true),
-			ShellJob:       proto.Bool(true),
-			TcpEstablished: proto.Bool(true),
-			FileLocks:      proto.Bool(true),
-			LinkRemap:      proto.Bool(true),
-		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
 		cmd.SetContext(ctx)

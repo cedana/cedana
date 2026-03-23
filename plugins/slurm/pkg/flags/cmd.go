@@ -6,6 +6,5 @@ type Flag struct {
 }
 
 var (
-	PathFlag = Flag{Full: "path", Short: "p"}
-	JidFlag  = Flag{Full: "jid", Short: "j"}
+	JidFlag = Flag{Full: "jid"}
 )
