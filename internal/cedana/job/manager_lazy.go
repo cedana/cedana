@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -533,10 +535,16 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 		checkpoint, ok := m.checkpoints.Load(id)
 		if ok {
 			err = m.db.PutCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
-		} else if _, deleted := m.deletedCheckpoints.Load(id); deleted {
+		} else if val, deleted := m.deletedCheckpoints.Load(id); deleted {
+			checkpoint := val.(*daemon.Checkpoint)
+			path := checkpoint.GetPath()
 			err = m.db.DeleteCheckpoint(ctx, id)
 			if err == nil {
 				m.deletedCheckpoints.Delete(id)
+				if config.Global.LocalStorageLimit > 0 && !config.Global.DB.Remote && !strings.Contains(path, "://") {
+					os.RemoveAll(path)
+					m.FreeStorage(ctx, checkpoint.GetSize())
+				}
 			}
 		}
 	}

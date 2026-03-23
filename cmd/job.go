@@ -35,6 +35,7 @@ func init() {
 
 	jobCheckpointCmd.AddCommand(listJobCheckpointCmd)
 	jobCheckpointCmd.AddCommand(inspectJobCheckpointCmd)
+	jobCheckpointCmd.AddCommand(deleteJobCheckpointCmd)
 
 	// Add subcommand flags
 	listJobCmd.Flags().BoolP(flags.AllFlag.Full, flags.AllFlag.Short, false, "include jobs from remote hosts")
@@ -433,6 +434,30 @@ var (
 			}
 
 			// TODO: Move checkpoint inespection to daemon, to allow inspecting compressed or even streamable checkpoints
+
+			return nil
+		},
+	}
+)
+
+var (
+	deleteJobCheckpointCmdUse = "delete <checkpoint-id>"
+	deleteJobCheckpointCmd    = &cobra.Command{
+		Use:   deleteJobCheckpointCmdUse,
+		Short: "Delete a checkpoint",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			if !ok {
+				return fmt.Errorf("invalid client in context")
+			}
+
+			id := args[0]
+
+			_, err := client.DeleteCheckpoint(cmd.Context(), &daemon.DeleteCheckpointReq{ID: *proto.String(id)})
+			if err != nil {
+				return err
+			}
 
 			return nil
 		},
