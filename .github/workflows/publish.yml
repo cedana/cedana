@@ -246,8 +246,9 @@ jobs:
 
             plugin="${fname#libcedana-}"
             plugin="${plugin%.so}"
-            fname="${fname//-//}"
-
+            if [[ "$plugin" == *storage* ]]; then
+              plugin="${plugin//-//}"
+            fi
             checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
 
             jq \
