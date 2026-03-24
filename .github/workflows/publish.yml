@@ -250,16 +250,18 @@ jobs:
               plugin="${plugin//-//}"
             fi
             checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
-
+            size="$(stat -c%s $fname)"
             jq \
               --arg plugin "$plugin" \
               --arg name "$fname" \
               --arg checksum "$checksum" \
+              --arg size "$size" \
               '
               .plugins[$plugin] |=
                 (
                   . // {
                     type: "SUPPORTED",
+                    size: $size,
                     libraries: []
                   }
                 )
