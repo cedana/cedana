@@ -24,6 +24,7 @@ import (
 var Version string = "dev"
 
 var (
+	RestoreCmd *cobra.Command   = cmd.RestoreCmd
 	HelperCmds []*cobra.Command = []*cobra.Command{cmd.HelperCmd}
 	CmdTheme   text.Colors      = style.HighLevelRuntimeColors
 )
@@ -41,7 +42,6 @@ var (
 		job.SetPIDForDump,
 
 		job.GetSlurmJobForDump,
-		job.DumpSlurmScript,
 
 		cgroup.UseCgroupFreezerIfAvailableForDump,
 		network.LockNetworkBeforeDump,
@@ -51,7 +51,6 @@ var (
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 
-		job.RestoreSlurmScript,
 		job.GetSlurmJobForRestore,
 
 		network.UnlockNetworkAfterRestore,
