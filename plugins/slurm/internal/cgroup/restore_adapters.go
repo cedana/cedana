@@ -66,9 +66,14 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 				// apply cgroups to the CRIU process
 				err = manager.Apply(int(criuPid))
 				if err != nil {
-					return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
+					if os.IsPermission(err) {
+						log.Warn().Msgf("skipping cgroup apply (unprivileged): %v\n", err)
+					} else {
+						return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
+					}
+				} else {
+					log.Trace().Msgf("applied cgroups to CRIU process %d\n", criuPid)
 				}
-				log.Trace().Msgf("applied cgroups to CRIU process %d\n", criuPid)
 
 				// set CgRoot to tell CRIU where to place restored processes
 				// CRIU expects paths relative to each controller's mount point
