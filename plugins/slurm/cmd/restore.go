@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	slurmpb "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/slurm"
@@ -29,7 +30,12 @@ var RestoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
-		jobID, err := cmd.Flags().GetUint32(slurm_flags.JidFlag.Full)
+		jobID, err := cmd.Flags().GetString(slurm_flags.JidFlag.Full)
+		if err != nil {
+			return fmt.Errorf("invalid job id: %v", err)
+		}
+
+		jid, err := strconv.Atoi(jobID)
 		if err != nil {
 			return fmt.Errorf("invalid job id: %v", err)
 		}
@@ -42,7 +48,7 @@ var RestoreCmd = &cobra.Command{
 		req.Type = "slurm"
 		req.Details = &daemon.Details{Slurm: &slurmpb.Slurm{
 			ID:    fmt.Sprintf("%d", jobID),
-			JobID: uint32(jobID),
+			JobID: uint32(jid),
 		}}
 
 		req.Path = path
