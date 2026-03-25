@@ -265,7 +265,7 @@ jobs:
             fi
             checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
             size="$(stat -c%s $file)"
-            date_file="artifacts/${plugin_file_safe}.date"
+            date_file="artifacts/${plugin}.date"
             published_at="$(cat "$date_file")"
 
             jq \
