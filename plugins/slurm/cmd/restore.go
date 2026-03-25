@@ -47,7 +47,7 @@ var RestoreCmd = &cobra.Command{
 
 		req.Type = "slurm"
 		req.Details = &daemon.Details{Slurm: &slurmpb.Slurm{
-			ID:    fmt.Sprintf("%d", jobID),
+			ID:    fmt.Sprintf("%s", jobID),
 			JobID: uint32(jid),
 		}}
 
