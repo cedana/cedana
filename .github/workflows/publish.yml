@@ -239,7 +239,7 @@ jobs:
       - name: Download plugin date
         uses: actions/download-artifact@v4
         with:
-          name: date-${{ matrix.arch }}-*
+          pattern: date-${{ matrix.arch }}-*
           path: artifacts
 
       - name: Generate registry_map.json
