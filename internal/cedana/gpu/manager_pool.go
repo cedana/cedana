@@ -109,7 +109,7 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 		Msg("GPU controller pool")
 
 	if config.Global.GPU.Debug {
-		log.Warn().Msg("GPU controller pool is in debug mode, not maintaining pool size")
+		log.Warn().Msg("GPU controller pool is in debug mode, not maintaining pool size, you may spawn a GPU controller manually")
 		return nil // Allow external maintenance of pool for debugging
 	}
 
