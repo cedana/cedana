@@ -265,7 +265,6 @@ jobs:
             fi
             checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
             size="$(stat -c%s $file)"
-            ls artifacts/date-$ARCH-${plugin}
             date_file="artifacts/date-$ARCH-${plugin}/${plugin}.date"
             published_at="$(cat "$date_file")"
 
@@ -281,7 +280,7 @@ jobs:
                   . // {
                     type: "SUPPORTED",
                     size: $size,
-                    published_at: $published_at
+                    published_at: $published_at,
                     libraries: []
                   }
                 )
