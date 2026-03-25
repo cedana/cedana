@@ -34,7 +34,7 @@ teardown_file() {
 ### Dump ###
 ############
 
-@test "test" {
+@test "test storage limit" {
     jid=$(unix_nano)
 
     cedana run process --jid "$jid" -- python3 "$WORKLOADS/allocate.py"
