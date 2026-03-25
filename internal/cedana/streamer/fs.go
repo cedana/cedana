@@ -12,12 +12,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
+	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
@@ -44,6 +46,7 @@ const (
 	IMG_FILE_FORMATTER = "img-%d"
 	CONNECTION_TIMEOUT = 5 * time.Minute
 	PIPE_SIZE          = 4 * utils.MEBIBYTE
+	RETRY_INTERVAL     = 25 * time.Millisecond
 )
 
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
@@ -74,7 +77,7 @@ func NewStreamingFs(
 	_, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs, "startup")
 	defer end()
 
-	if streams < 1 {
+	if streams < 2 {
 		return nil, nil, fmt.Errorf("invalid number of streams: %d", streams)
 	}
 	var compression string
@@ -176,10 +179,12 @@ func NewStreamingFs(
 	args := []string{"--images-dir", imagesDir}
 	var extraFiles []*os.File
 	var lastMsg string
+	memoryLimit := strconv.FormatUint(config.Global.Checkpoint.StreamerMemoryLimit, 10)
 
 	switch mode {
 	case READ_ONLY:
-		args = append(args, "--shard-fds", strings.Join(shardFds, ","), "serve")
+		log.Debug().Str("streamer memory limit", memoryLimit)
+		args = append(args, "--memory-limit", memoryLimit, "--shard-fds", strings.Join(shardFds, ","), "serve")
 		extraFiles = readFds
 	case WRITE_ONLY:
 		args = append(args, "--shard-fds", strings.Join(shardFds, ","), "capture")
@@ -437,6 +442,49 @@ func (m Mode) String() string {
 	}
 }
 
+/* retries until streamer is ready */
+func (fs *Fs) waitForStreamerReady(name string) error {
+	for {
+		resp := &img_streamer.ImgStreamerReplyEntry{}
+		var sizeBuf [4]byte
+		_, err := fs.conn.Read(sizeBuf[:])
+		if err != nil {
+			return fmt.Errorf("failed to read size from file response: %w", err)
+		}
+		size := binary.LittleEndian.Uint32(sizeBuf[:])
+		data := make([]byte, size)
+		n, err := fs.conn.Read(data)
+		if err != nil {
+			return fmt.Errorf("failed to read data from file response: %w", err)
+		}
+		if n != int(size) {
+			return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
+		}
+		err = proto.Unmarshal(data, resp)
+		if err != nil {
+			return fmt.Errorf("failed to unmarshal response: %w", err)
+		}
+		if !resp.HasStatus() {
+			if !resp.Exists {
+				return fmt.Errorf("file does not exist: %s", name)
+			}
+		} else {
+			status := resp.GetStatus()
+			if status == img_streamer.FileStatus_DOES_NOT_EXIST {
+				return fmt.Errorf("file does not exist: %s", name)
+			} else if status == img_streamer.FileStatus_NOT_READY {
+				time.Sleep(RETRY_INTERVAL)
+				continue
+			} else if status == img_streamer.FileStatus_READY {
+				break
+			} else {
+				return fmt.Errorf("recieved invalid file status from streamer")
+			}
+		}
+	}
+	return nil
+}
+
 // Opens a pair of file descriptors for reading and writing through the streamer
 func (fs *Fs) openFd(name string) (int, error) {
 	fds := make([]int, 2)
@@ -485,27 +533,9 @@ func (fs *Fs) openFd(name string) (int, error) {
 
 	// If read-only, read for msg from streamer if file exists
 	if fs.mode == READ_ONLY {
-		resp := &img_streamer.ImgStreamerReplyEntry{}
-		var sizeBuf [4]byte
-		_, err = fs.conn.Read(sizeBuf[:])
+		err = fs.waitForStreamerReady(name)
 		if err != nil {
-			return 0, fmt.Errorf("failed to read size from file response: %w", err)
-		}
-		size := binary.LittleEndian.Uint32(sizeBuf[:])
-		data := make([]byte, size)
-		n, err := fs.conn.Read(data)
-		if err != nil {
-			return 0, fmt.Errorf("failed to read data from file response: %w", err)
-		}
-		if n != int(size) {
-			return 0, fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
-		}
-		err = proto.Unmarshal(data, resp)
-		if err != nil {
-			return 0, fmt.Errorf("failed to unmarshal response: %w", err)
-		}
-		if !resp.Exists {
-			return 0, fmt.Errorf("file does not exist: %s", name)
+			return 0, err
 		}
 	}
 
