@@ -201,6 +201,14 @@ jobs:
           libcedana-${PLUGIN_SAFE}.so \
           s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so \
           --metadata arch=${{ matrix.arch }},ref=${REF},sha=${SHA}
+      - name: Generate plugin date
+        run: |
+          date -u +"%Y-%m-%dT%H:%M:%SZ" > ${PLUGIN}.date
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: date-${{ matrix.arch }}-${{ env.PLUGIN }}
+          path: ${{ env.PLUGIN }}.date
 
   aws_s3_metadata:
     name: Generate Plugin registry_map.json
@@ -228,6 +236,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Download plugin date
+        uses: actions/download-artifact@v4
+        with:
+          name: date-${{ matrix.arch }}-*
+          path: artifacts
+
       - name: Generate registry_map.json
         run: |
           set -euo pipefail
@@ -251,10 +265,14 @@ jobs:
             fi
             checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
             size="$(stat -c%s $file)"
+            date_file="artifacts/${plugin_file_safe}.date"
+            published_at="$(cat "$date_file")"
+
             jq \
               --arg plugin "$plugin" \
               --arg name "$fname" \
               --arg checksum "$checksum" \
+              --arg published_at "$published_at" \
               --arg size "$size" \
               '
               .plugins[$plugin] |=
@@ -262,6 +280,7 @@ jobs:
                   . // {
                     type: "SUPPORTED",
                     size: $size,
+                    published_at: $published_at
                     libraries: []
                   }
                 )
