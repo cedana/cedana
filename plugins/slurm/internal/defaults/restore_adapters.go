@@ -19,7 +19,13 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 			req.Details.Slurm = &slurm.Slurm{}
 		}
 		if req.GetCriu() == nil {
-			req.Criu = &criu_proto.CriuOpts{}
+			req.Criu = &criu_proto.CriuOpts{
+				Unprivileged:   proto.Bool(true),
+				ShellJob:       proto.Bool(true),
+				TcpEstablished: proto.Bool(true),
+				FileLocks:      proto.Bool(true),
+				LinkRemap:      proto.Bool(true),
+			}
 		}
 		if req.GetDetails().GetSlurm().GetID() == "" {
 			req.Details.Slurm.ID = req.GetDetails().GetJID()
