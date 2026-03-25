@@ -54,9 +54,9 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      criu_version: feature/ced-1916-add-support-for-retry-mechanism-to-criu
-      gpu_version: feature/ced-1917-add-support-for-retry-mechanism-to-cedana-gpu
-      streamer_version: feature/ced-1429-streamer-time-out-on-restore-for-large-files
+      criu_version: criu-dev
+      gpu_version: main
+      streamer_version: main
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
