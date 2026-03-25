@@ -260,13 +260,14 @@ jobs:
 
             plugin="${fname#libcedana-}"
             plugin="${plugin%.so}"
+            date_file="artifacts/date-$ARCH-${plugin}/${plugin}.date"
+            published_at="$(cat "$date_file")"
+
             if [[ "$plugin" == *storage* ]]; then
               plugin="${plugin//-//}"
             fi
             checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
             size="$(stat -c%s $file)"
-            date_file="artifacts/date-$ARCH-${plugin}/${plugin}.date"
-            published_at="$(cat "$date_file")"
 
             jq \
               --arg plugin "$plugin" \
