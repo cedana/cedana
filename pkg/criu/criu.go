@@ -55,10 +55,6 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	defer srv.Close()
 
 	args := []string{"swrk", strconv.Itoa(3 + len(extraFiles))}
-	if !utils.IsRootUser() {
-		args = append(args, "--unprivileged")
-	}
-
 	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
@@ -173,6 +169,10 @@ func (c *Criu) doSwrkWithResp(
 
 	if nfy != nil {
 		opts.NotifyScripts = proto.Bool(true)
+	}
+
+	if !utils.IsRootUser() {
+		opts.Unprivileged = proto.Bool(true)
 	}
 
 	if features != nil {
