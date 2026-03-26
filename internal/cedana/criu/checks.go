@@ -15,6 +15,7 @@ import (
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 )
 
 const CRIU_MIN_VERSION = 30000
@@ -100,6 +101,9 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 			if all {
 				flags = append(flags, "--all")
 			}
+			if !utils.IsRootUser() {
+				flags = append(flags, "--unprivileged")
+			}
 			out, err := c.Check(ctx, flags...)
 			warnings, errors := parseCheckOutput(out)
 			component.Warnings = append(component.Warnings, warnings...)
@@ -155,10 +159,10 @@ func parseCheckOutput(out string) (warnings, errors []string) {
 	// other lines are ignored. must return a list of warnings and errors.
 
 	for line := range strings.SplitSeq(out, "\n") {
-		if strings.HasPrefix(line, "Warn") {
-			warnings = append(warnings, strings.TrimSpace(strings.TrimPrefix(line, "Warn")))
-		} else if strings.HasPrefix(line, "Error") {
-			errors = append(errors, strings.TrimSpace(strings.TrimPrefix(line, "Error")))
+		if after, ok := strings.CutPrefix(line, "Warn"); ok {
+			warnings = append(warnings, strings.TrimSpace(after))
+		} else if after0, ok0 := strings.CutPrefix(line, "Error"); ok0 {
+			errors = append(errors, strings.TrimSpace(after0))
 		}
 	}
 

@@ -20,7 +20,6 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		}
 		if req.GetCriu() == nil {
 			req.Criu = &criu_proto.CriuOpts{
-				Unprivileged:   proto.Bool(true),
 				ShellJob:       proto.Bool(true),
 				TcpEstablished: proto.Bool(true),
 				FileLocks:      proto.Bool(true),
