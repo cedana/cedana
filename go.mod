@@ -5,7 +5,7 @@ go 1.25
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.5.1-20251009084235-8dc16543509d.2
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251217045538-a7aca122d469.1
-	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20251217045538-7c29e0988c5e.1
+	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20260325135548-5c34961f8356.1
 	buf.build/gen/go/cedana/cedana/grpc/go v1.6.0-00000000000000-35a6b961b424.1
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-4fccc639692d.1
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251217045538-54cc2971c322.1
