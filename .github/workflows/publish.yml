@@ -223,6 +223,16 @@ jobs:
           - arm64
 
     steps:
+      - name: Checkout full repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set cedana git version
+        run: |
+          echo "VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
+
       - name: Download all plugin artifacts
         uses: actions/download-artifact@v4
         with:
@@ -241,17 +251,6 @@ jobs:
         with:
           pattern: date-${{ matrix.arch }}-*
           path: artifacts
-
-      - name: Checkout full repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Set cedana git version
-        run: |
-          git fetch --tags --force
-          VERSION=$(git describe --tags --always --dirty)
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Generate registry_map.json
         run: |
