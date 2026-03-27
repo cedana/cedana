@@ -242,6 +242,17 @@ jobs:
           pattern: date-${{ matrix.arch }}-*
           path: artifacts
 
+      - name: Checkout full repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set cedana git version
+        run: |
+          git fetch --tags --force
+          VERSION=$(git describe --tags --always --dirty)
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Generate registry_map.json
         run: |
           set -euo pipefail
@@ -268,7 +279,7 @@ jobs:
             fi
             checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
             size=$(stat -c%s $file)
-            version=$(git describe --tags --always)
+            version=${{ env.VERSION }}
             jq \
               --arg plugin "$plugin" \
               --arg version "$version" \
