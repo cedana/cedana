@@ -1,3 +1,5 @@
+//go:build linux
+
 package cgroup
 
 import (
@@ -29,15 +31,7 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 		}
 
 		if req.Criu == nil {
-			req.Criu = &criu_proto.CriuOpts{}
-		}
-
-		if req.Criu.ManageCgroupsMode != nil || true { // Force this path
-			manageCgroups := criu_proto.CriuCgMode_IGNORE
-			req.Criu.ManageCgroupsMode = &manageCgroups
-		} else {
-			manageCgroups := false
-			req.Criu.ManageCgroups = &manageCgroups
+			return nil, status.Errorf(codes.InvalidArgument, "missing CRIU options in restore request")
 		}
 
 		// GetPaths() returns absolute filesystem paths (e.g., /sys/fs/cgroup/cpu/slurm/...).
@@ -60,13 +54,10 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 					log.Trace().Msgf("  Controller %s: %s\n", c, p)
 				}
 
-				// ensure the new cgroup hierarchy exists
+				// log whether the new cgroup hierarchy exists
 				for _, p := range paths {
-					if _, statErr := os.Stat(p); os.IsNotExist(statErr) {
-						log.Trace().Msgf("creating cgroup path: %s\n", p)
-						if err := os.MkdirAll(p, 0755); err != nil {
-							return fmt.Errorf("failed to create cgroup path %s: %v", p, err)
-						}
+					if err := os.MkdirAll(p, 0755); os.IsNotExist(err) {
+						log.Trace().Msgf("cgroup path does not exist: %s\n", p)
 					} else {
 						log.Trace().Msgf("cgroup path already exists: %s\n", p)
 					}
@@ -75,9 +66,14 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 				// apply cgroups to the CRIU process
 				err = manager.Apply(int(criuPid))
 				if err != nil {
-					return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
+					if os.IsPermission(err) {
+						log.Warn().Msgf("skipping cgroup apply (unprivileged): %v\n", err)
+					} else {
+						return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
+					}
+				} else {
+					log.Trace().Msgf("applied cgroups to CRIU process %d\n", criuPid)
 				}
-				log.Trace().Msgf("applied cgroups to CRIU process %d\n", criuPid)
 
 				// set CgRoot to tell CRIU where to place restored processes
 				// CRIU expects paths relative to each controller's mount point

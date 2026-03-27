@@ -16,7 +16,7 @@ Real benefits of streaming are realized only when checkpointing and restoring to
 
 ## Checkpoint
 
-The `cedana dump` subcommand supports a `--streams <n>` flag, where `n` is the number of parallel streams to use. For example:
+The `cedana dump` subcommand supports a `--streams <n>` flag, where `n` is the number of parallel streams to use (minimum of 2). For example:
 
 ```sh
 cedana dump process <pid> --streams 4
