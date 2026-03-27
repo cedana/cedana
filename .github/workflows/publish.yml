@@ -268,9 +268,10 @@ jobs:
             fi
             checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
             size=$(stat -c%s $file)
-
+            version=$(shell git describe --tags --always)
             jq \
               --arg plugin "$plugin" \
+              --arg version "$version" \
               --arg name "$fname" \
               --arg checksum "$checksum" \
               --arg published_at "$published_at" \
@@ -279,6 +280,7 @@ jobs:
               .plugins[$plugin] |=
                 (
                   . // {
+                    version: $version,
                     type: "SUPPORTED",
                     size: $size,
                     published_at: $published_at,
