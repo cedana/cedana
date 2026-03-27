@@ -500,7 +500,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			}
 		}
 
-		if !config.Global.DB.Remote && config.Global.LocalStorageLimit > 0 {
+		if config.Global.LocalStorageLimit > 0 {
 			m.storageUsedMutex.Lock()
 			storageUsed, err := m.db.GetStorageUsed(ctx)
 			if err != nil {
@@ -541,7 +541,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			err = m.db.DeleteCheckpoint(ctx, id)
 			if err == nil {
 				m.deletedCheckpoints.Delete(id)
-				if config.Global.LocalStorageLimit > 0 && !config.Global.DB.Remote && !strings.Contains(path, "://") {
+				if config.Global.LocalStorageLimit > 0 && !strings.Contains(path, "://") {
 					os.RemoveAll(path)
 					m.FreeStorage(ctx, checkpoint.GetSize())
 				}
