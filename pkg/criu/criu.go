@@ -402,6 +402,10 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	args := []string{"check"}
 	args = append(args, flags...)
 
+	if !utils.IsRootUser() {
+		args = append(args, "--unprivileged")
+	}
+
 	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly

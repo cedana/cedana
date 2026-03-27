@@ -15,7 +15,6 @@ import (
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 )
 
 const CRIU_MIN_VERSION = 30000
@@ -100,9 +99,6 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 			var flags []string
 			if all {
 				flags = append(flags, "--all")
-			}
-			if !utils.IsRootUser() {
-				flags = append(flags, "--unprivileged")
 			}
 			out, err := c.Check(ctx, flags...)
 			warnings, errors := parseCheckOutput(out)

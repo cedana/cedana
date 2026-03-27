@@ -35,7 +35,7 @@ var RestoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid job id: %v", err)
 		}
 
-		jid, err := strconv.Atoi(jobID)
+		jid, err := strconv.ParseUint(jobID, 10, 32)
 		if err != nil {
 			return fmt.Errorf("invalid job id: %v", err)
 		}
