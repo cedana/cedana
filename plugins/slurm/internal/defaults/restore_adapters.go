@@ -17,10 +17,6 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		if req.GetDetails().GetSlurm() == nil {
 			req.Details.Slurm = &slurm.Slurm{}
 		}
-
-		req.Criu.Unprivileged = proto.Bool(true)
-		req.Criu.ShellJob = proto.Bool(true)
-		req.Criu.TcpEstablished = proto.Bool(true)
 		if req.GetDetails().GetSlurm().GetID() == "" {
 			req.Details.Slurm.ID = req.GetDetails().GetJID()
 		}
