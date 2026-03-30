@@ -3,7 +3,7 @@
 # The tests here test the local storage limit of the daemon.
 
 # This file assumes its being run from the same directory as the Makefile
-# bats file_tags=base,storage_limit
+# bats file_tags=base,storage_limit,remote
 
 load ../helpers/utils
 load ../helpers/daemon
@@ -13,6 +13,7 @@ load_lib assert
 load_lib file
 
 export CEDANA_STORAGE_LIMIT=1
+export CEDANA_DB_REMOTE=true
 
 setup_file() {
     setup_file_daemon
@@ -30,7 +31,7 @@ teardown_file() {
     teardown_file_daemon
 }
 
-@test "test storage limit" {
+@test "test storage limit (remote)" {
     jid=$(unix_nano)
 
     cedana run process --jid "$jid" -- python3 "$WORKLOADS/allocate.py"
