@@ -17,7 +17,7 @@ import (
 )
 
 func storageLimitEnforced(dir string) bool {
-	return config.Global.LocalStorageLimit > 0 && !strings.Contains(dir, "://")
+	return config.Global.StorageLimit > 0 && !strings.Contains(dir, "://")
 }
 
 // Adapter that fills in dump request details based on saved job info.

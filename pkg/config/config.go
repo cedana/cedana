@@ -28,7 +28,7 @@ const (
 	DEFAULT_LOG_LEVEL           = "info"
 	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
-	DEFAULT_LOCAL_STORAGE_LIMIT_GB = 0
+	DEFAULT_STORAGE_LIMIT_GB = 0
 
 	DEFAULT_CHECKPOINT_COMPRESSION = "none"
 	DEFAULT_CHECKPOINT_DIR         = "/tmp"
@@ -69,11 +69,11 @@ const (
 var Global Config = Config{
 	// NOTE: Don't specify default address here as it depends on default protocol.
 	// Use above constants for default address for each protocol.
-	Protocol:          DEFAULT_PROTOCOL,
-	LogLevel:          DEFAULT_LOG_LEVEL,
-	LogLevelNoServer:  DEFAULT_LOG_LEVEL_NO_SERVER,
-	Metrics:           DEFAULT_METRICS,
-	LocalStorageLimit: DEFAULT_LOCAL_STORAGE_LIMIT_GB,
+	Protocol:         DEFAULT_PROTOCOL,
+	LogLevel:         DEFAULT_LOG_LEVEL,
+	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
+	Metrics:          DEFAULT_METRICS,
+	StorageLimit:     DEFAULT_STORAGE_LIMIT_GB,
 	Checkpoint: Checkpoint{
 		Dir:         DEFAULT_CHECKPOINT_DIR,
 		Compression: DEFAULT_CHECKPOINT_COMPRESSION,

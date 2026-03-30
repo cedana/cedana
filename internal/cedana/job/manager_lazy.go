@@ -445,7 +445,7 @@ func (m *ManagerLazy) ReserveStorageForJob(ctx context.Context, jid string) (int
 func (m *ManagerLazy) ReserveStorageAmount(ctx context.Context, amount int64) error {
 	m.storageUsedMutex.Lock()
 	defer m.storageUsedMutex.Unlock()
-	storageLimit := config.Global.LocalStorageLimit * utils.GIBIBYTE
+	storageLimit := config.Global.StorageLimit * utils.GIBIBYTE
 	if amount+m.storageUsed > storageLimit {
 		return fmt.Errorf("not enough storage to checkpoint, storage limit: %v, storage used: %v",
 			utils.SizeStr(storageLimit),
@@ -500,7 +500,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			}
 		}
 
-		if config.Global.LocalStorageLimit > 0 {
+		if config.Global.StorageLimit > 0 {
 			m.storageUsedMutex.Lock()
 			storageUsed, err := m.db.GetStorageUsed(ctx)
 			if err != nil {
@@ -508,7 +508,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 				return err
 			}
 
-			if storageUsed > config.Global.LocalStorageLimit*utils.GIBIBYTE {
+			if storageUsed > config.Global.StorageLimit*utils.GIBIBYTE {
 				log.Warn().Msg("cedana has used more storage than the limit")
 			}
 			m.storageUsed = storageUsed
@@ -541,7 +541,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			err = m.db.DeleteCheckpoint(ctx, id)
 			if err == nil {
 				m.deletedCheckpoints.Delete(id)
-				if config.Global.LocalStorageLimit > 0 && !strings.Contains(path, "://") {
+				if config.Global.StorageLimit > 0 && !strings.Contains(path, "://") {
 					os.RemoveAll(path)
 					m.FreeStorage(ctx, checkpoint.GetSize())
 				}
