@@ -188,8 +188,12 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 			streams = config.Global.Checkpoint.Streams
 		}
 
+		if streams == 1 {
+			return nil, status.Error(codes.InvalidArgument, "A minimum of 2 streams are required for streaming. Specify 0 to disable streaming.")
+		}
+
 		filesystem := filesystem.DumpFilesystem
-		if streams > 0 {
+		if streams > 1 {
 			filesystem = streamer.DumpFilesystem(streams)
 		}
 

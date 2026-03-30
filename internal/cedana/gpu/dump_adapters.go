@@ -22,14 +22,7 @@ var NVIDIA_MOUNTS_PATTERN = regexp.MustCompile(
 		`/run/nvidia|` +
 		`/usr/bin/nv|` +
 		`/usr/lib/firmware/nv|` +
-		`/usr/lib/libcuda|` +
-		`/usr/lib64/libcuda|` +
-		`/usr/lib/libnv|` +
-		`/usr/lib64/libnv|` +
-		`/usr/lib/x86_64-linux-gnu/libcuda|` +
-		`/usr/lib64/x86_64-linux-gnu/libcuda|` +
-		`/usr/lib/x86_64-linux-gnu/libnv|` +
-		`/usr/lib64/x86_64-linux-gnu/libnv|` +
+		`/usr/lib(64)?/(x86_64-linux-gnu/|aarch64-linux-gnu/)?(libcuda|libnv)|` +
 		`.*nvidia.*` +
 		`)`,
 )
@@ -95,3 +88,4 @@ func AddMountsForDump(next types.Dump) types.Dump {
 		return next(ctx, opts, resp, req)
 	}
 }
+
