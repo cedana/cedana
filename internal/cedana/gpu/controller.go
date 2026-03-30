@@ -248,7 +248,9 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		config.Global.GPU.SockDir,
 	)
 
-	if config.Global.GPU.LogDir != "" {
+	isHealthCheck := utils.Getenv(env, "CEDANA_GPU_HEALTH_CHECK") == "1"
+
+	if !isHealthCheck && config.Global.GPU.LogDir != "" {
 		logDir, err := EnsureLogDir(id, c.UID, c.GID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
@@ -622,7 +624,12 @@ func (p *pool) Check(binary string) types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
 		component := &daemon.HealthCheckComponent{Name: "status"}
 
-		controller, err := p.Spawn(ctx, binary, fmt.Sprintf("CEDANA_GPU_SHM_SIZE=%d", CONTROLLER_CHECK_SHM_SIZE))
+		controller, err := p.Spawn(
+			ctx,
+			binary,
+			fmt.Sprintf("CEDANA_GPU_SHM_SIZE=%d", CONTROLLER_CHECK_SHM_SIZE),
+			fmt.Sprintf("CEDANA_GPU_HEALTH_CHECK=%d", 1),
+		)
 		if err != nil {
 			component.Data = "failed"
 			component.Errors = append(component.Errors, err.Error())
