@@ -169,8 +169,8 @@ fi
 
 echo "Detected containerd config version $CONTAINERD_VERSION"
 
-CONFD_DIR="/etc/containerd/conf.d"
-echo "Using conf.d directory: $CONFD_DIR"
+CONTAINERD_CONFD_DIR=${CONTAINERD_CONFD_DIR:-"/etc/containerd/conf.d"}
+echo "Using conf.d directory: $CONTAINERD_CONFD_DIR"
 
 if [ "$CONTAINERD_VERSION" = "2" ]; then
     echo "Applying containerd v2 config strategy..."
@@ -179,9 +179,9 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
     # See https://github.com/containerd/containerd/issues/5837 (fixed in v3)
 
     # Find the last .toml file lexicographically (excluding 999-cedana.toml)
-    if [ -d "$CONFD_DIR" ]; then
-        echo "Scanning $CONFD_DIR for existing .toml files..."
-        LAST_CONFD_FILE=$(find "$CONFD_DIR" -maxdepth 1 -type f -name "*.toml" ! -name "999-cedana.toml" 2>/dev/null | sort | tail -n 1)
+    if [ -d "$CONTAINERD_CONFD_DIR" ]; then
+        echo "Scanning $CONTAINERD_CONFD_DIR for existing .toml files..."
+        LAST_CONFD_FILE=$(find "$CONTAINERD_CONFD_DIR" -maxdepth 1 -type f -name "*.toml" ! -name "999-cedana.toml" 2>/dev/null | sort | tail -n 1)
         echo "Last existing conf.d file: ${LAST_CONFD_FILE:-<none found>}"
     else
         echo "conf.d directory does not exist, skipping scan"
@@ -189,7 +189,7 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
     fi
 
     if [ -n "$LAST_CONFD_FILE" ]; then
-        TARGET_CONFIG="$CONFD_DIR/999-cedana.toml"
+        TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
         echo "Copying existing config from $LAST_CONFD_FILE to $TARGET_CONFIG"
         cp "$LAST_CONFD_FILE" "$TARGET_CONFIG"
         echo "" >>"$TARGET_CONFIG"
@@ -215,11 +215,11 @@ END_CAT
 elif [ "$CONTAINERD_VERSION" = "3" ]; then
     echo "Applying containerd v3 config strategy..."
     # Version 3: Ensure imports exist, then create conf.d file with only cedana config
-    TARGET_CONFIG="$CONFD_DIR/999-cedana.toml"
+    TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
 
     # Ensure conf.d directory exists
-    echo "Ensuring conf.d directory exists: $CONFD_DIR"
-    mkdir -p "$CONFD_DIR"
+    echo "Ensuring conf.d directory exists: $CONTAINERD_CONFD_DIR"
+    mkdir -p "$CONTAINERD_CONFD_DIR"
 
     # Ensure imports line exists in main config
     if ! grep -q 'imports = \[.*"/etc/containerd/conf.d/\*\.toml".*\]' "$CONTAINERD_CONFIG_PATH"; then
@@ -251,4 +251,4 @@ END_CAT
 fi
 
 echo "Restarting containerd to pick up the new runtime configuration..."
-(systemctl restart containerd && echo "Restarted containerd successfully") || echo "WARNING: Failed to restart containerd, please restart manually" >&2
+(systemctl restart containerd && echo "Restarted containerd sucessfully") || echo "WARNING: Failed to restart containerd, please restart manually" >&2
