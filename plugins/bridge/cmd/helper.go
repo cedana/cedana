@@ -27,7 +27,6 @@ import (
 	bridgescripts "github.com/cedana/cedana/plugins/bridge/scripts"
 	"github.com/cedana/cedana/scripts"
 	"github.com/jedib0t/go-pretty/v6/table"
-	"github.com/jedib0t/go-pretty/v6/text"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -173,6 +172,7 @@ var destroyCmd = &cobra.Command{
 
 		err := script.Run(
 			log.With().Str("operation", "destroy").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
+			scripts.ResetService,
 			bridgescripts.Uninstall,
 		)
 		if err != nil {
@@ -472,7 +472,6 @@ var jobListCmd = &cobra.Command{
 		tw := table.NewWriter()
 		tw.SetStyle(style.TableStyle)
 		tw.SetOutputMirror(os.Stdout)
-		tw.SetColumnConfigs([]table.ColumnConfig{{Name: "Node", Align: text.AlignLeft}, {Name: "Status", Align: text.AlignLeft}})
 		tw.AppendHeader(table.Row{"JID", "Node", "Hostname", "Status", "Name"})
 		for _, j := range resp.Jobs {
 			tw.AppendRow(table.Row{j.JID, j.NodeID, j.Hostname, j.Status, j.Name})
