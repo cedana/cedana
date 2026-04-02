@@ -161,6 +161,14 @@ if command -v systemctl >/dev/null 2>&1; then
     if systemctl restart kubelet; then
         success_method="systemctl"
         echo "kubelet restarted successfully via systemctl"
+    fi
+    if systemctl restart rke2-agent; then
+        success_method="systemctl"
+        echo "kubelet restarted successfully via rke2-agent"
+    fi
+    if systemctl restart rke2-server; then
+        success_method="systemctl"
+        echo "kubelet restarted successfully via rke2-server"
     else
         echo "WARNING: systemctl restart kubelet failed" >&2
     fi
