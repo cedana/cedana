@@ -280,7 +280,7 @@ jobs:
         run: |
           runtime_args=""
           for runtime in $(jq -r '.runtimes.list | keys[]' bench.json); do
-            runtime_args="$runtime_args --runtime $runtime"
+            runtime_args="$runtime_args --runtime $runtime:2"
           done
           ./bench results pull $runtime_args -f
 
