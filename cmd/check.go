@@ -24,7 +24,7 @@ var checkCmd = &cobra.Command{
 		ctx := cmd.Context()
 		full, _ := cmd.Flags().GetBool(flags.FullFlag.Full)
 
-		logging.SetLogger(io.Discard)
+		logging.Init(io.Discard)
 
 		cedana, err := cedana.New(ctx, "run")
 		if err != nil {

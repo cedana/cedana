@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -168,6 +169,10 @@ func (c *Criu) doSwrkWithResp(
 
 	if nfy != nil {
 		opts.NotifyScripts = proto.Bool(true)
+	}
+
+	if !utils.IsRootUser() {
+		opts.Unprivileged = proto.Bool(true)
 	}
 
 	if features != nil {
@@ -397,7 +402,14 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	args := []string{"check"}
 	args = append(args, flags...)
 
-	cmd := exec.Command(c.swrkPath, args...)
+	if !utils.IsRootUser() {
+		args = append(args, "--unprivileged")
+	}
+
+	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

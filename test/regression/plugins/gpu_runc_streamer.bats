@@ -49,10 +49,11 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     run cedana job kill "$jid"
 }
@@ -67,10 +68,11 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     run cedana job kill "$jid"
 }
@@ -110,10 +112,11 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     cedana restore job "$jid"
     watch_logs "$jid"
@@ -137,10 +140,11 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     cedana restore job "$jid"
     watch_logs "$jid"

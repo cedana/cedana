@@ -5,11 +5,15 @@ package gpu
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -64,7 +68,7 @@ const (
 	MAX_SYNC_FAILURES = 2
 
 	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
-	PARALLEL_DUMP    = true
+	PARALLEL_DUMP    = false // NOTE: Disabled since CED-1877 (allowing this requires some additional work)
 	PARALLEL_RESTORE = true
 )
 
@@ -83,6 +87,8 @@ type controller struct {
 	ErrBuf      *bytes.Buffer
 	Booking     *flock.Flock // To book the controller for use
 	Termination sync.Mutex   // To protect termination
+	Terminating atomic.Bool  // To indicate if termination has begun, to avoid multiple concurrent terminations
+	Terminated  chan int     // Closed when the controller process has exited
 	syncFails   int          // Number of consecutive sync failures
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
@@ -178,11 +184,12 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 				continue
 			}
 			c = &controller{
-				ID:      id,
-				Address: fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id),
-				Booking: flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR)),
-				UID:     fileInfo.Sys().(*syscall.Stat_t).Uid,
-				GID:     fileInfo.Sys().(*syscall.Stat_t).Gid,
+				ID:         id,
+				Address:    fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id),
+				Booking:    flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR)),
+				UID:        fileInfo.Sys().(*syscall.Stat_t).Uid,
+				GID:        fileInfo.Sys().(*syscall.Stat_t).Gid,
+				Terminated: make(chan int, 1),
 			}
 		}
 
@@ -241,7 +248,9 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		config.Global.GPU.SockDir,
 	)
 
-	if config.Global.GPU.LogDir != "" {
+	isHealthCheck := utils.Getenv(env, "CEDANA_GPU_HEALTH_CHECK") == "1"
+
+	if !isHealthCheck && config.Global.GPU.LogDir != "" {
 		logDir, err := EnsureLogDir(id, c.UID, c.GID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
@@ -257,10 +266,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		GidMappingsEnableSetgroups: false, // Avoid permission issues when running as non-root user
 	}
 
-	cmd.Stderr = c.ErrBuf
-	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stdout
+	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stderr
 		logger := log.With().Str("ID", id).Str("plugin", "gpu").Logger().Level(zerolog.DebugLevel)
-		cmd.Stdout = logging.Writer(&logger)
+		cmd.Stderr = io.MultiWriter(logging.Writer(&logger), c.ErrBuf)
+	} else {
+		cmd.Stderr = c.ErrBuf
 	}
 
 	existingLD := os.Getenv("LD_LIBRARY_PATH")
@@ -305,6 +315,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 
 	c.PID = uint32(cmd.Process.Pid)
 	c.ParentPID = uint32(os.Getpid())
+	c.Terminated = make(chan int, 1)
 
 	err = c.Sync(ctx, true)
 	if err != nil {
@@ -321,29 +332,44 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		return
 	}
 
-	log.Debug().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Msg("terminating GPU controller")
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
-	c.Termination.Lock()
+	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
+
+	if !c.Termination.TryLock() {
+		if c.Terminating.Load() {
+			log.Debug().Msg("termination of GPU controller already in progress, skipping duplicate termination attempt")
+			return
+		}
+		log.Debug().Msg("terminating GPU controller")
+		c.Termination.Lock() // Block on it as it's probably waiting on another condition (e.g. for a dump to finish)
+	} else {
+		log.Debug().Msg("terminating GPU controller")
+	}
+
+	c.Terminating.Store(true) // Indicate termination has begun, to avoid multiple concurrent terminations
 	defer c.Termination.Unlock()
-
 	defer os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id))
 	defer os.RemoveAll(fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id))
 	defer c.Booking.Close()
+	defer close(c.Terminated) // Signal that the controller has exited
 
 	defer p.Delete(id) // Remove from the pool
 
 	if c.PID == 0 {
 		return
 	}
-	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
+
 	if c.ClientConn != nil {
 		c.ClientConn.Close()
 		c.ClientConn = nil
 		c.ControllerClient = nil
 	}
-	log := log.With().Str("ID", id).Uint32("PID", c.PID).Logger()
+
+	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
 	if int(c.ParentPID) == os.Getpid() { // If we spawned it, then reap it
 		process, err := os.FindProcess(int(c.PID))
 		if err != nil {
@@ -353,11 +379,12 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		if err != nil {
 			log.Trace().Err(err).Msg("GPU controller Wait()")
 		}
+		c.Terminated <- state.ExitCode()
 		log.Debug().Int("status", state.ExitCode()).Msg("GPU controller exited")
 	} else { // Otherwise, just wait for it to exit
 		waitCtx, cancel := context.WithTimeout(ctx, TERMINATE_TIMEOUT)
 		defer cancel()
-		<-utils.WaitForPidCtx(waitCtx, c.PID)
+		c.Terminated <- <-utils.WaitForPidCtx(waitCtx, c.PID)
 		log.Debug().Str("status", "unknown").Msg("GPU controller exited")
 	}
 }
@@ -381,6 +408,12 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
 		defer cancel()
+
+		// Cancel on early termination
+		go func() {
+			<-controller.Terminated
+			cancel()
+		}()
 
 		log.Info().Msg("GPU freeze starting")
 
@@ -417,6 +450,12 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
+			// Cancel on early termination
+			go func() {
+				<-controller.Terminated
+				cancel()
+			}()
+
 			log.Info().Msg("GPU dump starting")
 
 			_, err := controller.Dump(waitCtx, &gpu.DumpReq{
@@ -435,7 +474,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		if PARALLEL_DUMP {
 			return nil
 		}
-		return utils.GRPCError(<-dumpErr)
+		return <-dumpErr
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
@@ -443,7 +482,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		if dumpErr == nil { // Dump was never started
 			return nil
 		}
-		return utils.GRPCError(<-dumpErr)
+		return <-dumpErr
 	}
 
 	callback.FinalizeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
@@ -461,22 +500,32 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			return nil
 		}
 
-		<-dumpErr // Ensure GPU dump has finished before unfreezing
+		err := <-dumpErr // Ensure GPU dump has finished before unfreezing
 
-		// NOTE: Unfreeze must complete even if parent context is cancelled
+		if !opts.GetLeaveRunning() {
+			return err
+		}
+
+		// NOTE: Unfreeze must complete even if parent context is cancelled, so process can resume
 		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
 		defer cancel()
 
+		// Cancel on early termination
+		go func() {
+			<-controller.Terminated
+			cancel()
+		}()
+
 		log.Info().Msg("GPU unfreeze starting")
 
-		_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
-		if err != nil {
-			log.Error().Err(err).Msg("failed to unfreeze GPU")
+		_, unfreezeErr := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
+		if unfreezeErr != nil {
+			log.Error().Err(unfreezeErr).Msg("failed to unfreeze GPU")
 		} else {
 			log.Info().Msg("GPU unfreeze completed")
 		}
 
-		return err
+		return errors.Join(err, utils.GRPCError(unfreezeErr))
 	}
 
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
@@ -496,6 +545,12 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 
+			// Cancel on early termination
+			go func() {
+				<-controller.Terminated
+				cancel()
+			}()
+
 			log.Debug().Msg("GPU restore starting")
 
 			resp, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
@@ -514,34 +569,52 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		if PARALLEL_RESTORE {
 			return nil
 		}
-		return utils.GRPCError(<-restoreErr)
+		return <-restoreErr
 	}
 
 	// Wait for GPU restore to finish before resuming the process
 	var restoredPid *int32
 	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
 		restoredPid = &pid
-		if restoreErr == nil { // Restore was never started
-			return nil
-		}
-		return utils.GRPCError(<-restoreErr)
+		return nil
 	}
 
-	// Signal the process so it knowns it may have a new PID (only useful for containers which get
-	// restore with a different host PID).
+	// Signal the process so it knowns it may have a new PID
+	// Only changes for containers - they restore with a different host PID
 	callback.PreResumeFunc = func(ctx context.Context) error {
-		if restoredPid == nil {
-			return nil
+		err := syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
+		if err != nil {
+			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
+			// Because it can't run since the GPU restore failed.
+			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
 		}
-		return syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
+		return err
 	}
 
-	// Ensure we always wait for GPU restore to finish before finalizing the restore
+	callback.PostResumeFunc = func(ctx context.Context) error {
+		err := <-restoreErr
+		if err != nil {
+			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
+			// Because it can't run since the GPU restore failed.
+			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+		}
+		return err
+	}
+
+	// Ensure we always wait for GPU restore to finish before finalizing the restore.
 	callback.FinalizeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		if restoreErr == nil {
 			return nil
 		}
-		return utils.GRPCError(<-restoreErr)
+		err := <-restoreErr
+		if err != nil {
+			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
+			// Because it can't run since the GPU restore failed.
+			if restoredPid != nil {
+				syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+			}
+		}
+		return err
 	}
 
 	return callback
@@ -551,7 +624,12 @@ func (p *pool) Check(binary string) types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
 		component := &daemon.HealthCheckComponent{Name: "status"}
 
-		controller, err := p.Spawn(ctx, binary, fmt.Sprintf("CEDANA_GPU_SHM_SIZE=%d", CONTROLLER_CHECK_SHM_SIZE))
+		controller, err := p.Spawn(
+			ctx,
+			binary,
+			fmt.Sprintf("CEDANA_GPU_SHM_SIZE=%d", CONTROLLER_CHECK_SHM_SIZE),
+			fmt.Sprintf("CEDANA_GPU_HEALTH_CHECK=%d", 1),
+		)
 		if err != nil {
 			component.Data = "failed"
 			component.Errors = append(component.Errors, err.Error())
@@ -672,7 +750,7 @@ func (c *controller) WaitForInfo(ctx context.Context, req *gpu.InfoReq) (*gpu.In
 
 	// Cancel on early termination
 	go func() {
-		<-utils.WaitForPidCtx(waitCtx, c.PID)
+		<-c.Terminated
 		cancel()
 	}()
 
@@ -692,7 +770,7 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 
 	// Cancel on early termination
 	go func() {
-		<-utils.WaitForPidCtx(waitCtx, c.PID)
+		<-c.Terminated
 		cancel()
 	}()
 
