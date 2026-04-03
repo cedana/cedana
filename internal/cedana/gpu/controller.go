@@ -248,7 +248,9 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		config.Global.GPU.SockDir,
 	)
 
-	if config.Global.GPU.LogDir != "" {
+	isHealthCheck := utils.Getenv(env, "CEDANA_GPU_HEALTH_CHECK") == "1"
+
+	if !isHealthCheck && config.Global.GPU.LogDir != "" {
 		logDir, err := EnsureLogDir(id, c.UID, c.GID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
@@ -483,7 +485,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return <-dumpErr
 	}
 
-	callback.FinalizeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+	callback.FinalizeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts, criuErr error) error {
 		pid := uint32(opts.GetPid())
 		log := log.With().Uint32("PID", pid).Logger()
 
@@ -582,6 +584,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	callback.PreResumeFunc = func(ctx context.Context) error {
 		err := syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
 		if err != nil {
+			log.Error().Err(err).Msg("failed to signal GPU process of new PID after restore")
 			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
 			// Because it can't run since the GPU restore failed.
 			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
@@ -600,12 +603,16 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	}
 
 	// Ensure we always wait for GPU restore to finish before finalizing the restore.
-	callback.FinalizeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+	callback.FinalizeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts, criuErr error) (err error) {
 		if restoreErr == nil {
 			return nil
 		}
-		err := <-restoreErr
-		if err != nil {
+
+		// If CRIU restore failed, we don't wait for GPU restore to finish
+		if criuErr == nil {
+			err = <-restoreErr
+		}
+		if err != nil || criuErr != nil {
 			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
 			// Because it can't run since the GPU restore failed.
 			if restoredPid != nil {
@@ -622,7 +629,12 @@ func (p *pool) Check(binary string) types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
 		component := &daemon.HealthCheckComponent{Name: "status"}
 
-		controller, err := p.Spawn(ctx, binary, fmt.Sprintf("CEDANA_GPU_SHM_SIZE=%d", CONTROLLER_CHECK_SHM_SIZE))
+		controller, err := p.Spawn(
+			ctx,
+			binary,
+			fmt.Sprintf("CEDANA_GPU_SHM_SIZE=%d", CONTROLLER_CHECK_SHM_SIZE),
+			fmt.Sprintf("CEDANA_GPU_HEALTH_CHECK=%d", 1),
+		)
 		if err != nil {
 			component.Data = "failed"
 			component.Errors = append(component.Errors, err.Error())
