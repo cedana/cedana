@@ -423,7 +423,8 @@ install_cedana_in_slurm() {
     for so in /usr/local/lib/libcedana-*.so \
         /usr/local/lib/task_cedana.so \
         /usr/local/lib/libslurm-cedana.so \
-        /usr/local/lib/cli_filter_cedana.so; do
+        /usr/local/lib/cli_filter_cedana.so \
+        /usr/local/lib/job_submit_cedana.so; do
         [ -f "$so" ] || continue
         for c in "${all_containers[@]}"; do
             docker cp "$so" "${c}:/usr/local/lib/$(basename "$so")" ||
@@ -517,7 +518,7 @@ PLUGIN_DIR="${PLUGIN_DIR:-/usr/lib/slurm}"
 echo "SLURM PluginDir: $PLUGIN_DIR"
 mkdir -p "$PLUGIN_DIR"
 
-for f in task_cedana.so cli_filter_cedana.so; do
+for f in task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
     src="/usr/local/lib/${f}"
     [ -f "$src" ] || continue
     chmod 755 "$src"
@@ -536,6 +537,10 @@ grep -q 'task/cedana' "$SLURM_CONF" || \
     sed -i 's|^\(TaskPlugin=.*\)|\1,task/cedana|' "$SLURM_CONF"
 grep -q 'cli_filter/cedana' "$SLURM_CONF" || \
     echo 'CliFilterPlugins=cli_filter/cedana' >> "$SLURM_CONF"
+if [ -f "${PLUGIN_DIR}/job_submit_cedana.so" ]; then
+    grep -q 'job_submit/cedana' "$SLURM_CONF" || \
+        echo 'JobSubmitPlugins=job_submit/cedana' >> "$SLURM_CONF"
+fi
 
 if [ -f /usr/local/lib/libslurm-cedana.so ]; then
     grep -q 'spank_cedana.so' "$PLUGSTACK_CONF" 2>/dev/null || \
@@ -558,7 +563,7 @@ if [ -z "$PLUGIN_DIR" ]; then
 fi
 PLUGIN_DIR="${PLUGIN_DIR:-/usr/lib/slurm}"
 mkdir -p "$PLUGIN_DIR"
-for f in task_cedana.so cli_filter_cedana.so; do
+for f in task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
     src="/usr/local/lib/${f}"
     [ -f "$src" ] || continue
     chmod 755 "$src"; cp "$src" "$PLUGIN_DIR/"

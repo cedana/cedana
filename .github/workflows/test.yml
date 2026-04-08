@@ -541,7 +541,7 @@ jobs:
       runner_gpu: ${{ inputs.runner_gpu }}
       parallelism: 1
       post_summary: false # Will post consolidated summary instead
-      slurm_version: "fix/slurm-dump-errors"
+      slurm_version: "main"
 
   post-summary:
     name: Post Summary

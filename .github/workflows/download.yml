@@ -469,7 +469,7 @@ jobs:
           else
             REPO="cedana/cedana-slurm-alpha"
           fi
-          for binary in cedana-slurm libslurm-cedana.so task_cedana.so cli_filter_cedana.so; do
+          for binary in cedana-slurm libslurm-cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
             URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/${binary}-${ARCH}"
             URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${VERSION}/${binary}"
             if ! curl -1Lf -O "$URL1"; then
