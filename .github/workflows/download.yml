@@ -480,6 +480,14 @@ jobs:
           done
           echo $VERSION > slurm-version.txt
 
+      - name: Checkout cedana-slurm
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-slurm
+          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
+          path: slurm/cedana-slurm
+          token: ${{ secrets.GIT_CI_PAT }}
+
       - name: Upload slurm artifacts
         uses: actions/upload-artifact@v4
         with:

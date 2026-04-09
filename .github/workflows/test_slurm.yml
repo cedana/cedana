@@ -117,14 +117,6 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Checkout cedana-slurm
-        uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana-slurm
-          ref: feat/job-db
-          path: cedana-slurm
-          token: ${{ secrets.GIT_CI_PAT }}
-
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
@@ -147,6 +139,9 @@ jobs:
         with:
           name: slurm-${{ matrix.arch }}
           path: slurm-bin
+
+      - name: Extract cedana-slurm
+        run: mv slurm-bin/cedana-slurm cedana-slurm
 
       - name: Download GPU plugin
         if: ${{ matrix.compute == 'GPU' }}
