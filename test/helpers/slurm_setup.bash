@@ -625,20 +625,6 @@ COMPUTE_EOF
                 error_log "Plugin setup failed on $c"
                 return 1
             }
-            
-        docker exec -i "$c" bash <<'PATH_EOF' >&"${OUTPUT_FD}" 2>&1 ||
-set -euo pipefail
-mkdir -p /etc/systemd/system/slurmd.service.d
-cat > /etc/systemd/system/slurmd.service.d/cedana-path.conf <<'EOF'
-[Service]
-Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-EOF
-systemctl daemon-reload || true
-PATH_EOF
-            {
-                error_log "Failed to configure slurmd PATH on $c"
-                return 1
-            }
     done
 
     debug_log "Starting cedana daemon on all nodes..."
@@ -694,14 +680,6 @@ PATH_EOF
         debug_log "  $c: cedana socket ready (${waited}s)"
     done
 
-    for c in "${compute_containers[@]}"; do
-        docker exec "$c" bash -c '
-            mkdir -p /etc/default
-            grep -q "^PATH=" /etc/default/slurmd 2>/dev/null || \
-                echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" >> /etc/default/slurmd
-        '
-    done
-
     debug_log "Restarting SLURM services to load task_cedana plugin..."
     _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld ||
         {
@@ -716,21 +694,6 @@ PATH_EOF
             }
     done
     sleep 5
-
-    debug_log "=== SPANK Plugin Diagnostics ==="
-    for c in "${compute_containers[@]}"; do
-        debug_log "--- $c ---"
-        docker exec "$c" bash -c '
-            echo "plugstack.conf:"
-            cat /etc/slurm/plugstack.conf 2>/dev/null || echo "NOT FOUND"
-            echo ""
-            echo "spank_cedana.so:"
-            ls -la /usr/lib/slurm/spank_cedana.so 2>/dev/null || echo "NOT FOUND"
-            echo ""
-            ldd /usr/lib/slurm/spank_cedana.so 2>/dev/null || echo "(ldd failed)"
-        ' >&"${OUTPUT_FD}" || true
-    done
-    debug_log "=== End SPANK Plugin Diagnostics ==="
 
     debug_log "Restarting cedana daemon on all nodes (post-SLURM restart)..."
     for c in "${all_containers[@]}"; do

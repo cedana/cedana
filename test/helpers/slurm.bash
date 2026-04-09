@@ -39,17 +39,9 @@ get_slurm_job_batch_host() {
         grep -oP 'BatchHost=\K\S+' | head -1
 }
 
-get_slurm_job_command() {
-    local job_id="$1"
-    slurm_exec scontrol show job "$job_id" 2>/dev/null |
-        grep -oP 'Command=\K\S+' | head -1
-}
-
-
 ensure_slurm_checkpoint_monitor() {
     local job_id="$1"
-    local host pid cmd
-    local pid_source="unknown"
+    local host pid
 
     host=$(get_slurm_job_batch_host "$job_id")
     if [ -z "$host" ]; then
@@ -57,56 +49,20 @@ ensure_slurm_checkpoint_monitor() {
         return 1
     fi
 
-    if ! docker exec "$host" test -x /usr/local/bin/cedana-slurm 2>/dev/null; then
-        error_log "cedana-slurm binary not found in $host"
-        return 1
-    fi
-
     if docker exec "$host" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
-        info_log "cedana-slurm monitor already running for job $job_id on $host"
+        debug_log "Monitor already running for job $job_id on $host"
         return 0
     fi
 
-    cmd=$(get_slurm_job_command "$job_id")
-    if [ -n "$cmd" ]; then
-        info_log "Resolved SLURM job $job_id command: $cmd"
-        pid=$(docker exec "$host" bash -c "pgrep -f -- '$cmd' | tail -1" 2>/dev/null || true)
-        [ -n "$pid" ] && pid_source="command"
-    fi
-
-    if [ -z "$pid" ]; then
-        pid=$(docker exec "$host" bash -c "scontrol listpids '$job_id' 2>/dev/null || scontrol listpids jobid='$job_id' 2>/dev/null" |
-            awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1}' |
-            while read -r p; do
-                comm=$(ps -p "$p" -o comm= 2>/dev/null || true)
-                case "$comm" in
-                    slurmstepd|slurm_script|srun|bash)
-                        ;;
-                    *)
-                        echo "$p"
-                        break
-                        ;;
-                esac
-            done)
-                [ -n "$pid" ] && pid_source="listpids-filtered"
-    fi
-
-    if [ -z "$pid" ]; then
-        pid=$(docker exec "$host" bash -c "scontrol listpids '$job_id' 2>/dev/null || scontrol listpids jobid='$job_id' 2>/dev/null" |
-            awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1; exit}')
-        [ -n "$pid" ] && pid_source="listpids-first"
-    fi
+    pid=$(docker exec "$host" bash -c "scontrol listpids '$job_id' 2>/dev/null" |
+        awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1; exit}')
 
     if [ -z "$pid" ]; then
         error_log "Cannot determine PID for job $job_id on $host"
         return 1
     fi
 
-    info_log "Selected PID for job $job_id: $pid (source=$pid_source)"
-    info_log "Monitor launch context on $host:"
-    docker exec "$host" bash -c 'echo "PATH=$PATH"; command -v cedana-slurm || true; ls -l /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm /usr/sbin/cedana-slurm 2>/dev/null || true' || true
-
-    info_log "Starting fallback cedana-slurm monitor for job $job_id (pid=$pid) on $host"
+    info_log "Starting cedana-slurm monitor for job $job_id (pid=$pid) on $host"
     docker exec -d \
         -e CEDANA_URL="${CEDANA_URL:-}" \
         -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -116,18 +72,16 @@ ensure_slurm_checkpoint_monitor() {
         -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
         "$host" \
         bash -c "/usr/local/bin/cedana-slurm monitor $pid $job_id >>/var/log/cedana-slurm-monitor.log 2>&1" || {
-        error_log "Failed to start fallback monitor for job $job_id on $host"
+        error_log "Failed to start monitor for job $job_id on $host"
         return 1
     }
 
     sleep 2
     if ! docker exec "$host" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
-        error_log "Fallback monitor exited immediately for job $job_id on $host"
+        error_log "Monitor exited immediately for job $job_id on $host"
         docker exec "$host" tail -40 /var/log/cedana-slurm-monitor.log 2>/dev/null || true
         return 1
     fi
-
-    info_log "Fallback monitor is running for job $job_id on $host"
 
     return 0
 }
