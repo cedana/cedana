@@ -438,7 +438,7 @@ install_cedana_in_slurm() {
     if [ -f "/usr/local/bin/cedana-slurm" ]; then
         for c in "${all_containers[@]}"; do
             docker cp /usr/local/bin/cedana-slurm "${c}:/usr/local/bin/cedana-slurm" &&
-                docker exec "$c" chmod +x /usr/local/bin/cedana-slurm ||
+                docker exec "$c" bash -c 'chmod +x /usr/local/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm' ||
                 {
                     error_log "Failed to install cedana-slurm in $c"
                     return 1
