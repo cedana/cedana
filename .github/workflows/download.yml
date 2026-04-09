@@ -463,22 +463,23 @@ jobs:
         run: |
           mkdir -p slurm/build
           cd slurm
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
+          VERSION_REF="${VERSION//\//-}"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             REPO="cedana/cedana-slurm"
           else
             REPO="cedana/cedana-slurm-alpha"
           fi
+
           for binary in cedana-slurm libslurm-cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
-            URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/${binary}-${ARCH}"
-            URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${VERSION}/${binary}"
+            URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION_REF}/${binary}-${ARCH}"
+            URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${VERSION_REF}/${binary}"
             if ! curl -1Lf -O "$URL1"; then
               echo "Primary URL failed for ${binary}, trying alternative URL..."
               curl -1Lf -o "${binary}-${ARCH}" "$URL2"
             fi
             mv "${binary}-${ARCH}" "build/${binary}" 2>/dev/null || mv "${binary}" "build/${binary}" 2>/dev/null || true
           done
-          echo $VERSION > slurm-version.txt
+          echo "$VERSION_REF" > slurm-version.txt
 
       - name: Checkout cedana-slurm
         uses: actions/checkout@v4
