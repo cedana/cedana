@@ -149,6 +149,9 @@ jobs:
         with:
           name: gpu-${{ matrix.arch }}
 
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
       - name: Pre-install plugins
         env:
           GPU: ${{ matrix.compute == 'GPU' && 'true' || 'false' }}
@@ -183,9 +186,6 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             docker.io ansible python3-docker
           ansible-galaxy collection install community.docker 2>/dev/null || true
-
-      - name: Mark git dir as safe
-        run: git config --global --add safe.directory "$(pwd)"
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
