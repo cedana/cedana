@@ -110,7 +110,10 @@ ensure_slurm_checkpoint_monitor() {
     docker exec -d \
         -e CEDANA_URL="${CEDANA_URL:-}" \
         -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+        -e CEDANA_ADDRESS="/run/cedana.sock" \
+        -e CEDANA_PROTOCOL="unix" \
         -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
+        -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
         "$host" \
         bash -c "/usr/local/bin/cedana-slurm monitor $pid $job_id >>/var/log/cedana-slurm-monitor.log 2>&1" || {
         error_log "Failed to start fallback monitor for job $job_id on $host"

@@ -447,16 +447,19 @@ install_cedana_in_slurm() {
         done
     done
 
-    if [ -f "/usr/local/bin/cedana-slurm" ]; then
-        for c in "${all_containers[@]}"; do
-            docker cp /usr/local/bin/cedana-slurm "${c}:/usr/local/bin/cedana-slurm" &&
-                docker exec "$c" bash -c 'chmod +x /usr/local/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm' ||
-                {
-                    error_log "Failed to install cedana-slurm in $c"
-                    return 1
-                }
-        done
+    if [ ! -f "/usr/local/bin/cedana-slurm" ]; then
+        error_log "cedana-slurm binary not found at /usr/local/bin/cedana-slurm"
+        return 1
     fi
+
+    for c in "${all_containers[@]}"; do
+        docker cp /usr/local/bin/cedana-slurm "${c}:/usr/local/bin/cedana-slurm" &&
+            docker exec "$c" bash -c 'chmod +x /usr/local/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm' ||
+            {
+                error_log "Failed to install cedana-slurm in $c"
+                return 1
+            }
+    done
 
     debug_log "Installing SLURM plugin via Cedana CLI in all nodes..."
     for c in "${all_containers[@]}"; do
