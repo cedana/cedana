@@ -62,6 +62,11 @@ var Registry = []Plugin{
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-storage-gcs.so"}},
 	},
+	{
+		Name:      "storage-manager",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-storage-manager.so"}},
+	},
 
 	// Others
 	{

@@ -34,6 +34,8 @@ const (
 	DEFAULT_CHECKPOINT_ASYNC                  = false
 	DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB = 4000
 
+	DEFAULT_LOCAL_STORAGE_LIMIT = 0 // 0 means disabled
+
 	DEFAULT_DB_REMOTE = false
 	DEFAULT_DB_PATH   = "/tmp/cedana.db"
 
@@ -68,10 +70,11 @@ const (
 var Global Config = Config{
 	// NOTE: Don't specify default address here as it depends on default protocol.
 	// Use above constants for default address for each protocol.
-	Protocol:         DEFAULT_PROTOCOL,
-	LogLevel:         DEFAULT_LOG_LEVEL,
-	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
-	Metrics:          DEFAULT_METRICS,
+	Protocol:          DEFAULT_PROTOCOL,
+	LogLevel:          DEFAULT_LOG_LEVEL,
+	LogLevelNoServer:  DEFAULT_LOG_LEVEL_NO_SERVER,
+	Metrics:           DEFAULT_METRICS,
+	LocalStorageLimit: DEFAULT_LOCAL_STORAGE_LIMIT,
 	Checkpoint: Checkpoint{
 		Dir:               DEFAULT_CHECKPOINT_DIR,
 		Compression:       DEFAULT_CHECKPOINT_COMPRESSION,

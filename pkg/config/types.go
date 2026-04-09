@@ -19,6 +19,9 @@ type (
 		// Metrics is whether to enable metrics collection and observability
 		Metrics bool `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics" env_aliases:"CEDANA_METRICS_ENABLED"`
 
+		// LocalStorageLimit is the maximum amount of local storage to use for checkpoints (in GiB). 0 means disabled.
+		LocalStorageLimit int64 `json:"local_storage_limit" key:"local_storage_limit" yaml:"local_storage_limit" mapstructure:"local_storage_limit"`
+
 		// Connection settings
 		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`
 		// Checkpoint and storage settings
