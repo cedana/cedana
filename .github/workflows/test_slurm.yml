@@ -126,7 +126,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: cedana/cedana-slurm
-          ref: ${{ inputs.slurm_version }}
+          ref: feat/job-db
           path: cedana-slurm
           token: ${{ secrets.GIT_CI_PAT }}
 
