@@ -60,32 +60,44 @@ _slurm_conf_set() {
 # Service Management
 ##############################
 
-# Tries systemctl first, falls back to direct binary launch.
 _svc_restart() {
     local container="$1"
     local name="$2"
     local binary="$3"
     shift 3
     local extra_args=("$@")
+    local proc
+    proc=$(basename "$binary")
 
     debug_log "Restarting $name in $container..."
 
-    if docker exec "$container" bash -c \
-        "systemctl restart '$name' 2>/dev/null && systemctl is-active --quiet '$name'" 2>/dev/null; then
+    docker exec "$container" mkdir -p /run/slurmd /run/slurmctld /run/slurmdbd 2>/dev/null || true
+
+    docker exec "$container" systemctl stop "$name" 2>/dev/null || true
+    local waited=0
+    while [ "$waited" -lt 10 ]; do
+        docker exec "$container" pgrep -x "$proc" &>/dev/null || break
+        sleep 1
+        waited=$((waited + 1))
+    done
+
+    docker exec "$container" systemctl start "$name" 2>/dev/null || true
+    sleep 3
+    if docker exec "$container" pgrep -x "$proc" &>/dev/null; then
         debug_log "$name started via systemctl in $container"
         return 0
     fi
 
-    docker exec "$container" bash -c "pkill -x '$(basename "$binary")' 2>/dev/null || true; sleep 1"
     docker exec -d "$container" "$binary" "${extra_args[@]}"
     sleep 3
-
-    if docker exec "$container" pgrep -x "$(basename "$binary")" &>/dev/null; then
+    if docker exec "$container" pgrep -x "$proc" &>/dev/null; then
         debug_log "$name started directly in $container"
         return 0
     fi
 
     error_log "$name failed to start in $container"
+    docker exec "$container" journalctl -u "$name" --no-pager -n 30 2>/dev/null || true
+    docker exec "$container" tail -30 /var/log/slurm/${name}.log 2>/dev/null || true
     return 1
 }
 
@@ -438,7 +450,7 @@ install_cedana_in_slurm() {
     if [ -f "/usr/local/bin/cedana-slurm" ]; then
         for c in "${all_containers[@]}"; do
             docker cp /usr/local/bin/cedana-slurm "${c}:/usr/local/bin/cedana-slurm" &&
-                docker exec "$c" bash -c 'chmod +x /usr/local/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm' ||
+                docker exec "$c" bash -c 'chmod +x /usr/local/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm' ||
                 {
                     error_log "Failed to install cedana-slurm in $c"
                     return 1
@@ -514,11 +526,11 @@ install_cedana_in_slurm() {
 
         # slurm.conf must be identical across all nodes
         for c in "${compute_containers[@]}"; do
-            docker cp "$SLURM_CONTROLLER_CONTAINER:/etc/slurm/slurm.conf" "/tmp/slurm.conf.sync"
-            docker cp "/tmp/slurm.conf.sync" "$c:/etc/slurm/slurm.conf"
+            docker cp "$SLURM_CONTROLLER_CONTAINER:/etc/slurm/slurm.conf" "/tmp/slurm.conf.sync.$$"
+            docker cp "/tmp/slurm.conf.sync.$$" "$c:/etc/slurm/slurm.conf"
             debug_log "Synced slurm.conf to $c"
         done
-        rm -f /tmp/slurm.conf.sync
+        rm -f /tmp/slurm.conf.sync.$$
     fi
 
     debug_log "Configuring SLURM to load Cedana plugins (controller)..."
@@ -610,6 +622,20 @@ COMPUTE_EOF
                 error_log "Plugin setup failed on $c"
                 return 1
             }
+            
+        docker exec -i "$c" bash <<'PATH_EOF' >&"${OUTPUT_FD}" 2>&1 ||
+set -euo pipefail
+mkdir -p /etc/systemd/system/slurmd.service.d
+cat > /etc/systemd/system/slurmd.service.d/cedana-path.conf <<'EOF'
+[Service]
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EOF
+systemctl daemon-reload || true
+PATH_EOF
+            {
+                error_log "Failed to configure slurmd PATH on $c"
+                return 1
+            }
     done
 
     debug_log "Starting cedana daemon on all nodes..."
@@ -658,10 +684,19 @@ COMPUTE_EOF
             waited=$((waited + 1))
         done
         if [ "$waited" -ge 30 ]; then
-            debug_log "WARNING: cedana socket not ready on $c after 30s — proceeding"
-        else
-            debug_log "  $c: cedana socket ready (${waited}s)"
+            error_log "cedana socket not ready on $c after 30s"
+            docker exec "$c" tail -20 /var/log/cedana.log 2>/dev/null || true
+            return 1
         fi
+        debug_log "  $c: cedana socket ready (${waited}s)"
+    done
+
+    for c in "${compute_containers[@]}"; do
+        docker exec "$c" bash -c '
+            mkdir -p /etc/default
+            grep -q "^PATH=" /etc/default/slurmd 2>/dev/null || \
+                echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" >> /etc/default/slurmd
+        '
     done
 
     debug_log "Restarting SLURM services to load task_cedana plugin..."
@@ -724,10 +759,11 @@ COMPUTE_EOF
             waited=$((waited + 1))
         done
         if [ "$waited" -ge 30 ]; then
-            debug_log "WARNING: cedana socket not ready on $c after 30s — proceeding"
-        else
-            debug_log "  $c: cedana socket ready post-restart (${waited}s)"
+            error_log "cedana socket not ready on $c after 30s (post-restart)"
+            docker exec "$c" tail -20 /var/log/cedana.log 2>/dev/null || true
+            return 1
         fi
+        debug_log "  $c: cedana socket ready post-restart (${waited}s)"
     done
 
     debug_log "Starting cedana-slurm daemon on compute nodes..."

@@ -39,19 +39,10 @@ get_slurm_job_batch_host() {
         grep -oP 'BatchHost=\K\S+' | head -1
 }
 
-get_slurm_job_pid() {
-    local job_id="$1"
-    local pid
-
-    pid=$(slurm_exec bash -c "scontrol listpids '$job_id' 2>/dev/null || scontrol listpids jobid='$job_id' 2>/dev/null" |
-        awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1; exit}')
-
-    echo "$pid"
-}
 
 ensure_slurm_checkpoint_monitor() {
     local job_id="$1"
-    local host container pid
+    local host pid
 
     host=$(get_slurm_job_batch_host "$job_id")
     if [ -z "$host" ]; then
@@ -59,32 +50,31 @@ ensure_slurm_checkpoint_monitor() {
         return 1
     fi
 
-    container="$host"
-
-    if ! docker exec "$container" test -x /usr/local/bin/cedana-slurm 2>/dev/null; then
-        error_log "cedana-slurm binary not found in $container"
+    if ! docker exec "$host" test -x /usr/local/bin/cedana-slurm 2>/dev/null; then
+        error_log "cedana-slurm binary not found in $host"
         return 1
     fi
 
-    if docker exec "$container" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
-        debug_log "cedana-slurm monitor already running for job $job_id on $container"
+    if docker exec "$host" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
+        debug_log "cedana-slurm monitor already running for job $job_id on $host"
         return 0
     fi
 
-    pid=$(get_slurm_job_pid "$job_id")
+    pid=$(docker exec "$host" bash -c "scontrol listpids '$job_id' 2>/dev/null || scontrol listpids jobid='$job_id' 2>/dev/null" |
+        awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1; exit}')
     if [ -z "$pid" ]; then
-        error_log "Cannot determine PID for job $job_id (required to start cedana-slurm monitor)"
+        error_log "Cannot determine PID for job $job_id on $host"
         return 1
     fi
 
-    debug_log "Starting fallback cedana-slurm monitor for job $job_id (pid=$pid) on $container"
+    debug_log "Starting fallback cedana-slurm monitor for job $job_id (pid=$pid) on $host"
     docker exec -d \
         -e CEDANA_URL="${CEDANA_URL:-}" \
         -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
         -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
-        "$container" \
+        "$host" \
         bash -c "/usr/local/bin/cedana-slurm monitor $pid $job_id >>/var/log/cedana-slurm-monitor.log 2>&1" || {
-        error_log "Failed to start fallback monitor for job $job_id on $container"
+        error_log "Failed to start fallback monitor for job $job_id on $host"
         return 1
     }
 
