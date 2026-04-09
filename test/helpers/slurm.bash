@@ -33,6 +33,65 @@ slurm_submit_job() {
     echo "$job_id"
 }
 
+get_slurm_job_batch_host() {
+    local job_id="$1"
+    slurm_exec scontrol show job "$job_id" 2>/dev/null |
+        grep -oP 'BatchHost=\K\S+' | head -1
+}
+
+get_slurm_job_pid() {
+    local job_id="$1"
+    local pid
+
+    pid=$(slurm_exec bash -c "scontrol listpids '$job_id' 2>/dev/null || scontrol listpids jobid='$job_id' 2>/dev/null" |
+        awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1; exit}')
+
+    echo "$pid"
+}
+
+ensure_slurm_checkpoint_monitor() {
+    local job_id="$1"
+    local host container pid
+
+    host=$(get_slurm_job_batch_host "$job_id")
+    if [ -z "$host" ]; then
+        error_log "Cannot determine BatchHost for job $job_id"
+        return 1
+    fi
+
+    container="$host"
+
+    if ! docker exec "$container" test -x /usr/local/bin/cedana-slurm 2>/dev/null; then
+        error_log "cedana-slurm binary not found in $container"
+        return 1
+    fi
+
+    if docker exec "$container" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
+        debug_log "cedana-slurm monitor already running for job $job_id on $container"
+        return 0
+    fi
+
+    pid=$(get_slurm_job_pid "$job_id")
+    if [ -z "$pid" ]; then
+        error_log "Cannot determine PID for job $job_id (required to start cedana-slurm monitor)"
+        return 1
+    fi
+
+    debug_log "Starting fallback cedana-slurm monitor for job $job_id (pid=$pid) on $container"
+    docker exec -d \
+        -e CEDANA_URL="${CEDANA_URL:-}" \
+        -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+        -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
+        "$container" \
+        bash -c "/usr/local/bin/cedana-slurm monitor $pid $job_id >>/var/log/cedana-slurm-monitor.log 2>&1" || {
+        error_log "Failed to start fallback monitor for job $job_id on $container"
+        return 1
+    }
+
+    sleep 2
+    return 0
+}
+
 _dump_job_failure_info() {
     local job_id="${1:-}"
 
@@ -71,6 +130,19 @@ _dump_job_failure_info() {
         echo "--- $c ---"
         docker exec "$c" tail -30 /var/log/cedana.log 2>/dev/null ||
             echo "(no log)"
+    done
+
+    echo "=== cedana-slurm monitor status/log on compute nodes ==="
+    for c in $(_slurm_compute_containers); do
+        echo "--- $c processes ---"
+        docker exec "$c" pgrep -fa 'cedana-slurm monitor|cedana-slurm daemon' 2>/dev/null ||
+            echo "(no cedana-slurm monitor/daemon process)"
+        echo "--- $c monitor log (last 40 lines) ---"
+        docker exec "$c" tail -40 /var/log/cedana-slurm-monitor.log 2>/dev/null ||
+            echo "(no monitor log)"
+        echo "--- $c cedana-slurm daemon log (last 40 lines) ---"
+        docker exec "$c" tail -40 /var/log/cedana-slurm.log 2>/dev/null ||
+            echo "(no daemon log)"
     done
 
     echo "=== cedana-slurm log on controller (last 30 lines) ==="
@@ -160,6 +232,11 @@ test_slurm_job() {
             }
             [ -z "$job_id" ] && {
                 error="Cannot DUMP — no active job ID"
+                break
+            }
+
+            ensure_slurm_checkpoint_monitor "$job_id" || {
+                error="Failed to start/verify checkpoint monitor for job $job_id"
                 break
             }
 
