@@ -539,9 +539,10 @@ jobs:
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
+      # Pinned to 1 because SLURM tests share a single cluster instance.
+      # Running them in parallel can cause resource collisions and flaky tests.
       parallelism: 1
       post_summary: false # Will post consolidated summary instead
-      slurm_version: "main"
 
   post-summary:
     name: Post Summary

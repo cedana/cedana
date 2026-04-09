@@ -1,4 +1,4 @@
-name: Test Slurm
+name: Test
 
 permissions:
   contents: read
@@ -45,11 +45,6 @@ on:
         description: "Post test summary"
         required: false
         default: false
-      slurm_version:
-        type: string
-        description: "cedana-slurm version to download (branch, tag, or 'release')"
-        required: false
-        default: "main"
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -60,7 +55,7 @@ env:
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
-  FORMATTER: pretty
+  FORMATTER: junit
   TERM: dumb
   RETRIES: 1
   DEBUG: ${{ vars.DEBUG_SLURM }}
