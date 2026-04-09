@@ -161,7 +161,6 @@ jobs:
           sudo -E cedana plugin install \
             criu \
             runc \
-            slurm \
             storage/cedana \
             storage/s3
           if [ "$GPU" = "true" ]; then
@@ -176,6 +175,7 @@ jobs:
           sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
           sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
           sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
+          sudo -E cedana slurm setup
 
       - name: Install ansible and Docker CLI
         run: |
