@@ -446,6 +446,22 @@ install_cedana_in_slurm() {
         done
     fi
 
+    debug_log "Installing SLURM plugin via Cedana CLI in all nodes..."
+    for c in "${all_containers[@]}"; do
+        docker exec \
+            -e CEDANA_PLUGINS_BUILDS="local" \
+            -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
+            "$c" bash -c '
+                set -euo pipefail
+                cedana plugin install slurm
+                cedana slurm setup
+            ' >&"${OUTPUT_FD}" 2>&1 ||
+            {
+                error_log "Cedana SLURM plugin install/setup failed on $c"
+                return 1
+            }
+    done
+
     if [ "${GPU:-0}" = "1" ]; then
         debug_log "Configuring SLURM GPU GRES resources..."
         for c in "${compute_containers[@]}"; do
