@@ -160,7 +160,7 @@ jobs:
           chmod +x ./cedana*
           chmod +x ./criu
           echo "$PWD" >> $GITHUB_PATH
-          make install
+          sudo cp ./cedana /usr/local/bin/cedana
           sudo -E cedana plugin install \
             criu \
             runc \
