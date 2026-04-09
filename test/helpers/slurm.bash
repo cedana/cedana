@@ -14,7 +14,7 @@ slurm_submit_job() {
     rel_path="${sbatch_file#*/slurm/}"
     container_dir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
     container_file="$(basename "$rel_path")"
-    debug_log "Submitting: cd $container_dir && sbatch $container_file"
+    info_log "Submitting: cd $container_dir && sbatch $container_file"
 
     local output exit_code
     output=$(slurm_exec bash -c \
@@ -29,7 +29,7 @@ slurm_submit_job() {
 
     local job_id
     job_id=$(echo "$output" | tail -1 | cut -d';' -f1 | tr -d '[:space:]')
-    debug_log "Submitted $container_file -> job $job_id"
+    info_log "Submitted $container_file -> job $job_id"
     echo "$job_id"
 }
 
@@ -39,10 +39,17 @@ get_slurm_job_batch_host() {
         grep -oP 'BatchHost=\K\S+' | head -1
 }
 
+get_slurm_job_command() {
+    local job_id="$1"
+    slurm_exec scontrol show job "$job_id" 2>/dev/null |
+        grep -oP 'Command=\K\S+' | head -1
+}
+
 
 ensure_slurm_checkpoint_monitor() {
     local job_id="$1"
-    local host pid
+    local host pid cmd
+    local pid_source="unknown"
 
     host=$(get_slurm_job_batch_host "$job_id")
     if [ -z "$host" ]; then
@@ -56,18 +63,50 @@ ensure_slurm_checkpoint_monitor() {
     fi
 
     if docker exec "$host" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
-        debug_log "cedana-slurm monitor already running for job $job_id on $host"
+        info_log "cedana-slurm monitor already running for job $job_id on $host"
         return 0
     fi
 
-    pid=$(docker exec "$host" bash -c "scontrol listpids '$job_id' 2>/dev/null || scontrol listpids jobid='$job_id' 2>/dev/null" |
-        awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1; exit}')
+    cmd=$(get_slurm_job_command "$job_id")
+    if [ -n "$cmd" ]; then
+        info_log "Resolved SLURM job $job_id command: $cmd"
+        pid=$(docker exec "$host" bash -c "pgrep -f -- '$cmd' | tail -1" 2>/dev/null || true)
+        [ -n "$pid" ] && pid_source="command"
+    fi
+
+    if [ -z "$pid" ]; then
+        pid=$(docker exec "$host" bash -c "scontrol listpids '$job_id' 2>/dev/null || scontrol listpids jobid='$job_id' 2>/dev/null" |
+            awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1}' |
+            while read -r p; do
+                comm=$(ps -p "$p" -o comm= 2>/dev/null || true)
+                case "$comm" in
+                    slurmstepd|slurm_script|srun|bash)
+                        ;;
+                    *)
+                        echo "$p"
+                        break
+                        ;;
+                esac
+            done)
+                [ -n "$pid" ] && pid_source="listpids-filtered"
+    fi
+
+    if [ -z "$pid" ]; then
+        pid=$(docker exec "$host" bash -c "scontrol listpids '$job_id' 2>/dev/null || scontrol listpids jobid='$job_id' 2>/dev/null" |
+            awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1; exit}')
+        [ -n "$pid" ] && pid_source="listpids-first"
+    fi
+
     if [ -z "$pid" ]; then
         error_log "Cannot determine PID for job $job_id on $host"
         return 1
     fi
 
-    debug_log "Starting fallback cedana-slurm monitor for job $job_id (pid=$pid) on $host"
+    info_log "Selected PID for job $job_id: $pid (source=$pid_source)"
+    info_log "Monitor launch context on $host:"
+    docker exec "$host" bash -c 'echo "PATH=$PATH"; command -v cedana-slurm || true; ls -l /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm /usr/sbin/cedana-slurm 2>/dev/null || true' || true
+
+    info_log "Starting fallback cedana-slurm monitor for job $job_id (pid=$pid) on $host"
     docker exec -d \
         -e CEDANA_URL="${CEDANA_URL:-}" \
         -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -79,6 +118,14 @@ ensure_slurm_checkpoint_monitor() {
     }
 
     sleep 2
+    if ! docker exec "$host" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
+        error_log "Fallback monitor exited immediately for job $job_id on $host"
+        docker exec "$host" tail -40 /var/log/cedana-slurm-monitor.log 2>/dev/null || true
+        return 1
+    fi
+
+    info_log "Fallback monitor is running for job $job_id on $host"
+
     return 0
 }
 
@@ -151,7 +198,7 @@ wait_for_slurm_job_state() {
         state=$(slurm_exec scontrol show job "$job_id" 2>/dev/null |
             grep -oP 'JobState=\K\S+' || echo "UNKNOWN")
 
-        debug_log "Job $job_id state: $state (want: $target_state)"
+        info_log "Job $job_id state: $state (want: $target_state)"
 
         [ "$state" = "$target_state" ] && return 0
 
@@ -187,6 +234,8 @@ test_slurm_job() {
 
     IFS='_' read -ra actions <<<"$action_sequence"
 
+    info_log "Starting SLURM action sequence: $action_sequence (file=$sbatch_file, dump_wait=${dump_wait_time}s, dump_timeout=${dump_timeout}s)"
+
     local job_id="" action_id="" submitted=false error=""
 
     for action in "${actions[@]}"; do
@@ -197,7 +246,7 @@ test_slurm_job() {
                 break
             }
 
-            debug_log "Submitting job from $sbatch_file..."
+            info_log "Submitting job from $sbatch_file..."
             job_id=$(slurm_submit_job "$sbatch_file") ||
                 {
                     error="Failed to submit job"
@@ -210,7 +259,7 @@ test_slurm_job() {
                     break
                 }
 
-            debug_log "Job $job_id running — waiting ${dump_wait_time}s before dump..."
+            info_log "Job $job_id running — waiting ${dump_wait_time}s before dump..."
             sleep "$dump_wait_time"
             submitted=true
             ;;
@@ -230,7 +279,7 @@ test_slurm_job() {
                 break
             }
 
-            debug_log "Checkpointing SLURM job $job_id via propagator..."
+            info_log "Checkpointing SLURM job $job_id via propagator..."
             local checkpoint_output checkpoint_status
 
             checkpoint_output=$(checkpoint_slurm_job "$job_id")
@@ -247,13 +296,15 @@ test_slurm_job() {
                     break
                 }
 
+            info_log "Checkpoint request returned action_id=$action_id"
+
             poll_slurm_action_status "$action_id" "checkpoint" "$dump_timeout" ||
                 {
                     error="Checkpoint action $action_id did not complete"
                     break
                 }
 
-            debug_log "Checkpoint complete (action_id: $action_id)"
+            info_log "Checkpoint complete (action_id: $action_id)"
             ;;
 
         RESTORE)
@@ -262,11 +313,11 @@ test_slurm_job() {
                 break
             }
 
-            debug_log "Cancelling job $job_id before restore..."
+            info_log "Cancelling job $job_id before restore..."
             cancel_slurm_job "$job_id"
             sleep 2
 
-            debug_log "Restoring job from action $action_id..."
+            info_log "Restoring job from action $action_id..."
             local restore_output restore_status restore_action_id
             restore_output=$(restore_slurm_job "$action_id" "$SLURM_CLUSTER_ID")
             restore_status=$?
@@ -282,14 +333,18 @@ test_slurm_job() {
                     break
                 }
 
-            debug_log "Waiting for restored job to appear..."
+            info_log "Restore request returned action_id=$restore_action_id"
+
+            info_log "Waiting for restored job to appear..."
             sleep 5
 
             local new_job_id
             new_job_id=$(slurm_exec squeue -h -o '%i' --sort=-V 2>/dev/null | head -1)
             if [ -n "$new_job_id" ] && [ "$new_job_id" != "$job_id" ]; then
                 job_id="$new_job_id"
-                debug_log "Restored job has new ID: $job_id"
+                info_log "Restored job has new ID: $job_id"
+            else
+                info_log "No new restored job ID detected; continuing with job_id=$job_id"
             fi
 
             wait_for_slurm_job_state "$job_id" "RUNNING" 60 ||
@@ -298,7 +353,7 @@ test_slurm_job() {
                     break
                 }
 
-            debug_log "Restored job $job_id is running"
+            info_log "Restored job $job_id is running"
             submitted=true
             ;;
 
@@ -310,6 +365,7 @@ test_slurm_job() {
     done
 
     [ -n "$job_id" ] && cancel_slurm_job "$job_id"
+    [ -n "$job_id" ] && info_log "Cleanup: cancelled job $job_id"
 
     if [ -n "$error" ]; then
         error_log "$error"
