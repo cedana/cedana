@@ -73,22 +73,19 @@ _dump_job_failure_info() {
             echo "(no log)"
     done
 
-    echo "=== cedana-slurm monitor status/log on compute nodes ==="
+    echo "=== cedana-slurm status/log on compute nodes ==="
     for c in $(_slurm_compute_containers); do
         echo "--- $c processes ---"
-        docker exec "$c" pgrep -fa 'cedana-slurm monitor|cedana-slurm daemon' 2>/dev/null ||
-            echo "(no cedana-slurm monitor/daemon process)"
-        echo "--- $c monitor log (last 40 lines) ---"
-        docker exec "$c" tail -40 /var/log/cedana-slurm-monitor.log 2>/dev/null ||
-            echo "(no monitor log)"
-        echo "--- $c cedana-slurm daemon log (last 40 lines) ---"
-        docker exec "$c" tail -40 /var/log/cedana-slurm.log 2>/dev/null ||
-            echo "(no daemon log)"
+        docker exec "$c" pgrep -fa 'cedana-slurm' 2>/dev/null ||
+            echo "(no cedana-slurm processes)"
+        echo "--- $c cedana-slurm log (last 80 lines) ---"
+        docker exec "$c" tail -80 /var/log/cedana-slurm.log 2>/dev/null ||
+            echo "(no log)"
     done
 
-    echo "=== cedana-slurm log on controller (last 30 lines) ==="
+    echo "=== cedana-slurm log on controller (last 50 lines) ==="
     docker exec "$SLURM_CONTROLLER_CONTAINER" \
-        tail -30 /var/log/cedana-slurm.log 2>/dev/null || true
+        tail -50 /var/log/cedana-slurm.log 2>/dev/null || true
 }
 
 wait_for_slurm_job_state() {
@@ -178,6 +175,17 @@ test_slurm_job() {
                 break
             }
 
+            local _host
+            _host=$(slurm_exec scontrol show job "$job_id" 2>/dev/null | grep -oP 'BatchHost=\K\S+' | head -1)
+            if [ -n "$_host" ]; then
+                info_log "[DEBUG] SPANK monitor check on $_host for job $job_id:"
+                docker exec "$_host" pgrep -fa 'cedana-slurm monitor' 2>/dev/null || info_log "[DEBUG] No monitor process found"
+                info_log "[DEBUG] slurmd PATH:"
+                docker exec "$_host" bash -c "cat /proc/\$(pgrep -x slurmd | head -1)/environ 2>/dev/null | tr '\0' '\n' | grep ^PATH" 2>/dev/null || info_log "[DEBUG] Could not read slurmd environ"
+                info_log "[DEBUG] SPANK log entries:"
+                docker exec "$_host" grep -i 'spank\|monitor command\|checkpoint handler' /var/log/cedana-slurm.log 2>/dev/null | tail -5 || info_log "[DEBUG] No SPANK entries in log"
+            fi
+
             info_log "Checkpointing SLURM job $job_id via propagator..."
             local checkpoint_output checkpoint_status
 
@@ -196,6 +204,14 @@ test_slurm_job() {
                 }
 
             info_log "Checkpoint request returned action_id=$action_id"
+
+            if [ -n "$_host" ]; then
+                sleep 3
+                info_log "[DEBUG] Monitor status after checkpoint request:"
+                docker exec "$_host" pgrep -fa 'cedana-slurm monitor' 2>/dev/null || info_log "[DEBUG] Monitor DIED after checkpoint request"
+                info_log "[DEBUG] Last 10 lines of cedana-slurm log:"
+                docker exec "$_host" tail -10 /var/log/cedana-slurm.log 2>/dev/null || true
+            fi
 
             poll_slurm_action_status "$action_id" "checkpoint" "$dump_timeout" ||
                 {
