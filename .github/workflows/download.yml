@@ -481,6 +481,10 @@ jobs:
           done
           echo "$VERSION_REF" > slurm-version.txt
 
+          echo "=== Binary checksums ==="
+          md5sum build/* 2>/dev/null || true
+          ls -la build/
+
       - name: Checkout cedana-slurm
         uses: actions/checkout@v4
         with:
