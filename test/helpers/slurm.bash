@@ -33,59 +33,6 @@ slurm_submit_job() {
     echo "$job_id"
 }
 
-get_slurm_job_batch_host() {
-    local job_id="$1"
-    slurm_exec scontrol show job "$job_id" 2>/dev/null |
-        grep -oP 'BatchHost=\K\S+' | head -1
-}
-
-ensure_slurm_checkpoint_monitor() {
-    local job_id="$1"
-    local host pid
-
-    host=$(get_slurm_job_batch_host "$job_id")
-    if [ -z "$host" ]; then
-        error_log "Cannot determine BatchHost for job $job_id"
-        return 1
-    fi
-
-    if docker exec "$host" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
-        debug_log "Monitor already running for job $job_id on $host"
-        return 0
-    fi
-
-    pid=$(docker exec "$host" bash -c "scontrol listpids '$job_id' 2>/dev/null" |
-        awk 'NR > 1 && $1 ~ /^[0-9]+$/ {print $1; exit}')
-
-    if [ -z "$pid" ]; then
-        error_log "Cannot determine PID for job $job_id on $host"
-        return 1
-    fi
-
-    info_log "Starting cedana-slurm monitor for job $job_id (pid=$pid) on $host"
-    docker exec -d \
-        -e CEDANA_URL="${CEDANA_URL:-}" \
-        -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
-        -e CEDANA_ADDRESS="/run/cedana.sock" \
-        -e CEDANA_PROTOCOL="unix" \
-        -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
-        -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-        "$host" \
-        bash -c "/usr/local/bin/cedana-slurm monitor $pid $job_id >>/var/log/cedana-slurm-monitor.log 2>&1" || {
-        error_log "Failed to start monitor for job $job_id on $host"
-        return 1
-    }
-
-    sleep 2
-    if ! docker exec "$host" pgrep -f "cedana-slurm monitor .* $job_id" >/dev/null 2>&1; then
-        error_log "Monitor exited immediately for job $job_id on $host"
-        docker exec "$host" tail -40 /var/log/cedana-slurm-monitor.log 2>/dev/null || true
-        return 1
-    fi
-
-    return 0
-}
-
 _dump_job_failure_info() {
     local job_id="${1:-}"
 
@@ -228,11 +175,6 @@ test_slurm_job() {
             }
             [ -z "$job_id" ] && {
                 error="Cannot DUMP — no active job ID"
-                break
-            }
-
-            ensure_slurm_checkpoint_monitor "$job_id" || {
-                error="Failed to start/verify checkpoint monitor for job $job_id"
                 break
             }
 
