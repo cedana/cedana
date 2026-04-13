@@ -2,6 +2,6 @@ package defaults
 
 const (
 	RUNTIME              = "containerd"
-	CONTAINERD_NAMESPACE = "k8s.io"
+	CONTAINERD_NAMESPACE = "default"
 	CRIO_NAMESPACE       = "k8s.io"
 )
