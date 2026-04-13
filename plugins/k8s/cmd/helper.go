@@ -28,7 +28,7 @@ import (
 
 const DAEMON_LOG_PATH = "/host/var/log/cedana-daemon.log"
 
-var containerdAddress = "/run/containerd/containerd.sock"
+var containerdAddress = "/run/k3s/containerd/containerd.sock"
 
 var (
 	cedana     *client.Client
