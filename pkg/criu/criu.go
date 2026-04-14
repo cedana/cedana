@@ -172,6 +172,10 @@ func (c *Criu) doSwrkWithResp(
 	}
 
 	if !utils.IsRootUser() {
+		if opts == nil {
+			opts = &criu.CriuOpts{}
+			req.Opts = opts
+		}
 		opts.Unprivileged = proto.Bool(true)
 	}
 
