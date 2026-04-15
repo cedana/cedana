@@ -251,4 +251,4 @@ END_CAT
 fi
 
 echo "Restarting containerd to pick up the new runtime configuration..."
-(systemctl restart containerd && echo "Restarted containerd sucessfully") || echo "WARNING: Failed to restart containerd, please restart manually" >&2
+(systemctl restart containerd && echo "Restarted containerd successfully") || echo "WARNING: Failed to restart containerd, please restart manually" >&2
