@@ -15,6 +15,7 @@ CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 # XXX: We always install the GPU plugin for now until auto-detection is added
 PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
+    criu/nvidia-dev@$CEDANA_PLUGINS_CRIU_VERSION \
     slurm/wlm@$CEDANA_PLUGINS_SLURM_WLM_VERSION"
 
 PLUGINS_TO_REMOVE=""
