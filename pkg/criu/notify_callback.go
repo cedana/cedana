@@ -15,8 +15,8 @@ type NotifyCallback struct {
 	InitializeFunc          InitializeFunc
 	InitializeDumpFunc      NotifyFuncOpts
 	InitializeRestoreFunc   NotifyFuncOpts
-	FinalizeDumpFunc        NotifyFuncOpts
-	FinalizeRestoreFunc     NotifyFuncOpts
+	FinalizeDumpFunc        NotifyFuncOptsErr
+	FinalizeRestoreFunc     NotifyFuncOptsErr
 	PreDumpFunc             NotifyFuncOpts
 	PostDumpFunc            NotifyFuncOpts
 	PreRestoreFunc          NotifyFuncOpts
@@ -36,6 +36,7 @@ type (
 	NotifyFuncOptsNoError func(ctx context.Context, opts *criu.CriuOpts)
 	NotifyFunc            func(ctx context.Context) error
 	NotifyFuncOpts        func(ctx context.Context, opts *criu.CriuOpts) error
+	NotifyFuncOptsErr     func(ctx context.Context, opts *criu.CriuOpts, err error) error
 	NotifyFuncPid         func(ctx context.Context, pid int32) error
 	NotifyFuncFd          func(ctx context.Context, fd int32) error
 	InitializeFunc        func(ctx context.Context, criuPid int32) error
@@ -86,13 +87,13 @@ func (n NotifyCallback) InitializeRestore(ctx context.Context, opts *criu.CriuOp
 	return nil
 }
 
-func (n NotifyCallback) FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error {
+func (n NotifyCallback) FinalizeDump(ctx context.Context, opts *criu.CriuOpts, err error) error {
 	if n.FinalizeDumpFunc != nil {
 		log.Trace().Str("name", n.Name).Msg("CRIU finalize dump callback")
 		var end func()
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
-		err := n.FinalizeDumpFunc(ctx, opts)
+		err := n.FinalizeDumpFunc(ctx, opts, err)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU finalize dump callback failed")
 			return fmt.Errorf("finalize dump callback: %v", err)
@@ -101,13 +102,13 @@ func (n NotifyCallback) FinalizeDump(ctx context.Context, opts *criu.CriuOpts) e
 	return nil
 }
 
-func (n NotifyCallback) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+func (n NotifyCallback) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts, err error) error {
 	if n.FinalizeRestoreFunc != nil {
 		log.Trace().Str("name", n.Name).Msg("CRIU finalize restore callback")
 		var end func()
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
-		err := n.FinalizeRestoreFunc(ctx, opts)
+		err := n.FinalizeRestoreFunc(ctx, opts, err)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU finalize restore callback failed")
 			return fmt.Errorf("finalize restore callback: %v", err)

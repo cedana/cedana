@@ -204,7 +204,7 @@ func (c *Criu) doSwrkWithResp(
 				return nil, fmt.Errorf("initialize-restore failed: %w", err)
 			}
 			defer func() {
-				err := nfy.FinalizeRestore(ctx, opts)
+				err := nfy.FinalizeRestore(ctx, opts, retErr)
 				if err != nil {
 					retErr = errors.Join(retErr, err)
 				}
@@ -215,7 +215,7 @@ func (c *Criu) doSwrkWithResp(
 				return nil, fmt.Errorf("initialize-dump failed: %w", err)
 			}
 			defer func() {
-				err := nfy.FinalizeDump(ctx, opts)
+				err := nfy.FinalizeDump(ctx, opts, retErr)
 				if err != nil {
 					retErr = errors.Join(retErr, err)
 				}
