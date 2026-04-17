@@ -19,6 +19,7 @@ slurm_submit_job() {
     local output exit_code
     output=$(slurm_exec bash -c \
         "cd '$container_dir' && sbatch --parsable --overcommit \
+         --export=ALL,PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
          --cpus-per-task=1 --mem=0 '$container_file'" 2>&1)
     exit_code=$?
 

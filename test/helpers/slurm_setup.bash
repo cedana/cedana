@@ -88,7 +88,9 @@ _svc_restart() {
         return 0
     fi
 
-    docker exec -d "$container" "$binary" "${extra_args[@]}"
+    docker exec -d \
+        -e PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        "$container" "$binary" "${extra_args[@]}"
     sleep 3
     if docker exec "$container" pgrep -x "$proc" &>/dev/null; then
         debug_log "$name started directly in $container"
@@ -318,6 +320,23 @@ install_cedana_in_slurm() {
                 error_log "Failed to install cedana-slurm in $c"
                 return 1
             }
+
+        docker exec "$c" bash -c 'test -x /usr/local/bin/cedana-slurm && /usr/local/bin/cedana-slurm --help >/dev/null' ||
+            {
+                error_log "cedana-slurm binary verification failed in $c"
+                return 1
+            }
+
+        docker exec "$c" bash -c '
+            grep -q "^PATH=" /etc/default/slurmd 2>/dev/null &&
+                sed -i "s|^PATH=.*|PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin|" /etc/default/slurmd ||
+                echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" >> /etc/default/slurmd
+            printf "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n" > /etc/profile.d/cedana-slurm-path.sh
+            chmod 644 /etc/profile.d/cedana-slurm-path.sh
+        ' || {
+            error_log "Failed to enforce PATH for slurmd in $c"
+            return 1
+        }
     done
 
     debug_log "Installing SLURM plugin via Cedana CLI in all nodes..."
@@ -651,6 +670,14 @@ start_cedana_slurm_daemon() {
     targets+=("${compute_containers[@]}")
 
     for c in "${targets[@]}"; do
+        docker exec "$c" bash -c 'test -x /usr/local/bin/cedana-slurm' ||
+            {
+                error_log "cedana-slurm binary missing in $c at /usr/local/bin/cedana-slurm"
+                return 1
+            }
+    done
+
+    for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
@@ -658,7 +685,7 @@ start_cedana_slurm_daemon() {
             -e CEDANA_CLUSTER_ID="$cluster_id" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
             "$c" \
-            bash -c 'cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' ||
+            bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' ||
             {
                 error_log "Failed to launch cedana-slurm daemon on $c"
                 return 1
