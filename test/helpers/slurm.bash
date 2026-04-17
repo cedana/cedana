@@ -217,8 +217,8 @@ test_slurm_job() {
                 sleep 3
                 info_log "[DEBUG] Monitor status after checkpoint request:"
                 docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm monitor'" 2>/dev/null || info_log "[DEBUG] Monitor DIED after checkpoint request"
-                info_log "[DEBUG] Last 40 lines of cedana-slurm logs:"
-                docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f ---\"; tail -40 \"\$f\"; done" 2>/dev/null || true
+                info_log "[DEBUG] Last 120 lines of cedana-slurm logs:"
+                docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f ---\"; tail -120 \"\$f\"; done" 2>/dev/null || true
             fi
 
             poll_slurm_action_status "$action_id" "checkpoint" "$dump_timeout" ||
