@@ -61,21 +61,6 @@ env:
   DEBUG: ${{ vars.DEBUG_SLURM }}
 
 jobs:
-  propagator-connectivity:
-    name: Propagator Connectivity (Slurm)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Quick connectivity test
-        run: |
-          echo "Testing basic connectivity to Propagator API..."
-          curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
-          echo "✓ Connectivity test completed"
-
   slurm:
     name: Slurm
     runs-on: ${{ format(
@@ -87,7 +72,6 @@ jobs:
       matrix.storage
       ) }}
     timeout-minutes: 120
-    needs: propagator-connectivity
     strategy:
       fail-fast: false
       matrix:
