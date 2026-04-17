@@ -591,22 +591,82 @@ COMPUTE_EOF
         debug_log "  $c: cedana socket ready post-restart (${waited}s)"
     done
 
-    debug_log "Starting cedana-slurm daemon on compute nodes..."
-    for c in "${compute_containers[@]}"; do
+    local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
+    cluster_id="${cluster_id//\"/}"
+
+    if [ -n "$cluster_id" ]; then
+        debug_log "Starting cedana-slurm daemon on compute nodes..."
+        for c in "${compute_containers[@]}"; do
+            docker exec "$c" bash -c "pkill -f 'cedana-slurm daemon' 2>/dev/null || true"
+            docker exec -d \
+                -e CEDANA_URL="${CEDANA_URL:-}" \
+                -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+                -e CEDANA_CLUSTER_ID="$cluster_id" \
+                -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
+                "$c" bash -c \
+                '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' ||
+                {
+                    error_log "Failed to launch cedana-slurm on $c"
+                    return 1
+                }
+        done
+
+        sleep 3
+        for c in "${compute_containers[@]}"; do
+            if docker exec "$c" pgrep -f 'cedana-slurm daemon' &>/dev/null; then
+                debug_log "  $c: cedana-slurm daemon running"
+            else
+                error_log "cedana-slurm daemon failed to start on $c"
+                docker exec "$c" tail -20 /var/log/cedana-slurm.log
+                return 1
+            fi
+        done
+    else
+        debug_log "Skipping cedana-slurm daemon startup on compute nodes: cluster ID not set yet"
+    fi
+
+    wait_for_slurm_ready 180
+    info_log "Cedana installed and SLURM cluster is ready"
+}
+
+start_cedana_slurm_daemon() {
+    local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
+    cluster_id="${cluster_id//\"/}"
+
+    if [ -z "$cluster_id" ]; then
+        error_log "SLURM cluster ID is required to start cedana-slurm daemon"
+        error_log "Set SLURM_CLUSTER_ID or CEDANA_CLUSTER_ID before calling start_cedana_slurm_daemon"
+        return 1
+    fi
+
+    debug_log "Starting cedana-slurm daemon on SLURM nodes..."
+
+    if [ -n "${CEDANA_SLURM_BIN:-}" ] && [ -f "$CEDANA_SLURM_BIN" ]; then
+        docker cp "$CEDANA_SLURM_BIN" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana-slurm"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/cedana-slurm
+    fi
+
+    local targets=("$SLURM_CONTROLLER_CONTAINER")
+    local compute_containers=($(_slurm_compute_containers))
+    targets+=("${compute_containers[@]}")
+
+    for c in "${targets[@]}"; do
+        docker exec "$c" bash -c "pkill -f 'cedana-slurm daemon' 2>/dev/null || true"
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+            -e CEDANA_CLUSTER_ID="$cluster_id" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
-            "$c" bash -c \
-            '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' ||
+            "$c" \
+            bash -c 'cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' ||
             {
-                error_log "Failed to launch cedana-slurm on $c"
+                error_log "Failed to launch cedana-slurm daemon on $c"
                 return 1
             }
     done
 
     sleep 3
-    for c in "${compute_containers[@]}"; do
+    for c in "${targets[@]}"; do
         if docker exec "$c" pgrep -f 'cedana-slurm daemon' &>/dev/null; then
             debug_log "  $c: cedana-slurm daemon running"
         else
@@ -615,35 +675,6 @@ COMPUTE_EOF
             return 1
         fi
     done
-
-    wait_for_slurm_ready 180
-    info_log "Cedana installed and SLURM cluster is ready"
-}
-
-start_cedana_slurm_daemon() {
-    debug_log "Starting cedana-slurm daemon in controller container..."
-
-    if [ -n "${CEDANA_SLURM_BIN:-}" ] && [ -f "$CEDANA_SLURM_BIN" ]; then
-        docker cp "$CEDANA_SLURM_BIN" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana-slurm"
-        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/cedana-slurm
-    fi
-
-    docker exec -d \
-        -e CEDANA_URL="${CEDANA_URL:-}" \
-        -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
-        -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
-        "$SLURM_CONTROLLER_CONTAINER" \
-        bash -c 'cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1'
-
-    sleep 3
-    if docker exec "$SLURM_CONTROLLER_CONTAINER" \
-        pgrep -f 'cedana-slurm daemon' &>/dev/null; then
-        debug_log "cedana-slurm daemon is running"
-    else
-        error_log "cedana-slurm daemon failed to start on $SLURM_CONTROLLER_CONTAINER"
-        docker exec "$SLURM_CONTROLLER_CONTAINER" tail -20 /var/log/cedana-slurm.log
-        return 1
-    fi
 }
 
 ##############################

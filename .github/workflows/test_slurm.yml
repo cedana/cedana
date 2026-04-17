@@ -199,6 +199,7 @@ jobs:
           CLUSTER_NAME="test-slurm-$(date +%s%N)"
           SLURM_CLUSTER_ID=$(register_slurm_cluster "$CLUSTER_NAME")
           echo "SLURM_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
+          echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
 
           start_cedana_slurm_daemon

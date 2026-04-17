@@ -53,14 +53,29 @@ register_slurm_cluster() {
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/cluster" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-            -d '{ "cluster_name": "'"${name}"'" }' \
+            -d '{ "cluster_name": "'"${name}"'", "kind": "slurm" }' \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
     local body="${response%???}"
 
     if [ "$http_code" -eq 200 ]; then
-        echo "$body"
+        local cluster_id="${body//\"/}"
+
+        if command -v jq &>/dev/null; then
+            local parsed_id
+            parsed_id=$(jq -r 'if type == "string" then . else (.id // .cluster_id // .data.id // empty) end' <<<"$body" 2>/dev/null || true)
+            if [ -n "$parsed_id" ] && [ "$parsed_id" != "null" ]; then
+                cluster_id="$parsed_id"
+            fi
+        fi
+
+        if [ -z "$cluster_id" ]; then
+            error_log "Failed to parse cluster ID from register response: $body"
+            return 1
+        fi
+
+        echo "$cluster_id"
         return 0
     else
         error_log "Failed to register slurm cluster (HTTP $http_code): $body"
