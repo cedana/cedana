@@ -189,12 +189,34 @@ jobs:
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
-          source test/helpers/slurm_propagator.bash
 
           setup_slurm_cluster
           setup_slurm_accounting
           install_cedana_in_slurm
+
+      - name: Setup SLURM samples
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
           setup_slurm_samples
+
+      - name: Register SLURM cluster and start daemon
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          source test/helpers/slurm_propagator.bash
 
           CLUSTER_NAME="test-slurm-$(date +%s%N)"
           SLURM_CLUSTER_ID=$(register_slurm_cluster "$CLUSTER_NAME")

@@ -597,7 +597,7 @@ COMPUTE_EOF
     if [ -n "$cluster_id" ]; then
         debug_log "Starting cedana-slurm daemon on compute nodes..."
         for c in "${compute_containers[@]}"; do
-            docker exec "$c" bash -c "pkill -f 'cedana-slurm daemon' 2>/dev/null || true"
+            docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
             docker exec -d \
                 -e CEDANA_URL="${CEDANA_URL:-}" \
                 -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -651,7 +651,7 @@ start_cedana_slurm_daemon() {
     targets+=("${compute_containers[@]}")
 
     for c in "${targets[@]}"; do
-        docker exec "$c" bash -c "pkill -f 'cedana-slurm daemon' 2>/dev/null || true"
+        docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
