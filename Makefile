@@ -270,18 +270,38 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 	fi
 
 test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
-	echo "Running slurm e2e tests..." ;\
-	echo "Parallelism: $(PARALLELISM)" ;\
-	if [ "$(TAGS)" = "" ]; then \
-		$(BATS_CMD) -r test/slurm ; status=$$? ;\
+	if [ -f /.dockerenv ]; then \
+		echo "Running slurm e2e tests..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		if [ "$(TAGS)" = "" ]; then \
+			$(BATS_CMD) -r test/slurm ; status=$$? ;\
+		else \
+			$(BATS_CMD_TAGS) -r test/slurm ; status=$$? ;\
+		fi ;\
+		if [ $$status -ne 0 ]; then \
+			echo "Slurm e2e tests failed" ;\
+			exit $$status ;\
+		else \
+			echo "All slurm e2e tests passed!" ;\
+		fi ;\
 	else \
-		$(BATS_CMD_TAGS) -r test/slurm ; status=$$? ;\
-	fi ;\
-	if [ $$status -ne 0 ]; then \
-		echo "Slurm e2e tests failed" ;\
-		exit $$status ;\
-	else \
-		echo "All slurm e2e tests passed!" ;\
+		if [ "$(GPU)" = "1" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_CREATE_SLURM_CUDA) ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_CREATE_SLURM) ;\
+		fi ;\
+		$(DOCKER_TEST_START) ;\
+		$(SLURM_ARTIFACTS_INSTALL) ;\
+		$(DOCKER_TEST_EXEC) make test-slurm \
+			PARALLELISM=$(PARALLELISM) \
+			TAGS=$(TAGS) \
+			RETRIES=$(RETRIES) \
+			GPU=$(GPU) \
+			FORMATTER=$(FORMATTER) \
+			DEBUG=$(DEBUG) ;\
+		$(DOCKER_TEST_REMOVE) ;\
 	fi
 
 test-enter: ## Enter the test environment
@@ -360,6 +380,31 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
 DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null
+
+CEDANA_SLURM_DIR?=$(shell if [ -d ../cedana-slurm ]; then cd ../cedana-slurm && pwd; fi)
+SLURM_ARTIFACTS_DIR?=$(shell if [ -d ../artifacts ]; then cd ../artifacts && pwd; fi)
+DOCKER_TEST_CREATE_SLURM_OPTS=$(if $(CEDANA_SLURM_DIR),-v $(CEDANA_SLURM_DIR):/cedana-slurm,) $(if $(SLURM_ARTIFACTS_DIR),-v $(SLURM_ARTIFACTS_DIR):/artifacts:ro,)
+
+SLURM_ARTIFACTS_INSTALL=docker exec $(DOCKER_TEST_CONTAINER_NAME) bash -c '\
+	if [ -d /artifacts ]; then \
+		cp -f /artifacts/cedana/cedana /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/criu/criu /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/slurm/build/cedana-slurm /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/plugin-slurm/libcedana-slurm.so /usr/local/lib/ 2>/dev/null; \
+		cp -f /artifacts/slurm/build/*.so /usr/local/lib/ 2>/dev/null; \
+		chmod +x /usr/local/bin/cedana /usr/local/bin/criu /usr/local/bin/cedana-slurm 2>/dev/null; \
+	fi'
+
+DOCKER_TEST_CREATE_SLURM=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_CREATE_SLURM_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
+						$(PLUGIN_LIB_COPY) && \
+						$(PLUGIN_BIN_COPY) && \
+						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
+DOCKER_TEST_CREATE_SLURM_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_CREATE_SLURM_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
+						$(PLUGIN_LIB_COPY) && \
+						$(PLUGIN_BIN_COPY) && \
+						$(PLUGIN_LIB_COPY_GPU) && \
+						$(PLUGIN_BIN_COPY_GPU) && \
+						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
 
 ifeq ($(PREBUILT_BINARIES),1)
 docker: cedana plugins ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
