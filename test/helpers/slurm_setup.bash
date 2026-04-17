@@ -115,11 +115,23 @@ setup_slurm_cluster() {
         return 1
     fi
 
+    # Use a YAML file for extra vars so booleans stay booleans (not strings).
+    # `-e key=value` on the CLI treats the value as string "false", which is
+    # truthy in Jinja `when:` — that would re-enable NFS even though we want
+    # it off.
+    local vars_file="/tmp/cedana-slurm-vars-$$.yml"
+    cat >"$vars_file" <<'EOF'
+slurm_cluster_name: cedana_test_cluster
+slurm_accounting_enabled: true
+nfs_shared_install: false
+EOF
+
     pushd "$ansible_dir" >/dev/null
-    ANSIBLE_EXTRA_ARGS="-e slurm_cluster_name=cedana_test_cluster -e slurm_accounting_enabled=true -e nfs_shared_install=false" \
+    ANSIBLE_EXTRA_ARGS="-e @${vars_file}" \
         ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&"${OUTPUT_FD}" 2>&1
     local rc=$?
     popd >/dev/null
+    rm -f "$vars_file"
 
     if [ "$rc" -ne 0 ]; then
         error_log "docker-deploy.sh failed (exit $rc)"
