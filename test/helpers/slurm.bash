@@ -34,8 +34,88 @@ slurm_submit_job() {
     echo "$job_id"
 }
 
+_persist_container_log_file() {
+    local container="$1"
+    local src="$2"
+    local dst_dir="$3"
+    local base
+
+    base="$(basename "$src")"
+    mkdir -p "$dst_dir"
+
+    if docker exec "$container" test -f "$src" 2>/dev/null; then
+        docker cp "$container:$src" "$dst_dir/$base" 2>/dev/null ||
+            docker exec "$container" sh -c "cat '$src'" >"$dst_dir/$base" 2>&1 || true
+    fi
+}
+
+_capture_runtime_slurm_logs() {
+    local reason="${1:-unknown}"
+    local job_id="${2:-unknown}"
+    local host_hint="${3:-unknown}"
+    local stamp out_root out_dir
+    local containers=()
+
+    stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+    out_root="${SLURM_RUNTIME_DEBUG_DIR:-/tmp/slurm-runtime-debug}"
+    out_dir="$out_root/${stamp}_${reason}_job-${job_id}"
+
+    mkdir -p "$out_dir"
+    {
+        echo "timestamp_utc=$stamp"
+        echo "reason=$reason"
+        echo "job_id=$job_id"
+        echo "host_hint=$host_hint"
+    } >"$out_dir/context.txt"
+
+    docker ps -a >"$out_dir/docker-ps-a.txt" 2>&1 || true
+    docker network ls >"$out_dir/docker-network-ls.txt" 2>&1 || true
+
+    mapfile -t containers < <(
+        {
+            [ -n "${SLURM_CONTROLLER_CONTAINER:-}" ] && echo "$SLURM_CONTROLLER_CONTAINER"
+            _slurm_compute_containers
+        } | awk 'NF && !seen[$0]++'
+    )
+
+    if [ "${#containers[@]}" -eq 0 ]; then
+        echo "No slurm containers found while capturing runtime logs" >"$out_dir/no-slurm-containers.txt"
+    fi
+
+    for c in "${containers[@]}"; do
+        [ -z "$c" ] && continue
+        cdir="$out_dir/$c"
+        mkdir -p "$cdir"
+
+        docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
+        docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
+        docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
+
+        _persist_container_log_file "$c" /var/log/cedana.log "$cdir"
+        _persist_container_log_file "$c" /var/log/cedana-slurm.log "$cdir"
+        _persist_container_log_file "$c" /var/log/cedana-slurm-monitor.log "$cdir"
+        _persist_container_log_file "$c" /var/log/slurm/slurmctld.log "$cdir"
+        _persist_container_log_file "$c" /var/log/slurm/slurmd.log "$cdir"
+        _persist_container_log_file "$c" /var/log/slurm/slurmdbd.log "$cdir"
+        _persist_container_log_file "$c" /var/log/munge/munged.log "$cdir"
+
+        docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
+        docker exec "$c" sh -c 'find /data -maxdepth 5 -type f -name "slurm-*.out" -print 2>/dev/null || true' >"$cdir/slurm-output-files.txt" 2>&1 || true
+
+        while IFS= read -r job_out; do
+            [ -z "$job_out" ] && continue
+            out_name="$(echo "$job_out" | sed 's#^/##; s#/#_#g')"
+            docker exec "$c" sh -c "cat '$job_out'" >"$cdir/${out_name}.txt" 2>&1 || true
+        done <"$cdir/slurm-output-files.txt"
+    done
+
+    info_log "[DEBUG] Captured runtime SLURM logs to $out_dir"
+}
+
 _dump_job_failure_info() {
     local job_id="${1:-}"
+
+    _capture_runtime_slurm_logs "failure-dump" "$job_id" "unknown"
 
     echo "=== sacct (last 10 jobs) ==="
     slurm_exec sacct --noheader -a \
@@ -214,15 +294,24 @@ test_slurm_job() {
             info_log "Checkpoint request returned action_id=$action_id"
 
             if [ -n "$_host" ]; then
+                local monitor_alive=true
                 sleep 3
                 info_log "[DEBUG] Monitor status after checkpoint request:"
-                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm monitor'" 2>/dev/null || info_log "[DEBUG] Monitor DIED after checkpoint request"
-                info_log "[DEBUG] Last 120 lines of cedana-slurm logs:"
-                docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f ---\"; tail -120 \"\$f\"; done" 2>/dev/null || true
+                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm monitor'" 2>/dev/null || {
+                    monitor_alive=false
+                    info_log "[DEBUG] Monitor DIED after checkpoint request"
+                }
+                info_log "[DEBUG] cedana-slurm log excerpts (first 120 / last 200 lines):"
+                docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f (first 120 lines) ---\"; sed -n '1,120p' \"\$f\"; echo \"--- \$f (last 200 lines) ---\"; tail -200 \"\$f\"; done" 2>/dev/null || true
+
+                if [ "$monitor_alive" = false ]; then
+                    _capture_runtime_slurm_logs "monitor-died-after-checkpoint" "$job_id" "$_host"
+                fi
             fi
 
             poll_slurm_action_status "$action_id" "checkpoint" "$dump_timeout" ||
                 {
+                    _capture_runtime_slurm_logs "checkpoint-action-timeout" "$job_id" "$_host"
                     error="Checkpoint action $action_id did not complete"
                     break
                 }
