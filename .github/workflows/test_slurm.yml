@@ -182,6 +182,51 @@ jobs:
           CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
           sudo -E cedana slurm setup
 
+      - name: Capture preflight binary metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PRE_FILE="./slurm-bin/slurm-version.txt"
+          SLURM_VERSION_VALUE=""
+
+          if [ -f "$PRE_FILE" ]; then
+            SLURM_VERSION_VALUE="$(head -n 1 "$PRE_FILE" || true)"
+          fi
+
+          touch "$PRE_FILE"
+
+          {
+            echo
+            echo "=== preflight-binary-metadata ==="
+            echo "timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "run_id=${{ github.run_id }}"
+            echo "run_attempt=${{ github.run_attempt }}"
+            echo "matrix_arch=${{ matrix.arch }}"
+            echo "matrix_compute=${{ matrix.compute }}"
+            echo "matrix_storage=${{ matrix.storage }}"
+            [ -f ./cedana-version.txt ] && echo "cedana_version_file=$(cat ./cedana-version.txt)"
+            [ -f ./plugin-version.txt ] && echo "plugin_version_file=$(cat ./plugin-version.txt)"
+            [ -n "$SLURM_VERSION_VALUE" ] && echo "slurm_version_file=$SLURM_VERSION_VALUE"
+
+            for f in \
+              /usr/local/bin/cedana \
+              /usr/local/bin/cedana-slurm \
+              /usr/local/lib/libcedana-storage-cedana.so \
+              /usr/local/lib/libcedana-storage-s3.so \
+              /usr/local/lib/libcedana-runc.so \
+              /usr/local/lib/libcedana-slurm.so
+            do
+              [ -f "$f" ] || continue
+              echo "=== $f ==="
+              ls -l "$f" || true
+              sha256sum "$f" || true
+              if command -v go >/dev/null 2>&1; then
+                go version -m "$f" || true
+              fi
+            done
+          } >>"$PRE_FILE" 2>&1
+
       - name: Install ansible and Docker CLI
         run: |
           apt-get update -qq
@@ -289,6 +334,14 @@ jobs:
             echo "matrix_storage=${{ matrix.storage }}"
           } >"$ARTIFACT_DIR/context.txt"
 
+          if [ -f ./slurm-bin/slurm-version.txt ]; then
+            {
+              echo
+              echo "=== slurm-version-and-preflight ==="
+              cat ./slurm-bin/slurm-version.txt
+            } >>"$ARTIFACT_DIR/context.txt"
+          fi
+
           if [ -d /tmp/slurm-runtime-debug ]; then
             mkdir -p "$ARTIFACT_DIR/runtime-debug"
             cp -a /tmp/slurm-runtime-debug/. "$ARTIFACT_DIR/runtime-debug/" 2>/dev/null || true
@@ -310,6 +363,10 @@ jobs:
             docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
             docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
             docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
+            docker exec "$c" sh -c 'for p in $(pgrep -f "cedana-slurm monitor" 2>/dev/null || true); do echo "=== monitor pid=$p ==="; tr "\000" "\n" </proc/$p/environ 2>/dev/null | sort; done' >"$cdir/monitor-environ.txt" 2>&1 || true
+            docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
+            docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
+            docker exec "$c" sh -c 'echo "=== /usr/local/lib plugins ==="; ls -la /usr/local/lib/libcedana-*.so 2>/dev/null || true; echo "=== CEDANA_* env ==="; env | sort | grep "^CEDANA_" || true' >"$cdir/plugin-inventory.txt" 2>&1 || true
 
             for f in \
               /var/log/cedana.log \
