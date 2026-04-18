@@ -264,7 +264,7 @@ poll_slurm_action_status() {
                         debug_log "Slurm $operation action completed successfully"
                         return 0
                         ;;
-                    "possibly_uploaded"|"deprecated")
+                    "possibly_uploaded"|"deprecated"|"error"|"failed")
                         error_log "Slurm $operation action failed (checkpoint status: $status)"
                         return 1
                         ;;
