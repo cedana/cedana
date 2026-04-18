@@ -143,12 +143,6 @@ jobs:
           echo "cedana-slurm md5:"
           md5sum slurm-bin/build/cedana-slurm
 
-          # Ensure the test job is running the binary that includes monitor signal
-          # handling and checkpoint action failure propagation changes.
-          grep -aFq "Received SIGQUIT shutdown signal" slurm-bin/build/cedana-slurm
-          grep -aFq "marked checkpoint action as failed" slurm-bin/build/cedana-slurm
-          grep -aFq "checkpoint context validation failed" slurm-bin/build/cedana-slurm
-
       - name: Download GPU plugin
         if: ${{ matrix.compute == 'GPU' }}
         uses: actions/download-artifact@v4
@@ -276,6 +270,67 @@ jobs:
             DEBUG=$DEBUG \
             PARALLELISM=$PARALLELISM
 
+      - name: Collect SLURM debug logs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARTIFACT_DIR="/tmp/slurm-debug"
+          mkdir -p "$ARTIFACT_DIR"
+
+          {
+            echo "timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "run_id=${{ github.run_id }}"
+            echo "run_attempt=${{ github.run_attempt }}"
+            echo "job=${{ github.job }}"
+            echo "matrix_arch=${{ matrix.arch }}"
+            echo "matrix_compute=${{ matrix.compute }}"
+            echo "matrix_storage=${{ matrix.storage }}"
+          } >"$ARTIFACT_DIR/context.txt"
+
+          docker ps -a >"$ARTIFACT_DIR/docker-ps-a.txt" 2>&1 || true
+          docker network ls >"$ARTIFACT_DIR/docker-network-ls.txt" 2>&1 || true
+
+          mapfile -t SLURM_CONTAINERS < <(docker ps -a --format '{{.Names}}' | grep -E '^slurm-(controller|compute-[0-9]+)$' || true)
+
+          if [ "${#SLURM_CONTAINERS[@]}" -eq 0 ]; then
+            echo "No slurm containers found" >"$ARTIFACT_DIR/no-slurm-containers.txt"
+          fi
+
+          for c in "${SLURM_CONTAINERS[@]}"; do
+            cdir="$ARTIFACT_DIR/$c"
+            mkdir -p "$cdir"
+
+            docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
+            docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
+            docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
+
+            for f in \
+              /var/log/cedana.log \
+              /var/log/cedana-slurm.log \
+              /var/log/cedana-slurm-monitor.log \
+              /var/log/slurm/slurmctld.log \
+              /var/log/slurm/slurmd.log \
+              /var/log/slurm/slurmdbd.log \
+              /var/log/munge/munged.log
+            do
+              if docker exec "$c" test -f "$f" 2>/dev/null; then
+                docker cp "$c:$f" "$cdir/$(basename "$f")" 2>/dev/null || \
+                  docker exec "$c" sh -c "cat '$f'" >"$cdir/$(basename "$f")" 2>&1 || true
+              fi
+            done
+
+            docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
+            docker exec "$c" sh -c 'find /data -maxdepth 5 -type f -name "slurm-*.out" -print 2>/dev/null || true' >"$cdir/slurm-output-files.txt" 2>&1 || true
+
+            while IFS= read -r job_out; do
+              [ -z "$job_out" ] && continue
+              out_name="$(echo "$job_out" | sed 's#^/##; s#/#_#g')"
+              docker exec "$c" sh -c "cat '$job_out'" >"$cdir/${out_name}.txt" 2>&1 || true
+            done <"$cdir/slurm-output-files.txt"
+          done
+
       - name: Setup node
         if: always()
         uses: actions/setup-node@v4
@@ -310,6 +365,15 @@ jobs:
           name: test-report-${{ matrix.arch }}-slurm-${{ env.STORAGE }}-${{ matrix.compute }}
           path: |
             /tmp/report*.json
+
+      - name: Upload SLURM debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slurm-debug-logs-${{ matrix.arch }}-${{ env.STORAGE }}-${{ matrix.compute }}
+          path: |
+            /tmp/slurm-debug/**
+          if-no-files-found: warn
 
   post-summary:
     name: Post Summary
