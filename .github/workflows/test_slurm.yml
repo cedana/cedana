@@ -127,6 +127,27 @@ jobs:
       - name: Extract cedana-slurm
         run: mv slurm-bin/cedana-slurm cedana-slurm
 
+      - name: Verify slurm binary provenance
+        run: |
+          set -euo pipefail
+
+          test -f slurm-bin/build/cedana-slurm
+
+          if [ ! -f slurm-bin/slurm-version.txt ]; then
+            echo "slurm-version.txt missing from slurm artifact" >&2
+            exit 1
+          fi
+
+          echo "slurm-version: $(cat slurm-bin/slurm-version.txt)"
+          echo "cedana-slurm md5:"
+          md5sum slurm-bin/build/cedana-slurm
+
+          # Ensure the test job is running the binary that includes monitor signal
+          # handling and checkpoint action failure propagation changes.
+          grep -aFq "Received SIGQUIT shutdown signal" slurm-bin/build/cedana-slurm
+          grep -aFq "marked checkpoint action as failed" slurm-bin/build/cedana-slurm
+          grep -aFq "checkpoint context validation failed" slurm-bin/build/cedana-slurm
+
       - name: Download GPU plugin
         if: ${{ matrix.compute == 'GPU' }}
         uses: actions/download-artifact@v4
