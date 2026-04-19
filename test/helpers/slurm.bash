@@ -104,7 +104,7 @@ _capture_runtime_slurm_logs() {
         _persist_container_log_file "$c" /var/log/munge/munged.log "$cdir"
 
         docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
-        docker exec "$c" sh -c 'find /data -maxdepth 5 -type f -name "slurm-*.out" -print 2>/dev/null || true' >"$cdir/slurm-output-files.txt" 2>&1 || true
+        docker exec "$c" sh -c 'find /data -maxdepth 5 -type f \( -name "slurm-*.out" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true' >"$cdir/slurm-output-files.txt" 2>&1 || true
 
         while IFS= read -r job_out; do
             [ -z "$job_out" ] && continue
@@ -133,7 +133,7 @@ _dump_job_failure_info() {
         echo "=== job output files ==="
         for c in $(_slurm_compute_containers); do
             for f in $(docker exec "$c" \
-                find "${SLURM_DATA_DIR}" -name "*-${job_id}.*" 2>/dev/null); do
+                find "${SLURM_DATA_DIR}" -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) 2>/dev/null | sort -u); do
                 echo "--- $c:$f ---"
                 docker exec "$c" cat "$f" 2>/dev/null || true
             done
@@ -178,6 +178,62 @@ _dump_job_failure_info() {
     echo "=== cedana-slurm monitor log on controller (last 120 lines) ==="
     docker exec "$SLURM_CONTROLLER_CONTAINER" \
         tail -120 /var/log/cedana-slurm-monitor.log 2>/dev/null || true
+}
+
+_detect_restored_job_id() {
+    local previous_job_id="$1"
+    local previous_job_name="${2:-}"
+
+    local queued_job_id
+    if [ -n "$previous_job_name" ]; then
+        queued_job_id=$(slurm_exec squeue -h -o '%i|%j' --sort=-V 2>/dev/null |
+            awk -F'|' -v prev="$previous_job_id" -v name="$previous_job_name" '$1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) && $2 == name { print $1; exit }')
+    else
+        queued_job_id=$(slurm_exec squeue -h -o '%i' --sort=-V 2>/dev/null |
+            awk -v prev="$previous_job_id" '$1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) { print $1; exit }')
+    fi
+    if [ -n "$queued_job_id" ]; then
+        echo "$queued_job_id"
+        return 0
+    fi
+
+    local accounted_job_id
+    if [ -n "$previous_job_name" ]; then
+        accounted_job_id=$(slurm_exec sacct --noheader -a --format=JobID,JobName -P 2>/dev/null |
+            awk -F'|' -v prev="$previous_job_id" -v name="$previous_job_name" '
+                $1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) && $2 == name {
+                    if (max == "" || $1 + 0 > max + 0) {
+                        max = $1
+                    }
+                }
+                END {
+                    if (max != "") {
+                        print max
+                    }
+                }')
+    else
+        accounted_job_id=$(slurm_exec sacct --noheader -a --format=JobID -P 2>/dev/null |
+            awk -F'|' -v prev="$previous_job_id" '
+                $1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) {
+                    if (max == "" || $1 + 0 > max + 0) {
+                        max = $1
+                    }
+                }
+                END {
+                    if (max != "") {
+                        print max
+                    }
+                }')
+    fi
+
+    [ -n "$accounted_job_id" ] && echo "$accounted_job_id"
+}
+
+_get_slurm_job_name() {
+    local job_id="$1"
+
+    slurm_exec scontrol show job "$job_id" 2>/dev/null |
+        grep -oP 'JobName=\K\S+' | head -1
 }
 
 wait_for_slurm_job_state() {
@@ -305,8 +361,8 @@ test_slurm_job() {
                     monitor_alive=false
                     info_log "[DEBUG] Monitor DIED after checkpoint request"
                 }
-                info_log "[DEBUG] cedana-slurm log excerpts (first 120 / last 200 lines):"
-                docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f (first 120 lines) ---\"; sed -n '1,120p' \"\$f\"; echo \"--- \$f (last 200 lines) ---\"; tail -200 \"\$f\"; done" 2>/dev/null || true
+                info_log "[DEBUG] cedana-slurm log excerpts scoped to job $job_id:"
+                docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f (job/action scoped) ---\"; grep -E 'jobid=${job_id}\\b|job_id=${job_id}\\b|action_id=${action_id}' \"\$f\" | tail -120 || echo '(no scoped matches)'; done" 2>/dev/null || true
 
                 if [ "$monitor_alive" = false ]; then
                     _capture_runtime_slurm_logs "monitor-died-after-checkpoint" "$job_id" "$_host"
@@ -352,15 +408,29 @@ test_slurm_job() {
             info_log "Restore request returned action_id=$restore_action_id"
 
             info_log "Waiting for restored job to appear..."
-            sleep 5
+            local old_job_id="$job_id"
+            local old_job_name=""
+            local new_job_id=""
+            local elapsed=0
+            local detect_timeout=40
 
-            local new_job_id
-            new_job_id=$(slurm_exec squeue -h -o '%i' --sort=-V 2>/dev/null | head -1)
-            if [ -n "$new_job_id" ] && [ "$new_job_id" != "$job_id" ]; then
+            old_job_name=$(_get_slurm_job_name "$old_job_id")
+
+            while [ "$elapsed" -lt "$detect_timeout" ]; do
+                new_job_id=$(_detect_restored_job_id "$old_job_id" "$old_job_name")
+                if [ -n "$new_job_id" ]; then
+                    break
+                fi
+                sleep 2
+                elapsed=$((elapsed + 2))
+            done
+
+            if [ -n "$new_job_id" ] && [ "$new_job_id" != "$old_job_id" ]; then
                 job_id="$new_job_id"
                 info_log "Restored job has new ID: $job_id"
             else
-                info_log "No new restored job ID detected; continuing with job_id=$job_id"
+                error="No new restored job ID detected for cancelled job $old_job_id"
+                break
             fi
 
             wait_for_slurm_job_state "$job_id" "RUNNING" 60 ||
