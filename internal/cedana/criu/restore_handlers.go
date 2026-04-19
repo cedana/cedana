@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"syscall"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
@@ -111,9 +113,18 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
 			status, err := p.Wait()
 			if err != nil {
-				log.Trace().Err(err).Msg("process Wait()")
+				log.Warn().Err(err).Msg("wait on job process failed; falling back to polling")
+				for {
+					if err := p.Signal(syscall.Signal(0)); err != nil {
+						break
+					}
+					time.Sleep(500 * time.Millisecond)
+				}
+				log.Info().Msgf("job process with PID %d has exited", resp.PID)
+				exitCode <- 0
+			} else {
+				exitCode <- status.ExitCode()
 			}
-			exitCode <- status.ExitCode()
 			close(exitCode)
 		})
 	}

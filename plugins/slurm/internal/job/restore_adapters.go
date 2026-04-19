@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -42,9 +41,6 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 			return nil, err
 		}
 
-		if req.Criu == nil {
-			req.Criu = &criu_proto.CriuOpts{}
-		}
 		req.Criu.ShellJob = proto.Bool(true)
 
 		// Get the cgroup of the restored job slurmstepd
