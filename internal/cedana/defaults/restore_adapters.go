@@ -18,7 +18,9 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 
 		req.Criu.NotifyScripts = proto.Bool(true)
 		req.Criu.EvasiveDevices = proto.Bool(true)
-		req.Criu.RstSibling = proto.Bool(true) // always restore as a child
+		if req.Criu.RstSibling == nil {
+			req.Criu.RstSibling = proto.Bool(true)
+		}
 
 		opts.InheritFdMap = make(map[string]int32)
 
