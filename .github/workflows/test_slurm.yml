@@ -246,6 +246,7 @@ jobs:
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          CEDANA_PLUGINS_BUILDS: alpha
           GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
         run: |
           source test/helpers/utils.bash

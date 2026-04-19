@@ -339,11 +339,25 @@ install_cedana_in_slurm() {
         }
     done
 
+    local storage_plugin=""
+    case "${CEDANA_CHECKPOINT_DIR:-}" in
+        cedana://*) storage_plugin="storage/cedana" ;;
+        s3://*) storage_plugin="storage/s3" ;;
+        gcs://*) storage_plugin="storage/gcs" ;;
+    esac
+
+    local runtime_plugins="runc"
+    if [ -n "$storage_plugin" ]; then
+        runtime_plugins="$runtime_plugins $storage_plugin"
+    fi
+
     debug_log "Installing SLURM plugin via Cedana CLI in all nodes..."
     for c in "${all_containers[@]}"; do
         docker exec \
             -e CEDANA_PLUGINS_BUILDS="local" \
             -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
+            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+            -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             "$c" bash -c '
                 set -euo pipefail
                 cedana plugin install slurm
@@ -351,6 +365,22 @@ install_cedana_in_slurm() {
             ' >&"${OUTPUT_FD}" 2>&1 ||
             {
                 error_log "Cedana SLURM plugin install/setup failed on $c"
+                return 1
+            }
+
+        docker exec \
+            -e CEDANA_URL="${CEDANA_URL:-}" \
+            -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+            -e CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS:-release}" \
+            -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
+            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+            -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
+            "$c" bash -c "
+                set -euo pipefail
+                cedana plugin install ${runtime_plugins}
+            " >&"${OUTPUT_FD}" 2>&1 ||
+            {
+                error_log "Cedana runtime plugin install failed on $c"
                 return 1
             }
     done
@@ -521,6 +551,8 @@ COMPUTE_EOF
             -e CEDANA_ADDRESS="/run/cedana.sock" \
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
+            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+            -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
             "$c" cedana --merge-config version ||
@@ -536,6 +568,8 @@ COMPUTE_EOF
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
             -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
+            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+            -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
             "$c" bash -c "/usr/local/bin/cedana daemon start \
@@ -588,6 +622,8 @@ COMPUTE_EOF
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
             -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
+            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+            -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
             "$c" bash -c "/usr/local/bin/cedana daemon start \
