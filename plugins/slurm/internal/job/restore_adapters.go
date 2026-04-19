@@ -36,22 +36,14 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 				hostname = h
 			}
 		}
-		if parent == 0 {
-			parent = uint32(os.Getppid())
-			log.Warn().Uint32("jid", jid).Uint32("parent_pid", parent).Msg("slurm restore request missing parent pid; using caller parent pid")
-		}
 
 		path, err := GetJobCgroupPath(hostname, jid, parent)
 		if err != nil {
 			return nil, err
 		}
 
-		// Set the new job PID to be the PID of the restored process
 		if req.Criu == nil {
 			req.Criu = &criu_proto.CriuOpts{}
-		}
-		if parent > 0 {
-			req.Criu.Pid = proto.Int32(int32(parent))
 		}
 		req.Criu.ShellJob = proto.Bool(true)
 
