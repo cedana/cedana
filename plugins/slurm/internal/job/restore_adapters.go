@@ -31,6 +31,15 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		jid := details.GetJobID()
 		hostname := details.GetHostname()
 		parent := details.GetParentPID()
+		if hostname == "" {
+			if h, err := os.Hostname(); err == nil {
+				hostname = h
+			}
+		}
+		if parent == 0 {
+			parent = uint32(os.Getppid())
+			log.Warn().Uint32("jid", jid).Uint32("parent_pid", parent).Msg("slurm restore request missing parent pid; using caller parent pid")
+		}
 
 		path, err := GetJobCgroupPath(hostname, jid, parent)
 		if err != nil {
@@ -41,7 +50,9 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		if req.Criu == nil {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
-		req.Criu.Pid = proto.Int32(int32(parent))
+		if parent > 0 {
+			req.Criu.Pid = proto.Int32(int32(parent))
+		}
 		req.Criu.ShellJob = proto.Bool(true)
 
 		// Get the cgroup of the restored job slurmstepd
