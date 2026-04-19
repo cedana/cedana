@@ -2,8 +2,10 @@ package criu
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -115,8 +117,14 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 			if err != nil {
 				log.Warn().Err(err).Msg("wait on job process failed; falling back to polling")
 				for {
-					if err := p.Signal(syscall.Signal(0)); err != nil {
-						break
+					err := p.Signal(syscall.Signal(0))
+					if err != nil {
+						if errors.Is(err, os.ErrProcessDone) ||
+							strings.Contains(err.Error(), "os: process already finished") ||
+							strings.Contains(err.Error(), "no such process") ||
+							errors.Is(err, syscall.ESRCH) {
+							break
+						}
 					}
 					time.Sleep(500 * time.Millisecond)
 				}
