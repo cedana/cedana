@@ -333,6 +333,19 @@ install_cedana_in_slurm() {
                 echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" >> /etc/default/slurmd
             printf "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n" > /etc/profile.d/cedana-slurm-path.sh
             chmod 644 /etc/profile.d/cedana-slurm-path.sh
+            mkdir -p /etc/systemd/system/slurmd.service.d /etc/systemd/system/slurmctld.service.d
+            cat >/etc/systemd/system/slurmd.service.d/cedana-path.conf <<"EOF"
+[Service]
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EOF
+            cat >/etc/systemd/system/slurmctld.service.d/cedana-path.conf <<"EOF"
+[Service]
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EOF
+
+            if command -v systemctl >/dev/null 2>&1; then
+                systemctl daemon-reload >/dev/null 2>&1 || true
+            fi
         ' || {
             error_log "Failed to enforce PATH for slurmd in $c"
             return 1
