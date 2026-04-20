@@ -469,6 +469,7 @@ install_cedana_in_slurm() {
     for c in "${all_containers[@]}"; do
         docker cp /usr/local/bin/cedana-slurm "${c}:/usr/local/bin/cedana-slurm" &&
             docker exec "$c" bash -c '
+                set -euo pipefail
                 chmod +x /usr/local/bin/cedana-slurm
                 install -m 0755 /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm
                 install -m 0755 /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm
@@ -488,16 +489,21 @@ install_cedana_in_slurm() {
             grep -q "^PATH=" /etc/default/slurmd 2>/dev/null &&
                 sed -i "s|^PATH=.*|PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin|" /etc/default/slurmd ||
                 echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" >> /etc/default/slurmd
+            grep -q "^CEDANA_SLURM_BIN=" /etc/default/slurmd 2>/dev/null &&
+                sed -i "s|^CEDANA_SLURM_BIN=.*|CEDANA_SLURM_BIN=/usr/bin/cedana-slurm|" /etc/default/slurmd ||
+                echo "CEDANA_SLURM_BIN=/usr/bin/cedana-slurm" >> /etc/default/slurmd
             printf "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\n" > /etc/profile.d/cedana-slurm-path.sh
             chmod 644 /etc/profile.d/cedana-slurm-path.sh
             mkdir -p /etc/systemd/system/slurmd.service.d /etc/systemd/system/slurmctld.service.d
             cat >/etc/systemd/system/slurmd.service.d/cedana-path.conf <<"EOF"
 [Service]
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=CEDANA_SLURM_BIN=/usr/bin/cedana-slurm
 EOF
             cat >/etc/systemd/system/slurmctld.service.d/cedana-path.conf <<"EOF"
 [Service]
 Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=CEDANA_SLURM_BIN=/usr/bin/cedana-slurm
 EOF
 
             if command -v systemctl >/dev/null 2>&1; then
@@ -827,6 +833,7 @@ COMPUTE_EOF
                 -e CEDANA_URL="${CEDANA_URL:-}" \
                 -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
                 -e CEDANA_CLUSTER_ID="$cluster_id" \
+                -e CEDANA_SLURM_BIN="${CEDANA_SLURM_BIN:-/usr/bin/cedana-slurm}" \
                 -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
                 "$c" bash -c \
                 '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' ||
@@ -882,10 +889,12 @@ start_cedana_slurm_daemon() {
 
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c '
+            set -euo pipefail
             test -x /usr/local/bin/cedana-slurm
             install -m 0755 /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm
             install -m 0755 /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm
-            command -v cedana-slurm >/dev/null
+            test -x /usr/bin/cedana-slurm
+            test -x /usr/sbin/cedana-slurm
         ' ||
             {
                 error_log "cedana-slurm binary install/verification failed in $c"
@@ -899,6 +908,7 @@ start_cedana_slurm_daemon() {
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
             -e CEDANA_CLUSTER_ID="$cluster_id" \
+            -e CEDANA_SLURM_BIN="${CEDANA_SLURM_BIN:-/usr/bin/cedana-slurm}" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
             "$c" \
             bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' ||
