@@ -140,6 +140,10 @@ jobs:
           fi
 
           echo "slurm-version: $(cat slurm-bin/slurm-version.txt)"
+          if [ -f slurm-bin/slurm-artifact-origin.txt ]; then
+            echo "slurm-artifact-origin:"
+            cat slurm-bin/slurm-artifact-origin.txt
+          fi
           echo "cedana-slurm md5:"
           md5sum slurm-bin/build/cedana-slurm
 
@@ -208,6 +212,9 @@ jobs:
             [ -f ./cedana-version.txt ] && echo "cedana_version_file=$(cat ./cedana-version.txt)"
             [ -f ./plugin-version.txt ] && echo "plugin_version_file=$(cat ./plugin-version.txt)"
             [ -n "$SLURM_VERSION_VALUE" ] && echo "slurm_version_file=$SLURM_VERSION_VALUE"
+            if [ -f ./slurm-bin/slurm-artifact-origin.txt ]; then
+              tr '\n' ' ' < ./slurm-bin/slurm-artifact-origin.txt | sed 's/ $//' | sed 's/^/slurm_artifact_origin=/'
+            fi
 
             for f in \
               /usr/local/bin/cedana \
