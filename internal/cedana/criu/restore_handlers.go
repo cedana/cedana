@@ -2,10 +2,8 @@ package criu
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -112,27 +110,32 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	if !reaper || req.Type == "process" {
 		opts.WG.Go(func() {
-			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
-			status, err := p.Wait()
-			if err != nil {
-				log.Warn().Err(err).Msg("wait on job process failed; falling back to polling")
-				for {
-					err := p.Signal(syscall.Signal(0))
-					if err != nil {
-						if errors.Is(err, os.ErrProcessDone) ||
-							strings.Contains(err.Error(), "os: process already finished") ||
-							strings.Contains(err.Error(), "no such process") ||
-							errors.Is(err, syscall.ESRCH) {
-							break
-						}
-					}
-					time.Sleep(500 * time.Millisecond)
-				}
-				log.Info().Msgf("job process with PID %d has exited", resp.PID)
-				exitCode <- 0
+			pid := int(resp.PID)
+			log.Info().Int("PID", pid).Msg("starting process lifecycle monitor")
+			p, _ := os.FindProcess(pid) // always succeeds on Linux
+			waitStatus, waitErr := p.Wait()
+			if waitErr != nil {
+				log.Warn().Err(waitErr).Int("PID", pid).Msg("p.Wait() failed (expected for CRIU-restored processes); polling instead")
 			} else {
-				exitCode <- status.ExitCode()
+				log.Warn().Int("PID", pid).Int("exitCode", waitStatus.ExitCode()).Msg("p.Wait() succeeded immediately — process exited before monitor started; this is unexpected for CRIU restores")
+				exitCode <- waitStatus.ExitCode()
+				close(exitCode)
+				return
 			}
+			for {
+				killErr := syscall.Kill(pid, 0)
+				if killErr != nil {
+					if killErr == syscall.ESRCH {
+						log.Info().Int("PID", pid).Msg("process no longer exists (ESRCH); exiting monitor")
+						break
+					}
+					log.Debug().Err(killErr).Int("PID", pid).Msg("Kill(0) returned non-ESRCH error — process still alive")
+				}
+				time.Sleep(500 * time.Millisecond)
+			}
+
+			log.Info().Int("PID", pid).Msg("job process has exited")
+			exitCode <- 0
 			close(exitCode)
 		})
 	}
