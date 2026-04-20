@@ -25,9 +25,7 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 		req.Criu.OrphanPtsMaster = proto.Bool(true)
-		if req.Criu.RstSibling == nil {
-			req.Criu.RstSibling = proto.Bool(true)
-		}
+		req.Criu.RstSibling = proto.Bool(false)
 
 		return next(ctx, opts, resp, req)
 	}
