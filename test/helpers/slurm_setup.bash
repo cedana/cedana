@@ -124,7 +124,7 @@ setup_slurm_cluster() {
     local vars_file="/tmp/cedana-slurm-vars-$$.yml"
     cat >"$vars_file" <<'EOF'
 slurm_cluster_name: cedana_test_cluster
-slurm_accounting_enabled: true
+slurm_accounting_enabled: false
 nfs_shared_install: false
 EOF
 
@@ -156,38 +156,191 @@ teardown_slurm_cluster() {
 ##############################
 
 setup_slurm_accounting() {
-    info_log "Seeding SLURM accounting records..."
+    info_log "Setting up SLURM accounting (MariaDB + slurmdbd)..."
 
-    # Ansible's slurmdbd role (enabled via slurm_accounting_enabled=true) has
-    # already installed MariaDB, started slurmdbd, wired AccountingStorage*
-    # and AccountingStorageEnforce=associations,limits,qos into slurm.conf.
-    # All we need to do here is seed the sacctmgr records that enforcement
-    # requires: cluster, account, user.
+    local mysql_root_password="${SLURM_MYSQL_ROOT_PASSWORD:-slurmroot123}"
+    local slurm_db_name="${SLURM_DB_NAME:-slurm_acct_db}"
+    local slurm_db_user="${SLURM_DB_USER:-slurm}"
+    local slurm_db_pass="${SLURM_DB_PASSWORD:-slurmdb123}"
+
+    debug_log "[1/7] Installing MariaDB..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mariadb-server python3-pymysql netcat-openbsd
+        mkdir -p /var/run/mysqld
+        chown mysql:mysql /var/run/mysqld
+    " || {
+        error_log "Failed to install MariaDB"
+        return 1
+    }
+
+    # slurmdbd warns without these innodb settings
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        cat >> /etc/mysql/mariadb.conf.d/50-server.cnf << 'EOF'
+innodb_buffer_pool_size = 128M
+innodb_lock_wait_timeout = 900
+EOF
+    " || true # non-fatal; defaults still work
+
+    debug_log "[2/7] Starting MariaDB..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        if [ ! -d /var/lib/mysql/mysql ]; then
+            mysql_install_db --user=mysql --basedir=/usr --datadir=/var/lib/mysql 2>/dev/null || true
+        fi
+        mysqld_safe --bind-address=127.0.0.1 --skip-networking=0 &
+        for i in \$(seq 1 30); do
+            mysqladmin ping --silent 2>/dev/null && break
+            sleep 1
+        done
+        mysqladmin ping --silent 2>/dev/null || { echo 'MariaDB did not start'; exit 1; }
+    " || {
+        error_log "Failed to start MariaDB"
+        return 1
+    }
+
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mysql -u root --connect-expired-password -e \"
+            ALTER USER 'root'@'localhost' IDENTIFIED BY '${mysql_root_password}';
+            FLUSH PRIVILEGES;
+        \" 2>/dev/null || \
+        mysql -u root -p'${mysql_root_password}' -e 'SELECT 1;' 2>/dev/null || {
+            echo 'ERROR: Cannot authenticate to MariaDB as root' >&2
+            exit 1
+        }
+    " || {
+        error_log "Failed to configure MariaDB root password"
+        return 1
+    }
+
+    debug_log "[3/7] Creating SLURM accounting database..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mysql -u root -p'${mysql_root_password}' << 'SQL'
+CREATE DATABASE IF NOT EXISTS \`${slurm_db_name}\`;
+CREATE USER IF NOT EXISTS '${slurm_db_user}'@'localhost' IDENTIFIED BY '${slurm_db_pass}';
+CREATE USER IF NOT EXISTS '${slurm_db_user}'@'127.0.0.1' IDENTIFIED BY '${slurm_db_pass}';
+GRANT ALL PRIVILEGES ON \`${slurm_db_name}\`.* TO '${slurm_db_user}'@'localhost';
+GRANT ALL PRIVILEGES ON \`${slurm_db_name}\`.* TO '${slurm_db_user}'@'127.0.0.1';
+FLUSH PRIVILEGES;
+SQL
+    " || {
+        error_log "Failed to create SLURM accounting database"
+        return 1
+    }
+
+    debug_log "[4/7] Verifying slurmdbd binary..."
+    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "test -x /usr/sbin/slurmdbd" 2>/dev/null; then
+        error_log "slurmdbd binary not found at /usr/sbin/slurmdbd"
+        return 1
+    fi
+
+    local slurmdbd_ver
+    slurmdbd_ver=$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        bash -c "/usr/sbin/slurmdbd -V 2>&1 | head -1 | awk '{print \$NF}'" 2>/dev/null || true)
+    debug_log "slurmdbd version: ${slurmdbd_ver:-unknown}"
+
+    debug_log "[5/7] Writing configuration files..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mkdir -p /etc/slurm /var/log/slurm /var/run/slurmdbd
+        cat > /etc/slurm/slurmdbd.conf << EOF
+AuthType=auth/munge
+DbdAddr=localhost
+DbdHost=localhost
+DbdPort=6819
+SlurmUser=slurm
+DebugLevel=4
+LogFile=/var/log/slurm/slurmdbd.log
+PidFile=/var/run/slurmdbd/slurmdbd.pid
+
+StorageType=accounting_storage/mysql
+StorageHost=localhost
+StoragePort=3306
+StorageUser=${slurm_db_user}
+StoragePass=${slurm_db_pass}
+StorageLoc=${slurm_db_name}
+EOF
+        chown slurm:slurm /etc/slurm/slurmdbd.conf
+        chmod 600 /etc/slurm/slurmdbd.conf
+        chown slurm:slurm /var/run/slurmdbd
+    " || {
+        error_log "Failed to write slurmdbd.conf"
+        return 1
+    }
+
+    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "AccountingStorageType" "accounting_storage/slurmdbd"
+    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "AccountingStorageHost" "localhost"
+    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "AccountingStoragePort" "6819"
+    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "JobCompType" "jobcomp/none"
+    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" "JobAcctGatherType" "jobacct_gather/none"
+    # Enforcement is added in step 7, after cluster/account/user records exist
+
+    debug_log "[6/7] Starting slurmdbd..."
+    docker exec -d "$SLURM_CONTROLLER_CONTAINER" slurmdbd -D
+    sleep 5
+    _wait_for_port "$SLURM_CONTROLLER_CONTAINER" 6819 60 ||
+        {
+            error_log "slurmdbd did not open port 6819 in time"
+            docker exec "$SLURM_CONTROLLER_CONTAINER" \
+                tail -30 /var/log/slurm/slurmdbd.log 2>/dev/null || true
+            return 1
+        }
+
+    debug_log "[7/7] Starting slurmctld and seeding accounting records..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mkdir -p /var/spool/slurmctld /var/spool/slurmd
+        chown slurm:slurm /var/spool/slurmctld /var/spool/slurmd
+    " || true
+
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        STATE_DIR=\$(awk -F= '/^StateSaveLocation/{gsub(/[[:space:]]/, \"\", \$2); print \$2; exit}' \
+            /etc/slurm/slurm.conf 2>/dev/null)
+        STATE_DIR=\"\${STATE_DIR:-/var/spool/slurm/ctld}\"
+        rm -f \"\${STATE_DIR}/clustername\"
+        echo \"Cleared stale ClusterID from \${STATE_DIR}/clustername\"
+    " || true
+
+    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld ||
+        {
+            error_log "Failed to start slurmctld"
+            return 1
+        }
+    sleep 5
 
     debug_log "Waiting for sacctmgr to reach slurmdbd (up to 90s)..."
-    local waited=0
-    while [ "$waited" -lt 90 ]; do
-        if slurm_exec sacctmgr show cluster -n &>/dev/null; then
+    local slurmdbd_ready=false
+    for i in $(seq 1 45); do
+        if slurm_exec sacctmgr show cluster -n 2>/dev/null; then
+            slurmdbd_ready=true
             break
         fi
         sleep 2
-        waited=$((waited + 2))
     done
 
-    if ! slurm_exec sacctmgr show cluster -n &>/dev/null; then
+    if [ "$slurmdbd_ready" = false ]; then
         error_log "sacctmgr could not reach slurmdbd after 90 seconds"
+        error_log "--- slurmdbd.log (last 30 lines) ---"
         docker exec "$SLURM_CONTROLLER_CONTAINER" tail -30 /var/log/slurm/slurmdbd.log 2>/dev/null || true
+        error_log "--- slurmctld.log (last 30 lines) ---"
         docker exec "$SLURM_CONTROLLER_CONTAINER" tail -30 /var/log/slurm/slurmctld.log 2>/dev/null || true
         return 1
     fi
 
-    slurm_exec sacctmgr -i add cluster cedana_test_cluster &>/dev/null || true
+    slurm_exec sacctmgr -i add cluster cluster 2>/dev/null || true
     slurm_exec sacctmgr -i add account default \
-        Description="Default Account" Organization=default &>/dev/null || true
+        Description="Default Account" Organization="default" 2>/dev/null || true
     slurm_exec sacctmgr -i add user root \
-        Account=default AdminLevel=Admin &>/dev/null || true
+        Account=default AdminLevel=Admin 2>/dev/null || true
 
-    info_log "SLURM accounting seeded"
+    _slurm_conf_set "$SLURM_CONTROLLER_CONTAINER" \
+        "AccountingStorageEnforce" "associations,limits,qos"
+
+    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld ||
+        {
+            error_log "Failed to restart slurmctld with accounting enforcement"
+            return 1
+        }
+    sleep 5
+
+    info_log "SLURM accounting setup complete"
 }
 
 ##############################
