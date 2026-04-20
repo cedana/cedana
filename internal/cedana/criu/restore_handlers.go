@@ -122,6 +122,7 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 				close(exitCode)
 				return
 			}
+			observedAlive := false
 			for {
 				killErr := syscall.Kill(pid, 0)
 				if killErr != nil {
@@ -129,13 +130,26 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 						log.Info().Int("PID", pid).Msg("process no longer exists (ESRCH); exiting monitor")
 						break
 					}
-					log.Debug().Err(killErr).Int("PID", pid).Msg("Kill(0) returned non-ESRCH error — process still alive")
+					if killErr == syscall.EPERM {
+						observedAlive = true
+						log.Debug().Err(killErr).Int("PID", pid).Msg("Kill(0) returned EPERM; process exists but is not signalable")
+						time.Sleep(500 * time.Millisecond)
+						continue
+					}
+					log.Warn().Err(killErr).Int("PID", pid).Msg("Kill(0) returned unexpected error; stopping monitor")
+					break
 				}
+				observedAlive = true
 				time.Sleep(500 * time.Millisecond)
 			}
 
-			log.Info().Int("PID", pid).Msg("job process has exited")
-			exitCode <- 0
+			if !observedAlive {
+				log.Warn().Int("PID", pid).Msg("process was never observed alive after restore; reporting non-zero exit code")
+				exitCode <- 1
+			} else {
+				log.Info().Int("PID", pid).Msg("job process has exited")
+				exitCode <- 0
+			}
 			close(exitCode)
 		})
 	}
