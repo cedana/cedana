@@ -8,7 +8,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 )
 
-const DEFAULT_ROOT = "/run/runc"
+const DEFAULT_ROOT = "/run/containerd/runc/k8s.io"
 
 func FillMissingRunDefaults(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {
