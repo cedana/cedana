@@ -21,12 +21,10 @@ const SLURM_SCRIPT_FILE = "slurm_script"
 
 func GetSlurmJobForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
-		details := req.GetDetails().GetSlurm()
-		jid := details.GetJobID()
-		hostname := details.GetHostname()
-		pid := details.GetPID()
+		jid := req.GetDetails().GetSlurm().GetJobID()
+		hostname := req.GetDetails().GetSlurm().GetHostname()
 
-		path, err := GetJobCgroupPath(hostname, jid, pid)
+		path, err := GetJobCgroupPath(hostname, jid)
 		if err != nil {
 			return nil, err
 		}

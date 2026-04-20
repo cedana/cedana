@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -30,17 +31,17 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		jid := details.GetJobID()
 		hostname := details.GetHostname()
 		parent := details.GetParentPID()
-		if hostname == "" {
-			if h, err := os.Hostname(); err == nil {
-				hostname = h
-			}
-		}
 
-		path, err := GetJobCgroupPath(hostname, jid, parent)
+		path, err := GetJobCgroupPath(hostname, jid)
 		if err != nil {
 			return nil, err
 		}
 
+		// Set the new job PID to be the PID of the restored process
+		if req.Criu == nil {
+			req.Criu = &criu_proto.CriuOpts{}
+		}
+		req.Criu.Pid = proto.Int32(int32(parent))
 		req.Criu.ShellJob = proto.Bool(true)
 
 		// Get the cgroup of the restored job slurmstepd

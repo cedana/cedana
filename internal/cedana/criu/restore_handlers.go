@@ -4,8 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"syscall"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
@@ -110,46 +108,12 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	if !reaper || req.Type == "process" {
 		opts.WG.Go(func() {
-			pid := int(resp.PID)
-			log.Info().Int("PID", pid).Msg("starting process lifecycle monitor")
-			p, _ := os.FindProcess(pid) // always succeeds on Linux
-			waitStatus, waitErr := p.Wait()
-			if waitErr != nil {
-				log.Warn().Err(waitErr).Int("PID", pid).Msg("p.Wait() failed (expected for CRIU-restored processes); polling instead")
-			} else {
-				log.Warn().Int("PID", pid).Int("exitCode", waitStatus.ExitCode()).Msg("p.Wait() succeeded immediately — process exited before monitor started; this is unexpected for CRIU restores")
-				exitCode <- waitStatus.ExitCode()
-				close(exitCode)
-				return
+			p, _ := os.FindProcess(int(resp.PID)) // always succeeds on linux
+			status, err := p.Wait()
+			if err != nil {
+				log.Trace().Err(err).Msg("process Wait()")
 			}
-			observedAlive := false
-			for {
-				killErr := syscall.Kill(pid, 0)
-				if killErr != nil {
-					if killErr == syscall.ESRCH {
-						log.Info().Int("PID", pid).Msg("process no longer exists (ESRCH); exiting monitor")
-						break
-					}
-					if killErr == syscall.EPERM {
-						observedAlive = true
-						log.Debug().Err(killErr).Int("PID", pid).Msg("Kill(0) returned EPERM; process exists but is not signalable")
-						time.Sleep(500 * time.Millisecond)
-						continue
-					}
-					log.Warn().Err(killErr).Int("PID", pid).Msg("Kill(0) returned unexpected error; stopping monitor")
-					break
-				}
-				observedAlive = true
-				time.Sleep(500 * time.Millisecond)
-			}
-
-			if !observedAlive {
-				log.Warn().Int("PID", pid).Msg("process was never observed alive after restore; reporting non-zero exit code")
-				exitCode <- 1
-			} else {
-				log.Info().Int("PID", pid).Msg("job process has exited")
-				exitCode <- 0
-			}
+			exitCode <- status.ExitCode()
 			close(exitCode)
 		})
 	}
