@@ -330,6 +330,7 @@ jobs:
           set -euo pipefail
 
           ARTIFACT_DIR="/tmp/slurm-debug"
+          SAMPLE_ROOT="/data/cedana-samples/slurm/${{ matrix.compute == 'GPU' && 'gpu' || 'cpu' }}"
           mkdir -p "$ARTIFACT_DIR"
 
           {
@@ -340,6 +341,7 @@ jobs:
             echo "matrix_arch=${{ matrix.arch }}"
             echo "matrix_compute=${{ matrix.compute }}"
             echo "matrix_storage=${{ matrix.storage }}"
+            echo "sample_root=$SAMPLE_ROOT"
           } >"$ARTIFACT_DIR/context.txt"
 
           if [ -f ./slurm-bin/slurm-version.txt ]; then
@@ -392,7 +394,7 @@ jobs:
             done
 
             docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
-            docker exec "$c" sh -c 'find /data -maxdepth 5 -type f -name "slurm-*.out" -print 2>/dev/null || true' >"$cdir/slurm-output-files.txt" 2>&1 || true
+            docker exec "$c" sh -c 'sample_root="$0"; if [ -d "$sample_root" ]; then find "$sample_root" -maxdepth 3 -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true; fi' "$SAMPLE_ROOT" >"$cdir/slurm-output-files.txt" 2>&1 || true
 
             while IFS= read -r job_out; do
               [ -z "$job_out" ] && continue

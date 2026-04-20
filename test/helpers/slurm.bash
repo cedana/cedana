@@ -34,6 +34,29 @@ slurm_submit_job() {
     echo "$job_id"
 }
 
+_slurm_sample_container_dir() {
+    local sbatch_file="$1"
+    local rel_path
+
+    rel_path="${sbatch_file#*/slurm/}"
+    printf '/data/cedana-samples/slurm/%s\n' "$(dirname "$rel_path")"
+}
+
+_slurm_relevant_job_ids_csv() {
+    local joined=""
+    local id
+
+    for id in "$@"; do
+        [ -z "$id" ] && continue
+        if [ -n "$joined" ]; then
+            joined+=","
+        fi
+        joined+="$id"
+    done
+
+    printf '%s\n' "$joined"
+}
+
 _persist_container_log_file() {
     local container="$1"
     local src="$2"
@@ -53,6 +76,8 @@ _capture_runtime_slurm_logs() {
     local reason="${1:-unknown}"
     local job_id="${2:-unknown}"
     local host_hint="${3:-unknown}"
+    local sample_dir="${4:-/data/cedana-samples}"
+    local relevant_job_ids_csv="${5:-$job_id}"
     local stamp out_root out_dir
     local containers=()
 
@@ -66,6 +91,8 @@ _capture_runtime_slurm_logs() {
         echo "reason=$reason"
         echo "job_id=$job_id"
         echo "host_hint=$host_hint"
+        echo "sample_dir=$sample_dir"
+        echo "relevant_job_ids=$relevant_job_ids_csv"
     } >"$out_dir/context.txt"
 
     docker ps -a >"$out_dir/docker-ps-a.txt" 2>&1 || true
@@ -104,7 +131,25 @@ _capture_runtime_slurm_logs() {
         _persist_container_log_file "$c" /var/log/munge/munged.log "$cdir"
 
         docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
-        docker exec "$c" sh -c 'find /data -maxdepth 5 -type f \( -name "slurm-*.out" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true' >"$cdir/slurm-output-files.txt" 2>&1 || true
+        docker exec \
+            -e SLURM_DEBUG_SAMPLE_DIR="$sample_dir" \
+            -e SLURM_DEBUG_JOB_IDS="$relevant_job_ids_csv" \
+            "$c" sh -c '
+                sample_dir="${SLURM_DEBUG_SAMPLE_DIR:-/data/cedana-samples}"
+                ids="${SLURM_DEBUG_JOB_IDS:-}"
+                if [ -d "$sample_dir" ]; then
+                    IFS=","; for id in $ids; do
+                        [ -n "$id" ] || continue
+                        for suffix in out err; do
+                            f="$sample_dir/slurm-$id.$suffix"
+                            [ -f "$f" ] && printf "%s\n" "$f"
+                        done
+                    done
+                    for f in "$sample_dir/.cedana_debug.out" "$sample_dir/.cedana_debug.err"; do
+                        [ -f "$f" ] && printf "%s\n" "$f"
+                    done
+                fi
+            ' >"$cdir/slurm-output-files.txt" 2>&1 || true
 
         while IFS= read -r job_out; do
             [ -z "$job_out" ] && continue
@@ -118,8 +163,10 @@ _capture_runtime_slurm_logs() {
 
 _dump_job_failure_info() {
     local job_id="${1:-}"
+    local sample_dir="${2:-/data/cedana-samples}"
+    local relevant_job_ids_csv="${3:-$job_id}"
 
-    _capture_runtime_slurm_logs "failure-dump" "$job_id" "unknown"
+    _capture_runtime_slurm_logs "failure-dump" "$job_id" "unknown" "$sample_dir" "$relevant_job_ids_csv"
 
     echo "=== sacct (last 10 jobs) ==="
     slurm_exec sacct --noheader -a \
@@ -132,8 +179,25 @@ _dump_job_failure_info() {
 
         echo "=== job output files ==="
         for c in $(_slurm_compute_containers); do
-            for f in $(docker exec "$c" \
-                find "${SLURM_DATA_DIR}" -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) 2>/dev/null | sort -u); do
+            for f in $(docker exec \
+                -e SLURM_DEBUG_SAMPLE_DIR="$sample_dir" \
+                -e SLURM_DEBUG_JOB_IDS="$relevant_job_ids_csv" \
+                "$c" sh -c '
+                    sample_dir="${SLURM_DEBUG_SAMPLE_DIR:-/data/cedana-samples}"
+                    ids="${SLURM_DEBUG_JOB_IDS:-}"
+                    if [ -d "$sample_dir" ]; then
+                        IFS=","; for id in $ids; do
+                            [ -n "$id" ] || continue
+                            for suffix in out err; do
+                                f="$sample_dir/slurm-$id.$suffix"
+                                [ -f "$f" ] && printf "%s\n" "$f"
+                            done
+                        done
+                        for f in "$sample_dir/.cedana_debug.out" "$sample_dir/.cedana_debug.err"; do
+                            [ -f "$f" ] && printf "%s\n" "$f"
+                        done
+                    fi
+                ' 2>/dev/null | sort -u); do
                 echo "--- $c:$f ---"
                 docker exec "$c" cat "$f" 2>/dev/null || true
             done
@@ -240,6 +304,8 @@ wait_for_slurm_job_state() {
     local job_id="$1"
     local target_state="$2"
     local timeout="${3:-60}"
+    local sample_dir="${4:-/data/cedana-samples}"
+    local relevant_job_ids_csv="${5:-$job_id}"
     local elapsed=0
 
     while [ "$elapsed" -lt "$timeout" ]; do
@@ -254,7 +320,7 @@ wait_for_slurm_job_state() {
         case "$state" in
         COMPLETED | FAILED | CANCELLED | TIMEOUT | NODE_FAIL)
             error_log "Job $job_id reached terminal state $state (expected $target_state)"
-            _dump_job_failure_info "$job_id"
+            _dump_job_failure_info "$job_id" "$sample_dir" "$relevant_job_ids_csv"
             return 1
             ;;
         esac
@@ -280,8 +346,12 @@ test_slurm_job() {
     local sbatch_file="$2"
     local dump_wait_time="${3:-10}"
     local dump_timeout="${4:-120}"
+    local sample_dir=""
+    local relevant_job_ids_csv=""
+    local tracked_job_ids=()
 
     IFS='_' read -ra actions <<<"$action_sequence"
+    sample_dir="$(_slurm_sample_container_dir "$sbatch_file")"
 
     info_log "Starting SLURM action sequence: $action_sequence (file=$sbatch_file, dump_wait=${dump_wait_time}s, dump_timeout=${dump_timeout}s)"
 
@@ -302,7 +372,10 @@ test_slurm_job() {
                     break
                 }
 
-            wait_for_slurm_job_state "$job_id" "RUNNING" 60 ||
+            tracked_job_ids+=("$job_id")
+            relevant_job_ids_csv="$(_slurm_relevant_job_ids_csv "${tracked_job_ids[@]}")"
+
+            wait_for_slurm_job_state "$job_id" "RUNNING" 60 "$sample_dir" "$relevant_job_ids_csv" ||
                 {
                     error="Job $job_id failed to reach RUNNING"
                     break
@@ -365,13 +438,13 @@ test_slurm_job() {
                 docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f (job/action scoped) ---\"; grep -E 'jobid=${job_id}\\b|job_id=${job_id}\\b|action_id=${action_id}' \"\$f\" | tail -120 || echo '(no scoped matches)'; done" 2>/dev/null || true
 
                 if [ "$monitor_alive" = false ]; then
-                    _capture_runtime_slurm_logs "monitor-died-after-checkpoint" "$job_id" "$_host"
+                    _capture_runtime_slurm_logs "monitor-died-after-checkpoint" "$job_id" "$_host" "$sample_dir" "$relevant_job_ids_csv"
                 fi
             fi
 
             poll_slurm_action_status "$action_id" "checkpoint" "$dump_timeout" ||
                 {
-                    _capture_runtime_slurm_logs "checkpoint-action-timeout" "$job_id" "$_host"
+                    _capture_runtime_slurm_logs "checkpoint-action-timeout" "$job_id" "$_host" "$sample_dir" "$relevant_job_ids_csv"
                     error="Checkpoint action $action_id did not complete"
                     break
                 }
@@ -427,13 +500,15 @@ test_slurm_job() {
 
             if [ -n "$new_job_id" ] && [ "$new_job_id" != "$old_job_id" ]; then
                 job_id="$new_job_id"
+                tracked_job_ids+=("$job_id")
+                relevant_job_ids_csv="$(_slurm_relevant_job_ids_csv "${tracked_job_ids[@]}")"
                 info_log "Restored job has new ID: $job_id"
             else
                 error="No new restored job ID detected for cancelled job $old_job_id"
                 break
             fi
 
-            wait_for_slurm_job_state "$job_id" "RUNNING" 60 ||
+            wait_for_slurm_job_state "$job_id" "RUNNING" 60 "$sample_dir" "$relevant_job_ids_csv" ||
                 {
                     error="Restored job $job_id failed to reach RUNNING"
                     break
@@ -457,7 +532,7 @@ test_slurm_job() {
         error_log "$error"
         slurm_exec squeue 2>/dev/null || true
         slurm_exec sinfo 2>/dev/null || true
-        _dump_job_failure_info "${job_id:-}"
+        _dump_job_failure_info "${job_id:-}" "$sample_dir" "$relevant_job_ids_csv"
         return 1
     fi
 
