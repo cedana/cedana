@@ -468,13 +468,17 @@ install_cedana_in_slurm() {
 
     for c in "${all_containers[@]}"; do
         docker cp /usr/local/bin/cedana-slurm "${c}:/usr/local/bin/cedana-slurm" &&
-            docker exec "$c" bash -c 'chmod +x /usr/local/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm && ln -sf /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm' ||
+            docker exec "$c" bash -c '
+                chmod +x /usr/local/bin/cedana-slurm
+                install -m 0755 /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm
+                install -m 0755 /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm
+            ' ||
             {
                 error_log "Failed to install cedana-slurm in $c"
                 return 1
             }
 
-        docker exec "$c" bash -c 'test -x /usr/local/bin/cedana-slurm && /usr/local/bin/cedana-slurm --help >/dev/null' ||
+        docker exec "$c" bash -c 'test -x /usr/local/bin/cedana-slurm && test -x /usr/bin/cedana-slurm && /usr/local/bin/cedana-slurm --help >/dev/null' ||
             {
                 error_log "cedana-slurm binary verification failed in $c"
                 return 1
@@ -862,19 +866,29 @@ start_cedana_slurm_daemon() {
 
     debug_log "Starting cedana-slurm daemon on SLURM nodes..."
 
-    if [ -n "${CEDANA_SLURM_BIN:-}" ] && [ -f "$CEDANA_SLURM_BIN" ]; then
-        docker cp "$CEDANA_SLURM_BIN" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana-slurm"
-        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/cedana-slurm
-    fi
-
     local targets=("$SLURM_CONTROLLER_CONTAINER")
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
+    if [ -n "${CEDANA_SLURM_BIN:-}" ] && [ -f "$CEDANA_SLURM_BIN" ]; then
+        for c in "${targets[@]}"; do
+            docker cp "$CEDANA_SLURM_BIN" "${c}:/usr/local/bin/cedana-slurm" ||
+                {
+                    error_log "Failed to copy CEDANA_SLURM_BIN into $c"
+                    return 1
+                }
+        done
+    fi
+
     for c in "${targets[@]}"; do
-        docker exec "$c" bash -c 'test -x /usr/local/bin/cedana-slurm' ||
+        docker exec "$c" bash -c '
+            test -x /usr/local/bin/cedana-slurm
+            install -m 0755 /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm
+            install -m 0755 /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm
+            command -v cedana-slurm >/dev/null
+        ' ||
             {
-                error_log "cedana-slurm binary missing in $c at /usr/local/bin/cedana-slurm"
+                error_log "cedana-slurm binary install/verification failed in $c"
                 return 1
             }
     done
