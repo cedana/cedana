@@ -81,11 +81,9 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      kubernetes: false # temporarily disabled while SLURM CI stabilises
 
   bench:
     name: Bench
-    if: false # temporarily disabled while SLURM CI stabilises
     uses: ./.github/workflows/bench.yml
     needs: [publish, download]
     secrets: inherit
