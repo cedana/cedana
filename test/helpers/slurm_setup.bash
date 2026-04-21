@@ -868,6 +868,18 @@ COMPUTE_EOF
     done
     sleep 5
 
+    if [ "${GPU:-0}" = "1" ]; then
+        debug_log "Clearing transient GPU drain state after SLURM restarts..."
+        for c in "${compute_containers[@]}"; do
+            local node_hostname
+            node_hostname=$(docker exec "$c" hostname)
+            # slurmctld may briefly drain the node while it still sees the
+            # pre-restart registration without GRES; clear that once slurmd is back.
+            slurm_exec scontrol update NodeName="$node_hostname" State=RESUME \
+                >/dev/null 2>&1 || true
+        done
+    fi
+
     debug_log "Restarting cedana daemon on all nodes (post-SLURM restart)..."
     for c in "${all_containers[@]}"; do
         docker exec "$c" bash -c "
