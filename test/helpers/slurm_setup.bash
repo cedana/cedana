@@ -565,18 +565,22 @@ EOF
         debug_log "Configuring SLURM GPU GRES resources..."
         for c in "${compute_containers[@]}"; do
             local gpu_count
-            gpu_count=$(docker exec "$c" bash -c 'nvidia-smi -L 2>/dev/null | wc -l' || echo "0")
+            gpu_count=$(docker exec "$c" bash -c 'ls -1 /dev/nvidia[0-9]* 2>/dev/null | wc -l' || echo "0")
             if [ "$gpu_count" -eq 0 ]; then
-                debug_log "WARNING: No GPUs detected on $c, skipping GRES config"
-                continue
+                error_log "GPU test requested but no /dev/nvidia* devices were found in $c"
+                docker exec "$c" bash -c 'ls -la /dev/nvidia* 2>/dev/null || true; nvidia-smi -L 2>/dev/null || true' || true
+                return 1
             fi
             debug_log "Detected $gpu_count GPU(s) on $c"
+
+            local node_hostname
+            node_hostname=$(docker exec "$c" hostname)
 
             docker exec "$c" bash -c "
                 mkdir -p /etc/slurm
                 echo '' > /etc/slurm/gres.conf
                 for i in \$(seq 0 $(($gpu_count - 1))); do
-                    echo \"Name=gpu File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
+                    echo \"NodeName=$node_hostname Name=gpu File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
                 done
                 cat /etc/slurm/gres.conf
             " || {
@@ -584,8 +588,6 @@ EOF
                 return 1
             }
 
-            local node_hostname
-            node_hostname=$(docker exec "$c" hostname)
             docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
                 set -euo pipefail
                 SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
@@ -650,8 +652,10 @@ PLUGSTACK_CONF="${PLUGSTACK_CONF:-/etc/slurm/plugstack.conf}"
 
 grep -q 'task/cedana' "$SLURM_CONF" || \
     sed -i 's|^\(TaskPlugin=.*\)|\1,task/cedana|' "$SLURM_CONF"
-grep -q 'cli_filter/cedana' "$SLURM_CONF" || \
+    grep -q 'cli_filter/cedana' "$SLURM_CONF" || \
     echo 'CliFilterPlugins=cli_filter/cedana' >> "$SLURM_CONF"
+grep -q 'NO_CONF_HASH' "$SLURM_CONF" || \
+    echo 'DebugFlags=NO_CONF_HASH' >> "$SLURM_CONF"
 if [ -f "${PLUGIN_DIR}/job_submit_cedana.so" ]; then
     grep -q 'job_submit/cedana' "$SLURM_CONF" || \
         echo 'JobSubmitPlugins=job_submit/cedana' >> "$SLURM_CONF"
