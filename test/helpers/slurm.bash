@@ -16,14 +16,11 @@ slurm_submit_job() {
     container_file="$(basename "$rel_path")"
     info_log "Submitting: cd $container_dir && sbatch $container_file"
 
-    local output exit_code
-    output=$(slurm_exec bash -c \
+    local output
+    if ! output=$(slurm_exec bash -c \
         "cd '$container_dir' && sbatch --parsable --overcommit \
          --export=ALL,PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-         --cpus-per-task=1 --mem=0 '$container_file'" 2>&1)
-    exit_code=$?
-
-    if [ "$exit_code" -ne 0 ]; then
+         --cpus-per-task=1 --mem=0 '$container_file'" 2>&1); then
         error_log "sbatch failed: $output"
         return 1
     fi
@@ -250,56 +247,54 @@ _detect_restored_job_id() {
     local previous_job_id="$1"
     local previous_job_name="${2:-}"
 
-    local queued_job_id
-    if [ -n "$previous_job_name" ]; then
-        queued_job_id=$(slurm_exec squeue -h -o '%i|%j' --sort=-V 2>/dev/null |
-            awk -F'|' -v prev="$previous_job_id" -v name="$previous_job_name" '$1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) && $2 == name { print $1; exit }')
-    else
-        queued_job_id=$(slurm_exec squeue -h -o '%i' --sort=-V 2>/dev/null |
-            awk -v prev="$previous_job_id" '$1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) { print $1; exit }')
+    # Don't guess on bare job IDs. If we failed to capture the original name,
+    # keep polling instead of attaching to an unrelated newer job.
+    if [ -z "$previous_job_name" ]; then
+        return 0
+    fi
+
+    local queued_job_id=""
+    local squeue_out=""
+    if squeue_out=$(slurm_exec squeue -h -o '%i|%j' --sort=-V 2>/dev/null); then
+        queued_job_id=$(awk -F'|' -v prev="$previous_job_id" -v name="$previous_job_name" '$1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) && $2 == name { print $1; exit }' <<<"$squeue_out")
     fi
     if [ -n "$queued_job_id" ]; then
         echo "$queued_job_id"
         return 0
     fi
 
-    local accounted_job_id
-    if [ -n "$previous_job_name" ]; then
-        accounted_job_id=$(slurm_exec sacct --noheader -a --format=JobID,JobName -P 2>/dev/null |
-            awk -F'|' -v prev="$previous_job_id" -v name="$previous_job_name" '
-                $1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) && $2 == name {
-                    if (max == "" || $1 + 0 > max + 0) {
-                        max = $1
-                    }
+    local accounted_job_id=""
+    local sacct_out=""
+    if sacct_out=$(slurm_exec sacct --noheader -a --format=JobID,JobName -P 2>/dev/null); then
+        accounted_job_id=$(awk -F'|' -v prev="$previous_job_id" -v name="$previous_job_name" '
+            $1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) && $2 == name {
+                if (max == "" || $1 + 0 > max + 0) {
+                    max = $1
                 }
-                END {
-                    if (max != "") {
-                        print max
-                    }
-                }')
-    else
-        accounted_job_id=$(slurm_exec sacct --noheader -a --format=JobID -P 2>/dev/null |
-            awk -F'|' -v prev="$previous_job_id" '
-                $1 ~ /^[0-9]+$/ && ($1 + 0) > (prev + 0) {
-                    if (max == "" || $1 + 0 > max + 0) {
-                        max = $1
-                    }
+            }
+            END {
+                if (max != "") {
+                    print max
                 }
-                END {
-                    if (max != "") {
-                        print max
-                    }
-                }')
+            }' <<<"$sacct_out")
     fi
 
     [ -n "$accounted_job_id" ] && echo "$accounted_job_id"
+    return 0
 }
 
 _get_slurm_job_name() {
     local job_id="$1"
 
     slurm_exec scontrol show job "$job_id" 2>/dev/null |
-        grep -oP 'JobName=\K\S+' | head -1
+        grep -oP 'JobName=\K\S+' | head -1 || true
+}
+
+_get_batch_host() {
+    local job_id="$1"
+
+    slurm_exec scontrol show job "$job_id" 2>/dev/null |
+        grep -oP 'BatchHost=\K\S+' | head -1 || true
 }
 
 wait_for_slurm_job_state() {
@@ -399,7 +394,7 @@ test_slurm_job() {
             }
 
             local _host
-            _host=$(slurm_exec scontrol show job "$job_id" 2>/dev/null | grep -oP 'BatchHost=\K\S+' | head -1)
+            _host="$(_get_batch_host "$job_id")"
             if [ -n "$_host" ]; then
                 info_log "[DEBUG] SPANK monitor check on $_host for job $job_id:"
                 docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm monitor'" 2>/dev/null || info_log "[DEBUG] No monitor process found"
@@ -410,14 +405,12 @@ test_slurm_job() {
             fi
 
             info_log "Checkpointing SLURM job $job_id via propagator..."
-            local checkpoint_output checkpoint_status
+            local checkpoint_output
 
-            checkpoint_output=$(checkpoint_slurm_job "$job_id")
-            checkpoint_status=$?
-            [ "$checkpoint_status" -ne 0 ] && {
+            if ! checkpoint_output=$(checkpoint_slurm_job "$job_id"); then
                 error="Checkpoint failed: $checkpoint_output"
                 break
-            }
+            fi
 
             action_id="$checkpoint_output"
             validate_action_id "$action_id" ||
@@ -460,18 +453,20 @@ test_slurm_job() {
                 break
             }
 
+            local old_job_id="$job_id"
+            local old_job_name=""
+            old_job_name="$(_get_slurm_job_name "$old_job_id")"
+
             info_log "Cancelling job $job_id before restore..."
             cancel_slurm_job "$job_id"
             sleep 2
 
             info_log "Restoring job from action $action_id..."
-            local restore_output restore_status restore_action_id
-            restore_output=$(restore_slurm_job "$action_id" "$SLURM_CLUSTER_ID")
-            restore_status=$?
-            [ "$restore_status" -ne 0 ] && {
+            local restore_output restore_action_id
+            if ! restore_output=$(restore_slurm_job "$action_id" "$SLURM_CLUSTER_ID"); then
                 error="Restore failed: $restore_output"
                 break
-            }
+            fi
 
             restore_action_id="$restore_output"
             validate_action_id "$restore_action_id" ||
@@ -483,13 +478,9 @@ test_slurm_job() {
             info_log "Restore request returned action_id=$restore_action_id"
 
             info_log "Waiting for restored job to appear..."
-            local old_job_id="$job_id"
-            local old_job_name=""
             local new_job_id=""
             local elapsed=0
             local detect_timeout=40
-
-            old_job_name=$(_get_slurm_job_name "$old_job_id")
 
             while [ "$elapsed" -lt "$detect_timeout" ]; do
                 new_job_id=$(_detect_restored_job_id "$old_job_id" "$old_job_name")

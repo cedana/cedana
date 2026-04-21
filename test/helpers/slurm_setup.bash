@@ -128,10 +128,14 @@ slurm_accounting_enabled: false
 nfs_shared_install: false
 EOF
 
+    local rc=0
     pushd "$ansible_dir" >/dev/null
-    ANSIBLE_EXTRA_ARGS="-e @${vars_file}" \
-        ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&"${OUTPUT_FD}" 2>&1
-    local rc=$?
+    if ANSIBLE_EXTRA_ARGS="-e @${vars_file}" \
+        ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&"${OUTPUT_FD}" 2>&1; then
+        rc=0
+    else
+        rc=$?
+    fi
     popd >/dev/null
     rm -f "$vars_file"
 
@@ -355,7 +359,9 @@ wait_for_slurm_ready() {
 
     while [ "$elapsed" -lt "$timeout" ]; do
         local node_state
-        node_state=$(slurm_exec sinfo -h -o '%T' 2>/dev/null | head -1)
+        if ! node_state=$(slurm_exec sinfo -h -o '%T' 2>/dev/null | head -1); then
+            node_state=""
+        fi
         debug_log "  [${elapsed}s] node state: ${node_state:-<no response>}"
 
         if echo "$node_state" | grep -qiE 'idle|mixed|alloc'; then
@@ -577,7 +583,9 @@ EOF
             local node_hostname
             node_hostname=$(docker exec "$c" hostname)
 
-            detected_gres=$(docker exec "$c" bash -lc "/usr/sbin/slurmd -C 2>/dev/null | tr ' ' '\n' | grep '^Gres=' | cut -d= -f2- | head -n 1")
+            if ! detected_gres=$(docker exec "$c" bash -lc "/usr/sbin/slurmd -C 2>/dev/null | tr ' ' '\n' | grep '^Gres=' | cut -d= -f2- | head -n 1"); then
+                detected_gres=""
+            fi
             if [ -z "$detected_gres" ]; then
                 detected_gres="gpu:$gpu_count"
                 debug_log "slurmd -C did not report GRES on $c, falling back to $detected_gres"
@@ -886,7 +894,7 @@ COMPUTE_EOF
                 debug_log "  $c: cedana-slurm daemon running"
             else
                 error_log "cedana-slurm daemon failed to start on $c"
-                docker exec "$c" tail -20 /var/log/cedana-slurm.log
+                docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
                 return 1
             fi
         done
@@ -961,7 +969,7 @@ start_cedana_slurm_daemon() {
             debug_log "  $c: cedana-slurm daemon running"
         else
             error_log "cedana-slurm daemon failed to start on $c"
-            docker exec "$c" tail -20 /var/log/cedana-slurm.log
+            docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
             return 1
         fi
     done

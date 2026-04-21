@@ -50,11 +50,14 @@ register_slurm_cluster() {
     debug_log "Registering slurm cluster '$name' with propagator..."
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/cluster" \
+    if ! response=$(curl -sS -X POST "${PROPAGATOR_BASE_URL}/v2/cluster" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -d '{ "cluster_name": "'"${name}"'", "kind": "slurm" }' \
-        -w "%{http_code}")
+        -w "%{http_code}"); then
+        error_log "Failed to register slurm cluster: request error"
+        return 1
+    fi
 
     local http_code="${response: -3}"
     local body="${response%???}"
@@ -95,9 +98,12 @@ deregister_slurm_cluster() {
     debug_log "Deregistering slurm cluster '$id'..."
 
     local response
-    response=$(curl -s -X DELETE "${PROPAGATOR_BASE_URL}/v2/cluster/${id}" \
+    if ! response=$(curl -sS -X DELETE "${PROPAGATOR_BASE_URL}/v2/cluster/${id}" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-        -w "%{http_code}")
+        -w "%{http_code}"); then
+        debug_log "Warning: Failed to deregister slurm cluster '$id': request error"
+        return 0
+    fi
 
     local http_code="${response: -3}"
     local body="${response%???}"
@@ -133,21 +139,27 @@ checkpoint_slurm_job() {
     debug_log "Checkpointing slurm job '$job_id' (kind=$kind, reason=$reason)..."
 
     local payload
-    payload=$(jq -n \
+    if ! payload=$(jq -n \
             --arg job_id "$job_id" \
             --arg job_name "job_$job_id" \
             --arg kind "$kind" \
             --arg reason "$reason" \
-            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind, "reason": $reason}')
+            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind, "reason": $reason}'); then
+        error_log "Failed to build checkpoint request payload"
+        return 1
+    fi
 
     info_log "Checkpoint request payload: $payload"
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoint/job" \
+    if ! response=$(curl -sS -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoint/job" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -d "$payload" \
-        -w "%{http_code}")
+        -w "%{http_code}"); then
+        error_log "Failed to checkpoint slurm job: request error"
+        return 1
+    fi
 
     local http_code="${response: -3}"
     local body="${response%???}"
@@ -187,7 +199,7 @@ restore_slurm_job() {
     debug_log "Restoring slurm job from action '$action_id' in cluster '$cluster_id'..."
 
     local payload
-    payload=$(jq -n \
+    if ! payload=$(jq -n \
             --arg action_id "$action_id" \
             --arg cluster_id "$cluster_id" \
             --arg reason "$reason" \
@@ -195,14 +207,20 @@ restore_slurm_job() {
                 "action_id": $action_id,
                 "cluster_id": $cluster_id,
                 "reason": $reason
-            }')
+            }'); then
+        error_log "Failed to build restore request payload"
+        return 1
+    fi
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/restore/job" \
+    if ! response=$(curl -sS -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/restore/job" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -d "$payload" \
-        -w "%{http_code}")
+        -w "%{http_code}"); then
+        error_log "Failed to restore slurm job: request error"
+        return 1
+    fi
 
     local http_code="${response: -3}"
     local body="${response%???}"
@@ -242,18 +260,24 @@ poll_slurm_action_status() {
 
     for i in $(seq 1 $max_attempts); do
         local response
-        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoints" \
+        if ! response=$(curl -sS -X GET "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoints" \
                 -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-            -w "%{http_code}")
+            -w "%{http_code}"); then
+            debug_log "Warning: /v2/slurm/checkpoints request failed (attempt $i/$max_attempts)"
+            sleep "$interval"
+            continue
+        fi
 
         local http_code="${response: -3}"
         local body="${response%???}"
 
         if [ "$http_code" -eq 200 ]; then
 
-            local entry_status
-            entry_status=$(echo "$body" | jq -r --arg aid "$action_id" \
-                '.[] | select(.action_id == $aid) | .status' 2>/dev/null | head -1)
+            local entry_status=""
+            if ! entry_status=$(jq -r --arg aid "$action_id" \
+                '.[] | select(.action_id == $aid) | .status' 2>/dev/null <<<"$body" | head -1); then
+                entry_status=""
+            fi
 
             if [ -n "$entry_status" ]; then
                 status="$entry_status"
@@ -298,9 +322,12 @@ get_slurm_checkpoints() {
     fi
 
     local response
-    response=$(curl -s -X GET "$url" \
+    if ! response=$(curl -sS -X GET "$url" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-        -w "%{http_code}")
+        -w "%{http_code}"); then
+        error_log "Failed to get slurm checkpoints: request error"
+        return 1
+    fi
 
     local http_code="${response: -3}"
     local body="${response%???}"
@@ -328,9 +355,12 @@ deprecate_slurm_checkpoint() {
     debug_log "Deprecating slurm checkpoint '$checkpoint_id'..."
 
     local response
-    response=$(curl -s -X PATCH "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoints/deprecate/${checkpoint_id}" \
+    if ! response=$(curl -sS -X PATCH "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoints/deprecate/${checkpoint_id}" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-        -w "%{http_code}")
+        -w "%{http_code}"); then
+        debug_log "Warning: Failed to deprecate checkpoint '$checkpoint_id': request error"
+        return 0
+    fi
 
     local http_code="${response: -3}"
     local body="${response%???}"
@@ -363,20 +393,26 @@ sync_slurm_jobs() {
     debug_log "Syncing slurm jobs to propagator..."
 
     local payload
-    payload=$(jq -n \
+    if ! payload=$(jq -n \
             --arg cluster_id "$cluster_id" \
             --argjson jobs "$jobs_json" \
             '{
                 "cluster_id": $cluster_id,
                 "jobs": $jobs
-            }')
+            }'); then
+        error_log "Failed to build slurm job sync payload"
+        return 1
+    fi
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/jobs/sync" \
+    if ! response=$(curl -sS -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/jobs/sync" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -d "$payload" \
-        -w "%{http_code}")
+        -w "%{http_code}"); then
+        error_log "Failed to sync jobs: request error"
+        return 1
+    fi
 
     local http_code="${response: -3}"
     local body="${response%???}"
@@ -399,9 +435,12 @@ validate_slurm_propagator() {
     debug_log "Validating propagator connectivity for slurm..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/user" \
+    if ! response=$(curl -sS -X GET "${PROPAGATOR_BASE_URL}/v2/user" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-        -w "%{http_code}")
+        -w "%{http_code}"); then
+        error_log "Propagator connectivity validation failed: request error"
+        return 1
+    fi
 
     local http_code="${response: -3}"
 
