@@ -128,6 +128,8 @@ _capture_runtime_slurm_logs() {
         _persist_container_log_file "$c" /var/log/slurm/slurmctld.log "$cdir"
         _persist_container_log_file "$c" /var/log/slurm/slurmd.log "$cdir"
         _persist_container_log_file "$c" /var/log/slurm/slurmdbd.log "$cdir"
+        _persist_container_log_file "$c" /etc/slurm/slurm.conf "$cdir"
+        _persist_container_log_file "$c" /etc/slurm/gres.conf "$cdir"
         _persist_container_log_file "$c" /var/log/munge/munged.log "$cdir"
 
         docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true

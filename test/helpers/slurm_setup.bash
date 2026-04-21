@@ -565,6 +565,8 @@ EOF
         debug_log "Configuring SLURM GPU GRES resources..."
         for c in "${compute_containers[@]}"; do
             local gpu_count
+            local detected_gres
+            local gpu_type
             gpu_count=$(docker exec "$c" bash -c 'ls -1 /dev/nvidia[0-9]* 2>/dev/null | wc -l' || echo "0")
             if [ "$gpu_count" -eq 0 ]; then
                 error_log "GPU test requested but no /dev/nvidia* devices were found in $c"
@@ -578,13 +580,43 @@ EOF
 
             docker exec "$c" bash -c "
                 mkdir -p /etc/slurm
-                echo '' > /etc/slurm/gres.conf
+                echo 'AutoDetect=nvidia' > /etc/slurm/gres.conf
                 for i in \$(seq 0 $(($gpu_count - 1))); do
                     echo \"NodeName=$node_hostname Name=gpu File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
                 done
                 cat /etc/slurm/gres.conf
             " || {
                 error_log "Failed to write gres.conf on $c"
+                return 1
+            }
+
+            detected_gres=$(docker exec "$c" bash -lc "/usr/sbin/slurmd -C 2>/dev/null | tr ' ' '\n' | grep '^Gres=' | cut -d= -f2- | head -n 1")
+            if [ -z "$detected_gres" ]; then
+                detected_gres="gpu:$gpu_count"
+                debug_log "slurmd -C did not report GRES on $c, falling back to $detected_gres"
+            else
+                debug_log "slurmd -C detected GRES '$detected_gres' on $c"
+            fi
+
+            gpu_type=""
+            if [[ "$detected_gres" == gpu:*:* ]]; then
+                gpu_type="${detected_gres#gpu:}"
+                gpu_type="${gpu_type%:*}"
+            fi
+
+            docker exec "$c" bash -c "
+                mkdir -p /etc/slurm
+                echo 'AutoDetect=nvidia' > /etc/slurm/gres.conf
+                for i in \$(seq 0 $(($gpu_count - 1))); do
+                    if [ -n '$gpu_type' ]; then
+                        echo \"NodeName=$node_hostname Name=gpu Type=$gpu_type File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
+                    else
+                        echo \"NodeName=$node_hostname Name=gpu File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
+                    fi
+                done
+                cat /etc/slurm/gres.conf
+            " || {
+                error_log "Failed to rewrite typed gres.conf on $c"
                 return 1
             }
 
@@ -603,6 +635,25 @@ EOF
                 echo 'GRES config updated for $node_hostname'
             " || {
                 error_log "Failed to update slurm.conf GRES on controller for $c"
+                return 1
+            }
+
+            docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+                set -euo pipefail
+                SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
+
+                grep -q '^DebugFlags=.*NO_CONF_HASH' \"\$SLURM_CONF\" || \
+                    echo 'DebugFlags=NO_CONF_HASH' >> \"\$SLURM_CONF\"
+
+                if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
+                    if grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
+                        sed -i 's|^\(NodeName=$node_hostname.*\) Gres=[^[:space:]]*|\1 Gres=$detected_gres|' \"\$SLURM_CONF\"
+                    else
+                        sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=$detected_gres|' \"\$SLURM_CONF\"
+                    fi
+                fi
+            " || {
+                error_log "Failed to align controller GRES with detected value '$detected_gres' for $c"
                 return 1
             }
         done
@@ -714,6 +765,14 @@ COMPUTE_EOF
                 return 1
             }
     done
+
+    debug_log "Re-syncing final slurm.conf to compute nodes..."
+    for c in "${compute_containers[@]}"; do
+        docker cp "$SLURM_CONTROLLER_CONTAINER:/etc/slurm/slurm.conf" "/tmp/slurm.conf.final.sync.$$"
+        docker cp "/tmp/slurm.conf.final.sync.$$" "$c:/etc/slurm/slurm.conf"
+        debug_log "Synced final slurm.conf to $c"
+    done
+    rm -f /tmp/slurm.conf.final.sync.$$
 
     debug_log "Starting cedana daemon on all nodes..."
     for c in "${all_containers[@]}"; do
