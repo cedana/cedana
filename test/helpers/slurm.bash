@@ -465,34 +465,54 @@ test_slurm_job() {
             cancel_slurm_job "$job_id"
             sleep 2
 
-            info_log "Restoring job from action $action_id..."
-            local restore_output restore_action_id
-            if ! restore_output=$(restore_slurm_job "$action_id" "$SLURM_CLUSTER_ID"); then
-                error="Restore failed: $restore_output"
-                break
-            fi
-
-            restore_action_id="$restore_output"
-            validate_action_id "$restore_action_id" ||
-                {
-                    error="Invalid restore action ID: $restore_action_id"
-                    break
-                }
-
-            info_log "Restore request returned action_id=$restore_action_id"
-
-            info_log "Waiting for restored job to appear..."
             local new_job_id=""
-            local elapsed=0
             local detect_timeout=40
+            local restore_attempt=1
+            local max_restore_attempts=2
 
-            while [ "$elapsed" -lt "$detect_timeout" ]; do
-                new_job_id=$(_detect_restored_job_id "$old_job_id" "$old_job_name")
-                if [ -n "$new_job_id" ]; then
+            while [ "$restore_attempt" -le "$max_restore_attempts" ]; do
+                [ "$restore_attempt" -gt 1 ] &&
+                    info_log "Retrying restore for job $old_job_id (attempt $restore_attempt/$max_restore_attempts)..."
+
+                info_log "Restoring job from action $action_id..."
+                local restore_output restore_action_id
+                if ! restore_output=$(restore_slurm_job "$action_id" "$SLURM_CLUSTER_ID"); then
+                    error="Restore failed: $restore_output"
                     break
                 fi
-                sleep 2
-                elapsed=$((elapsed + 2))
+
+                restore_action_id="$restore_output"
+                validate_action_id "$restore_action_id" ||
+                    {
+                        error="Invalid restore action ID: $restore_action_id"
+                        break
+                    }
+
+                info_log "Restore request returned action_id=$restore_action_id"
+
+                info_log "Waiting for restored job to appear..."
+                local elapsed=0
+
+                while [ "$elapsed" -lt "$detect_timeout" ]; do
+                    new_job_id=$(_detect_restored_job_id "$old_job_id" "$old_job_name")
+                    if [ -n "$new_job_id" ]; then
+                        break
+                    fi
+                    sleep 2
+                    elapsed=$((elapsed + 2))
+                done
+
+                if [ -n "$new_job_id" ] && [ "$new_job_id" != "$old_job_id" ]; then
+                    break
+                fi
+
+                if [ "$restore_attempt" -lt "$max_restore_attempts" ]; then
+                    info_log "Restore request accepted but no new job ID appeared for cancelled job $old_job_id"
+                    restore_attempt=$((restore_attempt + 1))
+                    continue
+                fi
+
+                break
             done
 
             if [ -n "$new_job_id" ] && [ "$new_job_id" != "$old_job_id" ]; then
@@ -501,7 +521,7 @@ test_slurm_job() {
                 relevant_job_ids_csv="$(_slurm_relevant_job_ids_csv "${tracked_job_ids[@]}")"
                 info_log "Restored job has new ID: $job_id"
             else
-                error="No new restored job ID detected for cancelled job $old_job_id"
+                [ -z "$error" ] && error="No new restored job ID detected for cancelled job $old_job_id"
                 break
             fi
 
