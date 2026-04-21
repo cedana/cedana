@@ -129,6 +129,10 @@ _capture_runtime_slurm_logs() {
         _persist_container_log_file "$c" /etc/slurm/gres.conf "$cdir"
         _persist_container_log_file "$c" /var/log/munge/munged.log "$cdir"
 
+        if [ "${GPU:-0}" = "1" ]; then
+            docker exec "$c" sh -c 'echo "=== nvidia-smi -L ==="; nvidia-smi -L 2>&1 || true; echo "=== /dev/nvidia* ==="; ls -la /dev/nvidia* 2>&1 || true; echo "=== /etc/slurm/gres.conf ==="; cat /etc/slurm/gres.conf 2>&1 || true; echo "=== /etc/slurm/slurm.conf (GPU lines) ==="; grep -E "^(NodeName|GresTypes|DebugFlags)" /etc/slurm/slurm.conf 2>&1 || true; echo "=== slurmd -C ==="; /usr/sbin/slurmd -C 2>&1 || true; echo "=== slurmd -G ==="; /usr/sbin/slurmd -G 2>&1 || true' >"$cdir/gpu-diagnostics.txt" 2>&1 || true
+        fi
+
         docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
         docker exec \
             -e SLURM_DEBUG_SAMPLE_DIR="$sample_dir" \

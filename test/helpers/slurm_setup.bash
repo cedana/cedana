@@ -56,6 +56,31 @@ _slurm_conf_set() {
     "
 }
 
+_log_gpu_debug_state() {
+    local container="$1"
+    local phase="${2:-state}"
+
+    [ "${GPU:-0}" = "1" ] || return 0
+
+    info_log "[GPU DEBUG][$phase] $container"
+    docker exec "$container" bash -lc '
+        echo "=== hostname ==="
+        hostname || true
+        echo "=== nvidia-smi -L ==="
+        nvidia-smi -L 2>&1 || true
+        echo "=== /dev/nvidia* ==="
+        ls -la /dev/nvidia* 2>&1 || true
+        echo "=== /etc/slurm/gres.conf ==="
+        cat /etc/slurm/gres.conf 2>&1 || true
+        echo "=== /etc/slurm/slurm.conf (GPU lines) ==="
+        grep -E "^(NodeName|GresTypes|DebugFlags)" /etc/slurm/slurm.conf 2>&1 || true
+        echo "=== slurmd -C ==="
+        /usr/sbin/slurmd -C 2>&1 || true
+        echo "=== slurmd -G ==="
+        /usr/sbin/slurmd -G 2>&1 || true
+    ' || true
+}
+
 ##############################
 # Service Management
 ##############################
@@ -378,6 +403,11 @@ wait_for_slurm_ready() {
     slurm_exec sinfo 2>/dev/null || echo "(sinfo unavailable)"
     echo "=== scontrol show nodes ==="
     slurm_exec scontrol show nodes 2>/dev/null || echo "(scontrol unavailable)"
+    if [ "${GPU:-0}" = "1" ]; then
+        for c in $(_slurm_compute_containers); do
+            _log_gpu_debug_state "$c" "slurm-not-ready"
+        done
+    fi
     echo "=== running SLURM processes ==="
     docker exec "$SLURM_CONTROLLER_CONTAINER" \
         pgrep -xa 'slurmctld|slurmd|slurmdbd|munged' 2>/dev/null || echo "(none)"
@@ -602,6 +632,8 @@ EOF
                 return 1
             }
 
+            _log_gpu_debug_state "$c" "post-gres-config"
+
             docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
                 set -euo pipefail
                 SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
@@ -651,6 +683,7 @@ EOF
             docker cp "$SLURM_CONTROLLER_CONTAINER:/etc/slurm/slurm.conf" "/tmp/slurm.conf.sync.$$"
             docker cp "/tmp/slurm.conf.sync.$$" "$c:/etc/slurm/slurm.conf"
             debug_log "Synced slurm.conf to $c"
+            _log_gpu_debug_state "$c" "post-slurm-conf-sync"
         done
         rm -f /tmp/slurm.conf.sync.$$
     fi
@@ -819,12 +852,19 @@ COMPUTE_EOF
             error_log "Failed to restart slurmctld"
             return 1
         }
+    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmd /usr/sbin/slurmd ||
+        {
+            error_log "Failed to restart controller slurmd"
+            return 1
+        }
+    _log_gpu_debug_state "$SLURM_CONTROLLER_CONTAINER" "post-controller-slurmd-restart"
     for c in "${compute_containers[@]}"; do
         _svc_restart "$c" slurmd /usr/sbin/slurmd ||
             {
                 error_log "Failed to restart slurmd on $c"
                 return 1
             }
+        _log_gpu_debug_state "$c" "post-slurmd-restart"
     done
     sleep 5
 

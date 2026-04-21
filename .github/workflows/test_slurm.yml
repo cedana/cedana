@@ -385,6 +385,8 @@ jobs:
               /var/log/slurm/slurmctld.log \
               /var/log/slurm/slurmd.log \
               /var/log/slurm/slurmdbd.log \
+              /etc/slurm/slurm.conf \
+              /etc/slurm/gres.conf \
               /var/log/munge/munged.log
             do
               if docker exec "$c" test -f "$f" 2>/dev/null; then
@@ -392,6 +394,10 @@ jobs:
                   docker exec "$c" sh -c "cat '$f'" >"$cdir/$(basename "$f")" 2>&1 || true
               fi
             done
+
+            if [ "${{ matrix.compute }}" = "GPU" ]; then
+              docker exec "$c" sh -c 'echo "=== nvidia-smi -L ==="; nvidia-smi -L 2>&1 || true; echo "=== /dev/nvidia* ==="; ls -la /dev/nvidia* 2>&1 || true; echo "=== /etc/slurm/gres.conf ==="; cat /etc/slurm/gres.conf 2>&1 || true; echo "=== /etc/slurm/slurm.conf (GPU lines) ==="; grep -E "^(NodeName|GresTypes|DebugFlags)" /etc/slurm/slurm.conf 2>&1 || true; echo "=== slurmd -C ==="; /usr/sbin/slurmd -C 2>&1 || true; echo "=== slurmd -G ==="; /usr/sbin/slurmd -G 2>&1 || true' >"$cdir/gpu-diagnostics.txt" 2>&1 || true
+            fi
 
             docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
             docker exec "$c" sh -c 'sample_root="$0"; if [ -d "$sample_root" ]; then find "$sample_root" -maxdepth 3 -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true; fi' "$SAMPLE_ROOT" >"$cdir/slurm-output-files.txt" 2>&1 || true
