@@ -566,7 +566,6 @@ EOF
         for c in "${compute_containers[@]}"; do
             local gpu_count
             local detected_gres
-            local gpu_type
             gpu_count=$(docker exec "$c" bash -c 'ls -1 /dev/nvidia[0-9]* 2>/dev/null | wc -l' || echo "0")
             if [ "$gpu_count" -eq 0 ]; then
                 error_log "GPU test requested but no /dev/nvidia* devices were found in $c"
@@ -578,18 +577,6 @@ EOF
             local node_hostname
             node_hostname=$(docker exec "$c" hostname)
 
-            docker exec "$c" bash -c "
-                mkdir -p /etc/slurm
-                echo 'AutoDetect=nvidia' > /etc/slurm/gres.conf
-                for i in \$(seq 0 $(($gpu_count - 1))); do
-                    echo \"NodeName=$node_hostname Name=gpu File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
-                done
-                cat /etc/slurm/gres.conf
-            " || {
-                error_log "Failed to write gres.conf on $c"
-                return 1
-            }
-
             detected_gres=$(docker exec "$c" bash -lc "/usr/sbin/slurmd -C 2>/dev/null | tr ' ' '\n' | grep '^Gres=' | cut -d= -f2- | head -n 1")
             if [ -z "$detected_gres" ]; then
                 detected_gres="gpu:$gpu_count"
@@ -598,25 +585,12 @@ EOF
                 debug_log "slurmd -C detected GRES '$detected_gres' on $c"
             fi
 
-            gpu_type=""
-            if [[ "$detected_gres" == gpu:*:* ]]; then
-                gpu_type="${detected_gres#gpu:}"
-                gpu_type="${gpu_type%:*}"
-            fi
-
             docker exec "$c" bash -c "
                 mkdir -p /etc/slurm
                 echo 'AutoDetect=nvidia' > /etc/slurm/gres.conf
-                for i in \$(seq 0 $(($gpu_count - 1))); do
-                    if [ -n '$gpu_type' ]; then
-                        echo \"NodeName=$node_hostname Name=gpu Type=$gpu_type File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
-                    else
-                        echo \"NodeName=$node_hostname Name=gpu File=/dev/nvidia\$i\" >> /etc/slurm/gres.conf
-                    fi
-                done
                 cat /etc/slurm/gres.conf
             " || {
-                error_log "Failed to rewrite typed gres.conf on $c"
+                error_log "Failed to write autodetect gres.conf on $c"
                 return 1
             }
 
