@@ -289,3 +289,34 @@ teardown_file() {
     kill -KILL "$pid"
     wait_for_no_pid "$pid"
 }
+
+# bats test_tags=restore
+@test "[$GPU_INFO] restore GPU process with deduplication enabled (mem throughput saxpy)" {
+    teardown_daemon
+
+    export CEDANA_DEDUP_ENABLED=1
+    setup_daemon
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" --  /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"
+
+    teardown_daemon
+    setup_daemom
+}
