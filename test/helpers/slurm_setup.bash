@@ -455,11 +455,18 @@ install_cedana_in_slurm() {
 
     debug_log "Copying cedana + criu binaries into containers..."
     local cedana_bin criu_bin
-    cedana_bin=$(command -v cedana 2>/dev/null) ||
-        {
-            error_log "cedana binary not found in PATH"
-            return 1
-        }
+    cedana_bin="${CEDANA_BIN:-}"
+    if [ -z "$cedana_bin" ]; then
+        cedana_bin=$(command -v cedana 2>/dev/null) ||
+            {
+                error_log "cedana binary not found in PATH"
+                return 1
+            }
+    fi
+    if [ ! -x "$cedana_bin" ]; then
+        error_log "cedana binary not executable at $cedana_bin"
+        return 1
+    fi
     criu_bin=$(command -v criu 2>/dev/null) ||
         {
             error_log "criu binary not found in PATH"
@@ -805,11 +812,12 @@ COMPUTE_EOF
             -e CEDANA_ADDRESS="/run/cedana.sock" \
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
+            -e CEDANA_BIN="${CEDANA_BIN:-/usr/local/bin/cedana}" \
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-            "$c" cedana --merge-config version ||
+            "$c" "$cedana_bin" --merge-config version ||
             {
                 error_log "cedana --merge-config failed on $c"
                 return 1
@@ -822,11 +830,12 @@ COMPUTE_EOF
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
             -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
+            -e CEDANA_BIN="${CEDANA_BIN:-/usr/local/bin/cedana}" \
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-            "$c" bash -c "/usr/local/bin/cedana daemon start \
+            "$c" bash -c "\"${CEDANA_BIN:-/usr/local/bin/cedana}\" daemon start \
                 >/var/log/cedana.log 2>&1"
     done
 
@@ -895,11 +904,12 @@ COMPUTE_EOF
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
             -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
+            -e CEDANA_BIN="${CEDANA_BIN:-/usr/local/bin/cedana}" \
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-            "$c" bash -c "/usr/local/bin/cedana daemon start \
+            "$c" bash -c "\"${CEDANA_BIN:-/usr/local/bin/cedana}\" daemon start \
                 >/var/log/cedana.log 2>&1"
     done
 

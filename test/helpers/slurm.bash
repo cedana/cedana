@@ -11,6 +11,7 @@ slurm_submit_job() {
     local sbatch_file="$1"
     local rel_path container_dir container_file
     local cedana_enable="${CEDANA_ENABLE:-1}"
+    local cedana_bin="${CEDANA_BIN:-/usr/local/bin/cedana}"
 
     rel_path="${sbatch_file#*/slurm/}"
     container_dir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
@@ -20,7 +21,7 @@ slurm_submit_job() {
     local output
     if ! output=$(slurm_exec bash -c \
         "cd '$container_dir' && sbatch --parsable --overcommit \
-         --export=ALL,CEDANA_ENABLE=${cedana_enable},PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+         --export=ALL,CEDANA_ENABLE=${cedana_enable},CEDANA_BIN=${cedana_bin} \
          --cpus-per-task=1 --mem=0 '$container_file'" 2>&1); then
         error_log "sbatch failed: $output"
         return 1
