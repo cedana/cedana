@@ -68,8 +68,7 @@ const (
 	MAX_SYNC_FAILURES = 2
 
 	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
-	PARALLEL_DUMP    = false // NOTE: Disabled since CED-1877 (allowing this requires some additional work)
-	PARALLEL_RESTORE = true
+	PARALLEL_DUMP = false // NOTE: Disabled since CED-1877 (allowing this requires some additional work)
 )
 
 type controller struct {
@@ -502,7 +501,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 		err := <-dumpErr // Ensure GPU dump has finished before unfreezing
 
-		if !opts.GetLeaveRunning() {
+		if !opts.GetLeaveRunning() && criuErr == nil {
 			return err
 		}
 
@@ -566,38 +565,42 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			profiling.AddTimingParallelComponent(ctx, copyMemTime, "CopyMemory")
 			profiling.AddTimingParallelComponent(ctx, replayCallsTime, "ReplayCalls")
 		}()
-		if PARALLEL_RESTORE {
-			return nil
-		}
-		return <-restoreErr
-	}
-
-	// Wait for GPU restore to finish before resuming the process
-	var restoredPid *int32
-	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
-		restoredPid = &pid
 		return nil
 	}
 
-	// Signal the process so it knowns it may have a new PID
-	// Only changes for containers - they restore with a different host PID
-	callback.PreResumeFunc = func(ctx context.Context) error {
-		err := syscall.Kill(int(*restoredPid), CONTROLLER_RESTORE_NEW_PID_SIGNAL)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to signal GPU process of new PID after restore")
-			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
-			// Because it can't run since the GPU restore failed.
-			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+	// Update GPU controller with the restore PID (which can be a new PID)
+	// This callback is only called in case of containers, so it allows us to
+	// call attach on GPU controller pretty eary.
+	var restoredPid *int32
+	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
+		controller := p.Get(id)
+		if controller == nil {
+			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
-		return err
+		restoredPid = &pid
+
+		return controller.Attach(ctx, uint32(pid))
 	}
 
-	callback.PostResumeFunc = func(ctx context.Context) error {
+	// Simply call attach again as for processes, the SetupNamespaces callback is not called
+	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
+		controller := p.Get(id)
+		if controller == nil {
+			return fmt.Errorf("GPU controller not found, is the process still running?")
+		}
+		restoredPid = &pid
+
+		return controller.Attach(ctx, uint32(pid))
+	}
+
+	callback.PreResumeFunc = func(ctx context.Context) error {
 		err := <-restoreErr
 		if err != nil {
 			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
 			// Because it can't run since the GPU restore failed.
-			syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+			if restoredPid != nil {
+				syscall.Kill(int(*restoredPid), syscall.SIGKILL)
+			}
 		}
 		return err
 	}
