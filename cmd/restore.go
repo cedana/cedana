@@ -14,6 +14,7 @@ import (
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
 	"github.com/cedana/cedana/internal/cedana"
+	"github.com/cedana/cedana/internal/restorenotify"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -63,6 +64,7 @@ func init() {
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.PersistentFlags().
 		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
+	addRestoreNotificationFlags(restoreCmd.PersistentFlags(), true)
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.OutFlag.Full,
@@ -197,25 +199,94 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
+		notifyCfg, err := restoreNotificationConfigFromFlags(cmd.Flags(), false)
+		if err != nil {
+			return err
+		}
+		if notifyCfg.RestorePath == "" {
+			notifyCfg.RestorePath = req.GetPath()
+		}
+		if notifyCfg.StorageProvider == "" {
+			notifyCfg.StorageProvider = restorenotify.StorageProviderFromPath(notifyCfg.RestorePath)
+		}
+		if notifyCfg.Enabled || notifyCfg.UploadProfiling || notifyCfg.ProfilingPath != "" {
+			if err := notifyCfg.Prepare(); err != nil {
+				return err
+			}
+		}
+
 		if noServer {
+			dispatcher := restorenotify.NewDispatcher(func(fn func()) { go fn() })
+			defer dispatcher.Close()
+
 			cedana, err := cedana.New(ctx, "restore")
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
+			dispatcher.SubmitPublish(ctx, notifyCfg, restorenotify.EventStart)
+
 			code, err := cedana.Restore(req)
+			data := cedana.Finalize()
 			if err != nil {
-				cedana.Finalize()
+				notifyCfg.ErrorMessage = err.Error()
+				dispatcher.Submit(func() {
+					asyncCfg := notifyCfg
+					if asyncCfg.UploadProfiling && data != nil {
+						objectPath, uploadErr := restorenotify.UploadProfilingJSON(context.WithoutCancel(ctx), asyncCfg.RestorePath, asyncCfg.RestoreUUID, data)
+						if uploadErr != nil {
+							asyncCfg.ProfilingError = uploadErr.Error()
+							restorenotify.LogPublishFailure(asyncCfg, restorenotify.EventError, uploadErr)
+						} else {
+							asyncCfg.ProfilingObject = objectPath
+						}
+					}
+					if asyncCfg.ProfilingPath != "" && data != nil {
+						if writeErr := restorenotify.WriteProfilingJSON(asyncCfg.ProfilingPath, data); writeErr != nil {
+							fmt.Println(style.WarningColors.Sprintf("failed to write restore profiling JSON: %v", writeErr))
+						}
+					}
+					if publishErr := publishRestoreEvent(context.WithoutCancel(ctx), asyncCfg, restorenotify.EventError); publishErr != nil {
+						restorenotify.LogPublishFailure(asyncCfg, restorenotify.EventError, publishErr)
+					}
+				})
 				return utils.GRPCErrorColored(err)
 			}
 
-			data := cedana.Finalize()
+			dispatcher.Submit(func() {
+				asyncCfg := notifyCfg
+				if asyncCfg.UploadProfiling && data != nil {
+					objectPath, uploadErr := restorenotify.UploadProfilingJSON(context.WithoutCancel(ctx), asyncCfg.RestorePath, asyncCfg.RestoreUUID, data)
+					if uploadErr != nil {
+						asyncCfg.ProfilingError = uploadErr.Error()
+						fmt.Println(style.WarningColors.Sprintf("failed to upload restore profiling JSON: %v", uploadErr))
+					} else {
+						asyncCfg.ProfilingObject = objectPath
+					}
+				}
+				if asyncCfg.ProfilingPath != "" && data != nil {
+					if writeErr := restorenotify.WriteProfilingJSON(asyncCfg.ProfilingPath, data); writeErr != nil {
+						fmt.Println(style.WarningColors.Sprintf("failed to write restore profiling JSON: %v", writeErr))
+					}
+				}
+				if publishErr := publishRestoreEvent(context.WithoutCancel(ctx), asyncCfg, restorenotify.EventSuccess); publishErr != nil {
+					restorenotify.LogPublishFailure(asyncCfg, restorenotify.EventSuccess, publishErr)
+				}
+			})
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}
 
 			os.Exit(<-code)
 		} else {
+			if notifyCfg.Enabled {
+				envEntry, err := restorenotify.EncodeEnv(notifyCfg)
+				if err != nil {
+					return err
+				}
+				req.Env = append(req.Env, envEntry)
+			}
+
 			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
 				return fmt.Errorf("invalids client in context")
@@ -228,6 +299,13 @@ var restoreCmd = &cobra.Command{
 				return err
 			}
 
+			if notifyCfg.ProfilingPath != "" && data != nil {
+				go func(path string, profilingData *profiling.Data) {
+					if writeErr := restorenotify.WriteProfilingJSON(path, profilingData); writeErr != nil {
+						fmt.Println(style.WarningColors.Sprintf("failed to write restore profiling JSON: %v", writeErr))
+					}
+				}(notifyCfg.ProfilingPath, data)
+			}
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}

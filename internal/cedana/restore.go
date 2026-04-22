@@ -15,6 +15,7 @@ import (
 	"github.com/cedana/cedana/internal/cedana/process"
 	"github.com/cedana/cedana/internal/cedana/streamer"
 	"github.com/cedana/cedana/internal/cedana/validation"
+	"github.com/cedana/cedana/internal/restorenotify"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -25,6 +26,12 @@ import (
 )
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
+	notifyCfg, env, err := restorenotify.DecodeEnv(req.Env)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	req.Env = env
+
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
@@ -63,11 +70,31 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		WG:       s.wg,
 	}
 	resp := &daemon.RestoreResp{}
+	dispatcher := restorenotify.NewDispatcher(func(fn func()) { s.wg.Go(fn) })
+	defer dispatcher.Close()
 
-	_, err := restore(ctx, opts, resp, req)
+	if notifyCfg != nil && notifyCfg.Enabled {
+		if notifyCfg.RestorePath == "" {
+			notifyCfg.RestorePath = req.GetPath()
+		}
+		if notifyCfg.StorageProvider == "" {
+			notifyCfg.StorageProvider = restorenotify.StorageProviderFromPath(notifyCfg.RestorePath)
+		}
+		dispatcher.SubmitPublish(ctx, *notifyCfg, restorenotify.EventStart)
+	}
+
+	_, err = restore(ctx, opts, resp, req)
 	if err != nil {
+		if notifyCfg != nil && notifyCfg.Enabled {
+			notifyCfg.ErrorMessage = err.Error()
+			dispatcher.SubmitPublish(ctx, *notifyCfg, restorenotify.EventError)
+		}
 		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
 		return nil, err
+	}
+
+	if notifyCfg != nil && notifyCfg.Enabled {
+		dispatcher.SubmitPublish(ctx, *notifyCfg, restorenotify.EventSuccess)
 	}
 
 	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("restore successful")

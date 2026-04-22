@@ -59,4 +59,27 @@ var (
 	ConfigDirFlag = Flag{Full: "config-dir"}
 	DBFlag        = Flag{Full: "db"}
 	ProfilingFlag = Flag{Full: "profiling"}
+
+	// Restore notifications
+	NotifyFlag             = Flag{Full: "notify"}
+	EventFlag              = Flag{Full: "event"}
+	RestoreIDFlag          = Flag{Full: "restore-id"}
+	NotificationNameFlag   = Flag{Full: "notification-name"}
+	RouterFlag             = Flag{Full: "router"}
+	RabbitMQURLFlag        = Flag{Full: "rabbitmq-url"}
+	ClusterIDFlag          = Flag{Full: "cluster-id"}
+	WorkloadTypeFlag       = Flag{Full: "workload-type"}
+	CheckpointIDFlag       = Flag{Full: "checkpoint-id"}
+	CheckpointActionIDFlag = Flag{Full: "checkpoint-action-id"}
+	ActionIDFlag           = Flag{Full: "action-id"}
+	ActionScopeFlag        = Flag{Full: "action-scope"}
+	PathIDFlag             = Flag{Full: "path-id"}
+	RestorePathFlag        = Flag{Full: "restore-path"}
+	StorageProviderFlag    = Flag{Full: "storage-provider"}
+	ErrorMessageFlag       = Flag{Full: "error-message"}
+	MetadataFlag           = Flag{Full: "metadata"}
+	RequestMetadataFlag    = Flag{Full: "request-metadata"}
+	RuntimeMetadataFlag    = Flag{Full: "runtime-metadata"}
+	ProfilingPathFlag      = Flag{Full: "profiling-path"}
+	UploadProfilingFlag    = Flag{Full: "upload-profiling"}
 )
