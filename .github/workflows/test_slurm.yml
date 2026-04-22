@@ -320,12 +320,35 @@ jobs:
             TAGS="${TAGS},!large"
           fi
 
+          set +e
           make test-slurm \
             TAGS=$TAGS \
             GPU=$GPU \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
             PARALLELISM=$PARALLELISM
+          test_exit_code=$?
+          set -e
+
+          if [ -f /tmp/report.xml ]; then
+            tests=$(grep -o '<testcase[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            failures=$(grep -o '<failure[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            errors=$(grep -o '<error[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            skipped=$(grep -o '<skipped[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            passed=$((tests - failures - errors - skipped))
+            if [ "$passed" -lt 0 ]; then
+              passed=0
+            fi
+            summary="SLURM tests: ${passed}/${tests} passed, ${failures} failed, ${errors} errored, ${skipped} skipped"
+            echo "$summary"
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "SLURM tests: report.xml not found"
+          fi
+
+          exit "$test_exit_code"
 
       - name: Collect SLURM debug logs
         if: always()
