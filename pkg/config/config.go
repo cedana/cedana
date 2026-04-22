@@ -57,6 +57,7 @@ const (
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
+	DEFAULT_CRIU_LOG_LEVEL      = 3
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
@@ -104,6 +105,7 @@ var Global Config = Config{
 		SkipNvidiaRuntimeHook: DEFAULT_GPU_SKIP_NVIDIA_RUNTIME_HOOK,
 	},
 	CRIU: CRIU{
+		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
 		LeaveRunning:  DEFAULT_CRIU_LEAVE_RUNNING,
 		ManageCgroups: DEFAULT_CRIU_MANAGE_CGROUPS,
 	},

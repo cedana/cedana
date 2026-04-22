@@ -1,7 +1,6 @@
 package gpu
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"fmt"
@@ -153,59 +152,28 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				}
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
 
-				// Find the checkpoint hostmem file by matching the hostmem name in metadata
-				// Checkpoint file format: size(8) + baseAddr(8) + segName(128) + data
-				expectedSegName := fmt.Sprintf("hostmem-%d", pid)
-				var hostMemSegSize uint64
-				found := false
+				var size uint64
 
-				// Try to find matching checkpoint file (workerIndex=0, contextIndex 0-9)
-				matches, err := afero.Glob(opts.DumpFs, "gpu-hostmem-*")
+				// Try to find matching hostmem metadata file
+				matches, err := afero.Glob(opts.DumpFs, "gpu-hostmem-metadata-*")
 				if err == nil {
 					for _, filename := range matches {
-						tempFile, openErr := opts.DumpFs.Open(filename)
+						file, openErr := opts.DumpFs.Open(filename)
 						if openErr != nil {
 							continue
 						}
 
-						// Read metadata: size(8) + baseAddr(8) + segName(128)
-						metadataBuffer := make([]byte, 144) // 8 + 8 + 128
-						_, readErr := tempFile.Read(metadataBuffer)
-						tempFile.Close()
+						sizeBuffer := make([]byte, 8)
+						_, readErr := file.Read(sizeBuffer)
+						file.Close()
 						if readErr != nil && readErr.Error() != "EOF" {
 							continue
 						}
 
-						// Extract segName from bytes 16-144
-						segNameBytes := metadataBuffer[16:144]
-						// Find null terminator
-						before, _, ok := bytes.Cut(segNameBytes, []byte{0})
-						var segName string
-						if ok {
-							segName = string(before)
-						} else {
-							segName = string(segNameBytes)
-						}
-
-						// strip the leading `/`
-						segName = strings.TrimSpace(segName)
-						segName = strings.TrimPrefix(segName, "/")
-
-						log.Debug().Str("file", filename).Str("segName", segName).Str("expected", expectedSegName).Msg("checking hostmem checkpoint file")
-
-						if segName == expectedSegName {
-							// Found the right file, extract size from first 8 bytes
-							hostMemSegSize = binary.LittleEndian.Uint64(metadataBuffer[0:8])
-							found = true
-							log.Debug().Str("file", filename).Str("segName", segName).Uint64("size", hostMemSegSize).Msg("found matching hostmem checkpoint file")
-							break
-						}
+						size = binary.LittleEndian.Uint64(sizeBuffer[0:8])
+						log.Debug().Str("file", filename).Uint64("size", size).Msg("found matching hostmem checkpoint file")
+						break
 					}
-				}
-
-				if !found {
-					err = status.Errorf(codes.Internal, "failed to find checkpoint hostmem file for %s (expected segName: %s)", path, expectedSegName)
-					return false
 				}
 
 				// Create hostmem file in host path (not using inherit FD)
@@ -214,25 +182,22 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
 					return false
 				}
-
 				defer hostmemFile.Close()
 
 				chmodErr := os.Chmod(newPath, 0o666)
 				if chmodErr != nil {
-					hostmemFile.Close()
 					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, chmodErr)
 					return false
 				}
 
 				// Truncate to the correct size
-				if hostMemSegSize > 0 {
-					truncErr := hostmemFile.Truncate(int64(hostMemSegSize))
+				if size > 0 {
+					truncErr := hostmemFile.Truncate(int64(size))
 					if truncErr != nil {
-						hostmemFile.Close()
-						err = status.Errorf(codes.Internal, "failed to truncate hostmem file %s to size %d: %v", newPath, hostMemSegSize, truncErr)
+						err = status.Errorf(codes.Internal, "failed to truncate hostmem file %s to size %d: %v", newPath, size, truncErr)
 						return false
 					}
-					log.Debug().Str("path", newPath).Uint64("size", hostMemSegSize).Msg("created and truncated hostmem file in host path")
+					log.Debug().Str("path", newPath).Uint64("size", size).Msg("created and truncated hostmem file in host path")
 				} else {
 					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
 				}
