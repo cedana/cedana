@@ -123,6 +123,30 @@ echo "Detected containerd config version $CONTAINERD_VERSION"
 
 CONFD_DIR="/etc/containerd/conf.d"
 
+# Check if the node is a part of rke2 cluster
+if [ -d "/var/lib/rancher/rke2" ]; then
+    RKE2_CONFIG="/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"
+    echo "Configuring rke2 config.toml.tmpl $RKE2_CONFIG"
+
+    sudo mkdir -p "$(dirname "$RKE2_CONFIG")"
+
+    if [ ! -f "$RKE2_CONFIG" ]; then
+        cat <<EOF | sudo tee "$RKE2_CONFIG" >/dev/null
+{{ template "base" . }}
+EOF
+    fi
+
+    # only append if not already present
+    if ! grep -q 'runtimes."cedana"' "$RKE2_CONFIG"; then
+        cat <<'EOF' | sudo tee -a "$FILE" >/dev/null
+
+[plugins."io.containerd.cri.v1.runtime".containerd.runtimes."cedana"]
+  runtime_type = "io.containerd.runc.v2"
+  runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+EOF
+    fi
+fi
+
 if [ "$CONTAINERD_VERSION" = "2" ]; then
     # Version 2: Copy last conf.d file (excluding 999-cedana.toml) if exists, then add config
     # This is because merging multiple runtimes in version 2 is problematic

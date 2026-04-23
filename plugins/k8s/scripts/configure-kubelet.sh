@@ -132,6 +132,8 @@ if command -v systemctl >/dev/null 2>&1; then
     echo "Attempting to restart kubelet via systemctl..."
     if systemctl restart kubelet; then
         success_method="systemctl"
+    elif systemctl restart rke2-server; then
+        success_method="systemctl: rke2-server restart"
     else
         echo "systemctl restart failed, trying service and snap"
     fi
