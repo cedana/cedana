@@ -127,6 +127,14 @@ echo \
 apt update && apt install -y docker-ce-cli
 EOT
 
+# Install ansible (for SLURM cluster provisioning)
+RUN <<EOT
+set -eux
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ansible python3-docker
+ansible-galaxy collection install community.docker
+EOT
+
 # Configure containerd
 RUN <<'EOT'
 mkdir -p /etc/containerd

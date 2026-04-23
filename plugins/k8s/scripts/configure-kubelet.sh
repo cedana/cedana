@@ -13,19 +13,24 @@ check_tool() {
     command -v "$1" >/dev/null 2>&1
 }
 
+echo "Checking required tools..."
+
 if ! check_tool "jq"; then
     echo "Error: 'jq' is not installed. Please install 'jq' to update JSON kubelet configurations." >&2
     exit 1
 fi
+echo "jq found at: $(command -v jq) ($(jq --version))"
 
 if ! check_tool "yq"; then
     echo "Error: 'yq' is not installed. Please install 'yq' to update YAML kubelet configurations." >&2
     echo "You can install it from https://github.com/mikefarah/yq#install" >&2
     exit 1
 fi
+echo "yq found at: $(command -v yq) ($(yq --version))"
 
 # Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
+echo "Target runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT"
 
 # The content to be added/updated in the kubelet configuration
 KUBELET_CONFIG_CONTENT_JSON=$(
@@ -65,18 +70,21 @@ get_kubelet_arg_value() {
     done
 }
 
+echo "Looking for running kubelet process..."
 KUBELET_PID=$(pidof kubelet || true)
 if [ -z "$KUBELET_PID" ]; then
-    echo "kubelet is not running" >&2
+    echo "Error: kubelet is not running" >&2
     exit 1
 fi
+echo "Found kubelet process (PID=$KUBELET_PID)"
 
-# Capture full kubelet args as a string
+echo "Reading kubelet arguments..."
 KUBELET_ARGS=$(ps -o args= -p "$KUBELET_PID")
 if [ -z "$KUBELET_ARGS" ]; then
     echo "WARNING: Could not get kubelet arguments, please manually modify request timeout" >&2
     exit 0
 fi
+echo "Raw kubelet args: $KUBELET_ARGS"
 
 # Split into proper positional parameters (preserves quoted arguments)
 eval "set -- $KUBELET_ARGS"
@@ -84,37 +92,56 @@ eval "set -- $KUBELET_ARGS"
 KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$@")
 KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$@")
 
+echo "Resolved --config-dir: ${KUBELET_CONFIG_DIR:-<not set>}"
+echo "Resolved --config:     ${KUBELET_CONFIG_FILE:-<not set>}"
+
 if [ -n "$KUBELET_CONFIG_DIR" ]; then
-    echo "Found --config-dir: $KUBELET_CONFIG_DIR"
+    TARGET="$KUBELET_CONFIG_DIR/99-cedana.conf"
+    echo "Strategy: drop-in config dir, writing to $TARGET"
+
+    echo "Ensuring config dir exists: $KUBELET_CONFIG_DIR"
     mkdir -p "$KUBELET_CONFIG_DIR" || {
-        echo "Failed to create config dir"
+        echo "Error: Failed to create config dir: $KUBELET_CONFIG_DIR" >&2
         exit 1
     }
-    echo "$KUBELET_CONFIG_CONTENT_JSON" >"$KUBELET_CONFIG_DIR/99-cedana.conf"
-    cat "$KUBELET_CONFIG_DIR/99-cedana.conf"
-    echo "Wrote config to $KUBELET_CONFIG_DIR/99-cedana.conf"
+
+    echo "$KUBELET_CONFIG_CONTENT_JSON" >"$TARGET"
+    echo "Wrote config to $TARGET:"
+    cat "$TARGET"
 
 elif [ -n "$KUBELET_CONFIG_FILE" ]; then
-    echo "Found --config: $KUBELET_CONFIG_FILE"
+    echo "Strategy: merge into existing config file at $KUBELET_CONFIG_FILE"
+
+    if [ ! -f "$KUBELET_CONFIG_FILE" ]; then
+        echo "Error: Kubelet config file not found: $KUBELET_CONFIG_FILE" >&2
+        exit 1
+    fi
+
     FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
+    echo "Detected config file extension: .$FILE_EXTENSION"
     TEMP_CONFIG=$(mktemp)
+    echo "Created temp file for merge: $TEMP_CONFIG"
 
     if [ "$FILE_EXTENSION" == "json" ]; then
-        # Merge JSON content safely
+        echo "Merging JSON config..."
         jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"
+        echo "JSON merge complete"
 
     elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
-        # Merge YAML content safely (yq v4+)
+        echo "Merging YAML config..."
         yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' \
             "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_YAML") >"$TEMP_CONFIG"
+        echo "YAML merge complete"
+
     else
-        echo "WARNING: Unsupported kubelet configuration file type: $FILE_EXTENSION, skipping kubelet config update" >&2
+        echo "WARNING: Unsupported kubelet configuration file type: .$FILE_EXTENSION, skipping kubelet config update" >&2
+        rm -f "$TEMP_CONFIG"
         exit 0
     fi
 
-    # Overwrite the original file with the updated content
+    echo "Moving merged config to $KUBELET_CONFIG_FILE..."
     mv "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE" || {
-        echo "Failed to update kubelet config"
+        echo "Error: Failed to update kubelet config at $KUBELET_CONFIG_FILE" >&2
         exit 0
     }
 
@@ -126,40 +153,45 @@ else
 fi
 
 # Restart kubelet to apply changes
+echo "Attempting to restart kubelet to apply changes..."
 success_method=""
 
 if command -v systemctl >/dev/null 2>&1; then
-    echo "Attempting to restart kubelet via systemctl..."
+    echo "systemctl is available, trying: systemctl restart kubelet"
     if systemctl restart kubelet; then
         success_method="systemctl"
+        echo "kubelet restarted successfully via systemctl"
     elif systemctl restart rke2-server; then
         success_method="systemctl: rke2-server restart"
+        echo "rke2-server restarted successfully via systemctl"
     else
-        echo "systemctl restart failed, trying service and snap"
+        echo "WARNING: systemctl restart kubelet failed" >&2
     fi
 fi
 
 if [ -z "$success_method" ] && command -v service >/dev/null 2>&1; then
-    echo "Attempting to restart kubelet via service..."
+    echo "service is available, trying: service kubelet restart"
     if service kubelet restart; then
         success_method="service"
+        echo "kubelet restarted successfully via service"
     else
-        echo "service restart failed, trying snap"
+        echo "WARNING: service kubelet restart failed" >&2
     fi
 fi
 
 if [ -z "$success_method" ] && command -v snap >/dev/null 2>&1; then
-    echo "Attempting to restart kubelet via snap..."
+    echo "snap is available, trying: snap restart kubelet-eks"
     if snap restart kubelet-eks; then
         success_method="snap"
+        echo "kubelet restarted successfully via snap"
     else
-        echo "snap restart failed, moving on"
+        echo "WARNING: snap restart kubelet-eks failed" >&2
     fi
 fi
 
 if [ -z "$success_method" ]; then
     echo "ERROR: Could not restart kubelet via systemctl, service, or snap; please restart manually" >&2
     exit 1
-else
-    echo "Restart attempts finished; kubelet successfully restarted via $success_method"
 fi
+
+echo "Done. kubelet configuration update complete (restarted via $success_method)"
