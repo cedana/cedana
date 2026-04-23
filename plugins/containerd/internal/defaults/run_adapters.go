@@ -12,12 +12,12 @@ import (
 )
 
 const (
-	DEFAULT_NAMESPACE   = "default"
+	DEFAULT_NAMESPACE   = "k8s.io"
 	DEFAULT_SNAPSHOTTER = "overlayfs"
 )
 
 var (
-	DEFAULT_ADDRESS  = utils.Getenv(os.Environ(), "CONTAINERD_ADDRESS", "/run/containerd/containerd.sock")
+	DEFAULT_ADDRESS  = utils.Getenv(os.Environ(), "CONTAINERD_ADDRESS", "/run/k3s/containerd/containerd.sock")
 	BASE_RUNTIME_DIR = filepath.Dir(DEFAULT_ADDRESS)
 )
 
