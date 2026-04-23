@@ -60,7 +60,7 @@ jobs:
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
-      slurm_version: feat/fix-slurm-errs
+      slurm_version: main
 
   publish:
     name: Publish
