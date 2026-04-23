@@ -166,7 +166,7 @@ if command -v systemctl >/dev/null 2>&1; then
         if [ -d "/var/lib/rancher/rke2" ]; then
             echo "kubelet systemctl restart failed, attempting rke2-server restart"
 
-            LOCK_FILE="/host/tmp/rke2-restarted"
+            LOCK_FILE="/tmp/rke2-restarted"
             # lock check (prevents restart loop)
             if [ -f "$LOCK_FILE" ]; then
                 echo "RKE2 restart already triggered. Skipping."
