@@ -54,36 +54,13 @@ jobs:
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
-      slurm_version: main
+      slurm_version: feat/fix-checkpoint
 
-  publish:
-    name: Publish
-    uses: ./.github/workflows/publish.yml
-    needs: build
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      cloudsmith: true
-      cloudsmith_repo: cedana-alpha
-      dockerhub: true
-      post_summary: false
-
-  test:
-    name: Test
-    uses: ./.github/workflows/test.yml
-    needs: [publish, download]
+  test_slurm:
+    name: Test SLURM
+    uses: ./.github/workflows/test_slurm.yml
+    needs: [build, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-
-  bench:
-    name: Bench
-    uses: ./.github/workflows/bench.yml
-    needs: [publish, download]
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
-      samples: 2
-      push_results: true
-      results_dataset: cedana_alpha
-      post_summary_pr: false
+      post_summary: false
