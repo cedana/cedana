@@ -1,12 +1,12 @@
 package utils
 
 import (
-	"path/filepath"
+	//"path/filepath"
 	"regexp"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
-	"github.com/cedana/cedana/plugins/containerd/internal/defaults"
+	// "github.com/cedana/cedana/plugins/containerd/internal/defaults"
 )
 
 const RUNTIME_PATTERN = "io.containerd.(.*).v[0-9]+"
@@ -24,7 +24,7 @@ func PluginForRuntime(runtime string) string {
 // Get the root runtime directory for the plugin in namespace (e.g. runc)
 // E.g. /run/containerd/runc/default
 func RootFromPlugin(plugin, namespace string) string {
-	return filepath.Join(defaults.BASE_RUNTIME_DIR, plugin, namespace)
+	return "/run/containerd/runc/k8s.io"
 }
 
 // Get the root runtime directory for the runtime in namespace (e.g. io.containerd.runc.v2)
