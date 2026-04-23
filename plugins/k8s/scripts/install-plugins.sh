@@ -187,7 +187,7 @@ EOF
 
     # only append if not already present
     if ! grep -q 'runtimes."cedana"' "$RKE2_CONFIG"; then
-        cat <<'EOF' | sudo tee -a "$FILE" >/dev/null
+        cat <<'EOF' | sudo tee -a "$RKE2_CONFIG" >/dev/null
 
 [plugins."io.containerd.cri.v1.runtime".containerd.runtimes."cedana"]
   runtime_type = "io.containerd.runc.v2"
