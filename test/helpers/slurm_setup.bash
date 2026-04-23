@@ -475,13 +475,21 @@ install_cedana_in_slurm() {
 
     for c in "${all_containers[@]}"; do
         docker cp "$cedana_bin" "${c}:/usr/local/bin/cedana" &&
-            docker exec "$c" chmod +x /usr/local/bin/cedana ||
+            docker exec "$c" bash -c '
+                set -euo pipefail
+                chmod +x /usr/local/bin/cedana
+                setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana
+            ' ||
             {
                 error_log "Failed to install cedana binary in $c"
                 return 1
             }
         docker cp "$criu_bin" "${c}:/usr/local/bin/criu" &&
-            docker exec "$c" chmod +x /usr/local/bin/criu ||
+            docker exec "$c" bash -c '
+                set -euo pipefail
+                chmod +x /usr/local/bin/criu
+                setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/criu
+            ' ||
             {
                 error_log "Failed to install criu binary in $c"
                 return 1
@@ -516,6 +524,9 @@ install_cedana_in_slurm() {
                 chmod +x /usr/local/bin/cedana-slurm
                 install -m 0755 /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm
                 install -m 0755 /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm
+                setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm
+                setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm
+                setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/sbin/cedana-slurm
             ' ||
             {
                 error_log "Failed to install cedana-slurm in $c"
@@ -1000,6 +1011,9 @@ start_cedana_slurm_daemon() {
             test -x /usr/local/bin/cedana-slurm
             install -m 0755 /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm
             install -m 0755 /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm
+            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm
+            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm
+            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/sbin/cedana-slurm
             test -x /usr/bin/cedana-slurm
             test -x /usr/sbin/cedana-slurm
         ' ||

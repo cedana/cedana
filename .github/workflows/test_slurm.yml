@@ -161,10 +161,17 @@ jobs:
           GPU: ${{ matrix.compute == 'GPU' && 'true' || 'false' }}
           CEDANA_PLUGINS_BUILDS: alpha
         run: |
+          if ! command -v setcap >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libcap2-bin
+          fi
           chmod +x ./cedana*
           chmod +x ./criu
           echo "$PWD" >> $GITHUB_PATH
           sudo cp ./cedana /usr/local/bin/cedana
+          sudo cp ./criu /usr/local/bin/criu
+          sudo setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana
+          sudo setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/criu
           sudo -E cedana plugin install \
             criu \
             runc \
@@ -178,6 +185,7 @@ jobs:
         run: |
           chmod +x slurm-bin/build/cedana-slurm
           sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
+          sudo setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm
           sudo cp slurm-bin/build/libslurm-cedana.so /usr/local/lib/libslurm-cedana.so
           sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
           sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
