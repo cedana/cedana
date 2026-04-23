@@ -1,0 +1,518 @@
+name: Test
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        description: "The branch, tag, or SHA to run on"
+        required: false
+        default: ""
+      debug:
+        type: boolean
+        description: "Run with debugging enabled"
+        required: false
+        default: false
+      large:
+        type: boolean
+        description: "Run large tests"
+        required: false
+        default: false
+      runner:
+        type: string
+        description: "Runner machine for CPU tests"
+        required: false
+        default: 2cpu
+      runner_gpu:
+        type: string
+        description: "Runner machine for GPU tests"
+        required: false
+        default: 4cpu-16g-1xT4
+      parallelism:
+        type: number
+        description: "Parallelism for running tests"
+        required: false
+        default: 1
+      post_summary:
+        type: boolean
+        description: "Post test summary"
+        required: false
+        default: false
+
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  CEDANA_LOG_LEVEL: debug
+  CEDANA_PROFILING_ENABLED: true
+  CEDANA_METRICS_ENABLED: true
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  FORMATTER: junit
+  TERM: dumb
+  RETRIES: 1
+  DEBUG: ${{ vars.DEBUG_SLURM }}
+
+jobs:
+  slurm:
+    name: Slurm
+    runs-on: ${{ format(
+      'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}/extras=s3-cache',
+      github.run_id,
+      matrix.compute == 'GPU' && inputs.runner_gpu || inputs.runner,
+      matrix.arch,
+      (matrix.compute == 'GPU' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
+      matrix.storage
+      ) }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        compute:
+          - CPU
+          - GPU
+        storage:
+          - storage/cedana
+        arch:
+          - amd64
+        exclude:
+          - compute: GPU
+            arch: arm64
+    container:
+      image: ${{ matrix.compute == 'GPU' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init ${{ matrix.compute == 'GPU' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
+    steps:
+      - uses: runs-on/action@v1
+
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana-${{ matrix.arch }}
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: plugin-${{ matrix.arch }}*
+          merge-multiple: true
+
+      - name: Download CRIU
+        uses: actions/download-artifact@v4
+        with:
+          name: criu-${{ matrix.arch }}
+
+      - name: Download slurm binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: slurm-${{ matrix.arch }}
+          path: slurm-bin
+
+      - name: Extract cedana-slurm
+        run: mv slurm-bin/cedana-slurm cedana-slurm
+
+      - name: Verify slurm binary provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          test -f slurm-bin/build/cedana-slurm
+
+          if [ ! -f slurm-bin/slurm-version.txt ]; then
+            echo "slurm-version.txt missing from slurm artifact" >&2
+            exit 1
+          fi
+
+          echo "slurm-version: $(cat slurm-bin/slurm-version.txt)"
+          if [ -f slurm-bin/slurm-artifact-origin.txt ]; then
+            echo "slurm-artifact-origin:"
+            cat slurm-bin/slurm-artifact-origin.txt
+          fi
+          echo "cedana-slurm md5:"
+          md5sum slurm-bin/build/cedana-slurm
+
+      - name: Download GPU plugin
+        if: ${{ matrix.compute == 'GPU' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu-${{ matrix.arch }}
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Pre-install plugins
+        env:
+          GPU: ${{ matrix.compute == 'GPU' && 'true' || 'false' }}
+          CEDANA_PLUGINS_BUILDS: alpha
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+          sudo cp ./cedana /usr/local/bin/cedana
+          sudo -E cedana plugin install \
+            criu \
+            runc \
+            storage/cedana \
+            storage/s3
+          if [ "$GPU" = "true" ]; then
+            sudo -E cedana plugin install gpu
+          fi
+
+      - name: Install slurm binaries
+        run: |
+          chmod +x slurm-bin/build/cedana-slurm
+          sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
+          sudo cp slurm-bin/build/libslurm-cedana.so /usr/local/lib/libslurm-cedana.so
+          sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
+          sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
+          sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
+          test -f ./libcedana-slurm.so
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana slurm setup
+
+      - name: Capture preflight binary metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PRE_FILE="./slurm-bin/slurm-version.txt"
+          SLURM_VERSION_VALUE=""
+
+          if [ -f "$PRE_FILE" ]; then
+            SLURM_VERSION_VALUE="$(head -n 1 "$PRE_FILE" || true)"
+          fi
+
+          touch "$PRE_FILE"
+
+          {
+            echo
+            echo "=== preflight-binary-metadata ==="
+            echo "timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "run_id=${{ github.run_id }}"
+            echo "run_attempt=${{ github.run_attempt }}"
+            echo "matrix_arch=${{ matrix.arch }}"
+            echo "matrix_compute=${{ matrix.compute }}"
+            echo "matrix_storage=${{ matrix.storage }}"
+            [ -f ./cedana-version.txt ] && echo "cedana_version_file=$(cat ./cedana-version.txt)"
+            [ -f ./plugin-version.txt ] && echo "plugin_version_file=$(cat ./plugin-version.txt)"
+            [ -n "$SLURM_VERSION_VALUE" ] && echo "slurm_version_file=$SLURM_VERSION_VALUE"
+            if [ -f ./slurm-bin/slurm-artifact-origin.txt ]; then
+              tr '\n' ' ' < ./slurm-bin/slurm-artifact-origin.txt | sed 's/ $//' | sed 's/^/slurm_artifact_origin=/'
+            fi
+
+            for f in \
+              /usr/local/bin/cedana \
+              /usr/local/bin/cedana-slurm \
+              /usr/local/lib/libcedana-storage-cedana.so \
+              /usr/local/lib/libcedana-storage-s3.so \
+              /usr/local/lib/libcedana-runc.so \
+              /usr/local/lib/libcedana-slurm.so
+            do
+              [ -f "$f" ] || continue
+              echo "=== $f ==="
+              ls -l "$f" || true
+              sha256sum "$f" || true
+              if command -v go >/dev/null 2>&1; then
+                go version -m "$f" || true
+              fi
+            done
+          } >>"$PRE_FILE" 2>&1
+
+      - name: Install ansible and Docker CLI
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            docker.io ansible python3-docker
+          ansible-galaxy collection install community.docker 2>/dev/null || true
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup SLURM cluster
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          CEDANA_PLUGINS_BUILDS: alpha
+          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+
+          setup_slurm_cluster
+          setup_slurm_accounting
+          install_cedana_in_slurm
+
+      - name: Setup SLURM samples
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          setup_slurm_samples
+
+      - name: Register SLURM cluster and start daemon
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          source test/helpers/slurm_propagator.bash
+
+          CLUSTER_NAME="test-slurm-$(date +%s%N)"
+          SLURM_CLUSTER_ID=$(register_slurm_cluster "$CLUSTER_NAME")
+          echo "SLURM_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
+          echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+
+          start_cedana_slurm_daemon
+          validate_slurm_propagator
+
+      - name: Run SLURM tests
+        env:
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+          LARGE: ${{ inputs.large && '1' || '0' }}
+          PARALLELISM: ${{ matrix.compute == 'GPU' && 1 || inputs.parallelism }}
+        run: |
+          TAGS="slurm"
+          if [ "$GPU" = "1" ]; then
+            TAGS="${TAGS},gpu"
+          else
+            TAGS="${TAGS},!gpu"
+          fi
+          if [ "$LARGE" = "0" ]; then
+            TAGS="${TAGS},!large"
+          fi
+
+          set +e
+          make test-slurm \
+            TAGS=$TAGS \
+            GPU=$GPU \
+            FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=$PARALLELISM
+          test_exit_code=$?
+          set -e
+
+          if [ -f /tmp/report.xml ]; then
+            tests=$(grep -o '<testcase[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            failures=$(grep -o '<failure[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            errors=$(grep -o '<error[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            skipped=$(grep -o '<skipped[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            passed=$((tests - failures - errors - skipped))
+            if [ "$passed" -lt 0 ]; then
+              passed=0
+            fi
+            summary="SLURM tests: ${passed}/${tests} passed, ${failures} failed, ${errors} errored, ${skipped} skipped"
+            echo "$summary"
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "SLURM tests: report.xml not found"
+          fi
+
+          exit "$test_exit_code"
+
+      - name: Collect SLURM debug logs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARTIFACT_DIR="/tmp/slurm-debug"
+          SAMPLE_ROOT="/data/cedana-samples/slurm/${{ matrix.compute == 'GPU' && 'gpu' || 'cpu' }}"
+          mkdir -p "$ARTIFACT_DIR"
+
+          {
+            echo "timestamp_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "run_id=${{ github.run_id }}"
+            echo "run_attempt=${{ github.run_attempt }}"
+            echo "job=${{ github.job }}"
+            echo "matrix_arch=${{ matrix.arch }}"
+            echo "matrix_compute=${{ matrix.compute }}"
+            echo "matrix_storage=${{ matrix.storage }}"
+            echo "sample_root=$SAMPLE_ROOT"
+          } >"$ARTIFACT_DIR/context.txt"
+
+          if [ -f ./slurm-bin/slurm-version.txt ]; then
+            {
+              echo
+              echo "=== slurm-version-and-preflight ==="
+              cat ./slurm-bin/slurm-version.txt
+            } >>"$ARTIFACT_DIR/context.txt"
+          fi
+
+          if [ -d /tmp/slurm-runtime-debug ]; then
+            mkdir -p "$ARTIFACT_DIR/runtime-debug"
+            cp -a /tmp/slurm-runtime-debug/. "$ARTIFACT_DIR/runtime-debug/" 2>/dev/null || true
+          fi
+
+          docker ps -a >"$ARTIFACT_DIR/docker-ps-a.txt" 2>&1 || true
+          docker network ls >"$ARTIFACT_DIR/docker-network-ls.txt" 2>&1 || true
+
+          mapfile -t SLURM_CONTAINERS < <(docker ps -a --format '{{.Names}}' | grep -E '^slurm-(controller|compute-[0-9]+)$' || true)
+
+          if [ "${#SLURM_CONTAINERS[@]}" -eq 0 ]; then
+            echo "No slurm containers found" >"$ARTIFACT_DIR/no-slurm-containers.txt"
+          fi
+
+          for c in "${SLURM_CONTAINERS[@]}"; do
+            cdir="$ARTIFACT_DIR/$c"
+            mkdir -p "$cdir"
+
+            docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
+            docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
+            docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
+            docker exec "$c" sh -c 'for p in $(pgrep -f "cedana-slurm monitor" 2>/dev/null || true); do echo "=== monitor pid=$p ==="; tr "\000" "\n" </proc/$p/environ 2>/dev/null | sort; done' >"$cdir/monitor-environ.txt" 2>&1 || true
+            docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
+            docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
+            docker exec "$c" sh -c 'echo "=== /usr/local/lib plugins ==="; ls -la /usr/local/lib/libcedana-*.so 2>/dev/null || true; echo "=== CEDANA_* env ==="; env | sort | grep "^CEDANA_" || true' >"$cdir/plugin-inventory.txt" 2>&1 || true
+
+            for f in \
+              /var/log/cedana.log \
+              /var/log/cedana-slurm.log \
+              /var/log/cedana-slurm-monitor.log \
+              /var/log/slurm/slurmctld.log \
+              /var/log/slurm/slurmd.log \
+              /var/log/slurm/slurmdbd.log \
+              /etc/slurm/slurm.conf \
+              /etc/slurm/gres.conf \
+              /var/log/munge/munged.log
+            do
+              if docker exec "$c" test -f "$f" 2>/dev/null; then
+                docker cp "$c:$f" "$cdir/$(basename "$f")" 2>/dev/null || \
+                  docker exec "$c" sh -c "cat '$f'" >"$cdir/$(basename "$f")" 2>&1 || true
+              fi
+            done
+
+            if [ "${{ matrix.compute }}" = "GPU" ]; then
+              docker exec "$c" sh -c 'echo "=== nvidia-smi -L ==="; nvidia-smi -L 2>&1 || true; echo "=== /dev/nvidia* ==="; ls -la /dev/nvidia* 2>&1 || true; echo "=== /etc/slurm/gres.conf ==="; cat /etc/slurm/gres.conf 2>&1 || true; echo "=== /etc/slurm/slurm.conf (GPU lines) ==="; grep -E "^(NodeName|GresTypes|DebugFlags)" /etc/slurm/slurm.conf 2>&1 || true; echo "=== slurmd -C ==="; /usr/sbin/slurmd -C 2>&1 || true; echo "=== slurmd -G ==="; /usr/sbin/slurmd -G 2>&1 || true' >"$cdir/gpu-diagnostics.txt" 2>&1 || true
+            fi
+
+            docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
+            docker exec "$c" sh -c 'sample_root="$0"; if [ -d "$sample_root" ]; then find "$sample_root" -maxdepth 3 -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true; fi' "$SAMPLE_ROOT" >"$cdir/slurm-output-files.txt" 2>&1 || true
+
+            while IFS= read -r job_out; do
+              [ -z "$job_out" ] && continue
+              out_name="$(echo "$job_out" | sed 's#^/##; s#/#_#g')"
+              docker exec "$c" sh -c "cat '$job_out'" >"$cdir/${out_name}.txt" 2>&1 || true
+            done <"$cdir/slurm-output-files.txt"
+          done
+
+      - name: Setup node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate report
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report.xml" -t bats -o /tmp/report.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, ${{ matrix.arch }})"
+
+      - name: Set sanitized storage
+        if: always()
+        env:
+          STORAGE: ${{ matrix.storage }}
+        run: |
+          STORAGE=$(echo $STORAGE | sed 's/\//-/g')
+          echo "STORAGE=$STORAGE" >> $GITHUB_ENV
+
+      - name: Upload report
+        if: always()
+        id: upload-report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-${{ matrix.arch }}-slurm-${{ env.STORAGE }}-${{ matrix.compute }}
+          path: |
+            /tmp/report*.json
+
+      - name: Upload SLURM debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slurm-debug-logs-${{ matrix.arch }}-${{ env.STORAGE }}-${{ matrix.compute }}
+          path: |
+            /tmp/slurm-debug/**
+          if-no-files-found: warn
+
+  post-summary:
+    name: Post Summary
+    if: inputs.post_summary && always()
+    needs: slurm
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
+    steps:
+      - name: Download report
+        id: download-report
+        uses: actions/download-artifact@v4
+        with:
+          pattern: test-report-${{ matrix.arch }}-slurm*
+          path: report
+
+      - name: Post report
+        uses: ctrf-io/github-test-reporter@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          report-path: report/**/*.json
+          github-report: true
+          failed-folded-report: true
+          summary: true
+          pull-request: true
+          title: Slurm (${{ matrix.arch }})
+          update-comment: true
+          overwrite-comment: true
+          comment-tag: test-report-slurm-${{ matrix.arch }}
+          group-by: "suite"
+          always-group-by: true
+          upload-artifact: true
+          artifact-name: ctrf-report-slurm-${{ matrix.arch }}
