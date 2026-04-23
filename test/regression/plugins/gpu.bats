@@ -294,7 +294,7 @@ teardown_file() {
 @test "[$GPU_INFO] restore GPU process with deduplication enabled (mem throughput saxpy)" {
     teardown_daemon
 
-    export CEDANA_DEDUP_ENABLED=1
+    export CEDANA_GPU_DEDUP_ENABLED=1
     setup_daemon
     jid=$(unix_nano)
 
