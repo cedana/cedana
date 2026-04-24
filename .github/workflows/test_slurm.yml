@@ -124,28 +124,61 @@ jobs:
           name: slurm-${{ matrix.arch }}
           path: slurm-bin
 
+      - name: Resolve slurm artifact paths
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          binary_path="$(find slurm-bin -type f -path '*/build/cedana-slurm' -print -quit)"
+          if [ -z "$binary_path" ]; then
+            echo "failed to locate build/cedana-slurm under slurm-bin" >&2
+            find slurm-bin -maxdepth 4 -print >&2 || true
+            exit 1
+          fi
+
+          artifact_root="$(cd "$(dirname "$binary_path")/.." && pwd)"
+          if [ "$(basename "$artifact_root")" = "cedana-slurm" ]; then
+            cedana_dir="$artifact_root"
+          else
+            cedana_dir="$(find "$artifact_root" -mindepth 1 -maxdepth 2 -type d -name cedana-slurm -print -quit)"
+          fi
+          version_file="$(find "$artifact_root" -maxdepth 2 -type f -name slurm-version.txt -print -quit)"
+          origin_file="$(find "$artifact_root" -maxdepth 2 -type f -name slurm-artifact-origin.txt -print -quit)"
+
+          if [ -z "$cedana_dir" ]; then
+            echo "failed to locate cedana-slurm directory under $artifact_root" >&2
+            find "$artifact_root" -maxdepth 4 -print >&2 || true
+            exit 1
+          fi
+
+          echo "SLURM_ARTIFACT_ROOT=$artifact_root" >> "$GITHUB_ENV"
+          echo "SLURM_BINARY_PATH=$binary_path" >> "$GITHUB_ENV"
+          echo "SLURM_ARTIFACT_CEDANA_DIR=$cedana_dir" >> "$GITHUB_ENV"
+          [ -n "$version_file" ] && echo "SLURM_VERSION_FILE=$version_file" >> "$GITHUB_ENV"
+          [ -n "$origin_file" ] && echo "SLURM_ARTIFACT_ORIGIN_FILE=$origin_file" >> "$GITHUB_ENV"
+
       - name: Extract cedana-slurm
-        run: mv slurm-bin/cedana-slurm cedana-slurm
+        run: mv "$SLURM_ARTIFACT_CEDANA_DIR" cedana-slurm
 
       - name: Verify slurm binary provenance
         shell: bash
         run: |
           set -euo pipefail
 
-          test -f slurm-bin/build/cedana-slurm
+          test -f "$SLURM_BINARY_PATH"
 
-          if [ ! -f slurm-bin/slurm-version.txt ]; then
+          if [ -z "${SLURM_VERSION_FILE:-}" ] || [ ! -f "$SLURM_VERSION_FILE" ]; then
             echo "slurm-version.txt missing from slurm artifact" >&2
             exit 1
           fi
 
-          echo "slurm-version: $(cat slurm-bin/slurm-version.txt)"
-          if [ -f slurm-bin/slurm-artifact-origin.txt ]; then
+          echo "slurm-version: $(cat "$SLURM_VERSION_FILE")"
+          if [ -n "${SLURM_ARTIFACT_ORIGIN_FILE:-}" ] && [ -f "$SLURM_ARTIFACT_ORIGIN_FILE" ]; then
             echo "slurm-artifact-origin:"
-            cat slurm-bin/slurm-artifact-origin.txt
+            cat "$SLURM_ARTIFACT_ORIGIN_FILE"
           fi
           echo "cedana-slurm md5:"
-          md5sum slurm-bin/build/cedana-slurm
+          md5sum "$SLURM_BINARY_PATH"
 
       - name: Download GPU plugin
         if: ${{ matrix.compute == 'GPU' }}
@@ -183,13 +216,13 @@ jobs:
 
       - name: Install slurm binaries
         run: |
-          chmod +x slurm-bin/build/cedana-slurm
-          sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
+          chmod +x "$SLURM_BINARY_PATH"
+          sudo cp "$SLURM_BINARY_PATH" /usr/local/bin/cedana-slurm
           sudo setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm
-          sudo cp slurm-bin/build/libslurm-cedana.so /usr/local/lib/libslurm-cedana.so
-          sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
-          sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
-          sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
+          sudo cp "$SLURM_ARTIFACT_ROOT/build/libslurm-cedana.so" /usr/local/lib/libslurm-cedana.so
+          sudo cp "$SLURM_ARTIFACT_ROOT/build/task_cedana.so" /usr/local/lib/task_cedana.so
+          sudo cp "$SLURM_ARTIFACT_ROOT/build/cli_filter_cedana.so" /usr/local/lib/cli_filter_cedana.so
+          sudo cp "$SLURM_ARTIFACT_ROOT/build/job_submit_cedana.so" /usr/local/lib/job_submit_cedana.so
           test -f ./libcedana-slurm.so
           CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
           CEDANA_PLUGINS_BUILDS=local sudo -E cedana slurm setup
@@ -199,7 +232,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          PRE_FILE="./slurm-bin/slurm-version.txt"
+          PRE_FILE="${SLURM_VERSION_FILE:-./slurm-bin/slurm-version.txt}"
           SLURM_VERSION_VALUE=""
 
           if [ -f "$PRE_FILE" ]; then
@@ -220,8 +253,8 @@ jobs:
             [ -f ./cedana-version.txt ] && echo "cedana_version_file=$(cat ./cedana-version.txt)"
             [ -f ./plugin-version.txt ] && echo "plugin_version_file=$(cat ./plugin-version.txt)"
             [ -n "$SLURM_VERSION_VALUE" ] && echo "slurm_version_file=$SLURM_VERSION_VALUE"
-            if [ -f ./slurm-bin/slurm-artifact-origin.txt ]; then
-              tr '\n' ' ' < ./slurm-bin/slurm-artifact-origin.txt | sed 's/ $//' | sed 's/^/slurm_artifact_origin=/'
+            if [ -n "${SLURM_ARTIFACT_ORIGIN_FILE:-}" ] && [ -f "$SLURM_ARTIFACT_ORIGIN_FILE" ]; then
+              tr '\n' ' ' < "$SLURM_ARTIFACT_ORIGIN_FILE" | sed 's/ $//' | sed 's/^/slurm_artifact_origin=/'
             fi
 
             for f in \
@@ -379,11 +412,11 @@ jobs:
             echo "sample_root=$SAMPLE_ROOT"
           } >"$ARTIFACT_DIR/context.txt"
 
-          if [ -f ./slurm-bin/slurm-version.txt ]; then
+          if [ -n "${SLURM_VERSION_FILE:-}" ] && [ -f "$SLURM_VERSION_FILE" ]; then
             {
               echo
               echo "=== slurm-version-and-preflight ==="
-              cat ./slurm-bin/slurm-version.txt
+              cat "$SLURM_VERSION_FILE"
             } >>"$ARTIFACT_DIR/context.txt"
           fi
 
