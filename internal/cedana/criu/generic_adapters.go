@@ -5,11 +5,13 @@ package criu
 import (
 	"context"
 	"os/exec"
+	"strings"
 
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -35,12 +37,17 @@ func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ
 				criuInstance.SetCriuPath(p.BinaryPaths()[0])
 			}
 
-			// Run a quick health check to ensure CRIU is functional, return first error
-
+			// Run a quick health check to ensure CRIU is functional.
+			// Capability errors are non-fatal since caps may be set
+			// dynamically (e.g. via setcap right before invocation).
 			results := CheckFeatures(manager, false)(ctx)
 			for _, result := range results {
-				if len(result.Errors) > 0 {
-					return nil, status.Error(codes.Unavailable, "CRIU is not functional: "+result.Errors[0])
+				for _, e := range result.Errors {
+					if strings.Contains(e, "CAP_") {
+						log.Warn().Msgf("CRIU capability check failed (continuing): %s", e)
+					} else {
+						return nil, status.Error(codes.Unavailable, "CRIU is not functional: "+e)
+					}
 				}
 			}
 
