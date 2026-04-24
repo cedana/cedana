@@ -41,6 +41,8 @@ type (
 
 		// Internal use only (for metrics and logging)
 		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id"`
+
+    Multinode_buffer_size int `json:"multi_buffer_size" key:"multi_buffer_size" yaml:"multi_buffer_size" mapstructure:"multi_buffer_size"`
 	}
 
 	Connection struct {
