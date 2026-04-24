@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
@@ -34,6 +36,12 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 		if req.Criu == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing CRIU options in restore request")
+		}
+
+		if req.Criu.ManageCgroupsMode == nil {
+			mode := criu_proto.CriuCgMode(criu_proto.CriuCgMode_value[strings.ToUpper(config.Global.CRIU.ManageCgroups)])
+			req.Criu.ManageCgroupsMode = &mode
+			req.Criu.ManageCgroups = proto.Bool(true)
 		}
 
 		// GetPaths() returns absolute filesystem paths (e.g., /sys/fs/cgroup/cpu/slurm/...).
