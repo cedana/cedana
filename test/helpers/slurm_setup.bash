@@ -1037,8 +1037,10 @@ start_cedana_slurm_daemon() {
     done
 }
 
-# Restart the cedana-slurm daemon with --unprivileged on all nodes.
-# Requires cedana-slurm to have CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE set via setcap.
+# Restart the cedana-slurm daemon with CEDANA_SLURM_UNPRIVILEGED=1 on all nodes.
+# Sets CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the binary via setcap,
+# then starts the daemon with CEDANA_SLURM_UNPRIVILEGED=1 so both the daemon and any monitors
+# it spawns use the embedded dump path.
 restart_cedana_slurm_daemon_unprivileged() {
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
@@ -1052,7 +1054,7 @@ restart_cedana_slurm_daemon_unprivileged() {
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
-    debug_log "Restarting cedana-slurm daemon with --unprivileged on SLURM nodes..."
+    debug_log "Restarting cedana-slurm daemon (unprivileged/embedded) on SLURM nodes..."
 
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
@@ -1069,9 +1071,10 @@ restart_cedana_slurm_daemon_unprivileged() {
             -e CEDANA_CLUSTER_ID="$cluster_id" \
             -e CEDANA_SLURM_BIN="${CEDANA_SLURM_BIN:-/usr/bin/cedana-slurm}" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
+            -e CEDANA_SLURM_UNPRIVILEGED=1 \
             "$c" \
-            bash -c '/usr/local/bin/cedana-slurm daemon start --unprivileged >/var/log/cedana-slurm.log 2>&1' || {
-            error_log "Failed to launch cedana-slurm daemon (--unprivileged) on $c"
+            bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
+            error_log "Failed to launch cedana-slurm daemon (unprivileged) on $c"
             return 1
         }
     done
@@ -1079,9 +1082,9 @@ restart_cedana_slurm_daemon_unprivileged() {
     sleep 3
     for c in "${targets[@]}"; do
         if docker exec "$c" pgrep -f 'cedana-slurm daemon' &>/dev/null; then
-            debug_log "  $c: cedana-slurm daemon (--unprivileged) running"
+            debug_log "  $c: cedana-slurm daemon (unprivileged) running"
         else
-            error_log "cedana-slurm daemon (--unprivileged) failed to start on $c"
+            error_log "cedana-slurm daemon (unprivileged) failed to start on $c"
             docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
             return 1
         fi
