@@ -22,7 +22,6 @@ APT_PACKAGES=(
     wget git make
     libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1 # CRIU
     sysvinit-utils
-    yq
 )
 
 install_apt_packages() {
@@ -72,7 +71,6 @@ else
 fi
 
 # Hack - yq is needed to configure kubelet, but not available in all distros
-bash
 case "$(uname -m)" in
     x86_64)
         wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
@@ -86,3 +84,4 @@ case "$(uname -m)" in
         ;;
 esac
 chmod +x /usr/local/bin/yq
+echo "yq has been Installed"

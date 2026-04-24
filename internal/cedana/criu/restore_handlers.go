@@ -7,6 +7,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
@@ -39,9 +40,9 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	// Set CRIU server
 	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
-	criuOpts.LogLevel = proto.Int32(logLevel())
-	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
+	criuOpts.LogLevel = proto.Int32(config.Global.CRIU.LogLevel)
 	criuOpts.LogToStderr = proto.Bool(false)
+	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 
 	// Change ownership of the dump directory
 	uids := resp.GetState().GetUIDs()

@@ -15,6 +15,7 @@ import (
 	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/internal/db"
+	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
@@ -112,6 +113,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 				logging.StreamLogger(),
 			),
 			grpc.ChainUnaryInterceptor(
+				channel.UnaryLifetime(ctx.Done()),
 				logging.UnaryLogger(),
 				profiling.UnaryProfiler(),
 			),
@@ -202,7 +204,7 @@ func (s *Server) Launch(ctx context.Context) (err error) {
 func (s *Server) Stop() {
 	s.grpcServer.GracefulStop()
 	s.listener.Close()
-	s.Wait()
+	s.wg.Wait()
 	log.Info().Msg("stopped server gracefully")
 }
 

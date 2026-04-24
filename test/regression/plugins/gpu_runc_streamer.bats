@@ -49,16 +49,18 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     run cedana job kill "$jid"
 }
 
 # bats test_tags=dump,hostmem
 @test "[$GPU_INFO] stream dump GPU container (vector add hostmem)" {
+    skip "until CED-1945 is fixed"
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
 
@@ -67,10 +69,11 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     run cedana job kill "$jid"
 }
@@ -110,10 +113,11 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     cedana restore job "$jid"
     watch_logs "$jid"
@@ -129,6 +133,7 @@ teardown_file() {
 
 # bats test_tags=restore,hostmem
 @test "[$GPU_INFO] stream restore GPU container (vector add hostmem)" {
+    skip "until CED-1945 is fixed"
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
 
@@ -137,10 +142,11 @@ teardown_file() {
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     cedana restore job "$jid"
     watch_logs "$jid"

@@ -78,6 +78,53 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	return resp, nil
 }
 
+func (s *Cedana) Dump(req *daemon.DumpReq) (*daemon.DumpResp, error) {
+	// The order below is the order followed before executing
+	// the final handler (criu.Dump).
+
+	middleware := types.Middleware[types.Dump]{
+		defaults.FillMissingDumpDefaults,
+		validation.ValidateDumpRequest,
+
+		pluginDumpStorage,    // detects and plugs in the storage to use
+		pluginDumpMiddleware, // middleware from plugins
+
+		// By now we should have the PID
+		process.FillProcessStateForDump,
+		process.DetectIOUringForDump,
+		process.AddExternalFilesForDump,
+		network.DetectNetworkOptionsForDump,
+		gpu.Dump(s.gpus),
+
+		process.SaveProcessStateForDump,
+		criu.CheckOptsForDump,
+	}
+
+	dump := pluginDumpHandler().With(middleware...)
+
+	dump = dump.With(criu.New[daemon.DumpReq, daemon.DumpResp](s.plugins))
+
+	opts := types.Opts{
+		Lifetime:   s.lifetime,
+		Plugins:    s.plugins,
+		WG:         s.wg,
+		Serverless: true,
+	}
+	resp := &daemon.DumpResp{}
+
+	_, err := dump(s.lifetime, opts, resp, req)
+	if err != nil {
+		log.Error().Err(err).Str("type", req.Type).Msg("dump failed")
+		return nil, err
+	}
+
+	for _, path := range resp.Paths {
+		resp.Messages = append(resp.Messages, "Dumped to "+path)
+	}
+
+	return resp, nil
+}
+
 //////////////////////////
 //// Helper Adapters /////
 //////////////////////////
@@ -141,8 +188,12 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 			streams = config.Global.Checkpoint.Streams
 		}
 
+		if streams == 1 {
+			return nil, status.Error(codes.InvalidArgument, "A minimum of 2 streams are required for streaming. Specify 0 to disable streaming.")
+		}
+
 		filesystem := filesystem.DumpFilesystem
-		if streams > 0 {
+		if streams > 1 {
 			filesystem = streamer.DumpFilesystem(streams)
 		}
 

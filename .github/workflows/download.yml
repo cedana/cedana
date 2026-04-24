@@ -44,6 +44,11 @@ on:
         description: Version for Cedana Helm chart (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+      slurm_version:
+        type: string
+        description: Version for cedana-slurm binaries (branch name, tag or "release" for latest release)
+        required: false
+        default: "none"
 
 jobs:
   cedana:
@@ -440,3 +445,85 @@ jobs:
           name: helm-chart
           path: cedana-helm
 
+  slurm:
+    name: Slurm
+    if: ${{ inputs.slurm_version != 'none' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+    steps:
+      - name: Checkout cedana-slurm
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-slurm
+          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
+          path: slurm/cedana-slurm
+          token: ${{ secrets.GIT_CI_PAT }}
+          submodules: recursive
+
+      - name: Resolve slurm binaries
+        env:
+          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p slurm/build
+
+          VERSION_REF="${VERSION//\//-}"
+          CHECKOUT_SHA="$(git -C slurm/cedana-slurm rev-parse HEAD)"
+          ORIGIN_FILE="slurm/slurm-artifact-origin.txt"
+
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+            REPO="cedana/cedana-slurm"
+            {
+              echo "source_mode=cloudsmith"
+              echo "source_ref=${VERSION_REF}"
+              echo "checkout_sha=${CHECKOUT_SHA}"
+              echo "cloudsmith_repo=${REPO}"
+            } > "$ORIGIN_FILE"
+
+            cd slurm
+            for binary in cedana-slurm libslurm-cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
+              URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION_REF}/${binary}-${ARCH}"
+              URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${VERSION_REF}/${binary}"
+              if ! curl -1Lf -O "$URL1"; then
+                echo "Primary URL failed for ${binary}, trying alternative URL..."
+                curl -1Lf -o "${binary}-${ARCH}" "$URL2"
+              fi
+              mv "${binary}-${ARCH}" "build/${binary}" 2>/dev/null || mv "${binary}" "build/${binary}" 2>/dev/null || true
+            done
+            cd ..
+          else
+            {
+              echo "source_mode=local-build"
+              echo "source_ref=${VERSION_REF}"
+              echo "built_from_sha=${CHECKOUT_SHA}"
+            } > "$ORIGIN_FILE"
+
+            (
+              cd slurm/cedana-slurm
+              make all
+            )
+            cp slurm/cedana-slurm/build/cedana-slurm slurm/build/cedana-slurm
+            cp slurm/cedana-slurm/build/libslurm-cedana.so slurm/build/libslurm-cedana.so
+            cp slurm/cedana-slurm/build/task_cedana.so slurm/build/task_cedana.so
+            cp slurm/cedana-slurm/build/cli_filter_cedana.so slurm/build/cli_filter_cedana.so
+            cp slurm/cedana-slurm/build/job_submit_cedana.so slurm/build/job_submit_cedana.so
+          fi
+
+          echo "$VERSION_REF" > slurm/slurm-version.txt
+
+          echo "=== Binary checksums ==="
+          md5sum slurm/build/* 2>/dev/null || true
+          ls -la slurm/build/
+
+      - name: Upload slurm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: slurm-${{ matrix.arch }}
+          path: ./slurm/*

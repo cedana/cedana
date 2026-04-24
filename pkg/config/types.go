@@ -61,9 +61,12 @@ type (
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 		// Streams specifies the number of parallel streams to use when checkpointing.
+		// Default is 0 for no streaming, a minimum of 2 is required otherwise.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
+		// The amount of memory streamer is allowed to use (in MB)
+		StreamMemoryLimit uint64 `json:"stream_memory_limit" key:"stream_memory_limit" yaml:"stream_memory_limit" mapstructure:"stream_memory_limit"`
 		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
-		// checkpoint reqeust to return early.
+		// checkpoint request to return early.
 		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
 	}
 
@@ -95,6 +98,8 @@ type (
 		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
 		// ManageCgroups sets the default cgroup C/R mode for CRIU (default, cg_none, props, soft, full, strict, ignore)
 		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
+		// LogLevel sets the default log level for CRIU (2 - errors, 3 - warnings, 4 - debug)
+		LogLevel int32 `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
 	}
 
 	GPU struct {

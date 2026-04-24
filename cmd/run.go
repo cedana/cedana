@@ -142,7 +142,7 @@ var runCmd = &cobra.Command{
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
 		// Assuming request is now ready to be sent to the server
-		req, ok := cmd.Context().Value(keys.RUN_REQ_CONTEXT_KEY).(*daemon.RunReq)
+		req, ok := ctx.Value(keys.RUN_REQ_CONTEXT_KEY).(*daemon.RunReq)
 		if !ok {
 			return fmt.Errorf("invalid request in context")
 		}
@@ -156,7 +156,6 @@ var runCmd = &cobra.Command{
 			code, err := cedana.Run(req)
 			if err != nil {
 				cedana.Finalize()
-				cedana.Wait()
 				return utils.GRPCErrorColored(err)
 			}
 
@@ -164,18 +163,17 @@ var runCmd = &cobra.Command{
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}
-			cedana.Wait()
 
 			os.Exit(<-code)
 		} else {
-			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
 				return fmt.Errorf("invalid client in context")
 			}
 			defer client.Close()
 
 			// Assuming request is now ready to be sent to the server
-			resp, data, err := client.Run(cmd.Context(), req)
+			resp, data, err := client.Run(ctx, req)
 			if err != nil {
 				return err
 			}
@@ -186,7 +184,7 @@ var runCmd = &cobra.Command{
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {
-				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+				return client.Attach(ctx, &daemon.AttachReq{PID: resp.PID})
 			}
 
 			for _, message := range resp.GetMessages() {

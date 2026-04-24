@@ -28,10 +28,11 @@ const (
 	DEFAULT_LOG_LEVEL           = "info"
 	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
-	DEFAULT_CHECKPOINT_COMPRESSION = "none"
-	DEFAULT_CHECKPOINT_DIR         = "/tmp"
-	DEFAULT_CHECKPOINT_STREAMS     = 0
-	DEFAULT_CHECKPOINT_ASYNC       = false
+	DEFAULT_CHECKPOINT_COMPRESSION            = "none"
+	DEFAULT_CHECKPOINT_DIR                    = "/tmp"
+	DEFAULT_CHECKPOINT_STREAMS                = 0
+	DEFAULT_CHECKPOINT_ASYNC                  = false
+	DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB = 4000
 
 	DEFAULT_DB_REMOTE = false
 	DEFAULT_DB_PATH   = "/tmp/cedana.db"
@@ -56,6 +57,7 @@ const (
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
+	DEFAULT_CRIU_LOG_LEVEL      = 3
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
@@ -74,10 +76,11 @@ var Global Config = Config{
 	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Metrics:          DEFAULT_METRICS,
 	Checkpoint: Checkpoint{
-		Dir:         DEFAULT_CHECKPOINT_DIR,
-		Compression: DEFAULT_CHECKPOINT_COMPRESSION,
-		Streams:     DEFAULT_CHECKPOINT_STREAMS,
-		Async:       DEFAULT_CHECKPOINT_ASYNC,
+		Dir:               DEFAULT_CHECKPOINT_DIR,
+		Compression:       DEFAULT_CHECKPOINT_COMPRESSION,
+		Streams:           DEFAULT_CHECKPOINT_STREAMS,
+		Async:             DEFAULT_CHECKPOINT_ASYNC,
+		StreamMemoryLimit: DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB,
 	},
 	DB: DB{
 		Remote: DEFAULT_DB_REMOTE,
@@ -104,6 +107,7 @@ var Global Config = Config{
 		SkipNvidiaRuntimeHook: DEFAULT_GPU_SKIP_NVIDIA_RUNTIME_HOOK,
 	},
 	CRIU: CRIU{
+		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
 		LeaveRunning:  DEFAULT_CRIU_LEAVE_RUNNING,
 		ManageCgroups: DEFAULT_CRIU_MANAGE_CGROUPS,
 	},

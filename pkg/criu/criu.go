@@ -8,11 +8,13 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -62,8 +64,14 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 	}
 
+	// Pin this goroutine to its OS thread so that Pdeathsig does not
+	// fire prematurely due to Go's M:N goroutine scheduling recycling
+	// the thread that spawned swrk. Unlocked in Cleanup.
+	runtime.LockOSThread()
+
 	err = cmd.Start()
 	if err != nil {
+		runtime.UnlockOSThread()
 		clnNet.Close()
 		return err
 	}
@@ -85,9 +93,14 @@ func (c *Criu) Cleanup() error {
 		// XXX: We don't use s.swrkCmd.Wait() because it can hang forever
 		// since the stdin, stdout, and stderr copy might not be over.
 		if _, err := c.swrkCmd.Process.Wait(); err != nil {
-			errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			// ECHILD means the process was already reaped (e.g. by the
+			// embedding process's signal handler or the Go runtime).
+			if !errors.Is(err, syscall.ECHILD) {
+				errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			}
 		}
 		c.swrkCmd = nil
+		runtime.UnlockOSThread()
 	}
 	return errors.Join(errs...)
 }
@@ -158,6 +171,10 @@ func (c *Criu) doSwrkWithResp(
 		opts.NotifyScripts = proto.Bool(true)
 	}
 
+	if !utils.IsRootUser() {
+		opts.Unprivileged = proto.Bool(true)
+	}
+
 	if features != nil {
 		req.Features = features
 	}
@@ -187,7 +204,7 @@ func (c *Criu) doSwrkWithResp(
 				return nil, fmt.Errorf("initialize-restore failed: %w", err)
 			}
 			defer func() {
-				err := nfy.FinalizeRestore(ctx, opts)
+				err := nfy.FinalizeRestore(ctx, opts, retErr)
 				if err != nil {
 					retErr = errors.Join(retErr, err)
 				}
@@ -198,7 +215,7 @@ func (c *Criu) doSwrkWithResp(
 				return nil, fmt.Errorf("initialize-dump failed: %w", err)
 			}
 			defer func() {
-				err := nfy.FinalizeDump(ctx, opts)
+				err := nfy.FinalizeDump(ctx, opts, retErr)
 				if err != nil {
 					retErr = errors.Join(retErr, err)
 				}
@@ -385,7 +402,14 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	args := []string{"check"}
 	args = append(args, flags...)
 
-	cmd := exec.Command(c.swrkPath, args...)
+	if !utils.IsRootUser() {
+		args = append(args, "--unprivileged")
+	}
+
+	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

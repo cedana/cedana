@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -39,10 +40,10 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	// Set CRIU server
 	criuOpts.LogFile = proto.String(CRIU_DUMP_LOG_FILE)
-	criuOpts.LogLevel = proto.Int32(logLevel())
+	criuOpts.LogLevel = proto.Int32(config.Global.CRIU.LogLevel)
+	criuOpts.LogToStderr = proto.Bool(false)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
-	criuOpts.LogToStderr = proto.Bool(false)
 
 	// Change ownership of the dump directory
 	uids := resp.GetState().GetUIDs()
@@ -79,18 +80,4 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	log.Info().Msg("CRIU dump complete")
 
 	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.State.PID)), nil
-}
-
-//////////////////////
-// Helper functions //
-//////////////////////
-
-func logLevel() int32 {
-	level := 2 // error statements
-	if log.Logger.GetLevel() <= zerolog.TraceLevel {
-		level = 4 // debug statements
-	} else if log.Logger.GetLevel() <= zerolog.DebugLevel {
-		level = 3 // warning statements
-	}
-	return int32(level)
 }
