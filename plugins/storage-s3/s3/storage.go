@@ -43,7 +43,6 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 		config.WithCredentialsProvider(credProvider),
 		config.WithRegion(cedana_config.Global.AWS.Region),
 	)
-
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +63,7 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 
 func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) {
 	bucket, key, err := s.sanitizePath(path)
-	log.Info().Str("bucket", bucket).Str("key", key).Msg("using S3 storage path")
+	log.Debug().Str("bucket", bucket).Str("key", key).Msg("using S3 storage path")
 	if err != nil {
 		return nil, err
 	}
