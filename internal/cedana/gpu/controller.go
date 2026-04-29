@@ -569,20 +569,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	}
 
 	// Update GPU controller with the restore PID (which can be a new PID)
-	// This callback is only called in case of containers, so it allows us to
-	// call attach on GPU controller pretty eary.
 	var restoredPid *int32
-	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
-		controller := p.Get(id)
-		if controller == nil {
-			return fmt.Errorf("GPU controller not found, is the process still running?")
-		}
-		restoredPid = &pid
-
-		return controller.Attach(ctx, uint32(pid))
-	}
-
-	// Simply call attach again as for processes, the SetupNamespaces callback is not called
 	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
 		controller := p.Get(id)
 		if controller == nil {
