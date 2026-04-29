@@ -88,6 +88,7 @@ type controller struct {
 	Termination sync.Mutex   // To protect termination
 	Terminating atomic.Bool  // To indicate if termination has begun, to avoid multiple concurrent terminations
 	Terminated  chan int     // Closed when the controller process has exited
+	Restoring   atomic.Bool  // To indicate the controller is mid-restore, so the sync loop doesn't terminate it
 	syncFails   int          // Number of consecutive sync failures
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
@@ -532,6 +533,10 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	var restoreErr chan error
 	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		restoreErr = make(chan error, 1)
+		controller := p.Get(id)
+		if controller != nil {
+			controller.Restoring.Store(true)
+		}
 		go func() {
 			defer close(restoreErr)
 
@@ -577,7 +582,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		}
 		restoredPid = &pid
 
-		return controller.Attach(ctx, uint32(pid))
+		err := controller.Attach(ctx, uint32(pid))
+		controller.Restoring.Store(false)
+		return err
 	}
 
 	callback.PreResumeFunc = func(ctx context.Context) error {
@@ -596,6 +603,11 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	callback.FinalizeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts, criuErr error) (err error) {
 		if restoreErr == nil {
 			return nil
+		}
+
+		controller := p.Get(id)
+		if controller != nil {
+			controller.Restoring.Store(false)
 		}
 
 		// If CRIU restore failed, we don't wait for GPU restore to finish
@@ -663,6 +675,9 @@ func (c *controller) Book() bool {
 
 func (c *controller) Status() (status controllerStatus, reason string) {
 	if c.syncFails < MAX_SYNC_FAILURES && utils.PidRunning(c.PID) {
+		if c.Restoring.Load() {
+			return CONTROLLER_BUSY, "controller is mid-restore"
+		}
 		if c.AttachedPID == 0 {
 			shmSizeMatches := c.ShmSize == uint64(config.Global.GPU.ShmSize)
 			credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
