@@ -866,6 +866,7 @@ SETUP_EOF
     done
 
     debug_log "Starting cedana daemon on all nodes..."
+    local container_cedana_bin="/usr/local/bin/cedana"
     for c in "${all_containers[@]}"; do
         docker exec "$c" mkdir -p /etc/cedana
 
@@ -881,12 +882,12 @@ SETUP_EOF
             -e CEDANA_ADDRESS="/run/cedana.sock" \
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
-            -e CEDANA_BIN="${CEDANA_BIN:-/usr/local/bin/cedana}" \
+            -e CEDANA_BIN="$container_cedana_bin" \
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-            "$c" "$cedana_bin" --merge-config version ||
+            "$c" "$container_cedana_bin" --merge-config version ||
             {
                 error_log "cedana --merge-config failed on $c"
                 return 1
@@ -899,12 +900,12 @@ SETUP_EOF
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
             -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
-            -e CEDANA_BIN="${CEDANA_BIN:-/usr/local/bin/cedana}" \
+            -e CEDANA_BIN="$container_cedana_bin" \
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-            "$c" bash -c "\"${CEDANA_BIN:-/usr/local/bin/cedana}\" daemon start \
+            "$c" bash -c "\"$container_cedana_bin\" daemon start \
                 >/var/log/cedana.log 2>&1"
     done
 
@@ -973,12 +974,12 @@ SETUP_EOF
             -e CEDANA_PROTOCOL="unix" \
             -e CEDANA_DB_REMOTE="true" \
             -e CEDANA_CLIENT_WAIT_FOR_READY="true" \
-            -e CEDANA_BIN="${CEDANA_BIN:-/usr/local/bin/cedana}" \
+            -e CEDANA_BIN="$container_cedana_bin" \
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
-            "$c" bash -c "\"${CEDANA_BIN:-/usr/local/bin/cedana}\" daemon start \
+            "$c" bash -c "\"$container_cedana_bin\" daemon start \
                 >/var/log/cedana.log 2>&1"
     done
 
