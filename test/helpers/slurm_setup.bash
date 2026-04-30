@@ -452,7 +452,11 @@ install_cedana_in_slurm() {
         }
     done
 
-    debug_log "Copying cedana + criu binaries into containers..."
+    # NFS root_squash: writes to /usr/local/{bin,lib}, /etc/slurm, and
+    # /usr/lib/slurm must happen on the controller; compute nodes inherit
+    # via NFS.
+
+    debug_log "Locating cedana + criu binaries on host..."
     local cedana_bin criu_bin
     cedana_bin="${CEDANA_BIN:-}"
     if [ -z "$cedana_bin" ]; then
@@ -472,35 +476,32 @@ install_cedana_in_slurm() {
             return 1
         }
 
-    for c in "${all_containers[@]}"; do
-        docker cp "$cedana_bin" "${c}:/usr/local/bin/cedana" &&
-            docker exec "$c" chmod +x /usr/local/bin/cedana ||
-            {
-                error_log "Failed to install cedana binary in $c"
-                return 1
-            }
-        docker cp "$criu_bin" "${c}:/usr/local/bin/criu" &&
-            docker exec "$c" chmod +x /usr/local/bin/criu ||
-            {
-                error_log "Failed to install criu binary in $c"
-                return 1
-            }
-    done
+    debug_log "Copying cedana + criu binaries into controller..."
+    docker cp "$cedana_bin" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana" &&
+        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/cedana ||
+        {
+            error_log "Failed to install cedana binary in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        }
+    docker cp "$criu_bin" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/criu" &&
+        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/criu ||
+        {
+            error_log "Failed to install criu binary in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        }
 
-    debug_log "Copying plugin libraries into containers..."
+    debug_log "Copying plugin libraries into controller..."
     for so in /usr/local/lib/libcedana-*.so \
         /usr/local/lib/task_cedana.so \
         /usr/local/lib/spank_cedana.so \
         /usr/local/lib/cli_filter_cedana.so \
         /usr/local/lib/job_submit_cedana.so; do
         [ -f "$so" ] || continue
-        for c in "${all_containers[@]}"; do
-            docker cp "$so" "${c}:/usr/local/lib/$(basename "$so")" ||
-                {
-                    error_log "Failed to copy $(basename "$so") into $c"
-                    return 1
-                }
-        done
+        docker cp "$so" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/lib/$(basename "$so")" ||
+            {
+                error_log "Failed to copy $(basename "$so") into $SLURM_CONTROLLER_CONTAINER"
+                return 1
+            }
     done
 
     if [ ! -f "/usr/local/bin/cedana-slurm" ]; then
@@ -508,16 +509,48 @@ install_cedana_in_slurm() {
         return 1
     fi
 
+    debug_log "Copying cedana-slurm binary into controller..."
+    docker cp /usr/local/bin/cedana-slurm "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana-slurm" &&
+        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/cedana-slurm ||
+        {
+            error_log "Failed to install cedana-slurm in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        }
+
+    debug_log "Waiting for NFS-shared binaries to be visible on compute nodes..."
+    for c in "${compute_containers[@]}"; do
+        local waited=0
+        local nfs_ok=0
+        while [ "$waited" -lt 30 ]; do
+            if docker exec "$c" bash -c '
+                test -x /usr/local/bin/cedana &&
+                test -x /usr/local/bin/cedana-slurm &&
+                test -f /usr/local/lib/spank_cedana.so
+            ' 2>/dev/null; then
+                nfs_ok=1
+                break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if [ "$nfs_ok" -ne 1 ]; then
+            error_log "NFS-shared binaries not visible on $c after ${waited}s"
+            docker exec "$c" findmnt -t nfs4 --noheadings 2>/dev/null || true
+            docker exec "$c" ls -la /usr/local/bin /usr/local/lib 2>/dev/null || true
+            return 1
+        fi
+        debug_log "  $c: NFS-mounted /usr/local visible (${waited}s)"
+    done
+
+    debug_log "Installing cedana-slurm into /usr/{bin,sbin} and configuring slurmd env..."
     for c in "${all_containers[@]}"; do
-        docker cp /usr/local/bin/cedana-slurm "${c}:/usr/local/bin/cedana-slurm" &&
-            docker exec "$c" bash -c '
-                set -euo pipefail
-                chmod +x /usr/local/bin/cedana-slurm
-                install -m 0755 /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm
-                install -m 0755 /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm
-            ' ||
+        docker exec "$c" bash -c '
+            set -euo pipefail
+            install -m 0755 /usr/local/bin/cedana-slurm /usr/bin/cedana-slurm
+            install -m 0755 /usr/local/bin/cedana-slurm /usr/sbin/cedana-slurm
+        ' ||
             {
-                error_log "Failed to install cedana-slurm in $c"
+                error_log "Failed to install cedana-slurm into /usr/{bin,sbin} on $c"
                 return 1
             }
 
@@ -569,44 +602,59 @@ EOF
         runtime_plugins="$runtime_plugins $storage_plugin"
     fi
 
-    debug_log "Installing SLURM plugin via Cedana CLI in all nodes..."
-    for c in "${all_containers[@]}"; do
-        local node_role="worker"
-        if [ "$c" = "$SLURM_CONTROLLER_CONTAINER" ]; then
-            node_role="controller"
+    debug_log "Installing SLURM plugin and runtime plugins on controller..."
+    docker exec \
+        -e CEDANA_PLUGINS_BUILDS="local" \
+        -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
+        -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+        -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
+        -e CEDANA_SLURM_NODE_ROLE="controller" \
+        "$SLURM_CONTROLLER_CONTAINER" bash -c '
+            set -euo pipefail
+            cedana plugin install slurm
+            cedana slurm setup --node-role controller
+        ' >&"${OUTPUT_FD}" 2>&1 ||
+        {
+            error_log "Cedana SLURM plugin install/setup failed on $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        }
+
+    docker exec \
+        -e CEDANA_URL="${CEDANA_URL:-}" \
+        -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+        -e CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS:-release}" \
+        -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
+        -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+        -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
+        "$SLURM_CONTROLLER_CONTAINER" bash -c "
+            set -euo pipefail
+            cedana plugin install ${runtime_plugins}
+        " >&"${OUTPUT_FD}" 2>&1 ||
+        {
+            error_log "Cedana runtime plugin install failed on $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        }
+
+    debug_log "Verifying plugin libraries visible on compute nodes via NFS..."
+    for c in "${compute_containers[@]}"; do
+        local waited=0
+        local plugins_ok=0
+        while [ "$waited" -lt 30 ]; do
+            if docker exec "$c" bash -c '
+                test -f /usr/local/lib/libcedana-runc.so &&
+                test -f /usr/local/lib/libcedana-criu.so
+            ' 2>/dev/null; then
+                plugins_ok=1
+                break
+            fi
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if [ "$plugins_ok" -ne 1 ]; then
+            error_log "Cedana plugin libs not visible on $c after ${waited}s"
+            docker exec "$c" ls -la /usr/local/lib 2>/dev/null || true
+            return 1
         fi
-
-        docker exec \
-            -e CEDANA_PLUGINS_BUILDS="local" \
-            -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
-            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
-            -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
-            -e CEDANA_SLURM_NODE_ROLE="$node_role" \
-            "$c" bash -c '
-                set -euo pipefail
-                cedana plugin install slurm
-                cedana slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
-            ' >&"${OUTPUT_FD}" 2>&1 ||
-            {
-                error_log "Cedana SLURM plugin install/setup failed on $c"
-                return 1
-            }
-
-        docker exec \
-            -e CEDANA_URL="${CEDANA_URL:-}" \
-            -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
-            -e CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS:-release}" \
-            -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
-            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
-            -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
-            "$c" bash -c "
-                set -euo pipefail
-                cedana plugin install ${runtime_plugins}
-            " >&"${OUTPUT_FD}" 2>&1 ||
-            {
-                error_log "Cedana runtime plugin install failed on $c"
-                return 1
-            }
     done
 
     if [ "${GPU:-0}" = "1" ]; then
@@ -635,12 +683,12 @@ EOF
                 debug_log "slurmd -C detected GRES '$detected_gres' on $c"
             fi
 
-            docker exec "$c" bash -c "
+            docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
                 mkdir -p /etc/slurm
                 echo 'AutoDetect=nvidia' > /etc/slurm/gres.conf
                 cat /etc/slurm/gres.conf
             " || {
-                error_log "Failed to write autodetect gres.conf on $c"
+                error_log "Failed to write autodetect gres.conf for $c (NFS-shared /etc/slurm)"
                 return 1
             }
 
@@ -684,20 +732,14 @@ EOF
             }
         done
 
-        # SLURM requires gres.conf on all nodes
         docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
             mkdir -p /etc/slurm
             test -f /etc/slurm/gres.conf || echo '' > /etc/slurm/gres.conf
         "
 
-        # slurm.conf must be identical across all nodes
         for c in "${compute_containers[@]}"; do
-            docker cp "$SLURM_CONTROLLER_CONTAINER:/etc/slurm/slurm.conf" "/tmp/slurm.conf.sync.$$"
-            docker cp "/tmp/slurm.conf.sync.$$" "$c:/etc/slurm/slurm.conf"
-            debug_log "Synced slurm.conf to $c"
             _log_gpu_debug_state "$c" "post-slurm-conf-sync"
         done
-        rm -f /tmp/slurm.conf.sync.$$
     fi
 
     debug_log "Configuring SLURM to load Cedana plugins (controller)..."
@@ -749,57 +791,23 @@ SETUP_EOF
             return 1
         }
 
-    debug_log "Installing Cedana plugins on compute nodes..."
+    debug_log "Verifying Cedana plugins visible on compute nodes via NFS..."
     for c in "${compute_containers[@]}"; do
-        docker exec -i "$c" bash <<'COMPUTE_EOF' >&"${OUTPUT_FD}" 2>&1 ||
-set -euo pipefail
-SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
-PLUGIN_DIR=$(awk -F= '/^PluginDir/{print $2; exit}' "$SLURM_CONF" 2>/dev/null || true)
-if [ -z "$PLUGIN_DIR" ]; then
-    PLUGIN_DIR=$(scontrol show config 2>/dev/null | awk '/^PluginDir[[:space:]]*=/{print $NF}' || true)
-fi
-PLUGIN_DIR="${PLUGIN_DIR:-/usr/lib/slurm}"
-mkdir -p "$PLUGIN_DIR"
-for f in task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
-    src="/usr/local/lib/${f}"
-    [ -f "$src" ] || continue
-    chmod 755 "$src"; cp "$src" "$PLUGIN_DIR/"
-done
-[ -f /usr/local/lib/spank_cedana.so ] && \
-    cp /usr/local/lib/spank_cedana.so "${PLUGIN_DIR}/spank_cedana.so"
-ldconfig
-
-grep -q 'task/cedana' "$SLURM_CONF" || \
-    sed -i 's|^\(TaskPlugin=.*\)|\1,task/cedana|' "$SLURM_CONF"
-grep -q 'cli_filter/cedana' "$SLURM_CONF" || \
-    echo 'CliFilterPlugins=cli_filter/cedana' >> "$SLURM_CONF"
-
-# Suppress conf-hash mismatch from plugin entries
-grep -q 'NO_CONF_HASH' "$SLURM_CONF" || \
-    echo 'DebugFlags=NO_CONF_HASH' >> "$SLURM_CONF"
-
-PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | awk '/^PlugStackConfig/{print $3}' || true)
-PLUGSTACK_CONF="${PLUGSTACK_CONF:-/etc/slurm/plugstack.conf}"
-if [ -f /usr/local/lib/spank_cedana.so ]; then
-    grep -q 'spank_cedana.so' "$PLUGSTACK_CONF" 2>/dev/null || \
-        echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
-fi
-
-echo "Plugins and config updated on $(hostname)"
-COMPUTE_EOF
+        docker exec "$c" bash -c '
+            set -euo pipefail
+            PLUGIN_DIR=$(scontrol show config 2>/dev/null | awk "/^PluginDir[[:space:]]*=/{print \$NF}" || true)
+            PLUGIN_DIR="${PLUGIN_DIR:-/usr/lib/slurm}"
+            test -f "${PLUGIN_DIR}/task_cedana.so" || { echo "missing ${PLUGIN_DIR}/task_cedana.so"; exit 1; }
+            test -f "${PLUGIN_DIR}/spank_cedana.so" || { echo "missing ${PLUGIN_DIR}/spank_cedana.so"; exit 1; }
+            grep -q task/cedana /etc/slurm/slurm.conf || { echo "task/cedana missing from slurm.conf"; exit 1; }
+        ' >&"${OUTPUT_FD}" 2>&1 ||
             {
-                error_log "Plugin setup failed on $c"
+                error_log "Cedana plugin/conf not visible on $c via NFS"
+                docker exec "$c" findmnt -t nfs4 --noheadings 2>/dev/null || true
+                docker exec "$c" ls -la /usr/lib/slurm /etc/slurm 2>/dev/null || true
                 return 1
             }
     done
-
-    debug_log "Re-syncing final slurm.conf to compute nodes..."
-    for c in "${compute_containers[@]}"; do
-        docker cp "$SLURM_CONTROLLER_CONTAINER:/etc/slurm/slurm.conf" "/tmp/slurm.conf.final.sync.$$"
-        docker cp "/tmp/slurm.conf.final.sync.$$" "$c:/etc/slurm/slurm.conf"
-        debug_log "Synced final slurm.conf to $c"
-    done
-    rm -f /tmp/slurm.conf.final.sync.$$
 
     debug_log "Starting cedana daemon on all nodes..."
     for c in "${all_containers[@]}"; do
