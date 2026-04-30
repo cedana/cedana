@@ -491,7 +491,7 @@ install_cedana_in_slurm() {
     debug_log "Copying plugin libraries into containers..."
     for so in /usr/local/lib/libcedana-*.so \
         /usr/local/lib/task_cedana.so \
-        /usr/local/lib/libslurm-cedana.so \
+        /usr/local/lib/spank_cedana.so \
         /usr/local/lib/cli_filter_cedana.so \
         /usr/local/lib/job_submit_cedana.so; do
         [ -f "$so" ] || continue
@@ -714,9 +714,9 @@ for f in task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
     chmod 755 "$src"
     cp "$src" "$PLUGIN_DIR/"
 done
-if [ -f /usr/local/lib/libslurm-cedana.so ]; then
-    chmod 755 /usr/local/lib/libslurm-cedana.so
-    cp /usr/local/lib/libslurm-cedana.so "${PLUGIN_DIR}/spank_cedana.so"
+if [ -f /usr/local/lib/spank_cedana.so ]; then
+    chmod 755 /usr/local/lib/spank_cedana.so
+    cp /usr/local/lib/spank_cedana.so "${PLUGIN_DIR}/spank_cedana.so"
 fi
 ldconfig
 
@@ -734,7 +734,7 @@ if [ -f "${PLUGIN_DIR}/job_submit_cedana.so" ]; then
         echo 'JobSubmitPlugins=job_submit/cedana' >> "$SLURM_CONF"
 fi
 
-if [ -f /usr/local/lib/libslurm-cedana.so ]; then
+if [ -f /usr/local/lib/spank_cedana.so ]; then
     grep -q 'spank_cedana.so' "$PLUGSTACK_CONF" 2>/dev/null || \
         echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
 fi
@@ -760,8 +760,8 @@ for f in task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
     [ -f "$src" ] || continue
     chmod 755 "$src"; cp "$src" "$PLUGIN_DIR/"
 done
-[ -f /usr/local/lib/libslurm-cedana.so ] && \
-    cp /usr/local/lib/libslurm-cedana.so "${PLUGIN_DIR}/spank_cedana.so"
+[ -f /usr/local/lib/spank_cedana.so ] && \
+    cp /usr/local/lib/spank_cedana.so "${PLUGIN_DIR}/spank_cedana.so"
 ldconfig
 
 grep -q 'task/cedana' "$SLURM_CONF" || \
@@ -775,7 +775,7 @@ grep -q 'NO_CONF_HASH' "$SLURM_CONF" || \
 
 PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | awk '/^PlugStackConfig/{print $3}' || true)
 PLUGSTACK_CONF="${PLUGSTACK_CONF:-/etc/slurm/plugstack.conf}"
-if [ -f /usr/local/lib/libslurm-cedana.so ]; then
+if [ -f /usr/local/lib/spank_cedana.so ]; then
     grep -q 'spank_cedana.so' "$PLUGSTACK_CONF" 2>/dev/null || \
         echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
 fi

@@ -488,7 +488,7 @@ jobs:
             } > "$ORIGIN_FILE"
 
             cd slurm
-            for binary in cedana-slurm libslurm-cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
+            for binary in cedana-slurm spank_cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
               URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION_REF}/${binary}-${ARCH}"
               URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${VERSION_REF}/${binary}"
               if ! curl -1Lf -O "$URL1"; then
@@ -510,7 +510,7 @@ jobs:
               make all
             )
             cp slurm/cedana-slurm/build/cedana-slurm slurm/build/cedana-slurm
-            cp slurm/cedana-slurm/build/libslurm-cedana.so slurm/build/libslurm-cedana.so
+            cp slurm/cedana-slurm/build/spank_cedana.so slurm/build/spank_cedana.so
             cp slurm/cedana-slurm/build/task_cedana.so slurm/build/task_cedana.so
             cp slurm/cedana-slurm/build/cli_filter_cedana.so slurm/build/cli_filter_cedana.so
             cp slurm/cedana-slurm/build/job_submit_cedana.so slurm/build/job_submit_cedana.so
