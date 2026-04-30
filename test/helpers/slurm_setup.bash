@@ -683,12 +683,12 @@ EOF
                 debug_log "slurmd -C detected GRES '$detected_gres' on $c"
             fi
 
-            docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+            docker exec "$c" bash -c "
                 mkdir -p /etc/slurm
                 echo 'AutoDetect=nvidia' > /etc/slurm/gres.conf
                 cat /etc/slurm/gres.conf
             " || {
-                error_log "Failed to write autodetect gres.conf for $c (NFS-shared /etc/slurm)"
+                error_log "Failed to write autodetect gres.conf on $c"
                 return 1
             }
 
@@ -791,7 +791,20 @@ SETUP_EOF
             return 1
         }
 
-    debug_log "Verifying Cedana plugins visible on compute nodes via NFS..."
+    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes..."
+    for conf in slurm.conf cgroup.conf plugstack.conf; do
+        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
+            continue
+        fi
+        local tmpfile="/tmp/slurm-${conf}.sync.$$"
+        docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile"
+        for c in "${compute_containers[@]}"; do
+            docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
+        done
+        rm -f "$tmpfile"
+    done
+
+    debug_log "Verifying Cedana plugin libs (NFS) and slurm.conf (local) on compute nodes..."
     for c in "${compute_containers[@]}"; do
         docker exec "$c" bash -c '
             set -euo pipefail
@@ -802,7 +815,7 @@ SETUP_EOF
             grep -q task/cedana /etc/slurm/slurm.conf || { echo "task/cedana missing from slurm.conf"; exit 1; }
         ' >&"${OUTPUT_FD}" 2>&1 ||
             {
-                error_log "Cedana plugin/conf not visible on $c via NFS"
+                error_log "Cedana plugin/conf check failed on $c"
                 docker exec "$c" findmnt -t nfs4 --noheadings 2>/dev/null || true
                 docker exec "$c" ls -la /usr/lib/slurm /etc/slurm 2>/dev/null || true
                 return 1
