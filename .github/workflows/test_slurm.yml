@@ -178,7 +178,7 @@ jobs:
         run: |
           chmod +x slurm-bin/build/cedana-slurm
           sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
-          sudo cp slurm-bin/build/libslurm-cedana.so /usr/local/lib/libslurm-cedana.so
+          sudo cp slurm-bin/build/spank_cedana.so /usr/local/lib/spank_cedana.so
           sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
           sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
           sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
