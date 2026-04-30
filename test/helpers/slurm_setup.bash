@@ -470,11 +470,18 @@ install_cedana_in_slurm() {
         error_log "cedana binary not executable at $cedana_bin"
         return 1
     fi
-    criu_bin=$(command -v criu 2>/dev/null) ||
-        {
-            error_log "criu binary not found in PATH"
-            return 1
-        }
+    criu_bin="${CRIU_BIN:-}"
+    if [ -z "$criu_bin" ]; then
+        criu_bin=$(command -v criu 2>/dev/null) ||
+            {
+                error_log "criu binary not found in PATH"
+                return 1
+            }
+    fi
+    if [ ! -x "$criu_bin" ]; then
+        error_log "criu binary not executable at $criu_bin"
+        return 1
+    fi
 
     debug_log "Copying cedana + criu binaries into controller..."
     docker cp "$cedana_bin" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana" &&
