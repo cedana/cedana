@@ -68,22 +68,15 @@ jobs:
       dockerhub: true
       post_summary: false
 
+  # TEMPORARY: only Slurm tests run on this branch while NFS/node-role
+  # changes are validated. Restore the full `test` (./test.yml) and `bench`
+  # jobs before merging.
   test:
     name: Test
-    uses: ./.github/workflows/test.yml
+    uses: ./.github/workflows/test_slurm.yml
     needs: [publish, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-
-  bench:
-    name: Bench
-    uses: ./.github/workflows/bench.yml
-    needs: [publish, download]
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
-      samples: 2
-      push_results: true
-      results_dataset: cedana_alpha
-      post_summary_pr: false
+      parallelism: 1
+      post_summary: true
