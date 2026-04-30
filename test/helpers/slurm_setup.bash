@@ -627,6 +627,16 @@ EOF
         runtime_plugins="$runtime_plugins $storage_plugin"
     fi
 
+    local expected_runtime_paths=(
+        "/usr/local/bin/criu"
+        "/usr/local/lib/libcedana-runc.so"
+    )
+    case "$storage_plugin" in
+        storage/cedana) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-cedana.so") ;;
+        storage/s3) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-s3.so") ;;
+        storage/gcs) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-gcs.so") ;;
+    esac
+
     debug_log "Installing SLURM plugin and runtime plugins on controller..."
     docker exec \
         -e CEDANA_PLUGINS_BUILDS="local" \
@@ -666,9 +676,14 @@ EOF
         local plugins_ok=0
         while [ "$waited" -lt 30 ]; do
             if docker exec "$c" bash -c '
-                test -f /usr/local/lib/libcedana-runc.so &&
-                test -f /usr/local/lib/libcedana-criu.so
-            ' 2>/dev/null; then
+                set -euo pipefail
+                for path in "$@"; do
+                    case "$path" in
+                        /usr/local/bin/*) test -x "$path" ;;
+                        *) test -f "$path" ;;
+                    esac
+                done
+            ' bash "${expected_runtime_paths[@]}" 2>/dev/null; then
                 plugins_ok=1
                 break
             fi
@@ -677,7 +692,10 @@ EOF
         done
         if [ "$plugins_ok" -ne 1 ]; then
             error_log "Cedana plugin libs not visible on $c after ${waited}s"
+            printf 'Expected runtime paths:\n' >&"${OUTPUT_FD}"
+            printf '  %s\n' "${expected_runtime_paths[@]}" >&"${OUTPUT_FD}"
             docker exec "$c" ls -la /usr/local/lib 2>/dev/null || true
+            docker exec "$c" ls -la /usr/local/bin/criu 2>/dev/null || true
             return 1
         fi
     done
