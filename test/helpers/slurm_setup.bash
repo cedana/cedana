@@ -144,13 +144,12 @@ setup_slurm_cluster() {
 
     # Use a YAML file for extra vars so booleans stay booleans (not strings).
     # `-e key=value` on the CLI treats the value as string "false", which is
-    # truthy in Jinja `when:` — that would re-enable NFS even though we want
-    # it off.
+    # truthy in Jinja `when:`.
     local vars_file="/tmp/cedana-slurm-vars-$$.yml"
     cat >"$vars_file" <<'EOF'
 slurm_cluster_name: cedana_test_cluster
 slurm_accounting_enabled: false
-nfs_shared_install: false
+nfs_shared_install: true
 EOF
 
     local rc=0
