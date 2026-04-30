@@ -184,7 +184,7 @@ jobs:
           sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
           test -f ./libcedana-slurm.so
           CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
-          CEDANA_PLUGINS_BUILDS=local sudo -E cedana slurm setup
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana slurm setup --node-role worker
 
       - name: Capture preflight binary metadata
         shell: bash
