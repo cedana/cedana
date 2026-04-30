@@ -572,15 +572,21 @@ EOF
 
     debug_log "Installing SLURM plugin via Cedana CLI in all nodes..."
     for c in "${all_containers[@]}"; do
+        local node_role="worker"
+        if [ "$c" = "$SLURM_CONTROLLER_CONTAINER" ]; then
+            node_role="controller"
+        fi
+
         docker exec \
             -e CEDANA_PLUGINS_BUILDS="local" \
             -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
+            -e CEDANA_SLURM_NODE_ROLE="$node_role" \
             "$c" bash -c '
                 set -euo pipefail
                 cedana plugin install slurm
-                cedana slurm setup
+                cedana slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
             ' >&"${OUTPUT_FD}" 2>&1 ||
             {
                 error_log "Cedana SLURM plugin install/setup failed on $c"
