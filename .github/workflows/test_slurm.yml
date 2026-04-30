@@ -164,6 +164,9 @@ jobs:
           chmod +x ./cedana*
           chmod +x ./criu
           echo "$PWD" >> $GITHUB_PATH
+          mkdir -p /tmp/cedana-preflight-bin
+          cp ./cedana /tmp/cedana-preflight-bin/cedana
+          cp ./criu /tmp/cedana-preflight-bin/criu
           sudo cp ./cedana /usr/local/bin/cedana
           sudo -E cedana plugin install \
             criu \
@@ -251,7 +254,8 @@ jobs:
         shell: bash
         env:
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
-          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
+          CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           CEDANA_PLUGINS_BUILDS: alpha
