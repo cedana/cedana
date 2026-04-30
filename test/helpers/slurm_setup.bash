@@ -432,6 +432,7 @@ wait_for_slurm_ready() {
 install_cedana_in_slurm() {
     info_log "Installing Cedana into SLURM cluster containers..."
 
+    local install_stage="/tmp/cedana-slurm-install"
     local all_containers=("$SLURM_CONTROLLER_CONTAINER")
     local compute_containers=()
     # shellcheck disable=SC2207
@@ -484,18 +485,27 @@ install_cedana_in_slurm() {
     fi
 
     debug_log "Copying cedana + criu binaries into controller..."
-    docker cp "$cedana_bin" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana" &&
-        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/cedana ||
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "rm -rf '$install_stage' && mkdir -p '$install_stage/bin' '$install_stage/lib'" ||
         {
-            error_log "Failed to install cedana binary in $SLURM_CONTROLLER_CONTAINER"
+            error_log "Failed to prepare install staging directory in $SLURM_CONTROLLER_CONTAINER"
             return 1
         }
-    docker cp "$criu_bin" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/criu" &&
-        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/criu ||
-        {
-            error_log "Failed to install criu binary in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        }
+    if ! docker cp "$cedana_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana"; then
+        error_log "Failed to stage cedana binary in $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    fi
+    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana" /usr/local/bin/cedana; then
+        error_log "Failed to install cedana binary in $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    fi
+    if ! docker cp "$criu_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/criu"; then
+        error_log "Failed to stage criu binary in $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    fi
+    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/criu" /usr/local/bin/criu; then
+        error_log "Failed to install criu binary in $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    fi
 
     debug_log "Copying plugin libraries into controller..."
     for so in /usr/local/lib/libcedana-*.so \
@@ -504,25 +514,33 @@ install_cedana_in_slurm() {
         /usr/local/lib/cli_filter_cedana.so \
         /usr/local/lib/job_submit_cedana.so; do
         [ -f "$so" ] || continue
-        docker cp "$so" "${SLURM_CONTROLLER_CONTAINER}:/usr/local/lib/$(basename "$so")" ||
-            {
-                error_log "Failed to copy $(basename "$so") into $SLURM_CONTROLLER_CONTAINER"
-                return 1
-            }
+        local so_name
+        so_name="$(basename "$so")"
+        if ! docker cp "$so" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/lib/${so_name}"; then
+            error_log "Failed to stage ${so_name} in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
+        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0644 "${install_stage}/lib/${so_name}" "/usr/local/lib/${so_name}"; then
+            error_log "Failed to install ${so_name} in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
     done
 
-    if [ ! -f "/usr/local/bin/cedana-slurm" ]; then
-        error_log "cedana-slurm binary not found at /usr/local/bin/cedana-slurm"
+    local cedana_slurm_bin="${CEDANA_SLURM_BIN:-/usr/local/bin/cedana-slurm}"
+    if [ ! -f "$cedana_slurm_bin" ]; then
+        error_log "cedana-slurm binary not found at $cedana_slurm_bin"
         return 1
     fi
 
     debug_log "Copying cedana-slurm binary into controller..."
-    docker cp /usr/local/bin/cedana-slurm "${SLURM_CONTROLLER_CONTAINER}:/usr/local/bin/cedana-slurm" &&
-        docker exec "$SLURM_CONTROLLER_CONTAINER" chmod +x /usr/local/bin/cedana-slurm ||
-        {
-            error_log "Failed to install cedana-slurm in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        }
+    if ! docker cp "$cedana_slurm_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana-slurm"; then
+        error_log "Failed to stage cedana-slurm in $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    fi
+    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana-slurm" /usr/local/bin/cedana-slurm; then
+        error_log "Failed to install cedana-slurm in $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    fi
 
     debug_log "Waiting for NFS-shared binaries to be visible on compute nodes..."
     for c in "${compute_containers[@]}"; do
@@ -1018,13 +1036,19 @@ start_cedana_slurm_daemon() {
     targets+=("${compute_containers[@]}")
 
     if [ -n "${CEDANA_SLURM_BIN:-}" ] && [ -f "$CEDANA_SLURM_BIN" ]; then
-        for c in "${targets[@]}"; do
-            docker cp "$CEDANA_SLURM_BIN" "${c}:/usr/local/bin/cedana-slurm" ||
-                {
-                    error_log "Failed to copy CEDANA_SLURM_BIN into $c"
-                    return 1
-                }
-        done
+        local daemon_install_stage="/tmp/cedana-slurm-install"
+        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "rm -rf '$daemon_install_stage' && mkdir -p '$daemon_install_stage/bin'"; then
+            error_log "Failed to prepare cedana-slurm install staging directory in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
+        if ! docker cp "$CEDANA_SLURM_BIN" "${SLURM_CONTROLLER_CONTAINER}:${daemon_install_stage}/bin/cedana-slurm"; then
+            error_log "Failed to stage CEDANA_SLURM_BIN into $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
+        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${daemon_install_stage}/bin/cedana-slurm" /usr/local/bin/cedana-slurm; then
+            error_log "Failed to install CEDANA_SLURM_BIN into $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
     fi
 
     for c in "${targets[@]}"; do
