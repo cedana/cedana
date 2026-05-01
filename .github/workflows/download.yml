@@ -62,30 +62,19 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download cedana
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
-          ARCH: ${{ matrix.arch }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Download cedana from S3
         run: |
           mkdir -p cedana
           cd cedana
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana"
-          else
-            REPO="cedana/cedana-alpha"
-          fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-${ARCH}/versions/${VERSION}/cedana"
-
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o cedana-${ARCH} "$URL2"
-          fi
-          mv cedana-${ARCH} cedana
-          echo $VERSION > cedana-version.txt
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
+          aws s3 cp s3://cedana-bin/${{ inputs.cedana_version }}/${{ matrix.arch }}/${REF_SAFE}/cedana
 
       - name: Upload cedana
         uses: actions/upload-artifact@v4
@@ -142,6 +131,9 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
       - name: Set plugin name
         env:
@@ -149,30 +141,22 @@ jobs:
         run: |
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
-
-      - name: Download plugin
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          PLUGIN: ${{ env.PLUGIN }}
-          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
-          ARCH: ${{ matrix.arch }}
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Download plugin from S3
         run: |
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana"
-          else
-            REPO="cedana/cedana-alpha"
-          fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-${PLUGIN}.so-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so"
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
+          PLUGIN_NAME="${{ matrix.plugin }}"
+          PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o libcedana-${PLUGIN}.so-${ARCH} "$URL2"
-          fi
-          mv libcedana-${PLUGIN}.so-${ARCH} libcedana-${PLUGIN}.so
-          echo $VERSION > plugins-version.txt
+          aws s3 cp \
+            s3://cedana-bin/${{ inputs.cedana_version }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so \
+            libcedana-${PLUGIN_SAFE}.so
 
       - name: Upload plugin
         uses: actions/upload-artifact@v4
@@ -180,7 +164,6 @@ jobs:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
             ./libcedana-*.so
-            ./plugin-version.txt
 
   criu:
     name: CRIU
@@ -192,31 +175,28 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
-      - name: Download CRIU
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Download CRIU from S3
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.criu_version == 'release' && 'latest' || inputs.criu_version }}
-          ARCH: ${{ matrix.arch }}
+          aws_s3_criu_path: ${{ inputs.criu_version == 'main' && 'criu' || 'criu-alpha' }}
         run: |
+          set -euo pipefail
           mkdir -p criu
-          cd criu
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/criu"
-          else
-            REPO="cedana/criu-alpha"
-          fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/criu-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/criu-${ARCH}/versions/${VERSION}/criu"
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o criu-${ARCH} "$URL2"
-          fi
-          mv criu-${ARCH} criu
-          echo $VERSION > criu-version.txt
+          aws s3 cp \
+            s3://cedana-bin/${aws_s3_criu_path}/${{ matrix.arch }}/${{ inputs.criu_version }}/criu \
+            criu/criu
 
       - name: Upload CRIU
         uses: actions/upload-artifact@v4
@@ -234,50 +214,43 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
-      - name: Download binaries
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download GPU binaries from S3
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
           VERSION: ${{ inputs.gpu_version == 'release' && 'latest' || inputs.gpu_version }}
-          ARCH: ${{ matrix.arch }}
         run: |
-          mkdir -p gpu
-          cd gpu
+          set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana-gpu"
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+            aws_s3_path="cedana-gpu"
           else
-            REPO="cedana/cedana-gpu-alpha"
+            aws_s3_path="cedana-gpu-alpha"
           fi
+          mkdir -p gpu
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
 
-          # Download cedana-gpu-controller with fallback
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-gpu-controller-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-gpu-controller-${ARCH}/versions/${VERSION}/cedana-gpu-controller"
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed for cedana-gpu-controller, trying alternative URL..."
-            curl -1Lf -o cedana-gpu-controller-${ARCH} "$URL2"
-          fi
+          aws s3 cp \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-gpu-controller \
+            gpu/cedana-gpu-controller
 
-          # Download libcedana-gpu.so with fallback
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-gpu.so-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-gpu.so-${ARCH}/versions/${VERSION}/libcedana-gpu.so"
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed for libcedana-gpu.so, trying alternative URL..."
-            curl -1Lf -o libcedana-gpu.so-${ARCH} "$URL2"
-          fi
+          aws s3 cp \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/libcedana-gpu.so \
+            gpu/libcedana-gpu.so
 
-          # Download libcedana-gpu-tracer.so with fallback
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-gpu-tracer.so-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-gpu-tracer.so-${ARCH}/versions/${VERSION}/libcedana-gpu-tracer.so"
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed for libcedana-gpu-tracer.so, trying alternative URL..."
-            curl -1Lf -o libcedana-gpu-tracer.so-${ARCH} "$URL2"
-          fi
-
-          mv cedana-gpu-controller-${ARCH} cedana-gpu-controller
-          mv libcedana-gpu.so-${ARCH} libcedana-gpu.so
-          mv libcedana-gpu-tracer.so-${ARCH} libcedana-gpu-tracer.so
-          echo $VERSION > gpu-version.txt
+          aws s3 cp \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/libcedana-gpu-tracer.so \
+            gpu/libcedana-gpu-tracer.so
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -295,31 +268,35 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
-      - name: Download binaries
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download streamer from S3
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
           VERSION: ${{ inputs.streamer_version == 'release' && 'latest' || inputs.streamer_version }}
-          ARCH: ${{ matrix.arch }}
         run: |
-          mkdir -p streamer
-          cd streamer
+          set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana-image-streamer"
+            aws_s3_path="cedana-image-streamer"
           else
-            REPO="cedana/cedana-image-streamer-alpha"
+            aws_s3_path="cedana-image-streamer-alpha"
           fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-image-streamer-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-image-streamer-${ARCH}/versions/${VERSION}/cedana-image-streamer"
+          mkdir -p streamer
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o cedana-image-streamer-${ARCH} "$URL2"
-          fi
-          mv cedana-image-streamer-${ARCH} cedana-image-streamer
-          echo $VERSION > streamer-version.txt
+          aws s3 cp \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-image-streamer \
+            streamer/cedana-image-streamer
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -382,33 +359,35 @@ jobs:
         arch:
           - amd64
           - arm64
+    permissions:
+      id-token: write # required for OIDC
+      contents: read
     steps:
-      - name: Download runtime binaries
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Download runtime from S3
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
           VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
-          ARCH: ${{ matrix.arch }}
         run: |
-          mkdir -p containerd-runtime-runc
-          cd containerd-runtime-runc
+          set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana-runtime-shim"
+            aws_s3_path="cedana-runtime-shim"
           else
-            REPO="cedana/cedana-runtime-shim-alpha"
+            aws_s3_path="cedana-runtime-shim-alpha"
           fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-shim-runc-v2-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-shim-runc-v2-${ARCH}/versions/${VERSION}/cedana-shim-runc-v2"
+          mkdir -p containerd-runtime-runc
+          REF="${{ github.head_ref || github.ref_name }}"
+          REF_SAFE="${REF//\//-}"
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o cedana-shim-runc-v2-${ARCH} "$URL2"
-          fi
-          mv cedana-shim-runc-v2-${ARCH} cedana-shim-runc-v2
-          echo $VERSION > containerd-runtime-version.txt
-          cd -
-          # TODO: Can add more runtimes here in the future
+          aws s3 cp \
+            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-shim-runc-v2 \
+            containerd-runtime-runc/cedana-shim-runc-v2
 
       - name: Upload runtime runc artifacts
         uses: actions/upload-artifact@v4
@@ -444,86 +423,3 @@ jobs:
         with:
           name: helm-chart
           path: cedana-helm
-
-  slurm:
-    name: Slurm
-    if: ${{ inputs.slurm_version != 'none' }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: true
-      matrix:
-        arch:
-          - amd64
-    steps:
-      - name: Checkout cedana-slurm
-        uses: actions/checkout@v4
-        with:
-          repository: cedana/cedana-slurm
-          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
-          path: slurm/cedana-slurm
-          token: ${{ secrets.GIT_CI_PAT }}
-          submodules: recursive
-
-      - name: Resolve slurm binaries
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
-          ARCH: ${{ matrix.arch }}
-        run: |
-          set -euo pipefail
-
-          mkdir -p slurm/build
-
-          VERSION_REF="${VERSION//\//-}"
-          CHECKOUT_SHA="$(git -C slurm/cedana-slurm rev-parse HEAD)"
-          ORIGIN_FILE="slurm/slurm-artifact-origin.txt"
-
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana-slurm"
-            {
-              echo "source_mode=cloudsmith"
-              echo "source_ref=${VERSION_REF}"
-              echo "checkout_sha=${CHECKOUT_SHA}"
-              echo "cloudsmith_repo=${REPO}"
-            } > "$ORIGIN_FILE"
-
-            cd slurm
-            for binary in cedana-slurm spank_cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
-              URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION_REF}/${binary}-${ARCH}"
-              URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${VERSION_REF}/${binary}"
-              if ! curl -1Lf -O "$URL1"; then
-                echo "Primary URL failed for ${binary}, trying alternative URL..."
-                curl -1Lf -o "${binary}-${ARCH}" "$URL2"
-              fi
-              mv "${binary}-${ARCH}" "build/${binary}" 2>/dev/null || mv "${binary}" "build/${binary}" 2>/dev/null || true
-            done
-            cd ..
-          else
-            {
-              echo "source_mode=local-build"
-              echo "source_ref=${VERSION_REF}"
-              echo "built_from_sha=${CHECKOUT_SHA}"
-            } > "$ORIGIN_FILE"
-
-            (
-              cd slurm/cedana-slurm
-              make all
-            )
-            cp slurm/cedana-slurm/build/cedana-slurm slurm/build/cedana-slurm
-            cp slurm/cedana-slurm/build/spank_cedana.so slurm/build/spank_cedana.so
-            cp slurm/cedana-slurm/build/task_cedana.so slurm/build/task_cedana.so
-            cp slurm/cedana-slurm/build/cli_filter_cedana.so slurm/build/cli_filter_cedana.so
-            cp slurm/cedana-slurm/build/job_submit_cedana.so slurm/build/job_submit_cedana.so
-          fi
-
-          echo "$VERSION_REF" > slurm/slurm-version.txt
-
-          echo "=== Binary checksums ==="
-          md5sum slurm/build/* 2>/dev/null || true
-          ls -la slurm/build/
-
-      - name: Upload slurm artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: slurm-${{ matrix.arch }}
-          path: ./slurm/*

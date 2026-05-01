@@ -54,13 +54,12 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      criu_version: criu-dev
-      gpu_version: main
-      streamer_version: main
+      criu_version: feat-CED-1769
+      gpu_version: feat-CED-1769
+      streamer_version: feat-CED-1769
       helm_chart_version: main
       controller_version: main
-      containerd_runtime_version: cedana
-      slurm_version: main
+      containerd_runtime_version: feat-CED-1769
 
   publish:
     name: Publish
@@ -69,8 +68,8 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      cloudsmith: true
-      cloudsmith_repo: cedana-alpha
+      aws_s3: true
+      aws_s3_path: cedana-alpha
       dockerhub: true
       post_summary: false
 

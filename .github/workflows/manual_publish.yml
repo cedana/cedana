@@ -28,14 +28,14 @@ on:
         description: "Publish to GitHub releases"
         required: false
         default: false
-      cloudsmith:
+      aws_s3:
         type: boolean
-        description: "Publish to Cloudsmith"
+        description: "Publish to AWS S3"
         required: false
         default: false
-      cloudsmith_repo:
+      aws_s3_path:
         type: string
-        description: "Cloudsmith repository to publish to"
+        description: "S3 path to publish to"
         required: false
         default: cedana-alpha
       dockerhub:
@@ -74,8 +74,8 @@ jobs:
     secrets: inherit
     with:
       github: ${{ inputs.github }}
-      cloudsmith: ${{ inputs.cloudsmith }}
-      cloudsmith_repo: ${{ inputs.cloudsmith_repo }}
+      aws_s3: ${{ inputs.aws_s3 }}
+      aws_s3_path: ${{ inputs.aws_s3_path }}
       dockerhub: ${{ inputs.dockerhub }}
       dockerhub_latest: ${{ inputs.dockerhub_latest }}
       post_summary: ${{ inputs.post_summary }}
