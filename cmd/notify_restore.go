@@ -72,29 +72,31 @@ func addRestoreNotificationFlags(set *pflag.FlagSet, includeEnable bool) {
 	set.String(flags.RequestMetadataFlag.Full, "", "JSON object for request metadata")
 	set.String(flags.RuntimeMetadataFlag.Full, "", "JSON object for runtime metadata")
 	set.String(flags.ProfilingPathFlag.Full, "", "write restore profiling JSON to this local file path")
-	set.Bool(flags.UploadProfilingFlag.Full, false, "upload restore profiling JSON next to the restore path using the selected storage backend")
+	set.String(flags.ProfilingUploadPathFlag.Full, "", "upload restore profiling JSON to this storage path instead of deriving it from the restore path")
+	set.Bool(flags.UploadProfilingFlag.Full, false, "upload restore profiling JSON using the selected storage backend")
 }
 
 func restoreNotificationConfigFromFlags(set *pflag.FlagSet, force bool) (restorenotify.Config, error) {
 	enabled := force || mustGetBool(set, flags.NotifyFlag.Full)
 	cfg := restorenotify.Config{
-		Enabled:            enabled,
-		RestoreUUID:        mustGetString(set, flags.RestoreIDFlag.Full),
-		NotificationName:   mustGetString(set, flags.NotificationNameFlag.Full),
-		Router:             mustGetString(set, flags.RouterFlag.Full),
-		RabbitMQURL:        mustGetString(set, flags.RabbitMQURLFlag.Full),
-		ClusterID:          mustGetString(set, flags.ClusterIDFlag.Full),
-		WorkloadType:       mustGetString(set, flags.WorkloadTypeFlag.Full),
-		CheckpointID:       mustGetString(set, flags.CheckpointIDFlag.Full),
-		CheckpointActionID: mustGetString(set, flags.CheckpointActionIDFlag.Full),
-		ActionIDs:          mustGetStringSlice(set, flags.ActionIDFlag.Full),
-		ActionScope:        mustGetString(set, flags.ActionScopeFlag.Full),
-		PathID:             mustGetString(set, flags.PathIDFlag.Full),
-		RestorePath:        mustGetString(set, flags.RestorePathFlag.Full),
-		StorageProvider:    mustGetString(set, flags.StorageProviderFlag.Full),
-		ErrorMessage:       mustGetString(set, flags.ErrorMessageFlag.Full),
-		ProfilingPath:      mustGetString(set, flags.ProfilingPathFlag.Full),
-		UploadProfiling:    mustGetBool(set, flags.UploadProfilingFlag.Full),
+		Enabled:             enabled,
+		RestoreUUID:         mustGetString(set, flags.RestoreIDFlag.Full),
+		NotificationName:    mustGetString(set, flags.NotificationNameFlag.Full),
+		Router:              mustGetString(set, flags.RouterFlag.Full),
+		RabbitMQURL:         mustGetString(set, flags.RabbitMQURLFlag.Full),
+		ClusterID:           mustGetString(set, flags.ClusterIDFlag.Full),
+		WorkloadType:        mustGetString(set, flags.WorkloadTypeFlag.Full),
+		CheckpointID:        mustGetString(set, flags.CheckpointIDFlag.Full),
+		CheckpointActionID:  mustGetString(set, flags.CheckpointActionIDFlag.Full),
+		ActionIDs:           mustGetStringSlice(set, flags.ActionIDFlag.Full),
+		ActionScope:         mustGetString(set, flags.ActionScopeFlag.Full),
+		PathID:              mustGetString(set, flags.PathIDFlag.Full),
+		RestorePath:         mustGetString(set, flags.RestorePathFlag.Full),
+		StorageProvider:     mustGetString(set, flags.StorageProviderFlag.Full),
+		ErrorMessage:        mustGetString(set, flags.ErrorMessageFlag.Full),
+		ProfilingPath:       mustGetString(set, flags.ProfilingPathFlag.Full),
+		ProfilingUploadPath: mustGetString(set, flags.ProfilingUploadPathFlag.Full),
+		UploadProfiling:     mustGetBool(set, flags.UploadProfilingFlag.Full),
 	}
 
 	metadata, err := jsonObjectFlag(set, flags.MetadataFlag.Full)

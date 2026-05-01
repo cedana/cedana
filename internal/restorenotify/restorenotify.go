@@ -9,6 +9,7 @@ import (
 	pathpkg "path"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cedana/cedana/internal/cedana/filesystem"
@@ -37,47 +38,49 @@ const (
 )
 
 type Config struct {
-	Enabled            bool           `json:"enabled"`
-	Event              Event          `json:"event,omitempty"`
-	RestoreUUID        string         `json:"restore_uuid,omitempty"`
-	NotificationName   string         `json:"notification_name,omitempty"`
-	Router             string         `json:"router,omitempty"`
-	RabbitMQURL        string         `json:"rabbitmq_url,omitempty"`
-	ClusterID          string         `json:"cluster_id,omitempty"`
-	WorkloadType       string         `json:"workload_type,omitempty"`
-	CheckpointID       string         `json:"checkpoint_id,omitempty"`
-	CheckpointActionID string         `json:"checkpoint_action_id,omitempty"`
-	ActionIDs          []string       `json:"action_ids,omitempty"`
-	ActionScope        string         `json:"action_scope,omitempty"`
-	PathID             string         `json:"path_id,omitempty"`
-	RestorePath        string         `json:"restore_path,omitempty"`
-	StorageProvider    string         `json:"storage_provider,omitempty"`
-	ErrorMessage       string         `json:"error_message,omitempty"`
-	Metadata           map[string]any `json:"metadata,omitempty"`
-	RequestMetadata    map[string]any `json:"request_metadata,omitempty"`
-	RuntimeMetadata    map[string]any `json:"runtime_metadata,omitempty"`
-	ProfilingPath      string         `json:"profiling_path,omitempty"`
-	UploadProfiling    bool           `json:"upload_profiling,omitempty"`
-	ProfilingObject    string         `json:"profiling_object,omitempty"`
-	ProfilingError     string         `json:"profiling_error,omitempty"`
+	Enabled             bool           `json:"enabled"`
+	Event               Event          `json:"event,omitempty"`
+	RestoreUUID         string         `json:"restore_uuid,omitempty"`
+	NotificationName    string         `json:"notification_name,omitempty"`
+	Router              string         `json:"router,omitempty"`
+	RabbitMQURL         string         `json:"rabbitmq_url,omitempty"`
+	ClusterID           string         `json:"cluster_id,omitempty"`
+	WorkloadType        string         `json:"workload_type,omitempty"`
+	CheckpointID        string         `json:"checkpoint_id,omitempty"`
+	CheckpointActionID  string         `json:"checkpoint_action_id,omitempty"`
+	ActionIDs           []string       `json:"action_ids,omitempty"`
+	ActionScope         string         `json:"action_scope,omitempty"`
+	PathID              string         `json:"path_id,omitempty"`
+	RestorePath         string         `json:"restore_path,omitempty"`
+	StorageProvider     string         `json:"storage_provider,omitempty"`
+	ErrorMessage        string         `json:"error_message,omitempty"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
+	RequestMetadata     map[string]any `json:"request_metadata,omitempty"`
+	RuntimeMetadata     map[string]any `json:"runtime_metadata,omitempty"`
+	ProfilingPath       string         `json:"profiling_path,omitempty"`
+	ProfilingUploadPath string         `json:"profiling_upload_path,omitempty"`
+	UploadProfiling     bool           `json:"upload_profiling,omitempty"`
+	ProfilingObject     string         `json:"profiling_object,omitempty"`
+	ProfilingError      string         `json:"profiling_error,omitempty"`
 }
 
 type Payload struct {
-	RestoreUUID        string         `json:"restore_uuid"`
-	PathID             string         `json:"path_id,omitempty"`
-	RestorePath        string         `json:"restore_path,omitempty"`
-	ClusterID          string         `json:"cluster_id,omitempty"`
-	WorkloadType       string         `json:"workload_type,omitempty"`
-	CheckpointID       string         `json:"checkpoint_id,omitempty"`
-	CheckpointActionID string         `json:"checkpoint_action_id,omitempty"`
-	ActionIDs          []string       `json:"action_ids,omitempty"`
-	ActionScope        string         `json:"action_scope,omitempty"`
-	StorageProvider    string         `json:"storage_provider,omitempty"`
-	ErrorMessage       string         `json:"error_message,omitempty"`
-	ProfilingPath      string         `json:"profiling_path,omitempty"`
-	Metadata           map[string]any `json:"metadata,omitempty"`
-	RequestMetadata    map[string]any `json:"request_metadata,omitempty"`
-	RuntimeMetadata    map[string]any `json:"runtime_metadata,omitempty"`
+	RestoreUUID         string         `json:"restore_uuid"`
+	PathID              string         `json:"path_id,omitempty"`
+	RestorePath         string         `json:"restore_path,omitempty"`
+	ClusterID           string         `json:"cluster_id,omitempty"`
+	WorkloadType        string         `json:"workload_type,omitempty"`
+	CheckpointID        string         `json:"checkpoint_id,omitempty"`
+	CheckpointActionID  string         `json:"checkpoint_action_id,omitempty"`
+	ActionIDs           []string       `json:"action_ids,omitempty"`
+	ActionScope         string         `json:"action_scope,omitempty"`
+	StorageProvider     string         `json:"storage_provider,omitempty"`
+	ErrorMessage        string         `json:"error_message,omitempty"`
+	ProfilingPath       string         `json:"profiling_path,omitempty"`
+	ProfilingUploadPath string         `json:"profiling_upload_path,omitempty"`
+	Metadata            map[string]any `json:"metadata,omitempty"`
+	RequestMetadata     map[string]any `json:"request_metadata,omitempty"`
+	RuntimeMetadata     map[string]any `json:"runtime_metadata,omitempty"`
 }
 
 func (e Event) QueueName() string {
@@ -250,20 +253,19 @@ func WriteProfilingJSON(target string, data *profiling.Data) error {
 	return nil
 }
 
-func UploadProfilingJSON(ctx context.Context, restorePath, restoreUUID string, data *profiling.Data) (string, error) {
+func UploadProfilingJSON(ctx context.Context, target string, data *profiling.Data) (string, error) {
 	if data == nil {
 		return "", nil
 	}
-	if restorePath == "" {
-		return "", fmt.Errorf("restore path is required to upload profiling data")
+	if target == "" {
+		return "", fmt.Errorf("target path is required to upload profiling data")
 	}
 
-	storage, err := ResolveStorage(ctx, restorePath)
+	storage, err := ResolveStorage(ctx, target)
 	if err != nil {
 		return "", err
 	}
 
-	target := ProfilingObjectPath(restorePath, restoreUUID)
 	body, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return "", fmt.Errorf("marshal profiling data: %w", err)
@@ -379,7 +381,9 @@ func LogPublishFailure(cfg Config, event Event, err error) {
 }
 
 type Dispatcher struct {
-	tasks chan func()
+	tasks     chan func()
+	closeOnce sync.Once
+	wg        sync.WaitGroup
 }
 
 func NewDispatcher(launch func(func())) *Dispatcher {
@@ -398,23 +402,38 @@ func (d *Dispatcher) Submit(task func()) {
 	if d == nil || task == nil {
 		return
 	}
-	d.tasks <- task
+	d.wg.Add(1)
+	d.tasks <- func() {
+		defer d.wg.Done()
+		task()
+	}
 }
 
 func (d *Dispatcher) Close() {
 	if d == nil {
 		return
 	}
-	close(d.tasks)
+	d.closeOnce.Do(func() {
+		close(d.tasks)
+	})
 }
 
-func (d *Dispatcher) SubmitPublish(ctx context.Context, cfg Config, event Event) {
-	cfgCopy := cfg
+func (d *Dispatcher) Wait() {
+	if d == nil {
+		return
+	}
+	d.wg.Wait()
+}
+
+func (d *Dispatcher) SubmitPublish(ctx context.Context, cfg *Config, event Event) {
+	if cfg == nil {
+		return
+	}
 	d.Submit(func() {
 		taskCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), publishTimeout)
 		defer cancel()
-		if err := NewPublishFunc(NewRabbitPublisher)(taskCtx, cfgCopy, event); err != nil {
-			LogPublishFailure(cfgCopy, event, err)
+		if err := NewPublishFunc(NewRabbitPublisher)(taskCtx, *cfg, event); err != nil {
+			LogPublishFailure(*cfg, event, err)
 		}
 	})
 }
@@ -439,7 +458,11 @@ func (d *Dispatcher) SubmitProfilingUpload(ctx context.Context, cfg *Config, dat
 		taskCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), profilingTaskTimeout)
 		defer cancel()
 
-		objectPath, err := UploadProfilingJSON(taskCtx, cfgCopy.RestorePath, cfgCopy.RestoreUUID, data)
+		target := cfgCopy.ProfilingUploadPath
+		if target == "" {
+			target = ProfilingObjectPath(cfgCopy.RestorePath, cfgCopy.RestoreUUID)
+		}
+		objectPath, err := UploadProfilingJSON(taskCtx, target, data)
 		if err != nil {
 			log.Error().Err(err).Str("restore_uuid", cfgCopy.RestoreUUID).Msg("restore profiling upload failed")
 			cfg.ProfilingError = err.Error()

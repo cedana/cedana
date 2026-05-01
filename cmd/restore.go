@@ -215,68 +215,53 @@ var restoreCmd = &cobra.Command{
 			}
 		}
 
-		if noServer {
-			dispatcher := restorenotify.NewDispatcher(func(fn func()) { go fn() })
-			defer dispatcher.Close()
+		dispatcher := restorenotify.NewDispatcher(func(fn func()) { go fn() })
+		finish := func() {
+			dispatcher.Close()
+			dispatcher.Wait()
+		}
 
+		if noServer {
 			cedana, err := cedana.New(ctx, "restore")
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
-			dispatcher.SubmitPublish(ctx, notifyCfg, restorenotify.EventStart)
+			if notifyCfg.Enabled {
+				dispatcher.SubmitPublish(ctx, &notifyCfg, restorenotify.EventStart)
+			}
 
 			code, err := cedana.Restore(req)
 			data := cedana.Finalize()
 			if err != nil {
 				notifyCfg.ErrorMessage = err.Error()
-				dispatcher.Submit(func() {
-					asyncCfg := notifyCfg
-					if asyncCfg.UploadProfiling && data != nil {
-						objectPath, uploadErr := restorenotify.UploadProfilingJSON(context.WithoutCancel(ctx), asyncCfg.RestorePath, asyncCfg.RestoreUUID, data)
-						if uploadErr != nil {
-							asyncCfg.ProfilingError = uploadErr.Error()
-							restorenotify.LogPublishFailure(asyncCfg, restorenotify.EventError, uploadErr)
-						} else {
-							asyncCfg.ProfilingObject = objectPath
-						}
-					}
-					if asyncCfg.ProfilingPath != "" && data != nil {
-						if writeErr := restorenotify.WriteProfilingJSON(asyncCfg.ProfilingPath, data); writeErr != nil {
-							fmt.Println(style.WarningColors.Sprintf("failed to write restore profiling JSON: %v", writeErr))
-						}
-					}
-					if publishErr := publishRestoreEvent(context.WithoutCancel(ctx), asyncCfg, restorenotify.EventError); publishErr != nil {
-						restorenotify.LogPublishFailure(asyncCfg, restorenotify.EventError, publishErr)
-					}
-				})
+				if notifyCfg.UploadProfiling && data != nil {
+					dispatcher.SubmitProfilingUpload(context.WithoutCancel(ctx), &notifyCfg, data)
+				}
+				if notifyCfg.ProfilingPath != "" && data != nil {
+					dispatcher.SubmitProfilingWrite(notifyCfg.ProfilingPath, data)
+				}
+				if notifyCfg.Enabled {
+					dispatcher.SubmitPublish(context.WithoutCancel(ctx), &notifyCfg, restorenotify.EventError)
+				}
+				finish()
 				return utils.GRPCErrorColored(err)
 			}
 
-			dispatcher.Submit(func() {
-				asyncCfg := notifyCfg
-				if asyncCfg.UploadProfiling && data != nil {
-					objectPath, uploadErr := restorenotify.UploadProfilingJSON(context.WithoutCancel(ctx), asyncCfg.RestorePath, asyncCfg.RestoreUUID, data)
-					if uploadErr != nil {
-						asyncCfg.ProfilingError = uploadErr.Error()
-						fmt.Println(style.WarningColors.Sprintf("failed to upload restore profiling JSON: %v", uploadErr))
-					} else {
-						asyncCfg.ProfilingObject = objectPath
-					}
-				}
-				if asyncCfg.ProfilingPath != "" && data != nil {
-					if writeErr := restorenotify.WriteProfilingJSON(asyncCfg.ProfilingPath, data); writeErr != nil {
-						fmt.Println(style.WarningColors.Sprintf("failed to write restore profiling JSON: %v", writeErr))
-					}
-				}
-				if publishErr := publishRestoreEvent(context.WithoutCancel(ctx), asyncCfg, restorenotify.EventSuccess); publishErr != nil {
-					restorenotify.LogPublishFailure(asyncCfg, restorenotify.EventSuccess, publishErr)
-				}
-			})
+			if notifyCfg.UploadProfiling && data != nil {
+				dispatcher.SubmitProfilingUpload(context.WithoutCancel(ctx), &notifyCfg, data)
+			}
+			if notifyCfg.ProfilingPath != "" && data != nil {
+				dispatcher.SubmitProfilingWrite(notifyCfg.ProfilingPath, data)
+			}
+			if notifyCfg.Enabled {
+				dispatcher.SubmitPublish(context.WithoutCancel(ctx), &notifyCfg, restorenotify.EventSuccess)
+			}
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}
 
+			finish()
 			os.Exit(<-code)
 		} else {
 			if notifyCfg.Enabled {
@@ -296,19 +281,21 @@ var restoreCmd = &cobra.Command{
 			// Assuming request is now ready to be sent to the server
 			resp, data, err := client.Restore(ctx, req)
 			if err != nil {
+				finish()
 				return err
 			}
 
+			if notifyCfg.UploadProfiling && data != nil {
+				dispatcher.SubmitProfilingUpload(context.WithoutCancel(ctx), &notifyCfg, data)
+			}
 			if notifyCfg.ProfilingPath != "" && data != nil {
-				go func(path string, profilingData *profiling.Data) {
-					if writeErr := restorenotify.WriteProfilingJSON(path, profilingData); writeErr != nil {
-						fmt.Println(style.WarningColors.Sprintf("failed to write restore profiling JSON: %v", writeErr))
-					}
-				}(notifyCfg.ProfilingPath, data)
+				dispatcher.SubmitProfilingWrite(notifyCfg.ProfilingPath, data)
 			}
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}
+
+			finish()
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {

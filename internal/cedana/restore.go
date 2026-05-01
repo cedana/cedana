@@ -71,6 +71,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	}
 	resp := &daemon.RestoreResp{}
 	dispatcher := restorenotify.NewDispatcher(func(fn func()) { s.wg.Go(fn) })
+	defer dispatcher.Wait()
 	defer dispatcher.Close()
 
 	if notifyCfg != nil && notifyCfg.Enabled {
@@ -80,21 +81,21 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		if notifyCfg.StorageProvider == "" {
 			notifyCfg.StorageProvider = restorenotify.StorageProviderFromPath(notifyCfg.RestorePath)
 		}
-		dispatcher.SubmitPublish(ctx, *notifyCfg, restorenotify.EventStart)
+		dispatcher.SubmitPublish(ctx, notifyCfg, restorenotify.EventStart)
 	}
 
 	_, err = restore(ctx, opts, resp, req)
 	if err != nil {
 		if notifyCfg != nil && notifyCfg.Enabled {
 			notifyCfg.ErrorMessage = err.Error()
-			dispatcher.SubmitPublish(ctx, *notifyCfg, restorenotify.EventError)
+			dispatcher.SubmitPublish(ctx, notifyCfg, restorenotify.EventError)
 		}
 		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
 		return nil, err
 	}
 
 	if notifyCfg != nil && notifyCfg.Enabled {
-		dispatcher.SubmitPublish(ctx, *notifyCfg, restorenotify.EventSuccess)
+		dispatcher.SubmitPublish(ctx, notifyCfg, restorenotify.EventSuccess)
 	}
 
 	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("restore successful")
