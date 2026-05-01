@@ -44,6 +44,11 @@ on:
         description: Version for Cedana Helm chart (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+      slurm_version:
+        type: string
+        description: Version for cedana-slurm binaries (branch name, tag or "release" for latest release)
+        required: false
+        default: "none"
 
 jobs:
   cedana:

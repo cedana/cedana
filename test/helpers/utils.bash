@@ -13,6 +13,14 @@ export YELLOW='\033[0;33m'
 export BLUE='\033[0;34m'
 export NC='\033[0m' # No Color
 
+# Determine output file descriptor once at initialization
+# Use fd 3 if available (BATS), otherwise use stdout
+if { true >&3; } 2>/dev/null; then
+    OUTPUT_FD=3
+else
+    OUTPUT_FD=1
+fi
+
 load_lib() {
     load /usr/lib/bats/bats-"$1"/load
 }
@@ -240,20 +248,20 @@ wait_for_file() {
 
 info_log() {
     local message="$1"
-    echo -e "${BLUE}$message${NC}" >&3
+    echo -e "${BLUE}$message${NC}" >&"${OUTPUT_FD}"
 }
 
 debug_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
-        echo -e "${YELLOW}[DEBUG] $message${NC}" >&3
+        echo -e "${YELLOW}[DEBUG] $message${NC}" >&"${OUTPUT_FD}"
     fi
 }
 
 error_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
-        echo -e "${RED}[ERROR] $message${NC}" >&3
+        echo -e "${RED}[ERROR] $message${NC}" >&"${OUTPUT_FD}"
     else
         echo -e "${RED}[ERROR] $message${NC}" >&2
     fi
@@ -261,18 +269,18 @@ error_log() {
 
 info() {
     if [ "$#" -eq 1 ]; then
-        eval "$1" >&3 2>&1
+        eval "$1" >&"${OUTPUT_FD}" 2>&1
     else
-        "$@" >&3 2>&1
+        "$@" >&"${OUTPUT_FD}" 2>&1
     fi
 }
 
 debug() {
     if [ "$DEBUG" == "1" ]; then
         if [ "$#" -eq 1 ]; then
-            eval "$1" >&3 2>&1
+            eval "$1" >&"${OUTPUT_FD}" 2>&1
         else
-            "$@" >&3 2>&1
+            "$@" >&"${OUTPUT_FD}" 2>&1
         fi
     else
         if [ "$#" -eq 1 ]; then
@@ -286,9 +294,9 @@ debug() {
 error() {
     if [ "$DEBUG" == "1" ]; then
         if [ "$#" -eq 1 ]; then
-            eval "$1" >&3 2>&1
+            eval "$1" >&"${OUTPUT_FD}" 2>&1
         else
-            "$@" >&3 2>&1
+            "$@" >&"${OUTPUT_FD}" 2>&1
         fi
     else
         if [ "$#" -eq 1 ]; then
