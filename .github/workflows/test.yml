@@ -30,6 +30,11 @@ on:
         description: "Run kubernetes tests"
         required: false
         default: true
+      slurm:
+        type: boolean
+        description: "Run slurm tests"
+        required: false
+        default: true
       parallelism:
         type: number
         description: "Parallelism for running tests"
@@ -523,10 +528,26 @@ jobs:
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
+  slurm:
+    name: Slurm
+    uses: ./.github/workflows/test_slurm.yml
+    if: ${{ inputs.slurm }}
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      debug: ${{ inputs.debug }}
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner_gpu }}
+      # Pinned to 1 because SLURM tests share a single cluster instance.
+      # Running them in parallel can cause resource collisions and flaky tests.
+      parallelism: 1
+      post_summary: false # Will post consolidated summary instead
+
   post-summary:
     name: Post Summary
     if: always()
-    needs: [basic, plugin, streamer, gpu, k3s, eks, gke, nebius]
+    needs: [basic, plugin, streamer, gpu, k3s, eks, gke, nebius, slurm]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -114,6 +114,9 @@ var Global Config = Config{
 		BinDir: DEFAULT_PLUGINS_BIN_DIR,
 		Builds: DEFAULT_PLUGINS_BUILDS,
 	},
+	Slurm: Slurm{
+		Unprivileged: false,
+	},
 }
 
 // The current config directory, set during Init
