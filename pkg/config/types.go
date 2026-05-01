@@ -18,6 +18,8 @@ type (
 		LogLevelNoServer string `json:"log_level_no_server" key:"log_level_no_server" yaml:"log_level_no_server" mapstructure:"log_level_no_server"`
 		// Metrics is whether to enable metrics collection and observability
 		Metrics bool `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics" env_aliases:"CEDANA_METRICS_ENABLED"`
+		// Amount of storage cedana is allowed to use locally (in GB), 0 means disabled
+		StorageLimit int64 `json:"storage_limit" key:"storage_limit" yaml:"storage_limit" mapstructure:"storage_limit"`
 
 		// Connection settings
 		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`

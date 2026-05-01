@@ -28,6 +28,8 @@ const (
 	DEFAULT_LOG_LEVEL           = "info"
 	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
+	DEFAULT_STORAGE_LIMIT_GB = 0
+
 	DEFAULT_CHECKPOINT_COMPRESSION            = "none"
 	DEFAULT_CHECKPOINT_DIR                    = "/tmp"
 	DEFAULT_CHECKPOINT_STREAMS                = 0
@@ -73,6 +75,7 @@ var Global Config = Config{
 	LogLevel:         DEFAULT_LOG_LEVEL,
 	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Metrics:          DEFAULT_METRICS,
+	StorageLimit:     DEFAULT_STORAGE_LIMIT_GB,
 	Checkpoint: Checkpoint{
 		Dir:               DEFAULT_CHECKPOINT_DIR,
 		Compression:       DEFAULT_CHECKPOINT_COMPRESSION,

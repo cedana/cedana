@@ -22,3 +22,6 @@ ORDER BY Time DESC;
 
 -- name: DeleteCheckpoint :exec
 DELETE FROM checkpoints WHERE ID = ?;
+
+-- name: GetStorageUsed :one
+SELECT SUM(size) FROM checkpoints WHERE path NOT LIKE '%://%';

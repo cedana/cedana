@@ -33,6 +33,7 @@ type Checkpoint interface {
 	ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error)
 	ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error)
 	DeleteCheckpoint(ctx context.Context, id string) error
+	GetStorageUsed(ctx context.Context) (int64, error)
 }
 
 /////////////////
@@ -79,4 +80,8 @@ func (UnimplementedDB) ListCheckpointsByJID(ctx context.Context, jids ...string)
 
 func (UnimplementedDB) DeleteCheckpoint(ctx context.Context, id string) error {
 	return errors.New("unimplemented")
+}
+
+func (UnimplementedDB) GetStorageUsed(ctx context.Context) (uint64, error) {
+	return 0, errors.New("unimplemented")
 }

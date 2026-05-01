@@ -261,6 +261,36 @@ func (db *PropagatorDB) DeleteCheckpoint(ctx context.Context, id string) error {
 	return nil
 }
 
+func (db *PropagatorDB) GetStorageUsed(ctx context.Context) (int64, error) {
+	url := fmt.Sprintf("%s/checkpoints/storage_used", db.URL)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
+
+	resp, err := db.client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	var storageUsed struct {
+		StorageUsed int64 `json:"storage_used"`
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("failed to get storage used: %s", resp.Status)
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&storageUsed); err != nil {
+		return 0, err
+	}
+
+	return storageUsed.StorageUsed, nil
+}
+
 /////////////
 /// Hosts ///
 /////////////

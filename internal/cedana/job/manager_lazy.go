@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/internal/db"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/utils"
@@ -32,6 +35,8 @@ type ManagerLazy struct {
 	checkpoints        sync.Map
 	deletedJobs        sync.Map // to keep track of deleted jobs
 	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
+	storageUsedMutex   sync.Mutex
+	storageUsed        int64
 
 	host    *daemon.Host
 	plugins plugins.Manager
@@ -424,6 +429,38 @@ func (m *ManagerLazy) Sync(ctx context.Context) error {
 	return m.syncWithDB(ctx, action{initialize, ""})
 }
 
+func (m *ManagerLazy) ReserveStorageForJob(ctx context.Context, jid string) (int64, error) {
+	latestCheckpoint := m.GetLatestCheckpoint(jid)
+	var reserveAmount int64 = 250 * utils.MEBIBYTE
+	if latestCheckpoint != nil && latestCheckpoint.GetSize() > 0 {
+		reserveAmount = latestCheckpoint.GetSize()
+	}
+	err := m.ReserveStorageAmount(ctx, reserveAmount)
+	if err != nil {
+		return 0, err
+	}
+	return reserveAmount, nil
+}
+
+func (m *ManagerLazy) ReserveStorageAmount(ctx context.Context, amount int64) error {
+	m.storageUsedMutex.Lock()
+	defer m.storageUsedMutex.Unlock()
+	storageLimit := config.Global.StorageLimit * utils.GIBIBYTE
+	if amount+m.storageUsed > storageLimit {
+		return fmt.Errorf("not enough storage to checkpoint, storage limit: %v, storage used: %v",
+			utils.SizeStr(storageLimit),
+			utils.SizeStr(m.storageUsed))
+	}
+	m.storageUsed += amount
+	return nil
+}
+
+func (m *ManagerLazy) FreeStorage(ctx context.Context, amount int64) {
+	m.storageUsedMutex.Lock()
+	defer m.storageUsedMutex.Unlock()
+	m.storageUsed -= amount
+}
+
 ////////////////////////
 //// Helper Methods ////
 ////////////////////////
@@ -463,6 +500,21 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			}
 		}
 
+		if config.Global.StorageLimit > 0 {
+			m.storageUsedMutex.Lock()
+			storageUsed, err := m.db.GetStorageUsed(ctx)
+			if err != nil {
+				m.storageUsedMutex.Unlock()
+				return err
+			}
+
+			if storageUsed > config.Global.StorageLimit*utils.GIBIBYTE {
+				log.Warn().Msg("cedana has used more storage than the limit")
+			}
+			m.storageUsed = storageUsed
+			m.storageUsedMutex.Unlock()
+		}
+
 		// TODO: Can also remove stale jobs from memory. But need to be careful
 		// about race conditions. For now, we just keep them in memory until daemon
 		// is restarted.
@@ -483,10 +535,16 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 		checkpoint, ok := m.checkpoints.Load(id)
 		if ok {
 			err = m.db.PutCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
-		} else if _, deleted := m.deletedCheckpoints.Load(id); deleted {
+		} else if val, deleted := m.deletedCheckpoints.Load(id); deleted {
+			checkpoint := val.(*daemon.Checkpoint)
+			path := checkpoint.GetPath()
 			err = m.db.DeleteCheckpoint(ctx, id)
 			if err == nil {
 				m.deletedCheckpoints.Delete(id)
+				if config.Global.StorageLimit > 0 && !strings.Contains(path, "://") {
+					os.RemoveAll(path)
+					m.FreeStorage(ctx, checkpoint.GetSize())
+				}
 			}
 		}
 	}
