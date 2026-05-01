@@ -62,6 +62,15 @@ func Add(writer io.Writer) {
 		Logger().Hook(LineInfoHook{})
 }
 
+func SetLogger(writer io.Writer) {
+	GlobalWriter = writer
+	log.Logger = zerolog.New(GlobalWriter).
+		Level(Level).
+		With().
+		Timestamp().
+		Logger().Hook(LineInfoHook{})
+}
+
 func Get() *zerolog.Logger {
 	return &log.Logger
 }

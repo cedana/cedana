@@ -17,3 +17,16 @@ These helpers use the passed `context` to store profiling data. If the `context`
 {% hint style="info" %}
 Behind the scenes, if metrics is enabled ([configuration](../get-started/configuration.md) `Metrics=true`), this data is also captured as OTel spans.
 {% endhint %}
+
+## Restore profiling and metadata
+
+Restore uses the same profiling plumbing as dump, but adds two restore-specific outputs:
+
+- `--profiling-path` writes the flattened profiling JSON to a local file.
+- `--profiling-upload-path` stores the profiling JSON at an explicit storage path instead of deriving one from the restore source path.
+- `--upload-profiling` uploads the profiling JSON using the selected storage backend.
+- If `--profiling-upload-path` is omitted, cedana derives `restore-<uuid>.json` from `--restore-path` and writes there.
+
+The uploaded object name is derived from the restore UUID and is written as `restore-<uuid>.json`. For compressed archives, the file is placed next to the archive rather than inside it.
+
+Restore notifications can also carry request and runtime metadata when `--notify` is enabled. The flags `--metadata`, `--request-metadata`, `--runtime-metadata`, and `--notification-name` are copied into the restore event payload. If profiling upload fails, the payload also carries the upload error so downstream consumers can distinguish it from the restore error itself.

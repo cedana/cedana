@@ -14,6 +14,7 @@ import (
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
 	"github.com/cedana/cedana/internal/cedana"
+	"github.com/cedana/cedana/internal/restorenotify"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -63,6 +64,7 @@ func init() {
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.PersistentFlags().
 		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
+	addRestoreNotificationFlags(restoreCmd.PersistentFlags(), true)
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.OutFlag.Full,
@@ -197,25 +199,79 @@ var restoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid restore request in context")
 		}
 
+		notifyCfg, err := restoreNotificationConfigFromFlags(cmd.Flags(), false)
+		if err != nil {
+			return err
+		}
+		if notifyCfg.RestorePath == "" {
+			notifyCfg.RestorePath = req.GetPath()
+		}
+		if notifyCfg.StorageProvider == "" {
+			notifyCfg.StorageProvider = restorenotify.StorageProviderFromPath(notifyCfg.RestorePath)
+		}
+		if notifyCfg.Enabled || notifyCfg.UploadProfiling || notifyCfg.ProfilingPath != "" {
+			if err := notifyCfg.Prepare(); err != nil {
+				return err
+			}
+		}
+
+		dispatcher := restorenotify.NewDispatcher(func(fn func()) { go fn() })
+		finish := func() {
+			dispatcher.Close()
+			dispatcher.Wait()
+		}
+
 		if noServer {
 			cedana, err := cedana.New(ctx, "restore")
 			if err != nil {
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
+			if notifyCfg.Enabled {
+				dispatcher.SubmitPublish(ctx, &notifyCfg, restorenotify.EventStart)
+			}
+
 			code, err := cedana.Restore(req)
+			data := cedana.Finalize()
 			if err != nil {
-				cedana.Finalize()
+				notifyCfg.ErrorMessage = err.Error()
+				if notifyCfg.UploadProfiling && data != nil {
+					dispatcher.SubmitProfilingUpload(context.WithoutCancel(ctx), &notifyCfg, data)
+				}
+				if notifyCfg.ProfilingPath != "" && data != nil {
+					dispatcher.SubmitProfilingWrite(notifyCfg.ProfilingPath, data)
+				}
+				if notifyCfg.Enabled {
+					dispatcher.SubmitPublish(context.WithoutCancel(ctx), &notifyCfg, restorenotify.EventError)
+				}
+				finish()
 				return utils.GRPCErrorColored(err)
 			}
 
-			data := cedana.Finalize()
+			if notifyCfg.UploadProfiling && data != nil {
+				dispatcher.SubmitProfilingUpload(context.WithoutCancel(ctx), &notifyCfg, data)
+			}
+			if notifyCfg.ProfilingPath != "" && data != nil {
+				dispatcher.SubmitProfilingWrite(notifyCfg.ProfilingPath, data)
+			}
+			if notifyCfg.Enabled {
+				dispatcher.SubmitPublish(context.WithoutCancel(ctx), &notifyCfg, restorenotify.EventSuccess)
+			}
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}
 
+			finish()
 			os.Exit(<-code)
 		} else {
+			if notifyCfg.Enabled {
+				envEntry, err := restorenotify.EncodeEnv(notifyCfg)
+				if err != nil {
+					return err
+				}
+				req.Env = append(req.Env, envEntry)
+			}
+
 			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
 				return fmt.Errorf("invalids client in context")
@@ -225,12 +281,21 @@ var restoreCmd = &cobra.Command{
 			// Assuming request is now ready to be sent to the server
 			resp, data, err := client.Restore(ctx, req)
 			if err != nil {
+				finish()
 				return err
 			}
 
+			if notifyCfg.UploadProfiling && data != nil {
+				dispatcher.SubmitProfilingUpload(context.WithoutCancel(ctx), &notifyCfg, data)
+			}
+			if notifyCfg.ProfilingPath != "" && data != nil {
+				dispatcher.SubmitProfilingWrite(notifyCfg.ProfilingPath, data)
+			}
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 			}
+
+			finish()
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {

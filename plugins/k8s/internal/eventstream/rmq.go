@@ -68,12 +68,12 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 		hostname = "unknown"
 	}
 	clientName := fmt.Sprintf("cedana-daemon-%s-%d", hostname, time.Now().UnixNano())
-	url, err := propagator.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
+	url, err := discoverRabbitMQURL(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover rabbitmq service: %v", err)
 	}
 	conn, err := rabbitmq.NewConn(
-		*url,
+		url,
 		rabbitmq.WithConnectionOptionsConfig(
 			rabbitmq.Config{
 				Properties: amqp.Table{
@@ -88,11 +88,50 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 	es := &EventStream{
 		cedana:            cedana,
 		propagator:        propagator,
-		url:               *url,
+		url:               url,
 		Conn:              conn,
 		containerdAddress: containerdAddress,
 	}
 	return es, nil
+}
+
+func discoverRabbitMQURL(ctx context.Context) (string, error) {
+	baseURL := strings.TrimSuffix(config.Global.Connection.URL, "/v1")
+	baseURL = strings.TrimSuffix(baseURL, "/v2")
+	baseURL += "/v2/discover/rabbitmq"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("create rabbitmq discovery request: %w", err)
+	}
+	if config.Global.Connection.AuthToken != "" {
+		req.Header.Set("Authorization", "Bearer "+config.Global.Connection.AuthToken)
+	}
+	if config.Global.ClusterID != "" {
+		q := req.URL.Query()
+		q.Set("cluster_id", config.Global.ClusterID)
+		req.URL.RawQuery = q.Encode()
+	}
+
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return "", fmt.Errorf("execute rabbitmq discovery request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read rabbitmq discovery response: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("%d: rabbitmq discovery failed: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	url := strings.TrimSpace(string(body))
+	if url == "" {
+		return "", fmt.Errorf("rabbitmq discovery returned an empty URL")
+	}
+	return url, nil
 }
 
 func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {

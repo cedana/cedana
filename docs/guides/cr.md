@@ -42,6 +42,20 @@ cedana restore process --path <path-to-dump>
 
 Notice that for restore the flag is called `--path` instead of `--dir` (as in dump), this is because it can be a path to a compressed file, or to a directory if not compressed.
 
+### Restore profiling and metadata
+
+Restore supports the same profiling output as dump:
+
+```sh
+cedana restore process --path <path-to-dump> --profiling-path /tmp/restore-profile.json
+cedana restore process --path <path-to-dump> --upload-profiling --restore-id <uuid>
+cedana restore process --path <path-to-dump> --upload-profiling --profiling-upload-path cedana://bucket/restores/restore-<uuid>.json
+```
+
+`--profiling-path` writes a local JSON copy, while `--upload-profiling` uploads profiling JSON through the active storage backend. By default cedana stores the upload at `restore-<uuid>.json` next to the restore source path. Use `--profiling-upload-path` to override that target and write directly to a different storage path. When the restore source is a compressed archive, the default uploaded profiling JSON is written next to the archive rather than inside it.
+
+If you enable restore notifications with `--notify`, the metadata flags `--metadata`, `--request-metadata`, `--runtime-metadata`, and `--notification-name` are attached to the restore event payload. The upload status is also propagated in the payload so downstream consumers can see whether profiling was written locally, uploaded successfully, or failed to upload.
+
 ### Without daemon
 
 {% hint style="warning" %}
