@@ -16,10 +16,12 @@ slurm_submit_job() {
     rel_path="${sbatch_file#*/slurm/}"
     container_dir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
     container_file="$(basename "$rel_path")"
-    info_log "Submitting: cd $container_dir && sbatch $container_file"
+    local submission_host
+    submission_host="$(slurm_submission_container)"
+    info_log "Submitting from $submission_host: cd $container_dir && sbatch $container_file"
 
     local output
-    if ! output=$(slurm_exec bash -c \
+    if ! output=$(slurm_submit_exec bash -c \
         "cd '$container_dir' && sbatch --parsable --overcommit \
          --export=ALL,CEDANA_ENABLE=${cedana_enable},CEDANA_BIN=${cedana_bin} \
          --cpus-per-task=1 --mem=0 '$container_file'" 2>&1); then

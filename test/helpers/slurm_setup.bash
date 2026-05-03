@@ -9,8 +9,9 @@ CEDANA_SLURM_DIR="${CEDANA_SLURM_DIR:-}"
 
 SLURM_DATA_DIR="${SLURM_DATA_DIR:-/data}"
 SLURM_CONTROLLER_CONTAINER="${SLURM_CONTROLLER_CONTAINER:-slurm-controller}"
-# Must match docker-deploy.sh COMPUTE_NODES
+# Must match docker-deploy.sh COMPUTE_NODES / LOGIN_NODES
 COMPUTE_NODES="${COMPUTE_NODES:-1}"
+LOGIN_NODES="${LOGIN_NODES:-1}"
 
 ##############################
 # Internal Helpers
@@ -24,8 +25,30 @@ _slurm_compute_containers() {
     echo "${names[@]}"
 }
 
+_slurm_login_containers() {
+    local names=()
+    for i in $(seq 1 "$LOGIN_NODES"); do
+        names+=("slurm-login-$(printf '%02d' "$i")")
+    done
+    echo "${names[@]}"
+}
+
 slurm_exec() {
     docker exec -i "$SLURM_CONTROLLER_CONTAINER" "$@"
+}
+
+# Pick the host that should act as the user-facing submission node.
+# Login node when at least one is provisioned; controller otherwise.
+slurm_submission_container() {
+    if [ "${LOGIN_NODES:-0}" -ge 1 ]; then
+        echo "slurm-login-01"
+    else
+        echo "$SLURM_CONTROLLER_CONTAINER"
+    fi
+}
+
+slurm_submit_exec() {
+    docker exec -i "$(slurm_submission_container)" "$@"
 }
 
 _wait_for_port() {
@@ -154,7 +177,9 @@ EOF
 
     local rc=0
     pushd "$ansible_dir" >/dev/null
-    if ANSIBLE_EXTRA_ARGS="-e @${vars_file}" \
+    if COMPUTE_NODES="$COMPUTE_NODES" \
+        LOGIN_NODES="$LOGIN_NODES" \
+        ANSIBLE_EXTRA_ARGS="-e @${vars_file}" \
         ANSIBLE_SKIP_TAGS="cedana" bash docker-deploy.sh >&"${OUTPUT_FD}" 2>&1; then
         rc=0
     else
@@ -175,7 +200,8 @@ teardown_slurm_cluster() {
     debug_log "Tearing down SLURM cluster (Docker containers)..."
     # shellcheck disable=SC2046
     docker rm -f "$SLURM_CONTROLLER_CONTAINER" \
-        $(seq 1 "$COMPUTE_NODES" | xargs -I{} printf 'slurm-compute-%02d ' {}) 2>/dev/null || true
+        $(seq 1 "$COMPUTE_NODES" | xargs -I{} printf 'slurm-compute-%02d ' {}) \
+        $(seq 1 "$LOGIN_NODES" | xargs -I{} printf 'slurm-login-%02d ' {}) 2>/dev/null || true
     docker network rm slurm-net 2>/dev/null || true
 }
 
@@ -1217,7 +1243,9 @@ restart_cedana_slurm_daemon() {
 setup_slurm_samples() {
     info_log "Cloning cedana-samples into cluster nodes..."
 
-    for c in "$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers); do
+    local sample_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
+
+    for c in "${sample_targets[@]}"; do
         docker exec "$c" bash -c '
             apt-get install -y -qq git 2>/dev/null
             rm -rf /data/cedana-samples
@@ -1232,7 +1260,7 @@ setup_slurm_samples() {
     done
 
     debug_log "Initializing Python virtual environment and patching sbatch files..."
-    for c in "$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers); do
+    for c in "${sample_targets[@]}"; do
         docker exec "$c" bash -c "
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
