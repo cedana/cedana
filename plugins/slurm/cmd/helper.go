@@ -23,6 +23,7 @@ const (
 	slurmNodeRoleEnv        = "CEDANA_SLURM_NODE_ROLE"
 	slurmNodeRoleController = "controller"
 	slurmNodeRoleWorker     = "worker"
+	slurmNodeRoleLogin      = "login"
 )
 
 var (
@@ -32,9 +33,9 @@ var (
 
 func init() {
 	setupCmd.Flags().StringVar(&setupNodeRole, "node-role", "",
-		"SLURM node role: controller or worker")
+		"SLURM node role: controller, worker or login")
 	destroyCmd.Flags().StringVar(&destroyNodeRole, "node-role", "",
-		"SLURM node role: controller or worker")
+		"SLURM node role: controller, worker or login")
 
 	HelperCmd.AddCommand(setupCmd)
 	HelperCmd.AddCommand(destroyCmd)
@@ -50,8 +51,8 @@ func resolveSlurmNodeRole(flagValue string) (string, error) {
 	}
 	if role == "" {
 		return "", fmt.Errorf(
-			"SLURM node role is required: pass --node-role %q or %q, or set %s",
-			slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleEnv,
+			"SLURM node role is required: pass --node-role %q, %q or %q, or set %s",
+			slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleLogin, slurmNodeRoleEnv,
 		)
 	}
 	switch strings.ToLower(role) {
@@ -59,10 +60,12 @@ func resolveSlurmNodeRole(flagValue string) (string, error) {
 		return slurmNodeRoleController, nil
 	case slurmNodeRoleWorker, "compute":
 		return slurmNodeRoleWorker, nil
+	case slurmNodeRoleLogin:
+		return slurmNodeRoleLogin, nil
 	default:
 		return "", fmt.Errorf(
-			"invalid --node-role %q: must be one of %q or %q",
-			role, slurmNodeRoleController, slurmNodeRoleWorker,
+			"invalid --node-role %q: must be one of %q, %q or %q",
+			role, slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleLogin,
 		)
 	}
 }
@@ -91,6 +94,11 @@ var setupCmd = &cobra.Command{
 		}
 		if err := os.Setenv(slurmNodeRoleEnv, nodeRole); err != nil {
 			return fmt.Errorf("failed to set %s: %w", slurmNodeRoleEnv, err)
+		}
+
+		if nodeRole == slurmNodeRoleLogin {
+			log.Info().Msg("login node: nothing to set up")
+			return nil
 		}
 
 		if config.Global.Metrics {
@@ -134,6 +142,11 @@ var destroyCmd = &cobra.Command{
 		}
 		if err := os.Setenv(slurmNodeRoleEnv, nodeRole); err != nil {
 			return fmt.Errorf("failed to set %s: %w", slurmNodeRoleEnv, err)
+		}
+
+		if nodeRole == slurmNodeRoleLogin {
+			log.Info().Msg("login node: nothing to destroy")
+			return nil
 		}
 
 		if config.Global.Metrics {
