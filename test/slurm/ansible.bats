@@ -187,3 +187,194 @@ LOGIN_01="slurm-login-01"
     [ "$status" -eq 0 ]
     [[ "$output" == *login* ]]
 }
+
+##############################
+# Cedana installation
+##############################
+
+@test "Ansible: cedana binary present on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" test -x /usr/local/bin/cedana
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "Ansible: criu binary present on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" test -x /usr/local/bin/criu
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "Ansible: cedana-slurm installed in /usr/bin on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" test -x /usr/bin/cedana-slurm
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "Ansible: cedana-slurm --help works on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" cedana-slurm --help
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "Ansible: cedana --version works on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" cedana --version
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "Ansible: login has no cedana-slurm in /usr/bin" {
+    run docker exec "$LOGIN_01" test -x /usr/bin/cedana-slurm
+    [ "$status" -ne 0 ]
+}
+
+##############################
+# Cedana daemon
+##############################
+
+@test "Ansible: cedana daemon running on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" pgrep -f 'cedana daemon'
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "Ansible: cedana daemon socket exists on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" test -S /run/cedana.sock
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "Ansible: no cedana daemon on login" {
+    run docker exec "$LOGIN_01" pgrep -f 'cedana daemon'
+    [ "$status" -ne 0 ]
+}
+
+##############################
+# SLURM plugins
+##############################
+
+@test "Ansible: task/cedana configured in slurm.conf" {
+    run docker exec "$CONTROLLER" grep 'task/cedana' /etc/slurm/slurm.conf
+    [ "$status" -eq 0 ]
+}
+
+@test "Ansible: cli_filter/cedana configured in slurm.conf" {
+    run docker exec "$CONTROLLER" grep 'cli_filter/cedana' /etc/slurm/slurm.conf
+    [ "$status" -eq 0 ]
+}
+
+@test "Ansible: spank_cedana.so configured in plugstack.conf" {
+    run docker exec "$CONTROLLER" grep 'spank_cedana.so' /etc/slurm/plugstack.conf
+    [ "$status" -eq 0 ]
+}
+
+@test "Ansible: plugin .so files in SLURM plugin dir on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" bash -c '
+            test -f /usr/lib/slurm/task_cedana.so &&
+            test -f /usr/lib/slurm/spank_cedana.so &&
+            test -f /usr/lib/slurm/cli_filter_cedana.so
+        '
+        [ "$status" -eq 0 ]
+    done
+}
+
+##############################
+# Slurm node state
+##############################
+
+@test "Ansible: no nodes in down or drain state" {
+    run docker exec "$CONTROLLER" sinfo -h -N -o '%N %T'
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"down"* ]]
+    [[ "$output" != *"drain"* ]]
+}
+
+@test "Ansible: scontrol lists controller and compute as nodes" {
+    run docker exec "$CONTROLLER" scontrol show nodes
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"$CONTROLLER"* ]]
+    [[ "$output" == *"$COMPUTE_01"* ]]
+}
+
+@test "Ansible: login is NOT a registered slurm node" {
+    run docker exec "$CONTROLLER" scontrol show nodes
+    [ "$status" -eq 0 ]
+    [[ "$output" != *"slurm-login"* ]]
+}
+
+##############################
+# Network and host resolution
+##############################
+
+@test "Ansible: controller resolves compute and login hostnames" {
+    run docker exec "$CONTROLLER" getent hosts "$COMPUTE_01"
+    [ "$status" -eq 0 ]
+    run docker exec "$CONTROLLER" getent hosts "$LOGIN_01"
+    [ "$status" -eq 0 ]
+}
+
+@test "Ansible: compute resolves controller hostname" {
+    run docker exec "$COMPUTE_01" getent hosts "$CONTROLLER"
+    [ "$status" -eq 0 ]
+}
+
+@test "Ansible: login resolves controller hostname" {
+    run docker exec "$LOGIN_01" getent hosts "$CONTROLLER"
+    [ "$status" -eq 0 ]
+}
+
+##############################
+# Configuration consistency
+##############################
+
+@test "Ansible: slurm.conf checksum matches between controller and compute" {
+    local controller_md5
+    controller_md5=$(docker exec "$CONTROLLER" md5sum /etc/slurm/slurm.conf | awk '{print $1}')
+    [ -n "$controller_md5" ]
+    local compute_md5
+    compute_md5=$(docker exec "$COMPUTE_01" md5sum /etc/slurm/slurm.conf | awk '{print $1}')
+    [ "$controller_md5" = "$compute_md5" ]
+}
+
+@test "Ansible: plugstack.conf checksum matches between controller and compute" {
+    local controller_md5
+    controller_md5=$(docker exec "$CONTROLLER" md5sum /etc/slurm/plugstack.conf | awk '{print $1}')
+    [ -n "$controller_md5" ]
+    local compute_md5
+    compute_md5=$(docker exec "$COMPUTE_01" md5sum /etc/slurm/plugstack.conf | awk '{print $1}')
+    [ "$controller_md5" = "$compute_md5" ]
+}
+
+@test "Ansible: slurm.conf on login matches controller" {
+    local controller_md5
+    controller_md5=$(docker exec "$CONTROLLER" md5sum /etc/slurm/slurm.conf | awk '{print $1}')
+    [ -n "$controller_md5" ]
+    local login_md5
+    login_md5=$(docker exec "$LOGIN_01" md5sum /etc/slurm/slurm.conf | awk '{print $1}')
+    [ "$controller_md5" = "$login_md5" ]
+}
+
+##############################
+# NFS completeness
+##############################
+
+@test "Ansible: NFS /usr/local/src mounted on compute and login" {
+    for c in "$COMPUTE_01" "$LOGIN_01"; do
+        run docker exec "$c" findmnt -t nfs4 --noheadings -o TARGET
+        [ "$status" -eq 0 ]
+        [[ "$output" == *"/usr/local/src"* ]]
+    done
+}
+
+@test "Ansible: NFS /usr/lib/slurm plugin dir mounted on compute" {
+    run docker exec "$COMPUTE_01" findmnt -t nfs4 --noheadings -o TARGET
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"/usr/lib/slurm"* ]]
+}
