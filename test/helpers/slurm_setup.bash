@@ -1259,12 +1259,18 @@ setup_slurm_samples() {
         docker exec "$c" ls -la /data/cedana-samples/ 2>&1 | head -20 >&"${OUTPUT_FD}" || true
     done
 
-    debug_log "Initializing Python virtual environment and patching sbatch files..."
-    for c in "${sample_targets[@]}"; do
+    local exec_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers))
+
+    debug_log "Initializing Python virtual environment on execution nodes..."
+    for c in "${exec_targets[@]}"; do
         docker exec "$c" bash -c "
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
         "
+    done
+
+    debug_log "Patching sbatch files on all nodes..."
+    for c in "${sample_targets[@]}"; do
         docker exec "$c" bash -c '
             find /data/cedana-samples/slurm -name "*.sbatch" -type f -exec sed -i "s|^#!/bin/bash|#!/bin/bash\nsource /data/venv/bin/activate|" {} +
         '
