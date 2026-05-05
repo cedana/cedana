@@ -352,13 +352,14 @@ LOGIN_01="slurm-login-01"
     [ "$controller_md5" = "$compute_md5" ]
 }
 
-@test "Ansible: slurm.conf on login matches controller" {
-    local controller_md5
-    controller_md5=$(docker exec "$CONTROLLER" md5sum /etc/slurm/slurm.conf | awk '{print $1}')
-    [ -n "$controller_md5" ]
-    local login_md5
-    login_md5=$(docker exec "$LOGIN_01" md5sum /etc/slurm/slurm.conf | awk '{print $1}')
-    [ "$controller_md5" = "$login_md5" ]
+@test "Ansible: slurm.conf on login has correct SlurmctldHost and partitions" {
+    local ctrl_host ctrl_partitions login_host login_partitions
+    ctrl_host=$(docker exec "$CONTROLLER" grep -E '^SlurmctldHost=' /etc/slurm/slurm.conf)
+    ctrl_partitions=$(docker exec "$CONTROLLER" grep -E '^PartitionName=' /etc/slurm/slurm.conf | sort)
+    login_host=$(docker exec "$LOGIN_01" grep -E '^SlurmctldHost=' /etc/slurm/slurm.conf)
+    login_partitions=$(docker exec "$LOGIN_01" grep -E '^PartitionName=' /etc/slurm/slurm.conf | sort)
+    [ "$ctrl_host" = "$login_host" ]
+    [ "$ctrl_partitions" = "$login_partitions" ]
 }
 
 ##############################

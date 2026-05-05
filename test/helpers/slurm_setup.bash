@@ -860,15 +860,14 @@ SETUP_EOF
             return 1
         }
 
-    local sync_targets=("${compute_containers[@]}" $(_slurm_login_containers))
-    debug_log "Syncing controller's /etc/slurm/*.conf to compute and login nodes..."
+    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes..."
     for conf in slurm.conf cgroup.conf plugstack.conf; do
         if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
             continue
         fi
         local tmpfile="/tmp/slurm-${conf}.sync.$$"
         docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile"
-        for c in "${sync_targets[@]}"; do
+        for c in "${compute_containers[@]}"; do
             docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
         done
         rm -f "$tmpfile"
