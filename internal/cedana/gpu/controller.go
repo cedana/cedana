@@ -648,15 +648,11 @@ func (p *pool) Check(binary string) types.Check {
 //////////////////
 
 func (c *controller) Book() bool {
-	acquired, _ := c.Booking.TryLock()
-	if !acquired {
-		return false
-	}
 	if status, _ := c.Status(); status != CONTROLLER_FREE { // Check it's still free
-		c.Booking.Unlock()
 		return false
 	}
-	return true
+	acquired, _ := c.Booking.TryLock()
+	return acquired
 }
 
 func (c *controller) Status() (status controllerStatus, reason string) {
