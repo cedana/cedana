@@ -505,10 +505,9 @@ jobs:
               echo "built_from_sha=${CHECKOUT_SHA}"
             } > "$ORIGIN_FILE"
 
-            (
-              cd slurm/cedana-slurm
-              make all
-            )
+            cd slurm/cedana-slurm
+            make all
+            cd ../../
             cp slurm/cedana-slurm/build/cedana-slurm slurm/build/cedana-slurm
             cp slurm/cedana-slurm/build/spank_cedana.so slurm/build/spank_cedana.so
             cp slurm/cedana-slurm/build/task_cedana.so slurm/build/task_cedana.so
