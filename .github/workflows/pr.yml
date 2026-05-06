@@ -60,7 +60,7 @@ jobs:
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
-      slurm_version: main
+      slurm_version: v0.9.289 # revert once download fixed for main branch of cedana-slurm
 
   publish:
     name: Publish
