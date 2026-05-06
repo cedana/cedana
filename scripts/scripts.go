@@ -17,5 +17,8 @@ var ConfigureShm string
 //go:embed configure-io-uring.sh
 var ConfigureIoUring string
 
+//go:embed install-yq.sh
+var InstallYq string
+
 //go:embed utils.sh
 var Utils string
