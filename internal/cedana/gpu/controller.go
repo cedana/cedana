@@ -136,10 +136,6 @@ func (p *pool) Find(attachedPID uint32) *controller {
 func (p *pool) List() (free []*controller, busy []*controller, stale []*controller, staleReason []string) {
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
-		if c.Booking.Locked() {
-			busy = append(busy, c)
-			return true
-		}
 		status, reason := c.Status()
 		switch status {
 		case CONTROLLER_FREE:
@@ -408,7 +404,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
 		defer cancel()
 
-		// Cancel on early termination
+		// Cancel on early external termination
 		go func() {
 			<-controller.Terminated
 			cancel()
@@ -435,9 +431,6 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		log := log.With().Uint32("PID", pid).Logger()
 
 		controller := p.Get(id)
-		if controller == nil {
-			return fmt.Errorf("GPU controller not found, is the process still running?")
-		}
 
 		// Begin GPU dump in parallel to CRIU dump
 
@@ -449,7 +442,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
 			defer cancel()
 
-			// Cancel on early termination
+			// Cancel on early external termination
 			go func() {
 				<-controller.Terminated
 				cancel()
@@ -489,10 +482,6 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		log := log.With().Uint32("PID", pid).Logger()
 
 		controller := p.Get(id)
-		if controller == nil {
-			return fmt.Errorf("GPU controller not found, is the process still running?")
-		}
-
 		defer controller.Termination.Unlock()
 
 		if dumpErr == nil { // Dump was never started
@@ -509,7 +498,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
 		defer cancel()
 
-		// Cancel on early termination
+		// Cancel on early external termination
 		go func() {
 			<-controller.Terminated
 			cancel()
@@ -527,6 +516,19 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return errors.Join(err, utils.GRPCError(unfreezeErr))
 	}
 
+	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+		controller := p.Get(id)
+		if controller == nil {
+			return fmt.Errorf("GPU controller not found, is the process still running?")
+		}
+
+		// Required to ensure the controller does not get terminated while restoring. This is to avoid deleting
+		// the controller instance in memory, leading to segfaults.
+		controller.Termination.Lock()
+
+		return nil
+	}
+
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
 	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
 	var restoreErr chan error
@@ -539,12 +541,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			defer cancel()
 
 			controller := p.Get(id)
-			if controller == nil {
-				restoreErr <- fmt.Errorf("GPU controller not found, is the process still running?")
-				return
-			}
 
-			// Cancel on early termination
+			// Cancel on early external termination
 			go func() {
 				<-controller.Terminated
 				cancel()
@@ -569,25 +567,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	}
 
 	// Update GPU controller with the restore PID (which can be a new PID)
-	// This callback is only called in case of containers, so it allows us to
-	// call attach on GPU controller pretty eary.
 	var restoredPid *int32
-	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
-		controller := p.Get(id)
-		if controller == nil {
-			return fmt.Errorf("GPU controller not found, is the process still running?")
-		}
-		restoredPid = &pid
-
-		return controller.Attach(ctx, uint32(pid))
-	}
-
-	// Simply call attach again as for processes, the SetupNamespaces callback is not called
 	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
 		controller := p.Get(id)
-		if controller == nil {
-			return fmt.Errorf("GPU controller not found, is the process still running?")
-		}
 		restoredPid = &pid
 
 		return controller.Attach(ctx, uint32(pid))
@@ -607,6 +589,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 	// Ensure we always wait for GPU restore to finish before finalizing the restore.
 	callback.FinalizeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts, criuErr error) (err error) {
+		controller := p.Get(id)
+		defer controller.Termination.Unlock()
+
 		if restoreErr == nil {
 			return nil
 		}
@@ -663,15 +648,11 @@ func (p *pool) Check(binary string) types.Check {
 //////////////////
 
 func (c *controller) Book() bool {
-	acquired, _ := c.Booking.TryLock()
-	if !acquired {
-		return false
-	}
 	if status, _ := c.Status(); status != CONTROLLER_FREE { // Check it's still free
-		c.Booking.Unlock()
 		return false
 	}
-	return true
+	acquired, _ := c.Booking.TryLock()
+	return acquired
 }
 
 func (c *controller) Status() (status controllerStatus, reason string) {
@@ -679,12 +660,14 @@ func (c *controller) Status() (status controllerStatus, reason string) {
 		if c.AttachedPID == 0 {
 			shmSizeMatches := c.ShmSize == uint64(config.Global.GPU.ShmSize)
 			credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
-			if shmSizeMatches && credentialsMatch {
+			if shmSizeMatches && credentialsMatch && !c.Booking.Locked() {
 				return CONTROLLER_FREE, "controller free and compatible"
 			} else if !shmSizeMatches {
 				reason = fmt.Sprintf("controller shm size mismatch (expected %d, got %d)", config.Global.GPU.ShmSize, c.ShmSize)
 			} else if !credentialsMatch {
 				reason = fmt.Sprintf("controller credentials mismatch (expected %d:%d, got %d:%d)", os.Getuid(), os.Getgid(), c.UID, c.GID)
+			} else if c.Booking.Locked() {
+				reason = "controller is already booked after spawning"
 			}
 		} else if utils.PidRunning(c.AttachedPID) {
 			return CONTROLLER_BUSY, "attached process is running"
