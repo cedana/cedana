@@ -30,7 +30,7 @@ var RestoreCmd = &cobra.Command{
 		if !ok {
 			return fmt.Errorf("invalid restore request in context")
 		}
-
+		// test
 		id, _ := cmd.Flags().GetString(runc_flags.IdFlag.Full)
 		image, _ := cmd.Flags().GetString(containerd_flags.ImageFlag.Full)
 		address, _ := cmd.Flags().GetString(containerd_flags.AddressFlag.Full)

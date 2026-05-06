@@ -507,6 +507,7 @@ jobs:
 
             (
               cd slurm/cedana-slurm
+              git config --global --add safe.directory /src
               make all
             )
             cp slurm/cedana-slurm/build/cedana-slurm slurm/build/cedana-slurm
