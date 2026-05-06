@@ -162,10 +162,31 @@ if command -v systemctl >/dev/null 2>&1; then
         success_method="systemctl"
         echo "kubelet restarted successfully via systemctl"
     else
-        echo "WARNING: systemctl restart kubelet failed" >&2
+        # Only run on RKE2 nodes
+        if [ -d "/var/lib/rancher/rke2" ]; then
+            echo "kubelet systemctl restart failed, attempting rke2-server restart"
+
+            LOCK_FILE="/tmp/rke2-restarted"
+            # lock check (prevents restart loop)
+            if [ -f "$LOCK_FILE" ]; then
+                echo "RKE2 restart already triggered. Skipping."
+                exit 0
+            fi
+
+            # create lock before restart
+            touch "$LOCK_FILE"
+
+            if systemctl restart rke2-server; then
+                success_method="systemctl: rke2-server restart"
+                echo "rke2-server restarted successfully via systemctl"
+            else
+                echo "WARNING: systemctl restart rke2-server failed" >&2
+            fi
+        else
+            echo "WARNING: systemctl restart kubelet failed" >&2
+        fi
     fi
 fi
-
 if [ -z "$success_method" ] && command -v service >/dev/null 2>&1; then
     echo "service is available, trying: service kubelet restart"
     if service kubelet restart; then
