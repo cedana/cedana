@@ -4,8 +4,10 @@ package cgroup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -66,7 +68,7 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 				// apply cgroups to the CRIU process
 				err = manager.Apply(int(criuPid))
 				if err != nil {
-					if os.IsPermission(err) {
+					if os.IsPermission(err) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
 						log.Warn().Msgf("skipping cgroup apply (unprivileged): %v\n", err)
 					} else {
 						return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)

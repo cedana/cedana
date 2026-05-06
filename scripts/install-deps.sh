@@ -22,7 +22,6 @@ APT_PACKAGES=(
     wget git make
     libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1 # CRIU
     sysvinit-utils
-    yq
 )
 
 install_apt_packages() {
@@ -54,12 +53,22 @@ if [ -f /etc/os-release ]; then
         debian | ubuntu | pop)
             install_apt_packages
             ;;
-        rhel | centos | fedora | amzn)
+        rhel | centos | fedora | amzn | rocky | almalinux | ol)
             install_yum_packages
             ;;
         *)
-            echo "Unknown distribution"
-            exit 1
+            case " ${ID_LIKE:-} " in
+                *" debian "* | *" ubuntu "*)
+                    install_apt_packages
+                    ;;
+                *" rhel "* | *" fedora "*)
+                    install_yum_packages
+                    ;;
+                *)
+                    echo "Unknown distribution: ${ID:-unknown}"
+                    exit 1
+                    ;;
+            esac
             ;;
     esac
 elif [ -f /etc/debian_version ]; then
@@ -85,3 +94,4 @@ case "$(uname -m)" in
         ;;
 esac
 chmod +x /usr/local/bin/yq
+echo "yq has been Installed"
