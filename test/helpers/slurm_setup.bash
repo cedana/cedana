@@ -696,6 +696,24 @@ EOF
             return 1
         }
 
+    debug_log "Running cedana slurm setup --node-role worker on compute nodes..."
+    for c in "${compute_containers[@]}"; do
+        docker exec \
+            -e CEDANA_PLUGINS_BUILDS="local" \
+            -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
+            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+            -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
+            -e CEDANA_SLURM_NODE_ROLE="worker" \
+            "$c" bash -c '
+                set -euo pipefail
+                cedana slurm setup --node-role worker
+            ' >&"${OUTPUT_FD}" 2>&1 ||
+            {
+                error_log "Cedana SLURM worker setup failed on $c"
+                return 1
+            }
+    done
+
     debug_log "Verifying plugin libraries visible on compute nodes via NFS..."
     for c in "${compute_containers[@]}"; do
         local waited=0
@@ -1161,8 +1179,8 @@ restart_cedana_slurm_daemon_unprivileged() {
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec "$c" bash -c '
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm 2>/dev/null || true
+            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm
+            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm 2>/dev/null || true
         ' || {
             error_log "Failed to set capabilities on cedana-slurm in $c"
             return 1
