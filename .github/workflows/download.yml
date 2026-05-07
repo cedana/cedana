@@ -505,6 +505,8 @@ jobs:
               echo "built_from_sha=${CHECKOUT_SHA}"
             } > "$ORIGIN_FILE"
 
+            SLURM_BUILD_DIR=$(cat slurm/cedana-slurm/slurm-versions | head -n 1)
+
             (
               cd slurm/cedana-slurm
               make all
@@ -526,15 +528,15 @@ jobs:
             cd build
             ls
             echo " -- slurm-date "
-            cd slurm-25-05-6-1
+            cd $SLURM_BUILD_DIR
             ls
-            cp slurm/cedana-slurm/build/cedana-slurm slurm/build/cedana-slurm
-            cp slurm/cedana-slurm/build/spank_cedana.so slurm/build/spank_cedana.so
-            cp slurm/cedana-slurm/build/task_cedana.so slurm/build/task_cedana.so
-            cp slurm/cedana-slurm/build/cli_filter_cedana.so slurm/build/cli_filter_cedana.so
-            cp slurm/cedana-slurm/build/job_submit_cedana.so slurm/build/job_submit_cedana.so
-          fi
 
+            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/cedana-slurm slurm/build/cedana-slurm
+            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/spank_cedana.so slurm/build/spank_cedana.so
+            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/task_cedana.so slurm/build/task_cedana.so
+            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/cli_filter_cedana.so slurm/build/cli_filter_cedana.so
+            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/job_submit_cedana.so slurm/build/job_submit_cedana.so
+          fi
           echo "$VERSION_REF" > slurm/slurm-version.txt
 
           echo "=== Binary checksums ==="
