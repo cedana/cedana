@@ -34,7 +34,7 @@ _slurm_login_containers() {
 }
 
 slurm_exec() {
-    docker exec -i "$SLURM_CONTROLLER_CONTAINER" "$@"
+    docker exec "$SLURM_CONTROLLER_CONTAINER" "$@"
 }
 
 # Pick the host that should act as the user-facing submission node.
@@ -48,7 +48,7 @@ slurm_submission_container() {
 }
 
 slurm_submit_exec() {
-    docker exec -i "$(slurm_submission_container)" "$@"
+    docker exec "$(slurm_submission_container)" "$@"
 }
 
 _wait_for_port() {
