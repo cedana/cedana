@@ -39,7 +39,7 @@ func ManageRestore(jobs Manager) types.Adapter[types.Restore] {
 				}
 			}
 
-			job = jobs.Get(jid)
+			job = jobs.Get(ctx, jid)
 			if job == nil {
 				return nil, status.Errorf(codes.NotFound, "job %s not found", jid)
 			}
