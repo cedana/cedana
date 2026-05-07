@@ -509,11 +509,15 @@ jobs:
               cd slurm/cedana-slurm
               make all
               ls
+              cd build
+              ls
             )
             ls
             cd slurm/
             ls
             cd cedana-slurm
+            ls
+            cd build
             ls
             cp slurm/cedana-slurm/build/cedana-slurm slurm/build/cedana-slurm
             cp slurm/cedana-slurm/build/spank_cedana.so slurm/build/spank_cedana.so
