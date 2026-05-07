@@ -71,6 +71,7 @@ var setupCmd = &cobra.Command{
 			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
 			script.Chroot("/host", scripts.ResetService),
 			script.Chroot("/host", scripts.InstallDeps),
+			script.Chroot("/host", scripts.InstallYq),
 			k8scripts.Install,
 			script.Chroot("/host", k8scripts.InstallPlugins),
 			script.Chroot("/host", k8scripts.ConfigureKubelet),

@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -45,10 +46,16 @@ var RestoreCmd = &cobra.Command{
 			return fmt.Errorf("invalid path: %v", err)
 		}
 
+		hostname, err := os.Hostname()
+		if err != nil {
+			return fmt.Errorf("failed to get hostname: %v", err)
+		}
+
 		req.Type = "slurm"
 		req.Details = &daemon.Details{Slurm: &slurmpb.Slurm{
-			ID:    fmt.Sprintf("%s", jobID),
-			JobID: uint32(jid),
+			ID:       fmt.Sprintf("%s", jobID),
+			JobID:    uint32(jid),
+			Hostname: hostname,
 		}}
 
 		req.Path = path

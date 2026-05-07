@@ -71,4 +71,14 @@ if [ "$ENV" != "production" ]; then
     exit 0
 fi
 
-cedana-slurm setup
+if [ -z "${CEDANA_SLURM_NODE_ROLE:-}" ]; then
+    echo "Error: CEDANA_SLURM_NODE_ROLE must be set to controller, worker or login" >&2
+    exit 1
+fi
+
+if [ "$CEDANA_SLURM_NODE_ROLE" = "login" ]; then
+    echo "Login node: skipping cedana-slurm setup"
+    exit 0
+fi
+
+cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
