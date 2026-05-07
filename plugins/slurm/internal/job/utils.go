@@ -26,8 +26,8 @@ func GetJobCgroupPath(hostname string, jid uint32) (string, error) {
 	if err != nil {
 		return "", status.Errorf(codes.Internal, "failed to glob cgroup paths for slurm job %d with pattern %s: %v", jid, pattern, err)
 	}
-	if matches != nil && len(matches) > 0 {
-		path = matches[0][len("/sys/fs/cgroup"):]
+	if len(matches) > 0 {
+		path = matches[0][len("/sys/fs/cgroup/freezer"):]
 	}
 	if path == "" {
 		return "", status.Errorf(codes.NotFound, "cgroup path for slurm job %d does not exist: %s", jid, path)
