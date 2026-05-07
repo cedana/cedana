@@ -508,16 +508,25 @@ jobs:
             (
               cd slurm/cedana-slurm
               make all
+              echo " -- inside slurm/cedana-slurm"
               ls
+              echo " -- inside slurm/cedana-slurm/build"
               cd build
               ls
             )
+            echo "outside"
             ls
             cd slurm/
+            echo "-- slurm dir --"
             ls
+            echo " -- cedana-slurm --"
             cd cedana-slurm
             ls
+            echo " -- build -- "
             cd build
+            ls
+            echo " -- slurm-date "
+            cd slurm-25-05-6-1
             ls
             cp slurm/cedana-slurm/build/cedana-slurm slurm/build/cedana-slurm
             cp slurm/cedana-slurm/build/spank_cedana.so slurm/build/spank_cedana.so
