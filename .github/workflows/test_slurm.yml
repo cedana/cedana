@@ -641,11 +641,12 @@ jobs:
             fi
 
             docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
-            docker exec "$c" sh -c 'sample_root="$0"; if [ -d "$sample_root" ]; then find "$sample_root" -maxdepth 3 -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true; fi' "$SAMPLE_ROOT" >"$cdir/slurm-output-files.txt" 2>&1 || true
+            docker exec "$c" sh -c 'sample_root="$0"; if [ -d "$sample_root" ]; then find "$sample_root" -maxdepth 3 -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true; fi' "$SAMPLE_ROOT" >"$cdir/slurm-output-files.txt" 2>/dev/null || true
 
             while IFS= read -r job_out; do
               [ -z "$job_out" ] && continue
-              out_name="$(echo "$job_out" | sed 's#^/##; s#/#_#g')"
+              [[ "$job_out" == /* ]] || continue
+              out_name="$(echo "$job_out" | sed 's#^/##; s#[/:<>|*?"]#_#g')"
               docker exec "$c" sh -c "cat '$job_out'" >"$cdir/${out_name}.txt" 2>&1 || true
             done <"$cdir/slurm-output-files.txt"
           done
