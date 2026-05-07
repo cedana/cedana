@@ -136,6 +136,10 @@ func (p *pool) Find(attachedPID uint32) *controller {
 func (p *pool) List() (free []*controller, busy []*controller, stale []*controller, staleReason []string) {
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
+		if c.Booking.Locked() {
+			busy = append(busy, c)
+			return true
+		}
 		status, reason := c.Status()
 		switch status {
 		case CONTROLLER_FREE:
@@ -648,11 +652,15 @@ func (p *pool) Check(binary string) types.Check {
 //////////////////
 
 func (c *controller) Book() bool {
-	if status, _ := c.Status(); status != CONTROLLER_FREE { // Check it's still free
+	acquired, _ := c.Booking.TryLock()
+	if !acquired {
 		return false
 	}
-	acquired, _ := c.Booking.TryLock()
-	return acquired
+	if status, _ := c.Status(); status != CONTROLLER_FREE { // Check it's still free
+		c.Booking.Unlock()
+		return false
+	}
+	return true
 }
 
 func (c *controller) Status() (status controllerStatus, reason string) {
@@ -660,14 +668,12 @@ func (c *controller) Status() (status controllerStatus, reason string) {
 		if c.AttachedPID == 0 {
 			shmSizeMatches := c.ShmSize == uint64(config.Global.GPU.ShmSize)
 			credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
-			if shmSizeMatches && credentialsMatch && !c.Booking.Locked() {
+			if shmSizeMatches && credentialsMatch {
 				return CONTROLLER_FREE, "controller free and compatible"
 			} else if !shmSizeMatches {
 				reason = fmt.Sprintf("controller shm size mismatch (expected %d, got %d)", config.Global.GPU.ShmSize, c.ShmSize)
 			} else if !credentialsMatch {
 				reason = fmt.Sprintf("controller credentials mismatch (expected %d:%d, got %d:%d)", os.Getuid(), os.Getgid(), c.UID, c.GID)
-			} else if c.Booking.Locked() {
-				reason = "controller is already booked after spawning"
 			}
 		} else if utils.PidRunning(c.AttachedPID) {
 			return CONTROLLER_BUSY, "attached process is running"
