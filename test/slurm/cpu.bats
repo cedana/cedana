@@ -59,3 +59,14 @@ load ../helpers/slurm_propagator
 
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
 }
+
+# bats test_tags=dump,restore,embedded
+# Requires cedana-slurm to have CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE:
+#   setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm
+@test "Dump/Restore: Embedded (Timestamp Logger)" {
+    local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/counting.sbatch"
+
+    restart_cedana_slurm_daemon_unprivileged
+    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15
+    restart_cedana_slurm_daemon
+}

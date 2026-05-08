@@ -116,6 +116,9 @@ var Global Config = Config{
 		BinDir: DEFAULT_PLUGINS_BIN_DIR,
 		Builds: DEFAULT_PLUGINS_BUILDS,
 	},
+	Slurm: Slurm{
+		Unprivileged: false,
+	},
 	Multinode_buffer_size: DEFAULT_MULTINODE_BUFFER,
 }
 

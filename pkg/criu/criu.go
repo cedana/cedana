@@ -171,7 +171,7 @@ func (c *Criu) doSwrkWithResp(
 		opts.NotifyScripts = proto.Bool(true)
 	}
 
-	if !utils.IsRootUser() {
+	if !utils.IsRootUser() && opts != nil {
 		opts.Unprivileged = proto.Bool(true)
 	}
 

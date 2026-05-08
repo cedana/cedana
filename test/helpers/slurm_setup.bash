@@ -491,7 +491,7 @@ install_cedana_in_slurm() {
     debug_log "Copying plugin libraries into containers..."
     for so in /usr/local/lib/libcedana-*.so \
         /usr/local/lib/task_cedana.so \
-        /usr/local/lib/libslurm-cedana.so \
+        /usr/local/lib/spank_cedana.so \
         /usr/local/lib/cli_filter_cedana.so \
         /usr/local/lib/job_submit_cedana.so; do
         [ -f "$so" ] || continue
@@ -714,9 +714,9 @@ for f in task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
     chmod 755 "$src"
     cp "$src" "$PLUGIN_DIR/"
 done
-if [ -f /usr/local/lib/libslurm-cedana.so ]; then
-    chmod 755 /usr/local/lib/libslurm-cedana.so
-    cp /usr/local/lib/libslurm-cedana.so "${PLUGIN_DIR}/spank_cedana.so"
+if [ -f /usr/local/lib/spank_cedana.so ]; then
+    chmod 755 /usr/local/lib/spank_cedana.so
+    cp /usr/local/lib/spank_cedana.so "${PLUGIN_DIR}/spank_cedana.so"
 fi
 ldconfig
 
@@ -734,7 +734,7 @@ if [ -f "${PLUGIN_DIR}/job_submit_cedana.so" ]; then
         echo 'JobSubmitPlugins=job_submit/cedana' >> "$SLURM_CONF"
 fi
 
-if [ -f /usr/local/lib/libslurm-cedana.so ]; then
+if [ -f /usr/local/lib/spank_cedana.so ]; then
     grep -q 'spank_cedana.so' "$PLUGSTACK_CONF" 2>/dev/null || \
         echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
 fi
@@ -760,8 +760,8 @@ for f in task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
     [ -f "$src" ] || continue
     chmod 755 "$src"; cp "$src" "$PLUGIN_DIR/"
 done
-[ -f /usr/local/lib/libslurm-cedana.so ] && \
-    cp /usr/local/lib/libslurm-cedana.so "${PLUGIN_DIR}/spank_cedana.so"
+[ -f /usr/local/lib/spank_cedana.so ] && \
+    cp /usr/local/lib/spank_cedana.so "${PLUGIN_DIR}/spank_cedana.so"
 ldconfig
 
 grep -q 'task/cedana' "$SLURM_CONF" || \
@@ -775,7 +775,7 @@ grep -q 'NO_CONF_HASH' "$SLURM_CONF" || \
 
 PLUGSTACK_CONF=$(scontrol show config 2>/dev/null | awk '/^PlugStackConfig/{print $3}' || true)
 PLUGSTACK_CONF="${PLUGSTACK_CONF:-/etc/slurm/plugstack.conf}"
-if [ -f /usr/local/lib/libslurm-cedana.so ]; then
+if [ -f /usr/local/lib/spank_cedana.so ]; then
     grep -q 'spank_cedana.so' "$PLUGSTACK_CONF" 2>/dev/null || \
         echo "required ${PLUGIN_DIR}/spank_cedana.so" >> "$PLUGSTACK_CONF"
 fi
@@ -1023,6 +1023,103 @@ start_cedana_slurm_daemon() {
                 error_log "Failed to launch cedana-slurm daemon on $c"
                 return 1
             }
+    done
+
+    sleep 3
+    for c in "${targets[@]}"; do
+        if docker exec "$c" pgrep -f 'cedana-slurm daemon' &>/dev/null; then
+            debug_log "  $c: cedana-slurm daemon running"
+        else
+            error_log "cedana-slurm daemon failed to start on $c"
+            docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
+            return 1
+        fi
+    done
+}
+
+# Restart the cedana-slurm daemon with CEDANA_SLURM_UNPRIVILEGED=1 on all nodes.
+# Sets CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the binary via setcap,
+# then starts the daemon with CEDANA_SLURM_UNPRIVILEGED=1 so both the daemon and any monitors
+# it spawns use the embedded dump path.
+restart_cedana_slurm_daemon_unprivileged() {
+    local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
+    cluster_id="${cluster_id//\"/}"
+
+    if [ -z "$cluster_id" ]; then
+        error_log "SLURM cluster ID is required"
+        return 1
+    fi
+
+    local targets=("$SLURM_CONTROLLER_CONTAINER")
+    local compute_containers=($(_slurm_compute_containers))
+    targets+=("${compute_containers[@]}")
+
+    debug_log "Restarting cedana-slurm daemon (unprivileged/embedded) on SLURM nodes..."
+
+    for c in "${targets[@]}"; do
+        docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
+        docker exec "$c" bash -c '
+            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm
+            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm 2>/dev/null || true
+        ' || {
+            error_log "Failed to set capabilities on cedana-slurm in $c"
+            return 1
+        }
+        docker exec -d \
+            -e CEDANA_URL="${CEDANA_URL:-}" \
+            -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+            -e CEDANA_CLUSTER_ID="$cluster_id" \
+            -e CEDANA_SLURM_BIN="${CEDANA_SLURM_BIN:-/usr/bin/cedana-slurm}" \
+            -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
+            -e CEDANA_SLURM_UNPRIVILEGED=1 \
+            "$c" \
+            bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
+            error_log "Failed to launch cedana-slurm daemon (unprivileged) on $c"
+            return 1
+        }
+    done
+
+    sleep 3
+    for c in "${targets[@]}"; do
+        if docker exec "$c" pgrep -f 'cedana-slurm daemon' &>/dev/null; then
+            debug_log "  $c: cedana-slurm daemon (unprivileged) running"
+        else
+            error_log "cedana-slurm daemon (unprivileged) failed to start on $c"
+            docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
+            return 1
+        fi
+    done
+}
+
+# Restart the cedana-slurm daemon in privileged mode (using cedana client) on all nodes.
+restart_cedana_slurm_daemon() {
+    local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
+    cluster_id="${cluster_id//\"/}"
+
+    if [ -z "$cluster_id" ]; then
+        error_log "SLURM cluster ID is required"
+        return 1
+    fi
+
+    local targets=("$SLURM_CONTROLLER_CONTAINER")
+    local compute_containers=($(_slurm_compute_containers))
+    targets+=("${compute_containers[@]}")
+
+    debug_log "Restarting cedana-slurm daemon (privileged) on SLURM nodes..."
+
+    for c in "${targets[@]}"; do
+        docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
+        docker exec -d \
+            -e CEDANA_URL="${CEDANA_URL:-}" \
+            -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
+            -e CEDANA_CLUSTER_ID="$cluster_id" \
+            -e CEDANA_SLURM_BIN="${CEDANA_SLURM_BIN:-/usr/bin/cedana-slurm}" \
+            -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
+            "$c" \
+            bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
+            error_log "Failed to launch cedana-slurm daemon on $c"
+            return 1
+        }
     done
 
     sleep 3
