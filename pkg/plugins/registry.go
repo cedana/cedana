@@ -28,6 +28,11 @@ var Registry = []Plugin{
 		Type:      EXTERNAL,
 		Libraries: []Binary{{Name: "nvidia-dev-plugin.so", InstallDir: "/usr/lib/criu"}}, // Do not change
 	},
+  {
+    Name:      "criu/infiniband",
+    Type:      EXTERNAL,
+    Libraries: []Binary{{Name: "infiniband-plugin.so", InstallDir: "/usr/lib/criu"}}, // Do not change
+  },
 
 	// Container runtimes
 	{
