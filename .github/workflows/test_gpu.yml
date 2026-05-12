@@ -200,6 +200,16 @@ jobs:
           path: |
             /tmp/report*.json
 
+      - name: Upload daemon and GPU controller logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpu-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
+          path: |
+            /tmp/cedana-*
+            /tmp/cedana-daemon-*.log
+          if-no-files-found: ignore
+
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
