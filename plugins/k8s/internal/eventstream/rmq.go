@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +16,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
+	multinode "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/multinode"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	cedanagosdk "github.com/cedana/cedana-go-sdk"
 	"github.com/cedana/cedana/pkg/client"
@@ -35,14 +35,11 @@ type EventStream struct {
 	cedana     *client.Client
 	propagator *cedanagosdk.ApiClient
 
-	url                string
-	checkpoints        *rabbitmq.Publisher
-	checkpointRequests *rabbitmq.Consumer
-	containerdAddress  string
-	lifecycleMu        sync.RWMutex
-	closeOnce          sync.Once
-	closeErr           error
+	url               string
+	checkpoints       *rabbitmq.Publisher
+	containerdAddress string
 	*rabbitmq.Conn
+	pendingRestores sync.Map
 }
 
 var defaultDumpOpts = &criu.CriuOpts{
@@ -96,16 +93,9 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 }
 
 func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
-	es.lifecycleMu.RLock()
-	conn := es.Conn
-	es.lifecycleMu.RUnlock()
-	if conn == nil {
-		return fmt.Errorf("rabbitmq connection is closed")
-	}
-
 	queueName := "cedana_daemon_helper-" + rand.Text()
 	consumer, err := rabbitmq.NewConsumer(
-		conn,
+		es.Conn,
 		queueName,
 		rabbitmq.WithConsumerOptionsExchangeName("daemon_broadcast_request"),
 		rabbitmq.WithConsumerOptionsConcurrency(10),
@@ -126,90 +116,81 @@ func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	es.lifecycleMu.Lock()
-	if es.Conn == nil {
-		es.lifecycleMu.Unlock()
-		consumer.Close()
-		return fmt.Errorf("rabbitmq connection is closed")
-	}
-	if es.checkpointRequests != nil {
-		es.lifecycleMu.Unlock()
-		consumer.Close()
-		return fmt.Errorf("checkpoints consumer is already running")
-	}
-	es.checkpointRequests = consumer
-	es.lifecycleMu.Unlock()
-
-	defer func() {
-		es.lifecycleMu.Lock()
-		if es.checkpointRequests == consumer {
-			es.checkpointRequests = nil
-		}
-		es.lifecycleMu.Unlock()
-	}()
-
-	if err := consumer.Run(es.checkpointHandler(ctx)); err != nil {
-		consumer.Close()
+	err = consumer.Run(es.checkpointHandler(ctx))
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
 func (es *EventStream) StartCheckpointsPublisher(ctx context.Context) error {
-	es.lifecycleMu.RLock()
-	conn := es.Conn
-	es.lifecycleMu.RUnlock()
-	if conn == nil {
-		return fmt.Errorf("rabbitmq connection is closed")
-	}
-
 	publisher, err := rabbitmq.NewPublisher(
-		conn,
+		es.Conn,
 	)
 	if err != nil {
 		return err
-	}
-
-	es.lifecycleMu.Lock()
-	defer es.lifecycleMu.Unlock()
-	if es.Conn == nil {
-		publisher.Close()
-		return fmt.Errorf("rabbitmq connection is closed")
-	}
-	if es.checkpoints != nil {
-		publisher.Close()
-		return fmt.Errorf("checkpoints publisher is already running")
 	}
 	es.checkpoints = publisher
 	return nil
 }
 
-func (es *EventStream) Close() error {
-	es.closeOnce.Do(func() {
-		es.lifecycleMu.Lock()
-		consumer := es.checkpointRequests
-		publisher := es.checkpoints
-		conn := es.Conn
-		es.checkpointRequests = nil
-		es.checkpoints = nil
-		es.Conn = nil
-		es.lifecycleMu.Unlock()
+func (es *EventStream) StartMultiPodConsumer(ctx context.Context) error {
+	queueName := "cedana_multinode_helper-" + rand.Text()
+	consumer, err := rabbitmq.NewConsumer(
+		es.Conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsExchangeName("multinode_broadcast_request"),
+		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsConcurrency(10),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_multinode_helper"),
+		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
+			RoutingKey:     "",
+			BindingOptions: rabbitmq.BindingOptions{},
+		}),
+	)
+	if err != nil {
+		return err
+	}
 
-		if consumer != nil {
-			consumer.Close()
+	return consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
+		var cmd MultiNodeCommand
+		if err := json.Unmarshal(msg.Body, &cmd); err != nil {
+			return rabbitmq.Ack
 		}
-		if publisher != nil {
-			publisher.Close()
+
+		var req *checkpointReq
+		var action string
+
+		if cmd.Freeze != nil {
+			req = cmd.Freeze
+			action = "FREEZE"
+		} else if cmd.Dump != nil {
+			req = cmd.Dump
+			action = "DUMP"
+		} else if cmd.Unfreeze != nil {
+			req = cmd.Unfreeze
+			action = "UNFREEZE"
 		}
-		if conn != nil {
-			if err := conn.Close(); err != nil {
-				es.closeErr = errors.Join(es.closeErr, fmt.Errorf("failed to close rabbitmq connection: %w", err))
+
+		podsHandled, err := es.handleMultiNodeAction(ctx, action, req)
+
+		// send response for each pod handled -> could have multiple allocated to same node
+		if msg.ReplyTo != "" {
+			if podsHandled == 0 {
+				// If this node has no pods, it shouldn't send anything
+				return rabbitmq.Ack
+			}
+
+			// Send a success message for every pod this node handled
+			for i := 0; i < podsHandled; i++ {
+				es.sendMultiNodeResponseToPropagator(ctx, msg.ReplyTo, msg.CorrelationId, err)
 			}
 		}
-	})
 
-	return es.closeErr
+		return rabbitmq.Ack
+	})
 }
 
 /////////////
@@ -217,13 +198,15 @@ func (es *EventStream) Close() error {
 /////////////
 
 type checkpointReq struct {
-	PodName   string `json:"pod_name"`
-	RuncRoot  string `json:"runc_root"` // DEPRECATED
-	Namespace string `json:"namespace"`
-	Kind      string `json:"kind"`
-	ActionId  string `json:"action_id"`
-
-	Overrides *checkpointOverrides `json:"overrides,omitempty"`
+	PodID          []string             `json:"pod_id,omitempty"`
+	PodName        []string             `json:"pod_name,omitempty"`
+	Namespace      string               `json:"namespace,omitempty"`
+	ClusterID      string               `json:"cluster_id,omitempty"`
+	AllInNamespace bool                 `json:"all_in_namespace,omitempty"`
+	ActionId       string               `json:"action_id,omitempty"`
+	Kind           string               `json:"kind,omitempty"`
+	Reason         string               `json:"reason,omitempty"`
+	Overrides      *checkpointOverrides `json:"overrides,omitempty"`
 }
 
 type checkpointOverrides struct {
@@ -258,6 +241,25 @@ type imageSecret struct {
 	ImageSource string `json:"image_source"`
 }
 
+type MultiNodeCommand struct {
+	Freeze   *checkpointReq `json:"Freeze,omitempty"`
+	Dump     *checkpointReq `json:"Dump,omitempty"`
+	Unfreeze *checkpointReq `json:"Unfreeze,omitempty"`
+}
+
+// to shared state across stages
+type multiNodePodState struct {
+	containers      []*containerd.Containerd
+	checkpointIdMap map[int]string
+	specMap         map[int]*specs.Spec
+	imageMap        map[int]string
+	dumpReqs        []*daemon.DumpReq
+	imageSecret     *imageSecret
+}
+
+// keyed by action ID + pod name
+var multiNodeStates = sync.Map{}
+
 func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 	return func(msg rabbitmq.Delivery) rabbitmq.Action {
 		log.Trace().Msgf("received checkpoint request: %s", string(msg.Body))
@@ -268,12 +270,17 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			log.Error().Err(err).Msg("failed to unmarshal message")
 			return rabbitmq.Ack
 		}
-		log := log.With().Str("action_id", req.ActionId).Str("kind", req.Kind).Str("pod", req.PodName).Str("namespace", req.Namespace).Logger()
+		if len(req.PodName) == 0 {
+			log.Warn().Msg("checkpoint request missing pod_name; ignoring (likely multi-node request)")
+			return rabbitmq.Ack
+		}
+
+		log := log.With().Str("action_id", req.ActionId).Str("kind", req.Kind).Str("pod", req.PodName[0]).Str("namespace", req.Namespace).Logger()
 
 		query := &daemon.QueryReq{
 			Type: "k8s",
 			K8S: &k8s.QueryReq{
-				Names:         []string{req.PodName},
+				Names:         req.PodName,
 				Namespace:     req.Namespace,
 				ContainerType: "container",
 			},
@@ -287,6 +294,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			log.Debug().Msg("no pods found for checkpoint request")
 			return rabbitmq.Ack
 		}
+		podUID := string(queryResp.K8S.Pods[0].UID)
 		containers := queryResp.K8S.Pods[0].Containerd
 		if len(containers) == 0 {
 			log.Trace().Msg("no containers found in pod for checkpoint request")
@@ -403,7 +411,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				}
 				es.publishCheckpoint(
 					log.WithContext(ctx),
-					req.PodName,
+					podUID,
 					req.ActionId,
 					checkpointIdMap[i],
 					nil,
@@ -433,7 +441,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				}
 				es.publishCheckpoint(
 					log.WithContext(ctx),
-					req.PodName,
+					podUID,
 					req.ActionId,
 					checkpointIdMap[i],
 					profiling,
@@ -465,13 +473,6 @@ func (es *EventStream) publishCheckpoint(
 	dumpErr error,
 ) error {
 	log := *log.Ctx(ctx)
-	es.lifecycleMu.RLock()
-	publisher := es.checkpoints
-	es.lifecycleMu.RUnlock()
-	if publisher == nil {
-		return fmt.Errorf("checkpoints publisher is not initialized")
-	}
-
 	ci := checkpointInfo{
 		ActionId:       actionId,
 		PodId:          podId,
@@ -524,7 +525,7 @@ func (es *EventStream) publishCheckpoint(
 	if err != nil {
 		return err
 	}
-	err = publisher.Publish(data, []string{"checkpoint_response"})
+	err = es.checkpoints.Publish(data, []string{"checkpoint_response"})
 	if err != nil {
 		return err
 	}
@@ -561,4 +562,411 @@ func (es *EventStream) getImageSecret() (*imageSecret, error) {
 		return nil, fmt.Errorf("invalid image secret received from propagator")
 	}
 	return &secret, nil
+}
+
+func (es *EventStream) handleMultiNodeAction(ctx context.Context, action string, req *checkpointReq) (int, error) {
+	if req == nil || len(req.PodName) == 0 {
+		return 0, fmt.Errorf("no pod names provided")
+	}
+
+	log := log.With().
+		Str("action", action).
+		Str("action_id", req.ActionId).
+		Strs("pod_names", req.PodName).
+		Str("namespace", req.Namespace).
+		Logger()
+
+	config.Global.Multinode_buffer_size = len(req.PodName)
+	log.Info().Int("buffer size", config.Global.Multinode_buffer_size).Msg("[multinode] channel buffer updated")
+
+	// instead of ckpt single pod, we pass whole list to query local daemon for all pod names in the list
+	query := &daemon.QueryReq{
+		Type: "k8s",
+		K8S: &k8s.QueryReq{
+			Names:         req.PodName,
+			Namespace:     req.Namespace,
+			ContainerType: "container",
+		},
+	}
+
+	queryResp, err := es.cedana.Query(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query pods")
+		return 0, err
+	}
+
+	if len(queryResp.K8S.Pods) == 0 {
+		log.Debug().Msg("no pods found on this node for multinode action")
+		return 0, nil
+	}
+
+	podsFound := len(queryResp.K8S.Pods)
+	log.Info().Int("pods_found", podsFound).Msg("[multinode] found pods on this node")
+
+	// process each pod found on this node
+	errChan := make(chan error, podsFound)
+	wg := sync.WaitGroup{}
+	wg.Add(podsFound)
+
+	for _, pod := range queryResp.K8S.Pods {
+		p := pod
+		go func(p *k8s.Pod) {
+			defer wg.Done()
+
+			var err error
+			switch action {
+			case "FREEZE":
+				err = es.freezeMultiPod(ctx, p, req)
+			case "DUMP":
+				err = es.dumpMultiPod(ctx, p, req)
+			case "UNFREEZE":
+				err = es.unfreezeMultiPod(ctx, p, req)
+			default:
+				err = fmt.Errorf("unknown action: %s", action)
+			}
+
+			if err != nil {
+				errChan <- err
+			}
+		}(p)
+	}
+
+	wg.Wait()
+	close(errChan)
+
+	// Check if any pod failed
+	for err := range errChan {
+		if err != nil {
+			return podsFound, err // Return count even w error so propagator knows
+		}
+	}
+
+	return podsFound, nil
+}
+
+func (es *EventStream) freezeMultiPod(ctx context.Context, pod *k8s.Pod, req *checkpointReq) error {
+	containers := pod.Containerd
+	if (len(containers)) == 0 {
+		return fmt.Errorf("no containers found in pod")
+	}
+	targetPodID := string(pod.GetUID())
+
+	log := log.With().
+		Str("pod", targetPodID).
+		Str("action_id", req.ActionId).
+		Logger()
+
+	log.Info().Int("containers", len(containers)).Msg("[multinode] freezing pod containers")
+
+	state := &multiNodePodState{
+		containers:      containers,
+		checkpointIdMap: make(map[int]string),
+		specMap:         make(map[int]*specs.Spec),
+		imageMap:        make(map[int]string),
+		dumpReqs:        make([]*daemon.DumpReq, 0),
+	}
+
+	for i, container := range containers {
+		spec, err := runc.LoadSpec(filepath.Join("/host", container.Runc.Bundle, "config.json"))
+		if err != nil {
+			return fmt.Errorf("failed to load spec for container: %w", err)
+		}
+		state.specMap[i] = spec
+
+		checkpointId, err := es.propagator.V2().Checkpoints().Post(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create checkpoint in propagator: %w", err)
+		}
+		state.checkpointIdMap[i] = *checkpointId
+	}
+
+	rootfs := strings.HasPrefix(req.Kind, "rootfs")
+	rootfsOnly := req.Kind == "rootfsonly"
+
+	if rootfs {
+		imageSecret, err := es.getImageSecret()
+		if err != nil {
+			return fmt.Errorf("failed to fetch image secret: %w", err)
+		}
+		state.imageSecret = imageSecret
+	}
+
+	for i, container := range containers {
+		state.imageMap[i] = container.Image.GetName()
+		container.Address = es.containerdAddress
+
+		if rootfs {
+			container.Image = &containerd.Image{
+				Name:     state.imageSecret.ImageSource + ":" + state.checkpointIdMap[i],
+				Username: strings.Split(state.imageSecret.ImageSecret, ":")[0],
+				Secret:   strings.Split(state.imageSecret.ImageSecret, ":")[1],
+			}
+			container.Rootfs = rootfs
+			container.RootfsOnly = rootfsOnly
+		} else {
+			container.Image = nil
+		}
+
+		dumpReq := &daemon.DumpReq{
+			Name: state.checkpointIdMap[i],
+			Type: "containerd",
+			Criu: &criu.CriuOpts{
+				LeaveRunning:    proto.Bool(true),
+				TcpEstablished:  proto.Bool(true),
+				TcpSkipInFlight: proto.Bool(true),
+				LinkRemap:       proto.Bool(true),
+			},
+			Details: &daemon.Details{
+				Containerd: container,
+			},
+		}
+
+		if req.Overrides != nil {
+			criuOpts := &criu.CriuOpts{}
+			err := json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
+			if err == nil {
+				dumpReq.Criu = criuOpts
+			}
+			dumpReq.Compression = req.Overrides.Compression
+			dumpReq.Dir = req.Overrides.Directory
+			dumpReq.Streams = int32(req.Overrides.Streams)
+			dumpReq.Async = req.Overrides.Async
+		}
+
+		state.dumpReqs = append(state.dumpReqs, dumpReq)
+	}
+
+	wg := sync.WaitGroup{}
+	var mu sync.Mutex
+	errMap := make(map[int]error)
+	wg.Add(len(state.dumpReqs))
+
+	for i, dumpReq := range state.dumpReqs {
+		go func(i int, dumpReq *daemon.DumpReq) {
+			defer wg.Done()
+			_, _, err := es.cedana.Freeze(ctx, dumpReq)
+			if err != nil {
+				mu.Lock()
+				errMap[i] = err
+				mu.Unlock()
+			}
+		}(i, dumpReq)
+	}
+
+	wg.Wait()
+
+	if len(errMap) > 0 {
+		for i, err := range errMap {
+			log.Error().
+				Int("container_order", i).
+				Str("container", containers[i].ID).
+				Err(err).
+				Msg("[multinode] failed to freeze container")
+
+			// for tracking if individual containers failed -> publish to propagator
+			es.publishCheckpoint(
+				log.WithContext(ctx),
+				targetPodID,
+				req.ActionId,
+				state.checkpointIdMap[i],
+				nil, "", nil, i,
+				state.specMap[i],
+				err,
+			)
+		}
+		return fmt.Errorf("[multinode] failed to freeze some containers")
+	}
+
+	log.Info().Msg("[multinode] all containers frozen successfully")
+
+	// state stored for DUMP phase
+	stateKey := fmt.Sprintf("%s:%s", req.ActionId, targetPodID)
+	multiNodeStates.Store(stateKey, state)
+
+	return nil
+}
+
+func (es *EventStream) dumpMultiPod(ctx context.Context, pod *k8s.Pod, req *checkpointReq) error {
+	targetPodID := string(pod.GetUID())
+
+	log := log.With().
+		Str("pod", targetPodID).
+		Str("action_id", req.ActionId).
+		Logger()
+
+	stateKey := fmt.Sprintf("%s:%s", req.ActionId, targetPodID)
+	stateVal, ok := multiNodeStates.Load(stateKey)
+	if !ok {
+		return fmt.Errorf("no freeze state found for pod - was FREEZE called first?")
+	}
+	state := stateVal.(*multiNodePodState)
+
+	log.Info().Msg("[multinode] starting dump of frozen containers")
+	wg := sync.WaitGroup{}
+	wg.Add(len(state.dumpReqs))
+
+	for i, dumpReq := range state.dumpReqs {
+		go func(i int, dumpReq *daemon.DumpReq) {
+			defer wg.Done()
+
+			dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
+			var path string
+			var stateData *daemon.ProcessState
+			if err == nil {
+				path = dumpResp.Paths[0]
+				stateData = dumpResp.State
+			}
+
+			es.publishCheckpoint(
+				log.WithContext(ctx),
+				targetPodID,
+				req.ActionId,
+				state.checkpointIdMap[i],
+				profiling,
+				path,
+				stateData,
+				i,
+				state.specMap[i],
+				err,
+			)
+		}(i, dumpReq)
+	}
+
+	wg.Wait()
+	log.Info().Msg("[multinode] dump complete for all containers")
+
+	return nil
+}
+
+func (es *EventStream) unfreezeMultiPod(ctx context.Context, pod *k8s.Pod, req *checkpointReq) error {
+	targetPodID := string(pod.GetUID())
+
+	log := log.With().
+		Str("pod", targetPodID).
+		Str("action_id", req.ActionId).
+		Logger()
+
+	stateKey := fmt.Sprintf("%s:%s", req.ActionId, targetPodID)
+	stateVal, ok := multiNodeStates.Load(stateKey)
+	if !ok {
+		return fmt.Errorf("no state found for pod - was FREEZE called first?")
+	}
+	state := stateVal.(*multiNodePodState)
+
+	log.Info().Msg("[multinode] unfreezing all containers")
+
+	wg := sync.WaitGroup{}
+	var mu sync.Mutex
+	errMap := make(map[int]error)
+	wg.Add(len(state.dumpReqs))
+
+	for i, dumpReq := range state.dumpReqs {
+		go func(i int, dumpReq *daemon.DumpReq) {
+			defer wg.Done()
+			_, _, err := es.cedana.Unfreeze(ctx, dumpReq)
+			if err != nil {
+				mu.Lock()
+				errMap[i] = err
+				mu.Unlock()
+			}
+		}(i, dumpReq)
+	}
+
+	wg.Wait()
+
+	for i, err := range errMap {
+		if err != nil {
+			log.Error().
+				Int("container_order", i).
+				Str("container", state.containers[i].ID).
+				Err(err).
+				Msg("failed to unfreeze container")
+		}
+	}
+
+	// clean up state
+	multiNodeStates.Delete(stateKey)
+	log.Info().Msg("[multinode] unfreeze complete, state cleaned up")
+
+	return nil
+}
+
+func (es *EventStream) sendMultiNodeResponseToPropagator(ctx context.Context, replyTo string, correlationId string, err error) {
+	status := "SUCCESS"
+	if err != nil {
+		status = err.Error()
+	}
+
+	// default exchange with rk as queue name -> direct publish to queue
+	// uses the same checkpoints (publisher) established by StartCheckpointsPublisher
+	es.checkpoints.Publish(
+		[]byte(status),
+		[]string{replyTo},
+		rabbitmq.WithPublishOptionsExchange(""),
+		rabbitmq.WithPublishOptionsCorrelationID(correlationId),
+	)
+}
+
+func (es *EventStream) PublishIPEvent(ctx context.Context, req *multinode.IPReportReq) error {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return err
+	}
+
+	routingKey := fmt.Sprintf("ip-report-%s", config.Global.ClusterID)
+
+	return es.checkpoints.Publish(
+		body,
+		[]string{routingKey},
+		rabbitmq.WithPublishOptionsContentType("application/json"),
+		rabbitmq.WithPublishOptionsExchange(""),
+	)
+}
+
+func (es *EventStream) StartGlobalMapConsumer(ctx context.Context) error {
+	queueName := "cedana_multinode_helper-" + rand.Text()
+	consumer, err := rabbitmq.NewConsumer(
+		es.Conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsExchangeName("network_map_fanout"),
+		rabbitmq.WithConsumerOptionsConcurrency(10),
+		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_multinode_helper"),
+		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
+			RoutingKey:     "",
+			BindingOptions: rabbitmq.BindingOptions{},
+		}),
+	)
+	if err != nil {
+		return err
+	}
+
+	return consumer.Run(func(msg rabbitmq.Delivery) rabbitmq.Action {
+		var globalMapMsg struct {
+			ClusterID string                      `json:"cluster_id"`
+			Entries   []*multinode.GlobalMapEntry `json:"entries"`
+		}
+
+		if err := json.Unmarshal(msg.Body, &globalMapMsg); err != nil {
+			log.Error().Err(err).Msg("Failed to unmarshal global map")
+			return rabbitmq.NackDiscard
+		}
+
+		_, err := es.cedana.SubmitGlobalMap(ctx, &multinode.GlobalMapReq{
+			ClusterId: globalMapMsg.ClusterID,
+			Entries:   globalMapMsg.Entries,
+		})
+		if err != nil {
+			if strings.Contains(err.Error(), "no pending restore found") {
+				log.Warn().Msg("Received global map for a cluster that isn't waiting. Discarding.")
+				return rabbitmq.Ack // ack so removed from queue
+			}
+			return rabbitmq.NackRequeue
+		}
+
+		log.Info().Msgf("Submitted global map for cluster %s", globalMapMsg.ClusterID)
+		return rabbitmq.Ack
+	})
 }
