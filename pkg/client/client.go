@@ -24,10 +24,10 @@ import (
 )
 
 const (
-	DEFAULT_DUMP_TIMEOUT     = 5 * time.Minute
+	DEFAULT_DUMP_TIMEOUT     = 10 * time.Minute
 	DEFAULT_FREEZE_TIMEOUT   = 1 * time.Minute
 	DEFAULT_UNFREEZE_TIMEOUT = 1 * time.Minute
-	DEFAULT_RESTORE_TIMEOUT  = 5 * time.Minute
+	DEFAULT_RESTORE_TIMEOUT  = 10 * time.Minute
 	DEFAULT_RUN_TIMEOUT      = 1 * time.Minute
 	DEFAULT_MANAGE_TIMEOUT   = 1 * time.Minute
 	DEFAULT_DB_TIMEOUT       = 20 * time.Second
