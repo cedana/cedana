@@ -331,24 +331,18 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		return
 	}
 
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
-
 	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
 
-	if !c.Termination.TryLock() {
-		if c.Terminating.Load() {
-			log.Debug().Msg("termination of GPU controller already in progress, skipping duplicate termination attempt")
-			return
-		}
-		log.Debug().Msg("terminating GPU controller")
-		c.Termination.Lock() // Block on it as it's probably waiting on another condition (e.g. for a dump to finish)
-	} else {
-		log.Debug().Msg("terminating GPU controller")
-	}
-
-	c.Terminating.Store(true) // Indicate termination has begun, to avoid multiple concurrent terminations
+	c.Termination.Lock()
 	defer c.Termination.Unlock()
+
+	if c.Terminating.Load() {
+		log.Debug().Msg("termination of GPU controller already in progress, skipping duplicate termination attempt")
+		return
+	}
+	log.Debug().Msg("terminating GPU controller")
+
+	c.Terminating.Store(true) // Indicate termination has begun, to avoid concurrent terminations
 	defer os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id))
@@ -367,6 +361,9 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		c.ClientConn = nil
 		c.ControllerClient = nil
 	}
+
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 
 	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
 	if int(c.ParentPID) == os.Getpid() { // If we spawned it, then reap it
