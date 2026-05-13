@@ -23,6 +23,7 @@ import (
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
@@ -210,6 +211,24 @@ func NewStreamingFs(
 
 	// Mark ready when we read init progress message on stderr
 	wg.Go(func() {
+		var filename string
+		var file *os.File
+		var err error
+		if log.GetLevel() <= zerolog.TraceLevel {
+			if mode == READ_ONLY {
+				filename = "streamer-read.log"
+			} else {
+				filename = "streamer-write.log"
+			}
+			file, err = os.Create(filepath.Join(imagesDir, filename))
+			if err != nil {
+				// it's okay if we can't log to file
+				log.Trace().Str("error", err.Error()).Msg("could not create streamer log file")
+				file = nil
+			} else {
+				defer file.Close()
+			}
+		}
 		scanner := bufio.NewScanner(stderrPipe)
 		for {
 			if !scanner.Scan() || ctx.Err() != nil {
@@ -220,6 +239,9 @@ func NewStreamingFs(
 				ready <- true
 			}
 			log.Trace().Msg(lastMsg)
+			if log.GetLevel() <= zerolog.TraceLevel && file != nil {
+				file.WriteString(lastMsg + "\n")
+			}
 		}
 	})
 
