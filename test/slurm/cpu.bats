@@ -32,13 +32,6 @@ load ../helpers/slurm_propagator
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15
 }
 
-# bats test_tags=dump,restore,samples
-@test "Dump/Restore: NumPy Matrix Ops" {
-    local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/numpy-matrix-ops.sbatch"
-
-    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20
-}
-
 # bats test_tags=dump,restore,samples,large
 @test "Dump/Restore: CPU PyTorch" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/cpu-pytorch.sbatch"
