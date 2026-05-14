@@ -568,8 +568,17 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	}
 
 	// Update GPU controller with the restore PID (which can be a new PID)
+	// In case, there are no namespaces to restore CRIU will call this hook
 	var restoredPid *int32
 	callback.NoNsFunc = func(ctx context.Context, pid int32) error {
+		controller := p.Get(id)
+		restoredPid = &pid
+
+		return controller.Attach(ctx, uint32(pid))
+	}
+
+	// Will only be called if there are namespaces to restore
+	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
 		controller := p.Get(id)
 		restoredPid = &pid
 
