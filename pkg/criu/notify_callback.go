@@ -25,6 +25,7 @@ type NotifyCallback struct {
 	NetworkUnlockFunc       NotifyFunc
 	SetupNamespacesFunc     NotifyFuncPid
 	PostSetupNamespacesFunc NotifyFunc
+	NoNsFunc                NotifyFuncPid
 	PreResumeFunc           NotifyFunc
 	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
@@ -247,6 +248,21 @@ func (n NotifyCallback) PostSetupNamespaces(ctx context.Context) error {
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU post-setup-namespaces callback failed")
 			return fmt.Errorf("post-setup-namespaces callback: %v", err)
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallback) NoNs(ctx context.Context, pid int32) error {
+	if n.NoNsFunc != nil {
+		log.Trace().Str("name", n.Name).Msg("CRIU no-ns callback")
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		err := n.NoNsFunc(ctx, pid)
+		if err != nil {
+			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU no-ns callback failed")
+			return fmt.Errorf("no-ns callback: %v", err)
 		}
 	}
 	return nil

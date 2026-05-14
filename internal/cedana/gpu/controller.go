@@ -569,7 +569,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 	// Update GPU controller with the restore PID (which can be a new PID)
 	var restoredPid *int32
-	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
+	callback.NoNsFunc = func(ctx context.Context, pid int32) error {
 		controller := p.Get(id)
 		restoredPid = &pid
 
