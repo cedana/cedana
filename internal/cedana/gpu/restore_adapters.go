@@ -258,6 +258,14 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				return true // not a file we care about
 			}
 
+			log.Debug().Str("path", path).Str("newPath", newPath).Msg("opening GPU file for inheriting")
+			newFile, err = os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o644)
+			if err != nil {
+				err = status.Errorf(codes.Internal, "failed to reopen file for inheriting FD %s: %v", newPath, err)
+				return false
+			}
+			toClose = append(toClose, newFile)
+
 			if external {
 				key = fmt.Sprintf("file[%x:%x]", file.MountID, file.Inode)
 			} else {
@@ -273,14 +281,6 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			// Open new GPU shm file only if not restoring a container because for container restore we expect the shm file to be
 			// bind-mounted from the host at the same path inside the container (CED-2077)
 			if !isContainer {
-				log.Debug().Str("path", path).Str("newPath", newPath).Msg("opening GPU file for inheriting")
-				newFile, err = os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o644)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to reopen file for inheriting FD %s: %v", newPath, err)
-					return false
-				}
-				toClose = append(toClose, newFile)
-
 				log.Debug().Str("key", key).Int32("fd", fd).Bool("external", external).Str("old", path).Str("new", newPath).Msgf("inheriting GPU file")
 
 				opts.ExtraFiles = append(opts.ExtraFiles, newFile)
