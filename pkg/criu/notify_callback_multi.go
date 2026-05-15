@@ -180,9 +180,9 @@ func (n NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context) error {
 	return nil
 }
 
-func (n NotifyCallbackMulti) NoNs(ctx context.Context, pid int32) error {
+func (n NotifyCallbackMulti) SkipNamespaces(ctx context.Context, pid int32) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].NoNs(ctx, pid)
+		err := n.callbacks[i].SkipNamespaces(ctx, pid)
 		if err != nil {
 			return err
 		}
