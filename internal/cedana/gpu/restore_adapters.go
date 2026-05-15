@@ -92,6 +92,20 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			req.Criu = &criu.CriuOpts{}
 		}
 
+		var toClose []*os.File
+		var logDir string
+		var isContainer bool
+		shmFileRegex := regexp.MustCompile(CONTROLLER_SHM_FILE_PATTERN)
+
+		mounts := make(map[uint64]any)
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+			// If the shm file appears in the mounts, it means this restore is for a container
+			isContainer = isContainer || shmFileRegex.MatchString(m.Root)
+
+			mounts[m.ID] = nil
+			return true
+		})
+
 		key := strings.TrimPrefix(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, state.GPUID), "/")
 		fd := int32(3 + len(opts.ExtraFiles))
 
@@ -101,13 +115,21 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		opts.InheritFdMap[key] = fd
 
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
-		if ok {
-			// Open new GPU shm file
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
+		}
+
+		// Open new GPU shm file only if not restoring a container because for container restore we expect the shm file to be
+		// bind-mounted from the host at the same path inside the container (CED-2077)
+		if !isContainer {
+			log.Debug().Str("key", key).Str("path", fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id)).Int32("fd", fd).Msg("opening GPU file for inheriting")
 			shmFile, err := os.OpenFile(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id), os.O_RDWR, 0o644)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to open GPU shm file: %v", err)
 			}
-			defer shmFile.Close()
+			toClose = append(toClose, shmFile)
+
+			log.Debug().Str("key", key).Str("new", fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id)).Int32("fd", fd).Msg("inheriting GPU file")
 
 			opts.ExtraFiles = append(opts.ExtraFiles, shmFile)
 			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
@@ -116,16 +138,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			})
 		}
 
-		mounts := make(map[uint64]any)
-		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			mounts[m.ID] = nil
-			return true
-		})
-
-		var toClose []*os.File
-		var logDir string
-
-		// Inherit hostmem files as well, if any
+		// Inherit other known GPU files as well, if any
 		utils.WalkTree(state, "OpenFiles", "Children", func(file *daemon.File) bool {
 			path := file.Path
 
@@ -245,11 +258,13 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				return true // not a file we care about
 			}
 
+			log.Debug().Str("path", path).Str("newPath", newPath).Msg("opening GPU file for inheriting")
 			newFile, err = os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o644)
 			if err != nil {
 				err = status.Errorf(codes.Internal, "failed to reopen file for inheriting FD %s: %v", newPath, err)
 				return false
 			}
+			toClose = append(toClose, newFile)
 
 			if external {
 				key = fmt.Sprintf("file[%x:%x]", file.MountID, file.Inode)
@@ -261,16 +276,19 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			if _, ok := opts.InheritFdMap[key]; ok {
 				return true // already inherited
 			}
-
-			log.Debug().Str("key", key).Int32("fd", fd).Bool("external", external).Str("old", path).Str("new", newPath).Msgf("inheriting file")
-
 			opts.InheritFdMap[key] = fd
-			opts.ExtraFiles = append(opts.ExtraFiles, newFile)
-			toClose = append(toClose, newFile)
-			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
-				Key: proto.String(key),
-				Fd:  proto.Int32(fd),
-			})
+
+			// Open new GPU shm file only if not restoring a container because for container restore we expect the shm file to be
+			// bind-mounted from the host at the same path inside the container (CED-2077)
+			if !isContainer {
+				log.Debug().Str("key", key).Int32("fd", fd).Bool("external", external).Str("old", path).Str("new", newPath).Msgf("inheriting GPU file")
+
+				opts.ExtraFiles = append(opts.ExtraFiles, newFile)
+				req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
+					Key: proto.String(key),
+					Fd:  proto.Int32(fd),
+				})
+			}
 
 			return true
 		})
@@ -284,6 +302,29 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 
 		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+// Adapter that tells CRIU about the external GPU mounts.
+func AddMountsForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"missing state. at least PID is required in resp.state",
+			)
+		}
+
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
+				log.Debug().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.Root))
+			}
+			return true
+		})
 
 		return next(ctx, opts, resp, req)
 	}
@@ -330,29 +371,6 @@ func InterceptionRestore(next types.Restore) types.Restore {
 		}
 
 		log.Info().Str("plugin", "gpu").Str("ID", id).Str("type", t).Msg("restoring GPU interception")
-
-		return next(ctx, opts, resp, req)
-	}
-}
-
-// Adapter that tells CRIU about the external GPU mounts.
-func AddMountsForRestore(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-		state := resp.GetState()
-		if state == nil {
-			return nil, status.Errorf(
-				codes.InvalidArgument,
-				"missing state. at least PID is required in resp.state",
-			)
-		}
-
-		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
-				log.Trace().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
-				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.Root))
-			}
-			return true
-		})
 
 		return next(ctx, opts, resp, req)
 	}
