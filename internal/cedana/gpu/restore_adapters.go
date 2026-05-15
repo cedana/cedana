@@ -100,7 +100,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		mounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
 			// If the shm file appears in the mounts, it means this restore is for a container
-			isContainer = isContainer || shmFileRegex.MatchString(m.Root)
+			isContainer = isContainer || shmFileRegex.MatchString(m.MountPoint)
 
 			mounts[m.ID] = nil
 			return true
