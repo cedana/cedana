@@ -249,3 +249,4 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		return next(ctx, opts, resp, req)
 	}
 }
+
