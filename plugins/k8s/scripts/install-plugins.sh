@@ -173,6 +173,10 @@ CONTAINERD_CONFD_DIR=${CONTAINERD_CONFD_DIR:-"/etc/containerd/conf.d"}
 echo "Using conf.d directory: $CONTAINERD_CONFD_DIR"
 
 # Check if the node is a part of rke2 cluster
+# Editing the generated config.toml directly is not persistent.
+# It gets regenerated on restarting the rke2-server/agent.
+# Instead, we modify config.toml.tmpl, which is the template RKE2 uses to
+# recreate the final containerd configuration across restarts.
 if [ -d "/var/lib/rancher/rke2" ]; then
     RKE2_CONFIG="/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"
     echo "Configuring rke2 config.toml.tmpl $RKE2_CONFIG"
