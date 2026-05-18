@@ -255,7 +255,7 @@ func (n NotifyCallback) PostSetupNamespaces(ctx context.Context) error {
 
 func (n NotifyCallback) SkipNamespaces(ctx context.Context, pid int32) error {
 	if n.SkipNamespacesFunc != nil {
-		log.Trace().Str("name", n.Name).Msg("CRIU skip-namespaces callback")
+		log.Trace().Int32("pid", pid).Str("name", n.Name).Msg("CRIU skip-namespaces callback")
 		var end func()
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
