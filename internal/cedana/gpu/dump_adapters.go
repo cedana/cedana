@@ -22,15 +22,9 @@ var NVIDIA_MOUNTS_PATTERN = regexp.MustCompile(
 		`/run/nvidia|` +
 		`/usr/bin/nv|` +
 		`/usr/lib/firmware/nv|` +
-		`/usr/lib/libcuda|` +
-		`/usr/lib64/libcuda|` +
-		`/usr/lib/libnv|` +
-		`/usr/lib64/libnv|` +
-		`/usr/lib/x86_64-linux-gnu/libcuda|` +
-		`/usr/lib64/x86_64-linux-gnu/libcuda|` +
-		`/usr/lib/x86_64-linux-gnu/libnv|` +
-		`/usr/lib64/x86_64-linux-gnu/libnv|` +
-		`.*nvidia.*` +
+		`/usr/lib(64)?/(x86_64-linux-gnu/|aarch64-linux-gnu/)?(libcuda|libnv)|` +
+		`.*nvidia.*|` +
+		`/etc/vulkan` +
 		`)`,
 )
 
@@ -86,7 +80,7 @@ func AddMountsForDump(next types.Dump) types.Dump {
 
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
 			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
-				log.Trace().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
+				log.Debug().Interface("m", m).Msg("marking NVIDIA GPU mount as external")
 				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.MountPoint))
 			}
 			return true

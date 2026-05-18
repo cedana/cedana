@@ -1,12 +1,15 @@
+//go:build linux
+
 package cgroup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
@@ -29,25 +32,14 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 		}
 
 		if req.Criu == nil {
-			req.Criu = &criu_proto.CriuOpts{}
+			return nil, status.Errorf(codes.InvalidArgument, "missing CRIU options in restore request")
 		}
 
-		if req.Criu.ManageCgroupsMode != nil || true { // Force this path
-			manageCgroups := criu_proto.CriuCgMode_IGNORE
-			req.Criu.ManageCgroupsMode = &manageCgroups
-		} else {
-			manageCgroups := false
-			req.Criu.ManageCgroups = &manageCgroups
-		}
-
-		// GetPaths() returns absolute filesystem paths (e.g., /sys/fs/cgroup/cpu/slurm/...).
-		// GetCgroups().Path is the relative cgroup path within each controller hierarchy,
-		// which is what CRIU expects for cg_root.
-		cgroupConfig, err := manager.GetCgroups()
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to get cgroup config: %v", err)
-		}
-		relativePath := cgroupConfig.Path
+		// Disable CRIU cgroup management: CRIU cannot remap cross-job cgroup paths
+		// (e.g. job_1219/step_batch/task_0 -> job_1266/step_batch). With manage_cgroups
+		// disabled, restored processes inherit CRIU's cgroup, which we place into the
+		// new job's hierarchy via manager.Apply below.
+		req.Criu.ManageCgroups = proto.Bool(false)
 
 		callback := &criu.NotifyCallback{
 			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
@@ -60,13 +52,10 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 					log.Trace().Msgf("  Controller %s: %s\n", c, p)
 				}
 
-				// ensure the new cgroup hierarchy exists
+				// log whether the new cgroup hierarchy exists
 				for _, p := range paths {
-					if _, statErr := os.Stat(p); os.IsNotExist(statErr) {
-						log.Trace().Msgf("creating cgroup path: %s\n", p)
-						if err := os.MkdirAll(p, 0755); err != nil {
-							return fmt.Errorf("failed to create cgroup path %s: %v", p, err)
-						}
+					if err := os.MkdirAll(p, 0755); os.IsNotExist(err) {
+						log.Trace().Msgf("cgroup path does not exist: %s\n", p)
 					} else {
 						log.Trace().Msgf("cgroup path already exists: %s\n", p)
 					}
@@ -75,19 +64,13 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 				// apply cgroups to the CRIU process
 				err = manager.Apply(int(criuPid))
 				if err != nil {
-					return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
-				}
-				log.Trace().Msgf("applied cgroups to CRIU process %d\n", criuPid)
-
-				// set CgRoot to tell CRIU where to place restored processes
-				// CRIU expects paths relative to each controller's mount point
-				for c := range paths {
-					cgroupRoot := &criu_proto.CgroupRoot{
-						Ctrl: proto.String(c),
-						Path: proto.String(relativePath),
+					if os.IsPermission(err) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
+						log.Warn().Msgf("skipping cgroup apply (unprivileged): %v\n", err)
+					} else {
+						return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
 					}
-					req.Criu.CgRoot = append(req.Criu.CgRoot, cgroupRoot)
-					log.Trace().Msgf("set CgRoot for controller %s: %s\n", c, relativePath)
+				} else {
+					log.Trace().Msgf("applied cgroups to CRIU process %d\n", criuPid)
 				}
 
 				return nil

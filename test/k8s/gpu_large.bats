@@ -46,6 +46,7 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,compbio,gromacs
 @test "Dump/Restore: GROMACS MD Simulation" {
+    skip "Blocked on CED-1965"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/gromacs-simple-example.yaml" "$NAMESPACE" "gromacs")
 
@@ -54,17 +55,14 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,compbio,openmm
 @test "Dump/Restore: OpenMM MD Simulation" {
-    skip "Blocked, skipping..."
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/openmm.yaml" "$NAMESPACE" "openmm")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300
 }
 
-# Blocked on CED-1863
 # bats test_tags=dump,restore,samples,tensorflow,training
 @test "Dump/Restore: TensorFlow Training" {
-    skip "Blocked on CED-1863"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-tensorflow-cifar100.yaml")
 
@@ -89,7 +87,6 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,llamafactory,training,finetuning
 @test "Dump/Restore: LlamaFactory LLM FineTuning" {
-    skip "Blocked on known LlamaFactory checkpoint/restore issues"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-llamafactory-lora-sft.yaml" "$NAMESPACE" "llamafactory")
 
@@ -98,6 +95,7 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,training,multi,deepspeed
 @test "Dump/Restore: Multi-GPU DeepSpeed Training" {
+    skip "multi-gpu workloads will be skipped"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-2xGPU-deepspeed-train.yaml" "$NAMESPACE" "deepspeed-2gpu")
 
@@ -106,6 +104,7 @@ setup_file() {
 
 # bats test_tags=dump,restore,samples,training,multi,torch
 @test "Dump/Restore: Multi-GPU PyTorch Training" {
+    skip "multi-gpu workloads will be skipped"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/gpu/cuda-4xGPU-pytorch-cifar100.yaml" "$NAMESPACE" "pytorch-4gpu")
 

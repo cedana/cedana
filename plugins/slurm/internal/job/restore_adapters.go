@@ -1,3 +1,5 @@
+//go:build linux
+
 package job
 
 import (
@@ -15,12 +17,12 @@ import (
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
 	slurm_utils "github.com/cedana/cedana/plugins/slurm/pkg/utils"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/cgroups"
 	cgroupsManager "github.com/opencontainers/cgroups/manager"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func GetSlurmJobForRestore(next types.Restore) types.Restore {
@@ -85,13 +87,13 @@ func RestoreSlurmScript(next types.Restore) types.Restore {
 					return false
 				}
 
-				err = os.MkdirAll(filepath.Dir(path), 0755)
+				err = os.MkdirAll(filepath.Dir(path), 0o755)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to create directory for slurm script %s", path)
 					return false
 				}
 
-				err = os.WriteFile(path, contents, 0700)
+				err = os.WriteFile(path, contents, 0o700)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to restore slurm script file %s", path)
 					return false

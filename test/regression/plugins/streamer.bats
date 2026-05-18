@@ -35,11 +35,12 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana dump process $pid --streams 1 --compression none
+    run cedana dump process $pid --streams 2 --compression none
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
 
     run kill $pid
 }
@@ -50,10 +51,11 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --streams 1 --compression none
+    run cedana dump process $pid --name "$name" --dir /tmp --streams 2 --compression none
     assert_success
     assert_exists "/tmp/$name"
     assert_exists "/tmp/$name/img-0"
+    assert_exists "/tmp/$name/img-1"
 
     run kill $pid
 }
@@ -247,11 +249,12 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana dump process $pid --streams 1 --compression none
+    run cedana dump process $pid --streams 2 --compression none
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
 
     cedana restore process --path "$dump_file"
 
@@ -264,11 +267,12 @@ teardown_file() {
     pid=$!
     name=$(unix_nano)
 
-    run cedana dump process $pid --name "$name" --dir /tmp --streams 1 --compression none
+    run cedana dump process $pid --name "$name" --dir /tmp --streams 2 --compression none
     assert_success
     dump_file="/tmp/$name"
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
 
     cedana restore process --path "$dump_file"
 

@@ -62,7 +62,7 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 						if err != nil {
 							log.Error().Err(err).Msg("failed to sync GPU controllers on shutdown")
 						}
-						if manager.free == 0 && manager.stale == 0 {
+						if (manager.free == 0 && manager.stale == 0) || config.Global.GPU.Debug {
 							return
 						}
 						time.Sleep(1 * time.Second) // Wait a bit before retrying
@@ -109,7 +109,7 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 		Msg("GPU controller pool")
 
 	if config.Global.GPU.Debug {
-		log.Warn().Msg("GPU controller pool is in debug mode, not maintaining pool size")
+		log.Warn().Msg("GPU controller pool is in debug mode, not maintaining pool size, you may spawn a GPU controller manually")
 		return nil // Allow external maintenance of pool for debugging
 	}
 

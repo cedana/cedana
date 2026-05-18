@@ -23,6 +23,11 @@ var Registry = []Plugin{
 		Binaries:  []Binary{{Name: "cuda-checkpoint", InstallDir: "/usr/local/bin"}}, // Do not change
 		Libraries: []Binary{{Name: "cuda_plugin.so", InstallDir: "/usr/lib/criu"}},   // Do not change
 	},
+	{
+		Name:      "criu/nvidia-dev",
+		Type:      EXTERNAL,
+		Libraries: []Binary{{Name: "nvidia-dev-plugin.so", InstallDir: "/usr/lib/criu"}}, // Do not change
+	},
 
 	// Container runtimes
 	{
@@ -101,9 +106,10 @@ var Registry = []Plugin{
 		Name: "slurm/wlm",
 		Type: EXTERNAL,
 		Libraries: []Binary{
-			{Name: "libslurm-cedana.so"},
+			{Name: "spank_cedana.so"},
 			{Name: "task_cedana.so"},
 			{Name: "cli_filter_cedana.so"},
+			{Name: "job_submit_cedana.so"},
 		},
 		Binaries: []Binary{{Name: "cedana-slurm"}},
 	},

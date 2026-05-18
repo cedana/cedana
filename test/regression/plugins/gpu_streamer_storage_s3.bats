@@ -46,7 +46,7 @@ teardown_file() {
 
     sleep 1
 
-    cedana dump job "$jid" --streams 1 --dir s3://checkpoints-ci
+    cedana dump job "$jid" --streams 2 --dir s3://checkpoints-ci
 
     run cedana job kill "$jid"
 }
@@ -78,7 +78,7 @@ teardown_file() {
 
     sleep 1
 
-    cedana dump job "$jid" --streams 1 --dir s3://checkpoints-ci
+    cedana dump job "$jid" --streams 2 --dir s3://checkpoints-ci
 
     cedana restore job "$jid"
     watch_logs "$jid"

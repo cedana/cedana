@@ -155,10 +155,10 @@ func parseCheckOutput(out string) (warnings, errors []string) {
 	// other lines are ignored. must return a list of warnings and errors.
 
 	for line := range strings.SplitSeq(out, "\n") {
-		if strings.HasPrefix(line, "Warn") {
-			warnings = append(warnings, strings.TrimSpace(strings.TrimPrefix(line, "Warn")))
-		} else if strings.HasPrefix(line, "Error") {
-			errors = append(errors, strings.TrimSpace(strings.TrimPrefix(line, "Error")))
+		if after, ok := strings.CutPrefix(line, "Warn"); ok {
+			warnings = append(warnings, strings.TrimSpace(after))
+		} else if after0, ok0 := strings.CutPrefix(line, "Error"); ok0 {
+			errors = append(errors, strings.TrimSpace(after0))
 		}
 	}
 

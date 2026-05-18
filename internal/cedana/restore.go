@@ -179,8 +179,12 @@ func pluginRestoreStorage(next types.Restore) types.Restore {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to detect restore filesystem to use: %v", err))
 		}
 
+		if streams == 1 {
+			return nil, status.Error(codes.Internal, "A minimum of 2 streams is required by streaming.")
+		}
+
 		filesystem := filesystem.RestoreFilesystem
-		if streams > 0 {
+		if streams > 1 {
 			filesystem = streamer.RestoreFilesystem(streams)
 		}
 

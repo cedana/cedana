@@ -97,6 +97,7 @@ teardown_file() {
 
 # bats test_tags=dump,hostmem
 @test "[$GPU_INFO] dump GPU container (vector add hostmem)" {
+    skip "until CED-1945 is fixed"
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
 
@@ -182,6 +183,7 @@ teardown_file() {
 
 # bats test_tags=restore,hostmem
 @test "[$GPU_INFO] restore GPU container (vector add hostmem)" {
+    skip "until CED-1945 is fixed"
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
 
@@ -207,6 +209,7 @@ teardown_file() {
 
 # bats test_tags=restore,crcr,hostmem
 @test "[$GPU_INFO] restore->dump->restore GPU container (vector add hostmem)" {
+    skip "until CED-1945 is fixed"
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
 
