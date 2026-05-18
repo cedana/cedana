@@ -209,8 +209,11 @@ func EncodeJSON(data *Data) (string, error) {
 
 func DecodeJSON(data string) (*Data, error) {
 	var d Data
-	err := json.Unmarshal([]byte(data), &d)
-	return &d, err
+	if err := json.Unmarshal([]byte(data), &d); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
 }
 
 func WriteJSON(path string, data *Data) error {
@@ -229,9 +232,11 @@ func ReadJSON(path string) (*Data, error) {
 	}
 
 	var data Data
-	err = json.Unmarshal(bytes, &data)
+	if err = json.Unmarshal(bytes, &data); err != nil {
+		return nil, err
+	}
 
-	return &data, err
+	return &data, nil
 }
 
 func Encode(data *Data, buf *bytes.Buffer) error {

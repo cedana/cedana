@@ -58,7 +58,7 @@ func init() {
 	rootCmd.PersistentFlags().
 		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
 	rootCmd.PersistentFlags().
-		StringP(flags.ProfilingPathFlag.Full, flags.ProfilingFlag.Short, "", "path to write profiling JSON to (if enabled)")
+		StringP(flags.ProfilingPathFlag.Full, flags.ProfilingPathFlag.Short, "", "path to write profiling JSON to (if enabled)")
 
 	// Bind to config
 	viper.BindPFlag("protocol", rootCmd.PersistentFlags().Lookup(flags.ProtocolFlag.Full))
