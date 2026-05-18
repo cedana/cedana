@@ -214,7 +214,6 @@ func DecodeJSON(data string) (*Data, error) {
 	}
 	return &d, nil
 }
-}
 
 func WriteJSON(path string, data *Data) error {
 	bytes, err := json.Marshal(data)
