@@ -22,6 +22,7 @@ cedana run process <path> [args...] [flags]
       --config string       one-time config JSON string (merge with existing config)
       --config-dir string   custom config directory
   -g, --gpu-enabled         enable GPU support
+      --gpu-id string       specify existing GPU controller ID to attach (internal use only)
       --gpu-tracing         enable GPU tracing
   -j, --jid string          job id
       --no-server           run without server

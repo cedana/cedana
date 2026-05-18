@@ -102,7 +102,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 			PostDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 				return <-rootfsErr
 			},
-			FinalizeDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+			FinalizeDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts, criuErr error) error {
 				return <-rootfsErr
 			},
 		})
@@ -135,6 +135,48 @@ func DumpImageName(next types.Dump) types.Dump {
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to write dump image name file: %v", err)
 		}
+		log.Debug().Str("image", image.Name()).Str("container", container.ID()).Msg("wrote dump image name")
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+func DumpSnapshotter(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		if req.Action != daemon.DumpAction_DUMP || opts.DumpFs == nil {
+			return next(ctx, opts, resp, req)
+		}
+
+		container, ok := ctx.Value(containerd_keys.CONTAINER_CONTEXT_KEY).(containerd.Container)
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get container from context")
+		}
+		info, err := container.Info(ctx)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get container info: %v", err)
+		}
+
+		snapshotKey, err := opts.DumpFs.Create(containerd_keys.DUMP_SNAPSHOT_KEY)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create dump snapshot key file: %v", err)
+		}
+		defer snapshotKey.Close()
+		_, err = snapshotKey.WriteString(info.SnapshotKey)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to write dump snapshot key file: %v", err)
+		}
+		log.Debug().Str("snapshot_key", info.SnapshotKey).Str("container", container.ID()).Msg("wrote dump snapshot key")
+
+		snapshotter, err := opts.DumpFs.Create(containerd_keys.DUMP_SNAPSHOTTER_KEY)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create dump snapshotter file: %v", err)
+		}
+		defer snapshotter.Close()
+		_, err = snapshotter.WriteString(info.Snapshotter)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to write dump snapshotter file: %v", err)
+		}
+		log.Debug().Str("snapshotter", info.Snapshotter).Str("container", container.ID()).Msg("wrote dump snapshotter")
 
 		return next(ctx, opts, resp, req)
 	}
@@ -228,9 +270,9 @@ func dumpRootfs(ctx context.Context, client *containerd.Client, container contai
 
 	if err := pushImage(context.WithoutCancel(ctx), client, ref, username, secret); err != nil {
 		log.Error().Msgf("failed to push image: %v", err)
+	} else {
+		log.Info().Msgf("pushed image %s successful", ref)
 	}
-
-	log.Info().Msgf("pushed image %s successful", ref)
 
 	return nil
 }

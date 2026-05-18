@@ -3,15 +3,17 @@
 # This is a helper file assumes its users are in the same directory as the Makefile
 
 export CEDANA_PROTOCOL=${CEDANA_PROTOCOL:-unix}
-export CEDANA_REMOTE=${CEDANA_REMOTE:-false}
+export CEDANA_DB_REMOTE=${CEDANA_DB_REMOTE:-false}
 export CEDANA_LOG_LEVEL=${CEDANA_LOG_LEVEL:-debug}
 export CEDANA_LOG_LEVEL_NO_SERVER=$CEDANA_LOG_LEVEL
 export CEDANA_PROFILING_ENABLED=${CEDANA_PROFILING_ENABLED:-false}
+export CEDANA_METRICS_ENABLED=${CEDANA_METRICS_ENABLED:-false}
 export CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-/tmp}
 export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
 export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 export CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-alpha}
-export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1*GIBIBYTE))}"
+export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1 * GIBIBYTE))}"
+export CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK=${CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK:-true}
 
 WAIT_TIMEOUT=60
 
@@ -82,7 +84,8 @@ teardown_daemon() {
 start_daemon_at() {
     local sock=$1
     id=$(basename "$sock")
-    cedana daemon start --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
+    debug_log "Starting daemon at socket $sock with config $CEDANA_CONFIG_DIR/config.json"
+    cedana daemon start --init-config --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
     wait_for_start "$sock"
 }
 
@@ -105,6 +108,7 @@ stop_daemon_at() {
         debug_log "Socket $sock does not exist, skipping stop"
         return 0
     fi
+    debug_log "Stopping daemon at socket $sock"
     kill_at_sock "$sock" TERM
     wait_for_stop "$sock"
 }
@@ -132,4 +136,18 @@ pid_for_jid() {
     local jid=$1
     table=$(cedana ps)
     echo "$table" | awk -v job="$jid" '$1 == job {print $3}'
+}
+
+logfile_for_jid() {
+    local jid=$1
+    table=$(cedana ps)
+    echo "$table" | awk -v job="$jid" '$1 == job {print $NF}'
+}
+
+watch_logs() {
+    local jid=$1
+    log_file=$(logfile_for_jid "$jid")
+    pid=$(pid_for_jid "$jid")
+
+    debug tail -f --silent --pid="$pid" "$log_file" &
 }

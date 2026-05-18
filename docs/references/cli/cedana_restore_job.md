@@ -9,23 +9,25 @@ cedana restore job <JID> [flags]
 ### Options
 
 ```
-      --address string          (containerd) containerd socket address
-  -b, --bundle string           (runc) bundle
-      --console-socket string   (runc) path to an AF_UNIX socket which will receive a file descriptor referencing the master end of the console's pseudoterminal
-  -d, --detach                  (runc) detach from the container's process, ignored if not using --no-server and is always true
-      --gpus int32Slice         (containerd) add GPUs to the container (e.g. 0,1,2) (default [])
-  -h, --help                    help for job
-      --id string               (runc) new id
-      --image string            (containerd) image to use
-      --log string              (runc) log file to write logs to if --no-server
-      --log-format string       (runc) log format to use if --no-server (json, text) (default "text")
-      --namespace string        (containerd) containerd namespace
-      --no-new-keyring          (runc) do not create a new session keyring.
-      --no-pivot                (runc) do not use pivot root to jail process inside rootfs.
-      --no-subreaper            (runc) disable the use of the subreaper used to reap reparented processes
-      --root string             (runc) root
-      --rootless string         (runc) ignore cgroup permission errors (true, false, auto) (default "auto")
-      --systemd-cgroup          (runc) enable systemd cgroup support, expects cgroupsPath to be of form 'slice:prefix:name' for e.g. 'system.slice:runc:434234'
+      --address string                (containerd) containerd socket address
+  -b, --bundle string                 (runc) bundle
+      --console-socket string         (runc) path to an AF_UNIX socket which will receive a file descriptor referencing the master end of the console's pseudoterminal
+  -d, --detach                        (runc) detach from the container's process, ignored if not using --no-server and is always true
+      --env strings                   (containerd) list of additional environment variables
+      --gpus int32Slice               (containerd) add GPUs to the container (e.g. 0,1,2) (default [])
+  -h, --help                          help for job
+      --id string                     (runc) new id
+      --image string                  (containerd) image to use
+      --log string                    (runc) log file to write logs to if --no-server
+      --log-format string             (runc) log format to use if --no-server (json, text) (default "text")
+      --namespace string              (containerd) containerd namespace
+      --netns-eth0-ipv4-addr string   (runc) new IPv4 address for eth0 in the restored container
+      --no-new-keyring                (runc) do not create a new session keyring.
+      --no-pivot                      (runc) do not use pivot root to jail process inside rootfs.
+      --no-subreaper                  (runc) disable the use of the subreaper used to reap reparented processes
+      --root string                   (runc) root
+      --rootless string               (runc) ignore cgroup permission errors (true, false, auto) (default "auto")
+      --systemd-cgroup                (runc) enable systemd cgroup support, expects cgroupsPath to be of form 'slice:prefix:name' for e.g. 'system.slice:runc:434234'
 ```
 
 ### Options inherited from parent commands
@@ -38,6 +40,7 @@ cedana restore job <JID> [flags]
       --criu-opts string    CRIU options JSON (overriddes individual CRIU flags)
       --external strings    resources from external namespaces (can be multiple)
       --file-locks          restore file locks
+      --gpu-id string       specify existing GPU controller ID to attach (internal use only)
       --leave-stopped       leave the process stopped after restore
       --link-remap          remap links to invisible files during restore
       --no-server           select how to run restores

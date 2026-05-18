@@ -17,10 +17,10 @@ export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 setup_file() {
     # FIXME: test is broken
     skip "disabled until test itself is fixed"
-    export CEDANA_GPU_SHM_SIZE=$((8*GIBIBYTE)) # Since workloads here are large
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
+    export CEDANA_GPU_SHM_SIZE=$((8*GIBIBYTE)) # Since workloads here are large
     setup_file_daemon
     do_once install_requirements
     do_once download_hf_models
@@ -36,7 +36,6 @@ teardown_file() {
 
 # bats test_tags=dump,restore
 @test "[$GPU_INFO] c/r transformers inference workload - stabilityai/stablelm-2-1_6b" {
-    # FIXME: test is broken
     skip "disabled until test itself is fixed"
 
     local model="stabilityai/stablelm-2-1_6b"
@@ -45,17 +44,19 @@ teardown_file() {
     sleep_duration=$((RANDOM % 11 + 10))
 
     cedana run process -g --jid "$jid" -- python3 /cedana-samples/gpu_smr/pytorch/llm/transformers_inference.py --model "$model"
+    watch_logs "$jid"
 
     sleep "$sleep_duration"
 
     cedana dump job "$jid"
 
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     sleep 5
 
     cedana restore job "$jid"
+    watch_logs "$jid"
 
     run cedana ps
     assert_success

@@ -14,8 +14,10 @@ import (
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -43,6 +45,8 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 
+		async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
+
 		// If remote storage, we instead use a temporary directory for CRIU
 		if storage.IsRemote() {
 			dir = os.TempDir()
@@ -61,7 +65,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Internal, "failed to create dump dir: %v", err)
 		}
 		defer func() {
-			if err != nil {
+			if err != nil || (storage.IsRemote() && !async) {
 				os.RemoveAll(imagesDirectory)
 			}
 		}()
@@ -91,16 +95,21 @@ func DumpFilesystem(next types.Dump) types.Dump {
 		// so that if we fail compression/upload, CRIU can still resume the process (only if leave-running is not set)
 
 		if storage.IsRemote() || (compression != "" && compression != "none") {
+			ext, err := io.ExtForCompression(compression)
+			if err != nil {
+				return nil, err
+			}
+			path := req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
+
 			compress := func(ctx context.Context) (err error) {
-				var path, ext string
-				ext, err = io.ExtForCompression(compression)
+				isFuse, err := isFuseFS(req.Dir, !storage.IsRemote())
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to determine filesystem type: %w", err)
 				}
 
-				path = req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
+				log.Debug().Str("path", path).Str("compression", compression).Bool("is_fuse", isFuse).Msg("starting compression of dump")
 
-				tarball, err := storage.Create(path)
+				tarball, err := storage.Create(ctx, path)
 				if err != nil {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
@@ -111,41 +120,94 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
-				err = io.Tar(imagesDirectory, tarball, compression)
+
+				err = io.Tar(imagesDirectory, tarball, compression, isFuse)
 				if err != nil {
-					storage.Delete(path)
+					storage.Delete(ctx, path)
+					os.RemoveAll(imagesDirectory)
 					return fmt.Errorf("failed to create tarball: %w", err)
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
 
 				os.RemoveAll(imagesDirectory)
-				resp.Paths = append(resp.Paths, path)
 				return nil
 			}
 
-			// If leave-running is requested, then we do not to block process for compress/upload, because the process
+			resp.Paths = append(resp.Paths, path)
+
+			// If leave-running is requested, then we do not need to block process for compress/upload, because the process
 			// will continue running regardless of the success of the dump/compress/upload. If leave-running is not set,
 			// then we need to ensure that the dump is compressed/uploaded in the post-dump hook so that it
 			// can be resumed on failure.
 
-			if req.GetCriu().GetLeaveRunning() {
+			if async {
 				defer func() {
-					err = errors.Join(err, compress(ctx))
+					if err != nil {
+						return
+					}
+
+					// Directly add profiling data here since the compress/upload
+					// will happen asynchronously and we cannot hook that into profiling later.
+					size := utils.SizeFromPath(imagesDirectory)
+					profiling.AddIO(ctx, size)
+
+					// Use a detached context for async upload since the parent request
+					// context will be canceled after the dump completes.
+					compressCtx := context.WithoutCancel(ctx)
+
+					opts.WG.Go(func() {
+						log.Info().Msg("async dump compress/upload started")
+						if compressErr := compress(compressCtx); compressErr != nil {
+							log.Error().Err(compressErr).Msg("async compress/upload failed")
+						} else {
+							log.Info().Msg("async dump compress/upload completed")
+						}
+					})
 				}()
 			} else {
-				callback := &criu_client.NotifyCallback{
-					PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) (err error) {
-						return compress(ctx)
-					},
+				if req.GetCriu().GetLeaveRunning() {
+					defer func() {
+						err = errors.Join(err, compress(ctx))
+					}()
+				} else {
+					callback := &criu_client.NotifyCallback{
+						PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) (err error) {
+							return compress(ctx)
+						},
+					}
+					opts.CRIUCallback.Include(callback)
 				}
-				opts.CRIUCallback.Include(callback)
 			}
 		} else {
-			// Nothing else to do, just set the path
+			// Nothing else to do, just set the path and
+			// add profiling data manually as no IO could be measured
+			defer func() {
+				size := utils.SizeFromPath(imagesDirectory)
+				profiling.AddIO(ctx, size)
+			}()
 			resp.Paths = append(resp.Paths, imagesDirectory)
 		}
 
 		return next(ctx, opts, resp, req)
 	}
+}
+
+func isFuseFS(path string, stat bool) (bool, error) {
+	if !stat {
+		return false, nil
+	}
+	var statfs unix.Statfs_t
+	if err := unix.Statfs(path, &statfs); err != nil {
+		return false, fmt.Errorf("failed to get statfs for %s: %w", path, err)
+	}
+
+	// FUSE magic number is 0x65735546
+	// https://github.com/torvalds/linux/blob/master/include/uapi/linux/magic.h#L39
+	const FUSE_SUPER_MAGIC = 0x65735546
+	if statfs.Type == FUSE_SUPER_MAGIC {
+		return true, nil
+	}
+
+	return false, nil
 }

@@ -22,7 +22,7 @@ on:
         default: false
       platform:
         type: string
-        description: "Platform to run tests on (K3s, EKS, GKE)"
+        description: "Platform to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter)"
         required: false
         default: K3s
       large:
@@ -54,18 +54,31 @@ on:
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
   CEDANA_LOG_LEVEL: debug
+  CEDANA_PROFILING_ENABLED: true
+  CEDANA_METRICS_ENABLED: true
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
   GCLOUD_PROJECT_ID: ${{ vars.GCLOUD_PROJECT_ID }}
   GCLOUD_SERVICE_ACCOUNT_KEY: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_KEY }}
   GCLOUD_REGION: ${{ vars.GCLOUD_REGION }}
+  NB_REGION: ${{ vars.NB_REGION }}
+  NB_PROJECT_ID: ${{ secrets.NB_PROJECT_ID }}
+  NB_PUBLIC_KEY_ID: ${{ secrets.NB_PUBLIC_KEY_ID }}
+  NB_SA_ID: ${{ secrets.NB_SA_ID }}
+  NB_SA_PRIVATE_KEY: ${{ secrets.NB_SA_PRIVATE_KEY }}
+  NB_SA_PRIVATE_KEY_PATH: ${{ secrets.NB_SA_PRIVATE_KEY_PATH }}
   EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+  EKS_KARPENTER_CLUSTER: ${{ vars.EKS_KARPENTER_CLUSTER }}
+  # Contains the common tag used by all vpc subnets
+  EKS_KARPENTER_SUBNET_SELECTOR: ${{ secrets.EKS_KARPENTER_SUBNET_SELECTOR }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
+  NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: 0 # bats debug logging
+  DEBUG: ${{ vars.DEBUG_K8S }}
 
 jobs:
   propagator-connectivity:
@@ -85,57 +98,94 @@ jobs:
 
   k8s:
     name: Kubernetes
-    runs-on:
-      ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 'ubuntu-latest' || format(
+    runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
-      matrix.compute == 'CUDA' && '-cuda-12-4' || '',
+      (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
       matrix.cr,
       matrix.storage
       ) }}
-    timeout-minutes: 30
+    timeout-minutes: 240
     needs: propagator-connectivity
     strategy:
-      fail-fast: true
+      fail-fast: ${{ inputs.platform != 'K3s' }} # save minutes on cloud providers
       matrix:
         platform:
           - ${{ inputs.platform }}
         compute:
           - CPU
-          # - CUDA # TODO: Enable when GPU tests are added
+          - CUDA
         cr:
           - default
           - streamer
         storage:
+          - storage/local
           - storage/cedana
           - storage/s3
         arch:
           - amd64
           - arm64
-        exclude: # XXX: To reduce overusage of CI minutes
+        exclude:
+          #
+          # XXX: To reduce overusage of CI minutes
           - platform: K3s
-            arch: arm64
             storage: storage/s3
           - platform: K3s
-            arch: amd64
             storage: storage/cedana
+          - platform: K3s
+            compute: CUDA
+            arch: arm64
+          - platform: K3s
+            compute: CPU
+            arch: amd64
+
+          - platform: EKS
+            compute: CUDA
           - platform: EKS
             arch: amd64
-          - platform: GKE
-            arch: arm64
           - platform: EKS
             cr: streamer
+          - platform: EKS
+            storage: storage/local
+
+          - platform: GKE
+            compute: CUDA
+          - platform: GKE
+            arch: arm64
           - platform: GKE
             cr: default
-      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE') && 1 || 9999 }}
+          - platform: GKE
+            storage: storage/local
+
+          - platform: Nebius
+            compute: CPU
+          - platform: Nebius
+            arch: arm64
+          - platform: Nebius
+            cr: streamer
+          - platform: Nebius
+            storage: storage/s3
+          - platform: Nebius
+            storage: storage/cedana
+
+          - platform: EKS-Karpenter
+            compute: CUDA
+          - platform: EKS-Karpenter
+            arch: arm64
+          - platform: EKS-Karpenter
+            cr: streamer
+          - platform: EKS-Karpenter
+            storage: storage/local
+
+      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' || inputs.platform == 'EKS-Karpenter') && 1 || 9999 }}
     container:
-      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
       - uses: runs-on/action@v1
 
@@ -249,52 +299,74 @@ jobs:
 
       - name: Run k8s tests
         env:
-          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci' }}
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || (matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci') }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
+          CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK: ${{ matrix.platform == 'K3s' && 'true' || 'false' }} # K3s has issues with nvidia-container-runtime hook as it runs inside a container
           PLATFORM: ${{ matrix.platform }}
-          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
-          LARGE: ${{ inputs.large && 'true' || 'false' }}
-          PARALLELISM: ${{ inputs.parallelism }}
+          LARGE: ${{ inputs.large && '1' || '0' }}
+          PARALLELISM: ${{ (matrix.compute == 'CUDA' || env.DEBUG == '1') && 1 || inputs.parallelism }} # limit GPU tests to 1 parallelism to avoid GPU contention for now
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
+          NB_CLUSTER_NAME: ${{ env.NB_CLUSTER_NAME }}-${{ matrix.arch }}
         run: |
-          if [ "$PLATFORM" = "K3s" ]; then
-            exit 0 # XXX: Temporarily disable k3s tests until image pull fixed
-          fi
-
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
           CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
           CONTROLLER_REPO=$(cat /tmp/controller-image-name/name.txt | head -n 1)
           HELM_CHART=/tmp/helm-chart
 
-          CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
-          CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
-          if [ "$GPU" = "true" ]; then
-            CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
+          export CEDANA_PLUGINS_CRIU_VERSION=$(cat ./criu-version.txt)
+          export CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=$(cat ./containerd-runtime-version.txt)
+          if [ "$GPU" = "1" ]; then
+            export CEDANA_PLUGINS_GPU_VERSION=$(cat ./gpu-version.txt)
           fi
           if [ "$STREAMER" = "true" ]; then
-            CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
+            export CEDANA_PLUGINS_STREAMER_VERSION=$(cat ./streamer-version.txt)
           fi
 
-          TAGS=$PLATFORM
-          if [ "$GPU" = "true" ]; then
-            TAGS=$TAGS,gpu
+          # Map platform names to provider names
+          case "$PLATFORM" in
+            K3s)  PROVIDER="k3s" ;;
+            EKS)  PROVIDER="aws" ;;
+            EKS-Karpenter) PROVIDER="eks-karpenter" ;;
+            GKE)  PROVIDER="gcp" ;;
+            Nebius) PROVIDER="nebius" ;;
+            *)    PROVIDER="generic" ;;
+          esac
+
+          TAGS="k8s"
+          if [ "$GPU" = "1" ]; then
+            TAGS="${TAGS},gpu"
           else
-            TAGS=$TAGS,!gpu
+            TAGS="${TAGS},!gpu"
           fi
-          if [ "$LARGE" != "true" ]; then
-            TAGS=$TAGS,!large
+          if [ "$LARGE" = "0" ]; then
+            TAGS="${TAGS},!samples,!large"
+          fi
+          if [ "$PLATFORM" = "EKS-Karpenter" ]; then
+            TAGS="${TAGS},spot"
+          else
+            TAGS="${TAGS},!spot"
+          fi
+          # Nebius only runs large GPU workloads (skip small tests)
+          if [ "$PROVIDER" = "nebius" ]; then
+            TAGS="${TAGS},large"
+          fi
+          # Skip large cpu workload tests on gcp only
+          if [ "$PROVIDER" = "gcp" ]; then
+            TAGS="${TAGS},!large"
           fi
 
           make test-k8s \
             TAGS=$TAGS \
-            PARALLELISM=$PARALLELISM \
-            RETRIES=$RETRIES \
-            DEBUG=$DEBUG \
+            PROVIDER=$PROVIDER \
+            GPU=$GPU \
             FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=$PARALLELISM \
             CONTROLLER_REPO=$CONTROLLER_REPO \
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \
@@ -353,6 +425,10 @@ jobs:
           - platform: EKS
             arch: amd64
           - platform: GKE
+            arch: arm64
+          - platform: Nebius
+            arch: arm64
+          - platform: EKS-Karpenter
             arch: arm64
     steps:
       - name: Download report

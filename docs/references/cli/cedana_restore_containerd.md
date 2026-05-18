@@ -10,6 +10,7 @@ cedana restore containerd [container-id] [args...] [flags]
 
 ```
       --address string     containerd socket address
+      --env strings        list of additional environment variables
       --gpus int32Slice    add GPUs to the container (e.g. 0,1,2) (default [])
   -h, --help               help for containerd
       --id string          new id
@@ -28,6 +29,7 @@ cedana restore containerd [container-id] [args...] [flags]
       --criu-opts string    CRIU options JSON (overriddes individual CRIU flags)
       --external strings    resources from external namespaces (can be multiple)
       --file-locks          restore file locks
+      --gpu-id string       specify existing GPU controller ID to attach (internal use only)
       --leave-stopped       leave the process stopped after restore
       --link-remap          remap links to invisible files during restore
       --no-server           select how to run restores

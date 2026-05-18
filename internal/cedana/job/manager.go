@@ -19,20 +19,27 @@ type Manager interface {
 	// New creates a new job with the given details.
 	New(jid string, jobType string) (*Job, error)
 
-	// Get returns a job with the given JID.
-	Get(jid string) *Job
+	// Get returns a job with the given JID, refreshing its in-memory state.
+	// The provided context bounds the state-refresh; pass a request-scoped ctx
+	// so deadlines (e.g. gRPC) propagate down to the descendant walk.
+	Get(ctx context.Context, jid string) *Job
 
 	// Delete deletes a job with the given JID.
 	Delete(jid string)
 
-	// Get returns a job with the given JID.
-	List(jids ...string) []*Job
+	// List returns jobs filtered by JID, refreshing each job's in-memory state.
+	// Pass a request-scoped ctx to bound the refresh.
+	List(ctx context.Context, jids ...string) []*Job
 
 	// ListByHostIDs returns a list of jobs with the given host IDs.
-	ListByHostIDs(hostIDs ...string) []*Job
+	// Pass a request-scoped ctx to bound the refresh.
+	ListByHostIDs(ctx context.Context, hostIDs ...string) []*Job
 
 	// Exists checks if a job with the given JID exists.
 	Exists(jid string) bool
+
+  // Find returns a job with the given PID.
+  Find(pid uint32) *Job
 
 	// Starts managing a running job, updating state once it exits.
 	// Since this runs in background, it should be called with a waitgroup,
@@ -44,7 +51,7 @@ type Manager interface {
 	// If the plugin for the job type exports a custom signal, it will be used instead.
 	// If you provide a custom signal, it will return error if the plugin for the job type
 	// exports a custom signal.
-	Kill(jid string, signal ...syscall.Signal) error
+	Kill(ctx context.Context, jid string, signal ...syscall.Signal) error
 
 	/////////////////////
 	//// Checkpoints ////

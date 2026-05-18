@@ -9,7 +9,17 @@ export MEBIBYTE=$(( KIBIBYTE * 1024 ))
 export GIBIBYTE=$(( MEBIBYTE * 1024 ))
 
 export RED='\033[0;31m'
+export YELLOW='\033[0;33m'
+export BLUE='\033[0;34m'
 export NC='\033[0m' # No Color
+
+# Determine output file descriptor once at initialization
+# Use fd 3 if available (BATS), otherwise use stdout
+if { true >&3; } 2>/dev/null; then
+    OUTPUT_FD=3
+else
+    OUTPUT_FD=1
+fi
 
 load_lib() {
     load /usr/lib/bats/bats-"$1"/load
@@ -151,7 +161,7 @@ wait_for_no_pid() {
 # Wait for a cmd to start returning zero exit code, then return the output.
 wait_for_cmd() {
     local timeout=${1:-60}
-    local interval=1
+    local interval=2
     shift 1
     local elapsed=0
     debug_log "Waiting for '$*' (timeout: $timeout seconds)"
@@ -184,7 +194,7 @@ wait_for_cmd() {
 # Same as wait_for_cmd, but waits for the command to fail instead of succeed.
 wait_for_cmd_fail() {
     local timeout=${1:-60}
-    local interval=1
+    local interval=2
     shift 1
     local elapsed=0
     debug_log "Waiting for '$*' to fail (timeout: $timeout seconds)"
@@ -236,28 +246,41 @@ wait_for_file() {
     return 0
 }
 
+info_log() {
+    local message="$1"
+    echo -e "${BLUE}$message${NC}" >&"${OUTPUT_FD}"
+}
+
 debug_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
-        echo "[DEBUG] $message" >&3
+        echo -e "${YELLOW}[DEBUG] $message${NC}" >&"${OUTPUT_FD}"
     fi
 }
 
 error_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
-        echo -e "${RED}[ERROR] $message${NC}" >&3
+        echo -e "${RED}[ERROR] $message${NC}" >&"${OUTPUT_FD}"
     else
         echo -e "${RED}[ERROR] $message${NC}" >&2
+    fi
+}
+
+info() {
+    if [ "$#" -eq 1 ]; then
+        eval "$1" >&"${OUTPUT_FD}" 2>&1
+    else
+        "$@" >&"${OUTPUT_FD}" 2>&1
     fi
 }
 
 debug() {
     if [ "$DEBUG" == "1" ]; then
         if [ "$#" -eq 1 ]; then
-            eval "$1" >&3 2>&1
+            eval "$1" >&"${OUTPUT_FD}" 2>&1
         else
-            "$@" >&3 2>&1
+            "$@" >&"${OUTPUT_FD}" 2>&1
         fi
     else
         if [ "$#" -eq 1 ]; then
@@ -271,9 +294,9 @@ debug() {
 error() {
     if [ "$DEBUG" == "1" ]; then
         if [ "$#" -eq 1 ]; then
-            eval "$1" >&3 2>&1
+            eval "$1" >&"${OUTPUT_FD}" 2>&1
         else
-            "$@" >&3 2>&1
+            "$@" >&"${OUTPUT_FD}" 2>&1
         fi
     else
         if [ "$#" -eq 1 ]; then

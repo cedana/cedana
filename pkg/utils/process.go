@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/mattn/go-isatty"
 	"github.com/moby/sys/mountinfo"
+	"github.com/rs/zerolog/log"
 	"github.com/shirou/gopsutil/v4/process"
 )
 
@@ -29,15 +32,18 @@ func GetProcessState(ctx context.Context, pid uint32, tree ...bool) (*daemon.Pro
 
 // Tries to fill as much as possible of the process state.
 // Only returns early if the process does not exist at all.
+//
+// When tree[0] is true, descendants are populated in state.Children. The walk
+// is iterative: a single /proc scan builds a parent->children map, then BFS
+// fills each descendant. This is O(N) in the size of the tree, vs O(N · |proc|)
+// for a recursive gopsutil.Children walk that re-scans /proc per node.
 func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessState, tree ...bool) error {
-	tree = append(tree, false)
+	deep := len(tree) > 0 && tree[0]
 
 	if state == nil {
 		return fmt.Errorf("state is nil")
 	}
-	state.PID = pid
 
-	var err error
 	errs := []error{}
 
 	host, err := GetHost(ctx)
@@ -46,12 +52,74 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		state.Host = host
 	}
 
+	if err := fillProcessNode(ctx, pid, state); err != nil {
+		// Preserve the prior contract: PID is always set on state, even on error.
+		state.PID = pid
+		return err
+	}
+
+	if !deep {
+		return errors.Join(errs...)
+	}
+
+	state.Children = []*daemon.ProcessState{}
+
+	// One /proc pass to learn parent->children for the whole system. Workloads
+	// like trtllm + torch inductor spawn hundreds of descendants; doing this
+	// once up front avoids globbing /proc per node.
+	childrenByPPID, err := buildPPIDMap(ctx)
+	if err != nil {
+		errs = append(errs, fmt.Errorf("build ppid map: %w", err))
+		return errors.Join(errs...)
+	}
+
+	// BFS so we visit each descendant exactly once, in a deterministic order.
+	type pending struct {
+		pid    uint32
+		parent *daemon.ProcessState
+	}
+	queue := make([]pending, 0, len(childrenByPPID[pid]))
+	for _, c := range childrenByPPID[pid] {
+		queue = append(queue, pending{pid: c, parent: state})
+	}
+
+	for len(queue) > 0 {
+		if ctx.Err() != nil {
+			break
+		}
+		cur := queue[0]
+		queue = queue[1:]
+
+		childState := &daemon.ProcessState{Host: state.Host}
+		if err := fillProcessNode(ctx, cur.pid, childState); err != nil {
+			// Process may have exited mid-walk; just skip it.
+			log.Warn().Err(err).Msgf("failed to get process state for child %d", cur.pid)
+			continue
+		}
+		childState.Children = []*daemon.ProcessState{}
+		cur.parent.Children = append(cur.parent.Children, childState)
+
+		for _, gc := range childrenByPPID[cur.pid] {
+			queue = append(queue, pending{pid: gc, parent: childState})
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// fillProcessNode fills a single node's state (no recursion into children).
+// state.Host is left untouched so callers can populate it once and reuse.
+func fillProcessNode(ctx context.Context, pid uint32, state *daemon.ProcessState) error {
+	state.PID = pid
+
 	p, err := process.NewProcessWithContext(ctx, int32(pid))
 	if err != nil {
-		return fmt.Errorf("could not get process: %v", err)
+		return fmt.Errorf("could not get process: (pid) %d with error: %v", pid, err)
 	}
 
 	state.IsRunning = true
+
+	errs := []error{}
 
 	cmdline, err := p.CmdlineWithContext(ctx)
 	errs = append(errs, err)
@@ -70,7 +138,6 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		state.SID = sid
 	}
 
-	// get process uids, gids, and groups
 	uids, err := p.UidsWithContext(ctx)
 	errs = append(errs, err)
 	if err == nil {
@@ -139,6 +206,7 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 					MountPoint: m.Mountpoint,
 					Options:    m.Options,
 					FSType:     m.FSType,
+					Source:     m.Source,
 				})
 			}
 		}
@@ -183,29 +251,59 @@ func FillProcessState(ctx context.Context, pid uint32, state *daemon.ProcessStat
 		state.WorkingDir = cwd
 	}
 
-	if tree[0] {
-		state.Children = []*daemon.ProcessState{}
-
-		var children []*process.Process
-		children, err = p.ChildrenWithContext(ctx)
-
-		if err == nil {
-			childErrs := []error{}
-			for _, child := range children {
-				childState, err := GetProcessState(ctx, uint32(child.Pid), tree...)
-				if err != nil {
-					childErrs = append(childErrs, err)
-					continue
-				}
-
-				state.Children = append(state.Children, childState)
-			}
-
-			errs = append(errs, childErrs...)
-		}
-	}
-
 	return errors.Join(errs...)
+}
+
+// buildPPIDMap scans /proc once and returns parent_pid -> []child_pid for the
+// whole system. Replaces O(N) calls to gopsutil.Children (each of which globs
+// /proc) with a single pass.
+func buildPPIDMap(ctx context.Context) (map[uint32][]uint32, error) {
+	statFiles, err := filepath.Glob("/proc/[0-9]*/stat")
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[uint32][]uint32, len(statFiles))
+	for _, f := range statFiles {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		contents, err := os.ReadFile(f)
+		if err != nil || len(contents) == 0 {
+			continue
+		}
+		pid, ppid, ok := parseStatPIDPPID(contents)
+		if !ok {
+			continue
+		}
+		m[ppid] = append(m[ppid], pid)
+	}
+	return m, nil
+}
+
+// parseStatPIDPPID extracts pid (field 1) and ppid (field 4) from /proc/<pid>/stat.
+// The 2nd field is the comm wrapped in parens and may itself contain spaces,
+// so we locate the closing ')' and split the remainder by spaces.
+func parseStatPIDPPID(contents []byte) (pid, ppid uint32, ok bool) {
+	s := string(contents)
+	rparen := strings.LastIndexByte(s, ')')
+	if rparen < 0 || rparen+2 >= len(s) {
+		return 0, 0, false
+	}
+	pidStr := s[:strings.IndexByte(s, ' ')]
+	pid64, err := strconv.ParseUint(pidStr, 10, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+	// After ") ", field 3 is state, field 4 is ppid.
+	rest := strings.Fields(s[rparen+2:])
+	if len(rest) < 2 {
+		return 0, 0, false
+	}
+	ppid64, err := strconv.ParseUint(rest[1], 10, 32)
+	if err != nil {
+		return 0, 0, false
+	}
+	return uint32(pid64), uint32(ppid64), true
 }
 
 // CloseCommonFdscloses any common FDs between the parent and child process
@@ -390,11 +488,16 @@ func IsTTY(path string) (bool, error) {
 	return isatty.IsTerminal(file.Fd()), nil
 }
 
+// Gets the last value of an env var from a list of env vars
 func Getenv(env []string, key string, defaultValue ...string) string {
-	for _, e := range env {
-		if after, ok := strings.CutPrefix(e, key+"="); ok {
+	prefix := key + "="
+	for i := len(env) - 1; i >= 0; i-- {
+		if after, ok := strings.CutPrefix(env[i], prefix); ok {
 			return after
 		}
 	}
-	return strings.Join(defaultValue, "")
+	if len(defaultValue) > 0 {
+		return defaultValue[0]
+	}
+	return ""
 }

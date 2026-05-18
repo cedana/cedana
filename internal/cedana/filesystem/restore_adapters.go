@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -42,6 +43,9 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 
 		if !storage.IsRemote() && isDir {
 			imagesDirectory = path
+			// Add profiling data manually as no IO can be measured
+			size := utils.SizeFromPath(imagesDirectory)
+			profiling.AddIO(ctx, size)
 		} else {
 			// Create a temporary directory for the restore
 			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().UnixNano()))
@@ -62,7 +66,7 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 					return err
 				}
 
-				tarball, err := storage.Open(path)
+				tarball, err := storage.Open(ctx, path)
 				if err != nil {
 					return fmt.Errorf("failed to open dump file: %v", err)
 				}

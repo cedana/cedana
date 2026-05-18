@@ -5,8 +5,7 @@ Freeze a container/process
 ### Options
 
 ```
-      --gpu-freeze-type string   GPU freeze type (IPC, NCCL)
-  -h, --help                     help for freeze
+  -h, --help   help for freeze
 ```
 
 ### Options inherited from parent commands

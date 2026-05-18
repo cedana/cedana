@@ -89,7 +89,7 @@ func CreateContainer(next types.Run) types.Run {
 
 			plugin := opts.Plugins.Getf(pluginName)
 			if !plugin.IsInstalled() {
-				return nil, status.Errorf(codes.FailedPrecondition, "please install the %s plugin to restore this container", pluginName)
+				return nil, status.Errorf(codes.FailedPrecondition, "please install the %s plugin to run this container", pluginName)
 			}
 			newRuntime := plugin.BinaryPaths()[0]
 
@@ -100,6 +100,7 @@ func CreateContainer(next types.Run) types.Run {
 				details.ID,
 				containerd.WithImage(image),
 				containerd.WithNewSnapshot(details.ID, image),
+				containerd.WithSnapshotter(details.Snapshotter),
 				containerd.WithNewSpec(specOpts...),
 				containerd.WithRuntime(newRuntime, &options.Options{}),
 			)

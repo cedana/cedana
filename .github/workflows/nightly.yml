@@ -4,7 +4,7 @@ name: Nightly
 
 on:
   schedule:
-    - cron: "0 4 * * *" # Every day at 1:30 AM (EST)
+    - cron: "0 5 * * *" # Every day at 1:00 AM (EST)
   workflow_dispatch:
     inputs:
       debug:
@@ -29,7 +29,7 @@ jobs:
       streamer_version: ${{ vars.NIGHTLY_STREAMER_VERSION }}
       helm_chart_version: ${{ vars.NIGHTLY_HELM_CHART_VERSION }}
       controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
-      containerd_runtime_version: ${{ vars.NIGHTLY_RUNTIME_SHIM_VERSION }}
+      containerd_runtime_version: ${{ vars.NIGHTLY_CONTAINERD_RUNTIME_VERSION }}
 
   test:
     name: Test
@@ -37,28 +37,27 @@ jobs:
     needs: download
     secrets: inherit
     with:
+      ref: ${{ github.ref }}
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
-      runner: 16cpu # use larger runner
+      runner: 8cpu # use larger runner
       runner_gpu: 16cpu-1gpu # use larger runner
       parallelism: 8
       parallelism_gpu: 4
       post_summary_slack: nightly
 
-  # TODO: Enable once the larger GPU benchmarks are fixed
-
-  # bench:
-  #   name: Bench
-  #   uses: ./.github/workflows/bench.yml
-  #   needs: download
-  #   secrets: inherit
-  #   with:
-  #     debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
-  #     runtimes: cedana
-  #     samples: 2
-  #     push_results: true
-  #     results_dataset: cedana_nightly
-  #     comparison_previous: true
-  #     comparison_runtime: true
-  #     post_summary_slack: nightly
-  #     runner: 8cpu-64g-1xL40S # use larger runner (bench will automatically run larger metrics)
+  bench:
+    name: Bench
+    uses: ./.github/workflows/bench.yml
+    needs: download
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
+      runtimes: cedana
+      samples: 2
+      push_results: true
+      results_dataset: cedana_nightly
+      comparison_previous: true
+      comparison_runtime: true
+      post_summary_slack: nightly
+      runner: 8cpu-64g-1xL40S # use larger runner (bench will automatically run larger metrics)

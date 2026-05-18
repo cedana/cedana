@@ -3,24 +3,21 @@ package metrics
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"os"
+	"sync"
 
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	"google.golang.org/grpc/credentials"
 )
 
+// Creds holds OpenTelemetry exporter credentials
 type Creds struct {
 	Endpoint string `json:"OTEL_EXPORTER_OTLP_ENDPOINT"`
 	Headers  string `json:"OTEL_EXPORTER_OTLP_HEADERS"`
@@ -28,65 +25,88 @@ type Creds struct {
 
 var Credentials *Creds
 
-// setupOTelSDK bootstraps the OpenTelemetry pipeline.
-// If it does not return an error, make sure to call shutdown for proper cleanup.
-func InitSigNoz(ctx context.Context, service, version string) (shutdown func(context.Context) error) {
-	var shutdownFuncs []func(context.Context) error
+// Init initializes OpenTelemetry tracing and metrics with SigNoz as the backend.
+// Returns a shutdown function that must be called for proper cleanup.
+func Init(ctx context.Context, wg *sync.WaitGroup, service, version string) {
+	log := log.With().Str("service", service).Str("version", version).Logger()
 
-	shutdown = func(ctx context.Context) error {
-		var err error
-		for _, fn := range shutdownFuncs {
-			err = errors.Join(err, fn(ctx))
-		}
-		shutdownFuncs = nil
-		return err
-	}
-
-	handleErr := func(inErr error) {
-		err := errors.Join(inErr, shutdown(ctx))
+	handleErr := func(err error) {
 		log.Warn().Err(err).Msg("metrics will not be sent to SigNoz")
 	}
 
-	prop := newPropagator()
-	otel.SetTextMapPropagator(prop)
+	initPropagator()
 
-	err := getOtelCreds()
+	err := getCreds()
 	if err != nil {
 		handleErr(err)
 		return
 	}
 
-	tracerProvider, err := newTracerProvider(ctx, service, version)
+	log = log.With().Str("endpoint", Credentials.Endpoint).Logger()
+
+	host, err := utils.GetHost(ctx)
 	if err != nil {
 		handleErr(err)
 		return
 	}
 
-	shutdownFuncs = append(shutdownFuncs, tracerProvider.Shutdown)
-	otel.SetTracerProvider(tracerProvider)
+	resource, err := resource.New(
+		ctx,
+		resource.WithAttributes(
+			semconv.HostNameKey.String(host.Hostname),
+			semconv.HostIDKey.String(host.ID),
+			semconv.HostArchKey.String(host.KernelArch),
+			semconv.ServiceNameKey.String(service),
+			semconv.ServiceVersionKey.String(version),
+			semconv.K8SClusterNameKey.String(config.Global.ClusterID),
+			semconv.K8SNodeNameKey.String(host.Hostname),
+			semconv.K8SNodeNameKey.String(host.Hostname),
+			attribute.KeyValue{Key: "cedana.service.url", Value: attribute.StringValue(config.Global.Connection.URL)},
+			attribute.KeyValue{Key: "cluster.id", Value: attribute.StringValue(config.Global.ClusterID)},
+		),
+	)
+	if err != nil {
+		handleErr(err)
+		return
+	}
 
-	log.Debug().Str("endpoint", Credentials.Endpoint).Msg("metrics initialized")
+	err = initLogger(ctx, wg, resource)
+	if err != nil {
+		handleErr(err)
+		return
+	}
 
-	return
+	err = initTracer(ctx, wg, resource)
+	if err != nil {
+		handleErr(err)
+		return
+	}
+
+	err = initMeter(ctx, wg, resource)
+	if err != nil {
+		handleErr(err)
+		return
+	}
 }
 
-func getOtelCreds() error {
+// getCreds fetches OpenTelemetry credentials from the Cedana endpoint
+func getCreds() error {
 	url := config.Global.Connection.URL
 	authToken := config.Global.Connection.AuthToken
 	if url == "" || authToken == "" {
 		return fmt.Errorf("connection URL or AuthToken unset in config/env")
 	}
 
-	url = url + "/otel/credentials"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	credentialsURL := url + "/otel/credentials"
+	req, err := http.NewRequest(http.MethodGet, credentialsURL, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch credentials: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -95,57 +115,21 @@ func getOtelCreds() error {
 	}
 
 	Credentials = &Creds{}
-
 	if err := json.NewDecoder(resp.Body).Decode(&Credentials); err != nil {
-		return err
+		return fmt.Errorf("failed to decode credentials: %w", err)
+	}
+
+	if Credentials.Endpoint == "" || Credentials.Headers == "" {
+		return fmt.Errorf("received incomplete credentials from server")
 	}
 
 	return nil
 }
 
-func newPropagator() propagation.TextMapPropagator {
-	return propagation.NewCompositeTextMapPropagator(
+// initPropagator initializes the OpenTelemetry propagator for context propagation
+func initPropagator() {
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
-	)
-}
-
-func newTracerProvider(ctx context.Context, service, version string) (*trace.TracerProvider, error) {
-	// set headers env var
-	if err := os.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "signoz-ingestion-key="+Credentials.Headers); err != nil {
-		return nil, err
-	}
-
-	secureOption := otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
-
-	traceExporter, err := otlptrace.New(
-		ctx,
-		otlptracegrpc.NewClient(
-			secureOption,
-			otlptracegrpc.WithEndpoint(Credentials.Endpoint),
-		))
-	if err != nil {
-		return nil, err
-	}
-
-	resources, err := resource.New(
-		ctx,
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String(service),
-			semconv.ServiceVersionKey.String(version),
-			attribute.KeyValue{
-				Key:   "cedana.service.url",
-				Value: attribute.StringValue(config.Global.Connection.URL),
-			},
-		),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	traceProvider := trace.NewTracerProvider(
-		trace.WithBatcher(traceExporter),
-		trace.WithResource(resources),
-	)
-	return traceProvider, nil
+	))
 }

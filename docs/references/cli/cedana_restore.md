@@ -10,6 +10,7 @@ Restore a container/process
       --criu-opts string   CRIU options JSON (overriddes individual CRIU flags)
       --external strings   resources from external namespaces (can be multiple)
       --file-locks         restore file locks
+      --gpu-id string      specify existing GPU controller ID to attach (internal use only)
   -h, --help               help for restore
       --leave-stopped      leave the process stopped after restore
       --link-remap         remap links to invisible files during restore

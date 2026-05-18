@@ -20,8 +20,7 @@ func init() {
 
 var DumpCmd = &cobra.Command{
 	Use:   "containerd <container-id>",
-	Short: "Dump a containerd container (w/ rootfs)",
-	Long:  "Dump a containerd container (w/ rootfs). If an image ref is provided, rootfs will also be dumped",
+	Short: "Dump a containerd container",
 	Args:  cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)

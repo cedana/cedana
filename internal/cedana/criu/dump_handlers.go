@@ -6,6 +6,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -19,13 +20,11 @@ import (
 
 const (
 	CRIU_DUMP_LOG_FILE  = "criu-dump.log"
-	GHOST_FILE_MAX_SIZE = 200 * utils.MEBIBYTE
+	GHOST_FILE_MAX_SIZE = 800 * utils.MEBIBYTE
 )
 
-var Dump types.Dump = dump
-
 // Returns a CRIU dump handler for the server
-func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 	if req.GetCriu() == nil {
 		return nil, status.Error(codes.InvalidArgument, "criu options is nil")
 	}
@@ -41,10 +40,10 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	// Set CRIU server
 	criuOpts.LogFile = proto.String(CRIU_DUMP_LOG_FILE)
-	criuOpts.LogLevel = proto.Int32(logLevel())
+	criuOpts.LogLevel = proto.Int32(config.Global.CRIU.LogLevel)
+	criuOpts.LogToStderr = proto.Bool(false)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
-	criuOpts.LogToStderr = proto.Bool(false)
 
 	// Change ownership of the dump directory
 	uids := resp.GetState().GetUIDs()
@@ -81,18 +80,4 @@ func dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	log.Info().Msg("CRIU dump complete")
 
 	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.State.PID)), nil
-}
-
-//////////////////////
-// Helper functions //
-//////////////////////
-
-func logLevel() int32 {
-	level := 1 // error statements
-	if log.Logger.GetLevel() <= zerolog.TraceLevel {
-		level = 3 // debug statements
-	} else if log.Logger.GetLevel() <= zerolog.DebugLevel {
-		level = 2 // warning statements
-	}
-	return int32(level)
 }

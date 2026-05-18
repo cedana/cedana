@@ -12,11 +12,14 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/internal/cedana"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/proto"
@@ -31,6 +34,8 @@ func init() {
 		StringP(flags.DirFlag.Full, flags.DirFlag.Short, "", "directory to dump into")
 	dumpCmd.PersistentFlags().
 		StringP(flags.NameFlag.Full, "", "", "name of the dump")
+	dumpCmd.PersistentFlags().
+		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "run without server")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
 	dumpCmd.PersistentFlags().
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
@@ -52,8 +57,6 @@ func init() {
 		BoolP(flags.ShellJobFlag.Full, flags.ShellJobFlag.Short, false, "process is not session leader (shell job)")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to files in the dump")
-	dumpCmd.PersistentFlags().
-		StringP(flags.GpuFreezeTypeFlag.Full, flags.GpuFreezeTypeFlag.Short, "", "GPU freeze type (IPC, NCCL)")
 
 	///////////////////////////////////////////
 	// Add subcommands from supported plugins
@@ -89,7 +92,6 @@ var dumpCmd = &cobra.Command{
 		name, _ := cmd.Flags().GetString(flags.NameFlag.Full)
 		compression, _ := cmd.Flags().GetString(flags.CompressionFlag.Full)
 		streams, _ := cmd.Flags().GetInt32(flags.StreamsFlag.Full)
-		gpuFreezeType, _ := cmd.Flags().GetString(flags.GpuFreezeTypeFlag.Full)
 
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		shellJob, _ := cmd.Flags().GetBool(flags.ShellJobFlag.Full)
@@ -118,13 +120,12 @@ var dumpCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.DumpReq{
-			Dir:           dir,
-			Name:          name,
-			Compression:   compression,
-			Streams:       int32(streams),
-			Criu:          criuOpts,
-			Action:        daemon.DumpAction_DUMP,
-			GPUFreezeType: gpuFreezeType,
+			Dir:         dir,
+			Name:        name,
+			Compression: compression,
+			Streams:     int32(streams),
+			Criu:        criuOpts,
+			Action:      daemon.DumpAction_DUMP,
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
@@ -148,25 +149,46 @@ var dumpCmd = &cobra.Command{
 	//******************************************************************************************
 
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) (err error) {
-		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
-		if !ok {
-			return fmt.Errorf("invalid client in context")
-		}
-		defer client.Close()
+		ctx := cmd.Context()
+		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 
 		// Assuming request is now ready to be sent to the server
-		req, ok := cmd.Context().Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
+		req, ok := ctx.Value(keys.DUMP_REQ_CONTEXT_KEY).(*daemon.DumpReq)
 		if !ok {
 			return fmt.Errorf("invalid request in context")
 		}
 
-		resp, profiling, err := client.Dump(cmd.Context(), req)
-		if err != nil {
-			return err
+		var resp *daemon.DumpResp
+		var data *profiling.Data
+
+		if noServer {
+			cedana, err := cedana.New(ctx, "dump")
+			if err != nil {
+				return fmt.Errorf("Error creating root: %v", err)
+			}
+
+			resp, err = cedana.Dump(req)
+			if err != nil {
+				cedana.Finalize()
+				return utils.GRPCErrorColored(err)
+			}
+
+			data = cedana.Finalize()
+		} else {
+			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			if !ok {
+				return fmt.Errorf("invalid client in context")
+			}
+			defer client.Close()
+
+			resp, data, err = client.Dump(ctx, req)
+			if err != nil {
+				return err
+			}
 		}
 
-		if config.Global.Profiling.Enabled && profiling != nil {
-			printProfilingData(profiling)
+		if config.Global.Profiling.Enabled && data != nil {
+			profiling.Print(data, features.Theme())
 		}
 
 		for _, message := range resp.GetMessages() {

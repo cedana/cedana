@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 install_helm() {
-    if command -v helm &> /dev/null; then
+    if command -v helm &>/dev/null; then
         debug_log "helm is already installed"
         return 0
     fi
@@ -17,26 +17,16 @@ helm_install_cedana() {
     local cluster_id="$1"
     local namespace="$2"
 
-    if kubectl get pods -n "$namespace" --no-headers 2>/dev/null | grep -q .; then
-        debug_log "Cleaning up old helm chart installation..."
-        helm uninstall cedana -n "$namespace" --wait --timeout=2m || {
-            error_log "Error: Failed to uninstall helm chart"
-            return 1
-        }
-        wait_for_cmd_fail 60 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
-        delete_namespace "$namespace" --wait
-    fi
-
     debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
-
     local helm_cmd
 
+    # Use upgrade --install for idempotent installs
     if [ -e "$HELM_CHART" ]; then
-        helm_cmd="helm install cedana $HELM_CHART" # local path to chart
+        helm_cmd="helm upgrade --install cedana $HELM_CHART" # local path to chart
     elif [ -n "$HELM_CHART" ]; then
-        helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm --version $HELM_CHART"
+        helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm --version $HELM_CHART"
     else
-        helm_cmd="helm install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
+        helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
     fi
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
     helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"
@@ -46,11 +36,12 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
     helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
     helm_cmd="$helm_cmd --set config.checkpointCompression=$CEDANA_CHECKPOINT_COMPRESSION"
-    helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     helm_cmd="$helm_cmd --set config.awsAccessKeyId=$AWS_ACCESS_KEY_ID"
     helm_cmd="$helm_cmd --set config.awsSecretAccessKey=$AWS_SECRET_ACCESS_KEY"
     helm_cmd="$helm_cmd --set config.awsRegion=$AWS_REGION"
     helm_cmd="$helm_cmd --set config.containerdAddress=$CONTAINERD_ADDRESS"
+    helm_cmd="$helm_cmd --set config.profiling=$CEDANA_PROFILING_ENABLED"
+    helm_cmd="$helm_cmd --set config.metrics=$CEDANA_METRICS_ENABLED"
 
     # Set overrides from environment variables
 
@@ -83,32 +74,59 @@ helm_install_cedana() {
     if [ -n "$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsContainerdRuntimeVersion=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION"
     fi
-    if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+    if [ "$GPU" == "1" ]; then
+        if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+        fi
+    else
+        helm_cmd="$helm_cmd --set config.pluginsGpuVersion=none"
     fi
     if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
     fi
+    if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
+        helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
+    fi
+    if [ -n "$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK" ]; then
+        helm_cmd="$helm_cmd --set config.gpuSkipNvidiaRuntimeHook=$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK"
+    fi
 
-    $helm_cmd || {
+    helm_cmd="$helm_cmd --wait --timeout=5m"
+
+    debug "$helm_cmd" || {
         error_log "Failed to install helm chart"
         error kubectl logs -n "$namespace" -l app.kubernetes.io/instance=cedana --tail=1000 --prefix=true
         return 1
     }
+    debug_log "Helm chart installed"
+}
+
+helm_is_cedana_installed() {
+    local namespace="$1"
+
+    helm status cedana -n "$namespace" &>/dev/null
+    return $?
 }
 
 helm_uninstall_cedana() {
     local namespace="$1"
 
     debug_log "Uninstalling helm chart..."
-    helm uninstall cedana -n "$namespace" --wait --timeout=2m || {
+
+    if ! helm_is_cedana_installed "$namespace"; then
+        debug_log "Helm chart is not installed"
+        return 0
+    fi
+
+    helm uninstall cedana -n "$namespace" --wait --timeout=2m --ignore-not-found || {
         error_log "Failed to uninstall helm chart"
         return 1
     }
 
     debug_log "Waiting for all pods in $namespace namespace to terminate..."
 
-    wait_for_cmd_fail 60 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
+    wait_for_cmd_fail 120 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
+    wait_for_cmd_fail 30 "kubectl get namespaces | grep -q $namespace"
 
     debug_log "Helm chart uninstalled successfully"
 }

@@ -11,8 +11,8 @@ type Notify interface {
 	Initialize(ctx context.Context, criuPid int32) error
 	InitializeDump(ctx context.Context, opts *criu.CriuOpts) error
 	InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error
-	FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error
-	FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error
+	FinalizeDump(ctx context.Context, opts *criu.CriuOpts, err error) error
+	FinalizeRestore(ctx context.Context, opts *criu.CriuOpts, err error) error
 	PreDump(ctx context.Context, opts *criu.CriuOpts) error
 	PostDump(ctx context.Context, opts *criu.CriuOpts) error
 	PreRestore(ctx context.Context, opts *criu.CriuOpts) error
@@ -45,12 +45,12 @@ func (c NoNotify) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) er
 }
 
 // FinalizeDump NoNotify
-func (c NoNotify) FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error {
+func (c NoNotify) FinalizeDump(ctx context.Context, opts *criu.CriuOpts, err error) error {
 	return nil
 }
 
 // FinalizeRestore NoNotify
-func (c NoNotify) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+func (c NoNotify) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts, err error) error {
 	return nil
 }
 

@@ -31,6 +31,7 @@ var (
 	UnfreezeCmd *cobra.Command = cmd.UnfreezeCmd
 	RunCmd      *cobra.Command = cmd.RunCmd
 	ManageCmd   *cobra.Command = cmd.ManageCmd
+	QueryCmd    *cobra.Command = cmd.QueryCmd
 	CmdTheme    text.Colors    = style.HighLevelRuntimeColors
 )
 
@@ -40,6 +41,8 @@ var HealthChecks types.Checks = types.Checks{
 		client.CheckRuntime(),
 	},
 }
+
+var QueryHandler types.Query = client.Query
 
 var (
 	RunHandler    types.Run                   = client.Run
@@ -68,13 +71,13 @@ var (
 		validation.ValidateDumpRequest,
 		client.Setup[daemon.DumpReq, daemon.DumpResp],
 		client.LoadContainer[daemon.DumpReq, daemon.DumpResp],
-		filesystem.DumpRootfs,
 		filesystem.DumpImageName,
+		filesystem.DumpSnapshotter,
 
 		runtime.DumpMiddleware, // Simply plug in the low-level runtime's dump middleware for the rest
 	}
 
-	RestoreHandler    types.Restore                   = client.Restore
+	RestoreHandler    types.Restore                   = client.Run // Can simply use Run as shim will handle restoring
 	RestoreMiddleware types.Middleware[types.Restore] = types.Middleware[types.Restore]{
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,

@@ -61,12 +61,17 @@ jobs:
           - arm64
     if: inputs.cedana || inputs.image
     container:
-      image: golang:1.25rc3-bullseye
+      image: rockylinux:8
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
+
+      - name: Install dependencies
+        run: |
+          dnf install -y git make gcc findutils
+
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -78,6 +83,12 @@ jobs:
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -91,6 +102,12 @@ jobs:
           make cedana VERSION=$VERSION -j $(nproc)
           echo $VERSION > ./cedana-version.txt
 
+      - id: "inject-version"
+        name: Inject VERSION into install-release.sh
+        run: |
+          VERSION="${{ github.head_ref || github.ref_name }}"
+          sed -i "s|^VERSION=\${VERSION:-\".*\"}|VERSION=\${VERSION:-\"$VERSION\"}|" scripts/install-release.sh
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -98,6 +115,13 @@ jobs:
           path: |
             ./cedana
             ./cedana-version.txt
+
+      - name: Upload scripts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cedana-scripts-${{ matrix.arch }}
+          path: |
+            scripts/install-release.sh
 
   plugin:
     name: Plugin
@@ -112,6 +136,7 @@ jobs:
           - kata
           - cloud-hypervisor
           - k8s
+          - slurm
           - storage/cedana
           - storage/s3
           - storage/gcs
@@ -120,12 +145,17 @@ jobs:
           - arm64
     if: inputs.plugins || inputs.image
     container:
-      image: golang:1.25rc3-bullseye
+      image: rockylinux:8
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v2
+
+      - name: Install dependencies
+        run: |
+          dnf install -y git make gcc findutils
+
       - uses: actions/checkout@v4
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -137,6 +167,12 @@ jobs:
 
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Install Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -323,7 +359,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: ./test
-          file: ./test/Dockerfile${{ matrix.tag == 'cuda' && '.cuda' || '' }}
+          file: ./test/${{ matrix.tag == 'cuda' && 'cuda.' || '' }}Dockerfile
           push: true
           platforms: linux/${{ matrix.arch }}
           labels: ${{ steps.meta.outputs.labels }}

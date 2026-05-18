@@ -8,8 +8,6 @@ GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
 
-DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
-
 ifndef VERBOSE
 .SILENT:
 endif
@@ -27,6 +25,7 @@ GO_MOD_FILES=go.sum go.mod
 VERSION=$(shell git describe --tags --always)
 LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
+DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
 cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
@@ -46,16 +45,16 @@ $(INSTALL_BIN_DIR)/$(BINARY): $(OUT_DIR)/$(BINARY)
 start: $(INSTALL_BIN_DIR)/$(BINARY) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
-install-systemd: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the systemd daemon
-	@echo "Installing systemd service..."
-	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
+install-service: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the daemon as a service
+	@echo "Installing service..."
+	$(SUDO) $(SCRIPTS_DIR)/install-service.sh
 
-reset-systemd: ## Reset the systemd daemon
-	@echo "Stopping systemd service..."
-	$(SUDO) $(SCRIPTS_DIR)/host/systemd-reset.sh ;\
+reset-service: ## Reset the daemon service
+	@echo "Stopping service..."
+	$(SUDO) $(SCRIPTS_DIR)/reset-service.sh
 	sleep 1
 
-reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
+reset: reset-service reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	$(SUDO) pkill $(BINARY) || true
 	rm -f $(OUT_DIR)/$(BINARY)
@@ -67,7 +66,7 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana
+	$(SUDO) rm -rf /etc/cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
@@ -117,6 +116,9 @@ PARALLELISM?=8
 TAGS?=
 ARGS?=
 RETRIES?=0
+GPU?=0
+PROVIDER?=K3s
+SKIP_HELM?=0
 HELPER_REPO?=
 HELPER_TAG?=""
 HELPER_DIGEST?=""
@@ -126,17 +128,17 @@ CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
 BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
-				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
-				--output /tmp --report-formatter $(FORMATTER)
+				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
+				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
-		        --jobs $(PARALLELISM) $(ARGS) --print-output-on-failure \
-				--output /tmp --report-formatter $(FORMATTER)
+		        --jobs $(PARALLELISM) $(ARGS) \
+				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 
-test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test: test-unit test-regression test-k8s test-slurm ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
-	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
+	$(GOCMD) test -v $(GOMODULE)/... -bench=. -benchmem
 
 test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
@@ -196,8 +198,8 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], CONTROLLER_REPO=<repo>, CONTROLLER_TAG=<tag>, CONTROLLER_DIGEST=<digest>, HELPER_REPO=<repo>, HELPER_TAG=<tag>, HELPER_DIGEST=<digest>, HELM_CHART=<path|version>)
-	if [ -f /.dockerenv ]; then \
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -222,14 +224,18 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
         fi; \
 		if [ "$(GPU)" = "1" ]; then \
 			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
-			$(DOCKER_TEST_CREATE_CUDA) ;\
+			$(DOCKER_TEST_CREATE_NO_PLUGINS_CUDA) ;\
 			$(DOCKER_TEST_START) ;\
 			$(DOCKER_TEST_EXEC) make test-k8s \
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
+				GPU=$(GPU) \
 				DEBUG=$(DEBUG) \
+				PROVIDER=$(PROVIDER) \
+				CLUSTER_ID=$(CLUSTER_ID) \
+				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
 				CONTROLLER_TAG=$(CONTROLLER_TAG) \
 				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
@@ -240,15 +246,18 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 			$(DOCKER_TEST_REMOVE) ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
-			$(DOCKER_TEST_CREATE) ;\
+			$(DOCKER_TEST_CREATE_NO_PLUGINS) ;\
 			$(DOCKER_TEST_START) ;\
 			$(DOCKER_TEST_EXEC) make test-k8s \
 				ARGS=$(ARGS) \
 				PARALLELISM=$(PARALLELISM) \
-				GPU=$(GPU) \
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
+				GPU=$(GPU) \
 				DEBUG=$(DEBUG) \
+				PROVIDER=$(PROVIDER) \
+				CLUSTER_ID=$(CLUSTER_ID) \
+				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
 				CONTROLLER_TAG=$(CONTROLLER_TAG) \
 				CONTROLLER_DIGEST=$(CONTROLLER_DIGEST) \
@@ -258,6 +267,41 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				$$MAKE_ADDITIONAL_OPTS ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
+	fi
+
+test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+	if [ -f /.dockerenv ]; then \
+		echo "Running slurm e2e tests..." ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		if [ "$(TAGS)" = "" ]; then \
+			$(BATS_CMD) -r test/slurm ; status=$$? ;\
+		else \
+			$(BATS_CMD_TAGS) -r test/slurm ; status=$$? ;\
+		fi ;\
+		if [ $$status -ne 0 ]; then \
+			echo "Slurm e2e tests failed" ;\
+			exit $$status ;\
+		else \
+			echo "All slurm e2e tests passed!" ;\
+		fi ;\
+	else \
+		if [ "$(GPU)" = "1" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_CREATE_SLURM_CUDA) ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_CREATE_SLURM) ;\
+		fi ;\
+		$(DOCKER_TEST_START) ;\
+		$(SLURM_ARTIFACTS_INSTALL) ;\
+		$(DOCKER_TEST_EXEC) make test-slurm \
+			PARALLELISM=$(PARALLELISM) \
+			TAGS=$(TAGS) \
+			RETRIES=$(RETRIES) \
+			GPU=$(GPU) \
+			FORMATTER=$(FORMATTER) \
+			DEBUG=$(DEBUG) ;\
+		$(DOCKER_TEST_REMOVE) ;\
 	fi
 
 test-enter: ## Enter the test environment
@@ -281,7 +325,7 @@ test-enter-cuda: ## Enter the test environment (CUDA)
 	fi ;\
 
 test-k9s: ## Enter k9s in the test environment
-	$(DOCKER_TEST_EXEC) k9s ;\
+	$(DOCKER_TEST_EXEC) k9s -A -r 1 --logoless --splashless ;\
 
 ##########
 ##@ Docker
@@ -291,7 +335,7 @@ test-k9s: ## Enter k9s in the test environment
 # and binaries, *if* they are installed in /usr/local/lib and /usr/local/bin respectively (which is
 # the default).
 
-DOCKER_IMAGE=cedana/cedana-helper-test:$(shell git rev-parse HEAD)
+DOCKER_IMAGE=cedana/cedana-helper-test:$(VERSION)
 DOCKER_TEST_CONTAINER_NAME=cedana-test
 DOCKER_TEST_IMAGE=cedana/cedana-test:latest
 DOCKER_TEST_IMAGE_CUDA=cedana/cedana-test:cuda
@@ -299,7 +343,7 @@ DOCKER_TEST_START=docker start $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
 DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 PLATFORM=linux/amd64,linux/arm64
-ALL_PLUGINS?=0
+ALL_PLUGINS?=1
 PREBUILT_BINARIES?=0
 
 PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
@@ -307,30 +351,66 @@ PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' 
 PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+RUSH_BIN_COPY=find /usr/local/bin -type f -name 'rush' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
-DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --name=$(DOCKER_TEST_CONTAINER_NAME) \
+DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --entrypoint tail --name=$(DOCKER_TEST_CONTAINER_NAME) \
 				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
-				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) -e CEDANA_PLUGINS_BUILDS=$(CEDANA_PLUGINS_BUILDS) \
+				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) \
+				-e CEDANA_METRICS_ENABLED=$(CEDANA_METRICS_ENABLED) -e CEDANA_PROFILING_ENABLED=$(CEDANA_PROFILING_ENABLED) \
 				-e HF_TOKEN=$(HF_TOKEN) \
 				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
 				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
-				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) \
+				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) -e NB_CLUSTER_NAME=$(NB_CLUSTER_NAME)\
 				$(DOCKER_ADDITIONAL_OPTS)
-DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_BIN_COPY_CRIU) && \
+						$(RUSH_BIN_COPY) && \
 						$(HELM_CHART_COPY) >/dev/null
-DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) sleep inf >/dev/null && \
+DOCKER_TEST_CREATE_NO_PLUGINS=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
+						$(HELM_CHART_COPY) >/dev/null
+DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
+						$(PLUGIN_LIB_COPY) && \
+						$(PLUGIN_BIN_COPY) && \
+						$(PLUGIN_LIB_COPY_GPU) && \
+						$(PLUGIN_BIN_COPY_GPU) && \
+						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
+DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
+						$(HELM_CHART_COPY) >/dev/null
+
+CEDANA_SLURM_DIR?=$(shell if [ -d ../cedana-slurm ]; then cd ../cedana-slurm && pwd; fi)
+SLURM_ARTIFACTS_DIR?=$(shell if [ -d ../artifacts ]; then cd ../artifacts && pwd; fi)
+DOCKER_TEST_CREATE_SLURM_OPTS=$(if $(CEDANA_SLURM_DIR),-v $(CEDANA_SLURM_DIR):/cedana-slurm,) $(if $(SLURM_ARTIFACTS_DIR),-v $(SLURM_ARTIFACTS_DIR):/artifacts:ro,)
+
+SLURM_ARTIFACTS_INSTALL=docker exec $(DOCKER_TEST_CONTAINER_NAME) bash -c '\
+	if [ -d /artifacts ]; then \
+		cp -f /artifacts/cedana/cedana /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/criu/criu /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/slurm/build/cedana-slurm /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/plugin-slurm/libcedana-slurm.so /usr/local/lib/ 2>/dev/null; \
+		cp -f /artifacts/slurm/build/*.so /usr/local/lib/ 2>/dev/null; \
+		chmod +x /usr/local/bin/cedana /usr/local/bin/criu /usr/local/bin/cedana-slurm 2>/dev/null; \
+	fi'
+
+DOCKER_TEST_CREATE_SLURM=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_CREATE_SLURM_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
+						$(PLUGIN_LIB_COPY) && \
+						$(PLUGIN_BIN_COPY) && \
+						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
+DOCKER_TEST_CREATE_SLURM_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_CREATE_SLURM_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_LIB_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
 
-docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
+ifeq ($(PREBUILT_BINARIES),1)
+docker: cedana plugins ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
+else
+docker:
+endif
 	@echo "Building helper Docker image..."
 	docker buildx build --platform $(PLATFORM) \
 		--build-arg PREBUILT_BINARIES=$(PREBUILT_BINARIES) \
@@ -338,23 +418,27 @@ docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64)
 		--build-arg VERSION=$(VERSION) \
 		-t $(DOCKER_IMAGE) --load . ;\
 
-docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64)
+docker-push: docker ## Push the helper Docker image (DOCKER_IMAGE=<image>)
+	@echo "Pushing helper Docker image..."
+	docker push $(DOCKER_IMAGE)
+
+docker-test: ## Build the test Docker image (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE=<image>)
 	@echo "Building test Docker image..."
 	cd test ;\
 	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE) --load . ;\
 	cd -
 
-docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
+docker-test-cuda: ## Build the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64, DOCKER_TEST_IMAGE_CUDA=<image>)
 	@echo "Building test CUDA Docker image..."
 	cd test ;\
-	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f Dockerfile.cuda --load . ;\
+	docker buildx build --platform $(PLATFORM) -t $(DOCKER_TEST_IMAGE_CUDA) -f cuda.Dockerfile --load . ;\
 	cd -
 
-docker-test-push: ## Push the test Docker image (PLATFORM=linux/amd64,linux/arm64)
+docker-test-push: ## Push the test Docker image (DOCKER_TEST_IMAGE=<image>)
 	@echo "Pushing test Docker image..."
 	docker push $(DOCKER_TEST_IMAGE)
 
-docker-test-cuda-push: ## Push the test Docker image for CUDA (PLATFORM=linux/amd64,linux/arm64)
+docker-test-cuda-push: ## Push the test Docker image for CUDA (DOCKER_TEST_IMAGE_CUDA=<image>)
 	@echo "Pushing test CUDA Docker image..."
 	docker push $(DOCKER_TEST_IMAGE_CUDA)
 

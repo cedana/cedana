@@ -1,9 +1,10 @@
 # Configuration
 
-Cedana configuration lives in your home directory, specifically in `~/.cedana/config.json`. This file is automatically created the first time you use a Cedana command. You can also create it manually.
+Cedana configuration lives in `/etc/cedana/config.json`. You can initialize this file with default values by using the `--init-config` flag (e.g. `sudo cedana daemon start --init-config`). Any configuration in environment variables will override the default values when this file is initialized. You may also merge currently set environment variables into an existing configuration file with the `--merge-config` flag (e.g. `sudo cedana daemon start --merge-config`).
 
 ## Environment variables
-You may also override the configuration using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
+
+You may also override the configuration file using environment variables. The environment variables are prefixed with `CEDANA_` and are in uppercase. For example, `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. Similarly, `Connection.URL` can be set with `CEDANA_CONNECTION_URL`, or its alias `CEDANA_URL`.
 
 ## [Config](../../pkg/config/types.go#L10-L36)
 
@@ -50,8 +51,10 @@ type CRIU struct {
     BinaryPath string `json:"binary_path" key:"binary_path" yaml:"binary_path" mapstructure:"binary_path"`
     // LeaveRunning sets whether to leave the process running after checkpoint
     LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
-		// ManageCgroupsMode sets the default cgroup C/R mode for CRIU (none, props, soft, full, strict, ignore)
-		ManageCgroupsMode string `json:"manage_cgroups_mode" key:"manage_cgroups_mode" yaml:"manage_cgroups_mode" mapstructure:"manage_cgroups_mode"`
+    // ManageCgroups sets the default cgroup C/R mode for CRIU (default, cg_none, props, soft, full, strict, ignore)
+    ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
+    // LogLevel sets the default log level for CRIU (2 - errors, 3 - warnings, 4 - debug)
+    LogLevel int32 `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
 }
 ```
 
@@ -66,6 +69,11 @@ type Checkpoint struct {
     // Stream (for streaming checkpoints) specifies the number of parallel streams to use.
     // 0 means no streaming. n > 0 means n parallel streams (or number of pipes) to use.
     Stream int32 `json:"stream" key:"stream" yaml:"stream" mapstructure:"stream"`
+		// The amount of memory streamer is allowed to use (in MB)
+		StreamMemoryLimit uint64 `json:"streamer_memory_limit" key:"streamer_memory_limit" yaml:"streamer_memory_limit" mapstructure:"streamer_memory_limit"`
+    // Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
+    // checkpoint request to return early.
+    Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
 }
 ```
 
@@ -104,22 +112,20 @@ type DB struct {
 
 ```go
 type GPU struct {
-		// Number of warm GPU controllers to keep in pool
-		PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
-		// LogDir is the directory to write GPU logs to
-		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
-		// SockDir is the directory to use for the GPU sockets
-		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
-		// Track metrics associated with observability
-		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
-		// FreezeType is the type of freeze to use for GPU processes (IPC, NCCL)
-		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
-		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
-		ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
-		// LdLibPath holds any additional directories to search for GPU libraries
-		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
-		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
-		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
+    // Number of warm GPU controllers to keep in pool
+    PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
+    // LogDir is the directory to write GPU logs to
+    LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
+    // SockDir is the directory to use for the GPU sockets
+    SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
+    // ShmSize is the size in bytes of the shared memory segment to use for GPU processes
+    ShmSize uint64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+    // LdLibPath holds any additional directories to search for GPU libraries
+    LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
+    // Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
+    Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
+    // SkipNvidiaRuntimeHook always skips the nvidia-container-runtime-hook when spawning GPU containers
+    SkipNvidiaRuntimeHook bool `json:"skip_nvidia_runtime_hook" key:"skip_nvidia_runtime_hook" yaml:"skip_nvidia_runtime_hook" mapstructure:"skip_nvidia_runtime_hook"`
 }
 ```
 
@@ -142,6 +148,8 @@ type Plugins struct {
 type Profiling struct {
     // Enabled sets whether to enable and show profiling information
     Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
+    // Detailed sets whether to show detailed profiling information
+    Detailed bool `json:"detailed" key:"detailed" yaml:"detailed" mapstructure:"detailed"`
     // Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
     Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
 }
@@ -151,11 +159,11 @@ type Profiling struct {
 
 ```go
 type AWS struct {
-		// AccessKeyID is the AWS access key ID
-		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
-		// SecretAccessKey is the AWS secret access key
-		SecretAccessKey string `json:"secret_access_key" key:"secret_access_key" yaml:"secret_access_key" mapstructure:"secret_access_key" env_alias:"AWS_SECRET_ACCESS_KEY"`
-		// Region is the AWS region to use
-		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region"`
+    // AccessKeyID is the AWS access key ID
+    AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
+    // SecretAccessKey is the AWS secret access key
+    SecretAccessKey string `json:"secret_access_key" key:"secret_access_key" yaml:"secret_access_key" mapstructure:"secret_access_key" env_alias:"AWS_SECRET_ACCESS_KEY"`
+    // Region is the AWS region to use
+    Region string `json:"region" key:"region" yaml:"region" mapstructure:"region"`
 }
 ```

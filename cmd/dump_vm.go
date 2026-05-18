@@ -10,6 +10,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/spf13/cobra"
 )
 
@@ -86,13 +87,13 @@ var dumpVMCmd = &cobra.Command{
 			return fmt.Errorf("invalid request in context")
 		}
 
-		_, profiling, err := client.DumpVM(cmd.Context(), req)
+		_, data, err := client.DumpVM(cmd.Context(), req)
 		if err != nil {
 			return err
 		}
 
-		if config.Global.Profiling.Enabled && profiling != nil {
-			printProfilingData(profiling)
+		if config.Global.Profiling.Enabled && data != nil {
+			profiling.Print(data, features.Theme())
 		}
 
 		return nil

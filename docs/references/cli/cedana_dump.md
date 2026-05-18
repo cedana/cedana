@@ -5,20 +5,19 @@ Dump a container/process
 ### Options
 
 ```
-      --compression string       compression algorithm (none, tar, gzip, lz4, zlib)
-      --criu-opts string         criu options JSON (overriddes individual CRIU flags)
-  -d, --dir string               directory to dump into
-      --external strings         resources from external namespaces (can be multiple)
-      --file-locks               dump file locks
-      --gpu-freeze-type string   GPU freeze type (IPC, NCCL)
-  -h, --help                     help for dump
-      --leave-running            leave the process running after dump
-      --link-remap               remap links to files in the dump
-      --name string              name of the dump
-      --shell-job                process is not session leader (shell job)
-      --skip-in-flight           skip in-flight tcp connections
-      --streams int32            number of streams to use for dump (0 for no streaming)
-      --tcp-established          dump tcp established connections
+      --compression string   compression algorithm (none, tar, gzip, lz4, zlib)
+      --criu-opts string     criu options JSON (overriddes individual CRIU flags)
+  -d, --dir string           directory to dump into
+      --external strings     resources from external namespaces (can be multiple)
+      --file-locks           dump file locks
+  -h, --help                 help for dump
+      --leave-running        leave the process running after dump
+      --link-remap           remap links to files in the dump
+      --name string          name of the dump
+      --shell-job            process is not session leader (shell job)
+      --skip-in-flight       skip in-flight tcp connections
+      --streams int32        number of streams to use for dump (0 for no streaming)
+      --tcp-established      dump tcp established connections
 ```
 
 ### Options inherited from parent commands

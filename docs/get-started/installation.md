@@ -6,17 +6,51 @@ For now, you can either install the daemon from source, or use the released bina
 
 Since Cedana depends on [CRIU](https://criu.org), you will need to ensure its dependencies are installed.
 
-#### Using apt (Ubuntu/Debian)&#x20;
+#### Using apt (Ubuntu/Debian)
 
 ```sh
-apt-get install -y libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel
+apt-get install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables-dev
 ```
 
 #### Using dnf/yum (Fedora/CentOS)
 
 ```sh
-yum install -y libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1
+yum install -y libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel
 ```
+
+## Download latest release
+
+{% hint style="info" %}
+Cedana is supported on both linux/amd64 and linux/arm64 platforms.
+{% endhint %}
+
+Using public installer:
+
+```sh
+curl -fsSL https://github.com/cedana/cedana/releases/latest/download/install-release.sh | sudo -E bash
+```
+
+Using authenticated installer (see [Authentication](authentication.md)):
+
+```sh
+export CEDANA_URL=https://myorg.cedana.ai/v1
+export CEDANA_AUTH_TOKEN=your_auth_token
+
+curl -fsSL "${CEDANA_URL}/install?version=latest" -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | sudo -E bash
+```
+
+Or, to install an alpha version:
+
+```sh
+export CEDANA_URL=https://myorg.cedana.ai/v1
+export CEDANA_AUTH_TOKEN=your_auth_token
+
+curl -fsSL "${CEDANA_URL}/install?build=alpha&version=main" -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | sudo -E bash
+```
+
+{% hint style="info" %}
+You can also find the latest binaries at [releases](https://github.com/cedana/cedana/releases). Ensure `/usr/local/bin` is in your `PATH`.
+{% endhint %}
 
 ## Build from source
 
@@ -37,40 +71,6 @@ make install
 {% hint style="info" %}
 Try `make help` to see all available targets.
 {% endhint %}
-
-## Download latest
-
-{% hint style="info" %}
-You can find the latest binaries at [releases](https://github.com/cedana/cedana/releases). Ensure `/usr/local/bin` is in your `PATH`.
-{% endhint %}
-
-#### AMD64
-
-```sh
-platform=amd64
-version=$(curl -s https://api.github.com/repos/cedana/cedana/releases/latest | grep tag_name | cut -d '"' -f 4)
-curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/$version/cedana-$platform.tar.gz
-tar -xzvf cedana.tar.gz
-chmod +x cedana
-mv cedana /usr/local/bin/cedana
-rm cedana.tar.gz
-
-cedana --version
-```
-
-#### ARM64
-
-```sh
-platform=arm64
-version=$(curl -s https://api.github.com/repos/cedana/cedana/releases/latest | grep tag_name | cut -d '"' -f 4)
-curl -L -o cedana.tar.gz https://github.com/cedana/cedana/releases/download/v0.9.245/cedana-$platform.tar.gz
-tar -xzvf cedana.tar.gz
-chmod +x cedana
-mv cedana /usr/local/bin/cedana
-rm cedana.tar.gz
-
-cedana --version
-```
 
 ## Install CRIU
 
@@ -109,7 +109,7 @@ sudo cedana daemon start
 If you're a _systemd_ user, you may also install it as a service (if built from source):
 
 ```sh
-make install-systemd
+make install-service
 ```
 
 {% hint style="info" %}

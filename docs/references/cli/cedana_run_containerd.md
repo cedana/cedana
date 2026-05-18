@@ -9,12 +9,14 @@ cedana run containerd <image|rootfs> [command] [args...] [flags]
 ### Options
 
 ```
-      --address string     containerd socket address
-      --gpus int32Slice    add GPUs to the container (e.g. 0,1,2) (default [])
-  -h, --help               help for containerd
-      --id string          containerd id
-      --namespace string   containerd namespace
-      --no-pivot           disable use of pivot-root
+      --address string       containerd socket address
+      --env strings          list of additional environment variables
+      --gpus int32Slice      add GPUs to the container (e.g. 0,1,2) (default [])
+  -h, --help                 help for containerd
+      --id string            containerd id
+      --namespace string     containerd namespace
+      --no-pivot             disable use of pivot-root
+      --snapshotter string   containerd snapshotter to use
 ```
 
 ### Options inherited from parent commands
@@ -25,6 +27,7 @@ cedana run containerd <image|rootfs> [command] [args...] [flags]
       --config string       one-time config JSON string (merge with existing config)
       --config-dir string   custom config directory
   -g, --gpu-enabled         enable GPU support
+      --gpu-id string       specify existing GPU controller ID to attach (internal use only)
       --gpu-tracing         enable GPU tracing
   -j, --jid string          job id
       --no-server           run without server

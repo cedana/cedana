@@ -19,6 +19,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 
@@ -35,7 +36,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "file to write PID to")
 	restoreCmd.PersistentFlags().
-		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "select how to run restores")
+		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "run without server")
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
@@ -166,8 +167,6 @@ var restoreCmd = &cobra.Command{
 		cmd.SetContext(ctx)
 
 		if noServer {
-			ctx := context.WithValue(cmd.Context(), keys.DAEMONLESS_CONTEXT_KEY, true)
-			cmd.SetContext(ctx)
 			return nil
 		}
 
@@ -206,37 +205,36 @@ var restoreCmd = &cobra.Command{
 
 			code, err := cedana.Restore(req)
 			if err != nil {
-				cedana.Wait()
+				cedana.Finalize()
 				return utils.GRPCErrorColored(err)
 			}
 
-			profiling := cedana.Finalize()
-			if config.Global.Profiling.Enabled && profiling != nil {
-				printProfilingData(profiling)
+			data := cedana.Finalize()
+			if config.Global.Profiling.Enabled && data != nil {
+				profiling.Print(data, features.Theme())
 			}
-			cedana.Wait()
 
 			os.Exit(<-code)
 		} else {
-			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
 				return fmt.Errorf("invalids client in context")
 			}
 			defer client.Close()
 
 			// Assuming request is now ready to be sent to the server
-			resp, profiling, err := client.Restore(cmd.Context(), req)
+			resp, data, err := client.Restore(ctx, req)
 			if err != nil {
 				return err
 			}
 
-			if config.Global.Profiling.Enabled && profiling != nil {
-				printProfilingData(profiling)
+			if config.Global.Profiling.Enabled && data != nil {
+				profiling.Print(data, features.Theme())
 			}
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {
-				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+				return client.Attach(ctx, &daemon.AttachReq{PID: resp.PID})
 			}
 
 			for _, message := range resp.GetMessages() {

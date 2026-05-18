@@ -12,10 +12,6 @@ load_lib assert
 load_lib file
 
 setup_file() {
-    # TODO: remove manage-cgroups once runc plugin does not force a cgroupRoot
-    # on detecting a NET PID for k8s
-    export CEDANA_CRIU_MANAGE_CGROUPS="default"
-
     setup_file_daemon
     do_once setup_rootfs
 }
@@ -51,7 +47,7 @@ teardown_file() {
     assert_output --partial "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run container (without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "echo hello")"
@@ -63,7 +59,7 @@ teardown_file() {
     run runc delete "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run container (without daemon, exit code)" {
     jid=$(unix_nano)
     code=42
@@ -75,7 +71,7 @@ teardown_file() {
     run runc delete "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run container (without daemon, detached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
@@ -90,7 +86,7 @@ teardown_file() {
     run runc delete "$jid"
 }
 
-# bats test_tags=daemonless
+# bats test_tags=serverless
 @test "run container (without daemon, PID file)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "echo hello")"
@@ -200,7 +196,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -216,7 +212,7 @@ teardown_file() {
 
     run cedana dump runc "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$jid" KILL
@@ -232,7 +228,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run cedana kill "$jid"
@@ -242,14 +238,16 @@ teardown_file() {
 @test "dump container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" --attach &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run cedana kill "$jid"
@@ -269,7 +267,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -292,7 +290,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -315,7 +313,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -338,7 +336,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -361,7 +359,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -384,7 +382,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -407,7 +405,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -434,7 +432,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -458,7 +456,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -487,7 +485,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc kill "$id" KILL
@@ -509,7 +507,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
@@ -530,7 +528,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --pid-file "$pid_file"
@@ -541,7 +539,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (without daemon)" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh" 3)"
@@ -552,7 +550,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server
@@ -561,7 +559,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (without daemon, exit code)" {
     id=$(unix_nano)
     code=42
@@ -573,7 +571,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server
@@ -583,7 +581,7 @@ teardown_file() {
     run runc delete "$id"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (without daemon, PID file)" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh" 3)"
@@ -595,7 +593,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server --pid-file "$pid_file"
@@ -616,7 +614,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc delete "$id"
@@ -628,7 +626,7 @@ teardown_file() {
     assert_equal "$status" "" # should be automatically deleted (as it was attached)
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (detached to without daemon)" {
     id=$(unix_nano)
     code=42
@@ -638,7 +636,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc delete "$id"
@@ -650,7 +648,7 @@ teardown_file() {
     assert_equal "$status" "" # should be automatically deleted (as not detached & without daemon)
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "restore container (detached to without daemon detached)" {
     id=$(unix_nano)
     code=42
@@ -660,7 +658,7 @@ teardown_file() {
 
     run cedana dump runc "$id"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run runc delete "$id"
@@ -683,7 +681,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -695,14 +693,16 @@ teardown_file() {
 @test "restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" --attach &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -724,7 +724,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -749,7 +749,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -774,7 +774,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -799,7 +799,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -824,7 +824,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -849,7 +849,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     run cedana restore job "$jid"
@@ -879,7 +879,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -905,7 +905,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -935,7 +935,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"
@@ -956,7 +956,7 @@ teardown_file() {
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"

@@ -17,7 +17,7 @@ type (
 		// LogLevelNoServer is the log level used when direct --no-server run/restore is used. This is separate from LogLevel so as to avoid cluttering the process output.
 		LogLevelNoServer string `json:"log_level_no_server" key:"log_level_no_server" yaml:"log_level_no_server" mapstructure:"log_level_no_server"`
 		// Metrics is whether to enable metrics collection and observability
-		Metrics bool `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics"`
+		Metrics bool `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics" env_aliases:"CEDANA_METRICS_ENABLED"`
 
 		// Connection settings
 		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`
@@ -35,9 +35,21 @@ type (
 		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
+		// SLURM settings
+		Slurm Slurm `json:"slurm" key:"slurm" yaml:"slurm" mapstructure:"slurm"`
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+
+		// Internal use only (for metrics and logging)
+		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id"`
+	}
+
+	Slurm struct {
+		// Unprivileged uses an embedded cedana instance for dump instead of the cedana daemon.
+		// Requires CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the cedana-slurm binary.
+		// Can also be set with CEDANA_SLURM_UNPRIVILEGED=1.
+		Unprivileged bool `json:"unprivileged" key:"unprivileged" yaml:"unprivileged" mapstructure:"unprivileged" env_aliases:"CEDANA_SLURM_UNPRIVILEGED"`
 	}
 
 	Connection struct {
@@ -56,7 +68,13 @@ type (
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 		// Streams specifies the number of parallel streams to use when checkpointing.
+		// Default is 0 for no streaming, a minimum of 2 is required otherwise.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
+		// The amount of memory streamer is allowed to use (in MB)
+		StreamMemoryLimit uint64 `json:"stream_memory_limit" key:"stream_memory_limit" yaml:"stream_memory_limit" mapstructure:"stream_memory_limit"`
+		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
+		// checkpoint request to return early.
+		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
 	}
 
 	DB struct {
@@ -69,6 +87,8 @@ type (
 	Profiling struct {
 		// Enabled sets whether to enable and show profiling information
 		Enabled bool `json:"enabled" key:"enabled" yaml:"enabled" mapstructure:"enabled"`
+		// Detailed sets whether to show detailed profiling information
+		Detailed bool `json:"detailed" key:"detailed" yaml:"detailed" mapstructure:"detailed"`
 		// Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
 		Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
 	}
@@ -85,6 +105,8 @@ type (
 		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
 		// ManageCgroups sets the default cgroup C/R mode for CRIU (default, cg_none, props, soft, full, strict, ignore)
 		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
+		// LogLevel sets the default log level for CRIU (2 - errors, 3 - warnings, 4 - debug)
+		LogLevel int32 `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
 	}
 
 	GPU struct {
@@ -94,16 +116,14 @@ type (
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 		// SockDir is the directory to use for the GPU sockets
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
-		// Track metrics associated with observability
-		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
-		// FreezeType is the type of freeze to use for GPU processes (IPC, NCCL)
-		FreezeType string `json:"freeze_type" key:"freeze_type" yaml:"freeze_type" mapstructure:"freeze_type"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 		// LdLibPath holds any additional directories to search for GPU libraries
 		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
+		// SkipNvidiaRuntimeHook always skips the nvidia-container-runtime-hook when spawning GPU containers
+		SkipNvidiaRuntimeHook bool `json:"skip_nvidia_runtime_hook" key:"skip_nvidia_runtime_hook" yaml:"skip_nvidia_runtime_hook" mapstructure:"skip_nvidia_runtime_hook"`
 	}
 
 	Plugins struct {

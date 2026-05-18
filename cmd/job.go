@@ -48,7 +48,6 @@ func init() {
 	rootCmd.AddCommand(utils.AliasOf(listJobCmd, "jobs"))
 	rootCmd.AddCommand(utils.AliasOf(deleteJobCmd))
 	rootCmd.AddCommand(utils.AliasOf(killJobCmd))
-	rootCmd.AddCommand(utils.AliasOf(inspectJobCmd))
 	rootCmd.AddCommand(utils.AliasOf(jobCheckpointCmd))
 	rootCmd.AddCommand(utils.AliasOf(listJobCheckpointCmd, "checkpoints"))
 }
@@ -113,6 +112,12 @@ var listJobCmd = &cobra.Command{
 		tableWriter := table.NewWriter()
 		tableWriter.SetStyle(style.TableStyle)
 		tableWriter.SetOutputMirror(os.Stdout)
+		tableWriter.SetColumnConfigs([]table.ColumnConfig{
+			{Name: "PID", Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
+			{Name: "Size", Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
+			{Name: "Checkpoint", Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
+			{Name: "Log", Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
+		})
 
 		tableWriter.AppendHeader(table.Row{
 			"Job",

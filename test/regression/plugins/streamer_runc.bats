@@ -36,16 +36,19 @@ teardown_file() {
 @test "stream dump container" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    runc run --bundle "$bundle" "$id" &
+    runc run --bundle "$bundle" "$id" --pid-file "$pid_file" &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
-    run cedana dump runc "$id" --streams 1 --compression none
+    run cedana dump runc "$id" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
 
     run runc kill "$id" KILL
     run runc delete "$id"
@@ -60,7 +63,7 @@ teardown_file() {
 
     run cedana dump runc "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -78,7 +81,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -90,14 +93,16 @@ teardown_file() {
 @test "stream dump container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" --attach &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -113,16 +118,19 @@ teardown_file() {
 @test "stream restore container" {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    runc run --bundle "$bundle" "$id" &
+    runc run --bundle "$bundle" "$id" --pid-file "$pid_file" &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
-    run cedana dump runc "$id" --streams 1 --compression none
+    run cedana dump runc "$id" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
 
     cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
 
@@ -139,7 +147,7 @@ teardown_file() {
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -153,14 +161,16 @@ teardown_file() {
 @test "stream restore container (new job, attached)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    cedana run runc --bundle "$bundle" --jid "$jid" --attach &
+    cedana run runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" --attach &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     run cedana dump job "$jid" --streams 2 --compression none
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
     assert_exists "$dump_file/img-1"
@@ -175,16 +185,18 @@ teardown_file() {
     id=$(unix_nano)
     jid=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
+    pid_file="/tmp/$(unix_nano).pid"
 
-    runc run --bundle "$bundle" "$id" &
+    runc run --bundle "$bundle" "$id" --pid-file "$pid_file" &
 
-    sleep 2
+    wait_for_file "$pid_file"
+    sleep 1
 
     cedana manage runc "$id" --jid "$jid" --bundle "$bundle"
 
     run cedana dump job "$jid"
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
 
     cedana restore job "$jid"

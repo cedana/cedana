@@ -14,11 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Force the PID to be attached to the GPU controller, even if it's a non-GPU process.
-// If false, each GPU controller only appears as busy once the intercepted process makes its first CUDA call.
-// Setting this true will force a GPU controller to remain attached to even for non-GPU processes.
-const FORCE_ATTACH = true
-
 // Implements a simple GPU manager that spawns GPU controllers on-demand
 type ManagerSimple struct {
 	controllers pool
@@ -72,7 +67,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		case controller.AttachedPID, ok = <-pid:
 		}
 
-		if ok && FORCE_ATTACH {
+		if ok {
 			err = controller.Attach(context.WithoutCancel(ctx), controller.AttachedPID)
 			if err != nil {
 				log.Debug().Err(err).Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("failed to forcefully attach GPU controller (FORCE_ATTACH is true)")
@@ -156,19 +151,17 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(id string, freezeType ...gpu.FreezeType) *criu.NotifyCallback {
-	return m.controllers.CRIUCallback(id, freezeType...)
+func (m *ManagerSimple) CRIUCallback(id string) *criu.NotifyCallback {
+	return m.controllers.CRIUCallback(id)
 }
 
-func (m *ManagerSimple) Freeze(ctx context.Context, pid uint32, freezeType ...gpu.FreezeType) error {
+func (m *ManagerSimple) Freeze(ctx context.Context, pid uint32) error {
 	controller := m.controllers.Find(pid)
 	if controller == nil {
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
 	}
 
-	freezeType = append(freezeType, CONTROLLER_DEFAULT_FREEZE_TYPE)
-
-	_, err := controller.Freeze(ctx, &gpu.FreezeReq{Type: freezeType[0]})
+	_, err := controller.Freeze(ctx, &gpu.FreezeReq{})
 	return err
 }
 

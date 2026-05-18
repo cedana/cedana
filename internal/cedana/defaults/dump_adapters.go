@@ -42,6 +42,7 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 
 		req.Criu.NotifyScripts = proto.Bool(true)
 		req.Criu.EvasiveDevices = proto.Bool(true)
+		req.Criu.ExtMasters = proto.Bool(true)
 
 		return next(ctx, opts, resp, req)
 	}

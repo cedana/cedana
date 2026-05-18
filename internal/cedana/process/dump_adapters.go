@@ -154,9 +154,9 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		mountIds := make(map[uint64]any)
+		mounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			mountIds[m.ID] = nil
+			mounts[m.ID] = nil
 			return true
 		})
 
@@ -168,14 +168,20 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
-			_, internal := mountIds[f.MountID]
+			_, mountFound := mounts[f.MountID]
 
-			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
+			// A file is external if it's from outside the process's mount namespace.
+			// Pipes, sockets, and anon_inodes are internal (not real files from external mounts).
+			// A file is external only if its mount ID is not in the process's mount table AND it's a real file.
+			internal := mountFound || isPipe || isSocket || isAnon
+			external := !internal
 
 			if external {
 				if f.IsTTY {
+					log.Trace().Str("path", f.Path).Uint64("rdev", f.Rdev).Uint64("dev", f.Dev).Msg("marking TTY file as external")
 					req.Criu.External = append(req.Criu.External, fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev))
 				} else {
+					log.Trace().Str("path", f.Path).Uint64("mount_id", f.MountID).Uint64("inode", f.Inode).Msg("marking file as external")
 					req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
 				}
 			}

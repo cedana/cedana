@@ -42,14 +42,36 @@ teardown_file() {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    watch_logs "$jid"
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+
+    run cedana job kill "$jid"
+}
+
+# bats test_tags=dump,hostmem
+@test "[$GPU_INFO] stream dump GPU process (vector add hostmem)" {
+    skip "until CED-1945 is fixed"
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add_host
+    watch_logs "$jid"
+
+    sleep 1
+
+    run cedana dump job "$jid" --streams 2
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     run cedana job kill "$jid"
 }
@@ -59,12 +81,13 @@ teardown_file() {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    watch_logs "$jid"
 
     sleep 1
 
     run cedana dump job "$jid" --streams 4
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
@@ -83,16 +106,48 @@ teardown_file() {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    watch_logs "$jid"
 
     sleep 1
 
-    run cedana dump job "$jid" --streams 1
+    run cedana dump job "$jid" --streams 2
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
 
     cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 1
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+}
+
+# bats test_tags=restore,hostmem
+@test "[$GPU_INFO] stream restore GPU process (vector add hostmem)" {
+    skip "until CED-1945 is fixed"
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add_host
+    watch_logs "$jid"
+
+    sleep 1
+
+    run cedana dump job "$jid" --streams 2
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+    assert_exists "$dump_file/img-0.gz"
+    assert_exists "$dump_file/img-1.gz"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
 
     sleep 1
 
@@ -108,12 +163,13 @@ teardown_file() {
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    watch_logs "$jid"
 
     sleep 1
 
     run cedana dump job "$jid" --streams 4
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"
@@ -121,6 +177,7 @@ teardown_file() {
     assert_exists "$dump_file/img-3.gz"
 
     cedana restore job "$jid"
+    watch_logs "$jid"
 
     sleep 1
 
@@ -131,18 +188,19 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-# bats test_tags=restore,daemonless
+# bats test_tags=restore,serverless
 @test "[$GPU_INFO] stream restore GPU process (mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     pid_file=/tmp/pid-$jid
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    watch_logs "$jid"
 
     sleep 1
 
     run cedana dump job "$jid" --streams 4
     assert_success
-    dump_file=$(echo "$output" | awk '{print $NF}')
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0.gz"
     assert_exists "$dump_file/img-1.gz"

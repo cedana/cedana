@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"regexp"
@@ -18,6 +19,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -27,8 +29,6 @@ import (
 func Restore(gpus Manager) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-			next = next.With(InheritFilesForRestore)
-
 			state := resp.GetState()
 
 			if !state.GPUEnabled {
@@ -60,6 +60,8 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 				}
 			}
 
+			next = next.With(InheritFilesForRestore, AddMountsForRestore)
+
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
 
@@ -86,41 +88,57 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.InvalidArgument, "missing state. it should have been set by the adapter")
 		}
 
-		extraFiles, _ := ctx.Value(keys.EXTRA_FILES_CONTEXT_KEY).([]*os.File)
-		inheritFdMap, _ := ctx.Value(keys.INHERIT_FD_MAP_CONTEXT_KEY).(map[string]int32)
-
 		if req.Criu == nil {
 			req.Criu = &criu.CriuOpts{}
 		}
 
-		key := strings.TrimPrefix(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, state.GPUID), "/")
-		fd := int32(3 + len(extraFiles))
+		var toClose []*os.File
+		var logDir string
+		var isContainer bool
+		shmFileRegex := regexp.MustCompile(CONTROLLER_SHM_FILE_PATTERN)
 
-		if _, ok := inheritFdMap[key]; ok {
+		mounts := make(map[uint64]any)
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+			// If the shm file appears in the mounts, it means this restore is for a container
+			isContainer = isContainer || shmFileRegex.MatchString(m.MountPoint)
+
+			mounts[m.ID] = nil
+			return true
+		})
+
+		key := strings.TrimPrefix(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, state.GPUID), "/")
+		fd := int32(3 + len(opts.ExtraFiles))
+
+		if _, ok := opts.InheritFdMap[key]; ok {
 			return nil, status.Errorf(codes.FailedPrecondition, "controller shm file already inherited")
 		}
-		inheritFdMap[key] = fd
+		opts.InheritFdMap[key] = fd
 
 		id, ok := ctx.Value(keys.GPU_ID_CONTEXT_KEY).(string)
-		if ok {
-			// Open new GPU shm file
+		if !ok {
+			return nil, status.Errorf(codes.Internal, "failed to get GPU ID from context")
+		}
+
+		// Open new GPU shm file only if not restoring a container because for container restore we expect the shm file to be
+		// bind-mounted from the host at the same path inside the container (CED-2077)
+		if !isContainer {
+			log.Debug().Str("key", key).Str("path", fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id)).Int32("fd", fd).Msg("opening GPU file for inheriting")
 			shmFile, err := os.OpenFile(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id), os.O_RDWR, 0o644)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to open GPU shm file: %v", err)
 			}
-			defer shmFile.Close()
+			toClose = append(toClose, shmFile)
 
-			extraFiles = append(extraFiles, shmFile)
+			log.Debug().Str("key", key).Str("new", fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id)).Int32("fd", fd).Msg("inheriting GPU file")
+
+			opts.ExtraFiles = append(opts.ExtraFiles, shmFile)
 			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
 				Fd:  proto.Int32(fd),
 				Key: proto.String(key),
 			})
 		}
 
-		var toClose []*os.File
-		var logDir string
-
-		// Inherit hostmem files as well, if any
+		// Inherit other known GPU files as well, if any
 		utils.WalkTree(state, "OpenFiles", "Children", func(file *daemon.File) bool {
 			path := file.Path
 
@@ -128,9 +146,16 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			var newFile *os.File
 			var pid int
 
+			isPipe := strings.HasPrefix(file.Path, "pipe")
+			isSocket := strings.HasPrefix(file.Path, "socket")
+			isAnon := strings.HasPrefix(file.Path, "anon_inode")
+			_, internal := mounts[file.MountID]
+
+			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
+
 			hostmemRegex := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
-			interceptorLogRegex := regexp.MustCompile(fmt.Sprintf(INTERCEPTOR_LOG_FILE_PATTERN, config.Global.GPU.LogDir))
-			tracerLogRegex := regexp.MustCompile(fmt.Sprintf(TRACER_LOG_FILE_PATTERN, config.Global.GPU.LogDir))
+			interceptorLogRegex := regexp.MustCompile(INTERCEPTOR_LOG_FILE_PATTERN)
+			tracerLogRegex := regexp.MustCompile(TRACER_LOG_FILE_PATTERN)
 
 			if matches := hostmemRegex.FindStringSubmatch(path); id != "" && len(matches) == 3 {
 				pid, err = strconv.Atoi(matches[2])
@@ -139,9 +164,59 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 				newPath = fmt.Sprintf(CONTROLLER_HOSTMEM_FILE_FORMATTER, id, pid)
-			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 3 {
-				oldId := matches[1]
-				pid, err = strconv.Atoi(matches[2])
+
+				var size uint64
+
+				// Try to find matching hostmem metadata file
+				matches, err := afero.Glob(opts.DumpFs, "gpu-hostmem-metadata-*")
+				if err == nil {
+					for _, filename := range matches {
+						file, openErr := opts.DumpFs.Open(filename)
+						if openErr != nil {
+							continue
+						}
+
+						sizeBuffer := make([]byte, 8)
+						_, readErr := file.Read(sizeBuffer)
+						file.Close()
+						if readErr != nil && readErr.Error() != "EOF" {
+							continue
+						}
+
+						size = binary.LittleEndian.Uint64(sizeBuffer[0:8])
+						log.Debug().Str("file", filename).Uint64("size", size).Msg("found matching hostmem checkpoint file")
+						break
+					}
+				}
+
+				// Create hostmem file in host path (not using inherit FD)
+				hostmemFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+				if createErr != nil {
+					err = status.Errorf(codes.Internal, "failed to create hostmem file %s: %v", newPath, createErr)
+					return false
+				}
+				defer hostmemFile.Close()
+
+				chmodErr := os.Chmod(newPath, 0o666)
+				if chmodErr != nil {
+					err = status.Errorf(codes.Internal, "failed to chmod hostmem file %s: %v", newPath, chmodErr)
+					return false
+				}
+
+				// Truncate to the correct size
+				if size > 0 {
+					truncErr := hostmemFile.Truncate(int64(size))
+					if truncErr != nil {
+						err = status.Errorf(codes.Internal, "failed to truncate hostmem file %s to size %d: %v", newPath, size, truncErr)
+						return false
+					}
+					log.Debug().Str("path", newPath).Uint64("size", size).Msg("created and truncated hostmem file in host path")
+				} else {
+					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
+				}
+			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
+				oldId := matches[2]
+				pid, err = strconv.Atoi(matches[3])
 				if err != nil {
 					err = status.Errorf(codes.Internal, "failed to parse PID from interceptor log file path %s: %v", path, err)
 					return false
@@ -149,15 +224,19 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(INTERCEPTOR_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
-			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 3 {
-				oldId := matches[1]
-				pid, err = strconv.Atoi(matches[2])
+			} else if matches := tracerLogRegex.FindStringSubmatch(path); len(matches) == 4 {
+				oldId := matches[2]
+				pid, err = strconv.Atoi(matches[3])
 				if err != nil {
 					err = status.Errorf(codes.Internal, "failed to parse PID from tracer log file path %s: %v", path, err)
 					return false
@@ -165,35 +244,51 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				if id == "" {
 					id = oldId
 				}
-				logDir, err = EnsureLogDir(id, req.UID, req.GID)
-				if err != nil {
-					err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
-					return false
+				if config.Global.GPU.LogDir != "" {
+					logDir, err = EnsureLogDir(id, req.UID, req.GID)
+					if err != nil {
+						err = status.Errorf(codes.Internal, "failed to recreate log directory %s: %v", logDir, err)
+						return false
+					}
+					newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
+				} else {
+					newPath = os.DevNull
 				}
-				newPath = fmt.Sprintf(TRACER_LOG_FILE_FORMATTER, config.Global.GPU.LogDir, id, pid)
 			} else {
 				return true // not a file we care about
 			}
 
+			log.Debug().Str("path", path).Str("newPath", newPath).Msg("opening GPU file for inheriting")
 			newFile, err = os.OpenFile(newPath, os.O_RDWR|os.O_CREATE, 0o644)
 			if err != nil {
 				err = status.Errorf(codes.Internal, "failed to reopen file for inheriting FD %s: %v", newPath, err)
 				return false
 			}
+			toClose = append(toClose, newFile)
 
-			key = strings.TrimPrefix(path, "/")
-			fd = int32(3 + len(extraFiles))
+			if external {
+				key = fmt.Sprintf("file[%x:%x]", file.MountID, file.Inode)
+			} else {
+				key = strings.TrimPrefix(path, "/")
+			}
+			fd = int32(3 + len(opts.ExtraFiles))
 
-			if _, ok := inheritFdMap[key]; ok {
+			if _, ok := opts.InheritFdMap[key]; ok {
 				return true // already inherited
 			}
-			inheritFdMap[key] = fd
-			extraFiles = append(extraFiles, newFile)
-			toClose = append(toClose, newFile)
-			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
-				Key: proto.String(key),
-				Fd:  proto.Int32(fd),
-			})
+			opts.InheritFdMap[key] = fd
+
+			// Open new GPU shm file only if not restoring a container because for container restore we expect the shm file to be
+			// bind-mounted from the host at the same path inside the container (CED-2077)
+			if !isContainer {
+				log.Debug().Str("key", key).Int32("fd", fd).Bool("external", external).Str("old", path).Str("new", newPath).Msgf("inheriting GPU file")
+
+				opts.ExtraFiles = append(opts.ExtraFiles, newFile)
+				req.Criu.InheritFd = append(req.Criu.InheritFd, &criu.InheritFd{
+					Key: proto.String(key),
+					Fd:  proto.Int32(fd),
+				})
+			}
 
 			return true
 		})
@@ -206,9 +301,30 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			return nil, err
 		}
 
-		ctx = context.WithValue(ctx, keys.EXTRA_FILES_CONTEXT_KEY, extraFiles)
-		ctx = context.WithValue(ctx, keys.INHERIT_FD_MAP_CONTEXT_KEY, inheritFdMap)
 		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+// Adapter that tells CRIU about the external GPU mounts.
+func AddMountsForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"missing state. at least PID is required in resp.state",
+			)
+		}
+
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
+				log.Debug().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.Root))
+			}
+			return true
+		})
 
 		return next(ctx, opts, resp, req)
 	}
