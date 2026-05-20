@@ -191,9 +191,14 @@ EOF
 
     # only append if not already present
     if ! grep -q 'runtimes."cedana"' "$RKE2_CONFIG"; then
-        cat <<'EOF' | sudo tee -a "$RKE2_CONFIG" >/dev/null
+        if [ "$CONTAINERD_VERSION" = "2" ]; then
+            PLUGIN_KEY='io.containerd.grpc.v1.cri'
+        else
+            PLUGIN_KEY='io.containerd.cri.v1.runtime'
+        fi
+        cat <<EOF | sudo tee -a "$RKE2_CONFIG" >/dev/null
 
-[plugins."io.containerd.cri.v1.runtime".containerd.runtimes."cedana"]
+[plugins."${PLUGIN_KEY}".containerd.runtimes."cedana"]
   runtime_type = "io.containerd.runc.v2"
   runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 EOF
