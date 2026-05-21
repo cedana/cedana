@@ -15,4 +15,3 @@ rm -rf /host/dev/shm/*cedana*
 # Remove all binaries and libraries from the host's filesystem
 rm -f /host/usr/local/lib/*cedana*
 rm -f /host/usr/local/bin/*cedana*
-rm -f /host/tmp/rke2-restarted
