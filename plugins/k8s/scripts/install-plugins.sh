@@ -193,7 +193,7 @@ EOF
     if ! grep -q 'runtimes."cedana"' "$RKE2_CONFIG"; then
         cat <<EOF | sudo tee -a "$RKE2_CONFIG" >/dev/null
 
-[plugins.io.containerd.grpc.v1.cri.containerd.runtimes."cedana"]
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
   runtime_type = "io.containerd.runc.v2"
   runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 EOF
