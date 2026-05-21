@@ -16,7 +16,7 @@ load_lib support
 load_lib assert
 load_lib file
 
-SAMPLES_SCRIPT="/cedana-samples/scripts/run-cuda-samples-tests.sh"
+SAMPLES_SCRIPT="/cedana-samples/gpu_smr/cuda-samples/run-tests.sh"
 
 setup_file() {
     if ! cmd_exists nvidia-smi; then
