@@ -18,10 +18,6 @@ fi
 # Download and install Cedana #
 ###############################
 
-if [[ "$EUID" -ne 0 ]]; then
-    echo "Error: This script must be run as root" >&2
-    exit 1
-fi
 if [[ -z "${CEDANA_URL:-}" ]]; then
     echo "Error: CEDANA_URL environment variable is not set" >&2
     exit 1

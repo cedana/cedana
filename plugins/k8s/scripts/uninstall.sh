@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-check_root
-
 # Remove config
 rm -rf /host/etc/cedana
 

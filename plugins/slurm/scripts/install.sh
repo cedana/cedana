@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-check_root
-
 # NOTE: This is called from a Cedana binary so assuming it's already installed
 
 # Merge new config defaults without overwriting existing user config values

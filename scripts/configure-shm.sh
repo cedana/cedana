@@ -9,8 +9,6 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
-check_root
-
 # Configure /dev/shm size
 # This script increases the shared memory size
 
