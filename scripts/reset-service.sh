@@ -9,8 +9,6 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
-check_root
-
 # check if systemd is available and running
 if ! systemctl status &>/dev/null; then
     pkill -f "$APP_PATH daemon start" || true

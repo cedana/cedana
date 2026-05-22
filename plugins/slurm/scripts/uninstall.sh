@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-check_root
-
 cedana-slurm cleanup || true
 
 # Remove config
