@@ -79,4 +79,4 @@ if [ "$CEDANA_SLURM_NODE_ROLE" = "login" ]; then
     exit 0
 fi
 
-cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
+${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
