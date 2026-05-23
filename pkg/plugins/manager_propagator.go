@@ -38,9 +38,11 @@ type PropagatorManager struct {
 }
 
 func NewPropagatorManager(connection config.Connection, compatibility string) *PropagatorManager {
-	downloadDir := filepath.Join(os.TempDir(), "cedana", "downloads")
-	os.RemoveAll(downloadDir) // cleanup existing downloads
-	os.MkdirAll(downloadDir, DOWNLOAD_DIR_PERMS)
+	downloadDir, err := os.UserHomeDir()
+	if err != nil {
+		downloadDir = os.TempDir()
+	}
+	downloadDir = filepath.Join(downloadDir, "downloads")
 
 	localManager := NewLocalManager()
 	builds := config.Global.Plugins.Builds
