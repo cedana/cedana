@@ -44,6 +44,9 @@ func NewPropagatorManager(connection config.Connection, compatibility string) *P
 	}
 	downloadDir = filepath.Join(downloadDir, "downloads")
 
+	os.RemoveAll(downloadDir) // cleanup existing downloads
+	os.MkdirAll(downloadDir, DOWNLOAD_DIR_PERMS)
+
 	localManager := NewLocalManager()
 	builds := config.Global.Plugins.Builds
 
