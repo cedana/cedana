@@ -16,10 +16,10 @@ if [ "${DISABLE_IO_URING:-false}" = "true" ]; then
         if sysctl -w kernel.io_uring_disabled=2; then
             echo "IO Uring disabled successfully (kernel.io_uring_disabled=2)"
         else
-            echo "ERROR: Failed to set kernel.io_uring_disabled=2 (sysctl command failed)"
+            echo "ERROR: Failed to set kernel.io_uring_disabled=2 (sysctl command failed)" >&2
         fi
     else
-        echo "ERROR: Cannot disable IO Uring - kernel.io_uring_disabled sysctl parameter not found"
-        echo "This kernel may not support io_uring or the parameter is not available"
+        echo "ERROR: Cannot disable IO Uring - kernel.io_uring_disabled sysctl parameter not found" >&2
+        echo "This kernel may not support io_uring or the parameter is not available" >&2
     fi
 fi
