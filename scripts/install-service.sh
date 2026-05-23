@@ -31,8 +31,8 @@ cat <<EOF | tee "$SERVICE_FILE" >/dev/null
 Description=Cedana Daemon
 [Service]
 ExecStart=$APP_PATH daemon start
-User=root
-Group=root
+User=$UID
+Group=$GID
 Restart=no
 
 [Install]
