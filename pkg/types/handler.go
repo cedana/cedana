@@ -128,3 +128,12 @@ func GID[REQ any](req *REQ) uint32 {
 		panic("unsupported type for GID extraction")
 	}
 }
+
+func IsRestore[REQ any](req *REQ) bool {
+	switch any(req).(type) {
+	case *daemon.RestoreReq:
+		return true
+	default:
+		return false
+	}
+}

@@ -42,6 +42,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		pluginRestoreMiddleware, // middleware from plugins
 
 		process.InheritFilesForRestore,
+		process.AddExternalMountsForRestore,
 		process.SetupIO[daemon.RestoreReq, daemon.RestoreResp],
 		criu.CheckOptsForRestore,
 	}

@@ -42,6 +42,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		process.FillProcessStateForDump,
 		process.DetectIOUringForDump,
 		process.AddExternalFilesForDump,
+		process.AddExternalMountsForDump,
 		network.DetectNetworkOptionsForDump,
 		gpu.Dump(s.gpus),
 
