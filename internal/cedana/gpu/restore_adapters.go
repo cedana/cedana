@@ -328,7 +328,7 @@ func AddMountsForRestore(next types.Restore) types.Restore {
 				if resolvedSource, ok := resolvedMountSources[m.ID]; ok {
 					source = resolvedSource
 				}
-				log.Debug().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
+				log.Debug().Str("root", source).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
 				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, source))
 			}
 			return true
