@@ -60,7 +60,7 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 				}
 			}
 
-			next = next.With(InheritFilesForRestore)
+			next = next.With(InheritFilesForRestore, AddMountsForRestore)
 
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
@@ -302,6 +302,29 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		}
 
 		ctx = context.WithValue(ctx, keys.GPU_LOG_DIR_CONTEXT_KEY, logDir)
+
+		return next(ctx, opts, resp, req)
+	}
+}
+
+// Adapter that tells CRIU about the external GPU mounts.
+func AddMountsForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		state := resp.GetState()
+		if state == nil {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"missing state. at least PID is required in resp.state",
+			)
+		}
+
+		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
+				log.Debug().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.Root))
+			}
+			return true
+		})
 
 		return next(ctx, opts, resp, req)
 	}

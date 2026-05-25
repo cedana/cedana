@@ -96,6 +96,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		pluginRestoreMiddleware, // middleware from plugins
 
 		process.InheritFilesForRestore,
+		process.AddExternalMountsForRestore,
 		process.SetupIO[daemon.RestoreReq, daemon.RestoreResp],
 		criu.CheckOptsForRestore,
 	}

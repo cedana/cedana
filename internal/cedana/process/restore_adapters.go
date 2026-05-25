@@ -253,6 +253,8 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 func AddExternalMountsForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[]:%s", "ms"))
+		req.Criu.SetAutoExtMnt(true)
+		req.Criu.SetExtMasters(true)
 		return next(ctx, opts, resp, req)
 	}
 }

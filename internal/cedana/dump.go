@@ -86,6 +86,7 @@ func (s *Cedana) Dump(req *daemon.DumpReq) (*daemon.DumpResp, error) {
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
+		process.AddExternalMountsForDump,
 
 		pluginDumpStorage,    // detects and plugs in the storage to use
 		pluginDumpMiddleware, // middleware from plugins
