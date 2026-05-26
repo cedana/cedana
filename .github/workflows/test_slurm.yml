@@ -273,12 +273,13 @@ jobs:
     name: Slurm
     needs: slurm-ansible
     runs-on: ${{ format(
-      'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}/extras=s3-cache',
+      'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}-{5}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'GPU' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
       (matrix.compute == 'GPU' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
-      matrix.storage
+      matrix.storage,
+      matrix.nfs
       ) }}
     timeout-minutes: 120
     strategy:
@@ -291,6 +292,9 @@ jobs:
           - storage/cedana
         arch:
           - amd64
+        nfs:
+          - root_squash
+          - no_root_squash
         exclude:
           - compute: GPU
             arch: arm64
@@ -470,6 +474,7 @@ jobs:
           CEDANA_PLUGINS_BUILDS: alpha
           GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
           LOGIN_NODES: '1'
+          NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -667,7 +672,7 @@ jobs:
             repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, ${{ matrix.arch }})"
+            testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, ${{ matrix.arch }}, ${{ matrix.nfs }})"
 
       - name: Set sanitized storage
         if: always()
@@ -682,7 +687,7 @@ jobs:
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-slurm-${{ env.STORAGE }}-${{ matrix.compute }}
+          name: test-report-${{ matrix.arch }}-slurm-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.nfs }}
           path: |
             /tmp/report*.json
 
@@ -690,7 +695,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: slurm-debug-logs-${{ matrix.arch }}-${{ env.STORAGE }}-${{ matrix.compute }}
+          name: slurm-debug-logs-${{ matrix.arch }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.nfs }}
           path: |
             /tmp/slurm-debug/**
           if-no-files-found: warn
