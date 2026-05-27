@@ -16,10 +16,12 @@ slurm_submit_job() {
     rel_path="${sbatch_file#*/slurm/}"
     container_dir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
     container_file="$(basename "$rel_path")"
-    info_log "Submitting: cd $container_dir && sbatch $container_file"
+    local submission_host
+    submission_host="$(slurm_submission_container)"
+    info_log "Submitting from $submission_host: cd $container_dir && sbatch $container_file"
 
     local output
-    if ! output=$(slurm_exec bash -c \
+    if ! output=$(slurm_submit_exec bash -c \
         "cd '$container_dir' && sbatch --parsable --overcommit \
          --export=ALL,CEDANA_ENABLE=${cedana_enable},CEDANA_BIN=${cedana_bin} \
          --cpus-per-task=1 --mem=0 '$container_file'" 2>&1); then
@@ -466,6 +468,15 @@ test_slurm_job() {
             info_log "Cancelling job $job_id before restore..."
             cancel_slurm_job "$job_id"
             sleep 2
+
+            for c in $(_slurm_compute_containers); do
+                docker exec "$c" bash -c '
+                    for mp in /usr/local/bin /usr/local/lib /usr/local/src /usr/lib/slurm; do
+                        mountpoint -q "$mp" 2>/dev/null && umount -l "$mp" 2>/dev/null
+                    done
+                    mount -a 2>/dev/null
+                ' 2>/dev/null || true
+            done
 
             local new_job_id=""
             local detect_timeout=40

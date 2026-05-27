@@ -83,7 +83,7 @@ jobs:
           - amd64
           - arm64
     container:
-      image: golang:1.25rc3-bullseye
+      image: golang:1.25-bookworm
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}

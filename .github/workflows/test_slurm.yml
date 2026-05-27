@@ -61,8 +61,217 @@ env:
   DEBUG: ${{ vars.DEBUG_SLURM }}
 
 jobs:
+  slurm-ansible:
+    name: Slurm (Ansible)
+    runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
+    timeout-minutes: 60
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
+    steps:
+      - uses: runs-on/action@v1
+
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana-amd64
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: plugin-amd64*
+          merge-multiple: true
+
+      - name: Download CRIU
+        uses: actions/download-artifact@v4
+        with:
+          name: criu-amd64
+
+      - name: Download slurm binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: slurm-amd64
+          path: slurm-bin
+
+      - name: Extract cedana-slurm
+        run: mv slurm-bin/cedana-slurm cedana-slurm
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Pre-install plugins
+        env:
+          CEDANA_PLUGINS_BUILDS: alpha
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+          mkdir -p /tmp/cedana-preflight-bin
+          cp ./cedana /tmp/cedana-preflight-bin/cedana
+          cp ./criu /tmp/cedana-preflight-bin/criu
+          sudo cp ./cedana /usr/local/bin/cedana
+          sudo -E cedana plugin install \
+            criu \
+            runc \
+            storage/cedana
+
+      - name: Install slurm binaries
+        run: |
+          chmod +x slurm-bin/build/cedana-slurm
+          sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
+          sudo cp slurm-bin/build/spank_cedana.so /usr/local/lib/spank_cedana.so
+          sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
+          sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
+          sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
+          test -f ./libcedana-slurm.so
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana slurm setup --node-role worker
+
+      - name: Install ansible and Docker CLI
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            docker.io ansible python3-docker
+          ansible-galaxy collection install community.docker 2>/dev/null || true
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup SLURM cluster
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
+          CRIU_BIN: /tmp/cedana-preflight-bin/criu
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          CEDANA_PLUGINS_BUILDS: alpha
+          GPU: '0'
+          LOGIN_NODES: '1'
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          setup_slurm_cluster
+          install_cedana_in_slurm
+
+      - name: Run ANSIBLE tests
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: '0'
+          # Set so setup_suite skips its own cluster setup
+          SLURM_CLUSTER_ID: ansible-test
+        run: |
+          set +e
+          make test-slurm \
+            TAGS=slurm,ansible \
+            GPU=0 \
+            FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=1
+          test_exit_code=$?
+          set -e
+
+          if [ -f /tmp/report.xml ]; then
+            tests=$(grep -o '<testcase[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            failures=$(grep -o '<failure[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            errors=$(grep -o '<error[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            skipped=$(grep -o '<skipped[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            passed=$((tests - failures - errors - skipped))
+            [ "$passed" -lt 0 ] && passed=0
+            summary="Ansible tests: ${passed}/${tests} passed, ${failures} failed, ${errors} errored, ${skipped} skipped"
+            echo "$summary"
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "Ansible tests: report.xml not found"
+          fi
+
+          exit "$test_exit_code"
+
+      - name: Collect SLURM debug logs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_DIR="/tmp/slurm-debug"
+          mkdir -p "$ARTIFACT_DIR"
+
+          docker ps -a >"$ARTIFACT_DIR/docker-ps-a.txt" 2>&1 || true
+          docker network ls >"$ARTIFACT_DIR/docker-network-ls.txt" 2>&1 || true
+
+          mapfile -t SLURM_CONTAINERS < <(docker ps -a --format '{{.Names}}' | grep -E '^slurm-(controller|compute-[0-9]+|login-[0-9]+)$' || true)
+
+          for c in "${SLURM_CONTAINERS[@]}"; do
+            cdir="$ARTIFACT_DIR/$c"
+            mkdir -p "$cdir"
+            docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
+            docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
+            docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
+            docker exec "$c" findmnt -t nfs4 --noheadings >"$cdir/nfs-mounts.txt" 2>&1 || true
+            for f in /etc/slurm/slurm.conf /etc/slurm/cgroup.conf /etc/slurm/plugstack.conf \
+                     /var/log/slurm/slurmctld.log /var/log/slurm/slurmd.log /var/log/munge/munged.log; do
+              if docker exec "$c" test -f "$f" 2>/dev/null; then
+                docker cp "$c:$f" "$cdir/$(basename "$f")" 2>/dev/null || true
+              fi
+            done
+          done
+
+      - name: Setup node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate report
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report.xml" -t bats -o /tmp/report.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Slurm (Ansible, amd64)"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-amd64-slurm-ansible
+          path: |
+            /tmp/report*.json
+
+      - name: Upload SLURM debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slurm-debug-logs-amd64-ansible
+          path: |
+            /tmp/slurm-debug/**
+          if-no-files-found: warn
+
   slurm:
     name: Slurm
+    needs: slurm-ansible
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}/extras=s3-cache',
       github.run_id,
@@ -164,6 +373,9 @@ jobs:
           chmod +x ./cedana*
           chmod +x ./criu
           echo "$PWD" >> $GITHUB_PATH
+          mkdir -p /tmp/cedana-preflight-bin
+          cp ./cedana /tmp/cedana-preflight-bin/cedana
+          cp ./criu /tmp/cedana-preflight-bin/criu
           sudo cp ./cedana /usr/local/bin/cedana
           sudo -E cedana plugin install \
             criu \
@@ -184,7 +396,7 @@ jobs:
           sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
           test -f ./libcedana-slurm.so
           CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
-          CEDANA_PLUGINS_BUILDS=local sudo -E cedana slurm setup
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana slurm setup --node-role worker
 
       - name: Capture preflight binary metadata
         shell: bash
@@ -251,11 +463,13 @@ jobs:
         shell: bash
         env:
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
-          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
+          CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           CEDANA_PLUGINS_BUILDS: alpha
           GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+          LOGIN_NODES: '1'
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -310,7 +524,7 @@ jobs:
           LARGE: ${{ inputs.large && '1' || '0' }}
           PARALLELISM: ${{ matrix.compute == 'GPU' && 1 || inputs.parallelism }}
         run: |
-          TAGS="slurm"
+          TAGS="slurm,!ansible"
           if [ "$GPU" = "1" ]; then
             TAGS="${TAGS},gpu"
           else
@@ -387,7 +601,7 @@ jobs:
           docker ps -a >"$ARTIFACT_DIR/docker-ps-a.txt" 2>&1 || true
           docker network ls >"$ARTIFACT_DIR/docker-network-ls.txt" 2>&1 || true
 
-          mapfile -t SLURM_CONTAINERS < <(docker ps -a --format '{{.Names}}' | grep -E '^slurm-(controller|compute-[0-9]+)$' || true)
+          mapfile -t SLURM_CONTAINERS < <(docker ps -a --format '{{.Names}}' | grep -E '^slurm-(controller|compute-[0-9]+|login-[0-9]+)$' || true)
 
           if [ "${#SLURM_CONTAINERS[@]}" -eq 0 ]; then
             echo "No slurm containers found" >"$ARTIFACT_DIR/no-slurm-containers.txt"
@@ -427,11 +641,12 @@ jobs:
             fi
 
             docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
-            docker exec "$c" sh -c 'sample_root="$0"; if [ -d "$sample_root" ]; then find "$sample_root" -maxdepth 3 -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true; fi' "$SAMPLE_ROOT" >"$cdir/slurm-output-files.txt" 2>&1 || true
+            docker exec "$c" sh -c 'sample_root="$0"; if [ -d "$sample_root" ]; then find "$sample_root" -maxdepth 3 -type f \( -name "slurm-*.out" -o -name "slurm-*.err" -o -name ".cedana_debug.out" -o -name ".cedana_debug.err" \) -print 2>/dev/null || true; fi' "$SAMPLE_ROOT" >"$cdir/slurm-output-files.txt" 2>/dev/null || true
 
             while IFS= read -r job_out; do
               [ -z "$job_out" ] && continue
-              out_name="$(echo "$job_out" | sed 's#^/##; s#/#_#g')"
+              [[ "$job_out" == /* ]] || continue
+              out_name="$(echo "$job_out" | sed 's#^/##; s#[/:<>|*?"]#_#g')"
               docker exec "$c" sh -c "cat '$job_out'" >"$cdir/${out_name}.txt" 2>&1 || true
             done <"$cdir/slurm-output-files.txt"
           done

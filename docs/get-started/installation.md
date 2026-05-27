@@ -36,7 +36,16 @@ Using authenticated installer (see [Authentication](authentication.md)):
 export CEDANA_URL=https://myorg.cedana.ai/v1
 export CEDANA_AUTH_TOKEN=your_auth_token
 
-curl -fsSL ${CEDANA_URL}/install?version=latest -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | sudo -E bash
+curl -fsSL "${CEDANA_URL}/install?version=latest" -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | sudo -E bash
+```
+
+Or, to install an alpha version:
+
+```sh
+export CEDANA_URL=https://myorg.cedana.ai/v1
+export CEDANA_AUTH_TOKEN=your_auth_token
+
+curl -fsSL "${CEDANA_URL}/install?build=alpha&version=main" -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | sudo -E bash
 ```
 
 {% hint style="info" %}
