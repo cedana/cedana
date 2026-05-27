@@ -58,7 +58,7 @@ env:
   FORMATTER: junit
   TERM: dumb
   RETRIES: 1
-  DEBUG: ${{ vars.DEBUG_SLURM }}
+  DEBUG: 0
 
 jobs:
   slurm-ansible:
@@ -275,9 +275,9 @@ jobs:
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}-{5}/extras=s3-cache',
       github.run_id,
-      matrix.compute == 'GPU' && inputs.runner_gpu || inputs.runner,
+      matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
-      (matrix.compute == 'GPU' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
+      (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
       matrix.storage,
       matrix.nfs
       ) }}
@@ -287,7 +287,7 @@ jobs:
       matrix:
         compute:
           - CPU
-          - GPU
+          - CUDA
         storage:
           - storage/cedana
         arch:
@@ -299,11 +299,11 @@ jobs:
           - compute: GPU
             arch: arm64
     container:
-      image: ${{ matrix.compute == 'GPU' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'GPU' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
+      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: runs-on/action@v1
 
@@ -361,7 +361,7 @@ jobs:
           md5sum slurm-bin/build/cedana-slurm
 
       - name: Download GPU plugin
-        if: ${{ matrix.compute == 'GPU' }}
+        if: ${{ matrix.compute == 'CUDA' }}
         uses: actions/download-artifact@v4
         with:
           name: gpu-${{ matrix.arch }}
@@ -371,7 +371,7 @@ jobs:
 
       - name: Pre-install plugins
         env:
-          GPU: ${{ matrix.compute == 'GPU' && 'true' || 'false' }}
+          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
           CEDANA_PLUGINS_BUILDS: alpha
         run: |
           chmod +x ./cedana*
@@ -472,7 +472,7 @@ jobs:
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           CEDANA_PLUGINS_BUILDS: alpha
-          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           LOGIN_NODES: '1'
           NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
         run: |
@@ -490,7 +490,7 @@ jobs:
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -503,7 +503,7 @@ jobs:
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -525,9 +525,9 @@ jobs:
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           LARGE: ${{ inputs.large && '1' || '0' }}
-          PARALLELISM: ${{ matrix.compute == 'GPU' && 1 || inputs.parallelism }}
+          PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
         run: |
           TAGS="slurm,!ansible"
           if [ "$GPU" = "1" ]; then
@@ -576,7 +576,7 @@ jobs:
           set -euo pipefail
 
           ARTIFACT_DIR="/tmp/slurm-debug"
-          SAMPLE_ROOT="/data/cedana-samples/slurm/${{ matrix.compute == 'GPU' && 'gpu' || 'cpu' }}"
+          SAMPLE_ROOT="/data/cedana-samples/slurm/${{ matrix.compute == 'CUDA' && 'gpu' || 'cpu' }}"
           mkdir -p "$ARTIFACT_DIR"
 
           {
@@ -641,7 +641,7 @@ jobs:
               fi
             done
 
-            if [ "${{ matrix.compute }}" = "GPU" ]; then
+            if [ "${{ matrix.compute }}" = "CUDA" ]; then
               docker exec "$c" sh -c 'echo "=== nvidia-smi -L ==="; nvidia-smi -L 2>&1 || true; echo "=== /dev/nvidia* ==="; ls -la /dev/nvidia* 2>&1 || true; echo "=== /etc/slurm/gres.conf ==="; cat /etc/slurm/gres.conf 2>&1 || true; echo "=== /etc/slurm/slurm.conf (GPU lines) ==="; grep -E "^(NodeName|GresTypes|DebugFlags)" /etc/slurm/slurm.conf 2>&1 || true; echo "=== slurmd -C ==="; /usr/sbin/slurmd -C 2>&1 || true; echo "=== slurmd -G ==="; /usr/sbin/slurmd -G 2>&1 || true' >"$cdir/gpu-diagnostics.txt" 2>&1 || true
             fi
 

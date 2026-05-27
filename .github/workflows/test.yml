@@ -40,11 +40,6 @@ on:
         description: "Parallelism for running tests"
         required: false
         default: 2
-      parallelism_gpu:
-        type: number
-        description: "Parallelism for running GPU tests"
-        required: false
-        default: 2
       runner:
         type: string
         description: "Runner machine for CPU tests"
@@ -70,7 +65,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
   RETRIES: 1
-  DEBUG: ${{ vars.DEBUG_REGRESSION }}
+  DEBUG: 0
 
 jobs:
   unit:
@@ -187,7 +182,7 @@ jobs:
       - name: Run regression tests
         env:
           LARGE: ${{ inputs.large }}
-          PARALLELISM: ${{ inputs.parallelism }}
+          PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
           if [ "$LARGE" = "true" ]; then
             make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
@@ -427,7 +422,6 @@ jobs:
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
-      parallelism_gpu: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       post_summary: false # Will post consolidated summary instead
@@ -440,7 +434,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
-      parallelism: ${{ inputs.parallelism_gpu }}
+      parallelism: ${{ inputs.parallelism }}
       runner: ${{ inputs.runner_gpu }}
       post_summary: false # Will post consolidated summary instead
 
