@@ -20,6 +20,7 @@ import (
 type Job struct {
 	JID   string
 	proto daemon.Job
+	done  chan error
 
 	sync.RWMutex
 }
