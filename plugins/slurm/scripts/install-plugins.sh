@@ -9,6 +9,7 @@ CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
+CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib"}
 
 # XXX: We always install the GPU plugin for now until auto-detection is added
 PLUGINS=" \
@@ -79,4 +80,9 @@ if [ "$CEDANA_SLURM_NODE_ROLE" = "login" ]; then
     exit 0
 fi
 
-${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
+# Pass lib-dir if CEDANA_PLUGINS_LIB_DIR is set
+if [ -n "${CEDANA_PLUGINS_LIB_DIR:-}" ]; then
+    ${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE" --lib-dir "$CEDANA_PLUGINS_LIB_DIR"
+else
+    ${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
+fi
