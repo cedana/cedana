@@ -20,13 +20,22 @@ slurm_submit_job() {
     submission_host="$(slurm_submission_container)"
     info_log "Submitting from $submission_host: cd $container_dir && sbatch $container_file"
 
-    local output
-    if ! output=$(slurm_submit_exec bash -c \
-        "cd '$container_dir' && sbatch --parsable --overcommit \
+    local sbatch_cmd="cd '$container_dir' && sbatch --parsable --overcommit \
          --export=ALL,CEDANA_ENABLE=${cedana_enable},CEDANA_BIN=${cedana_bin} \
-         --cpus-per-task=1 --mem=0 '$container_file'" 2>&1); then
-        error_log "sbatch failed: $output"
-        return 1
+         --cpus-per-task=1 --mem=0 '$container_file'"
+
+    local output
+    if [ -n "${SLURM_TEST_USER:-}" ]; then
+        info_log "Submitting as user $SLURM_TEST_USER"
+        if ! output=$(slurm_submit_exec runuser -u "$SLURM_TEST_USER" -- bash -c "$sbatch_cmd" 2>&1); then
+            error_log "sbatch failed: $output"
+            return 1
+        fi
+    else
+        if ! output=$(slurm_submit_exec bash -c "$sbatch_cmd" 2>&1); then
+            error_log "sbatch failed: $output"
+            return 1
+        fi
     fi
 
     local job_id
@@ -546,6 +555,100 @@ test_slurm_job() {
 
             info_log "Restored job $job_id is running"
             submitted=true
+            ;;
+
+        PREEMPT)
+            [ "$submitted" = false ] && {
+                error="Cannot PREEMPT — no job submitted"
+                break
+            }
+            [ -z "$job_id" ] && {
+                error="Cannot PREEMPT — no active job ID"
+                break
+            }
+
+            local old_preempt_job_id="$job_id"
+            local old_preempt_job_name=""
+            old_preempt_job_name="$(_get_slurm_job_name "$old_preempt_job_id")"
+
+            info_log "Submitting high-priority job to preempt job $job_id..."
+            local preempt_submission_host
+            preempt_submission_host="$(slurm_submission_container)"
+
+            local preempt_cmd="sbatch --parsable --partition=preempt --overcommit --cpus-per-task=1 --mem=0 --wrap='sleep 30'"
+            local preempt_output preempt_job_id
+            if [ -n "${SLURM_TEST_USER:-}" ]; then
+                preempt_output=$(docker exec "$preempt_submission_host" runuser -u "$SLURM_TEST_USER" -- bash -c "$preempt_cmd" 2>&1) || {
+                    error="Failed to submit preemption job: $preempt_output"
+                    break
+                }
+            else
+                preempt_output=$(docker exec "$preempt_submission_host" bash -c "$preempt_cmd" 2>&1) || {
+                    error="Failed to submit preemption job: $preempt_output"
+                    break
+                }
+            fi
+            preempt_job_id=$(echo "$preempt_output" | tail -1 | cut -d';' -f1 | tr -d '[:space:]')
+            info_log "Preemption job submitted: $preempt_job_id"
+
+            info_log "Waiting for original job $old_preempt_job_id to be preempted..."
+            local preempt_elapsed=0
+            local preempt_timeout=120
+            local preempted=false
+            while [ "$preempt_elapsed" -lt "$preempt_timeout" ]; do
+                local state
+                state=$(slurm_exec scontrol show job "$old_preempt_job_id" 2>/dev/null |
+                    grep -oP 'JobState=\K\S+' || echo "UNKNOWN")
+                info_log "Job $old_preempt_job_id state: $state (waiting for preemption)"
+                case "$state" in
+                    PREEMPTED|REQUEUED|SUSPENDED|COMPLETED|FAILED|CANCELLED)
+                        preempted=true
+                        break
+                        ;;
+                esac
+                sleep 3
+                preempt_elapsed=$((preempt_elapsed + 3))
+            done
+
+            if [ "$preempted" = false ]; then
+                error="Job $old_preempt_job_id was not preempted after ${preempt_timeout}s"
+                cancel_slurm_job "$preempt_job_id"
+                break
+            fi
+            info_log "Job $old_preempt_job_id preempted"
+
+            info_log "Waiting for auto-restored job to appear..."
+            local new_preempt_job_id=""
+            local detect_elapsed=0
+            local detect_timeout=90
+            while [ "$detect_elapsed" -lt "$detect_timeout" ]; do
+                new_preempt_job_id=$(_detect_restored_job_id "$old_preempt_job_id" "$old_preempt_job_name")
+                if [ -n "$new_preempt_job_id" ] && [ "$new_preempt_job_id" != "$old_preempt_job_id" ] && [ "$new_preempt_job_id" != "$preempt_job_id" ]; then
+                    break
+                fi
+                new_preempt_job_id=""
+                sleep 3
+                detect_elapsed=$((detect_elapsed + 3))
+            done
+
+            cancel_slurm_job "$preempt_job_id"
+
+            if [ -z "$new_preempt_job_id" ]; then
+                error="No auto-restored job detected after preemption of job $old_preempt_job_id"
+                break
+            fi
+
+            job_id="$new_preempt_job_id"
+            tracked_job_ids+=("$job_id")
+            relevant_job_ids_csv="$(_slurm_relevant_job_ids_csv "${tracked_job_ids[@]}")"
+            info_log "Auto-restored job has new ID: $job_id"
+
+            wait_for_slurm_job_state "$job_id" "RUNNING" 120 "$sample_dir" "$relevant_job_ids_csv" || {
+                error="Auto-restored job $job_id failed to reach RUNNING"
+                break
+            }
+
+            info_log "Auto-restored job $job_id is running after preemption"
             ;;
 
         *)

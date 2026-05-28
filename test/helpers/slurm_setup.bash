@@ -1263,6 +1263,97 @@ restart_cedana_slurm_daemon() {
 }
 
 ##############################
+# Preemption Setup
+##############################
+
+setup_slurm_preemption() {
+    info_log "Configuring SLURM preemption..."
+
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c '
+        CONF="/etc/slurm/slurm.conf"
+        grep -q "^PreemptType=" "$CONF" || echo "PreemptType=preempt/partition_prio" >> "$CONF"
+        grep -q "^PreemptMode=" "$CONF" || echo "PreemptMode=REQUEUE" >> "$CONF"
+        grep -q "^PriorityType=" "$CONF" || echo "PriorityType=priority/basic" >> "$CONF"
+
+        if ! grep -q "^PartitionName=preempt " "$CONF"; then
+            nodes=$(grep "^PartitionName=debug " "$CONF" | grep -oP "Nodes=\K[^ ]+")
+            echo "PartitionName=preempt Nodes=${nodes} Default=NO MaxTime=INFINITE State=UP PriorityTier=100 PreemptMode=off OverSubscribe=FORCE:1" >> "$CONF"
+        fi
+
+        if grep -q "^PartitionName=debug " "$CONF" && ! grep "^PartitionName=debug " "$CONF" | grep -q "PriorityTier="; then
+            sed -i "s/^PartitionName=debug .*/& PriorityTier=10 PreemptMode=REQUEUE OverSubscribe=FORCE:1/" "$CONF"
+        fi
+    ' || {
+        error_log "Failed to configure preemption in slurm.conf"
+        return 1
+    }
+
+    local compute_containers=($(_slurm_compute_containers))
+    for conf in slurm.conf; do
+        local tmpfile="/tmp/slurm-${conf}.preempt.$$"
+        docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile"
+        for c in "${compute_containers[@]}"; do
+            docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
+        done
+        rm -f "$tmpfile"
+    done
+
+    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld || {
+        error_log "Failed to restart slurmctld after preemption config"
+        return 1
+    }
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd || {
+            error_log "Failed to restart slurmd on $c after preemption config"
+            return 1
+        }
+    done
+    sleep 5
+
+    slurm_exec scontrol show partitions >&"${OUTPUT_FD}" 2>&1 || true
+    info_log "SLURM preemption configured"
+}
+
+##############################
+# Test User Setup
+##############################
+
+setup_slurm_test_user() {
+    local user="${SLURM_TEST_USER:-}"
+    if [ -z "$user" ]; then
+        debug_log "SLURM_TEST_USER not set, skipping test user setup"
+        return 0
+    fi
+
+    info_log "Creating test user '$user' in all containers..."
+
+    local all_containers=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
+
+    for c in "${all_containers[@]}"; do
+        docker exec "$c" bash -c "
+            id '$user' &>/dev/null || useradd -m -s /bin/bash '$user'
+        " || {
+            error_log "Failed to create user $user in $c"
+            return 1
+        }
+    done
+
+    debug_log "Adding $user to SLURM accounting..."
+    slurm_exec sacctmgr -i add user "$user" Account=default 2>/dev/null || true
+
+    debug_log "Making /data accessible to $user..."
+    for c in "${all_containers[@]}"; do
+        docker exec "$c" bash -c "
+            chmod -R a+rX /data 2>/dev/null || true
+            chown -R '$user':'$user' /data/cedana-samples 2>/dev/null || true
+            [ -d /data/venv ] && chown -R '$user':'$user' /data/venv 2>/dev/null || true
+        " || true
+    done
+
+    info_log "Test user '$user' ready"
+}
+
+##############################
 # Samples Setup
 ##############################
 
