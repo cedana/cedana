@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/google/uuid"
+	"github.com/moby/sys/mountinfo"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -318,16 +320,62 @@ func AddMountsForRestore(next types.Restore) types.Restore {
 			)
 		}
 
+		resolvedMountSources := resolveExternalMountSources(state)
+
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
 			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
-				log.Debug().Str("root", m.Root).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
-				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.Root))
+				source := m.Root
+				if resolvedSource, ok := resolvedMountSources[m.ID]; ok {
+					source = resolvedSource
+				}
+				log.Debug().Str("root", source).Str("mount_path", m.MountPoint).Msg("marking NVIDIA GPU mount as external")
+				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, source))
 			}
 			return true
 		})
 
 		return next(ctx, opts, resp, req)
 	}
+}
+
+// resolveExternalMountSources returns host source path overrides for mounts
+// whose m.Root must be resolved through a matching host filesystem mount.
+func resolveExternalMountSources(state *daemon.ProcessState) map[uint64]string {
+	sources := map[uint64]string{}
+	hostMounts, err := mountinfo.GetMounts(nil)
+	if err != nil {
+		return sources
+	}
+
+	hostMountsByDevice := map[string]*mountinfo.Info{}
+	for _, hostMount := range hostMounts {
+		key := fmt.Sprintf("%d:%d", hostMount.Major, hostMount.Minor)
+		if current := hostMountsByDevice[key]; current == nil || len(hostMount.Root) < len(current.Root) {
+			hostMountsByDevice[key] = hostMount
+		}
+	}
+
+	utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+		if _, err := os.Lstat(m.Root); err == nil {
+			return true
+		}
+
+		key := fmt.Sprintf("%d:%d", m.Major, m.Minor)
+		hostMount := hostMountsByDevice[key]
+		if hostMount == nil {
+			return true
+		}
+
+		pathInSourceMount, err := filepath.Rel(hostMount.Root, m.Root)
+		if err != nil || pathInSourceMount == ".." || strings.HasPrefix(pathInSourceMount, "../") {
+			return true
+		}
+
+		sources[m.ID] = filepath.Join(hostMount.Mountpoint, pathInSourceMount)
+		return true
+	})
+
+	return sources
 }
 
 ///////////////////////////////////////
