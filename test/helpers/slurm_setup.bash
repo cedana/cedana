@@ -168,11 +168,21 @@ setup_slurm_cluster() {
     # Use a YAML file for extra vars so booleans stay booleans (not strings).
     # `-e key=value` on the CLI treats the value as string "false", which is
     # truthy in Jinja `when:`.
+    local slurm_ver=""
+    local versions_file="${ansible_dir}/../slurm-versions"
+    if [ -f "$versions_file" ]; then
+        local tag
+        tag=$(head -n 1 "$versions_file" | tr -d '[:space:]')
+        slurm_ver=$(echo "$tag" | sed -E 's/^slurm-([0-9]+)-([0-9]+)-([0-9]+)-.*/\1.\2.\3/')
+        info_log "Pinning SLURM version to $slurm_ver (from $tag)"
+    fi
+
     local vars_file="/tmp/cedana-slurm-vars-$$.yml"
-    cat >"$vars_file" <<'EOF'
+    cat >"$vars_file" <<EOF
 slurm_cluster_name: cedana_test_cluster
 slurm_accounting_enabled: false
 nfs_shared_install: true
+${slurm_ver:+slurm_version: \"$slurm_ver\"}
 EOF
 
     if [ "${NFS_ROOT_SQUASH:-1}" = "0" ]; then
