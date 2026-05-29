@@ -83,7 +83,7 @@ jobs:
             cr: streamer
           - cuda_version: 12-2
             cr: default
-            arch: amd64
+            arch: arm64
           - cuda_version: 12-4
             cr: default
           - cuda_version: 12-4
@@ -105,7 +105,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all --cgroupns=host
+      options: --privileged --init --ipc=host --device nvidia.com/gpu=all --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
