@@ -175,6 +175,14 @@ slurm_accounting_enabled: false
 nfs_shared_install: true
 EOF
 
+    if [ "${NFS_ROOT_SQUASH:-1}" = "0" ]; then
+        cat >>"$vars_file" <<'EOF'
+nfs_v4_root_export_options: "ro,fsid=0,crossmnt,no_subtree_check,no_root_squash"
+nfs_export_options: "rw,sync,no_subtree_check,no_root_squash"
+EOF
+        info_log "NFS configured with no_root_squash"
+    fi
+
     local rc=0
     pushd "$ansible_dir" >/dev/null
     if COMPUTE_NODES="$COMPUTE_NODES" \
