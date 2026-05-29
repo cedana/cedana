@@ -77,7 +77,7 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all --cgroupns=host
+      options: --privileged --init --ipc=host --gpus all -e NVIDIA_DRIVER_CAPABILITIES=compute,utility --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
