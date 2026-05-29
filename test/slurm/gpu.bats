@@ -17,3 +17,10 @@ load ../helpers/slurm_propagator
 
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 30 240
 }
+
+# bats test_tags=preempt,gpu
+@test "Preemption: GPU PyTorch Simple" {
+    local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/gpu-pytorch-simple.sbatch"
+
+    test_slurm_job SUBMIT_PREEMPT "$sbatch_file" 30 240
+}

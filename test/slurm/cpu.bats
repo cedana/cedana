@@ -53,6 +53,27 @@ load ../helpers/slurm_propagator
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
 }
 
+# bats test_tags=preempt,samples
+@test "Preemption: Timestamp Logger (counting)" {
+    local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/counting.sbatch"
+
+    test_slurm_job SUBMIT_PREEMPT "$sbatch_file" 15
+}
+
+# bats test_tags=preempt,samples
+@test "Preemption: Monte Carlo Pi" {
+    local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/monte-carlo-pi.sbatch"
+
+    test_slurm_job SUBMIT_PREEMPT "$sbatch_file" 15
+}
+
+# bats test_tags=preempt,samples
+@test "Preemption: Password Hashing Benchmark" {
+    local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/password-hashing-benchmark.sbatch"
+
+    test_slurm_job SUBMIT_PREEMPT "$sbatch_file" 15
+}
+
 # bats test_tags=dump,restore,embedded
 # Requires cedana-slurm to have CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE:
 #   setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm

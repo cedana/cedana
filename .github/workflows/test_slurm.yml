@@ -475,6 +475,7 @@ jobs:
           GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
           LOGIN_NODES: '1'
           NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
+          SLURM_TEST_USER: ${{ matrix.nfs == 'root_squash' && 'testuser' || '' }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -482,6 +483,7 @@ jobs:
           setup_slurm_cluster
           setup_slurm_accounting
           install_cedana_in_slurm
+          setup_slurm_preemption
 
       - name: Setup SLURM samples
         shell: bash
@@ -491,10 +493,12 @@ jobs:
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
+          SLURM_TEST_USER: ${{ matrix.nfs == 'root_squash' && 'testuser' || '' }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
           setup_slurm_samples
+          setup_slurm_test_user
 
       - name: Register SLURM cluster and start daemon
         shell: bash
@@ -528,6 +532,7 @@ jobs:
           GPU: ${{ matrix.compute == 'GPU' && '1' || '0' }}
           LARGE: ${{ inputs.large && '1' || '0' }}
           PARALLELISM: ${{ matrix.compute == 'GPU' && 1 || inputs.parallelism }}
+          SLURM_TEST_USER: ${{ matrix.nfs == 'root_squash' && 'testuser' || '' }}
         run: |
           TAGS="slurm,!ansible"
           if [ "$GPU" = "1" ]; then
