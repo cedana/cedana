@@ -80,7 +80,7 @@ func AddExternalMountsForDump(next types.Dump) types.Dump {
 
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
 			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
-				log.Debug().Interface("m", m).Msg("marking NVIDIA GPU mount as external")
+				log.Trace().Interface("m", m).Msg("marking NVIDIA GPU mount as external")
 				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.MountPoint))
 			}
 			return true

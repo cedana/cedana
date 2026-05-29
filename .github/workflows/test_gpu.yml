@@ -62,10 +62,8 @@ jobs:
       fail-fast: false
       matrix:
         cuda_version:
-          # - 11-8  TODO: re-enable once compatibility is fixed
-          # - 12-2
-          # - 12-4
-          # - 12-8
+          - 12-4
+          - 12-8
           - 13-2
         cr:
           - default
@@ -76,13 +74,16 @@ jobs:
         exclude: # to reduce CI minutes
           - cuda_version: 12-4
             cr: default
-            arch: amd64
+          - cuda_version: 12-4
+            cr: streamer
+            arch: arm64
+          - cuda_version: 12-8
+            cr: streamer
           - cuda_version: 12-8
             cr: default
-            arch: arm64
-          - cuda_version: 13-2
-            cr: streamer
             arch: amd64
+          - cuda_version: 13-2
+            cr: default
     container:
       image: cedana/cedana-test:cuda
       credentials:
