@@ -96,6 +96,17 @@ func Attachable[REQ any](req *REQ) bool {
 	}
 }
 
+func WaitFirstMaster[REQ any](req *REQ) bool {
+	switch r := any(req).(type) {
+	case *daemon.RunReq:
+		return r.WaitFirstMaster
+	case *daemon.RestoreReq:
+		return r.WaitFirstMaster
+	default:
+		panic("unsupported type for Attachable extraction")
+	}
+}
+
 func Log[REQ any](req *REQ) string {
 	switch r := any(req).(type) {
 	case *daemon.RunReq:

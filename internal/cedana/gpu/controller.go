@@ -774,16 +774,7 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 	resp, err := c.HealthCheck(waitCtx, req, grpc.WaitForReady(true))
 	var components []*daemon.HealthCheckComponent
 	if resp != nil {
-		l := log.Debug()
-		l.Str("ID", c.ID)
 		for _, component := range resp.Components {
-			l = l.Str(component.Name, component.Data)
-			for _, w := range component.Warnings {
-				log.Warn().Str("ID", c.ID).Str(component.Name, component.Data).Msg(w)
-			}
-			for _, e := range component.Errors {
-				log.Error().Str("ID", c.ID).Str(component.Name, component.Data).Msg(e)
-			}
 			components = append(components, &daemon.HealthCheckComponent{
 				Name:     component.Name,
 				Data:     component.Data,
@@ -791,7 +782,6 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 				Errors:   component.Errors,
 			})
 		}
-		l.Msg("health checked GPU controller")
 	}
 	if err != nil {
 		return components, utils.GRPCErrorShort(err, c.ErrBuf.String())

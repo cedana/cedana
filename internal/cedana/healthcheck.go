@@ -32,7 +32,7 @@ func (s *Server) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 
 	results := checklist.Run(ctx)
 
-	log.Debug().Interface("results", results).Msg("health check results")
+	logResults(results)
 
 	return &daemon.HealthCheckResp{Results: results}, nil
 }
@@ -54,7 +54,7 @@ func (s *Cedana) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 
 	results := checklist.Run(s.lifetime)
 
-	log.Debug().Interface("results", results).Msg("health check results")
+	logResults(results)
 
 	return &daemon.HealthCheckResp{Results: results}, nil
 }
@@ -103,5 +103,32 @@ func checkPluginVersion(plugins plugins.Manager, plugin string) types.Check {
 		component.Data = p.Version
 
 		return []*daemon.HealthCheckComponent{component}
+	}
+}
+
+func logResults(results []*daemon.HealthCheckResult) {
+	for _, result := range results {
+		for _, component := range result.Components {
+			for _, warning := range component.Warnings {
+				log.Warn().Str("check", result.Name).
+					Str("component", component.Name).
+					Str("data", component.Data).
+					Str("warning", warning).
+					Msg("health check warning")
+			}
+			for _, error := range component.Errors {
+				log.Warn().Str("check", result.Name).
+					Str("component", component.Name).
+					Str("data", component.Data).
+					Str("error", error).
+					Msg("health check warning")
+			}
+			if len(component.Warnings)+len(component.Errors) == 0 {
+				log.Debug().Str("check", result.Name).
+					Str("component", component.Name).
+					Str("data", component.Data).
+					Msg("health check succeeded")
+			}
+		}
 	}
 }
