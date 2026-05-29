@@ -72,6 +72,16 @@ jobs:
           - amd64
           - arm64
         exclude: # to reduce CI minutes
+          - cuda_version: 11-8
+            cr: default
+          - cuda_version: 11-8
+            cr: streamer
+            arch: arm64
+          - cuda_version: 12-2
+            cr: streamer
+          - cuda_version: 12-2
+            cr: default
+            arch: amd64
           - cuda_version: 12-4
             cr: default
           - cuda_version: 12-4
@@ -84,6 +94,10 @@ jobs:
             arch: amd64
           - cuda_version: 13-2
             cr: default
+            arch: arm64
+          - cuda_version: 13-2
+            cr: streamer
+            arch: amd64
     container:
       image: cedana/cedana-test:cuda
       credentials:
