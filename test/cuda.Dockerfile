@@ -176,7 +176,6 @@ snapshotter = "native"
           runtime_type = "io.containerd.runc.v2"
 CONFIG
 nvidia-ctk runtime configure --runtime=containerd
-nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
 EOT
 
 # copy cedana-samples
