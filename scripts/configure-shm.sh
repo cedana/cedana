@@ -9,8 +9,6 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
-check_root
-
 # Configure /dev/shm size
 # This script increases the shared memory size
 
@@ -34,7 +32,7 @@ echo "Current size: $(numfmt --to=iec "$CURRENT_SIZE")"
 # 1. Remount if current size is too small
 if [ "$CURRENT_SIZE" -lt "$MIN_BYTES" ]; then
     echo "Remounting $SHM_PATH with size $SIZE..."
-    mount -o remount,size="$SIZE" "$SHM_PATH"
+    mount -o remount,size="$SIZE" "$SHM_PATH" || true
 else
     echo "$SHM_PATH already has sufficient size"
 fi
@@ -43,7 +41,7 @@ fi
 FSTAB_ENTRY="tmpfs /dev/shm tmpfs defaults,size=$SIZE 0 0"
 if [ -f "$FSTAB" ] && grep -qE "^\s*[^#]\s*tmpfs\s+/dev/shm" "$FSTAB"; then
     echo "Updating existing fstab entry for /dev/shm..."
-    sed -i.bak -E "s|^\s*[^#]\s*tmpfs\s+/dev/shm.*|$FSTAB_ENTRY|" "$FSTAB"
+    sed -i.bak -E "s|^\s*[^#]\s*tmpfs\s+/dev/shm.*|$FSTAB_ENTRY|" "$FSTAB" || true
 elif [ -f "$FSTAB" ]; then
     echo "Adding new fstab entry for /dev/shm..."
     echo "$FSTAB_ENTRY" >> "$FSTAB"

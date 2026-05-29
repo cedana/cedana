@@ -6,6 +6,7 @@ set -euo pipefail
 # VERSION will be automatically injected by the CI workflow
 VERSION=${VERSION:-"latest"}
 APP_PATH=${APP_PATH:-"/usr/local/bin/cedana"}
+CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib"}
 
 # If VERSION doesn't start with 'v' (not a semver tag), set CEDANA_PLUGINS_BUILDS to "alpha"
 if [[ ! "$VERSION" =~ ^v ]]; then
@@ -18,10 +19,6 @@ fi
 # Download and install Cedana #
 ###############################
 
-if [[ "$EUID" -ne 0 ]]; then
-    echo "Error: This script must be run as root" >&2
-    exit 1
-fi
 if [[ -z "${CEDANA_URL:-}" ]]; then
     echo "Error: CEDANA_URL environment variable is not set" >&2
     exit 1
@@ -41,13 +38,13 @@ else
     exit 1
 fi
 
-curl -fsSL \
+curl -fSL \
     "${CEDANA_URL}"/download?version="$VERSION"\&arch="$ARCH"\&build="$CEDANA_PLUGINS_BUILDS" \
     -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
     -o "$APP_PATH"
 chmod +x "$APP_PATH"
 
 # Delete any existing Cedana plugins to avoid incompatibilities with the new version
-rm -rf /usr/local/lib/*cedana*
+rm -rf ${CEDANA_PLUGINS_LIB_DIR}/*cedana*
 
 $APP_PATH --merge-config version

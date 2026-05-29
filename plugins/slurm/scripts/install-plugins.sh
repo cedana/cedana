@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-check_root
-
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
@@ -11,6 +9,7 @@ CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
+CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib"}
 
 # XXX: We always install the GPU plugin for now until auto-detection is added
 PLUGINS=" \
@@ -59,8 +58,8 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
 fi
 
 # Improve streaming performance
-echo 0 >/proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
-echo 4194304 >/proc/sys/fs/pipe-max-size  # change pipe max size to 4MiB
+echo 0 >/proc/sys/fs/pipe-user-pages-soft || true # change pipe pages soft limit to unlimited
+echo 4194304 >/proc/sys/fs/pipe-max-size || true # change pipe max size to 4MiB
 
 ##########################
 # Setup SLURM/WLM plugin #
@@ -81,4 +80,18 @@ if [ "$CEDANA_SLURM_NODE_ROLE" = "login" ]; then
     exit 0
 fi
 
-cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
+# Build the setup command with optional flags
+SETUP_CMD="${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role $CEDANA_SLURM_NODE_ROLE"
+
+# Pass lib-dir if CEDANA_PLUGINS_LIB_DIR is set and not default
+if [ -n "${CEDANA_PLUGINS_LIB_DIR:-}" ] && [ "$CEDANA_PLUGINS_LIB_DIR" != "/usr/local/lib" ]; then
+    SETUP_CMD="$SETUP_CMD --lib-dir $CEDANA_PLUGINS_LIB_DIR"
+fi
+
+# Pass config-dir if CEDANA_CONFIG_DIR is set and not default
+if [ -n "${CEDANA_CONFIG_DIR:-}" ] && [ "$CEDANA_CONFIG_DIR" != "/etc/cedana" ]; then
+    SETUP_CMD="$SETUP_CMD --config-dir $CEDANA_CONFIG_DIR"
+fi
+
+# Execute the command
+$SETUP_CMD
