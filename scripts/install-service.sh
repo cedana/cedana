@@ -59,7 +59,9 @@ fi
 # Build the daemon command with optional config-dir
 DAEMON_CMD="$APP_PATH daemon start"
 if [ -n "${CEDANA_CONFIG_DIR:-}" ] && [ "${CEDANA_CONFIG_DIR}" != "/etc/cedana" ]; then
-    DAEMON_CMD="$DAEMON_CMD --config-dir=${CEDANA_CONFIG_DIR}"
+    # Expand tilde and make absolute path for systemd compatibility
+    EXPANDED_CONFIG_DIR=$(eval echo "${CEDANA_CONFIG_DIR}")
+    DAEMON_CMD="$DAEMON_CMD --config-dir=${EXPANDED_CONFIG_DIR}"
 fi
 
 # Define the service file content
@@ -67,7 +69,7 @@ SERVICE_CONTENT="[Unit]
 Description=Cedana Daemon
 [Service]
 ExecStart=$DAEMON_CMD
-Environment=CEDANA_CONFIG_DIR=${CEDANA_CONFIG_DIR:-/etc/cedana}
+Environment=CEDANA_CONFIG_DIR=${EXPANDED_CONFIG_DIR:-/etc/cedana}
 User=$SERVICE_UID
 Group=$SERVICE_GID
 Restart=no

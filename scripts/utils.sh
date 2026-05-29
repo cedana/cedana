@@ -5,7 +5,9 @@ export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
 export APP_NAME="cedana"
 # Use CEDANA_PLUGINS_BIN_DIR if set, otherwise default to /usr/local/bin
 if [ -n "${CEDANA_PLUGINS_BIN_DIR:-}" ]; then
-    export APP_PATH="${CEDANA_PLUGINS_BIN_DIR}/cedana"
+    # Expand tilde and make absolute path for systemd compatibility
+    EXPANDED_BIN_DIR=$(eval echo "${CEDANA_PLUGINS_BIN_DIR}")
+    export APP_PATH="${EXPANDED_BIN_DIR}/cedana"
 else
     export APP_PATH=${APP_PATH:-"/usr/local/bin/cedana"}
 fi
