@@ -572,15 +572,11 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	}
 
 	// Will only be called if there are namespaces to restore
-	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
-		restoredPid = &pid
-		return nil
-	}
-
-	// Will only be called if there are namespaces to restore
-	callback.PostSetupNamespacesFunc = func(ctx context.Context) error {
+	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
 		controller := p.Get(id)
-		return controller.Attach(ctx, uint32(*restoredPid))
+		restoredPid = &pid
+
+		return controller.Attach(ctx, uint32(pid))
 	}
 
 	callback.PreResumeFunc = func(ctx context.Context) error {
