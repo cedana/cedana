@@ -632,6 +632,7 @@ test_slurm_job() {
             done
 
             cancel_slurm_job "$preempt_job_id"
+            cancel_slurm_job "$old_preempt_job_id"
 
             if [ -z "$new_preempt_job_id" ]; then
                 error="No auto-restored job detected after preemption of job $old_preempt_job_id"
@@ -658,8 +659,10 @@ test_slurm_job() {
         esac
     done
 
-    [ -n "$job_id" ] && cancel_slurm_job "$job_id"
-    [ -n "$job_id" ] && info_log "Cleanup: cancelled job $job_id"
+    for _tid in "${tracked_job_ids[@]}"; do
+        cancel_slurm_job "$_tid"
+    done
+    [ ${#tracked_job_ids[@]} -gt 0 ] && info_log "Cleanup: cancelled jobs ${tracked_job_ids[*]}"
 
     if [ -n "$error" ]; then
         error_log "$error"
