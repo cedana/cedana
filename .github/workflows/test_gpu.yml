@@ -82,12 +82,12 @@ jobs:
             cr: default
           - cuda_version: 12-4
             cr: streamer
-            arch: arm64
+            arch: amd64
           - cuda_version: 12-8
             cr: streamer
           - cuda_version: 12-8
             cr: default
-            arch: amd64
+            arch: arm64
           - cuda_version: 13-2
             cr: default
             arch: arm64
