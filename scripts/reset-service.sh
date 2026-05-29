@@ -87,6 +87,19 @@ if [ -f "$SERVICE_FILE" ]; then
         fi
     fi
 else
-    pkill -f "$APP_PATH daemon start" || true
-    echo "No systemd service found, but killed any running processes just in case."
+    echo "No systemd service file found."
+fi
+
+# Always check for and kill any running cedana daemon processes
+# This handles cases where the daemon is running but not managed by systemd
+if pgrep -f "cedana daemon start" > /dev/null 2>&1; then
+    echo "Found running cedana daemon processes, stopping them..."
+    pkill -f "cedana daemon start" || true
+    # Give it a moment to stop
+    sleep 1
+    # Force kill if still running
+    if pgrep -f "cedana daemon start" > /dev/null 2>&1; then
+        echo "Force stopping stubborn processes..."
+        pkill -9 -f "cedana daemon start" || true
+    fi
 fi
