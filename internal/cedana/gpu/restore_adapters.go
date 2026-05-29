@@ -338,6 +338,46 @@ func AddMountsForRestore(next types.Restore) types.Restore {
 	}
 }
 
+// resolveExternalMountSources returns host source path overrides for mounts
+// whose m.Root must be resolved through a matching host filesystem mount.
+func resolveExternalMountSources(state *daemon.ProcessState) map[uint64]string {
+	sources := map[uint64]string{}
+	hostMounts, err := mountinfo.GetMounts(nil)
+	if err != nil {
+		return sources
+	}
+
+	hostMountsByDevice := map[string]*mountinfo.Info{}
+	for _, hostMount := range hostMounts {
+		key := fmt.Sprintf("%d:%d", hostMount.Major, hostMount.Minor)
+		if current := hostMountsByDevice[key]; current == nil || len(hostMount.Root) < len(current.Root) {
+			hostMountsByDevice[key] = hostMount
+		}
+	}
+
+	utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+		if _, err := os.Lstat(m.Root); err == nil {
+			return true
+		}
+
+		key := fmt.Sprintf("%d:%d", m.Major, m.Minor)
+		hostMount := hostMountsByDevice[key]
+		if hostMount == nil {
+			return true
+		}
+
+		pathInSourceMount, err := filepath.Rel(hostMount.Root, m.Root)
+		if err != nil || pathInSourceMount == ".." || strings.HasPrefix(pathInSourceMount, "../") {
+			return true
+		}
+
+		sources[m.ID] = filepath.Join(hostMount.Mountpoint, pathInSourceMount)
+		return true
+	})
+
+	return sources
+}
+
 ///////////////////////////////////////
 //// Interception/Tracing Adapters ////
 ///////////////////////////////////////
