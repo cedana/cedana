@@ -80,9 +80,18 @@ if [ "$CEDANA_SLURM_NODE_ROLE" = "login" ]; then
     exit 0
 fi
 
-# Pass lib-dir if CEDANA_PLUGINS_LIB_DIR is set
-if [ -n "${CEDANA_PLUGINS_LIB_DIR:-}" ]; then
-    ${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE" --lib-dir "$CEDANA_PLUGINS_LIB_DIR"
-else
-    ${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role "$CEDANA_SLURM_NODE_ROLE"
+# Build the setup command with optional flags
+SETUP_CMD="${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role $CEDANA_SLURM_NODE_ROLE"
+
+# Pass lib-dir if CEDANA_PLUGINS_LIB_DIR is set and not default
+if [ -n "${CEDANA_PLUGINS_LIB_DIR:-}" ] && [ "$CEDANA_PLUGINS_LIB_DIR" != "/usr/local/lib" ]; then
+    SETUP_CMD="$SETUP_CMD --lib-dir $CEDANA_PLUGINS_LIB_DIR"
 fi
+
+# Pass config-dir if CEDANA_CONFIG_DIR is set and not default
+if [ -n "${CEDANA_CONFIG_DIR:-}" ] && [ "$CEDANA_CONFIG_DIR" != "/etc/cedana" ]; then
+    SETUP_CMD="$SETUP_CMD --config-dir $CEDANA_CONFIG_DIR"
+fi
+
+# Execute the command
+$SETUP_CMD
