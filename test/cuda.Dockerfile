@@ -39,7 +39,6 @@ export NVIDIA_CONTAINER_TOOLKIT_VERSION=1.18.1-1
       nvidia-container-toolkit-base=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
       libnvidia-container-tools=${NVIDIA_CONTAINER_TOOLKIT_VERSION} \
       libnvidia-container1=${NVIDIA_CONTAINER_TOOLKIT_VERSION}
-nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
 EOT
 
 # install bats
@@ -177,6 +176,7 @@ snapshotter = "native"
           runtime_type = "io.containerd.runc.v2"
 CONFIG
 nvidia-ctk runtime configure --runtime=containerd
+nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
 EOT
 
 # copy cedana-samples
