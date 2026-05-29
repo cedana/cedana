@@ -26,13 +26,17 @@ if test -f "$SERVICE_FILE"; then
 fi
 
 echo "Creating $SERVICE_FILE..."
+
+# Get the current user's primary group ID
+CURRENT_GID=$(id -g)
+
 cat <<EOF | tee "$SERVICE_FILE" >/dev/null
 [Unit]
 Description=Cedana Daemon
 [Service]
 ExecStart=$APP_PATH daemon start
 User=$UID
-Group=$GID
+Group=$CURRENT_GID
 Restart=no
 
 [Install]
