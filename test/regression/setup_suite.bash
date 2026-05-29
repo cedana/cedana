@@ -16,6 +16,10 @@ setup_suite() {
     info log_url_host "$CEDANA_URL"
     info_log "====================================="
 
+    if ! command -v nvidia-ctk &>/dev/null; then
+        debug nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
+    fi
+
     debug cedana plugin install criu@criu-dev
     start_containerd
 }
