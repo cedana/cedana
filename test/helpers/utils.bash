@@ -251,6 +251,11 @@ info_log() {
     echo -e "${BLUE}$message${NC}" >&"${OUTPUT_FD}"
 }
 
+warn_log() {
+    local message="$1"
+    echo -e "${YELLOW}[WARN] $message${NC}" >&"${OUTPUT_FD}"
+}
+
 debug_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then
