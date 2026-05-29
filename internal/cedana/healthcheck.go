@@ -10,6 +10,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/rs/zerolog/log"
 )
 
 const CRIU_EXPERIMENTAL_CHECKS = false
@@ -31,6 +32,8 @@ func (s *Server) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 
 	results := checklist.Run(ctx)
 
+	log.Debug().Interface("results", results).Msg("health check results")
+
 	return &daemon.HealthCheckResp{Results: results}, nil
 }
 
@@ -50,6 +53,8 @@ func (s *Cedana) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 	}
 
 	results := checklist.Run(s.lifetime)
+
+	log.Debug().Interface("results", results).Msg("health check results")
 
 	return &daemon.HealthCheckResp{Results: results}, nil
 }
