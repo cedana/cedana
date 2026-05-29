@@ -66,9 +66,6 @@ const (
 	INFO_TIMEOUT      = 30 * time.Second
 	TERMINATE_TIMEOUT = 10 * time.Second
 	MAX_SYNC_FAILURES = 2
-
-	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
-	PARALLEL_DUMP = false // NOTE: Disabled since CED-1877 (allowing this requires some additional work)
 )
 
 type controller struct {
@@ -234,10 +231,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	log.Debug().Str("ID", id).Msg("spawning new GPU controller")
 
 	c = &controller{
-		ID:     id,
-		ErrBuf: &bytes.Buffer{},
-		UID:    uint32(os.Getuid()),
-		GID:    uint32(os.Getgid()),
+		ID:         id,
+		ErrBuf:     &bytes.Buffer{},
+		UID:        uint32(os.Getuid()),
+		GID:        uint32(os.Getgid()),
+		Terminated: make(chan int, 1),
 	}
 
 	cmd := exec.Command(
@@ -314,7 +312,6 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 
 	c.PID = uint32(cmd.Process.Pid)
 	c.ParentPID = uint32(os.Getpid())
-	c.Terminated = make(chan int, 1)
 
 	err = c.Sync(ctx, true)
 	if err != nil {
@@ -464,9 +461,6 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump complete")
 		}()
-		if PARALLEL_DUMP {
-			return nil
-		}
 		return <-dumpErr
 	}
 
@@ -579,10 +573,14 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 	// Will only be called if there are namespaces to restore
 	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
-		controller := p.Get(id)
 		restoredPid = &pid
+		return nil
+	}
 
-		return controller.Attach(ctx, uint32(pid))
+	// Will only be called if there are namespaces to restore
+	callback.PostSetupNamespacesFunc = func(ctx context.Context) error {
+		controller := p.Get(id)
+		return controller.Attach(ctx, uint32(*restoredPid))
 	}
 
 	callback.PreResumeFunc = func(ctx context.Context) error {
