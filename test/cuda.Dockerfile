@@ -1,6 +1,9 @@
 # syntax=docker/dockerfile:1.6
 
-FROM cedana/cedana-samples:cuda12.4-torch2.7 AS cedana-samples
+# TEMP: point at the cedana-samples PR build (cedana/cedana-samples#36) to wire
+# up the cuda-samples interception smoke test. Revert to
+# cedana/cedana-samples:cuda12.4-torch2.7 once that PR merges.
+FROM cedana/cedana-samples-test:cuda12.4-torch2.7-feature-ced-2102-add-automated-cuda-samples-testing AS cedana-samples
 
 FROM nvidia/cuda:12.8.0-base-ubuntu24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
