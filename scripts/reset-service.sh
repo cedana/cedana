@@ -35,8 +35,22 @@ if [ -f "$SERVICE_FILE" ]; then
         fi
     fi
 
-    # truncate the logs
-    echo -n > "$LOG_PATH"
+    # truncate the logs (need sudo for /var/log)
+    if echo -n > "$LOG_PATH" 2>/dev/null; then
+        : # Successfully truncated
+    elif [ "$EUID" -eq 0 ]; then
+        echo -n > "$LOG_PATH"
+    elif sudo -n true 2>/dev/null; then
+        echo -n | sudo tee "$LOG_PATH" >/dev/null
+    elif [ -t 0 ]; then
+        echo "Sudo access required to truncate log file"
+        echo -n | sudo tee "$LOG_PATH" >/dev/null
+    else
+        # Non-interactive, try sudo anyway
+        if ! echo -n | sudo tee "$LOG_PATH" >/dev/null 2>&1; then
+            echo "WARNING: Cannot truncate log file $LOG_PATH"
+        fi
+    fi
 
     # Remove service file, use sudo if needed
     if ! rm -f "$SERVICE_FILE" 2>/dev/null; then

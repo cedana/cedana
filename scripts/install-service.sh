@@ -27,8 +27,21 @@ fi
 
 echo "Creating $SERVICE_FILE..."
 
-# Get the current user's primary group ID
-CURRENT_GID=$(id -g)
+# Cedana daemon should run as root for checkpoint/restore operations
+# But we need to ensure the binary is accessible
+SERVICE_UID=0
+SERVICE_GID=0
+
+# If using a custom bin directory, ensure it's readable by root
+if [ -n "${CEDANA_PLUGINS_BIN_DIR:-}" ] && [ "${CEDANA_PLUGINS_BIN_DIR}" != "/usr/local/bin" ]; then
+    echo "Ensuring $APP_PATH is executable..."
+    if [ -f "$APP_PATH" ]; then
+        chmod +x "$APP_PATH" 2>/dev/null || sudo chmod +x "$APP_PATH"
+    else
+        echo "WARNING: Binary not found at $APP_PATH"
+        echo "Make sure cedana is installed at: $APP_PATH"
+    fi
+fi
 
 # Build the daemon command with optional config-dir
 DAEMON_CMD="$APP_PATH daemon start"
@@ -42,8 +55,8 @@ Description=Cedana Daemon
 [Service]
 ExecStart=$DAEMON_CMD
 Environment=CEDANA_CONFIG_DIR=${CEDANA_CONFIG_DIR:-/etc/cedana}
-User=$UID
-Group=$CURRENT_GID
+User=$SERVICE_UID
+Group=$SERVICE_GID
 Restart=no
 
 [Install]
