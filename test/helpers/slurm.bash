@@ -601,7 +601,7 @@ test_slurm_job() {
                     grep -oP 'JobState=\K\S+' || echo "UNKNOWN")
                 info_log "Job $old_preempt_job_id state: $state (waiting for preemption)"
                 case "$state" in
-                    PREEMPTED|REQUEUED|SUSPENDED|COMPLETED|FAILED|CANCELLED)
+                    PREEMPTED|REQUEUED|PENDING|SUSPENDED|COMPLETED|FAILED|CANCELLED)
                         preempted=true
                         break
                         ;;
