@@ -32,8 +32,11 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		hostname := details.GetHostname()
 		parent := details.GetParentPID()
 
+		log.Info().Uint32("job_id", jid).Str("hostname", hostname).Str("operation", "restore").Msg("getting slurm job for restore")
+
 		path, err := GetJobCgroupPath(hostname, jid)
 		if err != nil {
+			log.Error().Err(err).Uint32("job_id", jid).Str("operation", "restore").Msg("failed to get cgroup path")
 			return nil, err
 		}
 
@@ -51,6 +54,7 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		}
 		manager, err := cgroupsManager.New(config)
 		if err != nil {
+			log.Error().Err(err).Uint32("job_id", jid).Str("cgroup_path", path).Str("operation", "restore").Msg("failed to load cgroup2")
 			return nil, status.Errorf(codes.Internal, "failed to load cgroup2 for slurm job %d: %v", jid, err)
 		}
 		ctx = context.WithValue(ctx, slurm_keys.CGROUP_MANAGER_CONTEXT_KEY, manager)
@@ -59,9 +63,11 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		// since in cgroup v1 it only checks "devices" controller.
 		st, err := manager.GetFreezerState()
 		if err != nil {
+			log.Error().Err(err).Uint32("job_id", jid).Str("operation", "restore").Msg("failed to get cgroup freezer state")
 			return nil, status.Errorf(codes.Internal, "failed to get cgroup freezer state: %v", err)
 		}
 		if st == configs.Frozen {
+			log.Warn().Uint32("job_id", jid).Str("operation", "restore").Msg("cgroup unexpectedly frozen")
 			return nil, status.Errorf(codes.FailedPrecondition, "container's cgroup unexpectedly frozen")
 		}
 
