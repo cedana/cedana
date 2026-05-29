@@ -21,8 +21,21 @@ if ! systemctl status &>/dev/null; then
     exit
 fi
 
+SERVICE_EXISTS=false
 if test -f "$SERVICE_FILE"; then
-    echo "Restarting $APP_NAME..."
+    echo "Service file exists, will restart after update..."
+    SERVICE_EXISTS=true
+    # Stop the existing service first
+    if ! systemctl stop "$APP_NAME".service 2>/dev/null; then
+        if [ "$EUID" -eq 0 ]; then
+            systemctl stop "$APP_NAME".service 2>/dev/null || true
+        elif sudo -n true 2>/dev/null; then
+            sudo systemctl stop "$APP_NAME".service 2>/dev/null || true
+        elif [ -t 0 ]; then
+            echo "Sudo access required to stop existing service"
+            sudo systemctl stop "$APP_NAME".service || true
+        fi
+    fi
 fi
 
 echo "Creating $SERVICE_FILE..."
@@ -100,7 +113,13 @@ if ! systemctl daemon-reload 2>/dev/null; then
     fi
 fi
 
-echo "Enabling and starting $APP_NAME service..."
+# Determine if we're updating or fresh install
+if [ "$SERVICE_EXISTS" = true ]; then
+    echo "Restarting $APP_NAME service with new configuration..."
+else
+    echo "Enabling and starting $APP_NAME service..."
+fi
+
 # Try to enable and start service, use sudo if needed
 if ! systemctl enable "$APP_NAME".service 2>/dev/null; then
     if [ "$EUID" -eq 0 ]; then
@@ -118,20 +137,47 @@ if ! systemctl enable "$APP_NAME".service 2>/dev/null; then
     fi
 fi
 
-if ! systemctl start "$APP_NAME".service 2>/dev/null; then
-    if [ "$EUID" -eq 0 ]; then
-        systemctl start "$APP_NAME".service
-    elif sudo -n true 2>/dev/null; then
-        sudo systemctl start "$APP_NAME".service
-    elif [ -t 0 ]; then
-        echo "Sudo access required to start service"
-        sudo systemctl start "$APP_NAME".service || exit 1
-    else
-        if ! sudo systemctl start "$APP_NAME".service 2>/dev/null; then
-            echo "ERROR: Cannot start service in non-interactive mode without passwordless sudo"
-            exit 1
+# Start or restart the service
+if [ "$SERVICE_EXISTS" = true ]; then
+    # Service exists, try reload-or-restart (restart if reload not supported)
+    if ! systemctl reload-or-restart "$APP_NAME".service 2>/dev/null; then
+        if [ "$EUID" -eq 0 ]; then
+            systemctl reload-or-restart "$APP_NAME".service
+        elif sudo -n true 2>/dev/null; then
+            sudo systemctl reload-or-restart "$APP_NAME".service
+        elif [ -t 0 ]; then
+            echo "Sudo access required to restart service"
+            sudo systemctl reload-or-restart "$APP_NAME".service || exit 1
+        else
+            if ! sudo systemctl reload-or-restart "$APP_NAME".service 2>/dev/null; then
+                echo "ERROR: Cannot restart service in non-interactive mode without passwordless sudo"
+                exit 1
+            fi
+        fi
+    fi
+else
+    # Fresh install, just start
+    if ! systemctl start "$APP_NAME".service 2>/dev/null; then
+        if [ "$EUID" -eq 0 ]; then
+            systemctl start "$APP_NAME".service
+        elif sudo -n true 2>/dev/null; then
+            sudo systemctl start "$APP_NAME".service
+        elif [ -t 0 ]; then
+            echo "Sudo access required to start service"
+            sudo systemctl start "$APP_NAME".service || exit 1
+        else
+            if ! sudo systemctl start "$APP_NAME".service 2>/dev/null; then
+                echo "ERROR: Cannot start service in non-interactive mode without passwordless sudo"
+                exit 1
+            fi
         fi
     fi
 fi
 
 echo "$APP_NAME service setup complete."
+
+# Verify the service is running with correct configuration
+echo "Service configured to run: $DAEMON_CMD"
+if [ -n "${CEDANA_CONFIG_DIR:-}" ] && [ "${CEDANA_CONFIG_DIR}" != "/etc/cedana" ]; then
+    echo "Using config directory: ${CEDANA_CONFIG_DIR}"
+fi
