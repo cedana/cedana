@@ -192,3 +192,12 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 		return next(ctx, opts, resp, req)
 	}
 }
+
+func AddExternalMountsForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[]:%s", "ms"))
+		req.Criu.SetAutoExtMnt(true)
+		req.Criu.SetExtMasters(true)
+		return next(ctx, opts, resp, req)
+	}
+}

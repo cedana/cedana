@@ -55,7 +55,7 @@ jobs:
     secrets: inherit
     with:
       criu_version: criu-dev
-      gpu_version: main
+      gpu_version: feature/ced-2056-gpu-restore-worker-failure-doesnt-kill-runrestore
       streamer_version: main
       helm_chart_version: main
       controller_version: main

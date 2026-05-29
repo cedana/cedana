@@ -54,6 +54,13 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 
 			jobs.AddCheckpoint(jid, resp.GetPaths())
 
+			// Wait for job exit & cleanup
+			if !req.Criu.GetLeaveRunning() {
+				if err := <-jobs.Done(jid); err != nil {
+					resp.Messages = append(resp.Messages, err.Error())
+				}
+			}
+
 			return code, nil
 		}
 	}

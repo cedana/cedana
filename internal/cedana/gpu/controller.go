@@ -66,9 +66,6 @@ const (
 	INFO_TIMEOUT      = 30 * time.Second
 	TERMINATE_TIMEOUT = 10 * time.Second
 	MAX_SYNC_FAILURES = 2
-
-	// Whether to do GPU dump and restore in parallel to CRIU dump and restore.
-	PARALLEL_DUMP = false // NOTE: Disabled since CED-1877 (allowing this requires some additional work)
 )
 
 type controller struct {
@@ -234,10 +231,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	log.Debug().Str("ID", id).Msg("spawning new GPU controller")
 
 	c = &controller{
-		ID:     id,
-		ErrBuf: &bytes.Buffer{},
-		UID:    uint32(os.Getuid()),
-		GID:    uint32(os.Getgid()),
+		ID:         id,
+		ErrBuf:     &bytes.Buffer{},
+		UID:        uint32(os.Getuid()),
+		GID:        uint32(os.Getgid()),
+		Terminated: make(chan int, 1),
 	}
 
 	cmd := exec.Command(
@@ -314,7 +312,6 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 
 	c.PID = uint32(cmd.Process.Pid)
 	c.ParentPID = uint32(os.Getpid())
-	c.Terminated = make(chan int, 1)
 
 	err = c.Sync(ctx, true)
 	if err != nil {
@@ -464,9 +461,6 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump complete")
 		}()
-		if PARALLEL_DUMP {
-			return nil
-		}
 		return <-dumpErr
 	}
 
@@ -578,7 +572,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	}
 
 	// Will only be called if there are namespaces to restore
-	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
+	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
 		controller := p.Get(id)
 		restoredPid = &pid
 
@@ -780,16 +774,7 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 	resp, err := c.HealthCheck(waitCtx, req, grpc.WaitForReady(true))
 	var components []*daemon.HealthCheckComponent
 	if resp != nil {
-		l := log.Debug()
-		l.Str("ID", c.ID)
 		for _, component := range resp.Components {
-			l = l.Str(component.Name, component.Data)
-			for _, w := range component.Warnings {
-				log.Warn().Str("ID", c.ID).Str(component.Name, component.Data).Msg(w)
-			}
-			for _, e := range component.Errors {
-				log.Error().Str("ID", c.ID).Str(component.Name, component.Data).Msg(e)
-			}
 			components = append(components, &daemon.HealthCheckComponent{
 				Name:     component.Name,
 				Data:     component.Data,
@@ -797,7 +782,6 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 				Errors:   component.Errors,
 			})
 		}
-		l.Msg("health checked GPU controller")
 	}
 	if err != nil {
 		return components, utils.GRPCErrorShort(err, c.ErrBuf.String())

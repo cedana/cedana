@@ -22,10 +22,17 @@ helm_install_cedana() {
 
     # Use upgrade --install for idempotent installs
     if [ -e "$HELM_CHART" ]; then
+        debug_log "Using local helm chart at $HELM_CHART"
         helm_cmd="helm upgrade --install cedana $HELM_CHART" # local path to chart
+        if [ -f "$HELM_CHART/.values.yaml" ]; then
+            debug_log "Using additional values from $HELM_CHART/.values.yaml"
+            helm_cmd="$helm_cmd -f $HELM_CHART/.values.yaml"
+        fi
     elif [ -n "$HELM_CHART" ]; then
+        debug_log "Using helm chart version $HELM_CHART from OCI registry"
         helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm --version $HELM_CHART"
     else
+        debug_log "Using latest helm chart from OCI registry"
         helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
     fi
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
@@ -86,9 +93,6 @@ helm_install_cedana() {
     fi
     if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
-    fi
-    if [ -n "$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK" ]; then
-        helm_cmd="$helm_cmd --set config.gpuSkipNvidiaRuntimeHook=$CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK"
     fi
 
     helm_cmd="$helm_cmd --wait --timeout=5m"
