@@ -139,13 +139,14 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
+			isMemfd := strings.HasPrefix(f.Path, "/memfd:")
 			_, internal := mounts[f.MountID]
 
 			var key string
 			var fd int32
 			var extraFile *os.File
 
-			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
+			external := !(internal || isPipe || isSocket || isAnon || isMemfd) // sockets, pipes and memfds are always in external mounts
 
 			if external {
 				// Inherit all external namespace files, expecting them to still exist
@@ -249,4 +250,3 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		return next(ctx, opts, resp, req)
 	}
 }
-

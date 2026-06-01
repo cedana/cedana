@@ -151,9 +151,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			isPipe := strings.HasPrefix(file.Path, "pipe")
 			isSocket := strings.HasPrefix(file.Path, "socket")
 			isAnon := strings.HasPrefix(file.Path, "anon_inode")
+			isMemfd := strings.HasPrefix(file.Path, "/memfd:")
 			_, internal := mounts[file.MountID]
 
-			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
+			external := !(internal || isPipe || isSocket || isAnon || isMemfd) // sockets, pipes and memfds are always in external mounts
 
 			hostmemRegex := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
 			interceptorLogRegex := regexp.MustCompile(INTERCEPTOR_LOG_FILE_PATTERN)
