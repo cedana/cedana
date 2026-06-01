@@ -13,6 +13,10 @@ export YELLOW='\033[0;33m'
 export BLUE='\033[0;34m'
 export NC='\033[0m' # No Color
 
+# Set it here because bats resets this to 0 for some reason. That's the reason we set
+# BATS_RETRIES instead of BATS_TEST_RETRIES directly before calling bats.
+export BATS_TEST_RETRIES=$BATS_RETRIES
+
 # Determine output file descriptor once at initialization
 # Use fd 3 if available (BATS), otherwise use stdout
 if { true >&3; } 2>/dev/null; then

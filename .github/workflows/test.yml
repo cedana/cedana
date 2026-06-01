@@ -64,7 +64,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
-  RETRIES: 1
+  RETRIES: 0
   DEBUG: 0
 
 jobs:

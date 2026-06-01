@@ -57,7 +57,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
   TERM: dumb
-  RETRIES: 1
+  RETRIES: 1 # some tests are still flaky
   DEBUG: 0
 
 jobs:

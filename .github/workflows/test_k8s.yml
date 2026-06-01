@@ -77,7 +77,7 @@ env:
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
-  RETRIES: 1
+  RETRIES: 1 # some tests are still flaky
   DEBUG: 0
 
 jobs:

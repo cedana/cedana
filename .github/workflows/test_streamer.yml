@@ -55,7 +55,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   FORMATTER: junit
-  RETRIES: 1
+  RETRIES: 1 # some tests are still flaky
   DEBUG: 0
 
 jobs:
