@@ -146,7 +146,8 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			var fd int32
 			var extraFile *os.File
 
-			external := !(internal || isPipe || isSocket || isAnon || isMemfd) // sockets, pipes and memfds are always in external mounts
+			// sockets, pipes, anon_inodes and memfds are not real filesytem paths, treat them as internal
+			external := !(internal || isPipe || isSocket || isAnon || isMemfd)
 
 			if external {
 				// Inherit all external namespace files, expecting them to still exist

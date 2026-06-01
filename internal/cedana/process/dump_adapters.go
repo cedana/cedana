@@ -172,7 +172,7 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			_, mountFound := mounts[f.MountID]
 
 			// A file is external if it's from outside the process's mount namespace.
-			// Pipes, sockets, and anon_inodes are internal (not real files from external mounts).
+			// Pipes, sockets, memfds and anon_inodes are internal (not real files from external mounts).
 			// A file is external only if its mount ID is not in the process's mount table AND it's a real file.
 			internal := mountFound || isPipe || isSocket || isAnon || isMemfd
 			external := !internal
