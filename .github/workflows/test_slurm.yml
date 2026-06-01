@@ -184,7 +184,8 @@ jobs:
             GPU=0 \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
-            PARALLELISM=1
+            PARALLELISM=1 \
+            RETRIES=$RETRIES
           test_exit_code=$?
           set -e
 
