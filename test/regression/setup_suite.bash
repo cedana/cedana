@@ -17,8 +17,7 @@ setup_suite() {
     info_log "====================================="
 
     if command -v nvidia-ctk &>/dev/null && [ -f /.dockerenv  ]; then
-        debug nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
-        warn_log A CDI spec is expected at /etc/cdi/nvidia.yaml for some GPU tests
+        nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
     fi
 
     debug cedana plugin install criu@criu-dev
