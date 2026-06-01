@@ -64,12 +64,27 @@ if [ -n "${CEDANA_CONFIG_DIR:-}" ] && [ "${CEDANA_CONFIG_DIR}" != "/etc/cedana" 
     DAEMON_CMD="$DAEMON_CMD --config-dir=${EXPANDED_CONFIG_DIR}"
 fi
 
+# Expand all plugin directories for environment variables
+if [ -n "${CEDANA_PLUGINS_BIN_DIR:-}" ]; then
+    EXPANDED_BIN_DIR=$(eval echo "${CEDANA_PLUGINS_BIN_DIR}")
+else
+    EXPANDED_BIN_DIR="/usr/local/bin"
+fi
+
+if [ -n "${CEDANA_PLUGINS_LIB_DIR:-}" ]; then
+    EXPANDED_LIB_DIR=$(eval echo "${CEDANA_PLUGINS_LIB_DIR}")
+else  
+    EXPANDED_LIB_DIR="/usr/local/lib"
+fi
+
 # Define the service file content
 SERVICE_CONTENT="[Unit]
 Description=Cedana Daemon
 [Service]
 ExecStart=$DAEMON_CMD
 Environment=CEDANA_CONFIG_DIR=${EXPANDED_CONFIG_DIR:-/etc/cedana}
+Environment=CEDANA_PLUGINS_BIN_DIR=${EXPANDED_BIN_DIR}
+Environment=CEDANA_PLUGINS_LIB_DIR=${EXPANDED_LIB_DIR}
 User=$SERVICE_UID
 Group=$SERVICE_GID
 Restart=no
