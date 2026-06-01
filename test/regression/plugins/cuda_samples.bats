@@ -1,9 +1,7 @@
 #!/usr/bin/env bats
 
-# Interception smoke test: runs the upstream NVIDIA cuda-samples suite via
-# run_tests.py underneath cedana's GPU interceptor. Exercises a wide surface of
-# CUDA driver/runtime APIs in one shot. Intended for the GPU runner.
-#
+# Differential interception test for the NVIDIA cuda-samples suite.
+
 # This file assumes its being run from the same directory as the Makefile
 #
 # bats file_tags=gpu,cuda-samples
@@ -16,14 +14,16 @@ load_lib support
 load_lib assert
 load_lib file
 
-SAMPLES_SCRIPT="/cedana-samples/gpu_smr/cuda-samples/run-tests.sh"
+SAMPLES_DIR="/cedana-samples/gpu_smr/cuda-samples"
+SAMPLES_SCRIPT="$SAMPLES_DIR/run-tests.sh"
+COMPARE_SCRIPT="$SAMPLES_DIR/compare-results.py"
 
 setup_file() {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
-    if [ ! -x "$SAMPLES_SCRIPT" ]; then
-        skip "cuda-samples smoke-test script missing at $SAMPLES_SCRIPT (rebuild cedana-samples image)"
+    if [ ! -x "$SAMPLES_SCRIPT" ] || [ ! -f "$COMPARE_SCRIPT" ]; then
+        skip "cuda-samples scripts missing under $SAMPLES_DIR (rebuild cedana-samples image)"
     fi
     setup_file_daemon
 }
@@ -41,9 +41,31 @@ teardown_file() {
 }
 
 # bats test_tags=cuda-samples
-@test "[$GPU_INFO] cuda-samples smoke test (intercepted)" {
-    jid=$(unix_nano)
+@test "[$GPU_INFO] cuda-samples differential (native baseline vs intercepted)" {
+    native_jid=$(unix_nano)
+    cedana_jid=$(unix_nano)
+    native_out="/tmp/cuda-samples-native-$native_jid"
+    cedana_out="/tmp/cuda-samples-cedana-$cedana_jid"
 
-    debug cedana run process --attach -g --jid "$jid" \
-        -- "$SAMPLES_SCRIPT"
+    # Baseline
+    run cedana run process --attach --jid "$native_jid" \
+        -- bash -c "OUTPUT_DIR='$native_out' '$SAMPLES_SCRIPT'"
+    echo "native run rc=$status"
+    echo "$output"
+
+    # Candidate
+    run cedana run process --attach -g --jid "$cedana_jid" \
+        -- bash -c "OUTPUT_DIR='$cedana_out' '$SAMPLES_SCRIPT'"
+    echo "intercepted run rc=$status"
+    echo "$output"
+
+    assert_exists "$native_out/results.json"
+    assert_exists "$cedana_out/results.json"
+
+    # Compare 
+    run python3 "$COMPARE_SCRIPT" \
+        --baseline "$native_out/results.json" \
+        --candidate "$cedana_out/results.json"
+    echo "$output"
+    assert_success
 }
