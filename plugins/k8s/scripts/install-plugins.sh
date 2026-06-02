@@ -196,6 +196,7 @@ EOF
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
   runtime_type = "io.containerd.runc.v2"
   runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+  container_annotations = ["nvidia.cdi.k8s.io/*"]
 EOF
     fi
 fi
@@ -234,6 +235,7 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+    container_annotations = ["nvidia.cdi.k8s.io/*"]
 END_CAT
         echo "Cedana runtime config written to $TARGET_CONFIG"
     else
