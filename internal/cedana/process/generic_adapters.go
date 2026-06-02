@@ -30,7 +30,7 @@ func SetupIO[REQ, RESP any](next types.Handler[REQ, RESP]) types.Handler[REQ, RE
 			stdout = os.Stdout
 			stderr = os.Stderr
 		} else if types.Attachable(req) {
-			stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id)
+			stdin, stdout, stderr = cedana_io.NewStreamIOSlave(opts.Lifetime, opts.WG, id, types.WaitFirstMaster(req))
 			defer func() {
 				if err == nil {
 					cedana_io.SetIOSlaveExitCode(id, code())
