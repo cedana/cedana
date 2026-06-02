@@ -57,7 +57,7 @@ const (
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
-	DEFAULT_CRIU_LOG_LEVEL      = 3
+	DEFAULT_CRIU_LOG_LEVEL      = 2
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
