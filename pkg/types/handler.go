@@ -103,7 +103,7 @@ func WaitFirstMaster[REQ any](req *REQ) bool {
 	case *daemon.RestoreReq:
 		return r.WaitFirstMaster
 	default:
-		panic("unsupported type for Attachable extraction")
+		panic("unsupported type for WaitFirstMaster extraction")
 	}
 }
 
