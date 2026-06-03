@@ -483,44 +483,27 @@ jobs:
 
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             REPO="cedana/cedana-slurm"
-            {
-              echo "source_mode=cloudsmith"
-              echo "source_ref=${VERSION_REF}"
-              echo "checkout_sha=${CHECKOUT_SHA}"
-              echo "cloudsmith_repo=${REPO}"
-            } > "$ORIGIN_FILE"
-
-            cd slurm
-            for binary in cedana-slurm spank_cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
-              URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION_REF}/${binary}-${ARCH}"
-              URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${VERSION_REF}/${binary}"
-              if ! curl -1Lf -O "$URL1"; then
-                echo "Primary URL failed for ${binary}, trying alternative URL..."
-                curl -1Lf -o "${binary}-${ARCH}" "$URL2"
-              fi
-              mv "${binary}-${ARCH}" "build/${binary}" 2>/dev/null || mv "${binary}" "build/${binary}" 2>/dev/null || true
-            done
-            cd ..
           else
-            {
-              echo "source_mode=local-build"
-              echo "source_ref=${VERSION_REF}"
-              echo "built_from_sha=${CHECKOUT_SHA}"
-            } > "$ORIGIN_FILE"
-
-            SLURM_BUILD_DIR=$(cat slurm/cedana-slurm/slurm-versions | head -n 1)
-
-            (
-              cd slurm/cedana-slurm
-              make all
-            )
-
-            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/cedana-slurm slurm/build/cedana-slurm
-            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/spank_cedana.so slurm/build/spank_cedana.so
-            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/task_cedana.so slurm/build/task_cedana.so
-            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/cli_filter_cedana.so slurm/build/cli_filter_cedana.so
-            cp slurm/cedana-slurm/build/$SLURM_BUILD_DIR/job_submit_cedana.so slurm/build/job_submit_cedana.so
+            REPO="cedana/cedana-slurm-alpha"
           fi
+          {
+            echo "source_mode=cloudsmith"
+            echo "source_ref=${VERSION_REF}"
+            echo "checkout_sha=${CHECKOUT_SHA}"
+            echo "cloudsmith_repo=${REPO}"
+          } > "$ORIGIN_FILE"
+
+          cd slurm
+          for binary in cedana-slurm spank_cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
+            URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION_REF}/${binary}-${ARCH}"
+            URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${VERSION_REF}/${binary}"
+            if ! curl -1Lf -O "$URL1"; then
+              echo "Primary URL failed for ${binary}, trying alternative URL..."
+              curl -1Lf -o "${binary}-${ARCH}" "$URL2"
+            fi
+            mv "${binary}-${ARCH}" "build/${binary}" 2>/dev/null || mv "${binary}" "build/${binary}" 2>/dev/null || true
+          done
+          cd ..
           echo "$VERSION_REF" > slurm/slurm-version.txt
 
           echo "=== Binary checksums ==="

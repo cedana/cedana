@@ -207,4 +207,3 @@ func Decode(data string) (*Data, error) {
 	err := gob.NewDecoder(bytes.NewBufferString(data)).Decode(&d)
 	return &d, err
 }
-
