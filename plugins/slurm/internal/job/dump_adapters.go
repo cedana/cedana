@@ -24,8 +24,11 @@ func GetSlurmJobForDump(next types.Dump) types.Dump {
 		jid := req.GetDetails().GetSlurm().GetJobID()
 		hostname := req.GetDetails().GetSlurm().GetHostname()
 
+		log.Info().Uint32("job_id", jid).Str("hostname", hostname).Str("operation", "dump").Msg("getting slurm job for dump")
+
 		path, err := GetJobCgroupPath(hostname, jid)
 		if err != nil {
+			log.Error().Err(err).Uint32("job_id", jid).Str("operation", "dump").Msg("failed to get cgroup path")
 			return nil, err
 		}
 
@@ -35,6 +38,7 @@ func GetSlurmJobForDump(next types.Dump) types.Dump {
 		}
 		manager, err := cgroupsManager.New(config)
 		if err != nil {
+			log.Error().Err(err).Uint32("job_id", jid).Str("cgroup_path", path).Str("operation", "dump").Msg("failed to load cgroup2")
 			return nil, status.Errorf(codes.NotFound, "failed to load cgroup2 for slurm job %d: %v", jid, err)
 		}
 
