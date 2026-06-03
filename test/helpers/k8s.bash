@@ -733,7 +733,10 @@ test_pod_spec() {
 
                 debug_log "Restore starting for $name..."
 
-                validate_pod "$name" "$pod_timeout"
+                validate_pod "$name" "$pod_timeout" || {
+                    error="Restored pod $name failed to become Ready"
+                    break
+                }
                 debug_log "Restored pod $name successfully"
                 original_name="$name"
                 deployed=true
