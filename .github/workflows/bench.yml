@@ -67,11 +67,12 @@ env:
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   SAMPLES: ${{ inputs.samples }}
   RETRIES: 2
+  DEBUG: 0
 
 jobs:
   dry-run:
     name: Dry Run
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-8/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-13-2/extras=s3-cache
     container:
       image: cedana/cedana-bench:slim
       credentials:
@@ -116,7 +117,7 @@ jobs:
   run:
     name: Run
     needs: dry-run
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-12-8/tag=${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64-cuda-13-2/tag=${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}/extras=s3-cache
     container:
       # sglang and vllm have incompatible dep sets, so cedana-bench publishes
       # two separate images. Match cedana-bench's own test.yml: pick the
@@ -198,7 +199,7 @@ jobs:
         with:
           limit-access-to-actor: true
 
-      - name: Disable io_uring 
+      - name: Disable io_uring
         run: sysctl -w kernel.io_uring_disabled=2
 
       - name: Run
@@ -208,14 +209,16 @@ jobs:
           METRIC: ${{ matrix.metric }}
           WORKLOAD: ${{ matrix.workload }}
         run: |
-          # Pre-create log files so `tail -F` can latch on immediately,
-          # then stream them into the GH job output while the bench runs. 
-          : > /src/runner.log
-          : > /src/cr.log
-          : > /src/crtool.log
-          ( tail -F --pid=$$ /src/runner.log /src/cr.log /src/crtool.log /tmp/*.log 2>/dev/null | sed -u 's/^/[log] /' ) &
-          TAIL_PID=$!
-          trap 'kill $TAIL_PID 2>/dev/null || true' EXIT
+          if [ "$DEBUG" -eq 1 ]; then
+            # Pre-create log files so `tail -F` can latch on immediately,
+            # then stream them into the GH job output while the bench runs.
+            : > /src/runner.log
+            : > /src/cr.log
+            : > /src/crtool.log
+            ( tail -F --pid=$$ /src/runner.log /src/cr.log /src/crtool.log /tmp/*.log 2>/dev/null | sed -u 's/^/[log] /' ) &
+            TAIL_PID=$!
+            trap 'kill $TAIL_PID 2>/dev/null || true' EXIT
+          fi
           ./bench run $RUNTIME -m $METRIC -w $WORKLOAD -n $SAMPLES -r $RETRIES --save
 
       - name: Upload logs

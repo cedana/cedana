@@ -122,8 +122,6 @@ type (
 		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
-		// SkipNvidiaRuntimeHook always skips the nvidia-container-runtime-hook when spawning GPU containers
-		SkipNvidiaRuntimeHook bool `json:"skip_nvidia_runtime_hook" key:"skip_nvidia_runtime_hook" yaml:"skip_nvidia_runtime_hook" mapstructure:"skip_nvidia_runtime_hook"`
 	}
 
 	Plugins struct {
@@ -132,7 +130,7 @@ type (
 		// LibDir is the directory where plugin libraries are stored
 		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
 		// Builds is the build versions to list/download for plugins (release, alpha)
-		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds"`
+		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds" env_aliases:"CEDANA_PLUGINS_BUILD"`
 	}
 
 	AWS struct {

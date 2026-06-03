@@ -11,17 +11,21 @@ BUNDLE="$WORKLOADS/bundle"
 BUNDLE_CUDA="$WORKLOADS/bundle_cuda"
 
 setup_rootfs() {
+    debug_log "Setting up rootfs from $ROOTFS_URL"
     mkdir -p "$ROOTFS"
     wget -q -O /tmp/rootfs.tar.gz "$ROOTFS_URL"
     tar -C "$ROOTFS" -xzf /tmp/rootfs.tar.gz
     rm /tmp/rootfs.tar.gz
+    debug_log "Rootfs setup complete"
 }
 
 setup_rootfs_cuda() {
+    debug_log "Setting up CUDA rootfs from $ROOTFS_CUDA_IMAGE"
     mkdir -p "$ROOTFS_CUDA"
     cid=$(docker create "$ROOTFS_CUDA_IMAGE" tail)
     docker export "$cid" | tar -C "$ROOTFS_CUDA" -xf -
     docker rm "$cid"
+    debug_log "CUDA Rootfs setup complete"
 }
 
 create_workload_bundle() {

@@ -86,7 +86,8 @@ var runCmd = &cobra.Command{
 					flags.OutFlag.Full,
 					flags.AttachFlag.Full,
 					flags.AttachableFlag.Full,
-				))
+				),
+			)
 		}
 
 		env := os.Environ()
@@ -104,13 +105,14 @@ var runCmd = &cobra.Command{
 			GPUTracing: gpuTracing,
 			GPUID:      gpuID,
 
-			Attachable: attach || attachable,
-			Action:     daemon.RunAction_START_NEW,
-			Env:        env,
-			UID:        user.Uid,
-			GID:        user.Gid,
-			Groups:     user.Groups,
-			Details:    &daemon.Details{},
+			Attachable:      attach || attachable,
+			WaitFirstMaster: attach,
+			Action:          daemon.RunAction_START_NEW,
+			Env:             env,
+			UID:             user.Uid,
+			GID:             user.Gid,
+			Groups:          user.Groups,
+			Details:         &daemon.Details{},
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RUN_REQ_CONTEXT_KEY, req)
