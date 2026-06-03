@@ -14,10 +14,6 @@ setup_file() {
     fi
 }
 
-teardown() {
-    kubectl delete pods --all -n "$NAMESPACE" --grace-period=0 --force --wait=true 2>/dev/null || true
-}
-
 #########
 # Basic #
 #########
