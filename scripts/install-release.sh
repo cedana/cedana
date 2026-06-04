@@ -3,6 +3,8 @@ set -euo pipefail
 
 # This is a one-shot script to install the current release version of Cedana.
 
+export APP_NAME="cedana"
+
 # VERSION will be automatically injected by the CI workflow
 VERSION=${VERSION:-"latest"}
 if [[ $EUID -ne 0 ]]; then
