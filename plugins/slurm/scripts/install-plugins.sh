@@ -57,8 +57,12 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
 fi
 
 # Improve streaming performance
-echo 0 >/proc/sys/fs/pipe-user-pages-soft || true # change pipe pages soft limit to unlimited
-echo 4194304 >/proc/sys/fs/pipe-max-size || true # change pipe max size to 4MiB
+if ! echo 0 >/proc/sys/fs/pipe-user-pages-soft; then
+    echo "Warning: Failed to set pipe-user-pages-soft to 0, streaming performance may be degraded" >&2
+fi
+if ! echo 4194304 >/proc/sys/fs/pipe-max-size; then
+    echo "Warning: Failed to set pipe-max-size to 4194304, streaming performance may be degraded" >&2
+fi
 
 ##########################
 # Setup SLURM/WLM plugin #

@@ -32,7 +32,10 @@ echo "Current size: $(numfmt --to=iec "$CURRENT_SIZE")"
 # 1. Remount if current size is too small
 if [ "$CURRENT_SIZE" -lt "$MIN_BYTES" ]; then
     echo "Remounting $SHM_PATH with size $SIZE..."
-    mount -o remount,size="$SIZE" "$SHM_PATH" || true
+    if ! mount -o remount,size="$SIZE" "$SHM_PATH"; then
+        echo "Warning: Failed to remount $SHM_PATH with size $SIZE" >&2
+        exit 1
+    fi
 else
     echo "$SHM_PATH already has sufficient size"
 fi
@@ -41,7 +44,10 @@ fi
 FSTAB_ENTRY="tmpfs /dev/shm tmpfs defaults,size=$SIZE 0 0"
 if [ -f "$FSTAB" ] && grep -qE "^\s*[^#]\s*tmpfs\s+/dev/shm" "$FSTAB"; then
     echo "Updating existing fstab entry for /dev/shm..."
-    sed -i.bak -E "s|^\s*[^#]\s*tmpfs\s+/dev/shm.*|$FSTAB_ENTRY|" "$FSTAB" || true
+    if ! sed -i.bak -E "s|^\s*[^#]\s*tmpfs\s+/dev/shm.*|$FSTAB_ENTRY|" "$FSTAB"; then
+        echo "Warning: Failed to update fstab entry for /dev/shm" >&2
+        exit 1
+    fi
 elif [ -f "$FSTAB" ]; then
     echo "Adding new fstab entry for /dev/shm..."
     echo "$FSTAB_ENTRY" >> "$FSTAB"
