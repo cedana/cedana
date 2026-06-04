@@ -38,11 +38,14 @@ type PropagatorManager struct {
 }
 
 func NewPropagatorManager(connection config.Connection, compatibility string) *PropagatorManager {
-	downloadDir, err := os.UserHomeDir()
-	if err != nil {
+	var downloadDir string
+	var err error
+	if downloadDir, err = os.UserCacheDir(); err != nil {
+		downloadDir = os.TempDir()
+	} else if downloadDir, err = os.UserHomeDir(); err != nil {
 		downloadDir = os.TempDir()
 	}
-	downloadDir = filepath.Join(downloadDir, "downloads")
+	downloadDir = filepath.Join(downloadDir, ".cedana", "downloads")
 
 	os.RemoveAll(downloadDir) // cleanup existing downloads
 	os.MkdirAll(downloadDir, DOWNLOAD_DIR_PERMS)

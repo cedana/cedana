@@ -9,7 +9,6 @@ CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
-CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib"}
 
 # XXX: We always install the GPU plugin for now until auto-detection is added
 PLUGINS=" \
@@ -66,7 +65,7 @@ echo 4194304 >/proc/sys/fs/pipe-max-size || true # change pipe max size to 4MiB
 ##########################
 
 if [ "$ENV" != "production" ]; then
-    echo "Non-production environment detected, skipping containerd runtime configuration"
+    echo "Non-production environment detected, skipping containerd runtime configuration" >&2
     exit 0
 fi
 
@@ -76,22 +75,8 @@ if [ -z "${CEDANA_SLURM_NODE_ROLE:-}" ]; then
 fi
 
 if [ "$CEDANA_SLURM_NODE_ROLE" = "login" ]; then
-    echo "Login node: skipping cedana-slurm setup"
+    echo "Login node: skipping cedana-slurm setup" >&2
     exit 0
 fi
 
-# Build the setup command with optional flags
-SETUP_CMD="${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role $CEDANA_SLURM_NODE_ROLE"
-
-# Pass lib-dir if CEDANA_PLUGINS_LIB_DIR is set and not default
-if [ -n "${CEDANA_PLUGINS_LIB_DIR:-}" ] && [ "$CEDANA_PLUGINS_LIB_DIR" != "/usr/local/lib" ]; then
-    SETUP_CMD="$SETUP_CMD --lib-dir $CEDANA_PLUGINS_LIB_DIR"
-fi
-
-# Pass config-dir if CEDANA_CONFIG_DIR is set and not default
-if [ -n "${CEDANA_CONFIG_DIR:-}" ] && [ "$CEDANA_CONFIG_DIR" != "/etc/cedana" ]; then
-    SETUP_CMD="$SETUP_CMD --config-dir $CEDANA_CONFIG_DIR"
-fi
-
-# Execute the command
-$SETUP_CMD
+${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role $CEDANA_SLURM_NODE_ROLE

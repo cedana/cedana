@@ -315,4 +315,3 @@ func bindEnvVars() {
 
 	viper.AutomaticEnv()
 }
-
