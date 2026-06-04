@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/flags"
@@ -10,8 +11,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+var (
+	DIR_PATH      = "/etc/cedana"
+	DIR_PATH_USER string
+)
+
 const (
-	DIR_PATH   = "/etc/cedana"
 	FILE_NAME  = "config"
 	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
@@ -42,7 +47,7 @@ const (
 	DEFAULT_PROFILING_DETAILED  = true
 	DEFAULT_PROFILING_PRECISION = "auto"
 
-	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai"
+	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai/v1"
 	DEFAULT_CONNECTION_AUTH_TOKEN = ""
 
 	DEFAULT_METRICS = false
@@ -129,6 +134,16 @@ func init() {
 		panic(err)
 	}
 
+	if os.Geteuid() != 0 {
+		homeDir, err := os.UserConfigDir()
+		if err != nil {
+			panic(fmt.Errorf("failed to get user home directory: %w", err))
+		}
+		DIR_PATH_USER = filepath.Join(homeDir, "cedana")
+	} else {
+		DIR_PATH_USER = DIR_PATH
+	}
+
 	var configStr string
 	var configDir string
 	var initConfig bool
@@ -189,12 +204,13 @@ func Load(args ...Args) (err error) {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH
+		Dir = DIR_PATH_USER
 	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
+	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
 
@@ -230,12 +246,13 @@ func Init(args ...Args) error {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH
+		Dir = DIR_PATH_USER
 	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
+	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
