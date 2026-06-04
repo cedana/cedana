@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 )
 
-var searchPath = os.Getenv("CEDANA_PLUGINS_LOCAL_SEARCH_PATH")
+var searchPath = config.Global.Plugins.LocalSearchPath
 
 type LocalManager struct {
 	searchPath string

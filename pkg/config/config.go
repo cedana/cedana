@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 )
@@ -126,6 +127,52 @@ func init() {
 	err := viper.Unmarshal(&Global)
 	if err != nil {
 		panic(err)
+	}
+
+	var configStr string
+	var configDir string
+	var initConfig bool
+	var mergeConfig bool
+
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--"+flags.ConfigFlag.Full && i+1 < len(args) {
+			configStr = args[i+1]
+			i++
+		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigFlag.Full); ok {
+			configStr = after
+		}
+		if arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args) {
+			configDir = args[i+1]
+			i++
+		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigDirFlag.Full); ok {
+			configDir = after
+		}
+		if arg == "--"+flags.InitConfig.Full {
+			initConfig = true
+		}
+		if arg == "--"+flags.MergeConfig.Full {
+			mergeConfig = true
+		}
+	}
+	if configDir == "" {
+		configDir = os.Getenv("CEDANA_CONFIG_DIR")
+	}
+	if initConfig || mergeConfig {
+		err = Init(Args{
+			Config:    configStr,
+			ConfigDir: configDir,
+			Merge:     mergeConfig,
+		})
+	} else {
+		err = Load(Args{
+			Config:    configStr,
+			ConfigDir: configDir,
+		})
+	}
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize config: %w", err))
 	}
 }
 
@@ -268,3 +315,4 @@ func bindEnvVars() {
 
 	viper.AutomaticEnv()
 }
+

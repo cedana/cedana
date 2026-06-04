@@ -131,6 +131,8 @@ type (
 		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
 		// Builds is the build versions to list/download for plugins (release, alpha)
 		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds" env_aliases:"CEDANA_PLUGINS_BUILD"`
+		// LocalSearchPath is a colon-separated list of local directories to search for locally built plugins
+		LocalSearchPath string `json:"local_search_path" key:"local_search_path" yaml:"local_search_path" mapstructure:"local_search_path"`
 	}
 
 	AWS struct {
