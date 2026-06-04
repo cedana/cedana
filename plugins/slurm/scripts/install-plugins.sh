@@ -68,19 +68,12 @@ fi
 # Setup SLURM/WLM plugin #
 ##########################
 
-if [ "$ENV" != "production" ]; then
-    echo "Non-production environment detected, skipping containerd runtime configuration" >&2
-    exit 0
-fi
-
 if [ -z "${CEDANA_SLURM_NODE_ROLE:-}" ]; then
     echo "Error: CEDANA_SLURM_NODE_ROLE must be set to controller, worker or login" >&2
     exit 1
 fi
 
-if [ "$CEDANA_SLURM_NODE_ROLE" = "login" ]; then
-    echo "Login node: skipping cedana-slurm setup" >&2
-    exit 0
-fi
+fuser -k -TERM "${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm" || true
+sleep 5
 
 ${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role $CEDANA_SLURM_NODE_ROLE

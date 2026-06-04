@@ -48,6 +48,9 @@ else
     exit 1
 fi
 
+fuser -k -TERM "$APP_PATH" || true
+sleep 5
+
 curl -fSL \
     "${CEDANA_URL}"/download?version="$VERSION"\&arch="$ARCH"\&build="$CEDANA_PLUGINS_BUILDS" \
     -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
