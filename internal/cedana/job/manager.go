@@ -53,6 +53,11 @@ type Manager interface {
 	// exports a custom signal.
 	Kill(ctx context.Context, jid string, signal ...syscall.Signal) error
 
+	// Returns a channel that will receive an error once the job with the given JID is done.
+	// If the job exits cleanly, the channel will receive a nil error. If the job exits with an error, the channel will
+	// receive that error. Non-zero exit codes are not considered errors. Failure in cleanup is considered an error.
+	Done(jid string) <-chan error
+
 	/////////////////////
 	//// Checkpoints ////
 	/////////////////////

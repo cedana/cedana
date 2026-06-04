@@ -139,7 +139,8 @@ var restoreCmd = &cobra.Command{
 					flags.OutFlag.Full,
 					flags.AttachFlag.Full,
 					flags.AttachableFlag.Full,
-				))
+				),
+			)
 		}
 
 		env := os.Environ()
@@ -150,17 +151,18 @@ var restoreCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
-			Path:       path,
-			PidFile:    pidFile,
-			Log:        log,
-			Attachable: attach || attachable,
-			Criu:       criuOpts,
-			Env:        env,
-			GPUID:      gpuID,
-			UID:        user.Uid,
-			GID:        user.Gid,
-			Groups:     user.Groups,
-			Details:    &daemon.Details{},
+			Path:            path,
+			PidFile:         pidFile,
+			Log:             log,
+			Attachable:      attach || attachable,
+			WaitFirstMaster: attach,
+			Criu:            criuOpts,
+			Env:             env,
+			GPUID:           gpuID,
+			UID:             user.Uid,
+			GID:             user.Gid,
+			Groups:          user.Groups,
+			Details:         &daemon.Details{},
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)

@@ -58,7 +58,6 @@ teardown_file() {
 
 # bats test_tags=dump,hostmem
 @test "[$GPU_INFO] stream dump GPU process (vector add hostmem)" {
-    skip "until CED-1945 is fixed"
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add_host
@@ -131,7 +130,6 @@ teardown_file() {
 
 # bats test_tags=restore,hostmem
 @test "[$GPU_INFO] stream restore GPU process (vector add hostmem)" {
-    skip "until CED-1945 is fixed"
     jid=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add_host

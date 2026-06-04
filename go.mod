@@ -7,8 +7,8 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.10-20251217045538-a7aca122d469.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.10-20260325135548-5c34961f8356.1
 	buf.build/gen/go/cedana/cedana/grpc/go v1.6.0-00000000000000-35a6b961b424.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-00000000000000-4fccc639692d.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20251217045538-54cc2971c322.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.10-20260529082745-9a49abc733aa.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.10-20260529082745-92c0b18fed8d.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
@@ -16,12 +16,12 @@ require (
 	github.com/cedana/cedana-go-sdk v0.3.8-0.20260116153239-87b778d35bc8
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.4
-	github.com/containerd/containerd v1.7.28
+	github.com/containerd/containerd v1.7.32
 	github.com/containerd/containerd/api v1.8.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v0.2.1
 	github.com/coreos/go-systemd/v22 v22.6.0
-	github.com/cyphar/filepath-securejoin v0.5.0
+	github.com/cyphar/filepath-securejoin v0.5.1
 	github.com/gofrs/flock v0.12.1
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
@@ -35,7 +35,7 @@ require (
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/opencontainers/runc v1.3.2
 	github.com/opencontainers/runtime-spec v1.2.1
-	github.com/opencontainers/selinux v1.12.0
+	github.com/opencontainers/selinux v1.13.1
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0

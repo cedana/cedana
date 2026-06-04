@@ -50,8 +50,8 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   FORMATTER: junit
-  RETRIES: 1
-  DEBUG: ${{ vars.DEBUG_REGRESSION }}
+  RETRIES: 1 # some tests are still flaky
+  DEBUG: 0
 
 jobs:
   cuda:
@@ -62,22 +62,44 @@ jobs:
       fail-fast: false
       matrix:
         cuda_version:
-          # - 11-8  TODO: re-enable once compatibility is fixed
-          # - 12-2
+          - 12-2
           - 12-4
           - 12-8
+          - 13-2
         cr:
           - default
           - streamer
         arch:
           - amd64
           - arm64
+        exclude: # to reduce CI minutes
+          - cuda_version: 12-2
+            cr: streamer
+          - cuda_version: 12-2
+            cr: default
+            arch: arm64
+          - cuda_version: 12-4
+            cr: default
+          - cuda_version: 12-4
+            cr: streamer
+            arch: amd64
+          - cuda_version: 12-8
+            cr: streamer
+          - cuda_version: 12-8
+            cr: default
+            arch: arm64
+          - cuda_version: 13-2
+            cr: default
+            arch: arm64
+          - cuda_version: 13-2
+            cr: streamer
+            arch: amd64
     container:
       image: cedana/cedana-test:cuda
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all --cgroupns=host
+      options: --privileged --init --ipc=host --device nvidia.com/gpu=all --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -145,7 +167,7 @@ jobs:
         env:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
-          PARALLELISM: ${{ inputs.parallelism }}
+          PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then

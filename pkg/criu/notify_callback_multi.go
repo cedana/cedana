@@ -180,6 +180,16 @@ func (n NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context) error {
 	return nil
 }
 
+func (n NotifyCallbackMulti) SkipNamespaces(ctx context.Context, pid int32) error {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		err := n.callbacks[i].SkipNamespaces(ctx, pid)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
 		err := n.callbacks[i].OrphanPtsMaster(ctx, fd)
