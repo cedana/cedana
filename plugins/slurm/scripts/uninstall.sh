@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm cleanup --node-role $CEDANA_SLURM_NODE_ROLE || true
+${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm cleanup || true
 
 # Remove config
 rm -rf /etc/cedana
