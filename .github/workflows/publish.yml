@@ -54,6 +54,7 @@ jobs:
         arch:
           - amd64
           - arm64
+      max-parallel: 1 # DO NOT CHANGE: required to run in order
     steps:
       - name: Download binary
         uses: actions/download-artifact@v4
