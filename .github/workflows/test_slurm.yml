@@ -45,6 +45,11 @@ on:
         description: "Post test summary"
         required: false
         default: false
+      slurm_artifact:
+        type: string
+        description: "Name of the slurm binaries artifact to download"
+        required: false
+        default: "slurm"
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -101,7 +106,7 @@ jobs:
       - name: Download slurm binaries
         uses: actions/download-artifact@v4
         with:
-          name: slurm-amd64
+          name: ${{ inputs.slurm_artifact }}-amd64
           path: slurm-bin
 
       - name: Extract cedana-slurm
@@ -160,8 +165,8 @@ jobs:
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           CEDANA_PLUGINS_BUILDS: alpha
-          GPU: '0'
-          LOGIN_NODES: '1'
+          GPU: "0"
+          LOGIN_NODES: "1"
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -174,7 +179,7 @@ jobs:
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: '0'
+          GPU: "0"
           # Set so setup_suite skips its own cluster setup
           SLURM_CLUSTER_ID: ansible-test
         run: |
@@ -335,7 +340,7 @@ jobs:
       - name: Download slurm binaries
         uses: actions/download-artifact@v4
         with:
-          name: slurm-${{ matrix.arch }}
+          name: ${{ inputs.slurm_artifact }}-${{ matrix.arch }}
           path: slurm-bin
 
       - name: Extract cedana-slurm
@@ -474,7 +479,7 @@ jobs:
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           CEDANA_PLUGINS_BUILDS: alpha
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
-          LOGIN_NODES: '1'
+          LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
         run: |
           source test/helpers/utils.bash
