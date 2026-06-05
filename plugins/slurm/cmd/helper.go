@@ -136,24 +136,11 @@ var destroyCmd = &cobra.Command{
 			wg.Wait()
 		}()
 
-		nodeRole, err := resolveSlurmNodeRole(destroyNodeRole)
-		if err != nil {
-			return err
-		}
-		if err := os.Setenv(slurmNodeRoleEnv, nodeRole); err != nil {
-			return fmt.Errorf("failed to set %s: %w", slurmNodeRoleEnv, err)
-		}
-
-		if nodeRole == slurmNodeRoleLogin {
-			log.Info().Msg("login node: nothing to destroy")
-			return nil
-		}
-
 		if config.Global.Metrics {
 			metrics.Init(ctx, wg, "cedana-helper", version.Version)
 		}
 
-		err = script.Run(
+		err := script.Run(
 			log.With().Str("operation", "destroy").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
 			scripts.ResetService,
 			slurmscripts.Uninstall,
