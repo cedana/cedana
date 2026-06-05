@@ -7,15 +7,9 @@ export APP_NAME="cedana"
 
 # VERSION will be automatically injected by the CI workflow
 VERSION=${VERSION:-"latest"}
-if [[ $EUID -ne 0 ]]; then
-    export APP_PATH="$HOME/.local/bin/$APP_NAME"
-    export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"$HOME/.local/lib/"}
-    export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR:-"$HOME/.local/bin/"}
-else
-    export APP_PATH="/usr/local/bin/$APP_NAME"
-    export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib/"}
-    export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR:-"/usr/local/bin/"}
-fi
+export APP_PATH="/usr/local/bin/$APP_NAME"
+export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib/"}
+export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR:-"/usr/local/bin/"}
 export PATH="$CEDANA_PLUGINS_BIN_DIR:$PATH"
 
 # If VERSION doesn't start with 'v' (not a semver tag), set CEDANA_PLUGINS_BUILDS to "alpha"

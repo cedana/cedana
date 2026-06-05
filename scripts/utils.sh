@@ -1,15 +1,9 @@
 # script utils
 
 export APP_NAME="cedana"
-if [[ $EUID -ne 0 ]]; then
-    export APP_PATH="$HOME/.local/bin/$APP_NAME"
-    export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"$HOME/.local/lib/"}
-    export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR:-"$HOME/.local/bin/"}
-else
-    export APP_PATH="/usr/local/bin/$APP_NAME"
-    export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib/"}
-    export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR:-"/usr/local/bin/"}
-fi
+export APP_PATH="/usr/local/bin/$APP_NAME"
+export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib/"}
+export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR:-"/usr/local/bin/"}
 export LOG_PATH="/var/log/$APP_NAME-daemon.log"
 export SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
 export DISABLE_IO_URING=${DISABLE_IO_URING:-true}
