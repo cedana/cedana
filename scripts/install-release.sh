@@ -69,4 +69,5 @@ if ! {
     echo "export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR}" >&2
 fi
 
-$APP_PATH --merge-config version
+version=$($APP_PATH --merge-config version)
+echo "Installed Cedana version $version"
