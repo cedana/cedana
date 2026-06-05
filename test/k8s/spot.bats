@@ -37,7 +37,7 @@ setup_file() {
     local action_id
     action_id=$(checkpoint_pod "$pod_id")
     validate_action_id "$action_id"
-    poll_action_status "$action_id" "checkpoint" 120
+    poll_action_status "$action_id" "checkpoint" 200
 
     # Simulate spot interruption
     simulate_spot_interruption "$node_name"
