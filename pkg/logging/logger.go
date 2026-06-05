@@ -42,11 +42,7 @@ func init() {
 
 func Init(writer io.Writer) {
 	SetLevel(config.Global.LogLevel)
-	GlobalWriter = zerolog.ConsoleWriter{
-		Out:          writer,
-		TimeFormat:   LOG_TIME_FORMAT,
-		TimeLocation: time.Local,
-	}
+	GlobalWriter = writer
 	log.Logger = zerolog.New(GlobalWriter).
 		Level(Level).
 		With().
@@ -59,11 +55,7 @@ func Add(writer io.Writer) {
 		Init(writer)
 		return
 	}
-	log.Logger = zerolog.New(io.MultiWriter(GlobalWriter, zerolog.ConsoleWriter{
-		Out:          writer,
-		TimeFormat:   LOG_TIME_FORMAT,
-		TimeLocation: time.Local,
-	})).
+	log.Logger = zerolog.New(io.MultiWriter(GlobalWriter, writer)).
 		Level(Level).
 		With().
 		Timestamp().
