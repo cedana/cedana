@@ -37,9 +37,14 @@ type Config struct {
     GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
     // Plugin settings
     Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
+		// SLURM settings
+		Slurm Slurm `json:"slurm" key:"slurm" yaml:"slurm" mapstructure:"slurm"`
 
     // AWS settings
     AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+
+    // ClusterID is the cluster ID (for SLURM/K8s)
+    ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id"`
 }
 ```
 
@@ -62,7 +67,10 @@ type CRIU struct {
 
 ```go
 type Checkpoint struct {
-    // Dir is the default directory to store checkpoints
+		// Dir is the default directory to store checkpoints
+		// - "cedana://<path>" for Cedana-managed global storage (recommended)
+		// - "s3://<path>" for your S3 storage
+		// - "<path>" for node-local storage
     Dir string `json:"dir" key:"dir" yaml:"dir" mapstructure:"dir"`
     // Compression is the default compression algorithm to use for checkpoints
     Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
@@ -124,8 +132,6 @@ type GPU struct {
     LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
     // Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
     Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
-    // SkipNvidiaRuntimeHook always skips the nvidia-container-runtime-hook when spawning GPU containers
-    SkipNvidiaRuntimeHook bool `json:"skip_nvidia_runtime_hook" key:"skip_nvidia_runtime_hook" yaml:"skip_nvidia_runtime_hook" mapstructure:"skip_nvidia_runtime_hook"`
 }
 ```
 
@@ -139,6 +145,8 @@ type Plugins struct {
     LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
     // Builds is the build versions to list/download for plugins (release, alpha)
     Builds string `json:"builds" key:"build" yaml:"builds" mapstructure:"builds"`
+		// LocalSearchPath is a colon-separated list of local directories to search for locally built plugins
+		LocalSearchPath string `json:"local_search_path" key:"local_search_path" yaml:"local_search_path" mapstructure:"local_search_path"`
 }
 ```
 
@@ -165,5 +173,26 @@ type AWS struct {
     SecretAccessKey string `json:"secret_access_key" key:"secret_access_key" yaml:"secret_access_key" mapstructure:"secret_access_key" env_alias:"AWS_SECRET_ACCESS_KEY"`
     // Region is the AWS region to use
     Region string `json:"region" key:"region" yaml:"region" mapstructure:"region"`
+		// Endpoint is a custom AWS endpoint to use (e.g. for S3-compatible storage)
+		Endpoint string `json:"endpoint" key:"endpoint" yaml:"endpoint" mapstructure:"endpoint" env_aliases:"AWS_ENDPOINT"`
 }
+```
+
+## [SLURM](../../pkg/config/types.go#L48-L61)
+
+```go
+type Slurm struct {
+		// Unprivileged uses an embedded cedana instance for dump instead of the cedana daemon.
+		// Requires CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the cedana-slurm binary.
+		// Can also be set with CEDANA_SLURM_UNPRIVILEGED=1.
+		Unprivileged bool `json:"unprivileged" key:"unprivileged" yaml:"unprivileged" mapstructure:"unprivileged" env_aliases:"CEDANA_SLURM_UNPRIVILEGED"`
+		// DBHost is the hostname of the slurmdbd database server
+		DBHost string `json:"db_host" key:"db_host" yaml:"db_host" mapstructure:"db_host"`
+		// DBSocket is the socket path of the slurmdbd database server (if using UNIX socket connection)
+		DBSocket string `json:"db_socket" key:"db_socket" yaml:"db_socket" mapstructure:"db_socket"`
+		// DBPort is the port of the slurmdbd database server
+		DBPort int `json:"db_port" key:"db_port" yaml:"db_port" mapstructure:"db_port"`
+		// DBName is the name of the slurmdbd database to connect to
+		DBName string `json:"db_name" key:"db_name" yaml:"db_name" mapstructure:"db_name"`
+	}
 ```

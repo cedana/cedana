@@ -41,7 +41,7 @@ type (
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
 
-		// Internal use only (for metrics and logging)
+		// ClusterID is the cluster ID (for SLURM/K8s)
 		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id"`
 	}
 
@@ -56,7 +56,7 @@ type (
 		DBSocket string `json:"db_socket" key:"db_socket" yaml:"db_socket" mapstructure:"db_socket"`
 		// DBPort is the port of the slurmdbd database server
 		DBPort int `json:"db_port" key:"db_port" yaml:"db_port" mapstructure:"db_port"`
-		// DBUser is the username to connect to the slurmdbd database
+		// DBName is the name of the slurmdbd database to connect to
 		DBName string `json:"db_name" key:"db_name" yaml:"db_name" mapstructure:"db_name"`
 	}
 
