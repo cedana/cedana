@@ -67,6 +67,9 @@ const (
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
 	DEFAULT_PLUGINS_BUILDS  = "release"
+
+	DEFAULT_SLURM_DB_PORT = 3306
+	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
 )
 
 // The default global config. This will get overwritten
@@ -120,6 +123,8 @@ var Global Config = Config{
 	},
 	Slurm: Slurm{
 		Unprivileged: false,
+		DBPort:       DEFAULT_SLURM_DB_PORT,
+		DBName:       DEFAULT_SLURM_DB_NAME,
 	},
 }
 
