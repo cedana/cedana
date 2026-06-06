@@ -65,21 +65,17 @@ curl -fSL \
 chmod +x "$APP_PATH"
 
 # Delete any existing Cedana plugin libs to avoid incompatibilities with the new version
-rm -rf ${CEDANA_PLUGINS_LIB_DIR}/*cedana*
+rm -rf ${CEDANA_PLUGINS_LIB_DIR}/libcedana-*.so
 
 # Update /etc/profile.d/cedana.sh with the new environment variables for plugins
 PROFILE_D_FILE="/etc/profile.d/cedana.sh"
 if ! {
     echo "#!/bin/sh"
     echo "export PATH=${CEDANA_PLUGINS_BIN_DIR}:\$PATH"
-    echo "export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR}"
-    echo "export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR}"
     } > "$PROFILE_D_FILE" 2>/dev/null || ! chmod +x "$PROFILE_D_FILE" 2>/dev/null; then
     echo "Warning: Failed to update $PROFILE_D_FILE. Plugin environment variables may need to be set manually." >&2
     echo "Please add the following lines to your shell profile:" >&2
     echo "export PATH=${CEDANA_PLUGINS_BIN_DIR}:\$PATH" >&2
-    echo "export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR}" >&2
-    echo "export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR}" >&2
 fi
 
 version=$($APP_PATH --merge-config version)
