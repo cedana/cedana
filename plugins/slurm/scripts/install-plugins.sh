@@ -4,11 +4,59 @@ set -euo pipefail
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
-CEDANA_PLUGINS_SLURM_WLM_VERSION=${CEDANA_PLUGINS_SLURM_WLM_VERSION:-"latest"}
-CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
-CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
+
+# Detect the SLURM version string installed on this machine (e.g. "25.11.5").
+_detect_slurm_version() {
+    local ver=""
+    for cmd in sinfo slurmd slurmctld; do
+        if command -v "$cmd" &>/dev/null; then
+            ver=$(LC_ALL=C "$cmd" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+            [[ -n "$ver" ]] && break
+        fi
+    done
+    echo "$ver"
+}
+
+# Convert a detected version string (e.g. "25.11.5") to a matching SLURM tag
+# from SLURM_VERSIONS via prefix match (e.g. "slurm-25-11-5-1").
+# The RPM build-release suffix (-1) is not present in the SLURM version string,
+# so prefix matching is required.
+_version_to_tag() {
+    local ver="$1"
+    local prefix
+    prefix="slurm-$(echo "$ver" | tr '.' '-')"
+    for v in "${SLURM_VERSIONS[@]}"; do
+        [[ "$v" == "${prefix}"* ]] && echo "$v" && return
+    done
+    echo ""
+}
+
+# Fetch the latest SLURM WLM version if not defined
+if [ -z "${CEDANA_PLUGINS_SLURM_WLM_VERSION:-}" ]; then
+    # Get the latest version from cedana plugin list slurm/wlm
+    # Example output: "v0.9.291-slurm-25-11-5-1"
+    # We extract just the version part: "v0.9.291"
+    latest_version=$(cedana plugin list slurm/wlm | awk '/AVAILABLE VERSION/ {getline; print $NF}')
+    CEDANA_PLUGINS_SLURM_WLM_VERSION=$(echo "$latest_version" | grep -oP '^v[0-9]+\.[0-9]+\.[0-9]+')
+    detected_slurm_version=$(_detect_slurm_version)
+    if [ -n "$detected_slurm_version" ]; then
+        matching_tag=$(_version_to_tag "$detected_slurm_version")
+        if [ -n "$matching_tag" ]; then
+            CEDANA_PLUGINS_SLURM_WLM_VERSION="${CEDANA_PLUGINS_SLURM_WLM_VERSION}-${matching_tag}"
+        else
+            echo "Failed to find a matching SLURM tag for detected version $detected_slurm_version" >&2
+            exit 1
+        fi
+    else
+        echo "Failed to detect SLURM version for the slur/wlm plugin" >&2
+        exit 1
+    fi
+fi
+
+CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
+CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 
 # XXX: We always install the GPU plugin for now until auto-detection is added
 PLUGINS=" \
