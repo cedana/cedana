@@ -2,10 +2,8 @@
 set -euo pipefail
 
 # Load the binaries and libraries into the host's filesystem
-cp /usr/local/bin/cedana /host/usr/local/bin/cedana
-cp /usr/local/lib/libcedana*.so /host/usr/local/lib/
+cp $CEDANA_PLUGINS_BIN_DIR/cedana /host/$CEDANA_PLUGINS_LIB_DIR/cedana
+cp $CEDANA_PLUGINS_LIB_DIR/libcedana*.so /host/$CEDANA_PLUGINS_LIB_DIR/
 
 # Re-initialize config since it's a fresh install
-chroot /host /usr/local/bin/cedana --init-config version
-
-echo "Installed Cedana into the host filesystem"
+chroot /host $APP_PATH --merge-config version

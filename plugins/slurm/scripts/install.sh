@@ -5,5 +5,3 @@ set -euo pipefail
 
 # Merge new config defaults without overwriting existing user config values
 $APP_PATH --merge-config version
-
-echo "Installed Cedana into the host filesystem"

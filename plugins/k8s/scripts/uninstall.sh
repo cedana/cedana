@@ -11,5 +11,5 @@ rm -rf /host/run/*cedana*
 rm -rf /host/dev/shm/*cedana*
 
 # Remove all binaries and libraries from the host's filesystem
-rm -f /host/usr/local/lib/*cedana*
-rm -f /host/usr/local/bin/*cedana*
+rm -f /host/$CEDANA_PLUGINS_LIB_DIR/*cedana*
+rm -f /host/$CEDANA_PLUGINS_BIN_DIR/*cedana*

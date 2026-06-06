@@ -193,7 +193,7 @@ EOF
 
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
   runtime_type = "io.containerd.runc.v2"
-  runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+  runtime_path = "$CEDANA_PLUGINS_BIN_DIR/cedana-shim-runc-v2"
 EOF
     fi
 fi
@@ -228,10 +228,10 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
 
     if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
         echo "Adding cedana runtime config to $TARGET_CONFIG"
-        cat >>"$TARGET_CONFIG" <<'END_CAT'
+        cat >>"$TARGET_CONFIG" <<END_CAT
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+    runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
 END_CAT
         echo "Cedana runtime config written to $TARGET_CONFIG"
     else
@@ -265,10 +265,10 @@ elif [ "$CONTAINERD_VERSION" = "3" ]; then
 
     if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
         echo "Creating cedana runtime config at $TARGET_CONFIG"
-        cat >"$TARGET_CONFIG" <<'END_CAT'
+        cat >"$TARGET_CONFIG" <<END_CAT
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+    runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
 END_CAT
         echo "Cedana runtime config written to $TARGET_CONFIG"
     else
