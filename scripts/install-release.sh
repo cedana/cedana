@@ -23,6 +23,19 @@ fi
 # Download and install Cedana #
 ###############################
 
+# Try to load values from /etc/cedana/config.json if they're not set in environment
+if [[ -f "/etc/cedana/config.json" ]]; then
+    if command -v jq &>/dev/null; then
+        # Use jq if available
+        [[ -z "${CEDANA_URL:-}" ]] && CEDANA_URL=$(jq -r '.url // empty' /etc/cedana/config.json 2>/dev/null || true)
+        [[ -z "${CEDANA_AUTH_TOKEN:-}" ]] && CEDANA_AUTH_TOKEN=$(jq -r '.auth_token // empty' /etc/cedana/config.json 2>/dev/null || true)
+    else
+        # Fallback to grep/sed if jq is not available
+        [[ -z "${CEDANA_URL:-}" ]] && CEDANA_URL=$(grep -oP '"url"\s*:\s*"\K[^"]+' /etc/cedana/config.json 2>/dev/null || true)
+        [[ -z "${CEDANA_AUTH_TOKEN:-}" ]] && CEDANA_AUTH_TOKEN=$(grep -oP '"auth_token"\s*:\s*"\K[^"]+' /etc/cedana/config.json 2>/dev/null || true)
+    fi
+fi
+
 if [[ -z "${CEDANA_URL:-}" ]]; then
     echo "Error: CEDANA_URL environment variable is not set" >&2
     exit 1
