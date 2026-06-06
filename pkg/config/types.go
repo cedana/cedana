@@ -49,7 +49,7 @@ type (
 		// Unprivileged uses an embedded cedana instance for dump instead of the cedana daemon.
 		// Requires CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the cedana-slurm binary.
 		// Can also be set with CEDANA_SLURM_UNPRIVILEGED=1.
-		Unprivileged bool `json:"unprivileged" key:"unprivileged" yaml:"unprivileged" mapstructure:"unprivileged" env_aliases:"CEDANA_SLURM_UNPRIVILEGED"`
+		Unprivileged bool `json:"unprivileged" key:"unprivileged" yaml:"unprivileged" mapstructure:"unprivileged"`
 		// DBHost is the hostname of the slurmdbd database server
 		DBHost string `json:"db_host" key:"db_host" yaml:"db_host" mapstructure:"db_host"`
 		// DBSocket is the socket path of the slurmdbd database server (if using UNIX socket connection)
