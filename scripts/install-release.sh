@@ -34,6 +34,10 @@ if [[ -f "/etc/cedana/config.json" ]]; then
         [[ -z "${CEDANA_URL:-}" ]] && CEDANA_URL=$(grep -oP '"url"\s*:\s*"\K[^"]+' /etc/cedana/config.json 2>/dev/null || true)
         [[ -z "${CEDANA_AUTH_TOKEN:-}" ]] && CEDANA_AUTH_TOKEN=$(grep -oP '"auth_token"\s*:\s*"\K[^"]+' /etc/cedana/config.json 2>/dev/null || true)
     fi
+else
+    # avoid unbound var errors
+    export CEDANA_URL="${CEDANA_URL:-}"
+    export CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}"
 fi
 
 if [[ -z "${CEDANA_URL:-}" ]]; then
