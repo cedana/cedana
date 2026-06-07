@@ -136,7 +136,7 @@ func init() {
 	bindEnvVars()
 	err := viper.Unmarshal(&Global)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("failed to unmarshal default config: %w", err))
 	}
 
 	if os.Geteuid() != 0 {
