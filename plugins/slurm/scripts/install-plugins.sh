@@ -4,6 +4,9 @@ set -euo pipefail
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
+CEDANA_PLUGINS_SLURM_WLM_VERSION=${CEDANA_PLUGINS_SLURM_WLM_VERSION:-"latest"}
+CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
+CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
@@ -33,8 +36,8 @@ _version_to_tag() {
     echo ""
 }
 
-# Fetch the latest SLURM WLM version if not defined
-if [ -z "${CEDANA_PLUGINS_SLURM_WLM_VERSION:-}" ]; then
+# Fetch the latest SLURM WLM version if "latest" is specified
+if [[ "$CEDANA_PLUGINS_SLURM_WLM_VERSION" == "latest" ]]; then
     # Get the latest version from cedana plugin list slurm/wlm
     # Example output: "v0.9.291-slurm-25-11-5-1"
     # We extract just the version part: "v0.9.291"
@@ -54,9 +57,6 @@ if [ -z "${CEDANA_PLUGINS_SLURM_WLM_VERSION:-}" ]; then
         exit 1
     fi
 fi
-
-CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
-CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 
 # XXX: We always install the GPU plugin for now until auto-detection is added
 PLUGINS=" \

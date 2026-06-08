@@ -8,7 +8,6 @@ import (
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -55,11 +54,6 @@ func init() {
 		StringP(flags.AddressFlag.Full, flags.AddressFlag.Short, "", "address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)")
 	rootCmd.PersistentFlags().
 		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
-
-	// Bind to config
-	viper.BindPFlag("protocol", rootCmd.PersistentFlags().Lookup(flags.ProtocolFlag.Full))
-	viper.BindPFlag("address", rootCmd.PersistentFlags().Lookup(flags.AddressFlag.Full))
-	viper.BindPFlag("profiling.enabled", rootCmd.PersistentFlags().Lookup(flags.ProfilingFlag.Full))
 }
 
 var rootCmd = &cobra.Command{
@@ -106,4 +100,3 @@ func Execute(ctx context.Context, version string) error {
 
 	return rootCmd.ExecuteContext(ctx)
 }
-
