@@ -183,6 +183,11 @@ jobs:
             fi
           fi
 
+      - name: Run cuda-samples interception check
+        # Runs once on a >=12.8 runner (samples are CUDA 12.8-built).
+        if: ${{ !cancelled() && matrix.cuda_version == '12-8' && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        run: /cedana-samples/gpu_smr/cuda-samples/cuda-samples.sh
+
       - name: Setup node
         if: always()
         uses: actions/setup-node@v4
