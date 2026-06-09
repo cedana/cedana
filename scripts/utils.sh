@@ -1,7 +1,7 @@
 # script utils
 
 export APP_NAME="cedana"
-export APP_PATH=${APP_PATH:-"/usr/local/bin/$APP_NAME"}
+export APP_PATH=/usr/local/bin/$APP_NAME
 export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib/"}
 export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR:-"/usr/local/bin/"}
 export LOG_PATH="/var/log/$APP_NAME-daemon.log"
