@@ -43,33 +43,6 @@ func init() {
 	script.Source(scripts.Utils)
 }
 
-// resolveSlurmNodeRole picks the role from the flag, falling back to the env
-func resolveSlurmNodeRole(flagValue string) (string, error) {
-	role := strings.TrimSpace(flagValue)
-	if role == "" {
-		role = os.Getenv(slurmNodeRoleEnv)
-	}
-	if role == "" {
-		return "", fmt.Errorf(
-			"SLURM node role is required: pass --node-role %q, %q or %q, or set %s",
-			slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleLogin, slurmNodeRoleEnv,
-		)
-	}
-	switch strings.ToLower(role) {
-	case slurmNodeRoleController:
-		return slurmNodeRoleController, nil
-	case slurmNodeRoleWorker, "compute":
-		return slurmNodeRoleWorker, nil
-	case slurmNodeRoleLogin:
-		return slurmNodeRoleLogin, nil
-	default:
-		return "", fmt.Errorf(
-			"invalid --node-role %q: must be one of %q, %q or %q",
-			role, slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleLogin,
-		)
-	}
-}
-
 var HelperCmd = &cobra.Command{
 	Use:   "slurm",
 	Short: "Helper for setting up and running in Slurm",
@@ -152,4 +125,31 @@ var destroyCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// resolveSlurmNodeRole picks the role from the flag, falling back to the env
+func resolveSlurmNodeRole(flagValue string) (string, error) {
+	role := strings.TrimSpace(flagValue)
+	if role == "" {
+		role = os.Getenv(slurmNodeRoleEnv)
+	}
+	if role == "" {
+		return "", fmt.Errorf(
+			"SLURM node role is required: pass --node-role %q, %q or %q, or set %s",
+			slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleLogin, slurmNodeRoleEnv,
+		)
+	}
+	switch strings.ToLower(role) {
+	case slurmNodeRoleController:
+		return slurmNodeRoleController, nil
+	case slurmNodeRoleWorker, "compute":
+		return slurmNodeRoleWorker, nil
+	case slurmNodeRoleLogin:
+		return slurmNodeRoleLogin, nil
+	default:
+		return "", fmt.Errorf(
+			"invalid --node-role %q: must be one of %q, %q or %q",
+			role, slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleLogin,
+		)
+	}
 }
