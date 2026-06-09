@@ -40,15 +40,18 @@ setup_file_daemon() {
         export CEDANA_CONFIG_DIR
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
+        export CEDANA_DB_PATH=/tmp/cedana-"$(basename "$SOCK")".db
         export CEDANA_ADDRESS="$SOCK"
         debug start_daemon_at "$SOCK"
     fi
 }
+
 teardown_file_daemon() {
     if env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
     fi
 }
+
 setup_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         SOCK=$(random_sock)
@@ -57,6 +60,7 @@ setup_daemon() {
         export CEDANA_CONFIG_DIR
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
+        export CEDANA_DB_PATH=/tmp/cedana-"$(basename "$SOCK")".db
         export CEDANA_ADDRESS="$SOCK"
         debug start_daemon_at "$SOCK"
     else
@@ -66,6 +70,7 @@ setup_daemon() {
         export TAIL_PID
     fi
 }
+
 teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
@@ -84,7 +89,7 @@ start_daemon_at() {
     local sock=$1
     id=$(basename "$sock")
     debug_log "Starting daemon at socket $sock with config $CEDANA_CONFIG_DIR/config.json"
-    cedana daemon start --init-config --db /tmp/cedana-"$id".db | tee "$(daemon_log_file "$sock")" &
+    cedana daemon start --init-config | tee "$(daemon_log_file "$sock")" &
     wait_for_start "$sock"
 }
 

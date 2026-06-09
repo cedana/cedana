@@ -17,9 +17,6 @@ func FillMissingRestoreDefaults(next types.Restore) types.Restore {
 		if req.GetDetails().GetSlurm() == nil {
 			req.Details.Slurm = &slurm.Slurm{}
 		}
-		if req.GetDetails().GetSlurm().GetID() == "" {
-			req.Details.Slurm.ID = req.GetDetails().GetJID()
-		}
 		req.Criu.OrphanPtsMaster = proto.Bool(true)
 
 		return next(ctx, opts, resp, req)

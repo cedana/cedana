@@ -40,16 +40,21 @@ type (
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
-
-		// Internal use only (for metrics and logging)
-		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id"`
 	}
 
 	Slurm struct {
 		// Unprivileged uses an embedded cedana instance for dump instead of the cedana daemon.
 		// Requires CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the cedana-slurm binary.
 		// Can also be set with CEDANA_SLURM_UNPRIVILEGED=1.
-		Unprivileged bool `json:"unprivileged" key:"unprivileged" yaml:"unprivileged" mapstructure:"unprivileged" env_aliases:"CEDANA_SLURM_UNPRIVILEGED"`
+		Unprivileged bool `json:"unprivileged" key:"unprivileged" yaml:"unprivileged" mapstructure:"unprivileged"`
+		// DBHost is the hostname of the slurmdbd database server
+		DBHost string `json:"db_host" key:"db_host" yaml:"db_host" mapstructure:"db_host"`
+		// DBSocket is the socket path of the slurmdbd database server (if using UNIX socket connection)
+		DBSocket string `json:"db_socket" key:"db_socket" yaml:"db_socket" mapstructure:"db_socket"`
+		// DBPort is the port of the slurmdbd database server
+		DBPort int `json:"db_port" key:"db_port" yaml:"db_port" mapstructure:"db_port"`
+		// DBName is the name of the slurmdbd database to connect to
+		DBName string `json:"db_name" key:"db_name" yaml:"db_name" mapstructure:"db_name"`
 	}
 
 	Connection struct {
@@ -57,6 +62,8 @@ type (
 		URL string `json:"url" key:"url" yaml:"url" mapstructure:"url" env_aliases:"CEDANA_URL"`
 		// AuthToken is your authentication token for the Cedana endpoint
 		AuthToken string `json:"auth_token" key:"auth_token" yaml:"auth_token" mapstructure:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
+		// ClusterID is the cluster ID (for SLURM/K8s)
+		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id" env_aliases:"CEDANA_CLUSTER_ID"`
 	}
 
 	Checkpoint struct {
@@ -131,6 +138,8 @@ type (
 		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
 		// Builds is the build versions to list/download for plugins (release, alpha)
 		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds" env_aliases:"CEDANA_PLUGINS_BUILD"`
+		// LocalSearchPath is a colon-separated list of local directories to search for locally built plugins
+		LocalSearchPath string `json:"local_search_path" key:"local_search_path" yaml:"local_search_path" mapstructure:"local_search_path"`
 	}
 
 	AWS struct {

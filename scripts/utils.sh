@@ -1,12 +1,11 @@
 # script utils
 
-export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION="python"
-
 export APP_NAME="cedana"
-export APP_PATH="/usr/local/bin/$APP_NAME"
+export APP_PATH=/usr/local/bin/$APP_NAME
+export CEDANA_PLUGINS_LIB_DIR=${CEDANA_PLUGINS_LIB_DIR:-"/usr/local/lib/"}
+export CEDANA_PLUGINS_BIN_DIR=${CEDANA_PLUGINS_BIN_DIR:-"/usr/local/bin/"}
 export LOG_PATH="/var/log/$APP_NAME-daemon.log"
 export SERVICE_FILE="/etc/systemd/system/$APP_NAME.service"
-export DISABLE_IO_URING=${DISABLE_IO_URING:-true}
 
 USER=$(whoami)
 export USER
@@ -25,10 +24,3 @@ NC='\033[0m'
 log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
-
-check_root() {
-    if [[ "$EUID" -ne 0 ]]; then
-        echo "This script must be run as root" >&2
-        exit 1
-    fi
-}
