@@ -22,18 +22,11 @@ _detect_slurm_version() {
     echo "$ver"
 }
 
-# Convert a detected version string (e.g. "25.11.5") to a matching SLURM tag
-# from SLURM_VERSIONS via prefix match (e.g. "slurm-25-11-5-1").
-# The RPM build-release suffix (-1) is not present in the SLURM version string,
-# so prefix matching is required.
+# Convert a detected version string (e.g. "25.11.5") to a SLURM tag
+# (e.g. "slurm-25-11-5-1") with the default RPM build-release suffix (-1).
 _version_to_tag() {
     local ver="$1"
-    local prefix
-    prefix="slurm-$(echo "$ver" | tr '.' '-')"
-    for v in "${SLURM_VERSIONS[@]}"; do
-        [[ "$v" == "${prefix}"* ]] && echo "$v" && return
-    done
-    echo ""
+    echo "slurm-$(echo "$ver" | tr '.' '-')-1"
 }
 
 # Fetch the latest SLURM WLM version if "latest" is specified
