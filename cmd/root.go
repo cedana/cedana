@@ -52,8 +52,6 @@ func init() {
 		StringP(flags.ProtocolFlag.Full, flags.ProtocolFlag.Short, "", "protocol to use (TCP, UNIX, VSOCK)")
 	rootCmd.PersistentFlags().
 		StringP(flags.AddressFlag.Full, flags.AddressFlag.Short, "", "address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)")
-	rootCmd.PersistentFlags().
-		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
 }
 
 var rootCmd = &cobra.Command{

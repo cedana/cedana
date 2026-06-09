@@ -41,7 +41,7 @@ if [[ "$CEDANA_PLUGINS_SLURM_WLM_VERSION" == "latest" ]]; then
     # Get the latest version from cedana plugin list slurm/wlm
     # Example output: "v0.9.291-slurm-25-11-5-1"
     # We extract just the version part: "v0.9.291"
-    latest_version=$(cedana plugin list slurm/wlm | awk '/AVAILABLE VERSION/ {getline; print $NF}')
+    latest_version=$($APP_PATH plugin list slurm/wlm | awk '/AVAILABLE VERSION/ {getline; print $NF}')
     CEDANA_PLUGINS_SLURM_WLM_VERSION=$(echo "$latest_version" | grep -oP '^v[0-9]+\.[0-9]+\.[0-9]+')
     detected_slurm_version=$(_detect_slurm_version)
     if [ -n "$detected_slurm_version" ]; then

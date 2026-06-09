@@ -40,7 +40,7 @@ setup_file_daemon() {
         export CEDANA_CONFIG_DIR
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
-        export CEDANA_DB=/tmp/cedana-"$(basename "$SOCK")".db
+        export CEDANA_DB_PATH=/tmp/cedana-"$(basename "$SOCK")".db
         export CEDANA_ADDRESS="$SOCK"
         debug start_daemon_at "$SOCK"
     fi
@@ -60,7 +60,7 @@ setup_daemon() {
         export CEDANA_CONFIG_DIR
         export CEDANA_GPU_LOG_DIR="$CEDANA_CONFIG_DIR"
         export CEDANA_GPU_SOCK_DIR="$CEDANA_CONFIG_DIR"
-        export CEDANA_DB=/tmp/cedana-"$(basename "$SOCK")".db
+        export CEDANA_DB_PATH=/tmp/cedana-"$(basename "$SOCK")".db
         export CEDANA_ADDRESS="$SOCK"
         debug start_daemon_at "$SOCK"
     else

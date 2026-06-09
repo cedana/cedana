@@ -40,9 +40,6 @@ type (
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
-
-		// ClusterID is the cluster ID (for SLURM/K8s)
-		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id"`
 	}
 
 	Slurm struct {
@@ -65,6 +62,8 @@ type (
 		URL string `json:"url" key:"url" yaml:"url" mapstructure:"url" env_aliases:"CEDANA_URL"`
 		// AuthToken is your authentication token for the Cedana endpoint
 		AuthToken string `json:"auth_token" key:"auth_token" yaml:"auth_token" mapstructure:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
+		// ClusterID is the cluster ID (for SLURM/K8s)
+		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id" env_aliases:"CEDANA_CLUSTER_ID"`
 	}
 
 	Checkpoint struct {
