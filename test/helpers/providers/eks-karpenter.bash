@@ -151,8 +151,9 @@ spec:
         name: $nodepool_name
       expireAfter: 720h # 30 * 24h = 720h
   limits:
-    cpu: "100"
-    memory: "100Gi"
+    cpu: "6"
+    memory: "32Gi"
+    nodes: 3
 
   disruption:
     consolidationPolicy: WhenEmpty
