@@ -99,11 +99,13 @@ func (p *Plugin) SyncVersion() {
 			break
 		}
 		binary := p.Binaries[0]
-		cmd := exec.Command(binary.Name, "--version")
-		cmd.Env = append(os.Environ(), "PATH="+BinDir+":"+os.Getenv("PATH"))
-		if out, err := cmd.Output(); err == nil {
-			if v := strings.TrimSpace(string(out)); v != "" {
-				version = v
+		if !strings.HasSuffix(binary.Name, ".sh") { // dont do for scripts
+			cmd := exec.Command(binary.Name, "--version")
+			cmd.Env = append(os.Environ(), "PATH="+BinDir+":"+os.Getenv("PATH"))
+			if out, err := cmd.Output(); err == nil {
+				if v := strings.TrimSpace(string(out)); v != "" {
+					version = v
+				}
 			}
 		}
 	}
