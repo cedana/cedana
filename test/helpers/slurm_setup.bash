@@ -837,6 +837,36 @@ EOF
         done
     fi
 
+    if [ "${PREEMPT:-0}" = "1" ]; then
+        debug_log "Configuring SLURM partition preemption (PREEMPT=1)..."
+        local preempt_grace="${PREEMPT_GRACE_TIME:-120}"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+            set -euo pipefail
+            SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
+
+            grep -q '^PreemptType=' \"\$SLURM_CONF\" || echo 'PreemptType=preempt/partition_prio' >> \"\$SLURM_CONF\"
+            grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=CANCEL' >> \"\$SLURM_CONF\"
+            grep -q '^SchedulerParameters=' \"\$SLURM_CONF\" || echo 'SchedulerParameters=preempt_reorder_count=100,preempt_strict_order' >> \"\$SLURM_CONF\"
+
+            if grep -q '^PartitionName=debug' \"\$SLURM_CONF\"; then
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PriorityTier=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PriorityTier=1|' \"\$SLURM_CONF\"
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=CANCEL|' \"\$SLURM_CONF\"
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'GraceTime=' || sed -i 's|^\(PartitionName=debug .*\)|\1 GraceTime=${preempt_grace}|' \"\$SLURM_CONF\"
+            fi
+
+            if ! grep -q '^PartitionName=high ' \"\$SLURM_CONF\"; then
+                nodes=\$(grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -oE 'Nodes=[^[:space:]]+' | head -1 | cut -d= -f2)
+                echo \"PartitionName=high Nodes=\${nodes:-ALL} MaxTime=INFINITE State=UP PreemptMode=CANCEL PriorityTier=2\" >> \"\$SLURM_CONF\"
+            fi
+
+            echo '--- preemption config ---'
+            grep -E '^(PreemptType|PreemptMode|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
+        " >&"${OUTPUT_FD}" 2>&1 || {
+            error_log "Failed to configure SLURM preemption on controller"
+            return 1
+        }
+    fi
+
     debug_log "Configuring SLURM to load Cedana plugins (controller)..."
     docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash <<'SETUP_EOF' >&"${OUTPUT_FD}" 2>&1 ||
 set -euo pipefail
