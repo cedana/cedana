@@ -58,8 +58,7 @@ teardown_file() {
             continue
         fi
 
-        # Skip samples that fail/waive natively — environmental, not cedana.
-        run cedana run process --attach --jid "$(unix_nano)" -- "$bin"
+        run "$bin"
         if [ "$status" -ne 0 ]; then
             echo "skip $sample (native rc=$status)"
             skipped=$((skipped + 1))

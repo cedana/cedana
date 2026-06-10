@@ -186,7 +186,10 @@ jobs:
       - name: Run cuda-samples interception check
         # Runs once on a >=12.8 runner (samples are CUDA 12.8-built).
         if: ${{ !cancelled() && matrix.cuda_version == '12-8' && matrix.cr == 'default' && matrix.arch == 'amd64' }}
-        run: bats --filter-tags cuda-samples -r test/regression
+        run: |
+          mkdir -p /tmp/cuda-samples
+          bats --filter-tags cuda-samples -r test/regression \
+            --output /tmp/cuda-samples --report-formatter junit
 
       - name: Setup node
         if: always()
@@ -217,6 +220,18 @@ jobs:
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
             testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
+
+      - name: Generate report (cuda-samples)
+        if: ${{ !cancelled() && matrix.cuda_version == '12-8' && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        run: |
+          npx junit-to-ctrf "/tmp/cuda-samples/report.xml" -t bats -o /tmp/report-cuda-samples.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="CUDA samples (intercepted)"
 
       - name: Upload report
         if: always()
