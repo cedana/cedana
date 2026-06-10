@@ -14,7 +14,7 @@ import (
 const LOG_ATTACHABLE string = "[Attachable]"
 
 func (s *Server) Get(ctx context.Context, req *daemon.GetReq) (*daemon.GetResp, error) {
-	job := s.jobs.Get(req.JID)
+	job := s.jobs.Get(ctx, req.JID)
 	if job == nil {
 		return nil, status.Errorf(codes.NotFound, "job %s not found", req.JID)
 	}
@@ -31,9 +31,9 @@ func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListRes
 	var jobs []*job.Job
 
 	if !req.Remote {
-		jobs = s.jobs.ListByHostIDs(s.host.ID)
+		jobs = s.jobs.ListByHostIDs(ctx, s.host.ID)
 	} else {
-		jobs = s.jobs.List(req.JIDs...)
+		jobs = s.jobs.List(ctx, req.JIDs...)
 	}
 
 	jobProtos := []*daemon.Job{}
@@ -50,7 +50,7 @@ func (s *Server) List(ctx context.Context, req *daemon.ListReq) (*daemon.ListRes
 }
 
 func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillResp, error) {
-	jobs := s.jobs.List(req.GetJIDs()...)
+	jobs := s.jobs.List(ctx, req.GetJIDs()...)
 
 	if len(jobs) == 0 {
 		return nil, status.Errorf(codes.NotFound, "no jobs found")
@@ -64,7 +64,7 @@ func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillRes
 				messages = append(messages, fmt.Sprintf("Cannot kill remote job %s", job.JID))
 				continue
 			}
-			err := s.jobs.Kill(job.JID)
+			err := s.jobs.Kill(ctx, job.JID)
 			if err != nil {
 				messages = append(messages, fmt.Sprintf("Failed to kill job %s: %v", job.JID, err))
 				continue
@@ -77,7 +77,7 @@ func (s *Server) Kill(ctx context.Context, req *daemon.KillReq) (*daemon.KillRes
 }
 
 func (s *Server) Delete(ctx context.Context, req *daemon.DeleteReq) (*daemon.DeleteResp, error) {
-	jobs := s.jobs.List(req.GetJIDs()...)
+	jobs := s.jobs.List(ctx, req.GetJIDs()...)
 
 	if len(jobs) == 0 {
 		return nil, status.Errorf(codes.NotFound, "no jobs found")

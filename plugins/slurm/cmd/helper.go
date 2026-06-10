@@ -4,6 +4,8 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/cedana/cedana/pkg/config"
@@ -17,7 +19,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	slurmNodeRoleEnv        = "CEDANA_SLURM_NODE_ROLE"
+	slurmNodeRoleController = "controller"
+	slurmNodeRoleWorker     = "worker"
+	slurmNodeRoleLogin      = "login"
+)
+
+var (
+	setupNodeRole   string
+	destroyNodeRole string
+)
+
 func init() {
+	setupCmd.Flags().StringVar(&setupNodeRole, "node-role", "",
+		"SLURM node role: controller, worker or login")
+	destroyCmd.Flags().StringVar(&destroyNodeRole, "node-role", "",
+		"SLURM node role: controller, worker or login")
+
 	HelperCmd.AddCommand(setupCmd)
 	HelperCmd.AddCommand(destroyCmd)
 
@@ -41,6 +60,19 @@ var setupCmd = &cobra.Command{
 			cancel()
 			wg.Wait()
 		}()
+
+		nodeRole, err := resolveSlurmNodeRole(setupNodeRole)
+		if err != nil {
+			return err
+		}
+		if err := os.Setenv(slurmNodeRoleEnv, nodeRole); err != nil {
+			return fmt.Errorf("failed to set %s: %w", slurmNodeRoleEnv, err)
+		}
+
+		if nodeRole == slurmNodeRoleLogin {
+			log.Info().Msg("login node: nothing to set up")
+			return nil
+		}
 
 		if config.Global.Metrics {
 			metrics.Init(ctx, wg, "cedana-slurm", version.Version)
@@ -93,4 +125,31 @@ var destroyCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// resolveSlurmNodeRole picks the role from the flag, falling back to the env
+func resolveSlurmNodeRole(flagValue string) (string, error) {
+	role := strings.TrimSpace(flagValue)
+	if role == "" {
+		role = os.Getenv(slurmNodeRoleEnv)
+	}
+	if role == "" {
+		return "", fmt.Errorf(
+			"SLURM node role is required: pass --node-role %q, %q or %q, or set %s",
+			slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleLogin, slurmNodeRoleEnv,
+		)
+	}
+	switch strings.ToLower(role) {
+	case slurmNodeRoleController:
+		return slurmNodeRoleController, nil
+	case slurmNodeRoleWorker, "compute":
+		return slurmNodeRoleWorker, nil
+	case slurmNodeRoleLogin:
+		return slurmNodeRoleLogin, nil
+	default:
+		return "", fmt.Errorf(
+			"invalid --node-role %q: must be one of %q, %q or %q",
+			role, slurmNodeRoleController, slurmNodeRoleWorker, slurmNodeRoleLogin,
+		)
+	}
 }

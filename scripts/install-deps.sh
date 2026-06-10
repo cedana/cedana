@@ -9,18 +9,16 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
-check_root
-
 # Define packages for YUM and APT
 YUM_PACKAGES=(
-    wget git make
-    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel # CRIU
+    wget git make psmisc
+    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel # CRIU
     yq
 )
 
 APT_PACKAGES=(
-    wget git make
-    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1 # CRIU
+    wget git make psmisc
+    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev iptables libnftables1 # CRIU
     sysvinit-utils
 )
 
@@ -79,19 +77,3 @@ else
     echo "Unknown distribution"
     exit 1
 fi
-
-# Hack - yq is needed to configure kubelet, but not available in all distros
-case "$(uname -m)" in
-    x86_64)
-        wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
-        ;;
-    arm64 | aarch64)
-        wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
-        ;;
-    *)
-        echo "Unsupported architecture: $(uname -m)"
-        exit 1
-        ;;
-esac
-chmod +x /usr/local/bin/yq
-echo "yq has been Installed"

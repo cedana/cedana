@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-check_root
-
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
@@ -172,6 +170,34 @@ echo "Detected containerd config version $CONTAINERD_VERSION"
 CONTAINERD_CONFD_DIR=${CONTAINERD_CONFD_DIR:-"/etc/containerd/conf.d"}
 echo "Using conf.d directory: $CONTAINERD_CONFD_DIR"
 
+# Check if the node is a part of rke2 cluster
+# Editing the generated config.toml directly is not persistent.
+# It gets regenerated on restarting the rke2-server/agent.
+# Instead, we modify config.toml.tmpl, which is the template RKE2 uses to
+# recreate the final containerd configuration across restarts.
+if [ -d "/var/lib/rancher/rke2" ]; then
+    RKE2_CONFIG="/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"
+    echo "Configuring rke2 config.toml.tmpl $RKE2_CONFIG"
+
+    sudo mkdir -p "$(dirname "$RKE2_CONFIG")"
+
+    if [ ! -f "$RKE2_CONFIG" ]; then
+        cat <<EOF | sudo tee "$RKE2_CONFIG" >/dev/null
+{{ template "base" . }}
+EOF
+    fi
+
+    # only append if not already present
+    if ! grep -q 'runtimes."cedana"' "$RKE2_CONFIG"; then
+        cat <<EOF | sudo tee -a "$RKE2_CONFIG" >/dev/null
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
+  runtime_type = "io.containerd.runc.v2"
+  runtime_path = "$CEDANA_PLUGINS_BIN_DIR/cedana-shim-runc-v2"
+EOF
+    fi
+fi
+
 if [ "$CONTAINERD_VERSION" = "2" ]; then
     echo "Applying containerd v2 config strategy..."
     # Version 2: Copy last conf.d file (excluding 999-cedana.toml) if exists, then add config
@@ -202,10 +228,10 @@ if [ "$CONTAINERD_VERSION" = "2" ]; then
 
     if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
         echo "Adding cedana runtime config to $TARGET_CONFIG"
-        cat >>"$TARGET_CONFIG" <<'END_CAT'
+        cat >>"$TARGET_CONFIG" <<END_CAT
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+    runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
 END_CAT
         echo "Cedana runtime config written to $TARGET_CONFIG"
     else
@@ -239,10 +265,10 @@ elif [ "$CONTAINERD_VERSION" = "3" ]; then
 
     if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
         echo "Creating cedana runtime config at $TARGET_CONFIG"
-        cat >"$TARGET_CONFIG" <<'END_CAT'
+        cat >"$TARGET_CONFIG" <<END_CAT
 [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
-    runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+    runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
 END_CAT
         echo "Cedana runtime config written to $TARGET_CONFIG"
     else

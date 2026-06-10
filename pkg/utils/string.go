@@ -15,7 +15,7 @@ func StrList(strs []string) string {
 }
 
 func LastLine(s string) string {
-  s = strings.Trim(s, "\n")
+	s = strings.Trim(s, "\n")
 	lines := strings.Split(s, "\n")
 	return strings.Trim(lines[len(lines)-1], "\n")
 }

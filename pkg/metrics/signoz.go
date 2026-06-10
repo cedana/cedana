@@ -58,11 +58,11 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string) {
 			semconv.HostArchKey.String(host.KernelArch),
 			semconv.ServiceNameKey.String(service),
 			semconv.ServiceVersionKey.String(version),
-			semconv.K8SClusterNameKey.String(config.Global.ClusterID),
+			semconv.K8SClusterNameKey.String(config.Global.Connection.ClusterID),
 			semconv.K8SNodeNameKey.String(host.Hostname),
 			semconv.K8SNodeNameKey.String(host.Hostname),
 			attribute.KeyValue{Key: "cedana.service.url", Value: attribute.StringValue(config.Global.Connection.URL)},
-			attribute.KeyValue{Key: "cluster.id", Value: attribute.StringValue(config.Global.ClusterID)},
+			attribute.KeyValue{Key: "cluster.id", Value: attribute.StringValue(config.Global.Connection.ClusterID)},
 		),
 	)
 	if err != nil {

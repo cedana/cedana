@@ -151,19 +151,33 @@ func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 	return job, nil
 }
 
-func (m *ManagerLazy) Get(jid string) *Job {
+func (m *ManagerLazy) Get(ctx context.Context, jid string) *Job {
+	job := m.lookup(jid)
+	if job == nil {
+		return nil
+	}
+
+	// Deep sync so consumers like `cedana job inspect` see the full descendant
+	// tree. The walk is now iterative (one /proc scan + BFS, vs the original
+	// O(N · |/proc|) recursion) and respects ctx cancellation, so for very wide
+	// trees the request will return on deadline rather than hang the daemon.
+	job.SyncDeep(ctx)
+
+	if !job.GPUEnabled() && m.gpus.IsAttached(job.GetPID()) {
+		job.SetGPUEnabled(true)
+		m.pending <- action{putJob, jid}
+	}
+
+	return job
+}
+
+// lookup returns the in-memory job without syncing. Used internally where a
+// fresh state walk is unnecessary (e.g. plumbing the JID to a syscall.Kill).
+func (m *ManagerLazy) lookup(jid string) *Job {
 	job, ok := m.jobs.Load(jid)
 	if !ok {
 		return nil
 	}
-
-	job.(*Job).SyncDeep()
-
-	if !job.(*Job).GPUEnabled() && m.gpus.IsAttached(job.(*Job).GetPID()) {
-		job.(*Job).SetGPUEnabled(true)
-		m.pending <- action{putJob, jid}
-	}
-
 	return job.(*Job)
 }
 
@@ -184,7 +198,7 @@ func (m *ManagerLazy) Delete(jid string) {
 	}
 }
 
-func (m *ManagerLazy) List(jids ...string) []*Job {
+func (m *ManagerLazy) List(ctx context.Context, jids ...string) []*Job {
 	var jobs []*Job
 
 	jidSet := make(map[string]any)
@@ -198,7 +212,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 		if _, ok := jidSet[jid]; len(jids) > 0 && !ok {
 			return true
 		}
-		job.Sync()
+		job.Sync(ctx)
 		if !job.GPUEnabled() && m.gpus.IsAttached(job.GetPID()) {
 			job.SetGPUEnabled(true)
 			m.pending <- action{putJob, jid}
@@ -210,7 +224,7 @@ func (m *ManagerLazy) List(jids ...string) []*Job {
 	return jobs
 }
 
-func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
+func (m *ManagerLazy) ListByHostIDs(ctx context.Context, hostIDs ...string) []*Job {
 	var jobs []*Job
 
 	hostIDSet := make(map[string]any)
@@ -225,7 +239,7 @@ func (m *ManagerLazy) ListByHostIDs(hostIDs ...string) []*Job {
 		if _, ok := hostIDSet[hostID]; len(hostIDs) > 0 && !ok {
 			return true
 		}
-		job.Sync()
+		job.Sync(ctx)
 		if !job.GPUEnabled() && m.gpus.IsAttached(job.GetPID()) {
 			job.SetGPUEnabled(true)
 			m.pending <- action{putJob, jid}
@@ -266,11 +280,12 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 		return fmt.Errorf("PID %d is already being managed under job %s", pid, jid)
 	}
 
-	log := log.With().Str("JID", jid).Str("type", m.Get(jid).GetType()).Uint32("PID", pid).Logger()
+	job := m.lookup(jid)
+	log := log.With().Str("JID", jid).Str("type", job.GetType()).Uint32("PID", pid).Logger()
 
-	job := m.Get(jid)
 	job.SetPID(pid)
-	job.SyncDeep()
+	job.SyncDeep(lifetime)
+	job.done = make(chan error, 1)
 
 	m.pending <- action{putJob, jid}
 
@@ -281,7 +296,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 
 		select {
 		case <-lifetime.Done():
-			m.Kill(jid)
+			m.Kill(lifetime, jid)
 			exitCode = <-code
 		case exitCode = <-code:
 		}
@@ -297,20 +312,23 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 			err := cleanup(context.WithoutCancel(lifetime), job.GetDetails())
 			if err != nil {
 				log.Debug().Err(err).Msg("custom cleanup from plugin failed")
+				job.done <- fmt.Errorf("Failed %s cleanup: %v", job.GetType(), err)
 			}
 			return err
 		}, job.GetType())
+
+		close(job.done)
 	})
 
 	return nil
 }
 
-func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
+func (m *ManagerLazy) Kill(ctx context.Context, jid string, signal ...syscall.Signal) error {
 	if !m.Exists(jid) {
 		return fmt.Errorf("job %s does not exist", jid)
 	}
 
-	job := m.Get(jid)
+	job := m.Get(ctx, jid)
 
 	if !job.IsRunning() {
 		// We don't want to make a random syscall to kill a job that isn't running
@@ -350,8 +368,18 @@ func (m *ManagerLazy) Kill(jid string, signal ...syscall.Signal) error {
 	return fmt.Errorf("job %s is not running, PID %d is not valid", jid, pid)
 }
 
+func (m *ManagerLazy) Done(jid string) <-chan error {
+	job := m.lookup(jid)
+	if job == nil {
+		ch := make(chan error)
+		close(ch)
+		return ch
+	}
+	return job.done
+}
+
 func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
-	job := m.Get(jid)
+	job := m.lookup(jid)
 	if job == nil {
 		return
 	}

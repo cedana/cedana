@@ -25,6 +25,7 @@ type NotifyCallback struct {
 	NetworkUnlockFunc       NotifyFunc
 	SetupNamespacesFunc     NotifyFuncPid
 	PostSetupNamespacesFunc NotifyFunc
+	SkipNamespacesFunc      NotifyFuncPid
 	PreResumeFunc           NotifyFunc
 	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
@@ -247,6 +248,21 @@ func (n NotifyCallback) PostSetupNamespaces(ctx context.Context) error {
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU post-setup-namespaces callback failed")
 			return fmt.Errorf("post-setup-namespaces callback: %v", err)
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallback) SkipNamespaces(ctx context.Context, pid int32) error {
+	if n.SkipNamespacesFunc != nil {
+		log.Trace().Int32("pid", pid).Str("name", n.Name).Msg("CRIU skip-namespaces callback")
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		err := n.SkipNamespacesFunc(ctx, pid)
+		if err != nil {
+			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU skip-namespaces callback failed")
+			return fmt.Errorf("skip-namespaces callback: %v", err)
 		}
 	}
 	return nil

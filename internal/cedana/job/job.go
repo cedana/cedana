@@ -20,6 +20,7 @@ import (
 type Job struct {
 	JID   string
 	proto daemon.Job
+	done  chan error
 
 	sync.RWMutex
 }
@@ -54,27 +55,27 @@ func fromProto(j *daemon.Job) *Job {
 	}
 }
 
-func (j *Job) Sync(state ...*daemon.ProcessState) {
+func (j *Job) Sync(ctx context.Context, state ...*daemon.ProcessState) {
 	j.Lock()
 	defer j.Unlock()
 
 	if len(state) > 0 {
 		j.proto.State = proto.CloneOf(state[0])
 	} else {
-		j.proto.State = j.latestState(false)
+		j.proto.State = j.latestState(ctx, false)
 	}
 
 	j.proto.Log = j.latestLog()
 }
 
-func (j *Job) SyncDeep(state ...*daemon.ProcessState) {
+func (j *Job) SyncDeep(ctx context.Context, state ...*daemon.ProcessState) {
 	j.Lock()
 	defer j.Unlock()
 
 	if len(state) > 0 {
 		j.proto.State = proto.CloneOf(state[0])
 	} else {
-		j.proto.State = j.latestState(true)
+		j.proto.State = j.latestState(ctx, true)
 	}
 
 	j.proto.Log = j.latestLog()
@@ -201,7 +202,7 @@ func (j *Job) SetGPUEnabled(enabled bool) {
 
 // Functions below don't use locks, so they could be called with locks held.
 
-func (j *Job) latestState(deep bool) (state *daemon.ProcessState) {
+func (j *Job) latestState(ctx context.Context, deep bool) (state *daemon.ProcessState) {
 	if j.proto.State == nil {
 		return &daemon.ProcessState{
 			Status:    "unknown",
@@ -243,8 +244,11 @@ func (j *Job) latestState(deep bool) (state *daemon.ProcessState) {
 		}
 	}
 
-	// Try to fill rest as much as possible, let it error
-	utils.FillProcessState(context.TODO(), state.PID, state, deep)
+	// Try to fill rest as much as possible, let it error.
+	// Use the caller-provided context so request deadlines (e.g. gRPC) propagate
+	// down to the descendant walk. Workloads like trtllm + torch inductor spawn
+	// hundreds of descendants; without a deadline this call is unbounded.
+	utils.FillProcessState(ctx, state.PID, state, deep)
 
 	return
 }

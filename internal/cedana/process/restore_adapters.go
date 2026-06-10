@@ -139,13 +139,15 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
+			isMemfd := strings.HasPrefix(f.Path, "/memfd:")
 			_, internal := mounts[f.MountID]
 
 			var key string
 			var fd int32
 			var extraFile *os.File
 
-			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
+			// sockets, pipes, anon_inodes and memfds are not real filesytem paths, treat them as internal
+			external := !(internal || isPipe || isSocket || isAnon || isMemfd)
 
 			if external {
 				// Inherit all external namespace files, expecting them to still exist
@@ -246,6 +248,15 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 		req.Criu.InheritFd = inheritFds
 
+		return next(ctx, opts, resp, req)
+	}
+}
+
+func AddExternalMountsForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[]:%s", "ms"))
+		req.Criu.SetAutoExtMnt(true)
+		req.Criu.SetExtMasters(true)
 		return next(ctx, opts, resp, req)
 	}
 }

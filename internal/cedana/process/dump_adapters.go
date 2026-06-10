@@ -168,9 +168,14 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			isPipe := strings.HasPrefix(f.Path, "pipe")
 			isSocket := strings.HasPrefix(f.Path, "socket")
 			isAnon := strings.HasPrefix(f.Path, "anon_inode")
-			_, internal := mounts[f.MountID]
+			isMemfd := strings.HasPrefix(f.Path, "/memfd:")
+			_, mountFound := mounts[f.MountID]
 
-			external := !(internal || isPipe || isSocket || isAnon) // sockets and pipes are always in external mounts
+			// A file is external if it's from outside the process's mount namespace.
+			// Pipes, sockets, memfds and anon_inodes are internal (not real files from external mounts).
+			// A file is external only if its mount ID is not in the process's mount table AND it's a real file.
+			internal := mountFound || isPipe || isSocket || isAnon || isMemfd
+			external := !internal
 
 			if external {
 				if f.IsTTY {
@@ -185,6 +190,15 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			return true
 		})
 
+		return next(ctx, opts, resp, req)
+	}
+}
+
+func AddExternalMountsForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[]:%s", "ms"))
+		req.Criu.SetAutoExtMnt(true)
+		req.Criu.SetExtMasters(true)
 		return next(ctx, opts, resp, req)
 	}
 }

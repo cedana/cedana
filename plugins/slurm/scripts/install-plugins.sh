@@ -1,8 +1,6 @@
 #!/bin/bash
 set -euo pipefail
 
-check_root
-
 CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 CEDANA_PLUGINS_NATIVE_VERSION=${CEDANA_PLUGINS_NATIVE_VERSION:-"latest"}
 CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
@@ -11,6 +9,47 @@ CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
 CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
+
+# Detect the SLURM version string installed on this machine (e.g. "25.11.5").
+_detect_slurm_version() {
+    local ver=""
+    for cmd in sinfo slurmd slurmctld; do
+        if command -v "$cmd" &>/dev/null; then
+            ver=$(LC_ALL=C "$cmd" --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1)
+            [[ -n "$ver" ]] && break
+        fi
+    done
+    echo "$ver"
+}
+
+# Convert a detected version string (e.g. "25.11.5") to a SLURM tag
+# (e.g. "slurm-25-11-5-1") with the default RPM build-release suffix (-1).
+_version_to_tag() {
+    local ver="$1"
+    echo "slurm-$(echo "$ver" | tr '.' '-')-1"
+}
+
+# Fetch the latest SLURM WLM version if "latest" is specified
+if [[ "$CEDANA_PLUGINS_SLURM_WLM_VERSION" == "latest" ]]; then
+    # Get the latest version from cedana plugin list slurm/wlm
+    # Example output: "v0.9.291-slurm-25-11-5-1"
+    # We extract just the version part: "v0.9.291"
+    latest_version=$($APP_PATH plugin list slurm/wlm | awk '/AVAILABLE VERSION/ {getline; print $NF}')
+    CEDANA_PLUGINS_SLURM_WLM_VERSION=$(echo "$latest_version" | grep -oP '^v[0-9]+\.[0-9]+\.[0-9]+')
+    detected_slurm_version=$(_detect_slurm_version)
+    if [ -n "$detected_slurm_version" ]; then
+        matching_tag=$(_version_to_tag "$detected_slurm_version")
+        if [ -n "$matching_tag" ]; then
+            CEDANA_PLUGINS_SLURM_WLM_VERSION="${CEDANA_PLUGINS_SLURM_WLM_VERSION}-${matching_tag}"
+        else
+            echo "Failed to find a matching SLURM tag for detected version $detected_slurm_version" >&2
+            exit 1
+        fi
+    else
+        echo "Failed to detect SLURM version for the slur/wlm plugin" >&2
+        exit 1
+    fi
+fi
 
 # XXX: We always install the GPU plugin for now until auto-detection is added
 PLUGINS=" \
@@ -59,16 +98,23 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
 fi
 
 # Improve streaming performance
-echo 0 >/proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
-echo 4194304 >/proc/sys/fs/pipe-max-size  # change pipe max size to 4MiB
+if ! echo 0 >/proc/sys/fs/pipe-user-pages-soft; then
+    echo "Warning: Failed to set pipe-user-pages-soft to 0, streaming performance may be degraded" >&2
+fi
+if ! echo 4194304 >/proc/sys/fs/pipe-max-size; then
+    echo "Warning: Failed to set pipe-max-size to 4194304, streaming performance may be degraded" >&2
+fi
 
 ##########################
 # Setup SLURM/WLM plugin #
 ##########################
 
-if [ "$ENV" != "production" ]; then
-    echo "Non-production environment detected, skipping containerd runtime configuration"
-    exit 0
+if [ -z "${CEDANA_SLURM_NODE_ROLE:-}" ]; then
+    echo "Error: CEDANA_SLURM_NODE_ROLE must be set to controller, worker or login" >&2
+    exit 1
 fi
 
-cedana-slurm setup
+fuser -k -TERM "${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm" || true
+sleep 5
+
+${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm setup --node-role $CEDANA_SLURM_NODE_ROLE

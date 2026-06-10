@@ -127,10 +127,10 @@ CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
+BATS_CMD_TAGS=export BATS_NO_FAIL_FOCUS_RUN=1; export BATS_RETRIES=$(RETRIES); bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
-BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
+BATS_CMD=export BATS_NO_FAIL_FOCUS_RUN=1; export BATS_RETRIES=$(RETRIES); bats \
 		        --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 
@@ -143,6 +143,7 @@ test-unit: ## Run unit tests (with benchmarks)
 test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
+		echo "Retries: $(RETRIES)" ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		echo "\nUsing unique instance of daemon per test...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -201,6 +202,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
+		echo "Retries: $(RETRIES)" ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/k8s ; status=$$? ;\
@@ -272,6 +274,7 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running slurm e2e tests..." ;\
+		echo "Retries: $(RETRIES)" ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/slurm ; status=$$? ;\

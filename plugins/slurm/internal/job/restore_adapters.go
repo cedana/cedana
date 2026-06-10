@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -17,10 +16,8 @@ import (
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
 	slurm_utils "github.com/cedana/cedana/plugins/slurm/pkg/utils"
 
-	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/cgroups"
 	cgroupsManager "github.com/opencontainers/cgroups/manager"
-	"github.com/opencontainers/runc/libcontainer/configs"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -30,21 +27,12 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		details := req.GetDetails().GetSlurm()
 		jid := details.GetJobID()
 		hostname := details.GetHostname()
-		parent := details.GetParentPID()
 
 		path, err := GetJobCgroupPath(hostname, jid)
 		if err != nil {
 			return nil, err
 		}
 
-		// Set the new job PID to be the PID of the restored process
-		if req.Criu == nil {
-			req.Criu = &criu_proto.CriuOpts{}
-		}
-		req.Criu.Pid = proto.Int32(int32(parent))
-		req.Criu.ShellJob = proto.Bool(true)
-
-		// Get the cgroup of the restored job slurmstepd
 		config := &cgroups.Cgroup{
 			Path:      path,
 			Resources: &cgroups.Resources{},
@@ -61,7 +49,7 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to get cgroup freezer state: %v", err)
 		}
-		if st == configs.Frozen {
+		if st == cgroups.Frozen {
 			return nil, status.Errorf(codes.FailedPrecondition, "container's cgroup unexpectedly frozen")
 		}
 
@@ -87,13 +75,13 @@ func RestoreSlurmScript(next types.Restore) types.Restore {
 					return false
 				}
 
-				err = os.MkdirAll(filepath.Dir(path), 0755)
+				err = os.MkdirAll(filepath.Dir(path), 0o755)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to create directory for slurm script %s", path)
 					return false
 				}
 
-				err = os.WriteFile(path, contents, 0700)
+				err = os.WriteFile(path, contents, 0o700)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to restore slurm script file %s", path)
 					return false
