@@ -86,9 +86,7 @@ func SizeStr(bytes int64) string {
 		return "0"
 	}
 
-	stringValue := strings.TrimSuffix(
-		fmt.Sprintf("%.0f", value), ".00",
-	)
+	stringValue := strings.TrimSuffix(fmt.Sprintf("%.1f", value), ".0")
 
 	return fmt.Sprintf("%s %s", stringValue, unit)
 }
