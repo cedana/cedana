@@ -118,4 +118,9 @@ var Registry = []Plugin{
 		},
 		Binaries: []Binary{{Name: "cedana-slurm"}},
 	},
+	{
+		Name:     "slurm/tests",
+		Type:     EXTERNAL,
+		Binaries: []Binary{{Name: "test-preemption.sh"}},
+	},
 }

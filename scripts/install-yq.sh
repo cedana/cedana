@@ -9,8 +9,6 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
-check_root
-
 # yq is needed to configure kubelet, but not available in all distros
 case "$(uname -m)" in
     x86_64)

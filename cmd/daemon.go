@@ -12,7 +12,6 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -24,9 +23,6 @@ func init() {
 		StringP(flags.DBFlag.Full, flags.DBFlag.Short, "", "path to local database")
 	checkDaemonCmd.PersistentFlags().
 		BoolP(flags.FullFlag.Full, flags.FullFlag.Short, false, "perform a full check (including plugins)")
-
-	// Bind to config
-	viper.BindPFlag("db.path", startDaemonCmd.PersistentFlags().Lookup(flags.DBFlag.Full))
 }
 
 var daemonCmd = &cobra.Command{

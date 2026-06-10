@@ -3,14 +3,11 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -55,13 +52,6 @@ func init() {
 		StringP(flags.ProtocolFlag.Full, flags.ProtocolFlag.Short, "", "protocol to use (TCP, UNIX, VSOCK)")
 	rootCmd.PersistentFlags().
 		StringP(flags.AddressFlag.Full, flags.AddressFlag.Short, "", "address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)")
-	rootCmd.PersistentFlags().
-		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
-
-	// Bind to config
-	viper.BindPFlag("protocol", rootCmd.PersistentFlags().Lookup(flags.ProtocolFlag.Full))
-	viper.BindPFlag("address", rootCmd.PersistentFlags().Lookup(flags.AddressFlag.Full))
-	viper.BindPFlag("profiling.enabled", rootCmd.PersistentFlags().Lookup(flags.ProfilingFlag.Full))
 }
 
 var rootCmd = &cobra.Command{
@@ -81,36 +71,8 @@ var rootCmd = &cobra.Command{
 		"\nInstance Brokerage, Orchestration and Migration System." +
 		"\nProperty of Cedana, Corp.\n",
 
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-		initConfig, _ := cmd.Flags().GetBool(flags.InitConfig.Full)
-		mergeConfig, _ := cmd.Flags().GetBool(flags.MergeConfig.Full)
-		conf, _ := cmd.Flags().GetString(flags.ConfigFlag.Full)
-		confDir, _ := cmd.Flags().GetString(flags.ConfigDirFlag.Full)
-
-		if confDir == "" {
-			confDir = os.Getenv("CEDANA_CONFIG_DIR")
-		}
-
-		if initConfig || mergeConfig {
-			err = config.Init(config.Args{
-				Config:    conf,
-				ConfigDir: confDir,
-				Merge:     mergeConfig,
-			})
-		} else {
-			err = config.Load(config.Args{
-				Config:    conf,
-				ConfigDir: confDir,
-			})
-		}
-
-		if err != nil {
-			return fmt.Errorf("Failed to initialize config: %w", err)
-		}
-
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		logging.Init(logging.ConsoleWriter)
-
-		return nil
 	},
 }
 
