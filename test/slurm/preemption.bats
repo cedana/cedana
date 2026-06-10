@@ -31,7 +31,7 @@ load ../helpers/slurm
     # Preemptor demands the whole node to force eviction of the victim.
     local node_cpus
     node_cpus="$(docker exec "$compute" sinfo -h -N -o '%c' 2>/dev/null | sort -n | tail -1)"
-    [[ "$node_cpus" =~ ^[0-9]+$ ]] || node_cpus=2
+    [[ "$node_cpus" =~ ^[0-9]+$ ]] || { error_log "could not read node CPU count from sinfo"; return 1; }
 
     run docker exec \
         -e LOW_PARTITION=debug \
