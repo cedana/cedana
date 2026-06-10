@@ -353,6 +353,11 @@ jobs:
     name: Post Summary
     runs-on: ubuntu-latest
     needs: ["github", "aws_s3", "dockerhub"]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch:
+          - amd64
     if: inputs.post_summary
     steps:
       - name: Checkout

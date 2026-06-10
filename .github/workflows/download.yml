@@ -74,7 +74,7 @@ jobs:
           cd cedana
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
-          aws s3 cp s3://cedana-bin/${{ inputs.cedana_version }}/${{ matrix.arch }}/${REF_SAFE}/cedana
+          aws s3 cp s3://cedana-bin/${{ inputs.cedana_version }}/${{ matrix.arch }}/${REF_SAFE}/cedana .
 
       - name: Upload cedana
         uses: actions/upload-artifact@v4
@@ -237,8 +237,6 @@ jobs:
             aws_s3_path="cedana-gpu-alpha"
           fi
           mkdir -p gpu
-          REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
 
           aws s3 cp \
             s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-gpu-controller \
