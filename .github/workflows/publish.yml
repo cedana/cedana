@@ -140,12 +140,12 @@ jobs:
         run: |
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
-          SHA="${{ github.sha }}"
+          checksum="md5:$(md5sum "cedana" | cut -d' ' -f1)"
 
           aws s3 cp \
             cedana \
             s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/cedana \
-            --metadata arch=${{ matrix.arch }},ref=${REF},sha=${SHA}
+            --metadata arch=${{ matrix.arch }},ref=${REF},md5=${checksum}
 
   aws_s3_plugin:
     name: AWS S3 Plugin Upload
@@ -197,10 +197,13 @@ jobs:
           PLUGIN_NAME="${{ matrix.plugin }}"
           # Sanitize plugin name by replacing slashes with hiphens
           PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
+          checksum="md5:$(md5sum "libcedana-${PLUGIN_SAFE}.so" | cut -d' ' -f1)"
+
           aws s3 cp \
           libcedana-${PLUGIN_SAFE}.so \
           s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so \
-          --metadata arch=${{ matrix.arch }},ref=${REF},sha=${SHA}
+          --metadata arch=${{ matrix.arch }},ref=${REF},md5=${checksum}
+
       - name: Generate plugin date
         run: |
           date -u +"%Y-%m-%dT%H:%M:%SZ" > ${PLUGIN}.date
@@ -210,104 +213,6 @@ jobs:
           name: date-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: ${{ env.PLUGIN }}.date
 
-  aws_s3_metadata:
-    name: Generate Plugin registry_map.json
-    if: inputs.aws_s3
-    runs-on: ubuntu-latest
-    needs: aws_s3_plugin
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - amd64
-          - arm64
-
-    steps:
-      - name: Checkout full repo
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Set cedana git version
-        run: |
-          echo "VERSION=$(git describe --tags --always)" >> $GITHUB_ENV
-
-      - name: Download all plugin artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: plugin-${{ matrix.arch }}-*
-          path: artifacts
-
-      - name: Upload metadata.json to S3
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Download plugin date
-        uses: actions/download-artifact@v4
-        with:
-          pattern: date-${{ matrix.arch }}-*
-          path: artifacts
-
-      - name: Generate registry_map.json
-        run: |
-          set -euo pipefail
-
-          REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
-          ARCH="${{ matrix.arch }}"
-
-          jq -n \
-            --arg arch "$ARCH" \
-            '{ arch: $arch, plugins: {} }' \
-            > registry_map.json
-
-          find artifacts/plugin-${ARCH}-* -type f -name "libcedana-*.so" | while read -r file; do
-            fname="$(basename "$file")"
-
-            plugin="${fname#libcedana-}"
-            plugin="${plugin%.so}"
-            date_file="artifacts/date-$ARCH-${plugin}/${plugin}.date"
-            published_at="$(cat "$date_file")"
-
-            if [[ "$plugin" == *storage* ]]; then
-              plugin="${plugin//-//}"
-            fi
-            checksum="sha256:$(sha256sum "$file" | cut -d' ' -f1)"
-            size=$(stat -c%s $file)
-            version=${{ env.VERSION }}
-            jq \
-              --arg plugin "$plugin" \
-              --arg version "$version" \
-              --arg name "$fname" \
-              --arg checksum "$checksum" \
-              --arg published_at "$published_at" \
-              --arg size "$size" \
-              '
-              .plugins[$plugin] |=
-                (
-                  . // {
-                    version: $version,
-                    type: "SUPPORTED",
-                    size: $size,
-                    published_at: $published_at,
-                    libraries: []
-                  }
-                )
-              | .plugins[$plugin].libraries += [{
-                  name: $name,
-                  checksum: $checksum
-                }]
-              ' registry_map.json > tmp.json && mv tmp.json registry_map.json
-          done
-
-          aws s3 cp \
-            registry_map.json \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${ARCH}/${REF_SAFE}/registry_map.json \
-            --content-type application/json
 
   dockerhub:
     name: DockerHub (multi-arch)
