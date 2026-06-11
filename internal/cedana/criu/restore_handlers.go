@@ -108,7 +108,7 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		opts.ExtraFiles...,
 	)
 
-	if criuResp.Stats != nil {
+	if err != nil && criuResp.Stats != nil {
 		addRestoreProfiling(ctx, criuResp)
 	}
 
