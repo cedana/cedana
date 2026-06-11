@@ -145,7 +145,7 @@ jobs:
           aws s3 cp \
             cedana \
             s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/cedana \
-            --metadata arch=${{ matrix.arch }},ref=${REF},md5=${checksum}
+            --metadata arch=${{ matrix.arch }},version=${REF},md5=${checksum}
 
   aws_s3_plugin:
     name: AWS S3 Plugin Upload
@@ -202,7 +202,7 @@ jobs:
           aws s3 cp \
           libcedana-${PLUGIN_SAFE}.so \
           s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so \
-          --metadata arch=${{ matrix.arch }},ref=${REF},md5=${checksum}
+          --metadata arch=${{ matrix.arch }},version=${REF},md5=${checksum}
 
       - name: Generate plugin date
         run: |
