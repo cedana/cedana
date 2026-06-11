@@ -254,7 +254,7 @@ jobs:
       matrix:
         cuda_version:
           # - 11-8  TODO: re-enable once compatibility is fixed
-          # - 12-2
+          - 12-2
           - 12-4
           - 12-8
           - 13-2
