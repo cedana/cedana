@@ -8,6 +8,7 @@ import (
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func init() {
