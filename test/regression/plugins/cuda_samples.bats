@@ -65,7 +65,7 @@ teardown_file() {
             continue
         fi
 
-        run cedana run process --attach -g --jid "$(unix_nano)" -- "$bin"
+        run cedana run process --attach -g --jid "$(unix_nano)-$sample" -- "$bin"
         compared=$((compared + 1))
         if [ "$status" -eq 0 ]; then
             echo "ok $sample"
