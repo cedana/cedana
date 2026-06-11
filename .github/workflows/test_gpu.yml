@@ -183,6 +183,16 @@ jobs:
             fi
           fi
 
+      - name: Run cuda-samples interception check
+        # Samples are CUDA 12.8-built. Run on the 12.8 runner, and on the 13.2
+        # runner for backward-compat (12.8 binaries under a newer driver).
+        # Missing samples auto-skip, so the same curated list is safe on both.
+        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        run: |
+          mkdir -p /tmp/cuda-samples
+          bats --filter-tags cuda-samples -r test/regression \
+            --output /tmp/cuda-samples --report-formatter junit
+
       - name: Setup node
         if: always()
         uses: actions/setup-node@v4
@@ -213,6 +223,18 @@ jobs:
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
             testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
 
+      - name: Generate report (cuda-samples)
+        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        run: |
+          npx junit-to-ctrf "/tmp/cuda-samples/report.xml" -t bats -o /tmp/report-cuda-samples.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="CUDA samples (intercepted, ${{ matrix.cuda_version }})"
+
       - name: Upload report
         if: always()
         id: upload-report
@@ -232,9 +254,10 @@ jobs:
       matrix:
         cuda_version:
           # - 11-8  TODO: re-enable once compatibility is fixed
-          # - 12-2
+          - 12-2
           - 12-4
           - 12-8
+          - 13-2
         arch:
           - amd64
           - arm64
