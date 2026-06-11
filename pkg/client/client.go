@@ -45,6 +45,9 @@ func New(address, protocol string) (*Client, error) {
 	var opts []grpc.DialOption
 
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	opts = append(opts,
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(6<<20)), // 6MiB instead of default 4MiB
+	)
 
 	protocol = strings.ToLower(protocol)
 
