@@ -140,7 +140,7 @@ jobs:
         run: |
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
-          checksum="md5:$(md5sum "cedana" | cut -d' ' -f1)"
+          checksum="$(md5sum "cedana" | cut -d' ' -f1)"
 
           aws s3 cp \
             cedana \
@@ -197,7 +197,7 @@ jobs:
           PLUGIN_NAME="${{ matrix.plugin }}"
           # Sanitize plugin name by replacing slashes with hiphens
           PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
-          checksum="md5:$(md5sum "libcedana-${PLUGIN_SAFE}.so" | cut -d' ' -f1)"
+          checksum="$(md5sum "libcedana-${PLUGIN_SAFE}.so" | cut -d' ' -f1)"
 
           aws s3 cp \
           libcedana-${PLUGIN_SAFE}.so \
