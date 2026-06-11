@@ -123,14 +123,16 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		totalDuration += duration
 		totalIO += io
 
-		if categoryName != "" {
-			categoryDuration[category] += duration
-			categoryIO[category] += p.IO
-			categoryIORedundant[category] = p.Redundant
-		} else {
-			categoryDuration[style.DisabledColors.Sprint("other")] += duration
-			categoryIO[style.DisabledColors.Sprint("other")] += p.IO
-			categoryIORedundant[style.DisabledColors.Sprint("other")] = p.Redundant
+		if duration != 0 || io != 0 {
+			if categoryName != "" {
+				categoryDuration[category] += duration
+				categoryIO[category] += p.IO
+				categoryIORedundant[category] = p.Redundant
+			} else {
+				categoryDuration[style.DisabledColors.Sprint("other")] += duration
+				categoryIO[style.DisabledColors.Sprint("other")] += p.IO
+				categoryIORedundant[style.DisabledColors.Sprint("other")] = p.Redundant
+			}
 		}
 
 		tableWriter.AppendRow([]any{
