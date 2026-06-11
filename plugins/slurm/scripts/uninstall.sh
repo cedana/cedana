@@ -1,9 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-check_root
-
-cedana-slurm cleanup || true
+${CEDANA_PLUGINS_BIN_DIR}/cedana-slurm cleanup || true
 
 # Remove config
 rm -rf /etc/cedana

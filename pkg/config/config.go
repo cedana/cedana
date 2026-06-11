@@ -3,14 +3,20 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 )
 
+var (
+	DIR_PATH      = "/etc/cedana"
+	DIR_PATH_USER string
+)
+
 const (
-	DIR_PATH   = "/etc/cedana"
 	FILE_NAME  = "config"
 	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
@@ -41,7 +47,7 @@ const (
 	DEFAULT_PROFILING_DETAILED  = true
 	DEFAULT_PROFILING_PRECISION = "auto"
 
-	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai"
+	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai/v1"
 	DEFAULT_CONNECTION_AUTH_TOKEN = ""
 
 	DEFAULT_METRICS = false
@@ -61,6 +67,9 @@ const (
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
 	DEFAULT_PLUGINS_BUILDS  = "release"
+
+	DEFAULT_SLURM_DB_PORT = 3306
+	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
 )
 
 // The default global config. This will get overwritten
@@ -114,6 +123,8 @@ var Global Config = Config{
 	},
 	Slurm: Slurm{
 		Unprivileged: false,
+		DBPort:       DEFAULT_SLURM_DB_PORT,
+		DBName:       DEFAULT_SLURM_DB_NAME,
 	},
 }
 
@@ -125,7 +136,63 @@ func init() {
 	bindEnvVars()
 	err := viper.Unmarshal(&Global)
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("failed to unmarshal default config: %w", err))
+	}
+
+	if os.Geteuid() != 0 {
+		homeDir, err := os.UserConfigDir()
+		if err != nil {
+			panic(fmt.Errorf("failed to get user home directory: %w", err))
+		}
+		DIR_PATH_USER = filepath.Join(homeDir, "cedana")
+	} else {
+		DIR_PATH_USER = DIR_PATH
+	}
+
+	var configStr string
+	var configDir string
+	var initConfig bool
+	var mergeConfig bool
+
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--"+flags.ConfigFlag.Full && i+1 < len(args) {
+			configStr = args[i+1]
+			i++
+		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigFlag.Full); ok {
+			configStr = after
+		}
+		if arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args) {
+			configDir = args[i+1]
+			i++
+		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigDirFlag.Full); ok {
+			configDir = after
+		}
+		if arg == "--"+flags.InitConfig.Full {
+			initConfig = true
+		}
+		if arg == "--"+flags.MergeConfig.Full {
+			mergeConfig = true
+		}
+	}
+	if configDir == "" {
+		configDir = os.Getenv("CEDANA_CONFIG_DIR")
+	}
+	if initConfig || mergeConfig {
+		err = Init(Args{
+			Config:    configStr,
+			ConfigDir: configDir,
+			Merge:     mergeConfig,
+		})
+	} else {
+		err = Load(Args{
+			Config:    configStr,
+			ConfigDir: configDir,
+		})
+	}
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize config: %w", err))
 	}
 }
 
@@ -142,12 +209,13 @@ func Load(args ...Args) (err error) {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH
+		Dir = DIR_PATH_USER
 	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
+	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
 
@@ -183,12 +251,13 @@ func Init(args ...Args) error {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH
+		Dir = DIR_PATH_USER
 	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
+	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)

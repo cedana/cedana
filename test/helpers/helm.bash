@@ -95,7 +95,7 @@ helm_install_cedana() {
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     fi
 
-    helm_cmd="$helm_cmd --wait --timeout=5m"
+    helm_cmd="$helm_cmd --wait --timeout=7m"
 
     debug "$helm_cmd" || {
         error_log "Failed to install helm chart"
