@@ -184,8 +184,10 @@ jobs:
           fi
 
       - name: Run cuda-samples interception check
-        # Runs once on a >=12.8 runner (samples are CUDA 12.8-built).
-        if: ${{ !cancelled() && matrix.cuda_version == '12-8' && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        # Samples are CUDA 12.8-built. Run on the 12.8 runner, and on the 13.2
+        # runner for backward-compat (12.8 binaries under a newer driver).
+        # Missing samples auto-skip, so the same curated list is safe on both.
+        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
         run: |
           mkdir -p /tmp/cuda-samples
           bats --filter-tags cuda-samples -r test/regression \
@@ -222,7 +224,7 @@ jobs:
             testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
 
       - name: Generate report (cuda-samples)
-        if: ${{ !cancelled() && matrix.cuda_version == '12-8' && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
         run: |
           npx junit-to-ctrf "/tmp/cuda-samples/report.xml" -t bats -o /tmp/report-cuda-samples.json -e \
             appName="cedana" appVersion="$(git describe --tags --always)" \
@@ -231,7 +233,7 @@ jobs:
             repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA samples (intercepted)"
+            testEnvironment="cedana/cedana-test" reportName="CUDA samples (intercepted, ${{ matrix.cuda_version }})"
 
       - name: Upload report
         if: always()
@@ -255,6 +257,7 @@ jobs:
           # - 12-2
           - 12-4
           - 12-8
+          - 13-2
         arch:
           - amd64
           - arm64
