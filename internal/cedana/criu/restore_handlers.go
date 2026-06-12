@@ -4,8 +4,11 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -22,6 +25,25 @@ import (
 )
 
 const CRIU_RESTORE_LOG_FILE = "criu-restore.log"
+
+func addRestoreProfiling(ctx context.Context, criuResp *criu.CriuRestoreResp) {
+	preRestoreTime := time.Duration(criuResp.Stats.GetPreRestoreTime() * uint32(time.Microsecond))
+	profiling.AddTimingParallelComponent(ctx, preRestoreTime, "PreRestore")
+
+	restoreTime := time.Duration(criuResp.Stats.GetRestoreTime() * uint32(time.Microsecond))
+	restoreCtx := profiling.AddTimingParallelComponent(ctx, restoreTime, "Restore")
+
+	for _, processRestoreStats := range criuResp.Stats.GetProcessRestoreStats() {
+		pidStr := strconv.FormatUint(uint64(processRestoreStats.GetPid()), 10)
+		pidCtx := profiling.AddTimingParallelComponent(restoreCtx, 0, "Process "+pidStr)
+		for _, timeEntry := range processRestoreStats.GetTimeEntries() {
+			profiling.AddTimingParallelComponent(pidCtx, time.Duration(timeEntry.GetTime()*uint32(time.Microsecond)), timeEntry.GetName())
+		}
+	}
+
+	postRestoreTime := time.Duration(criuResp.Stats.GetPostRestoreTime() * uint32(time.Microsecond))
+	profiling.AddTimingParallelComponent(ctx, postRestoreTime, "PostRestore")
+}
 
 // Returns a CRIU restore handler for the server
 func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
@@ -85,6 +107,10 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		opts.IO.Stderr,
 		opts.ExtraFiles...,
 	)
+
+	if err != nil && criuResp.Stats != nil {
+		addRestoreProfiling(ctx, criuResp)
+	}
 
 	end()
 
