@@ -4,10 +4,8 @@ package cgroup
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
-	"syscall"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -24,6 +22,8 @@ import (
 	// See -> 'github.com/opencontainers/runc/libcontainer/cgroups/cgroups.go'
 	_ "github.com/opencontainers/cgroups/devices"
 )
+
+const CGROUPS_BASE_PATH = "/sys/fs/cgroup"
 
 func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
@@ -45,34 +45,20 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 		callback := &criu.NotifyCallback{
 			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
-				paths := manager.GetPaths()
-
-				log.Trace().Msgf("restoring checkpoint from old cgroup to new cgroup\n")
-				log.Trace().Msgf("CRIU process PID: %d\n", criuPid)
-				log.Trace().Msgf("new cgroup paths:\n")
-				for c, p := range paths {
-					log.Trace().Msgf("  Controller %s: %s\n", c, p)
-				}
-
-				// log whether the new cgroup hierarchy exists
-				for _, p := range paths {
-					if err := os.MkdirAll(p, 0o755); os.IsNotExist(err) {
-						log.Trace().Msgf("cgroup path does not exist: %s\n", p)
-					} else {
-						log.Trace().Msgf("cgroup path already exists: %s\n", p)
-					}
-				}
-
-				// apply cgroups to the CRIU process
 				err = manager.Apply(int(criuPid))
 				if err != nil {
-					if os.IsPermission(err) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM) {
-						log.Warn().Msgf("skipping cgroup apply (unprivileged): %v\n", err)
-					} else {
-						return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
+					return fmt.Errorf("failed to apply cgroups: %v", err)
+				}
+				paths := manager.GetPaths()
+
+				for c, p := range paths {
+					p = strings.TrimPrefix(p, CGROUPS_BASE_PATH)
+					log.Debug().Str("controller", c).Str("path", p).Msg("setting cgroup root for CRIU")
+					cgroupRoot := &criu_proto.CgroupRoot{
+						Ctrl: proto.String(c),
+						Path: proto.String(p),
 					}
-				} else {
-					log.Trace().Msgf("applied cgroups to CRIU process %d\n", criuPid)
+					req.Criu.CgRoot = append(req.Criu.CgRoot, cgroupRoot)
 				}
 
 				return nil
