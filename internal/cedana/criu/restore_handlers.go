@@ -35,11 +35,10 @@ func addRestoreProfiling(ctx context.Context, criuResp *criu.CriuRestoreResp) {
 	}
 
 	stats := criuResp.GetStats()
-	microSecondUint32 := uint32(time.Microsecond)
-	preRestoreTime := time.Duration(stats.GetPreRestoreTime() * microSecondUint32)
+	preRestoreTime := time.Duration(stats.GetPreRestoreTime()) * time.Microsecond
 	profiling.AddTimingParallelComponent(ctx, preRestoreTime, "PreRestore")
 
-	restoreTime := time.Duration(stats.GetRestoreTime() * microSecondUint32)
+	restoreTime := time.Duration(stats.GetRestoreTime()) * time.Microsecond
 	restoreCtx := profiling.AddTimingParallelComponent(ctx, restoreTime, "Restore")
 	type pidTimeEntry struct {
 		time  uint32
@@ -47,11 +46,13 @@ func addRestoreProfiling(ctx context.Context, criuResp *criu.CriuRestoreResp) {
 		stage string
 	}
 
-	var timingsByStage [32][]pidTimeEntry
+	var timingsByStage [][]pidTimeEntry
 
 	for _, processRestoreStats := range stats.GetProcessRestoreStats() {
 		// the order of time entries is perserved in when deserializing
 		// protobufs, so this allows us to index using i
+		// and all ProcessRestoreStats will have the same number of timeEntries
+		timingsByStage = make([][]pidTimeEntry, len(processRestoreStats.GetTimeEntries()))
 		for i, timeEntry := range processRestoreStats.GetTimeEntries() {
 			timingsByStage[i] = append(timingsByStage[i], pidTimeEntry{timeEntry.GetTime(), processRestoreStats.GetPid(), timeEntry.GetName()})
 		}
@@ -71,10 +72,10 @@ func addRestoreProfiling(ctx context.Context, criuResp *criu.CriuRestoreResp) {
 		}
 		slowestEntry := timingsForStage[0]
 		pidStr := strconv.FormatUint(uint64(slowestEntry.pid), 10)
-		profiling.AddTimingParallelComponent(restoreCtx, time.Duration(slowestEntry.time*microSecondUint32), "SlowestPID="+pidStr+"="+slowestEntry.stage)
+		profiling.AddTimingParallelComponent(restoreCtx, time.Duration(slowestEntry.time)*time.Microsecond, "SlowestPID="+pidStr+"="+slowestEntry.stage)
 	}
 
-	postRestoreTime := time.Duration(criuResp.Stats.GetPostRestoreTime() * microSecondUint32)
+	postRestoreTime := time.Duration(criuResp.Stats.GetPostRestoreTime()) * time.Microsecond
 	profiling.AddTimingParallelComponent(ctx, postRestoreTime, "PostRestore")
 }
 
