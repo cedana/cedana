@@ -133,7 +133,7 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 		return nil, 0, nil, 0, err
 	}
 	if flags&syscall.MSG_TRUNC != 0 {
-		err = fmt.Errorf("MSG_TRUNC was returned, try providing a larger buffer: %v", err.Error())
+		err = fmt.Errorf("MSG_TRUNC was returned, try providing a larger buffer")
 	}
 
 	return respB, n, oobB, oobn, err
