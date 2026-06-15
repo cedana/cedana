@@ -121,10 +121,18 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 		return nil, 0, nil, 0, err
 	}
 
-	respB = make([]byte, 2*4096)
+	// CRIU on restore will respond with profiling data
+	// so allocate a larger buffer.
+	// Profiling data will at max ~100 KB for a 1000
+	// process tree, this should be more than enough.
+	respB = make([]byte, 1*utils.MEBIBYTE)
 	oobB = make([]byte, 4096)
-	n, oobn, _, _, err = cln.ReadMsgUnix(respB, oobB)
+	var flags int
+	n, oobn, flags, _, err = cln.ReadMsgUnix(respB, oobB)
 	if err != nil {
+		if flags&syscall.MSG_TRUNC != 0 {
+			err = fmt.Errorf("MSG_TRUNC was returned, try providing a larger buffer: %v", err.Error())
+		}
 		return nil, 0, nil, 0, err
 	}
 
