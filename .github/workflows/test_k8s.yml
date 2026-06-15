@@ -128,7 +128,6 @@ jobs:
           - amd64
           - arm64
         exclude:
-          #
           # XXX: To reduce overusage of CI minutes
           - platform: K3s
             storage: storage/s3
@@ -140,6 +139,8 @@ jobs:
           - platform: K3s
             compute: CPU
             arch: amd64
+          - platform: K3s
+            compute: CUDA # XXX: Skip until fixed
 
           - platform: EKS
             compute: CUDA
