@@ -46,13 +46,16 @@ func addRestoreProfiling(ctx context.Context, criuResp *criu.CriuRestoreResp) {
 		stage string
 	}
 
+	processStats := stats.GetProcessRestoreStats()
 	var timingsByStage [][]pidTimeEntry
-
-	for _, processRestoreStats := range stats.GetProcessRestoreStats() {
-		// the order of time entries is perserved in when deserializing
+	if len(processStats) > 0 {
+		// the order of time entries is preserved when deserializing
 		// protobufs, so this allows us to index using i
 		// and all ProcessRestoreStats will have the same number of timeEntries
-		timingsByStage = make([][]pidTimeEntry, len(processRestoreStats.GetTimeEntries()))
+		timingsByStage = make([][]pidTimeEntry, len(processStats[0].GetTimeEntries()))
+	}
+
+	for _, processRestoreStats := range processStats {
 		for i, timeEntry := range processRestoreStats.GetTimeEntries() {
 			timingsByStage[i] = append(timingsByStage[i], pidTimeEntry{timeEntry.GetTime(), processRestoreStats.GetPid(), timeEntry.GetName()})
 		}
