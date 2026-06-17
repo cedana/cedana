@@ -19,6 +19,11 @@ else
     export CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-"release"}
 fi
 
+# Overrides that should always override the config on installation, even if the
+# user has changed them to some other value. For all other config values, the defaults/user-set
+# values will be preserved on installation.
+export CEDANA_CRIU_MANAGE_CGROUPS="cg_none" # required for how SLURM manages cgroups
+
 ###############################
 # Download and install Cedana #
 ###############################
