@@ -44,7 +44,6 @@ var (
 		// TODO: this needs to be smarter (and not always modify CRIU opts)
 		// Otherwise it causes `operation failed (msg:Error (criu/cr-restore.c:1163): Unable to find an external pidns: extRootPIDNS`
 		// https://github.com/SchedMD/slurm/blob/035cb8f0b5d1fb6a375b27f2ecde106b84473ed5/src/plugins/namespace/linux/namespace_linux.c#L112-L138
-
 		// namespaces.AddExternalNamespacesForDump(configs.NEWNS, configs.NEWPID, configs.NEWUSER),
 
 		network.LockNetworkBeforeDump,

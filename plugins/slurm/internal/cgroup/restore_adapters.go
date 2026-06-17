@@ -4,11 +4,15 @@ package cgroup
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"strings"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
@@ -42,7 +46,12 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
 				err = manager.Apply(int(criuPid))
 				if err != nil {
-					return fmt.Errorf("failed to apply cgroups: %v", err)
+					if config.Global.Slurm.Unprivileged &&
+						(os.IsPermission(err) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM)) {
+						log.Warn().Msgf("skipping cgroup apply (unprivileged): %v\n", err)
+					} else {
+						return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
+					}
 				}
 				paths := manager.GetPaths()
 
