@@ -38,7 +38,11 @@ var (
 		validation.ValidateDumpRequest,
 		job.SetPIDForDump,
 		job.GetSlurmJobForDump,
-		cgroup.UseCgroupFreezerIfAvailableForDump,
+
+		// TODO: this needs to be smarter (and not always on)
+		// Otherwise it causes `operation failed (msg:Error (compel/src/lib/infect.c:262): Unseizable non-zombie 2443832 found`
+		// cgroup.UseCgroupFreezerIfAvailableForDump,
+
 		// https://github.com/SchedMD/slurm/blob/035cb8f0b5d1fb6a375b27f2ecde106b84473ed5/src/plugins/namespace/linux/namespace_linux.c#L112-L138
 		namespaces.AddExternalNamespacesForDump(configs.NEWNS, configs.NEWPID, configs.NEWUSER),
 		network.LockNetworkBeforeDump,
