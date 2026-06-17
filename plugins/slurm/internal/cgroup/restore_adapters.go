@@ -5,7 +5,9 @@ package cgroup
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -51,7 +53,12 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 				}
 				paths := manager.GetPaths()
 
+				time.Sleep(30 * time.Second) // TODO: remove after debuggin
+
 				for c, p := range paths {
+					if err := os.MkdirAll(p, 0o755); err != nil {
+						log.Warn().Err(err).Str("path", p).Msgf("ensuring cgroup path")
+					}
 					p = strings.TrimPrefix(p, CGROUPS_BASE_PATH)
 					log.Debug().Str("controller", c).Str("path", p).Msg("setting cgroup root for CRIU")
 					cgroupRoot := &criu_proto.CgroupRoot{
