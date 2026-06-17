@@ -38,12 +38,7 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.InvalidArgument, "missing CRIU options in restore request")
 		}
 
-		// Disable CRIU cgroup management: CRIU cannot remap cross-job cgroup paths
-		// (e.g. job_1219/step_batch/task_0 -> job_1266/step_batch). With manage_cgroups
-		// disabled, restored processes inherit CRIU's cgroup, which we place into the
-		// new job's hierarchy via manager.Apply below.
-		req.Criu.ManageCgroupsMode = criu_proto.CriuCgMode_CG_NONE.Enum()
-		req.Criu.ManageCgroups = proto.Bool(true)
+		// Assumes that the process was dumped with CRIU's cgroup manage mode "cg_none"
 
 		callback := &criu.NotifyCallback{
 			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
