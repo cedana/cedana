@@ -38,7 +38,7 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.InvalidArgument, "missing CRIU options in restore request")
 		}
 
-		// Assumes that the process was dumped with CRIU's cgroup manage mode "cg_none"
+		// NOTE: Assumes that the process was dumped with CRIU's cgroup manage mode "cg_none"
 
 		callback := &criu.NotifyCallback{
 			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
