@@ -1,6 +1,6 @@
 # Cedana
 
-![GitHub Release](https://img.shields.io/github/v/release/cedana/cedana) ![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/cedana/cedana/release.yml?branch=main)
+![GitHub Release](https://img.shields.io/github/v/release/cedana/cedana) [![amd64](https://github.com/cedana/cedana/actions/workflows/push.yml/badge.svg)](https://github.com/cedana/cedana/actions/workflows/push.yml) [![arm64](https://github.com/cedana/cedana/actions/workflows/push.yml/badge.svg)](https://github.com/cedana/cedana/actions/workflows/push.yml)
 
 ![output-onlinepngtools](https://github.com/user-attachments/assets/8f7930c0-8cef-451f-bb96-a30625dc690b)
 
