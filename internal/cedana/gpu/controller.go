@@ -568,19 +568,22 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		controller := p.Get(id)
 		restoredPid = &pid
 
-		return controller.Attach(ctx, uint32(pid))
+		return controller.Attach(ctx, uint32(pid), nil)
 	}
 
-	// SetupNamespaces and PostSetupNamespaces
-	// will only be called if there are namespaces to restore
-	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
-		restoredPid = &pid
-		return nil
-	}
-
-	callback.PostSetupNamespacesFunc = func(ctx context.Context) error {
+	callback.PostSetupNamespacesFunc = func(ctx context.Context, pid int32, postSetupNsResp *criu_proto.PostSetupNsNotifyResp) error {
 		controller := p.Get(id)
-		return controller.Attach(ctx, uint32(*restoredPid))
+		restoredPid = &pid
+		mountNsInfo := &MountNsInfo{}
+		if postSetupNsResp != nil {
+			mountNsInfo.CriuPid = uint32(postSetupNsResp.GetCriuPid())
+			mountNsInfo.MntNsFd = uint32(postSetupNsResp.GetMntNsFd())
+			mountNsInfo.RootFd = uint32(postSetupNsResp.GetRootPathFd())
+			log.Info().Any("mountNsInfo", mountNsInfo).Msg("got mountNsInfo from CRIU")
+			return controller.Attach(ctx, uint32(pid), mountNsInfo)
+		}
+		log.Info().Msg("did not get mountNsInfo from CRIU")
+		return controller.Attach(ctx, uint32(pid), nil)
 	}
 
 	callback.PreResumeFunc = func(ctx context.Context) error {
@@ -654,6 +657,14 @@ func (p *pool) Check(binary string) types.Check {
 //////////////////
 /// CONTROLLER ///
 //////////////////
+
+// specifies the fds the controller should use
+// to enter a mount namespace during restore
+type MountNsInfo struct {
+	CriuPid uint32
+	MntNsFd uint32
+	RootFd  uint32
+}
 
 func (c *controller) Book() bool {
 	acquired, _ := c.Booking.TryLock()
@@ -733,8 +744,16 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 }
 
 // Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.
-func (c *controller) Attach(ctx context.Context, pid uint32) (err error) {
-	_, err = c.ControllerClient.Attach(ctx, &gpu.AttachReq{PID: pid})
+func (c *controller) Attach(ctx context.Context, pid uint32, mountNsInfo *MountNsInfo) (err error) {
+	req := gpu.AttachReq{PID: pid}
+	if mountNsInfo != nil {
+		mountInfoFromCRIU := &gpu.MountInfoFromCRIU{}
+		mountInfoFromCRIU.CRIUPid = mountNsInfo.CriuPid
+		mountInfoFromCRIU.MntNsFd = mountNsInfo.MntNsFd
+		mountInfoFromCRIU.RootFd = mountNsInfo.RootFd
+		req.MountInfo = mountInfoFromCRIU
+	}
+	_, err = c.ControllerClient.Attach(ctx, &req)
 	if err != nil {
 		return utils.GRPCErrorShort(err, c.ErrBuf.String())
 	}
