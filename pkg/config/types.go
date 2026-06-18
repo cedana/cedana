@@ -125,6 +125,8 @@ type (
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		// DedupEnabled sets whether to use deduplication for GPU checkpoints (reduces checkpoint size)
+		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 	}

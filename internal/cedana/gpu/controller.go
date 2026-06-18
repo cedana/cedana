@@ -275,6 +275,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
+		"CEDANA_GPU_DEDEUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 	)
 
 	cmd.Env = append(cmd.Env, env...)
