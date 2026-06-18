@@ -141,10 +141,11 @@ func init() {
 
 	if os.Geteuid() != 0 {
 		homeDir, err := os.UserConfigDir()
-		if err != nil {
-			panic(fmt.Errorf("failed to get user home directory: %w", err))
+		if err == nil {
+			DIR_PATH_USER = filepath.Join(homeDir, "cedana")
+		} else {
+			DIR_PATH_USER = DIR_PATH
 		}
-		DIR_PATH_USER = filepath.Join(homeDir, "cedana")
 	} else {
 		DIR_PATH_USER = DIR_PATH
 	}

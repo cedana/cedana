@@ -7,7 +7,7 @@ CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_SLURM_WLM_VERSION=${CEDANA_PLUGINS_SLURM_WLM_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
-CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"\tmp"}
+CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"/tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
 # Detect the SLURM version string installed on this machine (e.g. "25.11.5").
@@ -35,6 +35,7 @@ if [[ "$CEDANA_PLUGINS_SLURM_WLM_VERSION" == "latest" ]]; then
     # Example output: "v0.9.291-slurm-25-11-5-1"
     # We extract just the version part: "v0.9.291"
     latest_version=$($APP_PATH plugin list slurm/wlm | awk '/AVAILABLE VERSION/ {getline; print $NF}')
+    [[ -n "$latest_version" ]] || { echo "Error: could not parse version from 'cedana plugin list slurm/wlm'" >&2; exit 1; }
     CEDANA_PLUGINS_SLURM_WLM_VERSION=$(echo "$latest_version" | grep -oP '^v[0-9]+\.[0-9]+\.[0-9]+')
     detected_slurm_version=$(_detect_slurm_version)
     if [ -n "$detected_slurm_version" ]; then
