@@ -17,7 +17,7 @@ load ../helpers/propagator
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/xgboost-training.yaml" "$NAMESPACE" "xgboost")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" 
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
 }
 
 # bats test_tags=dump,restore,samples,ml,sklearn,random-forest
@@ -25,7 +25,7 @@ load ../helpers/propagator
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/sklearn-random-forest.yaml" "$NAMESPACE" "sklearn-rf")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" 
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
 }
 
 # bats test_tags=dump,restore,samples,simulation,monte-carlo
@@ -33,7 +33,7 @@ load ../helpers/propagator
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/monte-carlo-pi.yaml" "$NAMESPACE" "monte-carlo")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 60 300 "$NAMESPACE" 
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 60 300 "$NAMESPACE"
 }
 
 # bats test_tags=dump,restore,samples,hpc,numpy
@@ -41,7 +41,7 @@ load ../helpers/propagator
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/numpy-matrix-ops.yaml" "$NAMESPACE" "numpy")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" 
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
 }
 
 # bats test_tags=dump,restore,samples,hpc,linpack
@@ -49,13 +49,24 @@ load ../helpers/propagator
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/hpl-linpack.yaml" "$NAMESPACE" "linpack")
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE" 
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
 }
 
 # bats test_tags=dump,restore,samples,compbio,lammps
-@test "Dump/Restore: LAMMPS Molecular Dynamics" {
+@test "Dump/Restore: LAMMPS Lennard-Jones molecular dynamics benchmark" {
     local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cpu/lammps-molecular-dynamics.yaml" "$NAMESPACE" "lammps")
+    spec=$(
+        pod_spec "$SAMPLES_DIR/cpu/lammps-lennard-jones-benchmark.yaml" "$NAMESPACE"
+        "lennard-jones"
+    )
 
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"  
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
+}
+
+# bats test_tags=dump,restore,samples,compbio,lammps
+@test "Dump/Restore: LAMMPS Rhodopsin molecular dynamics benchmark" {
+    local spec
+    spec=$(pod_spec "$SAMPLES_DIR/cpu/lammps-rhodospin-md.yaml" "$NAMESPACE" "rhodopsin")
+
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
 }

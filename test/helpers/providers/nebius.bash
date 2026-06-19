@@ -147,12 +147,12 @@ delete_mk8s_cluster() {
     cluster_id=$(nebius mk8s cluster get-by-name \
         --name "$NB_CLUSTER_NAME" --format json | jq -r '.metadata.id')
 
-    debug "Deleting pvc"
+    debug_log "Deleting pvc"
     kubectl delete pvc xyc
-    debug "Waiting for pvc and pv deletion"
+    debug_log "Waiting for pvc and pv deletion"
     kubectl wait --for=delete pvc/xyc --timeout=5m
     kubectl wait --for=delete pv/ <pv-name >--timeout=10m
-    debug "pvc and pv are deleted successfully"
+    debug_log "pvc and pv are deleted successfully"
 
     if [ -z "$cluster_id" ] || [ "$cluster_id" = "null" ]; then
         debug_log "Cluster does not exist, skipping deletion..."
