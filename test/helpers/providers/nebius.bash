@@ -71,8 +71,8 @@ _create_nebius_mk8s() {
     debug_log "Creating Nebius mk8s cluster..."
 
     NB_SUBNET_ID=$(nebius vpc subnet list \
-            --format json |
-    jq -r '.items[0].metadata.id')
+        --format json |
+        jq -r '.items[0].metadata.id')
     export NB_SUBNET_ID
     : "${NB_SUBNET_ID:?NB_SUBNET_ID is empty}"
 
@@ -85,11 +85,18 @@ _create_nebius_mk8s() {
     if [ -n "$NB_CLUSTER_ID" ] && [ "$NB_CLUSTER_ID" != "null" ]; then
         debug_log "Cluster already exists, skip creation..."
     else
-        NB_CLUSTER_ID=$(nebius mk8s cluster create \
+        if ! NB_CLUSTER_ID=$(
+            nebius mk8s cluster create \
                 --name "$NB_CLUSTER_NAME" \
                 --control-plane-subnet-id "$NB_SUBNET_ID" \
                 '{"spec": { "control_plane": { "endpoints": {"public_endpoint": {}}}}}' \
-            --format json | jq -r '.metadata.id')
+                --format json \
+                2>&1
+        ); then
+            error_log "Failed to create Nebius cluster:"
+            error_log "$NB_CLUSTER_ID"
+            return 1
+        fi
     fi
     export NB_CLUSTER_ID
     : "${NB_CLUSTER_ID:?NB_CLUSTER_ID is empty}"
@@ -114,14 +121,22 @@ create_nodegroup() {
         NB_NODEGROUP_ID="$existing_nodegroup"
     else
         debug_log "Creating new node-group..."
-        nebius mk8s node-group create \
-            --name "$NB_NODEGROUP_NAME" \
-            --parent-id "$NB_CLUSTER_ID" \
-            --template-boot-disk-size-bytes "$NB_NODE_DISK_SIZE" \
-            --fixed-node-count "$NB_NODE_COUNT" \
-            --template-resources-platform "$NB_GPU_PLATFORM" \
-            --template-resources-preset "$NB_GPU_PRESET" \
-            --template-network-interfaces "[{\"public_ip_address\": {},\"subnet_id\": \"$NB_SUBNET_ID\"}]"
+
+        if ! node_group_create=$(
+            nebius mk8s node-group create \
+                --name "$NB_NODEGROUP_NAME" \
+                --parent-id "$NB_CLUSTER_ID" \
+                --template-boot-disk-size-bytes "$NB_NODE_DISK_SIZE" \
+                --fixed-node-count "$NB_NODE_COUNT" \
+                --template-resources-platform "$NB_GPU_PLATFORM" \
+                --template-resources-preset "$NB_GPU_PRESET" \
+                --template-network-interfaces "[{\"public_ip_address\": {},\"subnet_id\": \"$NB_SUBNET_ID\"}]" \
+                2>&1
+        ); then
+            error_log "Failed to create Nebius node-group:"
+            error_log "$node_group_create"
+            return 1
+        fi
         debug_log "Nebius node-group with H100 has been created"
     fi
     export NB_NODEGROUP_ID
@@ -131,6 +146,13 @@ delete_mk8s_cluster() {
     local cluster_id
     cluster_id=$(nebius mk8s cluster get-by-name \
         --name "$NB_CLUSTER_NAME" --format json | jq -r '.metadata.id')
+
+    debug "Deleting pvc"
+    kubectl delete pvc xyc
+    debug "Waiting for pvc and pv deletion"
+    kubectl wait --for=delete pvc/xyc --timeout=5m
+    kubectl wait --for=delete pv/ <pv-name >--timeout=10m
+    debug "pvc and pv are deleted successfully"
 
     if [ -z "$cluster_id" ] || [ "$cluster_id" = "null" ]; then
         debug_log "Cluster does not exist, skipping deletion..."
@@ -145,7 +167,7 @@ setup_gpu_operator() {
     debug_log "Installing NVIDIA GPU operator..."
 
     helm repo add nvidia https://helm.ngc.nvidia.com/nvidia &&
-    helm repo update
+        helm repo update
 
     helm upgrade -i --wait gpu-operator \
         -n "$GPU_OPERATOR_NAMESPACE" --create-namespace \
