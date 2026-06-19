@@ -74,6 +74,7 @@ _create_nebius_mk8s() {
             --format json |
     jq -r '.items[0].metadata.id')
     export NB_SUBNET_ID
+    : "${NB_SUBNET_ID:?NB_SUBNET_ID is empty}"
 
     NB_CLUSTER_ID=$(
         nebius mk8s cluster get-by-name \
@@ -91,6 +92,7 @@ _create_nebius_mk8s() {
             --format json | jq -r '.metadata.id')
     fi
     export NB_CLUSTER_ID
+    : "${NB_CLUSTER_ID:?NB_CLUSTER_ID is empty}"
 
     debug_log "Nebius mk8s cluster ready with ID: $NB_CLUSTER_ID"
 }
@@ -98,6 +100,10 @@ _create_nebius_mk8s() {
 create_nodegroup() {
 
     debug_log "Creating Nebius node-group with H100..."
+
+    # Variable check before creating nodegroup
+    : "${NB_CLUSTER_ID:?NB_CLUSTER_ID is empty}"
+    : "${NB_SUBNET_ID:?NB_SUBNET_ID is empty}"
 
     local existing_nodegroup
     existing_nodegroup=$(nebius mk8s node-group list --parent-id "$NB_CLUSTER_ID" \
