@@ -579,11 +579,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			mountNsInfo.CriuPid = uint32(postSetupNsResp.GetCriuPid())
 			mountNsInfo.MntNsFd = uint32(postSetupNsResp.GetMntNsFd())
 			mountNsInfo.RootFd = uint32(postSetupNsResp.GetRootPathFd())
-			log.Info().Any("mountNsInfo", mountNsInfo).Msg("got mountNsInfo from CRIU")
 			return controller.Attach(ctx, uint32(pid), mountNsInfo)
 		}
-		log.Info().Msg("did not get mountNsInfo from CRIU")
-		return controller.Attach(ctx, uint32(pid), nil)
+		return fmt.Errorf("could not get mount namespace info from CRIU")
 	}
 
 	callback.PreResumeFunc = func(ctx context.Context) error {
@@ -658,8 +656,8 @@ func (p *pool) Check(binary string) types.Check {
 /// CONTROLLER ///
 //////////////////
 
-// specifies the fds the controller should use
-// to enter a mount namespace during restore
+// specifies information the controller will
+// to mount checkpoint dir during restore.
 type MountNsInfo struct {
 	CriuPid uint32
 	MntNsFd uint32
@@ -747,11 +745,11 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 func (c *controller) Attach(ctx context.Context, pid uint32, mountNsInfo *MountNsInfo) (err error) {
 	req := gpu.AttachReq{PID: pid}
 	if mountNsInfo != nil {
-		mountInfoFromCRIU := &gpu.MountInfoFromCRIU{}
-		mountInfoFromCRIU.CRIUPid = mountNsInfo.CriuPid
-		mountInfoFromCRIU.MntNsFd = mountNsInfo.MntNsFd
-		mountInfoFromCRIU.RootFd = mountNsInfo.RootFd
-		req.MountInfo = mountInfoFromCRIU
+		mountNsInfoFromCRIU := &gpu.MountNsInfoFromCRIU{}
+		mountNsInfoFromCRIU.CRIUPid = mountNsInfo.CriuPid
+		mountNsInfoFromCRIU.MntNsFd = mountNsInfo.MntNsFd
+		mountNsInfoFromCRIU.RootFd = mountNsInfo.RootFd
+		req.MountNsInfo = mountNsInfoFromCRIU
 	}
 	_, err = c.ControllerClient.Attach(ctx, &req)
 	if err != nil {
