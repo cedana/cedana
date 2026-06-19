@@ -21,6 +21,7 @@ func GetJobCgroupPath(hostname string, jid uint32) (string, error) {
 		fmt.Sprintf("/system.slice/%s_slurmstepd.scope/job_%d/step_batch/user/task_special", hostname, jid),
 		fmt.Sprintf("/system.slice/slurmstepd.scope/job_%d/step_batch/user/task_special", jid),
 	}
+	v2Pattern := fmt.Sprintf("/sys/fs/cgroup/system.slice/*slurmstepd*.scope/job_%d/step_batch/user/task_special", jid)
 	v1Pattern := fmt.Sprintf("/sys/fs/cgroup/freezer/slurm/uid_*/job_%d/step_batch", jid)
 
 	for attempt := range cgroupRetryAttempts {
@@ -29,6 +30,12 @@ func GetJobCgroupPath(hostname string, jid uint32) (string, error) {
 				log.Debug().Str("path", p).Uint32("job_id", jid).Int("attempt", attempt).Msg("found cgroup path")
 				return p, nil
 			}
+		}
+
+		if v2Matches, _ := filepath.Glob(v2Pattern); len(v2Matches) > 0 {
+			path := v2Matches[0][len("/sys/fs/cgroup"):]
+			log.Debug().Str("path", path).Uint32("job_id", jid).Int("attempt", attempt).Msg("found cgroup path (v2 scope glob)")
+			return path, nil
 		}
 
 		matches, err := filepath.Glob(v1Pattern)
