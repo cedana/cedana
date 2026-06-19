@@ -26,9 +26,12 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		details := req.GetDetails().GetSlurm()
 		jid := details.GetJobID()
-		hostname := details.GetHostname()
+		pid := details.GetPID()
+		if pid == 0 {
+			pid = uint32(os.Getpid())
+		}
 
-		path, err := GetJobCgroupPath(hostname, jid)
+		path, err := ResolveJobCgroupPath(jid, pid)
 		if err != nil {
 			return nil, err
 		}
