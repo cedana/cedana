@@ -656,7 +656,7 @@ func (p *pool) Check(binary string) types.Check {
 /// CONTROLLER ///
 //////////////////
 
-// specifies information the controller will
+// specifies information the controller will need
 // to mount checkpoint dir during restore.
 type MountNsInfo struct {
 	CriuPid uint32
