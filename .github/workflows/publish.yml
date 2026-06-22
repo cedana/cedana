@@ -194,7 +194,7 @@ jobs:
           # Sanitize plugin name by replacing slashes with hiphens
           PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
           ls
-          ARCH=${{ matrix.arch }}"
+          ARCH="${{ matrix.arch }}"
           echo "${CEDANA_URL}/plugins/upload/libcedana-${PLUGIN_SAFE}.so?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha"
           curl -X POST \
             "${CEDANA_URL}/plugins/upload/libcedana-${PLUGIN_SAFE}.so?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha" \
