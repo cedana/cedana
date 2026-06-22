@@ -193,11 +193,13 @@ jobs:
           PLUGIN_NAME="${{ matrix.plugin }}"
           # Sanitize plugin name by replacing slashes with hiphens
           PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
+          ARCH = "${{ matrix.arch }}"
+          ls
           curl -X POST \
-            "${CEDANA_URL}/plugins/upload/libcedana-${PLUGIN_SAFE}.so?repository=cedana&version=${REF_SAFE}&arch=${{ matrix.arch }}&build=alpha" \
-            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
+            "$CEDANA_URL/plugins/upload/libcedana-$PLUGIN_SAFE.so?repository=cedana&version=$REF_SAFE&arch=$ARCH&build=alpha" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             -H "Content-Type: application/octet-stream" \
-            --data-binary "@./libcedana-${PLUGIN_SAFE}.so"
+            --data-binary "@./libcedana-$PLUGIN_SAFE.so"
 
 
   dockerhub:
