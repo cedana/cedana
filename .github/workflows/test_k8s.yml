@@ -145,7 +145,7 @@ jobs:
           - platform: EKS
             compute: CUDA
           - platform: EKS
-            arch: amd64
+            arch: ${{ inputs.large == '0' && 'arm64' || 'amd64' }} # Run amd64 for large tests
           - platform: EKS
             cr: streamer
           - platform: EKS
