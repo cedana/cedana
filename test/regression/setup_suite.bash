@@ -20,7 +20,7 @@ setup_suite() {
         nvidia-ctk cdi generate --output=/etc/cdi/nvidia.yaml
     fi
 
-    debug cedana plugin install criu@criu-dev
+    debug cedana plugin install criu@feature/ced-2118-parallelize-restore-for-containers
     start_containerd
 }
 
