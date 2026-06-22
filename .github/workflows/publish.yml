@@ -148,7 +148,7 @@ jobs:
             --metadata arch=${{ matrix.arch }},version=${REF},md5=${checksum}
 
   aws_s3_plugin:
-    name: AWS S3 Plugin Upload
+    name: Plugin Upload to Propagator
     if: inputs.aws_s3
     runs-on: ubuntu-latest
     strategy:
@@ -172,8 +172,6 @@ jobs:
       - name: Set plugin name
         env:
           PLUGIN: ${{ matrix.plugin }}
-          CEDANA_URL: "https://rahul.cedana.ai/v2"
-          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
@@ -185,6 +183,9 @@ jobs:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
 
       - name: Upload to Propagator
+        env:
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
@@ -197,15 +198,6 @@ jobs:
             -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -H "Content-Type: application/octet-stream" \
             --data-binary "@./libcedana-${PLUGIN_SAFE}.so"
-
-      - name: Generate plugin date
-        run: |
-          date -u +"%Y-%m-%dT%H:%M:%SZ" > ${PLUGIN}.date
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: date-${{ matrix.arch }}-${{ env.PLUGIN }}
-          path: ${{ env.PLUGIN }}.date
 
 
   dockerhub:
