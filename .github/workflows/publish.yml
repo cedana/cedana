@@ -172,6 +172,8 @@ jobs:
       - name: Set plugin name
         env:
           PLUGIN: ${{ matrix.plugin }}
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
@@ -182,14 +184,7 @@ jobs:
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Upload to S3
+      - name: Upload to Propagator
         run: |
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
@@ -197,12 +192,11 @@ jobs:
           PLUGIN_NAME="${{ matrix.plugin }}"
           # Sanitize plugin name by replacing slashes with hiphens
           PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
-          checksum="$(md5sum "libcedana-${PLUGIN_SAFE}.so" | cut -d' ' -f1)"
-
-          aws s3 cp \
-          libcedana-${PLUGIN_SAFE}.so \
-          s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so \
-          --metadata arch=${{ matrix.arch }},version=${REF},md5=${checksum}
+          curl -X POST \
+            "${CEDANA_URL}/plugins/upload/libcedana-${PLUGIN_SAFE}.so?repository=cedana&version=${REF_SAFE}&arch=${{ matrix.arch }}&build=alpha" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@./libcedana-${PLUGIN_SAFE}.so"
 
       - name: Generate plugin date
         run: |
