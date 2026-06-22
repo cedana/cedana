@@ -12,6 +12,25 @@ load ../helpers/propagator
 # Large Cedana Samples (ML Training, Scientific HPC) #
 #####################################################
 
+# bats test_tags=dump,restore,samples,compbio,lammps
+@test "Dump/Restore: LAMMPS Lennard-Jones molecular dynamics benchmark" {
+    local spec
+    spec=$(
+        pod_spec "$SAMPLES_DIR/cpu/lammps-lennard-jones-benchmark.yaml" "$NAMESPACE"
+        "lennard-jones"
+    )
+
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
+}
+
+# bats test_tags=dump,restore,samples,compbio,lammps
+@test "Dump/Restore: LAMMPS Rhodopsin molecular dynamics benchmark" {
+    local spec
+    spec=$(pod_spec "$SAMPLES_DIR/cpu/lammps-rhodospin-md.yaml" "$NAMESPACE" "rhodopsin")
+
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
+}
+
 # bats test_tags=dump,restore,samples,ml,xgboost
 @test "Dump/Restore: XGBoost Training" {
     local spec
@@ -46,27 +65,9 @@ load ../helpers/propagator
 
 # bats test_tags=dump,restore,samples,hpc,linpack
 @test "Dump/Restore: HPL Linpack Benchmark" {
+    skip "Requires intel arch"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/hpl-linpack.yaml" "$NAMESPACE" "linpack")
-
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
-}
-
-# bats test_tags=dump,restore,samples,compbio,lammps
-@test "Dump/Restore: LAMMPS Lennard-Jones molecular dynamics benchmark" {
-    local spec
-    spec=$(
-        pod_spec "$SAMPLES_DIR/cpu/lammps-lennard-jones-benchmark.yaml" "$NAMESPACE"
-        "lennard-jones"
-    )
-
-    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
-}
-
-# bats test_tags=dump,restore,samples,compbio,lammps
-@test "Dump/Restore: LAMMPS Rhodopsin molecular dynamics benchmark" {
-    local spec
-    spec=$(pod_spec "$SAMPLES_DIR/cpu/lammps-rhodospin-md.yaml" "$NAMESPACE" "rhodopsin")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 900 60 300 "$NAMESPACE"
 }
