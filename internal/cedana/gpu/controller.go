@@ -270,18 +270,12 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		cmd.Stderr = c.ErrBuf
 	}
 
-	existingLD := os.Getenv("LD_LIBRARY_PATH")
-	ldPath := config.Global.GPU.LdLibPath
-	if existingLD != "" {
-		ldPath = existingLD + ":" + ldPath
-	}
-
 	cmd.Env = append(
 		os.Environ(),
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
-		"LD_LIBRARY_PATH="+ldPath,
+		"CEDANA_GPU_DEDEUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 	)
 
 	cmd.Env = append(cmd.Env, env...)
