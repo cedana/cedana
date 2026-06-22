@@ -14,6 +14,7 @@ load ../helpers/propagator
 
 # bats test_tags=dump,restore,samples,compbio,lammps
 @test "Dump/Restore: LAMMPS Lennard-Jones molecular dynamics benchmark" {
+    skip "Runs on amd64 only"
     local spec
     spec=$(
         pod_spec "$SAMPLES_DIR/cpu/lammps-lennard-jones-benchmark.yaml" "$NAMESPACE"
@@ -25,6 +26,7 @@ load ../helpers/propagator
 
 # bats test_tags=dump,restore,samples,compbio,lammps
 @test "Dump/Restore: LAMMPS Rhodopsin molecular dynamics benchmark" {
+    skip "Runs on amd64 only"
     local spec
     spec=$(pod_spec "$SAMPLES_DIR/cpu/lammps-rhodospin-md.yaml" "$NAMESPACE" "rhodopsin")
 
