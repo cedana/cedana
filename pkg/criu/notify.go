@@ -91,7 +91,7 @@ func (c NoNotify) SetupNamespaces(ctx context.Context, pid int32) error {
 }
 
 // PostSetupNamespaces NoNotify
-func (c NoNotify) PostSetupNamespaces(ctx context.Context) error {
+func (c NoNotify) PostSetupNamespaces(ctx context.Context, pid int32, postSetupNsResp *criu.PostSetupNsNotifyResp) error {
 	return nil
 }
 

@@ -579,6 +579,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			mountNsInfo.CriuPid = uint32(postSetupNsResp.GetCriuPid())
 			mountNsInfo.MntNsFd = uint32(postSetupNsResp.GetMntNsFd())
 			mountNsInfo.RootFd = uint32(postSetupNsResp.GetRootPathFd())
+			log.Debug().Any("mountNsInfo", mountNsInfo).Msg("got mountNsInfo of process from CRIU")
 			return controller.Attach(ctx, uint32(pid), mountNsInfo)
 		}
 		return fmt.Errorf("could not get mount namespace info from CRIU")
@@ -656,8 +657,9 @@ func (p *pool) Check(binary string) types.Check {
 /// CONTROLLER ///
 //////////////////
 
-// specifies information the controller will need
-// to mount checkpoint dir during restore.
+// specifies information gpu-controller uses
+// to enter in the mount namespace of the
+// process being restored to mount checkpoint dir.
 type MountNsInfo struct {
 	CriuPid uint32
 	MntNsFd uint32
