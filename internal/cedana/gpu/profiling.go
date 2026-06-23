@@ -45,8 +45,6 @@ func addGPUFunctionProfileToProfiling(ctx context.Context, duration time.Duratio
 	return functionCtx
 }
 
-// The generated GPU API still names these fields DurationMs, but the GPU
-// controller now sends nanosecond values through them until the schema is renamed.
 func gpuProfileDuration(durationNs int64) time.Duration {
 	return time.Duration(durationNs) * time.Nanosecond
 }
@@ -120,7 +118,7 @@ func gpuPhaseRows(workers []*gpu_proto.WorkerProfile, phaseName, displayName str
 		if phase == nil {
 			continue
 		}
-		durationNs := phase.GetDurationMs()
+		durationNs := phase.GetDurationNs()
 		bytes := phase.GetBytes()
 		if durationNs == 0 && bytes == 0 {
 			continue
@@ -142,11 +140,11 @@ func gpuOtherRows(workers []*gpu_proto.WorkerProfile) []gpuWorkerTimingRow {
 		var namedDurationNs int64
 		var namedBytes uint64
 		for _, phase := range worker.GetPhases() {
-			namedDurationNs += phase.GetDurationMs()
+			namedDurationNs += phase.GetDurationNs()
 			namedBytes += phase.GetBytes()
 		}
 
-		otherDurationNs := worker.GetDurationMs() - namedDurationNs
+		otherDurationNs := worker.GetDurationNs() - namedDurationNs
 		if otherDurationNs < 0 {
 			otherDurationNs = 0
 		}
