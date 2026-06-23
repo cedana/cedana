@@ -24,7 +24,6 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/logging"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/gofrs/flock"
@@ -67,103 +66,6 @@ const (
 	TERMINATE_TIMEOUT = 10 * time.Second
 	MAX_SYNC_FAILURES = 2
 )
-
-func addGPUFunctionProfileToProfiling(ctx context.Context, duration time.Duration, parallel bool, f ...any) context.Context {
-	if parallel {
-		return profiling.AddTimingParallelComponent(ctx, duration, f...)
-	}
-	return profiling.AddTimingComponent(ctx, duration, f...)
-}
-
-func gpuWorkerPID(profile *gpu.GpuProfile, workerIndex int32) uint32 {
-	for _, worker := range profile.GetWorkers() {
-		if worker.GetWorkerIndex() == workerIndex {
-			return worker.GetPID()
-		}
-	}
-	return 0
-}
-
-func addGPUProfileToProfiling(ctx context.Context, profile *gpu.GpuProfile, functionsParallel bool) {
-	if profile == nil {
-		return
-	}
-
-	summary := profile.GetSummary()
-
-	for _, function := range profile.GetFunctions() {
-		functionCtx := addGPUFunctionProfileToProfiling(
-			ctx,
-			time.Duration(function.GetDurationMs())*time.Millisecond,
-			functionsParallel,
-			function.GetName(),
-		)
-		profiling.AddIO(functionCtx, int64(function.GetBytes()))
-		profiling.MarkIORedundant(functionCtx)
-	}
-
-	if summary.GetCount() > 0 {
-		averageBytes := summary.GetTotalBytes() / uint64(summary.GetCount())
-		profiling.AddTimingParallelComponent(
-			ctx,
-			time.Duration(summary.GetAverageDurationMs())*time.Millisecond,
-			"workerSummary",
-			fmt.Sprintf("count=%d", summary.GetCount()),
-			fmt.Sprintf("avgBytes=%s", utils.SizeStr(int64(averageBytes))),
-			fmt.Sprintf("totalBytes=%s", utils.SizeStr(int64(summary.GetTotalBytes()))),
-		)
-
-		profiling.AddTimingParallelComponent(
-			ctx,
-			time.Duration(summary.GetSlowestDurationMs())*time.Millisecond,
-			"workerSlowest",
-			fmt.Sprintf("worker=%d", summary.GetSlowestWorkerIndex()),
-			fmt.Sprintf("pid=%d", summary.GetSlowestPID()),
-		)
-	}
-
-	for _, worker := range profile.GetWorkers() {
-		workerCtx := profiling.AddTimingParallelComponent(
-			ctx,
-			time.Duration(worker.GetDurationMs())*time.Millisecond,
-			"worker",
-			fmt.Sprintf("worker=%d", worker.GetWorkerIndex()),
-			fmt.Sprintf("pid=%d", worker.GetPID()),
-		)
-		profiling.AddIO(workerCtx, int64(worker.GetBytes()))
-		profiling.MarkIORedundant(workerCtx)
-	}
-
-	for _, phase := range summary.GetPhases() {
-		averageBytes := phase.GetAverageBytes()
-		slowestBytes := phase.GetSlowestBytes()
-		slowestPID := phase.GetSlowestPID()
-		if pid := gpuWorkerPID(profile, phase.GetSlowestWorkerIndex()); pid != 0 {
-			slowestPID = pid
-		}
-
-		averageCtx := profiling.AddTimingParallelComponent(
-			ctx,
-			time.Duration(phase.GetAverageDurationMs())*time.Millisecond,
-			"workerPhaseAverage",
-			phase.GetName(),
-			fmt.Sprintf("count=%d", phase.GetCount()),
-		)
-		profiling.AddIO(averageCtx, int64(averageBytes))
-		profiling.MarkIORedundant(averageCtx)
-
-		slowestCtx := profiling.AddTimingParallelComponent(
-			ctx,
-			time.Duration(phase.GetSlowestDurationMs())*time.Millisecond,
-			"workerPhaseSlowest",
-			phase.GetName(),
-			fmt.Sprintf("worker=%d", phase.GetSlowestWorkerIndex()),
-			fmt.Sprintf("pid=%d", slowestPID),
-		)
-		profiling.AddIO(slowestCtx, int64(slowestBytes))
-		profiling.MarkIORedundant(slowestCtx)
-	}
-}
 
 type controller struct {
 	ID          string
@@ -555,7 +457,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
 				return
 			}
-			addGPUProfileToProfiling(ctx, resp.GetProfile(), false)
+			addGPUProfileToProfiling(ctx, resp.GetProfile())
 
 			log.Info().Msg("GPU dump complete")
 		}()
@@ -676,9 +578,12 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return controller.Attach(ctx, uint32(pid))
 	}
 
+	var restoreProfileOnce sync.Once
 	callback.PreResumeFunc = func(ctx context.Context) error {
 		err := <-restoreErr
-		addGPUProfileToProfiling(ctx, restoreProfile, true)
+		restoreProfileOnce.Do(func() {
+			addGPUProfileToProfiling(ctx, restoreProfile)
+		})
 		if err != nil {
 			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
 			// Because it can't run since the GPU restore failed.
