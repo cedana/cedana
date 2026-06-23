@@ -3,6 +3,7 @@ package profiling
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -196,6 +197,45 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	}
 
 	fmt.Println()
+}
+
+func EncodeJSON(data *Data) (string, error) {
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}
+
+func DecodeJSON(data string) (*Data, error) {
+	var d Data
+	if err := json.Unmarshal([]byte(data), &d); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+func WriteJSON(path string, data *Data) error {
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, bytes, 0o644)
+}
+
+func ReadJSON(path string) (*Data, error) {
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var data Data
+	if err = json.Unmarshal(bytes, &data); err != nil {
+		return nil, err
+	}
+
+	return &data, nil
 }
 
 func Encode(data *Data, buf *bytes.Buffer) error {

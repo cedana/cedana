@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -22,7 +23,12 @@ func main() {
 	defer stop()
 	version.PutVersion(Version)
 
-	if err := cmd.Execute(ctx, Version); err != nil {
+	if err := run(ctx, Version); err != nil {
+		fmt.Fprintf(os.Stderr, "cedana: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func run(ctx context.Context, version string) error {
+	return cmd.Execute(ctx, version)
 }
