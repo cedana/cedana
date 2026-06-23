@@ -109,7 +109,7 @@ jobs:
               install-release.sh
 
   aws_s3:
-    name: AWS S3 Upload
+    name: Cedana Binary Upload to Propagator
     if: inputs.aws_s3
     runs-on: ubuntu-latest
     strategy:
@@ -129,14 +129,7 @@ jobs:
         with:
           name: cedana-${{ matrix.arch }}
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Upload to S3
+      - name: Upload cedana to Propagator
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
