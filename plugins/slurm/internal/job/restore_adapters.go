@@ -28,7 +28,9 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		jid := details.GetJobID()
 		pid := details.GetPID()
 		if pid == 0 {
-			pid = uint32(os.Getpid())
+			if self := uint32(os.Getpid()); selfInJobCgroup(self, jid) {
+				pid = self
+			}
 		}
 
 		path, err := ResolveJobCgroupPath(jid, pid)

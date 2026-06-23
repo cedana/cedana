@@ -23,10 +23,45 @@ func ResolveJobCgroupPath(jid uint32, pid uint32) (string, error) {
 			log.Debug().Str("path", path).Uint32("job_id", jid).Uint32("pid", pid).Msg("found cgroup path (from /proc)")
 			return path, nil
 		} else {
-			log.Debug().Err(err).Uint32("job_id", jid).Uint32("pid", pid).Msg("could not resolve cgroup from /proc, falling back to v1 lookup")
+			log.Debug().Err(err).Uint32("job_id", jid).Uint32("pid", pid).Msg("could not resolve cgroup from /proc, falling back to job-scoped lookup")
 		}
 	}
+	if path, err := getJobCgroupPathV2(jid); err == nil {
+		return path, nil
+	}
 	return getJobCgroupPathV1(jid)
+}
+
+func getJobCgroupPathV2(jid uint32) (string, error) {
+	const root = "/sys/fs/cgroup"
+	leaf := fmt.Sprintf("job_%d/step_batch/user/task_special", jid)
+	patterns := []string{
+		fmt.Sprintf("%s/system.slice/*slurmstepd*.scope/%s", root, leaf),
+		fmt.Sprintf("%s/system.slice/*.scope/system.slice/*slurmstepd*.scope/%s", root, leaf),
+	}
+
+	for attempt := range cgroupRetryAttempts {
+		for _, pattern := range patterns {
+			if matches, _ := filepath.Glob(pattern); len(matches) > 0 {
+				path := matches[0][len(root):]
+				log.Debug().Str("path", path).Uint32("job_id", jid).Int("attempt", attempt).Msg("found cgroup path (v2 by job id)")
+				return path, nil
+			}
+		}
+		if attempt < cgroupRetryAttempts-1 {
+			time.Sleep(cgroupRetryInterval)
+		}
+	}
+
+	return "", status.Errorf(codes.NotFound, "cgroup v2 path for slurm job %d not found", jid)
+}
+
+func selfInJobCgroup(pid, jid uint32) bool {
+	path, err := cgroupPathFromProc(pid)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(path, fmt.Sprintf("/job_%d/", jid))
 }
 
 func cgroupPathFromProc(pid uint32) (string, error) {
