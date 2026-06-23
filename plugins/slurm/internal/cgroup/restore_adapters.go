@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
@@ -39,7 +40,8 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 		// (e.g. job_1219/step_batch/task_0 -> job_1266/step_batch). With manage_cgroups
 		// disabled, restored processes inherit CRIU's cgroup, which we place into the
 		// new job's hierarchy via manager.Apply below.
-		req.Criu.ManageCgroups = proto.Bool(false)
+		req.Criu.ManageCgroupsMode = criu_proto.CriuCgMode_CG_NONE.Enum()
+		req.Criu.ManageCgroups = proto.Bool(true)
 
 		callback := &criu.NotifyCallback{
 			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
@@ -54,7 +56,7 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 				// log whether the new cgroup hierarchy exists
 				for _, p := range paths {
-					if err := os.MkdirAll(p, 0755); os.IsNotExist(err) {
+					if err := os.MkdirAll(p, 0o755); os.IsNotExist(err) {
 						log.Trace().Msgf("cgroup path does not exist: %s\n", p)
 					} else {
 						log.Trace().Msgf("cgroup path already exists: %s\n", p)

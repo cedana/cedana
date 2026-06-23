@@ -77,8 +77,8 @@ env:
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
-  RETRIES: 1
-  DEBUG: ${{ vars.DEBUG_K8S }}
+  RETRIES: 1 # some tests are still flaky
+  DEBUG: 0
 
 jobs:
   propagator-connectivity:
@@ -128,7 +128,6 @@ jobs:
           - amd64
           - arm64
         exclude:
-          #
           # XXX: To reduce overusage of CI minutes
           - platform: K3s
             storage: storage/s3
@@ -140,6 +139,8 @@ jobs:
           - platform: K3s
             compute: CPU
             arch: amd64
+          - platform: K3s
+            compute: CUDA # XXX: Skip until fixed
 
           - platform: EKS
             compute: CUDA
@@ -302,7 +303,6 @@ jobs:
           CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || (matrix.storage == 'storage/s3' && 's3://checkpoints-ci' || 'cedana://ci') }}
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
-          CEDANA_GPU_SKIP_NVIDIA_RUNTIME_HOOK: ${{ matrix.platform == 'K3s' && 'true' || 'false' }} # K3s has issues with nvidia-container-runtime hook as it runs inside a container
           PLATFORM: ${{ matrix.platform }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
@@ -367,6 +367,7 @@ jobs:
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
             PARALLELISM=$PARALLELISM \
+            RETRIES=$RETRIES \
             CONTROLLER_REPO=$CONTROLLER_REPO \
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \

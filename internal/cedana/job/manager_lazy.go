@@ -285,6 +285,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 
 	job.SetPID(pid)
 	job.SyncDeep(lifetime)
+	job.done = make(chan error, 1)
 
 	m.pending <- action{putJob, jid}
 
@@ -311,9 +312,12 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 			err := cleanup(context.WithoutCancel(lifetime), job.GetDetails())
 			if err != nil {
 				log.Debug().Err(err).Msg("custom cleanup from plugin failed")
+				job.done <- fmt.Errorf("Failed %s cleanup: %v", job.GetType(), err)
 			}
 			return err
 		}, job.GetType())
+
+		close(job.done)
 	})
 
 	return nil
@@ -362,6 +366,16 @@ func (m *ManagerLazy) Kill(ctx context.Context, jid string, signal ...syscall.Si
 	}
 
 	return fmt.Errorf("job %s is not running, PID %d is not valid", jid, pid)
+}
+
+func (m *ManagerLazy) Done(jid string) <-chan error {
+	job := m.lookup(jid)
+	if job == nil {
+		ch := make(chan error)
+		close(ch)
+		return ch
+	}
+	return job.done
 }
 
 func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {

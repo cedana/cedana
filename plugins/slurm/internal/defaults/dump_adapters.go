@@ -5,7 +5,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/slurm"
-	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"google.golang.org/protobuf/proto"
 )
@@ -17,9 +16,6 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 		}
 		if req.GetDetails().GetSlurm() == nil {
 			req.Details.Slurm = &slurm.Slurm{}
-		}
-		if req.GetCriu() == nil {
-			req.Criu = &criu_proto.CriuOpts{}
 		}
 		req.Criu.OrphanPtsMaster = proto.Bool(true)
 

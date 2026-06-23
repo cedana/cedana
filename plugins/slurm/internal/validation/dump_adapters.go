@@ -14,8 +14,8 @@ func ValidateDumpRequest(next types.Dump) types.Dump {
 		if req.GetDetails().GetSlurm() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing slurm details")
 		}
-		if req.GetDetails().GetSlurm().GetID() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "missing slurm id")
+		if req.GetDetails().GetSlurm().GetJobID() == 0 {
+			return nil, status.Errorf(codes.InvalidArgument, "missing slurm job id")
 		}
 
 		return next(ctx, opts, resp, req)

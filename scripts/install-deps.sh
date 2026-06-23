@@ -9,18 +9,16 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
-check_root
-
 # Define packages for YUM and APT
 YUM_PACKAGES=(
-    wget git make
-    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel nftables-devel # CRIU
+    wget git make psmisc
+    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel # CRIU
     yq
 )
 
 APT_PACKAGES=(
-    wget git make
-    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev libnftables1 # CRIU
+    wget git make psmisc
+    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev iptables libnftables1 # CRIU
     sysvinit-utils
 )
 
