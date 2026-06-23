@@ -142,7 +142,9 @@ jobs:
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             -H "Content-Type: application/octet-stream" \
             --data-binary "@./cedana" \
-            --fail
+            --fail \
+            --limit-rate 5m \
+            --retry 5
 
   aws_s3_plugin:
     name: Plugin Upload to Propagator
@@ -196,7 +198,9 @@ jobs:
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             -H "Content-Type: application/octet-stream" \
             --data-binary "@./libcedana-${PLUGIN_SAFE}.so" \
-            --fail
+            --fail \
+            --limit-rate 5m \
+            --retry 5
 
 
   dockerhub:
