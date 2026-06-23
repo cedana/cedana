@@ -137,15 +137,18 @@ jobs:
           aws-region: us-east-1
 
       - name: Upload to S3
+        env:
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
-          checksum="$(md5sum "cedana" | cut -d' ' -f1)"
-
-          aws s3 cp \
-            cedana \
-            s3://cedana-bin/${{ inputs.aws_s3_path }}/${{ matrix.arch }}/${REF_SAFE}/cedana \
-            --metadata arch=${{ matrix.arch }},version=${REF},md5=${checksum}
+          ARCH="${{ matrix.arch }}"
+          curl -X POST \
+            "${CEDANA_URL}/plugins/upload/cedana?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary "@./cedana"
 
   aws_s3_plugin:
     name: Plugin Upload to Propagator
