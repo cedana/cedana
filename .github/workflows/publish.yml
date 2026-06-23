@@ -190,6 +190,7 @@ jobs:
           # Sanitize plugin name by replacing slashes with hiphens
           PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
           ARCH="${{ matrix.arch }}"
+          sleep $((1 + RANDOM % 5))
           curl -X POST \
             "${CEDANA_URL}/plugins/upload/libcedana-${PLUGIN_SAFE}.so?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
