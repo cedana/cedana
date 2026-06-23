@@ -54,8 +54,8 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      criu_version: criu-dev
-      gpu_version: main
+      criu_version: feature/ced-2118-parallelize-restore-for-containers
+      gpu_version: feature/ced-2118-parallelize-restore-for-containers
       streamer_version: main
       helm_chart_version: main
       controller_version: main
