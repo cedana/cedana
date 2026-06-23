@@ -143,8 +143,7 @@ jobs:
             -H "Content-Type: application/octet-stream" \
             --data-binary "@./cedana" \
             --fail \
-            --limit-rate 5m \
-            --retry 5
+            --limit-rate 1m
 
   aws_s3_plugin:
     name: Plugin Upload to Propagator
@@ -199,9 +198,7 @@ jobs:
             -H "Content-Type: application/octet-stream" \
             --data-binary "@./libcedana-${PLUGIN_SAFE}.so" \
             --fail \
-            --limit-rate 5m \
-            --retry 5
-
+            --limit-rate 1m
 
   dockerhub:
     name: DockerHub (multi-arch)
