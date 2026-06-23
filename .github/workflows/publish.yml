@@ -114,6 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         arch:
           - amd64
@@ -141,7 +142,8 @@ jobs:
             "${CEDANA_URL}/plugins/upload/cedana?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             -H "Content-Type: application/octet-stream" \
-            --data-binary "@./cedana"
+            --data-binary "@./cedana" \
+            --fail
 
   aws_s3_plugin:
     name: Plugin Upload to Propagator
@@ -149,6 +151,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         plugin:
           - runc
@@ -190,12 +193,12 @@ jobs:
           # Sanitize plugin name by replacing slashes with hiphens
           PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
           ARCH="${{ matrix.arch }}"
-          sleep $((1 + RANDOM % 5))
           curl -X POST \
             "${CEDANA_URL}/plugins/upload/libcedana-${PLUGIN_SAFE}.so?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             -H "Content-Type: application/octet-stream" \
-            --data-binary "@./libcedana-${PLUGIN_SAFE}.so"
+            --data-binary "@./libcedana-${PLUGIN_SAFE}.so" \
+            --fail
 
 
   dockerhub:
