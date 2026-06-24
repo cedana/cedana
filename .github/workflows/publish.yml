@@ -194,10 +194,8 @@ jobs:
         env:
           PLUGIN: ${{ matrix.plugin }}
         run: |
-          PLUGIN=$(echo $PLUGIN)
-          PLUGIN_SAFE=$(echo $PLUGIN | sed 's/\//-/g')
+          PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
-          echo "PLUGIN_SAFE=$PLUGIN_SAFE" >> $GITHUB_ENV
 
       - name: Download plugin
         uses: actions/download-artifact@v4
@@ -212,7 +210,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          FILE="libcedana-${PLUGIN_SAFE}.so"
+          FILE="libcedana-${PLUGIN}.so"
           REF="${{ github.head_ref || github.ref_name }}"
           ARCH="${{ matrix.arch }}"
           CHECKSUM="$(
