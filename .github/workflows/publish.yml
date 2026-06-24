@@ -152,7 +152,7 @@ jobs:
           )"
 
           RESPONSE="$(
-            curl -sS --fail -X POST \
+            curl -sS --fail \
               "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
           )"
@@ -227,7 +227,7 @@ jobs:
           )"
 
           RESPONSE="$(
-            curl -sS --fail -X POST \
+            curl -sS --fail \
               "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
           )"
