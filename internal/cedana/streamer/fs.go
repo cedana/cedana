@@ -90,12 +90,6 @@ func NewStreamingFs(
 	}
 
 	log := log.With().Str("plugin", "streamer").Str("path", storagePath).Int32("streams", streams).Str("mode", mode.String()).Logger()
-	// it's okay if we failed to create streamer log file
-	logFile, logFileCleanup, err := createStreamerLogFile(imagesDir, mode, log.GetLevel())
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to create streamer log file")
-	}
-
 	// Create pipes for reading and writing data to/from the streamer to dir
 	var readFds, writeFds []*os.File
 	var shardFds []string
@@ -217,8 +211,24 @@ func NewStreamingFs(
 	exited := make(chan bool, 1)
 	defer close(ready)
 
-	// Mark ready when we read init progress message on stderr
+	err = cmd.Start()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
+	}
+
+	// Mark ready when we read init progress message on stderr.
 	wg.Go(func() {
+		// it's okay if we failed to create streamer log file
+		logFile, logFileCleanup, err := createStreamerLogFile(imagesDir, mode, log.GetLevel())
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to create streamer log file")
+		}
+		defer func() {
+			if logFileCleanup != nil {
+				logFileCleanup()
+			}
+		}()
+
 		scanner := bufio.NewScanner(stderrPipe)
 		for {
 			if !scanner.Scan() || ctx.Err() != nil {
@@ -234,11 +244,6 @@ func NewStreamingFs(
 			}
 		}
 	})
-
-	err = cmd.Start()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
-	}
 
 	fs = &Fs{
 		mode:      mode,
@@ -256,7 +261,6 @@ func NewStreamingFs(
 			log.Trace().Err(err).Msg("streamer Wait()")
 		}
 		log.Debug().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
-		logFileCleanup()
 
 		// FIXME: Remove socket files. Should be cleaned up by the streamer itself
 		matches, err := filepath.Glob(filepath.Join(imagesDir, "*.sock"))
