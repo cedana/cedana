@@ -561,26 +561,25 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		controller := p.Get(id)
 		restoredPid = &pid
 
-		return controller.Attach(ctx, uint32(pid), nil)
+		return controller.Attach(ctx, uint32(pid))
 	}
 
 	callback.PostSetupNamespacesFunc = func(ctx context.Context, pid int32, postSetupNsResp *criu_proto.PostSetupNsNotifyResp) error {
 		controller := p.Get(id)
 		restoredPid = &pid
-		mountNsInfo := &MountNsInfo{}
+		mountNsInfo := &gpu.MountNsInfoFromCRIU{}
 		if postSetupNsResp != nil {
-			mountNsInfo.CriuPid = uint32(postSetupNsResp.GetCriuPid())
+			mountNsInfo.CRIUPid = uint32(postSetupNsResp.GetCriuPid())
 			mountNsInfo.MntNsFd = uint32(postSetupNsResp.GetMntNsFd())
 			mountNsInfo.RootFd = uint32(postSetupNsResp.GetRootPathFd())
 			log.Debug().Any("mountNsInfo", mountNsInfo).Msg("got mountNsInfo of process from CRIU")
-			return controller.Attach(ctx, uint32(pid), mountNsInfo)
+			return controller.AttachWithMountNs(ctx, uint32(pid), mountNsInfo)
 		}
-		// CRIU will call PostSetupNamespace even if it only
-		// had one namespace to restore. This happens sometimes
-		// in crcr situations where the second checkpoint ends
-		// up including a time namespace dump as well.
-		// So, only pass MountNsInfo if CRIU provides it.
-		return controller.Attach(ctx, uint32(pid), nil)
+		// CRIU can call PostSetupNamespaces for regular processes as well,
+		// because PostSetupNamespaces is triggered even if only one type of namespace was restored.
+		// But, it will only send mount ns info if a mount namespace was dumped.
+		// So, Do not error out here.
+		return controller.Attach(ctx, uint32(pid))
 	}
 
 	callback.PreResumeFunc = func(ctx context.Context) error {
@@ -654,15 +653,6 @@ func (p *pool) Check(binary string) types.Check {
 //////////////////
 /// CONTROLLER ///
 //////////////////
-
-// specifies information gpu-controller uses
-// to enter in the mount namespace of the
-// process being restored to mount checkpoint dir.
-type MountNsInfo struct {
-	CriuPid uint32
-	MntNsFd uint32
-	RootFd  uint32
-}
 
 func (c *controller) Book() bool {
 	acquired, _ := c.Booking.TryLock()
@@ -741,16 +731,20 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 	return err
 }
 
-// Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.
-func (c *controller) Attach(ctx context.Context, pid uint32, mountNsInfo *MountNsInfo) (err error) {
-	req := gpu.AttachReq{PID: pid}
-	if mountNsInfo != nil {
-		mountNsInfoFromCRIU := &gpu.MountNsInfoFromCRIU{}
-		mountNsInfoFromCRIU.CRIUPid = mountNsInfo.CriuPid
-		mountNsInfoFromCRIU.MntNsFd = mountNsInfo.MntNsFd
-		mountNsInfoFromCRIU.RootFd = mountNsInfo.RootFd
-		req.MountNsInfo = mountNsInfoFromCRIU
+func (c *controller) AttachWithMountNs(ctx context.Context, pid uint32, mountNsInfo *gpu.MountNsInfoFromCRIU) (err error) {
+	req := gpu.AttachReq{PID: pid, MountNsInfo: mountNsInfo}
+	_, err = c.ControllerClient.Attach(ctx, &req)
+	if err != nil {
+		return utils.GRPCErrorShort(err, c.ErrBuf.String())
 	}
+	c.AttachedPID = pid
+
+	return nil
+}
+
+// Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.
+func (c *controller) Attach(ctx context.Context, pid uint32) (err error) {
+	req := gpu.AttachReq{PID: pid}
 	_, err = c.ControllerClient.Attach(ctx, &req)
 	if err != nil {
 		return utils.GRPCErrorShort(err, c.ErrBuf.String())
