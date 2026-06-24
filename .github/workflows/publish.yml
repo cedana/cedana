@@ -134,16 +134,40 @@ jobs:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
+          set -euo pipefail
+
+          FILE="cedana"
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
           ARCH="${{ matrix.arch }}"
-          curl -X POST \
-            "${CEDANA_URL}/plugins/upload/cedana?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha" \
-            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary "@./cedana" \
-            --fail \
-            --limit-rate 1m
+
+          CHECKSUM="$(
+            python3 - <<'PY' "$FILE"
+          import sys, zlib, base64, struct
+          path = sys.argv[1]
+          with open(path, "rb") as f:
+              crc = zlib.crc32(f.read()) & 0xffffffff
+          print(base64.b64encode(struct.pack(">I", crc)).decode())
+          PY
+          )"
+
+          RESPONSE="$(
+            curl -sS --fail -X POST \
+              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
+              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
+          )"
+
+          VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
+          LATEST_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.latest_upload_url')"
+
+          for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
+            curl -sS --fail -X PUT "$URL" \
+              -H "Content-Type: application/octet-stream" \
+              -H "x-amz-meta-version: ${REF_SAFE}" \
+              -H "x-amz-checksum-crc32: ${CHECKSUM}" \
+              -H "x-amz-sdk-checksum-algorithm: CRC32" \
+              --upload-file "$FILE"
+          done
 
   aws_s3_plugin:
     name: Plugin Upload to Propagator
@@ -180,25 +204,45 @@ jobs:
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
 
-      - name: Upload to Propagator
+      - name: Upload plugin to Propagator
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
+          set -euo pipefail
+
+          FILE="libcedana-${PLUGIN_SAFE}.so"
           REF="${{ github.head_ref || github.ref_name }}"
           REF_SAFE="${REF//\//-}"
-          SHA="${{ github.sha }}"
-          PLUGIN_NAME="${{ matrix.plugin }}"
-          # Sanitize plugin name by replacing slashes with hiphens
-          PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
           ARCH="${{ matrix.arch }}"
-          curl -X POST \
-            "${CEDANA_URL}/plugins/upload/libcedana-${PLUGIN_SAFE}.so?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha" \
-            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary "@./libcedana-${PLUGIN_SAFE}.so" \
-            --fail \
-            --limit-rate 1m
+
+          CHECKSUM="$(
+            python3 - <<'PY' "$FILE"
+          import sys, zlib, base64, struct
+          path = sys.argv[1]
+          with open(path, "rb") as f:
+              crc = zlib.crc32(f.read()) & 0xffffffff
+          print(base64.b64encode(struct.pack(">I", crc)).decode())
+          PY
+          )"
+
+          RESPONSE="$(
+            curl -sS --fail -X POST \
+              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
+              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
+          )"
+
+          VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
+          LATEST_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.latest_upload_url')"
+
+          for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
+            curl -sS --fail -X PUT "$URL" \
+              -H "Content-Type: application/octet-stream" \
+              -H "x-amz-meta-version: ${REF_SAFE}" \
+              -H "x-amz-checksum-crc32: ${CHECKSUM}" \
+              -H "x-amz-sdk-checksum-algorithm: CRC32" \
+              --upload-file "$FILE"
+          done
 
   dockerhub:
     name: DockerHub (multi-arch)
