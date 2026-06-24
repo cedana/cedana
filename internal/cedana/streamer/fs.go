@@ -21,8 +21,10 @@ import (
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
 	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
@@ -38,15 +40,17 @@ const (
 )
 
 const (
-	CAPTURE_SOCK       = "streamer-capture.sock"
-	SERVE_SOCK         = "streamer-serve.sock"
-	INIT_PROGRESS_MSG  = "socket-init"
-	STOP_LISTENER_MSG  = "stop-listener"
-	IMG_FILE_PATTERN   = "^img-*"
-	IMG_FILE_FORMATTER = "img-%d"
-	CONNECTION_TIMEOUT = 5 * time.Minute
-	PIPE_SIZE          = 4 * utils.MEBIBYTE
-	RETRY_INTERVAL     = 25 * time.Millisecond
+	CAPTURE_SOCK            = "streamer-capture.sock"
+	SERVE_SOCK              = "streamer-serve.sock"
+	INIT_PROGRESS_MSG       = "socket-init"
+	STOP_LISTENER_MSG       = "stop-listener"
+	IMG_FILE_PATTERN        = "^img-*"
+	IMG_FILE_FORMATTER      = "img-%d"
+	CONNECTION_TIMEOUT      = 5 * time.Minute
+	PIPE_SIZE               = 4 * utils.MEBIBYTE
+	RETRY_INTERVAL          = 25 * time.Millisecond
+	STREAMER_READ_LOG_FILE  = "streamer-read.log"
+	STREAMER_WRITE_LOG_FILE = "streamer-write.log"
 )
 
 // Implementation of the afero.Fs filesystem interface that uses streaming as the backend
@@ -86,7 +90,6 @@ func NewStreamingFs(
 	}
 
 	log := log.With().Str("plugin", "streamer").Str("path", storagePath).Int32("streams", streams).Str("mode", mode.String()).Logger()
-
 	// Create pipes for reading and writing data to/from the streamer to dir
 	var readFds, writeFds []*os.File
 	var shardFds []string
@@ -208,8 +211,24 @@ func NewStreamingFs(
 	exited := make(chan bool, 1)
 	defer close(ready)
 
-	// Mark ready when we read init progress message on stderr
+	err = cmd.Start()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
+	}
+
+	// Mark ready when we read init progress message on stderr.
 	wg.Go(func() {
+		// it's okay if we failed to create streamer log file
+		logFile, logFileCleanup, err := createStreamerLogFile(imagesDir, mode, log.GetLevel())
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to create streamer log file")
+		}
+		defer func() {
+			if logFileCleanup != nil {
+				logFileCleanup()
+			}
+		}()
+
 		scanner := bufio.NewScanner(stderrPipe)
 		for {
 			if !scanner.Scan() || ctx.Err() != nil {
@@ -220,13 +239,11 @@ func NewStreamingFs(
 				ready <- true
 			}
 			log.Trace().Msg(lastMsg)
+			if logFile != nil {
+				logFile.Debug().Msg(lastMsg)
+			}
 		}
 	})
-
-	err = cmd.Start()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
-	}
 
 	fs = &Fs{
 		mode:      mode,
@@ -635,4 +652,40 @@ func IsStreamable(ctx context.Context, storage cedana_io.Storage, dir string) (s
 	}
 
 	return int32(matches), nil
+}
+
+// initialize a separate logger which writes streamer logs to a file
+func createStreamerLogFile(imagesDir string, mode Mode, level zerolog.Level) (*zerolog.Logger, func(), error) {
+	logFilePath := ""
+	switch mode {
+	case READ_ONLY:
+		logFilePath = filepath.Join(imagesDir, STREAMER_READ_LOG_FILE)
+	case WRITE_ONLY:
+		logFilePath = filepath.Join(imagesDir, STREAMER_WRITE_LOG_FILE)
+	default:
+		return nil, nil, fmt.Errorf("invalid streamer mode specified")
+	}
+
+	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	logFileWriter := zerolog.ConsoleWriter{
+		Out:        file,
+		TimeFormat: logging.LOG_TIME_FORMAT,
+	}
+
+	fileLogger := zerolog.New(logFileWriter).
+		Level(level).
+		With().
+		Timestamp().
+		Logger()
+
+	var cleanup func()
+	cleanup = func() {
+		file.Close()
+
+	}
+	return &fileLogger, cleanup, nil
 }
