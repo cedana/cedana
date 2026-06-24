@@ -575,7 +575,12 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			log.Debug().Any("mountNsInfo", mountNsInfo).Msg("got mountNsInfo of process from CRIU")
 			return controller.Attach(ctx, uint32(pid), mountNsInfo)
 		}
-		return fmt.Errorf("could not get mount namespace info from CRIU")
+		// CRIU will call PostSetupNamespace even if it only
+		// had one namespace to restore. This happens sometimes
+		// in crcr situations where the second checkpoint ends
+		// up including a time namespace dump as well.
+		// So, only pass MountNsInfo if CRIU provides it.
+		return controller.Attach(ctx, uint32(pid), nil)
 	}
 
 	callback.PreResumeFunc = func(ctx context.Context) error {
