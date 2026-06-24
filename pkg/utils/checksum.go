@@ -1,7 +1,8 @@
 package utils
 
 import (
-	"fmt"
+	"encoding/base64"
+	"encoding/binary"
 	"hash/crc32"
 	"io"
 	"os"
@@ -20,6 +21,9 @@ func FileCRC32Sum(path string) (string, error) {
 	if _, err := io.Copy(h, file); err != nil {
 		return "", err
 	}
+	sum := h.Sum32()
+	buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(buf, sum)
 
-	return fmt.Sprintf("%08x", h.Sum32()), nil
+	return base64.StdEncoding.EncodeToString(buf), nil
 }
