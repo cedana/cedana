@@ -68,7 +68,7 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 
 		if ok {
-			err = controller.Attach(context.WithoutCancel(ctx), controller.AttachedPID, nil)
+			err = controller.Attach(context.WithoutCancel(ctx), controller.AttachedPID)
 			if err != nil {
 				log.Debug().Err(err).Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("failed to forcefully attach GPU controller (FORCE_ATTACH is true)")
 				ok = false
