@@ -138,7 +138,6 @@ jobs:
 
           FILE="cedana"
           REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
           ARCH="${{ matrix.arch }}"
 
           CHECKSUM="$(
@@ -153,7 +152,7 @@ jobs:
 
           RESPONSE="$(
             curl -sS --fail \
-              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
+              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
           )"
 
@@ -163,7 +162,7 @@ jobs:
           for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
             curl -sS --fail -X PUT "$URL" \
               -H "Content-Type: application/octet-stream" \
-              -H "x-amz-meta-version: ${REF_SAFE}" \
+              -H "x-amz-meta-version: ${REF}" \
               -H "x-amz-checksum-crc32: ${CHECKSUM}" \
               -H "x-amz-sdk-checksum-algorithm: CRC32" \
               --upload-file "$FILE"
@@ -195,8 +194,10 @@ jobs:
         env:
           PLUGIN: ${{ matrix.plugin }}
         run: |
-          PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
+          PLUGIN=$(echo $PLUGIN)
+          PLUGIN_SAFE=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
+          echo "PLUGIN_SAFE=$PLUGIN_SAFE" >> $GITHUB_ENV
 
       - name: Download plugin
         uses: actions/download-artifact@v4
@@ -213,9 +214,7 @@ jobs:
 
           FILE="libcedana-${PLUGIN_SAFE}.so"
           REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
           ARCH="${{ matrix.arch }}"
-
           CHECKSUM="$(
             python3 - <<'PY' "$FILE"
           import sys, zlib, base64, struct
@@ -228,7 +227,7 @@ jobs:
 
           RESPONSE="$(
             curl -sS --fail \
-              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF_SAFE}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
+              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
           )"
 
@@ -238,7 +237,7 @@ jobs:
           for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
             curl -sS --fail -X PUT "$URL" \
               -H "Content-Type: application/octet-stream" \
-              -H "x-amz-meta-version: ${REF_SAFE}" \
+              -H "x-amz-meta-version: ${REF}" \
               -H "x-amz-checksum-crc32: ${CHECKSUM}" \
               -H "x-amz-sdk-checksum-algorithm: CRC32" \
               --upload-file "$FILE"
