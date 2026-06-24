@@ -1,25 +1,25 @@
 package utils
 
 import (
-	"crypto/md5"
 	"fmt"
+	"hash/crc32"
 	"io"
 	"os"
 )
 
-// Computes the MD5 checksum of the given files (read in order)
-func FileMD5Sum(path string) (string, error) {
+// Computes the CRC32 checksum of the given file.
+func FileCRC32Sum(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
 
-	h := md5.New()
+	h := crc32.NewIEEE()
 
 	if _, err := io.Copy(h, file); err != nil {
 		return "", err
 	}
 
-	return fmt.Sprintf("%x", h.Sum(nil)), nil
+	return fmt.Sprintf("%08x", h.Sum32()), nil
 }
