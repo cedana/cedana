@@ -150,7 +150,7 @@ jobs:
           PY
           )"
 
-          echo "Querying propagator"
+          echo "Querying propagator ..."
           RESPONSE="$(
             curl -sS --fail \
               "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
@@ -170,7 +170,7 @@ jobs:
             exit 1
           }
 
-          echo "Uploading Binary"
+          echo "Uploading Binary ..."
           for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
             curl -sS --fail -X PUT "$URL" \
               -H "Content-Type: application/octet-stream" \
@@ -186,6 +186,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      max-parallel: 15
       matrix:
         plugin:
           - runc
@@ -235,7 +236,7 @@ jobs:
           PY
           )"
 
-          echo "Querying propagator"
+          echo "Querying propagator ..."
           RESPONSE="$(
             curl -sS --fail \
               "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
@@ -255,7 +256,7 @@ jobs:
             exit 1
           }
 
-          echo "Uploading Binary"
+          echo "Uploading Binary ..."
           for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
             curl -sS --fail -X PUT "$URL" \
               -H "Content-Type: application/octet-stream" \
