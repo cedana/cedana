@@ -42,7 +42,7 @@ on:
         description: "Post summary to Slack"
         required: false
         default: false
-        #test
+
 jobs:
   github:
     name: GitHub
@@ -150,6 +150,7 @@ jobs:
           PY
           )"
 
+          echo "Querying propagator"
           RESPONSE="$(
             curl -sS --fail \
               "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
@@ -159,6 +160,17 @@ jobs:
           VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
           LATEST_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.latest_upload_url')"
 
+          test -n "$VERSION_UPLOAD_URL" && [ "$VERSION_UPLOAD_URL" != "null" ] || {
+            echo "version_upload_url missing in response: $RESPONSE"
+            exit 1
+          }
+
+          test -n "$LATEST_UPLOAD_URL" && [ "$LATEST_UPLOAD_URL" != "null" ] || {
+            echo "latest_upload_url missing in response: $RESPONSE"
+            exit 1
+          }
+
+          echo "Uploading Binary"
           for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
             curl -sS --fail -X PUT "$URL" \
               -H "Content-Type: application/octet-stream" \
@@ -223,6 +235,7 @@ jobs:
           PY
           )"
 
+          echo "Querying propagator"
           RESPONSE="$(
             curl -sS --fail \
               "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
@@ -232,6 +245,17 @@ jobs:
           VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
           LATEST_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.latest_upload_url')"
 
+          test -n "$VERSION_UPLOAD_URL" && [ "$VERSION_UPLOAD_URL" != "null" ] || {
+            echo "version_upload_url missing in response: $RESPONSE"
+            exit 1
+          }
+
+          test -n "$LATEST_UPLOAD_URL" && [ "$LATEST_UPLOAD_URL" != "null" ] || {
+            echo "latest_upload_url missing in response: $RESPONSE"
+            exit 1
+          }
+
+          echo "Uploading Binary"
           for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
             curl -sS --fail -X PUT "$URL" \
               -H "Content-Type: application/octet-stream" \
