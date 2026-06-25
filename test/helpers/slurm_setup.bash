@@ -1323,6 +1323,12 @@ setup_slurm_samples() {
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
         "
+        if [ "${GPU:-0}" = "1" ]; then
+            docker exec "$c" bash -c "
+                /data/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cu118 --quiet
+                sync
+            "
+        fi
     done
 
     debug_log "Patching sbatch files on all nodes..."
