@@ -244,6 +244,7 @@ type checkpointInfo struct {
 	GPU            bool          `json:"gpu"`
 	Platform       string        `json:"platform"`
 	ProfilingInfo  profilingInfo `json:"profiling_info"`
+	Info           info          `json:"info"`
 	ContainerOrder int           `json:"container_order"`
 }
 
@@ -251,6 +252,13 @@ type profilingInfo struct {
 	Raw           *profiling.Data `json:"raw"`
 	TotalDuration int64           `json:"total_duration"`
 	TotalIO       int64           `json:"total_io"`
+}
+
+type info struct {
+	Profiling     *profiling.Data `json:"profiling"`
+	TotalDuration int64           `json:"total_duration"`
+	TotalIO       int64           `json:"total_io"`
+	Error         string          `json:"error,omitempty"`
 }
 
 type imageSecret struct {
@@ -477,9 +485,11 @@ func (es *EventStream) publishCheckpoint(
 		PodId:          podId,
 		CheckpointId:   checkpointId,
 		ContainerOrder: containerOrder,
+		Info:           info{},
 	}
 	if dumpErr != nil {
 		ci.Status = "error"
+		ci.Info.Error = dumpErr.Error() // TODO: Capture more related logs
 	} else {
 		ci.Status = "success"
 	}
@@ -513,12 +523,14 @@ func (es *EventStream) publishCheckpoint(
 				totalIO += component.IO
 			}
 		}
-		profilingInfo := profilingInfo{
+		ci.Info.Profiling = profilingData
+		ci.Info.TotalDuration = totalDuration
+		ci.Info.TotalIO = totalIO
+		ci.ProfilingInfo = profilingInfo{
 			Raw:           profilingData,
 			TotalDuration: totalDuration,
 			TotalIO:       totalIO,
 		}
-		ci.ProfilingInfo = profilingInfo
 	}
 	data, err := json.Marshal(ci)
 	if err != nil {
