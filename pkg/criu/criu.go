@@ -55,7 +55,8 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	defer srv.Close()
 
 	args := []string{"swrk", strconv.Itoa(3 + len(extraFiles))}
-	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
+	cmd := exec.CommandContext(ctx, "strace", "-o", "strace.out", c.swrkPath)
+	cmd.Args = append(cmd.Args, args...)
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
