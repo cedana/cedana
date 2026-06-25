@@ -170,14 +170,27 @@ jobs:
             exit 1
           }
 
-          echo "Uploading Binary ..."
           for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
-            curl -sS --fail -X PUT "$URL" \
-              -H "Content-Type: application/octet-stream" \
-              -H "x-amz-meta-version: ${REF}" \
-              -H "x-amz-checksum-crc32: ${CHECKSUM}" \
-              -H "x-amz-sdk-checksum-algorithm: CRC32" \
-              --upload-file "$FILE"
+            success=false
+            for attempt in {1..5}; do
+              echo "Uploading Binary (Attempt $attempt) ..."
+              if curl -sS --fail -X PUT "$URL" \
+                -H "Content-Type: application/octet-stream" \
+                -H "x-amz-meta-version: ${REF}" \
+                -H "x-amz-checksum-crc32: ${CHECKSUM}" \
+                -H "x-amz-sdk-checksum-algorithm: CRC32" \
+                --upload-file "$FILE"; then
+                success=true
+                break
+              else
+                echo "Upload failed on attempt $attempt. Retrying in 2 seconds..."
+                sleep 2
+              fi
+            done
+            if [ "$success" = "false" ]; then
+              echo "Error: Failed to upload ${FILE} after 5 attempts."
+              exit 1
+            fi
           done
 
   aws_s3_plugin:
@@ -258,14 +271,27 @@ jobs:
                 exit 1
               }
 
-              echo "Uploading ${FILE} ..."
               for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
-                curl -sS --fail -X PUT "$URL" \
-                  -H "Content-Type: application/octet-stream" \
-                  -H "x-amz-meta-version: ${REF}" \
-                  -H "x-amz-checksum-crc32: ${CHECKSUM}" \
-                  -H "x-amz-sdk-checksum-algorithm: CRC32" \
-                  --upload-file "$FILE"
+                success=false
+                for attempt in {1..5}; do
+                  echo "Uploading ${FILE} (Attempt $attempt) ..."
+                  if curl -sS --fail -X PUT "$URL" \
+                    -H "Content-Type: application/octet-stream" \
+                    -H "x-amz-meta-version: ${REF}" \
+                    -H "x-amz-checksum-crc32: ${CHECKSUM}" \
+                    -H "x-amz-sdk-checksum-algorithm: CRC32" \
+                    --upload-file "$FILE"; then
+                    success=true
+                    break
+                  else
+                    echo "Upload failed on attempt $attempt. Retrying in 2 seconds..."
+                    sleep 2
+                  fi
+                done
+                if [ "$success" = "false" ]; then
+                  echo "Error: Failed to upload ${FILE} after 5 attempts."
+                  exit 1
+                fi
               done
               echo "Successfully uploaded ${FILE}"
             ) &
