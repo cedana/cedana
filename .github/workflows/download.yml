@@ -426,3 +426,66 @@ jobs:
         with:
           name: helm-chart
           path: cedana-helm
+
+  slurm:
+    name: Slurm
+    if: ${{ inputs.slurm_version != 'none' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+    steps:
+      - name: Checkout cedana-slurm
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-slurm
+          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
+          path: slurm/cedana-slurm
+          token: ${{ secrets.GIT_CI_PAT }}
+          submodules: recursive
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Resolve slurm binaries
+        env:
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p slurm/build
+
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
+          BUILD="alpha"
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+            BUILD=""
+          fi
+
+          CHECKOUT_SHA="$(git -C slurm/cedana-slurm rev-parse HEAD)"
+          ORIGIN_FILE="slurm/slurm-artifact-origin.txt"
+
+          {
+            echo "source_mode=s3"
+            echo "source_ref=${VERSION}"
+            echo "checkout_sha=${CHECKOUT_SHA}"
+          } > "$ORIGIN_FILE"
+
+          for binary in cedana-slurm spank_cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
+            curl -fL \
+              "${CEDANA_URL}/plugins/download/${binary}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+              --output "slurm/build/${binary}"
+            test -f "slurm/build/${binary}"
+            test -s "slurm/build/${binary}"
+          done
+
+      - name: Upload slurm artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: slurm-${{ matrix.arch }}
+          path: ./slurm/*
