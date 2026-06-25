@@ -541,6 +541,23 @@ install_cedana_in_slurm() {
         return 1
     fi
 
+    if [ "${GPU:-0}" = "1" ]; then
+        local gpu_controller_bin="${CEDANA_GPU_CONTROLLER_BIN:-/usr/local/bin/cedana-gpu-controller}"
+        if [ ! -x "$gpu_controller_bin" ]; then
+            error_log "GPU enabled but cedana-gpu-controller not found at $gpu_controller_bin"
+            return 1
+        fi
+        debug_log "Copying cedana-gpu-controller binary into controller..."
+        if ! docker cp "$gpu_controller_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana-gpu-controller"; then
+            error_log "Failed to stage cedana-gpu-controller in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
+        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana-gpu-controller" /usr/local/bin/cedana-gpu-controller; then
+            error_log "Failed to install cedana-gpu-controller in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
+    fi
+
     debug_log "Copying plugin libraries into controller..."
     for so in /usr/local/lib/libcedana-*.so \
         /usr/local/lib/task_cedana.so \
@@ -670,6 +687,9 @@ EOF
         storage/s3) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-s3.so") ;;
         storage/gcs) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-gcs.so") ;;
     esac
+    if [ "${GPU:-0}" = "1" ]; then
+        expected_runtime_paths+=("/usr/local/bin/cedana-gpu-controller" "/usr/local/lib/libcedana-gpu.so")
+    fi
 
     debug_log "Installing SLURM plugin and runtime plugins on controller..."
     docker exec \
@@ -691,7 +711,7 @@ EOF
     docker exec \
         -e CEDANA_URL="${CEDANA_URL:-}" \
         -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
-        -e CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS:-release}" \
+        -e CEDANA_PLUGINS_BUILDS="local" \
         -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
         -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
         -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \

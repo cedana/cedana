@@ -126,8 +126,10 @@ jobs:
           cp ./cedana /tmp/cedana-preflight-bin/cedana
           cp ./criu /tmp/cedana-preflight-bin/criu
           sudo cp ./cedana /usr/local/bin/cedana
-          sudo -E cedana plugin install \
-            criu \
+          CRIU_VERSION="$(cat ./criu-version.txt)"
+          sudo -E cedana plugin install "criu@${CRIU_VERSION}"
+          echo "CEDANA_PLUGINS_CRIU_VERSION=${CRIU_VERSION}" >> "$GITHUB_ENV"
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install \
             runc \
             storage/cedana
 
@@ -163,7 +165,6 @@ jobs:
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          CEDANA_PLUGINS_BUILDS: alpha
           GPU: "0"
           LOGIN_NODES: "1"
         run: |
@@ -386,13 +387,17 @@ jobs:
           cp ./cedana /tmp/cedana-preflight-bin/cedana
           cp ./criu /tmp/cedana-preflight-bin/criu
           sudo cp ./cedana /usr/local/bin/cedana
-          sudo -E cedana plugin install \
-            criu \
+          CRIU_VERSION="$(cat ./criu-version.txt)"
+          sudo -E cedana plugin install "criu@${CRIU_VERSION}"
+          echo "CEDANA_PLUGINS_CRIU_VERSION=${CRIU_VERSION}" >> "$GITHUB_ENV"
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install \
             runc \
             storage/cedana \
             storage/s3
           if [ "$GPU" = "true" ]; then
-            sudo -E cedana plugin install gpu
+            GPU_VERSION="$(cat ./gpu-version.txt)"
+            sudo -E cedana plugin install "gpu@${GPU_VERSION}"
+            echo "CEDANA_PLUGINS_GPU_VERSION=${GPU_VERSION}" >> "$GITHUB_ENV"
           fi
 
       - name: Install slurm binaries
@@ -475,7 +480,6 @@ jobs:
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          CEDANA_PLUGINS_BUILDS: alpha
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
@@ -765,8 +769,10 @@ jobs:
           cp ./cedana /tmp/cedana-preflight-bin/cedana
           cp ./criu /tmp/cedana-preflight-bin/criu
           sudo cp ./cedana /usr/local/bin/cedana
-          sudo -E cedana plugin install \
-            criu \
+          CRIU_VERSION="$(cat ./criu-version.txt)"
+          sudo -E cedana plugin install "criu@${CRIU_VERSION}"
+          echo "CEDANA_PLUGINS_CRIU_VERSION=${CRIU_VERSION}" >> "$GITHUB_ENV"
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install \
             runc \
             storage/cedana
 
@@ -802,7 +808,6 @@ jobs:
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          CEDANA_PLUGINS_BUILDS: alpha
           GPU: "0"
           LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: "0"
