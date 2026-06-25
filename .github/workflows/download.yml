@@ -70,6 +70,7 @@ jobs:
         run: |
           mkdir -p cedana
           cd cedana
+          echo $VERSION > cedana-version.txt
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             REPO="cedana/cedana"
@@ -85,7 +86,6 @@ jobs:
             curl -1Lf -o cedana-${ARCH} "$URL2"
           fi
           mv cedana-${ARCH} cedana
-          echo $VERSION > cedana-version.txt
 
       - name: Upload cedana
         uses: actions/upload-artifact@v4
@@ -157,6 +157,7 @@ jobs:
           VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
           ARCH: ${{ matrix.arch }}
         run: |
+          echo $VERSION > plugins-version.txt
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             REPO="cedana/cedana"
@@ -172,7 +173,6 @@ jobs:
             curl -1Lf -o libcedana-${PLUGIN}.so-${ARCH} "$URL2"
           fi
           mv libcedana-${PLUGIN}.so-${ARCH} libcedana-${PLUGIN}.so
-          echo $VERSION > plugins-version.txt
 
       - name: Upload plugin
         uses: actions/upload-artifact@v4
@@ -201,6 +201,7 @@ jobs:
         run: |
           mkdir -p criu
           cd criu
+          echo $VERSION > criu-version.txt
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             REPO="cedana/criu"
@@ -216,7 +217,6 @@ jobs:
             curl -1Lf -o criu-${ARCH} "$URL2"
           fi
           mv criu-${ARCH} criu
-          echo $VERSION > criu-version.txt
 
       - name: Upload CRIU
         uses: actions/upload-artifact@v4
@@ -243,6 +243,7 @@ jobs:
         run: |
           mkdir -p gpu
           cd gpu
+          echo $VERSION > gpu-version.txt
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             REPO="cedana/cedana-gpu"
@@ -277,7 +278,6 @@ jobs:
           mv cedana-gpu-controller-${ARCH} cedana-gpu-controller
           mv libcedana-gpu.so-${ARCH} libcedana-gpu.so
           mv libcedana-gpu-tracer.so-${ARCH} libcedana-gpu-tracer.so
-          echo $VERSION > gpu-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -304,6 +304,7 @@ jobs:
         run: |
           mkdir -p streamer
           cd streamer
+          echo $VERSION > streamer-version.txt
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             REPO="cedana/cedana-image-streamer"
@@ -391,6 +392,7 @@ jobs:
         run: |
           mkdir -p containerd-runtime-runc
           cd containerd-runtime-runc
+          echo $VERSION > containerd-runtime-version.txt
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             REPO="cedana/cedana-runtime-shim"
@@ -406,7 +408,6 @@ jobs:
             curl -1Lf -o cedana-shim-runc-v2-${ARCH} "$URL2"
           fi
           mv cedana-shim-runc-v2-${ARCH} cedana-shim-runc-v2
-          echo $VERSION > containerd-runtime-version.txt
           cd -
           # TODO: Can add more runtimes here in the future
 
