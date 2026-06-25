@@ -186,85 +186,99 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      max-parallel: 10
       matrix:
-        plugin:
-          - runc
-          - containerd
-          - crio
-          - kata
-          - cloud-hypervisor
-          - k8s
-          - slurm
-          - storage/cedana
-          - storage/s3
-          - storage/gcs
         arch:
           - amd64
           - arm64
     steps:
-      - name: Set plugin name
-        env:
-          PLUGIN: ${{ matrix.plugin }}
-        run: |
-          PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
-          echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
-
-      - name: Download plugin
+      - name: Download plugins
         uses: actions/download-artifact@v4
-        id: download-plugin
         with:
-          name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
+          path: .
+          pattern: plugin-${{ matrix.arch }}-{runc,containerd,crio,kata,cloud-hypervisor,k8s,slurm,storage-cedana,storage-s3,storage-gcs}
+          merge-multiple: true
 
-      - name: Upload plugin to Propagator
+      - name: Upload plugins to Propagator
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
           set -euo pipefail
 
-          FILE="libcedana-${PLUGIN}.so"
           REF="${{ github.head_ref || github.ref_name }}"
           ARCH="${{ matrix.arch }}"
-          CHECKSUM="$(
-            python3 - <<'PY' "$FILE"
-          import sys, zlib, base64, struct
-          path = sys.argv[1]
-          with open(path, "rb") as f:
-              crc = zlib.crc32(f.read()) & 0xffffffff
-          print(base64.b64encode(struct.pack(">I", crc)).decode())
-          PY
-          )"
 
-          echo "Querying propagator ..."
-          RESPONSE="$(
-            curl -sS --fail \
-              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
-              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
-          )"
+          PLUGINS=(
+            "runc"
+            "containerd"
+            "crio"
+            "kata"
+            "cloud-hypervisor"
+            "k8s"
+            "slurm"
+            "storage/cedana"
+            "storage/s3"
+            "storage/gcs"
+          )
 
-          VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
-          LATEST_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.latest_upload_url')"
+          PIDS=()
+          for P in "${PLUGINS[@]}"; do
+            (
+              set -euo pipefail
+              PLUGIN=$(echo "$P" | sed 's/\//-/g')
+              FILE="libcedana-${PLUGIN}.so"
 
-          test -n "$VERSION_UPLOAD_URL" && [ "$VERSION_UPLOAD_URL" != "null" ] || {
-            echo "version_upload_url missing in response: $RESPONSE"
-            exit 1
-          }
+              CHECKSUM="$(
+                python3 - <<'PY' "$FILE"
+              import sys, zlib, base64, struct
+              path = sys.argv[1]
+              with open(path, "rb") as f:
+                  crc = zlib.crc32(f.read()) & 0xffffffff
+              print(base64.b64encode(struct.pack(">I", crc)).decode())
+              PY
+              )"
 
-          test -n "$LATEST_UPLOAD_URL" && [ "$LATEST_UPLOAD_URL" != "null" ] || {
-            echo "latest_upload_url missing in response: $RESPONSE"
-            exit 1
-          }
+              echo "Querying propagator for ${FILE} ..."
+              RESPONSE="$(
+                curl -sS --fail \
+                  "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
+                  -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
+              )"
 
-          echo "Uploading Binary ..."
-          for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
-            curl -sS --fail -X PUT "$URL" \
-              -H "Content-Type: application/octet-stream" \
-              -H "x-amz-meta-version: ${REF}" \
-              -H "x-amz-checksum-crc32: ${CHECKSUM}" \
-              -H "x-amz-sdk-checksum-algorithm: CRC32" \
-              --upload-file "$FILE"
+              VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
+              LATEST_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.latest_upload_url')"
+
+              test -n "$VERSION_UPLOAD_URL" && [ "$VERSION_UPLOAD_URL" != "null" ] || {
+                echo "version_upload_url missing in response: $RESPONSE"
+                exit 1
+              }
+
+              test -n "$LATEST_UPLOAD_URL" && [ "$LATEST_UPLOAD_URL" != "null" ] || {
+                echo "latest_upload_url missing in response: $RESPONSE"
+                exit 1
+              }
+
+              echo "Uploading ${FILE} ..."
+              for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
+                curl -sS --fail -X PUT "$URL" \
+                  -H "Content-Type: application/octet-stream" \
+                  -H "x-amz-meta-version: ${REF}" \
+                  -H "x-amz-checksum-crc32: ${CHECKSUM}" \
+                  -H "x-amz-sdk-checksum-algorithm: CRC32" \
+                  --upload-file "$FILE"
+              done
+              echo "Successfully uploaded ${FILE}"
+            ) &
+            PIDS+=($!)
           done
+
+          exit_code=0
+          for PID in "${PIDS[@]}"; do
+            if ! wait "$PID"; then
+              exit_code=1
+            fi
+          done
+          exit $exit_code
 
   dockerhub:
     name: DockerHub (multi-arch)
