@@ -138,9 +138,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    permissions:
-      id-token: write # required for OIDC
-      contents: read
     steps:
       - name: Set plugin name
         env:
@@ -185,9 +182,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    permissions:
-      id-token: write # required for OIDC
-      contents: read
     steps:
       - name: Download CRIU from S3
         env:
@@ -229,9 +223,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    permissions:
-      id-token: write # required for OIDC
-      contents: read
     steps:
       - name: Download GPU binaries from S3
         env:
@@ -273,9 +264,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    permissions:
-      id-token: write # required for OIDC
-      contents: read
     steps:
       - name: Download streamer from S3
         env:
@@ -363,9 +351,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    permissions:
-      id-token: write # required for OIDC
-      contents: read
     steps:
       - name: Download runtime from S3
         env:
