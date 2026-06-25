@@ -150,10 +150,17 @@ jobs:
           PY
           )"
 
+          ENCODED_CHECKSUM="$(
+            python3 - "$CHECKSUM" <<'PY'
+          import sys, urllib.parse
+          print(urllib.parse.quote(sys.argv[1], safe=''))
+          PY
+          )"
+
           echo "Querying propagator ..."
           RESPONSE="$(
             curl -sS --fail \
-              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
+              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${ENCODED_CHECKSUM}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
           )"
 
@@ -251,10 +258,17 @@ jobs:
           PY
               )"
 
+              ENCODED_CHECKSUM="$(
+                python3 - "$CHECKSUM" <<'PY'
+          import sys, urllib.parse
+          print(urllib.parse.quote(sys.argv[1], safe=''))
+          PY
+              )"
+
               echo "Querying propagator for ${FILE} ..."
               RESPONSE="$(
                 curl -sS --fail \
-                  "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${CHECKSUM}" \
+                  "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${ENCODED_CHECKSUM}" \
                   -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
               )"
 
