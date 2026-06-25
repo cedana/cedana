@@ -150,18 +150,13 @@ jobs:
           PY
           )"
 
-          ENCODED_CHECKSUM="$(
-            python3 - "$CHECKSUM" <<'PY'
-          import sys, urllib.parse
-          print(urllib.parse.quote(sys.argv[1], safe=''))
-          PY
-          )"
-
           echo "Querying propagator ..."
           RESPONSE="$(
-            curl -sS --fail \
-              "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${ENCODED_CHECKSUM}" \
-              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
+            curl -sS --fail -X POST \
+              "${CEDANA_URL}/plugins/upload/${FILE}" \
+              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"repository\":\"cedana\",\"version\":\"${REF}\",\"arch\":\"${ARCH}\",\"build\":\"alpha\",\"checksum\":\"${CHECKSUM}\"}"
           )"
 
           VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
@@ -258,18 +253,13 @@ jobs:
           PY
               )"
 
-              ENCODED_CHECKSUM="$(
-                python3 - "$CHECKSUM" <<'PY'
-          import sys, urllib.parse
-          print(urllib.parse.quote(sys.argv[1], safe=''))
-          PY
-              )"
-
               echo "Querying propagator for ${FILE} ..."
               RESPONSE="$(
-                curl -sS --fail \
-                  "${CEDANA_URL}/plugins/upload/${FILE}?repository=cedana&version=${REF}&arch=${ARCH}&build=alpha&checksum=${ENCODED_CHECKSUM}" \
-                  -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
+                curl -sS --fail -X POST \
+                  "${CEDANA_URL}/plugins/upload/${FILE}" \
+                  -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+                  -H "Content-Type: application/json" \
+                  -d "{\"repository\":\"cedana\",\"version\":\"${REF}\",\"arch\":\"${ARCH}\",\"build\":\"alpha\",\"checksum\":\"${CHECKSUM}\"}"
               )"
 
               VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
