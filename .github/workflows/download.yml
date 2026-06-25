@@ -62,19 +62,26 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
       - name: Download cedana from S3
+        env:
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
+          set -euo pipefail
           mkdir -p cedana
           cd cedana
+
           REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
-          aws s3 cp s3://cedana-bin/${{ inputs.cedana_version }}/${{ matrix.arch }}/${REF_SAFE}/cedana .
+          ARCH="${{ matrix.arch }}"
+          FILE="cedana"
+
+          curl -fL \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${REF}&arch=${ARCH}&build=alpha" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "$FILE"
+
+          test -f "$FILE"
+          test -s "$FILE"
 
       - name: Upload cedana
         uses: actions/upload-artifact@v4
@@ -141,22 +148,25 @@ jobs:
         run: |
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-      - name: Download plugin from S3
-        run: |
-          REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
-          PLUGIN_NAME="${{ matrix.plugin }}"
-          PLUGIN_SAFE="${PLUGIN_NAME//\//-}"
 
-          aws s3 cp \
-            s3://cedana-bin/${{ inputs.cedana_version }}/${{ matrix.arch }}/${REF_SAFE}/libcedana-${PLUGIN_SAFE}.so \
-            libcedana-${PLUGIN_SAFE}.so
+      - name: Download plugin from S3
+        env:
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          REF="${{ github.head_ref || github.ref_name }}"
+          ARCH="${{ matrix.arch }}"
+          FILE="libcedana-${PLUGIN}.so"
+
+          curl -fL \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${REF}&arch=${ARCH}&build=alpha" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "$FILE"
+
+          test -f "$FILE"
+          test -s "$FILE"
 
       - name: Upload plugin
         uses: actions/upload-artifact@v4
@@ -179,24 +189,29 @@ jobs:
       id-token: write # required for OIDC
       contents: read
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
       - name: Download CRIU from S3
         env:
-          aws_s3_criu_path: ${{ inputs.criu_version == 'main' && 'criu' || 'criu-alpha' }}
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p criu
-          REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
 
-          aws s3 cp \
-            s3://cedana-bin/${aws_s3_criu_path}/${{ matrix.arch }}/${{ inputs.criu_version }}/criu \
-            criu/criu
+          VERSION="${{ inputs.criu_version }}"
+          BUILD="alpha"
+          if [ "$VERSION" = "main" ]; then
+            BUILD=""
+          fi
+          ARCH="${{ matrix.arch }}"
+          FILE="criu"
+
+          curl -fL \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "criu/${FILE}"
+
+          test -f "criu/${FILE}"
+          test -s "criu/${FILE}"
 
       - name: Upload CRIU
         uses: actions/upload-artifact@v4
@@ -218,37 +233,29 @@ jobs:
       id-token: write # required for OIDC
       contents: read
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
       - name: Download GPU binaries from S3
         env:
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.gpu_version == 'release' && 'latest' || inputs.gpu_version }}
         run: |
           set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
+          BUILD="alpha"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
-            aws_s3_path="cedana-gpu"
-          else
-            aws_s3_path="cedana-gpu-alpha"
+            BUILD=""
           fi
           mkdir -p gpu
 
-          aws s3 cp \
-            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-gpu-controller \
-            gpu/cedana-gpu-controller
-
-          aws s3 cp \
-            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/libcedana-gpu.so \
-            gpu/libcedana-gpu.so
-
-          aws s3 cp \
-            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/libcedana-gpu-tracer.so \
-            gpu/libcedana-gpu-tracer.so
+          ARCH="${{ matrix.arch }}"
+          for FILE in cedana-gpu-controller libcedana-gpu.so libcedana-gpu-tracer.so; do
+            curl -fL \
+              "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+              --output "gpu/${FILE}"
+            test -f "gpu/${FILE}"
+            test -s "gpu/${FILE}"
+          done
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -270,31 +277,30 @@ jobs:
       id-token: write # required for OIDC
       contents: read
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
       - name: Download streamer from S3
         env:
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.streamer_version == 'release' && 'latest' || inputs.streamer_version }}
         run: |
           set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
+          BUILD="alpha"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            aws_s3_path="cedana-image-streamer"
-          else
-            aws_s3_path="cedana-image-streamer-alpha"
+            BUILD=""
           fi
           mkdir -p streamer
-          REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
 
-          aws s3 cp \
-            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-image-streamer \
-            streamer/cedana-image-streamer
+          ARCH="${{ matrix.arch }}"
+          FILE="cedana-image-streamer"
+
+          curl -fL \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "streamer/${FILE}"
+
+          test -f "streamer/${FILE}"
+          test -s "streamer/${FILE}"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -361,31 +367,30 @@ jobs:
       id-token: write # required for OIDC
       contents: read
     steps:
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
       - name: Download runtime from S3
         env:
+          CEDANA_URL: "https://rahul.cedana.ai/v2"
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
         run: |
           set -euo pipefail
           VERSION=$(echo $VERSION | sed 's/\//-/g')
+          BUILD="alpha"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            aws_s3_path="cedana-runtime-shim"
-          else
-            aws_s3_path="cedana-runtime-shim-alpha"
+            BUILD=""
           fi
           mkdir -p containerd-runtime-runc
-          REF="${{ github.head_ref || github.ref_name }}"
-          REF_SAFE="${REF//\//-}"
 
-          aws s3 cp \
-            s3://cedana-bin/${aws_s3_path}/${{ matrix.arch }}/${VERSION}/cedana-shim-runc-v2 \
-            containerd-runtime-runc/cedana-shim-runc-v2
+          ARCH="${{ matrix.arch }}"
+          FILE="cedana-shim-runc-v2"
+
+          curl -fL \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "containerd-runtime-runc/${FILE}"
+
+          test -f "containerd-runtime-runc/${FILE}"
+          test -s "containerd-runtime-runc/${FILE}"
 
       - name: Upload runtime runc artifacts
         uses: actions/upload-artifact@v4
