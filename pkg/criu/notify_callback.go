@@ -24,7 +24,7 @@ type NotifyCallback struct {
 	NetworkLockFunc         NotifyFunc
 	NetworkUnlockFunc       NotifyFunc
 	SetupNamespacesFunc     NotifyFuncPid
-	PostSetupNamespacesFunc NotifyFunc
+	PostSetupNamespacesFunc NotifyFuncPostSetupNs
 	SkipNamespacesFunc      NotifyFuncPid
 	PreResumeFunc           NotifyFunc
 	PostResumeFunc          NotifyFunc
@@ -41,6 +41,7 @@ type (
 	NotifyFuncPid         func(ctx context.Context, pid int32) error
 	NotifyFuncFd          func(ctx context.Context, fd int32) error
 	InitializeFunc        func(ctx context.Context, criuPid int32) error
+	NotifyFuncPostSetupNs func(ctx context.Context, pid int32, postSetupNsResp *criu.PostSetupNsNotifyResp) error
 )
 
 func (n NotifyCallback) Initialize(ctx context.Context, criuPid int32) error {
@@ -238,13 +239,13 @@ func (n NotifyCallback) SetupNamespaces(ctx context.Context, pid int32) error {
 	return nil
 }
 
-func (n NotifyCallback) PostSetupNamespaces(ctx context.Context) error {
+func (n NotifyCallback) PostSetupNamespaces(ctx context.Context, pid int32, postSetupNsResp *criu.PostSetupNsNotifyResp) error {
 	if n.PostSetupNamespacesFunc != nil {
 		log.Trace().Str("name", n.Name).Msg("CRIU post-setup-namespaces callback")
 		var end func()
 		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
 		defer end()
-		err := n.PostSetupNamespacesFunc(ctx)
+		err := n.PostSetupNamespacesFunc(ctx, pid, postSetupNsResp)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU post-setup-namespaces callback failed")
 			return fmt.Errorf("post-setup-namespaces callback: %v", err)

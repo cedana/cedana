@@ -20,7 +20,7 @@ type Notify interface {
 	NetworkLock(ctx context.Context) error
 	NetworkUnlock(ctx context.Context) error
 	SetupNamespaces(ctx context.Context, pid int32) error
-	PostSetupNamespaces(ctx context.Context) error
+	PostSetupNamespaces(ctx context.Context, pid int32, postSetupNsResp *criu.PostSetupNsNotifyResp) error
 	SkipNamespaces(ctx context.Context, pid int32) error
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
@@ -91,7 +91,7 @@ func (c NoNotify) SetupNamespaces(ctx context.Context, pid int32) error {
 }
 
 // PostSetupNamespaces NoNotify
-func (c NoNotify) PostSetupNamespaces(ctx context.Context) error {
+func (c NoNotify) PostSetupNamespaces(ctx context.Context, pid int32, postSetupNsResp *criu.PostSetupNsNotifyResp) error {
 	return nil
 }
 

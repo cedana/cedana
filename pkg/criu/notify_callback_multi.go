@@ -170,9 +170,9 @@ func (n NotifyCallbackMulti) SetupNamespaces(ctx context.Context, pid int32) err
 	return nil
 }
 
-func (n NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context) error {
+func (n NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context, pid int32, postSetupNsResp *criu.PostSetupNsNotifyResp) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].PostSetupNamespaces(ctx)
+		err := n.callbacks[i].PostSetupNamespaces(ctx, pid, postSetupNsResp)
 		if err != nil {
 			return err
 		}
