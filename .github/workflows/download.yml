@@ -66,17 +66,17 @@ jobs:
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION:  ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           set -euo pipefail
           mkdir -p cedana
           cd cedana
 
-          REF="${{ github.head_ref || github.ref_name }}"
           ARCH="${{ matrix.arch }}"
           FILE="cedana"
 
           curl -fL \
-            "${CEDANA_URL}/plugins/download/${FILE}?version=${REF}&arch=${ARCH}&build=alpha" \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=alpha" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "$FILE"
 
