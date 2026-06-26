@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
-  "strings"
 
 	gpu_proto "buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -220,8 +220,8 @@ func addGPUWorkerTimingRowsToProfiling(ctx context.Context, rows []gpuWorkerTimi
 }
 
 func addGPUCallProfilesToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile) {
-  var parts []any
-  parts = append(parts, "calls")
+	var parts []any
+	parts = append(parts, "calls")
 	for _, fn := range profile.GetFunctions() {
 		name := fn.GetName()
 		if !strings.HasPrefix(name, "call:") {
@@ -230,7 +230,7 @@ func addGPUCallProfilesToProfiling(ctx context.Context, profile *gpu_proto.GpuPr
 		// controller already sorted desc and truncated to top-5; render in order.
 		parts = append(parts, fmt.Sprintf("%s=%s",
 			strings.TrimPrefix(name, "call:"),
-			(time.Duration(fn.GetDurationMs()) * time.Millisecond).String()))
+			(time.Duration(fn.GetDurationMs())*time.Millisecond).String()))
 	}
 	if len(parts) == 1 { // only the "calls" label, no call entries
 		return
@@ -254,9 +254,9 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 		}
 		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName))
 
-    if displayName == "restoreCalls" {
-        addGPUCallProfilesToProfiling(ctx, profile)
-    }
+		if displayName == "restoreCalls" {
+			addGPUCallProfilesToProfiling(ctx, profile)
+		}
 	}
 
 	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers))
