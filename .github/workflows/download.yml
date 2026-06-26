@@ -82,6 +82,7 @@ jobs:
 
           test -f "$FILE"
           test -s "$FILE"
+          echo "${VERSION}" > cedana-version.txt
 
       - name: Upload cedana
         uses: actions/upload-artifact@v4
@@ -164,6 +165,7 @@ jobs:
 
           test -f "$FILE"
           test -s "$FILE"
+          echo "${REF}" > plugin-version.txt
 
       - name: Upload plugin
         uses: actions/upload-artifact@v4
@@ -171,6 +173,7 @@ jobs:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
             ./libcedana-*.so
+            ./plugin-version.txt
 
   criu:
     name: CRIU
@@ -206,6 +209,7 @@ jobs:
 
           test -f "criu/${FILE}"
           test -s "criu/${FILE}"
+          echo "${VERSION}" > criu/criu-version.txt
 
       - name: Upload CRIU
         uses: actions/upload-artifact@v4
@@ -247,6 +251,7 @@ jobs:
             test -f "gpu/${FILE}"
             test -s "gpu/${FILE}"
           done
+          echo "${VERSION}" > gpu/gpu-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -289,6 +294,7 @@ jobs:
 
           test -f "streamer/${FILE}"
           test -s "streamer/${FILE}"
+          echo "${VERSION}" > streamer/streamer-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -376,6 +382,7 @@ jobs:
 
           test -f "containerd-runtime-runc/${FILE}"
           test -s "containerd-runtime-runc/${FILE}"
+          echo "${VERSION}" > containerd-runtime-runc/containerd-runtime-version.txt
 
       - name: Upload runtime runc artifacts
         uses: actions/upload-artifact@v4
@@ -468,6 +475,7 @@ jobs:
             test -f "slurm/build/${binary}"
             test -s "slurm/build/${binary}"
           done
+          echo "${VERSION}" > slurm/slurm-version.txt
 
       - name: Upload slurm artifacts
         uses: actions/upload-artifact@v4
