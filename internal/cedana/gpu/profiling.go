@@ -238,6 +238,14 @@ func addGPUCallProfilesToProfiling(ctx context.Context, profile *gpu_proto.GpuPr
 }
 
 func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile) {
+	var callCount int
+	for _, fn := range profile.GetFunctions() {
+		fmt.Printf("FUNCTION: %q dur=%d\n", fn.GetName(), fn.GetDurationNs()) // ADD — lists ALL functions
+		if strings.HasPrefix(fn.GetName(), "call:") {
+			callCount++
+		}
+	}
+	fmt.Printf("CALL ENTRIES: %d\n", callCount)
 	if profile == nil {
 		return
 	}
@@ -250,9 +258,11 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 		if displayName == "" {
 			displayName = phaseName
 		}
+		fmt.Printf("PHASE: phaseName=%q displayName=%q\n", phaseName, displayName)
 		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName))
 
 		if displayName == "restoreCalls" {
+			fmt.Printf("GATE FIRED for %q\n", phaseName)
 			addGPUCallProfilesToProfiling(ctx, profile)
 		}
 	}
