@@ -162,12 +162,12 @@ jobs:
           for FILE in "${FILES[@]}"; do
             CHECKSUM="$(
               python3 - <<'PY' "$FILE"
-            import sys, zlib, base64, struct
-            path = sys.argv[1]
-            with open(path, "rb") as f:
-                crc = zlib.crc32(f.read()) & 0xffffffff
-            print(base64.b64encode(struct.pack(">I", crc)).decode())
-            PY
+          import sys, zlib, base64, struct
+          path = sys.argv[1]
+          with open(path, "rb") as f:
+              crc = zlib.crc32(f.read()) & 0xffffffff
+          print(base64.b64encode(struct.pack(">I", crc)).decode())
+          PY
             )"
 
             echo "Querying propagator for ${FILE} ..."
