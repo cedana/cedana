@@ -125,70 +125,95 @@ jobs:
         with:
           name: cedana-${{ matrix.arch }}
 
-      - name: Upload cedana to Propagator
+      - name: Download scripts
+        if: matrix.arch == 'amd64'
+        uses: actions/download-artifact@v4
+        id: download-scripts
+        with:
+          name: cedana-scripts-${{ matrix.arch }}
+
+      - name: Upload cedana & install-release.sh
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
           set -euo pipefail
 
-          FILE="cedana"
+          FILES=(
+            "cedana"
+          )
+          if [[ "${{ matrix.arch }}" == "amd64" ]]; then
+            FILES+=("install-release.sh")
+          fi
+
           REF="${{ github.head_ref || github.ref_name }}"
           ARCH="${{ matrix.arch }}"
 
-          CHECKSUM="$(
-            python3 - <<'PY' "$FILE"
-          import sys, zlib, base64, struct
-          path = sys.argv[1]
-          with open(path, "rb") as f:
-              crc = zlib.crc32(f.read()) & 0xffffffff
-          print(base64.b64encode(struct.pack(">I", crc)).decode())
-          PY
-          )"
+          # Sets build and repository for upload based on aws_s3_path
+          PATH_VAL="${{ inputs.aws_s3_path }}"
+          if [[ "$PATH_VAL" == *-* ]]; then
+            REPOSITORY="${PATH_VAL%-*}"
+            BUILD="${PATH_VAL#*-}"
+          else
+            REPOSITORY="$PATH_VAL"
+            BUILD=""
+          fi
 
-          echo "Querying propagator ..."
-          RESPONSE="$(
-            curl -sS --fail -X POST \
-              "${CEDANA_URL}/plugins/upload/${FILE}" \
-              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
-              -H "Content-Type: application/json" \
-              -d "{\"repository\":\"cedana\",\"version\":\"${REF}\",\"arch\":\"${ARCH}\",\"build\":\"alpha\",\"checksum\":\"${CHECKSUM}\"}"
-          )"
+          for FILE in "${FILES[@]}"; do
+            CHECKSUM="$(
+              python3 - <<'PY' "$FILE"
+            import sys, zlib, base64, struct
+            path = sys.argv[1]
+            with open(path, "rb") as f:
+                crc = zlib.crc32(f.read()) & 0xffffffff
+            print(base64.b64encode(struct.pack(">I", crc)).decode())
+            PY
+            )"
 
-          VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
-          LATEST_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.latest_upload_url')"
+            echo "Querying propagator for ${FILE} ..."
+            RESPONSE="$(
+              curl -sS --fail -X POST \
+                "${CEDANA_URL}/plugins/upload/${FILE}" \
+                -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "{\"repository\":\"${REPOSITORY}\",\"version\":\"${REF}\",\"arch\":\"${ARCH}\",\"build\":\"${BUILD}\",\"checksum\":\"${CHECKSUM}\"}"
+            )"
 
-          test -n "$VERSION_UPLOAD_URL" && [ "$VERSION_UPLOAD_URL" != "null" ] || {
-            echo "version_upload_url missing in response: $RESPONSE"
-            exit 1
-          }
+            VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
+            LATEST_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.latest_upload_url')"
 
-          test -n "$LATEST_UPLOAD_URL" && [ "$LATEST_UPLOAD_URL" != "null" ] || {
-            echo "latest_upload_url missing in response: $RESPONSE"
-            exit 1
-          }
+            test -n "$VERSION_UPLOAD_URL" && [ "$VERSION_UPLOAD_URL" != "null" ] || {
+              echo "version_upload_url missing in response: $RESPONSE"
+              exit 1
+            }
 
-          for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
-            success=false
-            for attempt in {1..5}; do
-              echo "Uploading Binary (Attempt $attempt) ..."
-              if curl -sS --fail -X PUT "$URL" \
-                -H "Content-Type: application/octet-stream" \
-                -H "x-amz-meta-version: ${REF}" \
-                -H "x-amz-checksum-crc32: ${CHECKSUM}" \
-                -H "x-amz-sdk-checksum-algorithm: CRC32" \
-                --upload-file "$FILE"; then
-                success=true
-                break
-              else
-                echo "Upload failed on attempt $attempt. Retrying in 2 seconds..."
-                sleep 2
+            test -n "$LATEST_UPLOAD_URL" && [ "$LATEST_UPLOAD_URL" != "null" ] || {
+              echo "latest_upload_url missing in response: $RESPONSE"
+              exit 1
+            }
+
+            for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
+              success=false
+              for attempt in {1..5}; do
+                echo "Uploading ${FILE} (Attempt $attempt) ..."
+                if curl -sS --fail -X PUT "$URL" \
+                  -H "Content-Type: application/octet-stream" \
+                  -H "x-amz-meta-version: ${REF}" \
+                  -H "x-amz-checksum-crc32: ${CHECKSUM}" \
+                  -H "x-amz-sdk-checksum-algorithm: CRC32" \
+                  --upload-file "$FILE"; then
+                  success=true
+                  break
+                else
+                  echo "Upload failed on attempt $attempt. Retrying in 2 seconds..."
+                  sleep 2
+                fi
+              done
+              if [ "$success" = "false" ]; then
+                echo "Error: Failed to upload ${FILE} after 5 attempts."
+                exit 1
               fi
             done
-            if [ "$success" = "false" ]; then
-              echo "Error: Failed to upload ${FILE} after 5 attempts."
-              exit 1
-            fi
           done
 
   aws_s3_plugin:
@@ -218,6 +243,16 @@ jobs:
 
           REF="${{ github.head_ref || github.ref_name }}"
           ARCH="${{ matrix.arch }}"
+
+          # Sets build and repository for upload based on aws_s3_path
+          PATH_VAL="${{ inputs.aws_s3_path }}"
+          if [[ "$PATH_VAL" == *-* ]]; then
+            REPOSITORY="${PATH_VAL%-*}"
+            BUILD="${PATH_VAL#*-}"
+          else
+            REPOSITORY="$PATH_VAL"
+            BUILD=""
+          fi
 
           PLUGINS=(
             "runc"
@@ -255,7 +290,7 @@ jobs:
                   "${CEDANA_URL}/plugins/upload/${FILE}" \
                   -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
                   -H "Content-Type: application/json" \
-                  -d "{\"repository\":\"cedana\",\"version\":\"${REF}\",\"arch\":\"${ARCH}\",\"build\":\"alpha\",\"checksum\":\"${CHECKSUM}\"}"
+                  -d "{\"repository\":\"${REPOSITORY}\",\"version\":\"${REF}\",\"arch\":\"${ARCH}\",\"build\":\"${BUILD}\",\"checksum\":\"${CHECKSUM}\"}"
               )"
 
               VERSION_UPLOAD_URL="$(echo "$RESPONSE" | jq -r '.version_upload_url')"
