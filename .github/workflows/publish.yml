@@ -192,10 +192,16 @@ jobs:
               exit 1
             }
 
-            for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
+            for TYPE in "version" "latest"; do
+              if [ "$TYPE" = "version" ]; then
+                URL="$VERSION_UPLOAD_URL"
+              else
+                URL="$LATEST_UPLOAD_URL"
+              fi
+
               success=false
               for attempt in {1..5}; do
-                echo "Uploading ${FILE} (Attempt $attempt) ..."
+                echo "Uploading ${FILE} to ${TYPE} URL (Attempt $attempt) ..."
                 if curl -sS --fail -X PUT "$URL" \
                   -H "Content-Type: application/octet-stream" \
                   -H "x-amz-meta-version: ${REF}" \
@@ -213,6 +219,7 @@ jobs:
                 echo "Error: Failed to upload ${FILE} after 5 attempts."
                 exit 1
               fi
+              echo "Successfully uploaded ${FILE} to ${TYPE}"
             done
           done
 
@@ -306,10 +313,16 @@ jobs:
                 exit 1
               }
 
-              for URL in "$VERSION_UPLOAD_URL" "$LATEST_UPLOAD_URL"; do
+              for TYPE in "version" "latest"; do
+                if [ "$TYPE" = "version" ]; then
+                  URL="$VERSION_UPLOAD_URL"
+                else
+                  URL="$LATEST_UPLOAD_URL"
+                fi
+
                 success=false
                 for attempt in {1..5}; do
-                  echo "Uploading ${FILE} (Attempt $attempt) ..."
+                  echo "Uploading ${FILE} to ${TYPE} URL (Attempt $attempt) ..."
                   if curl -sS --fail -X PUT "$URL" \
                     -H "Content-Type: application/octet-stream" \
                     -H "x-amz-meta-version: ${REF}" \
