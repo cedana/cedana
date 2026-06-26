@@ -541,6 +541,23 @@ install_cedana_in_slurm() {
         return 1
     fi
 
+    if [ "${GPU:-0}" = "1" ]; then
+        local gpu_controller_bin="${CEDANA_GPU_CONTROLLER_BIN:-/usr/local/bin/cedana-gpu-controller}"
+        if [ ! -x "$gpu_controller_bin" ]; then
+            error_log "GPU enabled but cedana-gpu-controller not found at $gpu_controller_bin"
+            return 1
+        fi
+        debug_log "Copying cedana-gpu-controller binary into controller..."
+        if ! docker cp "$gpu_controller_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana-gpu-controller"; then
+            error_log "Failed to stage cedana-gpu-controller in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
+        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana-gpu-controller" /usr/local/bin/cedana-gpu-controller; then
+            error_log "Failed to install cedana-gpu-controller in $SLURM_CONTROLLER_CONTAINER"
+            return 1
+        fi
+    fi
+
     debug_log "Copying plugin libraries into controller..."
     for so in /usr/local/lib/libcedana-*.so \
         /usr/local/lib/task_cedana.so \
@@ -670,6 +687,9 @@ EOF
         storage/s3) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-s3.so") ;;
         storage/gcs) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-gcs.so") ;;
     esac
+    if [ "${GPU:-0}" = "1" ]; then
+        expected_runtime_paths+=("/usr/local/bin/cedana-gpu-controller" "/usr/local/lib/libcedana-gpu.so")
+    fi
 
     debug_log "Installing SLURM plugin and runtime plugins on controller..."
     docker exec \
@@ -691,7 +711,7 @@ EOF
     docker exec \
         -e CEDANA_URL="${CEDANA_URL:-}" \
         -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
-        -e CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS:-release}" \
+        -e CEDANA_PLUGINS_BUILDS="local" \
         -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
         -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
         -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
@@ -835,6 +855,36 @@ EOF
         for c in "${compute_containers[@]}"; do
             _log_gpu_debug_state "$c" "post-slurm-conf-sync"
         done
+    fi
+
+    if [ "${PREEMPT:-0}" = "1" ]; then
+        debug_log "Configuring SLURM partition preemption (PREEMPT=1)..."
+        local preempt_grace="${PREEMPT_GRACE_TIME:-120}"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+            set -euo pipefail
+            SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
+
+            grep -q '^PreemptType=' \"\$SLURM_CONF\" || echo 'PreemptType=preempt/partition_prio' >> \"\$SLURM_CONF\"
+            grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=CANCEL' >> \"\$SLURM_CONF\"
+            grep -q '^SchedulerParameters=' \"\$SLURM_CONF\" || echo 'SchedulerParameters=preempt_reorder_count=100,preempt_strict_order' >> \"\$SLURM_CONF\"
+
+            if grep -q '^PartitionName=debug' \"\$SLURM_CONF\"; then
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PriorityTier=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PriorityTier=1|' \"\$SLURM_CONF\"
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=CANCEL|' \"\$SLURM_CONF\"
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'GraceTime=' || sed -i 's|^\(PartitionName=debug .*\)|\1 GraceTime=${preempt_grace}|' \"\$SLURM_CONF\"
+            fi
+
+            if ! grep -q '^PartitionName=high ' \"\$SLURM_CONF\"; then
+                nodes=\$(grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -oE 'Nodes=[^[:space:]]+' | head -1 | cut -d= -f2)
+                echo \"PartitionName=high Nodes=\${nodes:-ALL} MaxTime=INFINITE State=UP PreemptMode=CANCEL PriorityTier=2\" >> \"\$SLURM_CONF\"
+            fi
+
+            echo '--- preemption config ---'
+            grep -E '^(PreemptType|PreemptMode|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
+        " >&"${OUTPUT_FD}" 2>&1 || {
+            error_log "Failed to configure SLURM preemption on controller"
+            return 1
+        }
     fi
 
     debug_log "Configuring SLURM to load Cedana plugins (controller)..."
@@ -1000,14 +1050,34 @@ SETUP_EOF
     sleep 5
 
     if [ "${GPU:-0}" = "1" ]; then
-        debug_log "Clearing transient GPU drain state after SLURM restarts..."
+        debug_log "Waiting for GPU GRES to register and node to become available..."
         for c in "${compute_containers[@]}"; do
             local node_hostname
             node_hostname=$(docker exec "$c" hostname)
-            # slurmctld may briefly drain the node while it still sees the
-            # pre-restart registration without GRES; clear that once slurmd is back.
-            slurm_exec scontrol update NodeName="$node_hostname" State=RESUME \
-                >/dev/null 2>&1 || true
+            local waited=0
+            local gres_ok=0
+            while [ "$waited" -lt 90 ]; do
+                slurm_exec scontrol update NodeName="$node_hostname" State=RESUME >/dev/null 2>&1 || true
+                local node_info state_line
+                node_info=$(slurm_exec scontrol show node "$node_hostname" 2>/dev/null) || node_info=""
+                state_line=$(echo "$node_info" | grep -oE 'State=[^[:space:]]+' | head -1)
+                if echo "$node_info" | grep -qiE 'Gres=gpu:' \
+                    && echo "$state_line" | grep -qiE 'IDLE|MIX|ALLOC' \
+                    && ! echo "$state_line" | grep -qiE 'DRAIN|DOWN|INVAL|UNKNOWN|FAIL|NPC'; then
+                    gres_ok=1
+                    break
+                fi
+                sleep 3
+                waited=$((waited + 3))
+            done
+            if [ "$gres_ok" -ne 1 ]; then
+                error_log "GPU GRES not registered/available on $node_hostname after ${waited}s; --gres=gpu jobs would submit without GPU"
+                slurm_exec scontrol show node "$node_hostname" 2>&1 || true
+                slurm_exec sinfo 2>&1 || true
+                _log_gpu_debug_state "$c" "gres-registration-timeout"
+                return 1
+            fi
+            debug_log "  $node_hostname: gres/gpu registered, node available (${waited}s)"
         done
     fi
 
@@ -1293,6 +1363,12 @@ setup_slurm_samples() {
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
         "
+        if [ "${GPU:-0}" = "1" ]; then
+            docker exec "$c" bash -c "
+                /data/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cu118 --quiet
+                sync
+            "
+        fi
     done
 
     debug_log "Patching sbatch files on all nodes..."
