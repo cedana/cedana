@@ -936,7 +936,12 @@ SETUP_EOF
             return 1
         }
 
-    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes..."
+    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes (slurm.conf only to login)..."
+    local login_containers=()
+    if [ "${LOGIN_NODES:-0}" -ge 1 ]; then
+        # shellcheck disable=SC2207
+        login_containers=($(_slurm_login_containers))
+    fi
     for conf in slurm.conf cgroup.conf plugstack.conf; do
         if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
             continue
@@ -946,6 +951,12 @@ SETUP_EOF
         for c in "${compute_containers[@]}"; do
             docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
         done
+        if [ "$conf" = "slurm.conf" ]; then
+            for c in "${login_containers[@]}"; do
+                docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
+                docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' "/etc/slurm/${conf}" 2>/dev/null || true
+            done
+        fi
         rm -f "$tmpfile"
     done
 
