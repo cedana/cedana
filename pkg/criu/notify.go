@@ -22,6 +22,7 @@ type Notify interface {
 	SetupNamespaces(ctx context.Context, pid int32) error
 	PostSetupNamespaces(ctx context.Context) error
 	SkipNamespaces(ctx context.Context, pid int32) error
+	PostForking(ctx context.Context, pid int32) error
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
@@ -98,6 +99,11 @@ func (c NoNotify) PostSetupNamespaces(ctx context.Context) error {
 // SkipNamespaces NoNotify
 func (c NoNotify) SkipNamespaces(ctx context.Context, pid int32) error {
 	return nil
+}
+
+// PostForking NoNotify
+func (c NoNotify) PostForking(ctx context.Context, pid int32) error {
+  return nil
 }
 
 // PreResume NoNotify

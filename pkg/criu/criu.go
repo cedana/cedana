@@ -277,6 +277,8 @@ func (c *Criu) doSwrkWithResp(
 			err = nfy.PostResume(ctx)
 		case "skip-namespaces":
 			err = nfy.SkipNamespaces(ctx, notify.GetPid())
+		case "post-forking":
+			err = nfy.PostForking(ctx, notify.GetPid())
 		case "orphan-pts-master":
 			scm, err := syscall.ParseSocketControlMessage(oobB[:oobn])
 			if err != nil {
