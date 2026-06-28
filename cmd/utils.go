@@ -54,7 +54,12 @@ func PrintHealthCheckResults(results []*daemon.HealthCheckResult) error {
 			maxLinelen := 60
 			rows := []table.Row{{component.Name, data, status}}
 			for _, err := range component.Errors {
-				errorCount++
+				lowerName := strings.ToLower(result.Name)
+				if lowerName == "gpu" || lowerName == "criu/cuda" {
+					warningCount++
+				} else {
+					errorCount++
+				}
 				err = style.BreakLine(err, maxLinelen)
 				err = style.DisabledColors.Sprint(err)
 				if len(rows) == 1 && len(rows[0]) == 3 {
