@@ -25,6 +25,7 @@ func GetRevision() string {
 
 func PrintHealthCheckResults(results []*daemon.HealthCheckResult) error {
 	errorCount := 0
+	gpuErrorCount := 0
 	warningCount := 0
 
 	tableWriter := table.NewWriter()
@@ -55,7 +56,7 @@ func PrintHealthCheckResults(results []*daemon.HealthCheckResult) error {
 			rows := []table.Row{{component.Name, data, status}}
 			for _, err := range component.Errors {
 				if result.Name == "gpu" || result.Name == "criu/cuda" {
-					warningCount++
+					gpuErrorCount++
 				} else {
 					errorCount++
 				}
@@ -90,6 +91,12 @@ func PrintHealthCheckResults(results []*daemon.HealthCheckResult) error {
 			return fmt.Errorf("Failed with %d error(s) and %d warning(s).", errorCount, warningCount)
 		}
 		return fmt.Errorf("Failed with %d error(s).", errorCount)
+	}
+
+	if gpuErrorCount > 0 && warningCount > 0 {
+		fmt.Printf("Failed with %d error(s) and %d warning(s).", gpuErrorCount, warningCount)
+	} else if gpuErrorCount > 0 {
+		fmt.Printf("Failed with %d error(s).\n", gpuErrorCount)
 	} else if warningCount > 0 {
 		fmt.Printf("Looks good, with %d warning(s).\n", warningCount)
 	} else {
