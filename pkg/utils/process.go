@@ -196,8 +196,9 @@ func fillProcessNode(ctx context.Context, pid uint32, state *daemon.ProcessState
 		mounts, err := mountinfo.GetMountsFromReader(mountinfoFile, nil)
 		errs = append(errs, err)
 		if err == nil {
+			mountList := make([]*daemon.Mount, 0, len(mounts))
 			for _, m := range mounts {
-				state.Mounts = append(state.Mounts, &daemon.Mount{
+				mountList = append(mountList, &daemon.Mount{
 					ID:         uint64(m.ID),
 					Parent:     int32(m.Parent),
 					Major:      int32(m.Major),
@@ -209,6 +210,7 @@ func fillProcessNode(ctx context.Context, pid uint32, state *daemon.ProcessState
 					Source:     m.Source,
 				})
 			}
+			state.Mounts = mountList
 		}
 	}
 

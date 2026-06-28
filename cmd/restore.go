@@ -214,6 +214,9 @@ var restoreCmd = &cobra.Command{
 			data := cedana.Finalize()
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
+				if config.Global.Profiling.Path != "" {
+					profiling.WriteJSON(config.Global.Profiling.Path, data)
+				}
 			}
 
 			os.Exit(<-code)
@@ -232,6 +235,9 @@ var restoreCmd = &cobra.Command{
 
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
+				if config.Global.Profiling.Path != "" {
+					profiling.WriteJSON(config.Global.Profiling.Path, data)
+				}
 			}
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)

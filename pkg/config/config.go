@@ -54,11 +54,12 @@ const (
 
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
-	DEFAULT_GPU_POOL_SIZE = 0
-	DEFAULT_GPU_LOG_DIR   = "/tmp"
-	DEFAULT_GPU_SOCK_DIR  = "/tmp"
-	DEFAULT_GPU_SHM_SIZE  = 8 * utils.GIBIBYTE
-	DEFAULT_GPU_DEBUG     = false
+	DEFAULT_GPU_POOL_SIZE     = 0
+	DEFAULT_GPU_LOG_DIR       = "/tmp"
+	DEFAULT_GPU_SOCK_DIR      = "/tmp"
+	DEFAULT_GPU_SHM_SIZE      = 8 * utils.GIBIBYTE
+	DEFAULT_GPU_DEBUG         = false
+	DEFAULT_GPU_DEDUP_ENABLED = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -105,11 +106,12 @@ var Global Config = Config{
 		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,
 	},
 	GPU: GPU{
-		PoolSize: DEFAULT_GPU_POOL_SIZE,
-		LogDir:   DEFAULT_GPU_LOG_DIR,
-		SockDir:  DEFAULT_GPU_SOCK_DIR,
-		ShmSize:  DEFAULT_GPU_SHM_SIZE,
-		Debug:    DEFAULT_GPU_DEBUG,
+		PoolSize:     DEFAULT_GPU_POOL_SIZE,
+		LogDir:       DEFAULT_GPU_LOG_DIR,
+		SockDir:      DEFAULT_GPU_SOCK_DIR,
+		ShmSize:      DEFAULT_GPU_SHM_SIZE,
+		Debug:        DEFAULT_GPU_DEBUG,
+		DedupEnabled: DEFAULT_GPU_DEDUP_ENABLED,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
@@ -141,10 +143,11 @@ func init() {
 
 	if os.Geteuid() != 0 {
 		homeDir, err := os.UserConfigDir()
-		if err != nil {
-			panic(fmt.Errorf("failed to get user home directory: %w", err))
+		if err == nil {
+			DIR_PATH_USER = filepath.Join(homeDir, "cedana")
+		} else {
+			DIR_PATH_USER = DIR_PATH
 		}
-		DIR_PATH_USER = filepath.Join(homeDir, "cedana")
 	} else {
 		DIR_PATH_USER = DIR_PATH
 	}

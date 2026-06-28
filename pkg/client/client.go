@@ -24,6 +24,7 @@ import (
 )
 
 const (
+	MAX_MSG_SIZE             = 6 << 20 // 6MiB instead of default 4MiB
 	DEFAULT_DUMP_TIMEOUT     = 10 * time.Minute
 	DEFAULT_FREEZE_TIMEOUT   = 1 * time.Minute
 	DEFAULT_UNFREEZE_TIMEOUT = 1 * time.Minute
@@ -45,6 +46,10 @@ func New(address, protocol string) (*Client, error) {
 	var opts []grpc.DialOption
 
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	opts = append(
+		opts,
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(MAX_MSG_SIZE)),
+	)
 
 	protocol = strings.ToLower(protocol)
 
