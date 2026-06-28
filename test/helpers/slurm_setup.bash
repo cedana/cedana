@@ -1374,7 +1374,9 @@ setup_slurm_samples() {
     debug_log "Patching sbatch files on all nodes..."
     for c in "${sample_targets[@]}"; do
         docker exec "$c" bash -c '
-            find /data/cedana-samples/slurm -name "*.sbatch" -type f -exec sed -i "s|^#!/bin/bash|#!/bin/bash\nsource /data/venv/bin/activate|" {} +
+            find /data/cedana-samples/slurm -name "*.sbatch" -type f | while read -r f; do
+                awk '\''NR==1 {print; next} !ins && $0 !~ /^[[:space:]]*#/ && $0 !~ /^[[:space:]]*$/ {print "source /data/venv/bin/activate"; ins=1} {print}'\'' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            done
         '
     done
 
