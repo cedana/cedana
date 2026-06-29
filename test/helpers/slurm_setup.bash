@@ -1376,7 +1376,7 @@ setup_slurm_samples() {
         "
         if [ "${GPU:-0}" = "1" ]; then
             docker exec "$c" bash -c "
-                /data/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cu118 --quiet
+                /data/venv/bin/pip install 'torch~=2.7' numpy --quiet
                 sync
             "
         fi

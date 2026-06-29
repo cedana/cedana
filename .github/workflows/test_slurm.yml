@@ -396,7 +396,7 @@ jobs:
             storage/s3
           if [ "$GPU" = "true" ]; then
             GPU_VERSION="$(cat ./gpu-version.txt)"
-            sudo -E cedana plugin install "gpu@${GPU_VERSION}"
+            CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install "gpu@${GPU_VERSION}"
             echo "CEDANA_PLUGINS_GPU_VERSION=${GPU_VERSION}" >> "$GITHUB_ENV"
           fi
 
