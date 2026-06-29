@@ -72,11 +72,16 @@ jobs:
           mkdir -p cedana
           cd cedana
 
+          BUILD="alpha"
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+            BUILD=""
+          fi
+
           ARCH="${{ matrix.arch }}"
           FILE="cedana"
 
           curl -fL \
-            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=alpha" \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "$FILE"
 
@@ -154,18 +159,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          REF="${{ github.head_ref || github.ref_name }}"
+          # Use current branch as plugin version
+          VERSION="${{ github.head_ref || github.ref_name }}"
+          BUILD="alpha"
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+            BUILD=""
+          fi
           ARCH="${{ matrix.arch }}"
           FILE="libcedana-${PLUGIN}.so"
 
           curl -fL \
-            "${CEDANA_URL}/plugins/download/${FILE}?version=${REF}&arch=${ARCH}&build=alpha" \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "$FILE"
 
           test -f "$FILE"
           test -s "$FILE"
-          echo "${REF}" > plugin-version.txt
+          echo "${VERSION}" > plugin-version.txt
 
       - name: Upload plugin
         uses: actions/upload-artifact@v4
@@ -190,13 +200,13 @@ jobs:
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: "${{ inputs.criu_version == 'release' && 'latest' || inputs.criu_version }}"
         run: |
           set -euo pipefail
           mkdir -p criu
 
-          VERSION="${{ inputs.criu_version }}"
           BUILD="alpha"
-          if [ "$VERSION" = "main" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
             BUILD=""
           fi
           ARCH="${{ matrix.arch }}"
@@ -235,7 +245,6 @@ jobs:
           VERSION: ${{ inputs.gpu_version == 'release' && 'latest' || inputs.gpu_version }}
         run: |
           set -euo pipefail
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
           BUILD="alpha"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
             BUILD=""
@@ -277,9 +286,8 @@ jobs:
           VERSION: ${{ inputs.streamer_version == 'release' && 'latest' || inputs.streamer_version }}
         run: |
           set -euo pipefail
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
             BUILD=""
           fi
           mkdir -p streamer
@@ -365,9 +373,8 @@ jobs:
           VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
         run: |
           set -euo pipefail
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
             BUILD=""
           fi
           mkdir -p containerd-runtime-runc
