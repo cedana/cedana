@@ -140,6 +140,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			})
 		}
 
+		hostmemMetadataUsed := make(map[string]bool)
 		// Inherit other known GPU files as well, if any
 		utils.WalkTree(state, "OpenFiles", "Children", func(file *daemon.File) bool {
 			path := file.Path
@@ -175,6 +176,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				matches, err := afero.Glob(opts.DumpFs, "gpu-hostmem-metadata-*")
 				if err == nil {
 					for _, filename := range matches {
+						if _, ok := hostmemMetadataUsed[filename]; ok {
+							log.Debug().Str("filename", filename).Msg("has already been used")
+							continue
+						}
 						file, openErr := opts.DumpFs.Open(filename)
 						if openErr != nil {
 							continue
@@ -188,6 +193,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 						}
 
 						size = binary.LittleEndian.Uint64(sizeBuffer[0:8])
+						hostmemMetadataUsed[filename] = true
 						log.Debug().Str("file", filename).Uint64("size", size).Msg("found matching hostmem checkpoint file")
 						break
 					}
