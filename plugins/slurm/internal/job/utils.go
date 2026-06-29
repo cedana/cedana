@@ -20,8 +20,11 @@ const (
 func ResolveJobCgroupPath(jid uint32, pid uint32) (string, error) {
 	if pid > 0 {
 		if path, err := cgroupPathFromProc(pid); err == nil {
-			log.Debug().Str("path", path).Uint32("job_id", jid).Uint32("pid", pid).Msg("found cgroup path (from /proc)")
-			return path, nil
+			if strings.Contains(path, fmt.Sprintf("/job_%d/", jid)) {
+				log.Debug().Str("path", path).Uint32("job_id", jid).Uint32("pid", pid).Msg("found cgroup path (from /proc)")
+				return path, nil
+			}
+			log.Debug().Str("path", path).Uint32("job_id", jid).Uint32("pid", pid).Msg("cgroup path from /proc does not belong to job, falling back to job-scoped lookup")
 		} else {
 			log.Debug().Err(err).Uint32("job_id", jid).Uint32("pid", pid).Msg("could not resolve cgroup from /proc, falling back to job-scoped lookup")
 		}
