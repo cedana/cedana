@@ -66,16 +66,16 @@ jobs:
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          VERSION:  ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
+          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           set -euo pipefail
-          mkdir -p cedana
-          cd cedana
-
           BUILD="alpha"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
             BUILD=""
           fi
+
+          mkdir -p cedana
+          cd cedana
 
           ARCH="${{ matrix.arch }}"
           FILE="cedana"
@@ -200,15 +200,14 @@ jobs:
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
-          VERSION: "${{ inputs.criu_version == 'release' && 'latest' || inputs.criu_version }}"
+          VERSION: ${{ inputs.criu_version == 'release' && 'latest' || inputs.criu_version }}
         run: |
           set -euo pipefail
-          mkdir -p criu
-
           BUILD="alpha"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
             BUILD=""
           fi
+          mkdir -p criu
           ARCH="${{ matrix.arch }}"
           FILE="criu"
 
@@ -457,13 +456,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          mkdir -p slurm/build
-
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           BUILD="alpha"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
             BUILD=""
           fi
+
+          mkdir -p slurm/build
 
           CHECKOUT_SHA="$(git -C slurm/cedana-slurm rev-parse HEAD)"
           ORIGIN_FILE="slurm/slurm-artifact-origin.txt"
