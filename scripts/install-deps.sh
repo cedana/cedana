@@ -77,3 +77,24 @@ else
     echo "Unknown distribution"
     exit 1
 fi
+
+# Install yq if not already installed
+# yq is needed to configure kubelet, but not available in all distros
+if ! command -v yq &> /dev/null; then
+    case "$(uname -m)" in
+        x86_64)
+            wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+            ;;
+        arm64 | aarch64)
+            wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
+            ;;
+        *)
+            echo "Unsupported architecture: $(uname -m)"
+            exit 1
+            ;;
+    esac
+    chmod +x /usr/local/bin/yq
+    echo "yq has been installed"
+else
+    echo "yq is already installed"
+fi
