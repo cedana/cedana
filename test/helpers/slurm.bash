@@ -122,6 +122,22 @@ _capture_runtime_slurm_logs() {
         docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/bin/cedana-gpu-controller /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so /usr/local/lib/libcedana-gpu.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
         docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/bin/cedana-gpu-controller /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so /usr/local/lib/libcedana-gpu.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
         docker exec "$c" sh -c 'echo "=== /usr/local/lib plugins ==="; ls -la /usr/local/lib/libcedana-*.so 2>/dev/null || true; echo "=== CEDANA_* env ==="; env | sort | grep "^CEDANA_" || true' >"$cdir/plugin-inventory.txt" 2>&1 || true
+        docker exec "$c" sh -c 'if [ -x /data/venv/bin/python ]; then /data/venv/bin/python - <<'"'"'PY'"'"'
+import importlib.util
+
+print("python_gpu_env=present")
+for name in ("numpy", "torch"):
+    spec = importlib.util.find_spec(name)
+    print(f"{name}_installed={spec is not None}")
+    if spec is None:
+        continue
+    mod = __import__(name)
+    print(f"{name}_version={getattr(mod, '"'"'__version__'"'"', '"'"'unknown'"'"')}")
+    if name == "torch":
+        print(f"torch_cuda_version={getattr(mod.version, '"'"'cuda'"'"', None)}")
+        print(f"torch_cuda_available={mod.cuda.is_available()}")
+PY
+else echo "python_gpu_env=missing"; fi' >"$cdir/python-gpu-env.txt" 2>&1 || true
 
         _persist_container_log_file "$c" /var/log/cedana.log "$cdir"
         _persist_container_log_file "$c" /var/log/cedana-slurm.log "$cdir"
