@@ -367,12 +367,13 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 			log.Trace().Err(err).Msg("GPU controller Wait()")
 		}
 		c.Terminated <- state.ExitCode()
-		log.Debug().Int("status", state.ExitCode()).Msg("GPU controller exited")
+		log.Debug().Int("status", state.ExitCode()).Str("stderr", c.ErrBuf.String()).Msg("GPU controller exited")
 	} else { // Otherwise, just wait for it to exit
 		waitCtx, cancel := context.WithTimeout(ctx, TERMINATE_TIMEOUT)
 		defer cancel()
-		c.Terminated <- <-utils.WaitForPidCtx(waitCtx, c.PID)
-		log.Debug().Str("status", "unknown").Msg("GPU controller exited")
+		exitStatus := <-utils.WaitForPidCtx(waitCtx, c.PID)
+		c.Terminated <- exitStatus
+		log.Debug().Int("status", exitStatus).Str("stderr", c.ErrBuf.String()).Msg("GPU controller exited")
 	}
 }
 
@@ -674,8 +675,10 @@ func (c *controller) Status() (status controllerStatus, reason string) {
 		} else {
 			reason = "attached process not running"
 		}
-	} else {
+	} else if !utils.PidRunning(c.PID) {
 		reason = "controller process not running"
+	} else {
+		reason = fmt.Sprintf("controller unresponsive (%d consecutive sync failures)", c.syncFails)
 	}
 	return CONTROLLER_STALE, reason
 }
