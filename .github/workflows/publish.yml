@@ -91,19 +91,19 @@ jobs:
         id: create-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.head_ref || github.ref_name }}
+          TAG: ${{ github.head_ref || github.ref_name }}
         run: |
-          gh release create "$tag" \
+          gh release create "$TAG" \
               --repo="$GITHUB_REPOSITORY" \
-              --title="$tag" \
+              --title="$TAG" \
               --generate-notes
 
       - name: Upload assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ github.head_ref || github.ref_name }}
+          TAG: ${{ github.head_ref || github.ref_name }}
         run: |
-          gh release upload --clobber "$tag" \
+          gh release upload --clobber "$TAG" \
               --repo="$GITHUB_REPOSITORY" \
               *.tar.gz \
               install-release.sh
@@ -151,24 +151,16 @@ jobs:
 
           # Sets build and repository for upload based on aws_s3_path
           PATH_VAL="${{ inputs.aws_s3_path }}"
-          if [[ "$PATH_VAL" == *-* ]]; then
-            REPOSITORY="${PATH_VAL%-*}"
-            BUILD="${PATH_VAL#*-}"
+          if [[ "$PATH_VAL" == "cedana-alpha" ]]; then
+            REPOSITORY="cedana"
+            BUILD="alpha"
           else
             REPOSITORY="$PATH_VAL"
             BUILD=""
           fi
 
           for FILE in "${FILES[@]}"; do
-            CHECKSUM="$(
-              python3 - <<'PY' "$FILE"
-          import sys, zlib, base64, struct
-          path = sys.argv[1]
-          with open(path, "rb") as f:
-              crc = zlib.crc32(f.read()) & 0xffffffff
-          print(base64.b64encode(struct.pack(">I", crc)).decode())
-          PY
-            )"
+            CHECKSUM="$(python3 -c 'import sys, zlib, base64, struct; print(base64.b64encode(struct.pack(">I", zlib.crc32(open(sys.argv[1], "rb").read()) & 0xffffffff)).decode())' "$FILE")"
 
             echo "Querying propagator for ${FILE} ..."
             RESPONSE="$(
@@ -238,7 +230,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: .
-          pattern: plugin-${{ matrix.arch }}-{runc,containerd,crio,kata,cloud-hypervisor,k8s,slurm,storage-cedana,storage-s3,storage-gcs}
+          pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Upload plugins to Propagator
@@ -253,9 +245,9 @@ jobs:
 
           # Sets build and repository for upload based on aws_s3_path
           PATH_VAL="${{ inputs.aws_s3_path }}"
-          if [[ "$PATH_VAL" == *-* ]]; then
-            REPOSITORY="${PATH_VAL%-*}"
-            BUILD="${PATH_VAL#*-}"
+          if [[ "$PATH_VAL" == "cedana-alpha" ]]; then
+            REPOSITORY="cedana"
+            BUILD="alpha"
           else
             REPOSITORY="$PATH_VAL"
             BUILD=""
@@ -281,15 +273,7 @@ jobs:
               PLUGIN=$(echo "$P" | sed 's/\//-/g')
               FILE="libcedana-${PLUGIN}.so"
 
-              CHECKSUM="$(
-                python3 - <<'PY' "$FILE"
-          import sys, zlib, base64, struct
-          path = sys.argv[1]
-          with open(path, "rb") as f:
-              crc = zlib.crc32(f.read()) & 0xffffffff
-          print(base64.b64encode(struct.pack(">I", crc)).decode())
-          PY
-              )"
+              CHECKSUM="$(python3 -c 'import sys, zlib, base64, struct; print(base64.b64encode(struct.pack(">I", zlib.crc32(open(sys.argv[1], "rb").read()) & 0xffffffff)).decode())' "$FILE")"
 
               echo "Querying propagator for ${FILE} ..."
               RESPONSE="$(
@@ -615,7 +599,7 @@ jobs:
           PREVIOUS_BINARIES_DIR: previous
         run: |
           echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
-          echo ::set-output name=slack-summary::$(scripts/ci/release-summary-slack)
+          echo "slack-summary=$(scripts/ci/release-summary-slack)" >> $GITHUB_OUTPUT
 
       - name: Post summary
         id: slack-patch
