@@ -40,10 +40,17 @@ func PrintHealthCheckResults(results []*daemon.HealthCheckResult) error {
 			statusWarn := style.WarningColors.Sprint(style.BulletMark)
 			statusOk := style.PositiveColors.Sprint(style.TickMark)
 			data := component.Data
+			isGpuOrCuda := result.Name == "gpu" || result.Name == "criu/cuda"
 			var status string
 			if len(component.Errors) > 0 {
-				status = statusErr
-				data = style.NegativeColors.Sprint(data)
+				// Treat GPU errors as warnings to avoid healthcheck crashes on CPU nodes
+				if isGpuOrCuda {
+					status = statusWarn
+					data = style.WarningColors.Sprint(data)
+				} else {
+					status = statusErr
+					data = style.NegativeColors.Sprint(data)
+				}
 			} else if len(component.Warnings) > 0 {
 				status = statusWarn
 				data = style.WarningColors.Sprint(data)
@@ -54,10 +61,13 @@ func PrintHealthCheckResults(results []*daemon.HealthCheckResult) error {
 			maxLinelen := 60
 			rows := []table.Row{{component.Name, data, status}}
 			for _, err := range component.Errors {
-				if result.Name == "gpu" || result.Name == "criu/cuda" {
+				var rowStatus string
+				if isGpuOrCuda {
 					warningCount++
+					rowStatus = statusWarn
 				} else {
 					errorCount++
+					rowStatus = statusErr
 				}
 				err = style.BreakLine(err, maxLinelen)
 				err = style.DisabledColors.Sprint(err)
@@ -65,7 +75,7 @@ func PrintHealthCheckResults(results []*daemon.HealthCheckResult) error {
 					rows[0] = append(rows[0], err)
 					continue
 				}
-				rows = append(rows, table.Row{"", "", statusErr, err})
+				rows = append(rows, table.Row{"", "", rowStatus, err})
 			}
 			for _, warn := range component.Warnings {
 				warningCount++
