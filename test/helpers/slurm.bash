@@ -490,7 +490,7 @@ test_slurm_job() {
             for c in $(_slurm_compute_containers); do
                 docker exec "$c" bash -c '
                     for mp in /usr/local/bin /usr/local/lib /usr/local/src /usr/lib/slurm; do
-                        mountpoint -q "$mp" 2>/dev/null && umount -l "$mp" 2>/dev/null
+                        mountpoint -q "$mp" 2>/dev/null && mount -o remount "$mp" 2>/dev/null
                     done
                     mount -a 2>/dev/null
                 ' 2>/dev/null || true
