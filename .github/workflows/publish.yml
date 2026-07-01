@@ -149,14 +149,11 @@ jobs:
           REF="${{ github.head_ref || github.ref_name }}"
           ARCH="${{ matrix.arch }}"
 
-          # Sets build and repository for upload based on aws_s3_path
-          PATH_VAL="${{ inputs.aws_s3_path }}"
-          if [[ "$PATH_VAL" == "cedana-alpha" ]]; then
+          REPOSITORY="${{ inputs.aws_s3_path }}"
+          BUILD=""
+          if [[ "$REPOSITORY" == "cedana-alpha" ]]; then
             REPOSITORY="cedana"
             BUILD="alpha"
-          else
-            REPOSITORY="$PATH_VAL"
-            BUILD=""
           fi
 
           for FILE in "${FILES[@]}"; do
@@ -243,14 +240,11 @@ jobs:
           REF="${{ github.head_ref || github.ref_name }}"
           ARCH="${{ matrix.arch }}"
 
-          # Sets build and repository for upload based on aws_s3_path
-          PATH_VAL="${{ inputs.aws_s3_path }}"
-          if [[ "$PATH_VAL" == "cedana-alpha" ]]; then
+          REPOSITORY="${{ inputs.aws_s3_path }}"
+          BUILD=""
+          if [[ "$REPOSITORY" == "cedana-alpha" ]]; then
             REPOSITORY="cedana"
             BUILD="alpha"
-          else
-            REPOSITORY="$PATH_VAL"
-            BUILD=""
           fi
 
           PLUGINS=(
