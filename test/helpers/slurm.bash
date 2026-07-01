@@ -119,9 +119,25 @@ _capture_runtime_slurm_logs() {
         docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
         docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
         docker exec "$c" sh -c 'for p in $(pgrep -f "cedana-slurm monitor" 2>/dev/null || true); do echo "=== monitor pid=$p ==="; tr "\000" "\n" </proc/$p/environ 2>/dev/null | sort; done' >"$cdir/monitor-environ.txt" 2>&1 || true
-        docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
-        docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
+        docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/bin/cedana-gpu-controller /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so /usr/local/lib/libcedana-gpu.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
+        docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/bin/cedana-gpu-controller /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so /usr/local/lib/libcedana-gpu.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
         docker exec "$c" sh -c 'echo "=== /usr/local/lib plugins ==="; ls -la /usr/local/lib/libcedana-*.so 2>/dev/null || true; echo "=== CEDANA_* env ==="; env | sort | grep "^CEDANA_" || true' >"$cdir/plugin-inventory.txt" 2>&1 || true
+        docker exec "$c" sh -c 'if [ -x /data/venv/bin/python ]; then /data/venv/bin/python - <<'"'"'PY'"'"'
+import importlib.util
+
+print("python_gpu_env=present")
+for name in ("numpy", "torch"):
+    spec = importlib.util.find_spec(name)
+    print(f"{name}_installed={spec is not None}")
+    if spec is None:
+        continue
+    mod = __import__(name)
+    print(f"{name}_version={getattr(mod, '"'"'__version__'"'"', '"'"'unknown'"'"')}")
+    if name == "torch":
+        print(f"torch_cuda_version={getattr(mod.version, '"'"'cuda'"'"', None)}")
+        print(f"torch_cuda_available={mod.cuda.is_available()}")
+PY
+else echo "python_gpu_env=missing"; fi' >"$cdir/python-gpu-env.txt" 2>&1 || true
 
         _persist_container_log_file "$c" /var/log/cedana.log "$cdir"
         _persist_container_log_file "$c" /var/log/cedana-slurm.log "$cdir"
@@ -135,6 +151,7 @@ _capture_runtime_slurm_logs() {
 
         if [ "${GPU:-0}" = "1" ]; then
             docker exec "$c" sh -c 'echo "=== nvidia-smi -L ==="; nvidia-smi -L 2>&1 || true; echo "=== /dev/nvidia* ==="; ls -la /dev/nvidia* 2>&1 || true; echo "=== /etc/slurm/gres.conf ==="; cat /etc/slurm/gres.conf 2>&1 || true; echo "=== /etc/slurm/slurm.conf (GPU lines) ==="; grep -E "^(NodeName|GresTypes|DebugFlags)" /etc/slurm/slurm.conf 2>&1 || true; echo "=== slurmd -C ==="; /usr/sbin/slurmd -C 2>&1 || true; echo "=== slurmd -G ==="; /usr/sbin/slurmd -G 2>&1 || true' >"$cdir/gpu-diagnostics.txt" 2>&1 || true
+            docker exec "$c" sh -c 'echo "=== nvidia driver/cuda ==="; nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv 2>&1 || true; echo "=== dmesg (segfault/oom/nvidia/cedana) ==="; dmesg -T 2>/dev/null | grep -iE "segfault|cedana-gpu|nvidia|nvrm|out of memory|killed process|general protection|traps:" | tail -80 || true; echo "=== core_pattern ==="; cat /proc/sys/kernel/core_pattern 2>/dev/null || true; echo "=== core dumps ==="; ls -la /tmp/core* /var/lib/systemd/coredump/* /data/core* core* 2>/dev/null || true; echo "=== cedana-gpu controller/interceptor logs (/tmp/cedana-gpu.*) ==="; ls -la /tmp/cedana-gpu.* 2>/dev/null || true; find /tmp/cedana-gpu.* -type f 2>/dev/null | while read -r lf; do echo "--- $lf ---"; tail -300 "$lf"; done || true' >"$cdir/gpu-controller-debug.txt" 2>&1 || true
         fi
 
         docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
@@ -148,8 +165,9 @@ _capture_runtime_slurm_logs() {
                     IFS=","; for id in $ids; do
                         [ -n "$id" ] || continue
                         for suffix in out err; do
-                            f="$sample_dir/slurm-$id.$suffix"
-                            [ -f "$f" ] && printf "%s\n" "$f"
+                            for f in "$sample_dir/slurm-$id.$suffix" "$sample_dir"/*-"$id.$suffix"; do
+                                [ -f "$f" ] && printf "%s\n" "$f"
+                            done
                         done
                     done
                     for f in "$sample_dir/.cedana_debug.out" "$sample_dir/.cedana_debug.err"; do

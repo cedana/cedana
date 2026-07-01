@@ -12,8 +12,15 @@ load ../helpers/slurm_propagator
 ##################
 
 # bats test_tags=dump,restore,gpu
-@test "Dump/Restore: GPU PyTorch Simple" {
-    local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/gpu-pytorch-simple.sbatch"
+@test "Dump/Restore: CUDA Vector Add" {
+    local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-vector-add.sbatch"
 
-    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 30 240
+    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15 180
+}
+
+# bats test_tags=dump,restore,gpu
+@test "Dump/Restore: CUDA Mem SAXPY Loop" {
+    local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-mem-throughput-loop.sbatch"
+
+    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15 180
 }
