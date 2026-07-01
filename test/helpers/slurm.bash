@@ -487,14 +487,16 @@ test_slurm_job() {
             cancel_slurm_job "$job_id"
             sleep 2
 
-            for c in $(_slurm_compute_containers); do
-                docker exec "$c" bash -c '
-                    for mp in /usr/local/bin /usr/local/lib /usr/local/src /usr/lib/slurm; do
-                        mountpoint -q "$mp" 2>/dev/null && mount -o remount "$mp" 2>/dev/null
-                    done
-                    mount -a 2>/dev/null
-                ' 2>/dev/null || true
-            done
+            if [ "${NFS_ROOT_SQUASH:-0}" != 1 ]; then
+                for c in $(_slurm_compute_containers); do
+                    docker exec "$c" bash -c '
+                        for mp in /usr/local/bin /usr/local/lib /usr/local/src /usr/lib/slurm; do
+                            mountpoint -q "$mp" 2>/dev/null && mount -o remount "$mp" 2>/dev/null
+                        done
+                        mount -a 2>/dev/null
+                    ' 2>/dev/null || true
+                done
+            fi
 
             local new_job_id=""
             local detect_timeout=40
