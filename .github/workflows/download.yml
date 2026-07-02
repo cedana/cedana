@@ -159,8 +159,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Use current branch as plugin version
-          VERSION="${{ github.head_ref || github.ref_name }}"
+          VERSION="${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}"
           BUILD="alpha"
           if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             BUILD=""

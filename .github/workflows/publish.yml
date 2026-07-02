@@ -470,7 +470,7 @@ jobs:
   post-summary:
     name: Post Summary
     runs-on: ubuntu-latest
-    needs: ["github", "aws_s3", "dockerhub"]
+    needs: ["github", "aws_s3", "aws_s3_plugin", "dockerhub"]
     strategy:
       fail-fast: false
       matrix:
@@ -512,6 +512,7 @@ jobs:
           mkdir -p previous
 
           PLUGINS=(
+            "cedana"
             "libcedana-cloud-hypervisor.so"
             "libcedana-containerd.so"
             "libcedana-crio.so"
@@ -524,14 +525,21 @@ jobs:
             "libcedana-storage-s3.so"
           )
 
-          for FILE in "${PLUGINS[@]}"; do
-            curl -fL \
-              "${CEDANA_URL}/plugins/download/${FILE}?version=${PREVIOUS_TAG}&arch=${ARCH}&build=${BUILD}" \
-              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
-              --output "previous/${FILE}"
-            test -f "previous/${FILE}"
-            test -s "previous/${FILE}"
-          done
+          if [[ -n "${PREVIOUS_TAG}" ]]; then
+            for FILE in "${PLUGINS[@]}"; do
+              if curl -fL \
+                "${CEDANA_URL}/plugins/download/${FILE}?version=${PREVIOUS_TAG}&arch=${ARCH}&build=${BUILD}" \
+                -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+                --output "previous/${FILE}" && \
+                test -f "previous/${FILE}" && \
+                test -s "previous/${FILE}"; then
+                echo "Downloaded previous ${FILE} successfully."
+              else
+                echo "Warning: Failed to download previous binary ${FILE}"
+                rm -f "previous/${FILE}"
+              fi
+            done
+          fi
 
       - name: Download current plugin binaries
         env:
@@ -551,6 +559,7 @@ jobs:
           mkdir -p current
 
           PLUGINS=(
+            "cedana"
             "libcedana-cloud-hypervisor.so"
             "libcedana-containerd.so"
             "libcedana-crio.so"
