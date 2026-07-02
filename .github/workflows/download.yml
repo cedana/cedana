@@ -70,7 +70,7 @@ jobs:
         run: |
           set -euo pipefail
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             BUILD=""
           fi
 
@@ -162,7 +162,7 @@ jobs:
           # Use current branch as plugin version
           VERSION="${{ github.head_ref || github.ref_name }}"
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             BUILD=""
           fi
           ARCH="${{ matrix.arch }}"
@@ -204,7 +204,7 @@ jobs:
         run: |
           set -euo pipefail
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             BUILD=""
           fi
           mkdir -p criu
@@ -245,13 +245,18 @@ jobs:
         run: |
           set -euo pipefail
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             BUILD=""
           fi
           mkdir -p gpu
 
           ARCH="${{ matrix.arch }}"
-          for FILE in cedana-gpu-controller libcedana-gpu.so libcedana-gpu-tracer.so; do
+          BINARIES=(
+            "cedana-gpu-controller"
+            "libcedana-gpu.so"
+            "libcedana-gpu-tracer.so"
+          )
+          for FILE in "${BINARIES[@]}"; do
             curl -fL \
               "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
@@ -286,7 +291,7 @@ jobs:
         run: |
           set -euo pipefail
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             BUILD=""
           fi
           mkdir -p streamer
@@ -373,7 +378,7 @@ jobs:
         run: |
           set -euo pipefail
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             BUILD=""
           fi
           mkdir -p containerd-runtime-runc
@@ -458,7 +463,7 @@ jobs:
 
           VERSION=$(echo $VERSION | sed 's/\//-/g')
           BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ] || [ "$VERSION" = "main" ]; then
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
             BUILD=""
           fi
 
@@ -473,7 +478,14 @@ jobs:
             echo "checkout_sha=${CHECKOUT_SHA}"
           } > "$ORIGIN_FILE"
 
-          for binary in cedana-slurm spank_cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
+          BINARIES=(
+            "cedana-slurm"
+            "spank_cedana.so"
+            "task_cedana.so"
+            "cli_filter_cedana.so"
+            "job_submit_cedana.so"
+          )
+          for binary in "${BINARIES[@]}"; do
             curl -fL \
               "${CEDANA_URL}/plugins/download/${binary}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
