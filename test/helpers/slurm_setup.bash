@@ -1178,6 +1178,16 @@ start_cedana_slurm_daemon() {
             }
     done
 
+    local cedana_config_json
+    cedana_config_json="{\"connection\":{\"url\":\"${CEDANA_URL:-}\",\"auth_token\":\"${CEDANA_AUTH_TOKEN:-}\",\"cluster_id\":\"${cluster_id}\"}}"
+    for c in "${targets[@]}"; do
+        docker exec "$c" bash -c "mkdir -p /etc/cedana && printf '%s' '$cedana_config_json' > /etc/cedana/config.json" ||
+            {
+                error_log "Failed to write cedana config on $c"
+                return 1
+            }
+    done
+
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec -d \
