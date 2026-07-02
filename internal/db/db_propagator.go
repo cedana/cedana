@@ -35,7 +35,7 @@ func NewPropagatorDB(ctx context.Context, connection config.Connection, fallback
 ///////////
 
 func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
-	url := fmt.Sprintf("%s/jobs/%s", db.URL, job.JID)
+	url := fmt.Sprintf("%s/cedana/jobs/%s", db.URL, job.JID)
 
 	body, err := json.Marshal(job)
 	if err != nil {
@@ -63,7 +63,7 @@ func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
 }
 
 func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s/jobs", db.URL)
+	url := fmt.Sprintf("%s/cedana/jobs", db.URL)
 	if len(jids) > 0 {
 		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
 	}
@@ -95,7 +95,7 @@ func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon
 }
 
 func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s/jobs", db.URL)
+	url := fmt.Sprintf("%s/cedana/jobs", db.URL)
 	if len(hostIDs) > 0 {
 		url += fmt.Sprintf("?host_ids=%s", strings.Join(hostIDs, ","))
 	}
@@ -126,7 +126,7 @@ func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string
 }
 
 func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
-	url := fmt.Sprintf("%s/jobs/%s", db.URL, jid)
+	url := fmt.Sprintf("%s/cedana/jobs/%s", db.URL, jid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
