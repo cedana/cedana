@@ -541,23 +541,6 @@ install_cedana_in_slurm() {
         return 1
     fi
 
-    if [ "${GPU:-0}" = "1" ]; then
-        local gpu_controller_bin="${CEDANA_GPU_CONTROLLER_BIN:-/usr/local/bin/cedana-gpu-controller}"
-        if [ ! -x "$gpu_controller_bin" ]; then
-            error_log "GPU enabled but cedana-gpu-controller not found at $gpu_controller_bin"
-            return 1
-        fi
-        debug_log "Copying cedana-gpu-controller binary into controller..."
-        if ! docker cp "$gpu_controller_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana-gpu-controller"; then
-            error_log "Failed to stage cedana-gpu-controller in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        fi
-        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana-gpu-controller" /usr/local/bin/cedana-gpu-controller; then
-            error_log "Failed to install cedana-gpu-controller in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        fi
-    fi
-
     debug_log "Copying plugin libraries into controller..."
     for so in /usr/local/lib/libcedana-*.so \
         /usr/local/lib/task_cedana.so \
@@ -687,9 +670,6 @@ EOF
         storage/s3) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-s3.so") ;;
         storage/gcs) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-gcs.so") ;;
     esac
-    if [ "${GPU:-0}" = "1" ]; then
-        expected_runtime_paths+=("/usr/local/bin/cedana-gpu-controller" "/usr/local/lib/libcedana-gpu.so")
-    fi
 
     debug_log "Installing SLURM plugin and runtime plugins on controller..."
     docker exec \
@@ -1061,34 +1041,14 @@ SETUP_EOF
     sleep 5
 
     if [ "${GPU:-0}" = "1" ]; then
-        debug_log "Waiting for GPU GRES to register and node to become available..."
+        debug_log "Clearing transient GPU drain state after SLURM restarts..."
         for c in "${compute_containers[@]}"; do
             local node_hostname
             node_hostname=$(docker exec "$c" hostname)
-            local waited=0
-            local gres_ok=0
-            while [ "$waited" -lt 90 ]; do
-                slurm_exec scontrol update NodeName="$node_hostname" State=RESUME >/dev/null 2>&1 || true
-                local node_info state_line
-                node_info=$(slurm_exec scontrol show node "$node_hostname" 2>/dev/null) || node_info=""
-                state_line=$(echo "$node_info" | grep -oE 'State=[^[:space:]]+' | head -1)
-                if echo "$node_info" | grep -qiE 'Gres=gpu:' \
-                    && echo "$state_line" | grep -qiE 'IDLE|MIX|ALLOC' \
-                    && ! echo "$state_line" | grep -qiE 'DRAIN|DOWN|INVAL|UNKNOWN|FAIL|NPC'; then
-                    gres_ok=1
-                    break
-                fi
-                sleep 3
-                waited=$((waited + 3))
-            done
-            if [ "$gres_ok" -ne 1 ]; then
-                error_log "GPU GRES not registered/available on $node_hostname after ${waited}s; --gres=gpu jobs would submit without GPU"
-                slurm_exec scontrol show node "$node_hostname" 2>&1 || true
-                slurm_exec sinfo 2>&1 || true
-                _log_gpu_debug_state "$c" "gres-registration-timeout"
-                return 1
-            fi
-            debug_log "  $node_hostname: gres/gpu registered, node available (${waited}s)"
+            # slurmctld may briefly drain the node while it still sees the
+            # pre-restart registration without GRES; clear that once slurmd is back.
+            slurm_exec scontrol update NodeName="$node_hostname" State=RESUME \
+                >/dev/null 2>&1 || true
         done
     fi
 

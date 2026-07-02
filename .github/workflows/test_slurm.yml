@@ -293,7 +293,6 @@ jobs:
       matrix:
         compute:
           - CPU
-          - CUDA
         storage:
           - storage/cedana
         arch:
@@ -301,9 +300,6 @@ jobs:
         nfs:
           - root_squash
           - no_root_squash
-        exclude:
-          - compute: GPU
-            arch: arm64
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
