@@ -1178,12 +1178,29 @@ start_cedana_slurm_daemon() {
             }
     done
 
-    local cedana_config_json
-    cedana_config_json="{\"connection\":{\"url\":\"${CEDANA_URL:-}\",\"auth_token\":\"${CEDANA_AUTH_TOKEN:-}\",\"cluster_id\":\"${cluster_id}\"}}"
     for c in "${targets[@]}"; do
-        docker exec "$c" bash -c "mkdir -p /etc/cedana && printf '%s' '$cedana_config_json' > /etc/cedana/config.json" ||
+        docker exec "$c" bash -c "
+            set -euo pipefail
+            mkdir -p /etc/systemd/system/slurmd.service.d
+            cat >/etc/systemd/system/slurmd.service.d/cedana-cluster.conf <<EOF
+[Service]
+Environment=CEDANA_CLUSTER_ID=$cluster_id
+EOF
+            grep -q '^CEDANA_CLUSTER_ID=' /etc/default/slurmd 2>/dev/null &&
+                sed -i 's|^CEDANA_CLUSTER_ID=.*|CEDANA_CLUSTER_ID=$cluster_id|' /etc/default/slurmd ||
+                echo 'CEDANA_CLUSTER_ID=$cluster_id' >> /etc/default/slurmd
+            command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
+        " ||
             {
-                error_log "Failed to write cedana config on $c"
+                error_log "Failed to set CEDANA_CLUSTER_ID in slurmd env on $c"
+                return 1
+            }
+    done
+
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd ||
+            {
+                error_log "Failed to restart slurmd after setting cluster env on $c"
                 return 1
             }
     done
