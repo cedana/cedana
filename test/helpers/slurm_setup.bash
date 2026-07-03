@@ -1179,28 +1179,12 @@ start_cedana_slurm_daemon() {
     done
 
     for c in "${targets[@]}"; do
-        docker exec "$c" bash -c "
-            set -euo pipefail
-            mkdir -p /etc/systemd/system/slurmd.service.d
-            cat >/etc/systemd/system/slurmd.service.d/cedana-cluster.conf <<EOF
-[Service]
-Environment=CEDANA_CLUSTER_ID=$cluster_id
-EOF
-            grep -q '^CEDANA_CLUSTER_ID=' /etc/default/slurmd 2>/dev/null &&
-                sed -i 's|^CEDANA_CLUSTER_ID=.*|CEDANA_CLUSTER_ID=$cluster_id|' /etc/default/slurmd ||
-                echo 'CEDANA_CLUSTER_ID=$cluster_id' >> /etc/default/slurmd
-            command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
-        " ||
+        docker exec "$c" mkdir -p /etc/cedana
+        docker exec \
+            -e CEDANA_CLUSTER_ID="$cluster_id" \
+            "$c" /usr/local/bin/cedana --merge-config version ||
             {
-                error_log "Failed to set CEDANA_CLUSTER_ID in slurmd env on $c"
-                return 1
-            }
-    done
-
-    for c in "${compute_containers[@]}"; do
-        _svc_restart "$c" slurmd /usr/sbin/slurmd ||
-            {
-                error_log "Failed to restart slurmd after setting cluster env on $c"
+                error_log "Failed to persist CEDANA_CLUSTER_ID into config on $c"
                 return 1
             }
     done
