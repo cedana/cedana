@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	DISK_EMPTY_PATH = "/var/lib/kubelet/pods/%v/volumes/kubernetes.io~empty-dir/checkpoint-disk-cache"
-	MEM_EMPTY_PATH  = "/var/lib/kubelet/pods/%v/volumes/kubernetes.io~empty-dir/checkpoint-ram-cache"
+	DISK_EMPTY_PATH = "/host/var/lib/kubelet/pods/%v/volumes/kubernetes.io~empty-dir/checkpoint-disk-cache"
+	MEM_EMPTY_PATH  = "/host/var/lib/kubelet/pods/%v/volumes/kubernetes.io~empty-dir/checkpoint-ram-cache"
 	POD_ID_ENV_VAR  = "CEDANA_HELPER_POD_UID"
 )
 
