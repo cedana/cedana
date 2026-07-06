@@ -62,8 +62,8 @@ jobs:
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
       github: true
-      aws_s3: true
-      aws_s3_path: cedana
+      propagator: true
+      propagator_repo: cedana
       dockerhub: true
       dockerhub_latest: true
       post_summary: true

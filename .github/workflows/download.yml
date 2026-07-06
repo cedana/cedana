@@ -62,7 +62,7 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download cedana from S3
+      - name: Download cedana
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -152,7 +152,7 @@ jobs:
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
 
-      - name: Download plugin from S3
+      - name: Download plugin
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -195,7 +195,7 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download CRIU from S3
+      - name: Download CRIU
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -236,7 +236,7 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download GPU binaries from S3
+      - name: Download GPU binaries
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -282,7 +282,7 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download streamer from S3
+      - name: Download streamer
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
@@ -369,7 +369,7 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download runtime from S3
+      - name: Download runtime
         env:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}

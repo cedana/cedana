@@ -28,14 +28,14 @@ on:
         description: "Publish to GitHub releases"
         required: false
         default: false
-      aws_s3:
+      propagator:
         type: boolean
-        description: "Publish to AWS S3"
+        description: "Publish to propagator"
         required: false
         default: false
-      aws_s3_path:
+      propagator_repo:
         type: string
-        description: "S3 path to publish to"
+        description: "Propagator repository to publish to"
         required: false
         default: cedana-alpha
       dockerhub:
@@ -74,8 +74,8 @@ jobs:
     secrets: inherit
     with:
       github: ${{ inputs.github }}
-      aws_s3: ${{ inputs.aws_s3 }}
-      aws_s3_path: ${{ inputs.aws_s3_path }}
+      propagator: ${{ inputs.propagator }}
+      propagator_repo: ${{ inputs.propagator_repo }}
       dockerhub: ${{ inputs.dockerhub }}
       dockerhub_latest: ${{ inputs.dockerhub_latest }}
       post_summary: ${{ inputs.post_summary }}

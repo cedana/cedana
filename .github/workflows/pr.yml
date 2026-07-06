@@ -68,8 +68,8 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      aws_s3: true
-      aws_s3_path: cedana-alpha
+      propagator: true
+      propagator_repo: cedana-alpha
       dockerhub: true
       post_summary: false
 
