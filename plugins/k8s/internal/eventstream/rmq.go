@@ -23,6 +23,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/plugins/k8s/internal/storage"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -371,9 +372,14 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					dumpReq.Criu = criuOpts
 				}
 				dumpReq.Compression = req.Overrides.Compression
-				dumpReq.Dir = req.Overrides.Directory
-				dumpReq.Streams = int32(req.Overrides.Streams)
-				dumpReq.Async = req.Overrides.Async
+				path, err := storage.FindDiskEmptyDir()
+				if err != nil {
+					log.Error().Err(err).Msg("failed to get disk empty dir path")
+				} else {
+					dumpReq.Dir = path
+					dumpReq.Streams = int32(req.Overrides.Streams)
+					dumpReq.Async = req.Overrides.Async
+				}
 			}
 			log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
 			dumpReqs = append(dumpReqs, dumpReq)
