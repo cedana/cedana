@@ -109,7 +109,7 @@ jobs:
               install-release.sh
 
   propagator:
-    name: Propagator
+    name: Cedana
     if: inputs.propagator
     runs-on: ubuntu-latest
     strategy:
@@ -213,7 +213,7 @@ jobs:
           done
 
   propagator-plugin:
-    name: Propagator
+    name: Plugins
     if: inputs.propagator
     runs-on: ubuntu-latest
     strategy:
