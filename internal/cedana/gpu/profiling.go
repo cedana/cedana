@@ -39,6 +39,11 @@ type gpuWorkerTimingRow struct {
 	bytes          uint64
 }
 
+type gpuProfileInterval struct {
+	startNs int64
+	endNs   int64
+}
+
 func addGPUFunctionProfileToProfiling(ctx context.Context, duration time.Duration, f ...any) context.Context {
 	functionCtx := profiling.AddTimingParallelComponent(ctx, duration, f...)
 	profiling.MarkRedundant(functionCtx)
@@ -134,23 +139,82 @@ func gpuPhaseRows(workers []*gpu_proto.WorkerProfile, phaseName, displayName str
 	return rows
 }
 
+func gpuMergedIntervalDurationNs(intervals []gpuProfileInterval) int64 {
+	if len(intervals) == 0 {
+		return 0
+	}
+
+	sort.Slice(intervals, func(i, j int) bool {
+		if intervals[i].startNs == intervals[j].startNs {
+			return intervals[i].endNs < intervals[j].endNs
+		}
+		return intervals[i].startNs < intervals[j].startNs
+	})
+
+	var total int64
+	currentStart := intervals[0].startNs
+	currentEnd := intervals[0].endNs
+	for _, interval := range intervals[1:] {
+		if interval.endNs <= interval.startNs {
+			continue
+		}
+		if interval.startNs <= currentEnd {
+			if interval.endNs > currentEnd {
+				currentEnd = interval.endNs
+			}
+			continue
+		}
+
+		total += currentEnd - currentStart
+		currentStart = interval.startNs
+		currentEnd = interval.endNs
+	}
+
+	return total + currentEnd - currentStart
+}
+
 func gpuOtherRows(workers []*gpu_proto.WorkerProfile) []gpuWorkerTimingRow {
 	var rows []gpuWorkerTimingRow
 	for i, worker := range workers {
-		var namedDurationNs int64
 		var namedBytes uint64
+		var coveredIntervals []gpuProfileInterval
+		intervalsComplete := true
+
 		for _, phase := range worker.GetPhases() {
-			namedDurationNs += phase.GetDurationNs()
 			namedBytes += phase.GetBytes()
+			phaseIntervals := phase.GetIntervals()
+			if phase.GetIntervalsTruncated() || (phase.GetDurationNs() > 0 && len(phaseIntervals) == 0) {
+				intervalsComplete = false
+			}
+			for _, interval := range phaseIntervals {
+				startNs := interval.GetStartNs()
+				endNs := interval.GetEndNs()
+				if startNs < 0 {
+					startNs = 0
+				}
+				if endNs > worker.GetDurationNs() {
+					endNs = worker.GetDurationNs()
+				}
+				if endNs > startNs {
+					coveredIntervals = append(coveredIntervals, gpuProfileInterval{
+						startNs: startNs,
+						endNs:   endNs,
+					})
+				}
+			}
 		}
 
-		otherDurationNs := worker.GetDurationNs() - namedDurationNs
+		if !intervalsComplete {
+			continue
+		}
+
+		otherDurationNs := worker.GetDurationNs() - gpuMergedIntervalDurationNs(coveredIntervals)
 		if otherDurationNs < 0 {
 			otherDurationNs = 0
 		}
 
 		var otherBytes uint64
-		if worker.GetBytes() > namedBytes {
+		if otherDurationNs > 0 && worker.GetBytes() > namedBytes {
 			otherBytes = worker.GetBytes() - namedBytes
 		}
 
@@ -188,7 +252,7 @@ func gpuWorkerProfileTags(row gpuWorkerTimingRow, stats gpuDurationStats) []any 
 	if row.worker.GetPID() != 0 {
 		tags = append(tags, fmt.Sprintf("pid=%d", row.worker.GetPID()))
 	}
-	if stats.count > 1 {
+	if stats.count > 1 && stats.min != stats.max {
 		if row.durationNs == stats.min {
 			tags = append(tags, "fastest")
 		}
