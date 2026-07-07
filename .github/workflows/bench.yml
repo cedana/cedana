@@ -61,9 +61,8 @@ on:
         default: "8cpu-32g-1xL4"
 
 env:
-  CLOUDSMITH_ENTITLEMENT_TOKEN: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
-  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_URL: "https://rahul.cedana.ai/v2"
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   SAMPLES: ${{ inputs.samples }}
   RETRIES: 2
