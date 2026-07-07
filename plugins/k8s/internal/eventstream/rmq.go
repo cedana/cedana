@@ -371,15 +371,16 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				} else {
 					dumpReq.Criu = criuOpts
 				}
+				dumpReq.Streams = int32(req.Overrides.Streams)
+				dumpReq.Async = req.Overrides.Async
 				dumpReq.Compression = req.Overrides.Compression
-				path, err := storage.FindDiskEmptyDir()
-				if err != nil {
-					log.Error().Err(err).Msg("failed to get disk empty dir path")
-				} else {
-					dumpReq.Dir = path
-					dumpReq.Streams = int32(req.Overrides.Streams)
-					dumpReq.Async = req.Overrides.Async
-				}
+			}
+			path, err := storage.FindDiskEmptyDir()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to get disk empty dir path")
+			} else {
+				log.Info().Str("path", path).Msg("found disk empty dir path")
+				dumpReq.Dir = path
 			}
 			log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
 			dumpReqs = append(dumpReqs, dumpReq)
