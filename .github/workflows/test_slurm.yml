@@ -117,7 +117,7 @@ jobs:
 
       - name: Pre-install plugins
         env:
-          CEDANA_PLUGINS_BUILDS: alpha
+          CEDANA_PLUGINS_BUILDS: local
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
@@ -374,7 +374,7 @@ jobs:
       - name: Pre-install plugins
         env:
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
-          CEDANA_PLUGINS_BUILDS: alpha
+          CEDANA_PLUGINS_BUILDS: local
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
@@ -756,7 +756,7 @@ jobs:
 
       - name: Pre-install plugins
         env:
-          CEDANA_PLUGINS_BUILDS: alpha
+          CEDANA_PLUGINS_BUILDS: local
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
