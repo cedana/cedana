@@ -148,8 +148,9 @@ _capture_runtime_slurm_logs() {
                     IFS=","; for id in $ids; do
                         [ -n "$id" ] || continue
                         for suffix in out err; do
-                            f="$sample_dir/slurm-$id.$suffix"
-                            [ -f "$f" ] && printf "%s\n" "$f"
+                            for f in "$sample_dir/slurm-$id.$suffix" "$sample_dir"/*-"$id.$suffix"; do
+                                [ -f "$f" ] && printf "%s\n" "$f"
+                            done
                         done
                     done
                     for f in "$sample_dir/.cedana_debug.out" "$sample_dir/.cedana_debug.err"; do
