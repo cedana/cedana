@@ -44,6 +44,7 @@ type EventStream struct {
 	closeOnce          sync.Once
 	closeErr           error
 	*rabbitmq.Conn
+	storage *storage.Storage
 }
 
 var defaultDumpOpts = &criu.CriuOpts{
@@ -86,12 +87,19 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to rmq: %v", err)
 	}
+
+	storage, err := storage.InitStorage()
+	if err != nil {
+		return nil, err
+	}
+
 	es := &EventStream{
 		cedana:            cedana,
 		propagator:        propagator,
 		url:               *url,
 		Conn:              conn,
 		containerdAddress: containerdAddress,
+		storage:           storage,
 	}
 	return es, nil
 }
@@ -371,15 +379,16 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				} else {
 					dumpReq.Criu = criuOpts
 				}
+				dumpReq.Dir = req.Overrides.Directory
+				dumpReq.Compression = req.Overrides.Compression
 				dumpReq.Streams = int32(req.Overrides.Streams)
 				dumpReq.Async = req.Overrides.Async
-				dumpReq.Compression = req.Overrides.Compression
-			}
-			path, err := storage.FindDiskEmptyDir()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to get disk empty dir path")
 			} else {
-				log.Info().Str("path", path).Msg("found disk empty dir path")
+				pid := queryResp.States[i].PID
+				path, err := es.storage.ReserveCheckpoint(int(pid))
+				if err != nil {
+					log.Error().Err(err).Msg("could not reserve storage for container")
+				}
 				dumpReq.Dir = path
 			}
 			log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
@@ -446,6 +455,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					path = dumpResp.Paths[0]
 					state = dumpResp.State
 				}
+				es.storage.FinalizeCheckpoint(int(state.PID), path)
 				es.publishCheckpoint(
 					log.WithContext(ctx),
 					req.PodName,
