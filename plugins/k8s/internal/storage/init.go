@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"container/heap"
 	"fmt"
 	"math"
 	"os"
@@ -36,25 +37,33 @@ const (
 type Checkpoint struct {
 	LayerPriority Priority
 	Path          string
-	// should have a better way to identify a checkpoint
-	Pid  int
-	Size int64
+	Pid           int
+	CheckpointID  string
+	Size          int64
+	unixTime      int64
+	// for the heap
+	index int
 }
 
 type Storage struct {
-	layers                []*Layer
-	inProgressCheckpoints map[int]Checkpoint
-	storedCheckpoints     map[int]Checkpoint
+	layers            []*Layer
+	storedCheckpoints map[string][3]*Checkpoint
+	toPersist         chan string
 }
 
 type Layer struct {
-	path      string
-	limit     int64
-	usedLimit int64
+	path           string
+	limit          int64
+	usedLimit      int64
+	checkpointHeap CheckpointHeap
+}
+
+func (l *Layer) AddCheckpoint(checkpoint *Checkpoint) {
+	heap.Push(&l.checkpointHeap, checkpoint)
 }
 
 func initMemLayer(podID string) (*Layer, error) {
-	memPath := fmt.Sprintf(DISK_EMPTY_PATH, podID)
+	memPath := fmt.Sprintf(MEM_EMPTY_PATH, podID)
 	info, err := os.Stat(memPath)
 	if err != nil {
 		return nil, fmt.Errorf("could not stat mem path")
@@ -77,6 +86,7 @@ func initMemLayer(podID string) (*Layer, error) {
 	memLayer := &Layer{}
 	memLayer.path = memPath
 	memLayer.limit = int64(memLimit) * GIBIBYTE
+	memLayer.checkpointHeap = NewCheckpointHeap()
 	return memLayer, nil
 }
 
@@ -104,6 +114,7 @@ func initDiskLayer(podID string) (*Layer, error) {
 	diskLayer := &Layer{}
 	diskLayer.path = diskPath
 	diskLayer.limit = int64(diskLimit) * GIBIBYTE
+	diskLayer.checkpointHeap = NewCheckpointHeap()
 	return diskLayer, nil
 }
 
@@ -138,15 +149,17 @@ func InitStorage() (*Storage, error) {
 	persistentLayer := initPersistentLayer()
 
 	storage := &Storage{
-		layers:                make([]*Layer, 3),
-		inProgressCheckpoints: make(map[int]Checkpoint),
-		storedCheckpoints:     make(map[int]Checkpoint),
+		layers:            make([]*Layer, 3),
+		storedCheckpoints: make(map[string][3]*Checkpoint),
 	}
 	storage.layers[Memory] = memLayer
 	storage.layers[Disk] = diskLayer
 	if persistentLayer != nil {
 		storage.layers[Persistent] = persistentLayer
 	}
+	storage.toPersist = make(chan string)
+	go storage.PersistWorker()
+	go storage.CleanupWorker()
 
 	return storage, nil
 }

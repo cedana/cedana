@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 func sizeFromPath(path string) int64 {
@@ -52,36 +53,44 @@ func (s *Storage) findFreeLayer(size int64) (string, Priority) {
 	return "", -1
 }
 
-func (s *Storage) ReserveCheckpoint(pid int) (string, error) {
+func (s *Storage) ReserveCheckpoint(pid int, checkpointID string) (string, error) {
 	size, err := EstimateCheckpointSize(pid)
 	if err != nil {
 		return "", err
 	}
 
 	if path, priority := s.findFreeLayer(size); path != "" {
-		s.inProgressCheckpoints[pid] = Checkpoint{
+		s.storedCheckpoints[checkpointID] = [3]*Checkpoint{}
+		checkpoints := s.storedCheckpoints[checkpointID]
+		checkpoints[int(priority)] = &Checkpoint{
 			LayerPriority: priority,
+			Pid:           pid,
+			CheckpointID:  checkpointID,
 			Size:          size,
+			unixTime:      time.Now().Unix(),
 		}
+		s.storedCheckpoints[checkpointID] = checkpoints
 		return path, nil
 	}
 	return "", fmt.Errorf("could not reserve storage")
 }
 
-func (s *Storage) FinalizeCheckpoint(pid int, checkpointPath string) error {
-	checkpoint, ok := s.inProgressCheckpoints[pid]
+func (s *Storage) FinalizeCheckpoint(checkpointID string, checkpointPath string) error {
+	checkpoints, ok := s.storedCheckpoints[checkpointID]
 	if !ok {
-		return fmt.Errorf("expected to find in progress checkpoint for pid")
+		return fmt.Errorf("could not find checkpoint")
 	}
 
-	finalSize := sizeFromPath(checkpointPath)
-	s.layers[checkpoint.LayerPriority].usedLimit += (finalSize - checkpoint.Size)
-
-	s.storedCheckpoints[pid] = Checkpoint{
-		Size:          finalSize,
-		LayerPriority: checkpoint.LayerPriority,
-		Pid:           pid,
-		Path:          checkpointPath,
+	for _, checkpoint := range checkpoints {
+		if checkpoint == nil {
+			continue
+		}
+		checkpoint.Path = checkpointPath
+		finalSize := sizeFromPath(checkpointPath)
+		s.layers[checkpoint.LayerPriority].usedLimit += (finalSize - checkpoint.Size)
+		checkpoint.Size = finalSize
+		s.layers[checkpoint.LayerPriority].AddCheckpoint(checkpoint)
+		s.toPersist <- checkpointID
 	}
 	return nil
 }

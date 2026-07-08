@@ -385,7 +385,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				dumpReq.Async = req.Overrides.Async
 			} else {
 				pid := queryResp.States[i].PID
-				path, err := es.storage.ReserveCheckpoint(int(pid))
+				path, err := es.storage.ReserveCheckpoint(int(pid), checkpointIdMap[i])
 				if err != nil {
 					log.Error().Err(err).Msg("could not reserve storage for container")
 				}
@@ -455,7 +455,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					path = dumpResp.Paths[0]
 					state = dumpResp.State
 				}
-				es.storage.FinalizeCheckpoint(int(state.PID), path)
+				es.storage.FinalizeCheckpoint(checkpointIdMap[i], path)
 				es.publishCheckpoint(
 					log.WithContext(ctx),
 					req.PodName,
