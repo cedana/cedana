@@ -60,7 +60,8 @@ jobs:
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
-      slurm_version: main
+      # TEMP: test against cedana-slurm#136 until it merges to main
+      slurm_version: feat/preemption-ci-test
 
   publish:
     name: Publish
