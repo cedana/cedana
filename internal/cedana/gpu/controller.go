@@ -24,7 +24,6 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/logging"
-	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/gofrs/flock"
@@ -442,7 +441,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump starting")
 
-			_, err := controller.Dump(waitCtx, &gpu.DumpReq{
+			resp, err := controller.Dump(waitCtx, &gpu.DumpReq{
 				Dir:          opts.GetImagesDir(),
 				Stream:       opts.GetStream(),
 				LeaveRunning: opts.GetLeaveRunning(),
@@ -452,6 +451,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
 				return
 			}
+			addGPUProfileToProfiling(ctx, resp.GetProfile())
 
 			log.Info().Msg("GPU dump complete")
 		}()
@@ -521,8 +521,10 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	// Add pre-restore hook for GPU restore, that begins GPU restore in parallel
 	// to CRIU restore. We instead block at post-restore, to maximize concurrency.
 	var restoreErr chan error
+	var restoreProfile *gpu.GpuProfile
 	callback.PreRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		restoreErr = make(chan error, 1)
+		restoreProfile = nil
 		go func() {
 			defer close(restoreErr)
 
@@ -547,10 +549,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			}
 			log.Info().Msg("GPU restore complete")
 
-			copyMemTime := time.Duration(resp.GetRestoreStats().GetCopyMemTime()) * time.Millisecond
-			replayCallsTime := time.Duration(resp.GetRestoreStats().GetReplayCallsTime()) * time.Millisecond
-			profiling.AddTimingParallelComponent(ctx, copyMemTime, "CopyMemory")
-			profiling.AddTimingParallelComponent(ctx, replayCallsTime, "ReplayCalls")
+			restoreProfile = resp.GetProfile()
 		}()
 		return nil
 	}
@@ -573,8 +572,12 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return controller.Attach(ctx, uint32(pid))
 	}
 
+	var restoreProfileOnce sync.Once
 	callback.PreResumeFunc = func(ctx context.Context) error {
 		err := <-restoreErr
+		restoreProfileOnce.Do(func() {
+			addGPUProfileToProfiling(ctx, restoreProfile)
+		})
 		if err != nil {
 			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
 			// Because it can't run since the GPU restore failed.
