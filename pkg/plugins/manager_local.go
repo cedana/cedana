@@ -161,7 +161,7 @@ func (m *LocalManager) Install(names []string) (chan int, chan string, chan erro
 			var plugin *Plugin
 			var ok bool
 			if plugin, ok = availableSet[name]; !ok {
-				errs <- fmt.Errorf("Plugin %s is not available", name)
+				errs <- fmt.Errorf("plugin %q is not available", name)
 				continue
 			}
 
@@ -261,7 +261,7 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 			var plugin *Plugin
 			var ok bool
 			if plugin, ok = availableSet[name]; !ok {
-				errs <- fmt.Errorf("Plugin %s is not available", name)
+				errs <- fmt.Errorf("plugin %q is not available", name)
 				continue
 			}
 			if plugin.Status != INSTALLED {
