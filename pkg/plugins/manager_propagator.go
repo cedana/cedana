@@ -151,7 +151,14 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 	}
 
 	if err != nil {
-		fmt.Println(style.WarningColors.Sprintf("Using local list. Failed to connect to propagator registry: %v", err))
+		fmt.Println(style.WarningColors.Sprintf(
+			"Failed to connect to the plugin registry: %v",
+			err,
+		))
+
+		fmt.Println(style.WarningColors.Sprint(
+			"Falling back to locally available plugins.",
+		))
 	}
 
 	return list, nil
@@ -188,7 +195,7 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 			name := strings.Split(name, "@")[0]
 
 			if _, ok := availableSet[name]; !ok {
-				errs <- fmt.Errorf("Plugin %s is not available", name)
+				errs <- fmt.Errorf("plugin %q is not available", name)
 				continue
 			}
 
