@@ -13,6 +13,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	containerd_utils "github.com/cedana/cedana/plugins/containerd/pkg/utils"
+	"github.com/cedana/cedana/plugins/runc/pkg/overlay"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/types/runc/options"
 	"github.com/containerd/containerd/contrib/nvidia"
@@ -163,6 +164,44 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		}()
 
 		log.Debug().Str("id", container.ID()).Msg("created container for restore")
+
+		// Restore the overlay RW (upper) layer into the freshly-prepared snapshot
+		// BEFORE the shim mounts the overlay (which happens later in NewTask ->
+		// mount.All, inside the containerd runtime).
+		//
+		// Overlayfs does not guarantee that files written directly into the
+		// upperdir of an already-mounted overlay become visible through the merged
+		// mount. Populating the upper post-mount (as the runc plugin's CRIU
+		// pre-restore callback does) can therefore leave the container reading the
+		// pristine lower-layer copy of a file (e.g. /etc/ld.so.cache), which is
+		// what selected the wrong libcuda. Populating pre-mount avoids this: the
+		// overlay is mounted on top of an already-complete upper. A marker is
+		// dropped so the runc plugin skips its now-redundant post-mount restore.
+		if mounts, merr := client.SnapshotService(snapshotter).Mounts(ctx, snapshotKey); merr != nil {
+			log.Warn().Err(merr).Str("snapshot_key", snapshotKey).Msg("could not resolve snapshot mounts; RW layer will be restored post-mount by the runc plugin")
+		} else {
+			for _, m := range mounts {
+				if m.Type != "overlay" {
+					continue
+				}
+				upperDir, uerr := overlay.UpperDirFromMountOptions(m.Options)
+				if uerr != nil {
+					log.Warn().Err(uerr).Msg("overlay snapshot mount has no upperdir; leaving RW layer to post-mount restore")
+					break
+				}
+				if overlay.AlreadyRestored(upperDir) {
+					break
+				}
+				log.Info().Str("upperDir", upperDir).Msg("restoring RW layer into snapshot upperdir before mount")
+				if rerr := overlay.RestoreToUpperDir(ctx, opts.DumpFs, upperDir); rerr != nil {
+					return nil, status.Errorf(codes.Internal, "failed to restore RW layer into upperdir %s: %v", upperDir, rerr)
+				}
+				if werr := overlay.WriteMarker(upperDir); werr != nil {
+					log.Warn().Err(werr).Str("upperDir", upperDir).Msg("failed to write RW layer restored marker")
+				}
+				break
+			}
+		}
 
 		ctx = context.WithValue(ctx, containerd_keys.CONTAINER_CONTEXT_KEY, container)
 
