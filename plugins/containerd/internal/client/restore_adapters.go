@@ -10,11 +10,11 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/overlay"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	containerd_keys "github.com/cedana/cedana/plugins/containerd/pkg/keys"
 	containerd_utils "github.com/cedana/cedana/plugins/containerd/pkg/utils"
-	"github.com/cedana/cedana/plugins/runc/pkg/overlay"
 	"github.com/containerd/containerd"
 	"github.com/containerd/containerd/api/types/runc/options"
 	"github.com/containerd/containerd/contrib/nvidia"
