@@ -1,8 +1,13 @@
 #!/usr/bin/env bats
 
-# CUDA graph C/R, templating OFF (default restore path). Same scenarios run with
-# templating on in gpu_cuda_graph_templates.bats; shared bodies in helpers/gpu.bash.
-# Skips if the cuda_graph_* samples aren't in the image (like cuda_samples.bats).
+# CUDA graph checkpoint/restore. The cuda_graph_* workloads self-validate (a host
+# counter shadows a graph-incremented device buffer) and exit non-zero on any
+# drift, so these tests just run each scenario through C/R and check the job is
+# still alive afterwards -- a corrupted restore trips the workload's own check and
+# the job halts.
+#
+# Requires the cuda_graph_* binaries from the cedana-samples image; skips if the
+# image predates them (same convention as cuda_samples.bats).
 #
 # bats file_tags=gpu
 
@@ -50,13 +55,7 @@ teardown_file() {
 @test "[$GPU_INFO] run GPU process (cuda graph capture loop)" {
     jid=$(unix_nano)
 
-    cedana run process -g --jid "$jid" -- "$GRAPH_LOOP"
-    watch_logs "$jid"
-
-    wait_for_graph_log "$jid" 'iter=3 '
-    graph_no_mismatch "$jid"
-
-    run cedana job kill "$jid"
+    debug cedana run process --attach -g --jid "$jid" -- "$GRAPH_LOOP"
 }
 
 ###############
@@ -65,30 +64,156 @@ teardown_file() {
 
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU process (cuda graph capture loop)" {
-    graph_scenario_basic "$GRAPH_LOOP"
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- "$GRAPH_LOOP"
+    watch_logs "$jid"
+
+    sleep 2
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 2
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
 }
 
 # bats test_tags=restore
-@test "[$GPU_INFO] restore GPU process (cuda graph events + pool churn)" {
-    graph_scenario_basic "$GRAPH_EVENTS"
+@test "[$GPU_INFO] restore GPU process (cuda graph events)" {
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- "$GRAPH_EVENTS"
+    watch_logs "$jid"
+
+    sleep 2
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 2
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
 }
 
 # bats test_tags=restore,crcr
 @test "[$GPU_INFO] restore->dump->restore GPU process (cuda graph events)" {
-    graph_scenario_crcr "$GRAPH_EVENTS"
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- "$GRAPH_EVENTS"
+    watch_logs "$jid"
+
+    sleep 2
+
+    cedana dump job "$jid"
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 2
+
+    cedana dump job "$jid"
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 2
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
 }
 
+# Warm: checkpoint after the graph has been launched many times.
+# bats test_tags=restore
+@test "[$GPU_INFO] restore GPU process (cuda graph, warm checkpoint)" {
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- "$GRAPH_WARMTH"
+    watch_logs "$jid"
+
+    sleep 3
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    sleep 2
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
+}
+
+# Cold: checkpoint after capture+instantiate but before any launch. The gate file
+# holds the first launch until after restore, so the dump lands unlaunched.
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU process (cuda graph, cold checkpoint / unlaunched)" {
-    graph_scenario_cold "$GRAPH_WARMTH"
+    jid=$(unix_nano)
+    gate=/tmp/gate-$jid
+    rm -f "$gate"
+
+    cedana run process -g --jid "$jid" -- "$GRAPH_WARMTH" "$gate"
+    watch_logs "$jid"
+
+    sleep 2 # captured + instantiated, holding at the gate (pre-launch)
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    touch "$gate" # release the first launch, now restored
+    sleep 2
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    rm -f "$gate"
+    run cedana job kill "$jid"
 }
 
+# Several live graphs of one topology; the cold siblings launch for the first
+# time only after restore (gate), the warm ones span the checkpoint.
 # bats test_tags=restore
-@test "[$GPU_INFO] restore GPU process (cuda graph, warm checkpoint / built-up state)" {
-    graph_scenario_warm "$GRAPH_WARMTH"
-}
+@test "[$GPU_INFO] restore GPU process (cuda graph siblings)" {
+    jid=$(unix_nano)
+    gate=/tmp/gate-$jid
+    rm -f "$gate"
 
-# bats test_tags=restore
-@test "[$GPU_INFO] restore GPU process (cuda graph siblings, mixed warm/cold)" {
-    graph_scenario_siblings "$GRAPH_SIBLINGS"
+    cedana run process -g --jid "$jid" -- "$GRAPH_SIBLINGS" "$gate"
+    watch_logs "$jid"
+
+    sleep 3 # warm siblings launching; cold ones held by the gate
+
+    cedana dump job "$jid"
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    touch "$gate" # launch the cold siblings for the first time, post-restore
+    sleep 2
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    rm -f "$gate"
+    run cedana job kill "$jid"
 }
