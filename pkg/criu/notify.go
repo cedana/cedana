@@ -21,7 +21,6 @@ type Notify interface {
 	NetworkUnlock(ctx context.Context) error
 	SetupNamespaces(ctx context.Context, pid int32) error
 	PostSetupNamespaces(ctx context.Context) error
-	SkipNamespaces(ctx context.Context, pid int32) error
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
@@ -92,11 +91,6 @@ func (c NoNotify) SetupNamespaces(ctx context.Context, pid int32) error {
 
 // PostSetupNamespaces NoNotify
 func (c NoNotify) PostSetupNamespaces(ctx context.Context) error {
-	return nil
-}
-
-// SkipNamespaces NoNotify
-func (c NoNotify) SkipNamespaces(ctx context.Context, pid int32) error {
 	return nil
 }
 
