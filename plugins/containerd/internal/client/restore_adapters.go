@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
@@ -177,29 +178,46 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		// what selected the wrong libcuda. Populating pre-mount avoids this: the
 		// overlay is mounted on top of an already-complete upper. A marker is
 		// dropped so the runc plugin skips its now-redundant post-mount restore.
+		log.Info().Str("snapshotter", snapshotter).Str("snapshot_key", snapshotKey).Msg("pre-mount RW layer restore: resolving snapshot mounts")
 		if mounts, merr := client.SnapshotService(snapshotter).Mounts(ctx, snapshotKey); merr != nil {
-			log.Warn().Err(merr).Str("snapshot_key", snapshotKey).Msg("could not resolve snapshot mounts; RW layer will be restored post-mount by the runc plugin")
+			log.Warn().Err(merr).Str("snapshot_key", snapshotKey).Msg("pre-mount RW layer restore: could not resolve snapshot mounts; RW layer will be restored post-mount by the runc plugin")
 		} else {
+			restoredPreMount := false
 			for _, m := range mounts {
+				log.Info().Str("type", m.Type).Str("source", m.Source).Msg("pre-mount RW layer restore: snapshot mount")
 				if m.Type != "overlay" {
 					continue
 				}
 				upperDir, uerr := overlay.UpperDirFromMountOptions(m.Options)
 				if uerr != nil {
-					log.Warn().Err(uerr).Msg("overlay snapshot mount has no upperdir; leaving RW layer to post-mount restore")
+					log.Warn().Err(uerr).Strs("options", m.Options).Msg("pre-mount RW layer restore: overlay mount has no upperdir; leaving RW layer to post-mount restore")
 					break
 				}
 				if overlay.AlreadyRestored(upperDir) {
+					log.Info().Str("upperDir", upperDir).Msg("pre-mount RW layer restore: upperdir already restored, skipping")
+					restoredPreMount = true
 					break
 				}
-				log.Info().Str("upperDir", upperDir).Msg("restoring RW layer into snapshot upperdir before mount")
+				log.Info().Str("upperDir", upperDir).Msg("pre-mount RW layer restore: restoring RW layer into snapshot upperdir BEFORE mount")
 				if rerr := overlay.RestoreToUpperDir(ctx, opts.DumpFs, upperDir); rerr != nil {
 					return nil, status.Errorf(codes.Internal, "failed to restore RW layer into upperdir %s: %v", upperDir, rerr)
 				}
 				if werr := overlay.WriteMarker(upperDir); werr != nil {
-					log.Warn().Err(werr).Str("upperDir", upperDir).Msg("failed to write RW layer restored marker")
+					log.Warn().Err(werr).Str("upperDir", upperDir).Msg("pre-mount RW layer restore: failed to write restored marker")
 				}
+				// Confirm the loader cache physically landed in the upperdir
+				// before the overlay is mounted on top of it.
+				cachePath := filepath.Join(upperDir, "etc", "ld.so.cache")
+				if st, serr := os.Stat(cachePath); serr != nil {
+					log.Warn().Err(serr).Str("path", cachePath).Msg("pre-mount RW layer restore: loader cache NOT present in upperdir after restore")
+				} else {
+					log.Info().Str("path", cachePath).Int64("size", st.Size()).Msg("pre-mount RW layer restore: loader cache present in upperdir after restore")
+				}
+				restoredPreMount = true
 				break
+			}
+			if !restoredPreMount {
+				log.Warn().Msg("pre-mount RW layer restore: no overlay upperdir was populated pre-mount; falling back to post-mount restore (overlay coherence NOT guaranteed)")
 			}
 		}
 
