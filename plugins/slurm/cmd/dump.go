@@ -16,11 +16,6 @@ func init() {
 	DumpCmd.PersistentFlags().String(slurm_flags.PidFlag.Full, "", "PID of the job process to dump")
 }
 
-// DumpCmd is the `cedana dump slurm` subcommand. It mirrors RestoreCmd: it only
-// stamps the request with the slurm type and details, letting the core dump
-// command dispatch through the slurm DumpMiddleware. Unlike restore, the slurm
-// dump adapters require the PID (SetPIDForDump / cgroup path resolution), so a
-// --pid flag is required in addition to --jid.
 var DumpCmd = &cobra.Command{
 	Use:    "slurm [args...]",
 	Short:  "Dump a Slurm job",
