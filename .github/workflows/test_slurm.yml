@@ -1089,6 +1089,25 @@ jobs:
           restart_cedana_slurm_daemon_unprivileged
           validate_slurm_propagator
 
+      - name: Assert unprivileged mode is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          c=$(docker ps -a --format '{{.Names}}' | grep -E '^slurm-compute-[0-9]+$' | head -1)
+          [ -n "$c" ] || { echo "no compute container found"; exit 1; }
+
+          caps=$(docker exec "$c" getcap /usr/bin/cedana-slurm 2>/dev/null || true)
+          echo "getcap: $caps"
+          echo "$caps" | grep -q cap_checkpoint_restore || { echo "cedana-slurm missing cap_checkpoint_restore"; exit 1; }
+          echo "$caps" | grep -q cap_sys_ptrace || { echo "cedana-slurm missing cap_sys_ptrace"; exit 1; }
+          echo "$caps" | grep -q cap_dac_read_search || { echo "cedana-slurm missing cap_dac_read_search"; exit 1; }
+
+          cfg=$(docker exec "$c" cat /etc/cedana/config.json 2>/dev/null || true)
+          echo "$cfg" | grep -Eq '"unprivileged"[[:space:]]*:[[:space:]]*true' || {
+            echo "slurm.unprivileged not true in /etc/cedana/config.json"; echo "$cfg"; exit 1;
+          }
+          echo "unprivileged mode configured on $c"
+
       - name: Run unprivileged C/R tests
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
@@ -1126,6 +1145,28 @@ jobs:
           fi
 
           exit "$test_exit_code"
+
+      - name: Assert monitor ran unprivileged
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          for c in $(docker ps -a --format '{{.Names}}' | grep -E '^slurm-compute-[0-9]+$'); do
+            log=$(docker exec "$c" cat /var/log/cedana-slurm.log 2>/dev/null || true)
+            markers=$(echo "$log" | grep -F 'checkpoint monitor mode' || true)
+            [ -n "$markers" ] || continue
+            echo "=== $c monitor mode markers ==="
+            echo "$markers"
+            if echo "$markers" | grep -q 'unprivileged=false'; then
+              echo "monitor ran PRIVILEGED on $c"; exit 1
+            fi
+            if echo "$markers" | grep -q 'uid=0'; then
+              echo "monitor ran as root (uid=0) on $c"; exit 1
+            fi
+            echo "$markers" | grep -q 'unprivileged=true' && found=1
+          done
+          [ "$found" -eq 1 ] || { echo "no unprivileged monitor marker found; monitor did not run"; exit 1; }
+          echo "confirmed: monitor ran unprivileged"
 
       - name: Collect SLURM debug logs
         if: always()

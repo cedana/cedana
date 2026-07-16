@@ -1217,10 +1217,9 @@ start_cedana_slurm_daemon() {
     done
 }
 
-# Restart the cedana-slurm daemon with CEDANA_SLURM_UNPRIVILEGED=1 on all nodes.
-# Sets CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the binary via setcap,
-# then starts the daemon with CEDANA_SLURM_UNPRIVILEGED=1 so both the daemon and any monitors
-# it spawns use the embedded dump path.
+# Switch all SLURM nodes to the unprivileged/embedded dump path: setcap the binary and persist
+# slurm.unprivileged=true to /etc/cedana/config.json (the SPANK-spawned monitor reads it there,
+# not from the daemon env).
 restart_cedana_slurm_daemon_unprivileged() {
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
@@ -1245,6 +1244,13 @@ restart_cedana_slurm_daemon_unprivileged() {
             error_log "Failed to set capabilities on cedana-slurm in $c"
             return 1
         }
+        docker exec "$c" mkdir -p /etc/cedana
+        docker exec -e CEDANA_SLURM_UNPRIVILEGED=1 \
+            "$c" /usr/local/bin/cedana --merge-config version ||
+            {
+                error_log "Failed to persist slurm.unprivileged into config on $c"
+                return 1
+            }
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
