@@ -84,13 +84,13 @@ if [ -d /proc/driver/nvidia/gpus/ ]; then
                 echo "WARNING: CUDA driver library (libcuda.so.1) not found in ldconfig cache" >&2
                 # Configure dynamic linker for NVIDIA libraries on the GPU K8 host
                 nvidia_lib_path="/run/nvidia/driver/usr/lib/x86_64-linux-gnu"
-                if [ -d "/host$nvidia_lib_path" ]; then
+                if [ -d "$nvidia_lib_path" ]; then
                     echo "NVIDIA driver libraries detected, checking ldconfig configuration ..."
-                    if [ ! -f "/host/etc/ld.so.conf.d/nvidia.conf" ] || ! grep -qxF "$nvidia_lib_path" "/host/etc/ld.so.conf.d/nvidia.conf" 2>/dev/null; then
+                    if [ ! -f "/etc/ld.so.conf.d/nvidia.conf" ] || ! grep -qxF "$nvidia_lib_path" "/etc/ld.so.conf.d/nvidia.conf" 2>/dev/null; then
                         echo "Adding ldconfig path: $nvidia_lib_path"
-                        echo "$nvidia_lib_path" >>/host/etc/ld.so.conf.d/nvidia.conf
-                        if ! chroot /host ldconfig; then
-                            echo "Failed to update the host ldconfig cache."
+                        echo "$nvidia_lib_path" >>/etc/ld.so.conf.d/nvidia.conf
+                        if ! /sbin/ldconfig; then
+                            echo "Failed to update ldconfig cache."
                         fi
                         echo "ldconfig has been set successfully!"
                     else
