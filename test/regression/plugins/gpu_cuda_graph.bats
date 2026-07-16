@@ -55,7 +55,16 @@ teardown_file() {
 @test "[$GPU_INFO] run GPU process (cuda graph capture loop)" {
     jid=$(unix_nano)
 
-    debug cedana run process --attach -g --jid "$jid" -- "$GRAPH_LOOP"
+    cedana run process -g --jid "$jid" -- "$GRAPH_LOOP"
+    watch_logs "$jid"
+
+    sleep 2
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    run cedana job kill "$jid"
 }
 
 ###############
