@@ -1275,6 +1275,15 @@ restart_cedana_slurm_daemon_unprivileged() {
             return 1
         fi
     done
+
+    # slurmd caches the SPANK plugin's config at startup; restart it so SPANK
+    # reloads unprivileged=true and drops the monitor to the job user.
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd || {
+            error_log "Failed to restart slurmd on $c"
+            return 1
+        }
+    done
 }
 
 # Restart the cedana-slurm daemon in privileged mode (using cedana client) on all nodes.
