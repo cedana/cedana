@@ -942,6 +942,12 @@ jobs:
     needs: slurm-ansible
     runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        nfs:
+          - root_squash
+          - no_root_squash
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -1039,12 +1045,26 @@ jobs:
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           GPU: "0"
           LOGIN_NODES: "1"
-          NFS_ROOT_SQUASH: "0"
+          NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
           setup_slurm_cluster
+          setup_slurm_accounting
           install_cedana_in_slurm
+
+      - name: Setup SLURM samples
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: "0"
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          setup_slurm_samples
 
       - name: Register SLURM cluster and start daemon (unprivileged)
         shell: bash
@@ -1074,6 +1094,7 @@ jobs:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           GPU: "0"
         run: |
@@ -1149,13 +1170,13 @@ jobs:
             repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm (Unprivileged, amd64)"
+            testEnvironment="cedana/cedana-test" reportName="Slurm (Unprivileged, amd64, ${{ matrix.nfs }})"
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-amd64-slurm-unprivileged
+          name: test-report-amd64-slurm-unprivileged-${{ matrix.nfs }}
           path: |
             /tmp/report*.json
 
@@ -1163,7 +1184,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: slurm-debug-logs-amd64-unprivileged
+          name: slurm-debug-logs-amd64-unprivileged-${{ matrix.nfs }}
           path: |
             /tmp/slurm-debug/**
           if-no-files-found: warn
@@ -1171,7 +1192,7 @@ jobs:
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
-    needs: slurm
+    needs: [slurm, slurm-preemption, slurm-unprivileged]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
