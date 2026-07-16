@@ -15,9 +15,10 @@ if [ -d "/host$nvidia_lib_path" ]; then
     echo "NVIDIA drivers detected, checking ldconfig configuration!"
     if [ ! -f "/host/etc/ld.so.conf.d/nvidia.conf" ] || ! grep -qxF "$nvidia_lib_path" "/host/etc/ld.so.conf.d/nvidia.conf" 2>/dev/null; then
         echo "Adding ldconfig path: $nvidia_lib_path"
-        mkdir -p /host/etc/ld.so.conf.d 2>/dev/null || true
-        echo "$nvidia_lib_path" >/host/etc/ld.so.conf.d/nvidia.conf 2>/dev/null || true
-        chroot /host ldconfig 2>/dev/null || true
+        echo "$nvidia_lib_path" >>/host/etc/ld.so.conf.d/nvidia.conf
+        if ! chroot /host ldconfig; then
+            echo "Failed to update the host ldconfig cache."
+        fi
         echo "ldconfig has been set successfully!"
     else
         echo "NVIDIA ldconfig path has already been configured."
