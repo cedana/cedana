@@ -1,15 +1,7 @@
 #!/usr/bin/env bats
 
-# Same CUDA graph C/R scenarios as gpu_cuda_graph.bats, but with template-based
-# restore enabled (CEDANA_GPU_TEMPLATES_ENABLED=true). That file covers the
-# default (non-template) path; this one exercises the template buckets the
-# feature adds -- launched-before-dump graphs go EAGER, captured-but-unlaunched
-# ones DEFER to first post-restore launch. Same self-validating workloads: any
-# drift halts the job and trips the assert. (Mirrors how gpu_dedup.bats re-runs a
-# representative scenario with its own gate enabled.)
-#
-# Requires the cuda_graph_* binaries from the cedana-samples image; skips if the
-# image predates them (same convention as cuda_samples.bats).
+# gpu_cuda_graph.bats scenarios with template-based restore on. Skips if the
+# samples image predates the binaries.
 #
 # bats file_tags=gpu
 
@@ -49,7 +41,7 @@ teardown_file() {
     teardown_file_daemon
 }
 
-# Warm (EAGER bucket): launched many times before the checkpoint.
+# Warm: launched before dump -> EAGER bucket.
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU process (cuda graph, warm checkpoint) [templated]" {
     jid=$(unix_nano)
@@ -73,8 +65,7 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-# Cold (DEFERRED bucket): captured + instantiated but never launched at dump.
-# The gate holds the first launch until after restore, so the dump lands unlaunched.
+# Cold: unlaunched at dump (gate holds first launch until post-restore) -> DEFERRED.
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU process (cuda graph, cold checkpoint / unlaunched) [templated]" {
     jid=$(unix_nano)
@@ -102,9 +93,7 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-# Siblings (mixed buckets): several graphs of one topology; warm ones span the
-# checkpoint (EAGER), cold ones launch for the first time only after restore
-# (DEFERRED against the warm same-topology template).
+# Siblings: same-topology graphs at mixed warmth -> EAGER + DEFERRED.
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU process (cuda graph siblings) [templated]" {
     jid=$(unix_nano)
