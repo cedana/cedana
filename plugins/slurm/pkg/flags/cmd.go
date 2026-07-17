@@ -7,4 +7,5 @@ type Flag struct {
 
 var (
 	JidFlag = Flag{Full: "jid"}
+	PidFlag = Flag{Full: "pid"}
 )
