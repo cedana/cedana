@@ -9,17 +9,18 @@
 //
 // IMPORTANT (overlayfs coherence): the Linux overlayfs contract states that
 // modifying the underlying upper/lower directories of a *mounted* overlay is
-// undefined behavior. A file created directly in the upperdir after the merged
-// parent directory has already been cached is not guaranteed to become visible
-// through the overlay mount. There are two safe ways to restore the RW layer:
+// undefined behavior — a file created in the upperdir of an already-mounted,
+// already-traversed overlay is not guaranteed to be visible through the merged
+// mount, and truncating an in-use file through the merged mount fails with
+// ETXTBSY. Therefore the RW layer must be restored into the upperdir *before*
+// the overlay is mounted:
 //
-//   - Before the overlay is mounted: write straight into the upperdir
-//     (RestoreToUpperDir). Only valid pre-mount.
-//   - After the overlay is mounted: write THROUGH the merged mount
-//     (RestoreThroughMount). The kernel performs the copy-up itself so its
-//     dcache stays coherent. This is the only safe option once the overlay is
-//     already mounted (e.g. the runc plugin running under the containerd shim
-//     for a Kubernetes pod).
+//   - Kubernetes pods: the containerd shim (cedana-containerd-runtime) populates
+//     the upperdir just before it mounts the rootfs.
+//   - CLI `cedana restore`: the containerd plugin populates the freshly-prepared
+//     snapshot's upperdir before NewTask mounts it.
+//
+// Both drop a marker so the runc plugin's post-mount restore is a no-op.
 package overlay
 
 import (
@@ -80,9 +81,9 @@ func WriteMarker(upperDir string) error {
 }
 
 // UpperDirFromMountOptions extracts the upperdir from a set of overlay mount
-// options (e.g. those returned by a containerd snapshotter's Mounts call).
-// Returns an error if there is no upperdir option (e.g. a read-only view mount
-// or a non-overlay filesystem).
+// options (e.g. those returned by a containerd snapshotter's Mounts call, or a
+// shim's rootfs mount spec). Returns an error if there is no upperdir option
+// (e.g. a read-only view mount or a non-overlay filesystem).
 func UpperDirFromMountOptions(options []string) (string, error) {
 	for _, opt := range options {
 		if after, ok := strings.CutPrefix(opt, "upperdir="); ok {
@@ -92,33 +93,14 @@ func UpperDirFromMountOptions(options []string) (string, error) {
 	return "", fmt.Errorf("upperdir not found in overlay mount options")
 }
 
-// RestoreToUpperDir writes the RW layer straight into upperDir. This is ONLY
-// coherent if the overlay is not yet mounted (pre-mount population). If the
-// overlay is already mounted, use RestoreThroughMount instead.
-func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) error {
-	return restore(ctx, dump, upperDir, false)
-}
-
-// RestoreThroughMount writes the RW layer THROUGH the merged overlay mount at
-// root (the mounted rootfs). The kernel performs copy-up, so the merged view is
-// coherent immediately. This is the correct way to restore into an
-// already-mounted overlay. Whiteouts (character device 0/0 in the dump) are
-// reproduced by deleting the corresponding path through the mount, which makes
-// overlayfs create the whiteout.
-func RestoreThroughMount(ctx context.Context, dump afero.Fs, root string) error {
-	return restore(ctx, dump, root, true)
-}
-
-// restore reads the RW-layer batches from the dump filesystem and writes them
-// under targetRoot. When throughMount is true, targetRoot is a live overlay
-// mount: whiteouts are reproduced via delete and overlay-internal xattrs are
-// skipped. When false, targetRoot is a raw upperdir and entries are written
-// verbatim (whiteouts as char 0/0 devices).
+// RestoreToUpperDir reads the RW-layer batches from the dump filesystem and
+// writes them into upperDir.
 //
-// If the dump contains no RW-layer manifest, it is a no-op. The operation is
-// idempotent (existing symlinks/devices/pipes are replaced) so a redundant
-// second pass does not fail with EEXIST.
-func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount bool) (err error) {
+// This must be called BEFORE the overlay is mounted (see the package doc). The
+// operation is idempotent with respect to symlinks, devices and named pipes (an
+// existing target is replaced) so a redundant second pass does not fail with
+// EEXIST. If the dump contains no RW-layer manifest, it is a no-op.
+func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err error) {
 	var manifestFile io.ReadCloser
 	manifestPath := dumpRWLayerManifestKey
 	manifestFile, err = dump.Open(manifestPath)
@@ -130,12 +112,12 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 	defer manifestFile.Close()
 
 	totalEntries := 0
-	log.Info().Str("target", targetRoot).Bool("throughMount", throughMount).Msg("RW layer restore starting")
+	log.Info().Str("upperDir", upperDir).Msg("RW layer restore starting")
 	defer func() {
 		if err != nil {
-			log.Error().Err(err).Str("target", targetRoot).Msg("RW layer restore failed")
+			log.Error().Err(err).Str("upperDir", upperDir).Msg("RW layer restore failed")
 		} else {
-			log.Info().Str("target", targetRoot).Int("entries", totalEntries).Msg("RW layer restore complete")
+			log.Info().Str("upperDir", upperDir).Int("entries", totalEntries).Msg("RW layer restore complete")
 		}
 	}()
 
@@ -189,30 +171,17 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 
 			totalEntries++
 			mode := rwLayerFile.GetMode()
-			fullPath := filepath.Join(targetRoot, relPath)
+			fullPath := filepath.Join(upperDir, relPath)
 			isLoaderCache := strings.HasSuffix(relPath, "ld.so.cache")
 
 			parentDir := filepath.Dir(fullPath)
-			if parentDir != targetRoot {
+			if parentDir != upperDir {
 				if err := os.MkdirAll(parentDir, 0o755); err != nil {
 					return fmt.Errorf("failed to create parent directory %s: %v", parentDir, err)
 				}
 			}
 
 			fileType := mode & syscall.S_IFMT
-			isWhiteout := fileType == syscall.S_IFCHR && rwLayerFile.GetDevMajor() == 0 && rwLayerFile.GetDevMinor() == 0
-
-			// A whiteout in the dump means the container deleted a path that
-			// exists in a lower layer. Through the mount we reproduce that by
-			// deleting the path (overlay creates the whiteout for us). Into a raw
-			// upperdir we keep writing the literal char 0/0 device.
-			if throughMount && isWhiteout {
-				if err := os.RemoveAll(fullPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-					return fmt.Errorf("failed to apply whiteout %s: %v", fullPath, err)
-				}
-				log.Trace().Str("path", fullPath).Msg("applied whiteout (delete through mount)")
-				continue
-			}
 
 			switch {
 			case fileType == syscall.S_IFLNK: // symlink
@@ -222,7 +191,7 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 				if err := os.Symlink(rwLayerFile.GetSymlinkTarget(), fullPath); err != nil {
 					return fmt.Errorf("failed to create symlink %s: %v", fullPath, err)
 				}
-			case fileType == syscall.S_IFBLK || fileType == syscall.S_IFCHR: // device (incl. raw whiteout in upperdir mode)
+			case fileType == syscall.S_IFBLK || fileType == syscall.S_IFCHR: // device / whiteout
 				if err := replaceExisting(fullPath); err != nil {
 					return err
 				}
@@ -238,15 +207,21 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 					log.Warn().Err(err).Str("path", fullPath).Msg("failed to set directory permissions")
 				}
 			case fileType == syscall.S_IFREG: // regular file
-				if err := writeRegularFileAtomic(fullPath, os.FileMode(mode&0o7777), reader); err != nil {
+				outFile, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(mode&0o7777))
+				if err != nil {
+					return fmt.Errorf("failed to create file %s: %v", fullPath, err)
+				}
+				if err := writeFileContent(reader, outFile); err != nil {
+					outFile.Close()
 					return err
 				}
+				outFile.Close()
 
 				if isLoaderCache {
 					if st, serr := os.Stat(fullPath); serr != nil {
 						log.Warn().Err(serr).Str("path", fullPath).Msg("loader cache missing right after write")
 					} else {
-						log.Info().Str("path", fullPath).Int64("size", st.Size()).Bool("throughMount", throughMount).Msg("wrote loader cache (ld.so.cache)")
+						log.Info().Str("path", fullPath).Int64("size", st.Size()).Msg("wrote loader cache (ld.so.cache) into upperdir")
 					}
 				}
 			case fileType == syscall.S_IFIFO: // named pipe
@@ -272,11 +247,6 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 			}
 
 			for name, encodedValue := range rwLayerFile.GetXattrs() {
-				// overlay-internal xattrs cannot (and must not) be set through a
-				// live mount; the kernel manages them.
-				if throughMount && strings.HasPrefix(name, "trusted.overlay.") {
-					continue
-				}
 				value, err := base64.StdEncoding.DecodeString(encodedValue)
 				if err != nil {
 					log.Warn().Err(err).Str("xattr", name).Str("path", fullPath).Msg("failed to decode xattr")
@@ -288,7 +258,7 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 			}
 
 			// os.Chtimes follows symlinks, so skip them: driver symlinks (e.g.
-			// libcuda.so -> a host-injected target not present in the overlay)
+			// libcuda.so -> a host-injected target not present in the layer)
 			// would otherwise fail with ENOENT noise.
 			if rwLayerFile.GetMtime() > 0 && fileType != syscall.S_IFLNK {
 				mtime := time.Unix(0, int64(rwLayerFile.GetMtime()))
@@ -300,44 +270,6 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 	}
 
 	unix.Sync()
-	return nil
-}
-
-// writeRegularFileAtomic writes a regular file's content (read as chunk
-// messages from reader) to path via a temp file + atomic rename.
-//
-// The rename is what makes this safe to run THROUGH a live mount: when the
-// target is a currently-executing binary or a mapped shared library, a direct
-// open(O_TRUNC) fails with ETXTBSY. Renaming a fresh inode over the path swaps
-// only the directory entry — any process still running the old binary keeps its
-// inode. This is common on restore because cedana's own injected GPU
-// controller/interception libraries are already running by the time the RW
-// layer is restored.
-//
-// The reader is always consumed so the stream stays aligned for the next entry.
-func writeRegularFileAtomic(path string, mode os.FileMode, reader *bufio.Reader) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".cedana-rw-*")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file in %s: %v", dir, err)
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op once renamed
-
-	if err := writeFileContent(reader, tmp); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		tmp.Close()
-		return fmt.Errorf("failed to chmod temp for %s: %v", path, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("failed to close temp for %s: %v", path, err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		return fmt.Errorf("failed to rename into place %s: %v", path, err)
-	}
 	return nil
 }
 
