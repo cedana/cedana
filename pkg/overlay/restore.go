@@ -238,16 +238,9 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 					log.Warn().Err(err).Str("path", fullPath).Msg("failed to set directory permissions")
 				}
 			case fileType == syscall.S_IFREG: // regular file
-				outFile, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(mode&0o7777))
-				if err != nil {
-					return fmt.Errorf("failed to create file %s: %v", fullPath, err)
-				}
-
-				if err := writeFileContent(reader, outFile); err != nil {
-					outFile.Close()
+				if err := writeRegularFileAtomic(fullPath, os.FileMode(mode&0o7777), reader); err != nil {
 					return err
 				}
-				outFile.Close()
 
 				if isLoaderCache {
 					if st, serr := os.Stat(fullPath); serr != nil {
@@ -294,7 +287,10 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 				}
 			}
 
-			if rwLayerFile.GetMtime() > 0 {
+			// os.Chtimes follows symlinks, so skip them: driver symlinks (e.g.
+			// libcuda.so -> a host-injected target not present in the overlay)
+			// would otherwise fail with ENOENT noise.
+			if rwLayerFile.GetMtime() > 0 && fileType != syscall.S_IFLNK {
 				mtime := time.Unix(0, int64(rwLayerFile.GetMtime()))
 				if err := os.Chtimes(fullPath, mtime, mtime); err != nil {
 					log.Warn().Err(err).Str("path", fullPath).Msg("failed to set mtime")
@@ -304,6 +300,44 @@ func restore(ctx context.Context, dump afero.Fs, targetRoot string, throughMount
 	}
 
 	unix.Sync()
+	return nil
+}
+
+// writeRegularFileAtomic writes a regular file's content (read as chunk
+// messages from reader) to path via a temp file + atomic rename.
+//
+// The rename is what makes this safe to run THROUGH a live mount: when the
+// target is a currently-executing binary or a mapped shared library, a direct
+// open(O_TRUNC) fails with ETXTBSY. Renaming a fresh inode over the path swaps
+// only the directory entry — any process still running the old binary keeps its
+// inode. This is common on restore because cedana's own injected GPU
+// controller/interception libraries are already running by the time the RW
+// layer is restored.
+//
+// The reader is always consumed so the stream stays aligned for the next entry.
+func writeRegularFileAtomic(path string, mode os.FileMode, reader *bufio.Reader) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, ".cedana-rw-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file in %s: %v", dir, err)
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op once renamed
+
+	if err := writeFileContent(reader, tmp); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return fmt.Errorf("failed to chmod temp for %s: %v", path, err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close temp for %s: %v", path, err)
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		return fmt.Errorf("failed to rename into place %s: %v", path, err)
+	}
 	return nil
 }
 
