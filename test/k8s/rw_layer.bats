@@ -8,6 +8,15 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
+setup_file() {
+    # This test only applies when the pod rootfs is an overlay mount (the only
+    # case with an RW/upper layer to dump + restore). On K3s CI the pods run in a
+    # nested privileged container whose rootfs is not an overlay mount point
+    if [ "$(echo "${PROVIDER:-}" | tr '[:upper:]' '[:lower:]')" = "k3s" ]; then
+        skip "RW-layer overlay dump/restore requires an overlay-mounted rootfs (not available on K3s CI)"
+    fi
+}
+
 # Regression test for the overlay RW-layer restore coherence bug (CED-2220).
 #
 # The bug: on restore the container's RW (upper) layer must be repopulated into
@@ -20,14 +29,6 @@ load ../helpers/propagator
 # container kept reading the pristine image copy of /etc/ld.so.cache -> the
 # loader resolved the wrong libcuda. The fix populates the upperdir before the
 # overlay is mounted (in the containerd shim / daemon).
-#
-# This reproduces the exact mechanism WITHOUT GPUs. A file that exists in the image
-# (lower layer) and is modified by the container (upper layer) must, after
-# restore, be served from the upper. We use a plain existing file
-# (/etc/debian_version) as the stand-in: overwrite it, checkpoint + restore, then
-# a FRESH read through the merged overlay must return the new content:
-#   - PASS (fixed):   upper is served  -> new content.
-#   - FAIL (pre-fix): stale lower served -> original image content.
 
 # bats test_tags=dump,restore,rwlayer
 @test "Restore: RW-layer file shadows image copy (overlay coherence)" {
