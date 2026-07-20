@@ -21,29 +21,25 @@ load ../helpers/propagator
 # loader resolved the wrong libcuda. The fix populates the upperdir before the
 # overlay is mounted (in the containerd shim / daemon).
 #
-# This reproduces the exact mechanism WITHOUT GPUs: the container regenerates
-# /etc/ld.so.cache (so the new cache lives in the RW/upper layer, shadowing the
-# image's lower copy), we checkpoint + restore, then a FRESH `ldconfig -p` in the
-# restored container reads the cache through the merged overlay:
-#   - PASS (fixed):   upper cache is served  -> the added entry is present.
-#   - FAIL (pre-fix): stale lower cache served -> the added entry is missing.
+# This reproduces the exact mechanism WITHOUT GPUs. A file that exists in the image
+# (lower layer) and is modified by the container (upper layer) must, after
+# restore, be served from the upper. We use a plain existing file
+# (/etc/debian_version) as the stand-in: overwrite it, checkpoint + restore, then
+# a FRESH read through the merged overlay must return the new content:
+#   - PASS (fixed):   upper is served  -> new content.
+#   - FAIL (pre-fix): stale lower served -> original image content.
 
 # bats test_tags=dump,restore,rwlayer
-@test "Restore: RW-layer ld.so.cache shadows image copy (overlay coherence)" {
-    local marker="libcedanarwtest"
+@test "Restore: RW-layer file shadows image copy (overlay coherence)" {
+    local marker="CEDANA_RW_LAYER_OK"
 
-    # Regenerate the loader cache inside the container: adding a lib dir + running
-    # ldconfig rewrites /etc/ld.so.cache into the upper layer, shadowing the
-    # image's copy in the lower layer
+    # Overwrite an existing image file so the new content lands in the RW (upper)
+    # layer, shadowing the image's copy in the lower layer.
     local script
     script=$(
         cat <<EOF
 set -e
-mkdir -p /opt/${marker}
-cp /lib/x86_64-linux-gnu/libc.so.6 /opt/${marker}/${marker}.so.1
-echo /opt/${marker} > /etc/ld.so.conf.d/${marker}.conf
-ldconfig
-ldconfig -p | grep -q ${marker} || { echo "setup failed: marker missing from cache before checkpoint"; exit 1; }
+echo ${marker} > /etc/debian_version
 echo RW_TEST_READY
 while true; do date; sleep 1; done
 EOF
@@ -73,10 +69,10 @@ EOF
     [ -n "$restored" ]
     validate_pod "$restored" 120
 
-    # A fresh exec reads /etc/ld.so.cache through the merged overlay
-    run kubectl exec "$restored" -n "$NAMESPACE" -- ldconfig -p
+    # A fresh exec reads the file through the merged overlay
+    run kubectl exec "$restored" -n "$NAMESPACE" -- cat /etc/debian_version
     if [ "$status" -ne 0 ] || ! echo "$output" | grep -q "$marker"; then
-        error_log "restored loader cache is missing '$marker' -> RW upper layer not visible through the overlay (coherence regression)"
+        error_log "restored /etc/debian_version is stale ('$marker' missing) -> RW upper layer not visible through the overlay (coherence regression)"
         echo "$output"
         kubectl delete pod "$restored" -n "$NAMESPACE" || true
         return 1
