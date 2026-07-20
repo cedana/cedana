@@ -1217,9 +1217,10 @@ start_cedana_slurm_daemon() {
     done
 }
 
-# Switch all SLURM nodes to the unprivileged/embedded dump path: setcap the binary and persist
+# Switch all SLURM nodes to the unprivileged dump path: setcap the binaries and persist
 # slurm.unprivileged=true to /etc/cedana/config.json (the SPANK-spawned monitor reads it there,
-# not from the daemon env).
+# not from the daemon env). The monitor runs as the job user and shells out to `cedana dump
+# slurm`, which drives criu, so cedana and criu also need the caps.
 restart_cedana_slurm_daemon_unprivileged() {
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
@@ -1233,15 +1234,18 @@ restart_cedana_slurm_daemon_unprivileged() {
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
-    debug_log "Restarting cedana-slurm daemon (unprivileged/embedded) on SLURM nodes..."
+    debug_log "Restarting cedana-slurm daemon (unprivileged) on SLURM nodes..."
 
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec "$c" bash -c '
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm 2>/dev/null || true
+            caps=cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip
+            setcap $caps /usr/bin/cedana-slurm
+            setcap $caps /usr/local/bin/cedana-slurm 2>/dev/null || true
+            setcap $caps /usr/local/bin/cedana
+            setcap $caps /usr/local/bin/criu
         ' || {
-            error_log "Failed to set capabilities on cedana-slurm in $c"
+            error_log "Failed to set capabilities on cedana/criu binaries in $c"
             return 1
         }
         docker exec "$c" mkdir -p /etc/cedana
