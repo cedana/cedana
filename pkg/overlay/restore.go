@@ -26,6 +26,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -113,13 +114,13 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 
 	var batchCount int
 	if err := json.Unmarshal(manifestData, &manifest); err != nil {
-		if _, err = fmt.Sscanf(string(manifestData), "%d\n", &batchCount); err != nil {
-			return fmt.Errorf("failed to parse manifest: %v", err)
+		if _, err = fmt.Sscanf(string(manifestData), "%d\n", &batchCount); err != nil || batchCount < 0 {
+			return fmt.Errorf("failed to parse manifest (invalid batch count): %v", err)
 		}
 	} else {
 		tb, ok := manifest["total_batches"].(float64)
-		if !ok {
-			return fmt.Errorf("manifest total_batches is missing or not a number: %v", manifest["total_batches"])
+		if !ok || tb < 0 || tb != math.Trunc(tb) || tb > math.MaxInt32 {
+			return fmt.Errorf("manifest total_batches is missing or not a non-negative integer: %v", manifest["total_batches"])
 		}
 		batchCount = int(tb)
 	}
