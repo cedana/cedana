@@ -1096,11 +1096,13 @@ jobs:
           c=$(docker ps -a --format '{{.Names}}' | grep -E '^slurm-compute-[0-9]+$' | head -1)
           [ -n "$c" ] || { echo "no compute container found"; exit 1; }
 
-          caps=$(docker exec "$c" getcap /usr/bin/cedana-slurm 2>/dev/null || true)
-          echo "getcap: $caps"
-          echo "$caps" | grep -q cap_checkpoint_restore || { echo "cedana-slurm missing cap_checkpoint_restore"; exit 1; }
-          echo "$caps" | grep -q cap_sys_ptrace || { echo "cedana-slurm missing cap_sys_ptrace"; exit 1; }
-          echo "$caps" | grep -q cap_dac_read_search || { echo "cedana-slurm missing cap_dac_read_search"; exit 1; }
+          for bin in /usr/bin/cedana-slurm /usr/bin/cedana /usr/bin/criu; do
+            caps=$(docker exec "$c" getcap "$bin" 2>/dev/null || true)
+            echo "getcap $bin: $caps"
+            for cap in cap_checkpoint_restore cap_sys_ptrace cap_dac_read_search; do
+              echo "$caps" | grep -q "$cap" || { echo "$bin missing $cap"; exit 1; }
+            done
+          done
 
           cfg=$(docker exec "$c" cat /etc/cedana/config.json 2>/dev/null || true)
           echo "$cfg" | grep -Eq '"unprivileged"[[:space:]]*:[[:space:]]*true' || {

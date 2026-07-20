@@ -1217,10 +1217,7 @@ start_cedana_slurm_daemon() {
     done
 }
 
-# Switch all SLURM nodes to the unprivileged dump path: setcap the binaries and persist
-# slurm.unprivileged=true to /etc/cedana/config.json (the SPANK-spawned monitor reads it there,
-# not from the daemon env). The monitor runs as the job user and shells out to `cedana dump
-# slurm`, which drives criu, so cedana and criu also need the caps.
+# Switch all SLURM nodes to the unprivileged dump path.
 restart_cedana_slurm_daemon_unprivileged() {
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
@@ -1240,12 +1237,13 @@ restart_cedana_slurm_daemon_unprivileged() {
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec "$c" bash -c '
             caps=cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip
+            install -m 0755 /usr/local/bin/cedana /usr/bin/cedana
+            install -m 0755 /usr/local/bin/criu /usr/bin/criu
             setcap $caps /usr/bin/cedana-slurm
-            setcap $caps /usr/local/bin/cedana-slurm 2>/dev/null || true
-            setcap $caps /usr/local/bin/cedana
-            setcap $caps /usr/local/bin/criu
+            setcap $caps /usr/bin/cedana
+            setcap $caps /usr/bin/criu
         ' || {
-            error_log "Failed to set capabilities on cedana/criu binaries in $c"
+            error_log "Failed to stage/setcap cedana/criu binaries in $c"
             return 1
         }
         docker exec "$c" mkdir -p /etc/cedana
@@ -1255,6 +1253,16 @@ restart_cedana_slurm_daemon_unprivileged() {
                 error_log "Failed to persist slurm.unprivileged into config on $c"
                 return 1
             }
+        docker exec "$c" python3 - <<'PY' || { error_log "Failed to set node-local bin paths in config on $c"; return 1; }
+import json
+p = "/etc/cedana/config.json"
+with open(p) as f:
+    c = json.load(f)
+c.setdefault("plugins", {})["bin_dir"] = "/usr/bin"
+c.setdefault("criu", {})["binary_path"] = "/usr/bin/criu"
+with open(p, "w") as f:
+    json.dump(c, f, indent=2)
+PY
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -1280,8 +1288,6 @@ restart_cedana_slurm_daemon_unprivileged() {
         fi
     done
 
-    # slurmd caches the SPANK plugin's config at startup; restart it so SPANK
-    # reloads unprivileged=true and drops the monitor to the job user.
     for c in "${compute_containers[@]}"; do
         _svc_restart "$c" slurmd /usr/sbin/slurmd || {
             error_log "Failed to restart slurmd on $c"
