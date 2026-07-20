@@ -169,15 +169,6 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		// Restore the overlay RW (upper) layer into the freshly-prepared snapshot
 		// BEFORE the shim mounts the overlay (which happens later in NewTask ->
 		// mount.All, inside the containerd runtime).
-		//
-		// Overlayfs does not guarantee that files written directly into the
-		// upperdir of an already-mounted overlay become visible through the merged
-		// mount. Populating the upper post-mount (as the runc plugin's CRIU
-		// pre-restore callback does) can therefore leave the container reading the
-		// pristine lower-layer copy of a file (e.g. /etc/ld.so.cache), which is
-		// what selected the wrong libcuda. Populating pre-mount avoids this: the
-		// overlay is mounted on top of an already-complete upper. A marker is
-		// dropped so the runc plugin skips its now-redundant post-mount restore.
 		log.Info().Str("snapshotter", snapshotter).Str("snapshot_key", snapshotKey).Msg("pre-mount RW layer restore: resolving snapshot mounts")
 		if mounts, merr := client.SnapshotService(snapshotter).Mounts(ctx, snapshotKey); merr != nil {
 			log.Warn().Err(merr).Str("snapshot_key", snapshotKey).Msg("pre-mount RW layer restore: could not resolve snapshot mounts; RW layer will be restored post-mount by the runc plugin")

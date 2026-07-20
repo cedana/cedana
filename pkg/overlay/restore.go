@@ -1,20 +1,14 @@
 // Package overlay provides shared helpers for restoring a container's
-// overlayfs RW (upper) layer from a Cedana dump.
+// overlayfs RW (upper) layer from a dump.
 //
-// It lives in the parent module (not under plugins/runc, which is a git
-// submodule whose contents are not shipped when github.com/cedana/cedana is
-// consumed as a versioned dependency) so that the runc plugin, the containerd
-// plugin, AND the containerd runtime shim (cedana-containerd-runtime) can all
+// It lives in the parent module so that runc plugin, the containerd
+// plugin, and the containerd runtime shim (cedana-containerd-runtime) can all
 // use it.
 //
-// IMPORTANT (overlayfs coherence): the Linux overlayfs contract states that
-// modifying the underlying upper/lower directories of a *mounted* overlay is
-// undefined behavior — a file created in the upperdir of an already-mounted,
-// already-traversed overlay is not guaranteed to be visible through the merged
-// mount, and truncating an in-use file through the merged mount fails with
-// ETXTBSY. Therefore the RW layer must be restored into the upperdir *before*
+// REASON: the Linux overlayfs contract states that modifying the underlying
+// upper/lower directories of a *mounted* overlay is undefined behavior
+// Therefore the RW layer must be restored into the upperdir *before*
 // the overlay is mounted:
-//
 //   - Kubernetes pods: the containerd shim (cedana-containerd-runtime) populates
 //     the upperdir just before it mounts the rootfs.
 //   - CLI `cedana restore`: the containerd plugin populates the freshly-prepared
@@ -61,29 +55,23 @@ const (
 // later, redundant restore attempt to skip and avoid a double-populate.
 const RestoredMarker = ".cedana-rw-restored"
 
-// MarkerPath returns the path of the restored-marker for a given upperdir.
 func MarkerPath(upperDir string) string {
 	return filepath.Join(filepath.Dir(upperDir), RestoredMarker)
 }
 
-// AlreadyRestored reports whether the RW layer for the given upperdir has
-// already been restored (i.e. the marker is present).
 func AlreadyRestored(upperDir string) bool {
 	_, err := os.Lstat(MarkerPath(upperDir))
 	return err == nil
 }
 
 // WriteMarker records that the RW layer for the given upperdir has been
-// restored. A failure to write the marker is not fatal; it only risks a
-// redundant (idempotent) second restore pass.
+// restored.
 func WriteMarker(upperDir string) error {
 	return os.WriteFile(MarkerPath(upperDir), nil, 0o600)
 }
 
 // UpperDirFromMountOptions extracts the upperdir from a set of overlay mount
-// options (e.g. those returned by a containerd snapshotter's Mounts call, or a
-// shim's rootfs mount spec). Returns an error if there is no upperdir option
-// (e.g. a read-only view mount or a non-overlay filesystem).
+// options
 func UpperDirFromMountOptions(options []string) (string, error) {
 	for _, opt := range options {
 		if after, ok := strings.CutPrefix(opt, "upperdir="); ok {
@@ -94,12 +82,7 @@ func UpperDirFromMountOptions(options []string) (string, error) {
 }
 
 // RestoreToUpperDir reads the RW-layer batches from the dump filesystem and
-// writes them into upperDir.
-//
-// This must be called BEFORE the overlay is mounted (see the package doc). The
-// operation is idempotent with respect to symlinks, devices and named pipes (an
-// existing target is replaced) so a redundant second pass does not fail with
-// EEXIST. If the dump contains no RW-layer manifest, it is a no-op.
+// writes them into upperDir. No-op if dump has no RW-layer manifest
 func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err error) {
 	var manifestFile io.ReadCloser
 	manifestPath := dumpRWLayerManifestKey
