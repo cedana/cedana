@@ -167,7 +167,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		log.Debug().Str("id", container.ID()).Msg("created container for restore")
 
 		// Restore the overlay RW (upper) layer into the freshly-prepared snapshot
-		// BEFORE the shim mounts the overlay (which happens later in NewTask ->
+		// before the shim mounts the overlay (which happens later in NewTask ->
 		// mount.All, inside the containerd runtime).
 		log.Info().Str("snapshotter", snapshotter).Str("snapshot_key", snapshotKey).Msg("pre-mount RW layer restore: resolving snapshot mounts")
 		if mounts, merr := client.SnapshotService(snapshotter).Mounts(ctx, snapshotKey); merr != nil {
@@ -194,7 +194,7 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 					return nil, status.Errorf(codes.Internal, "failed to restore RW layer into upperdir %s: %v", upperDir, rerr)
 				}
 				if werr := overlay.WriteMarker(upperDir); werr != nil {
-					log.Warn().Err(werr).Str("upperDir", upperDir).Msg("pre-mount RW layer restore: failed to write restored marker")
+					return nil, status.Errorf(codes.Internal, "pre-mount RW layer restore: populated upperdir %s but failed to write marker: %v", upperDir, werr)
 				}
 				// Confirm the loader cache physically landed in the upperdir
 				// before the overlay is mounted on top of it.

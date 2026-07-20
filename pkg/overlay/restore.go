@@ -5,7 +5,7 @@
 // plugin, and the containerd runtime shim (cedana-containerd-runtime) can all
 // use it.
 //
-// REASON: the Linux overlayfs contract states that modifying the underlying
+// The Linux overlayfs contract states that modifying the underlying
 // upper/lower directories of a *mounted* overlay is undefined behavior
 // Therefore the RW layer must be restored into the upperdir *before*
 // the overlay is mounted:
@@ -34,6 +34,7 @@ import (
 
 	runc_proto "buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/runc"
 	"github.com/cedana/cedana/pkg/profiling"
+	securejoin "github.com/cyphar/filepath-securejoin"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
@@ -116,7 +117,11 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 			return fmt.Errorf("failed to parse manifest: %v", err)
 		}
 	} else {
-		batchCount = int(manifest["total_batches"].(float64))
+		tb, ok := manifest["total_batches"].(float64)
+		if !ok {
+			return fmt.Errorf("manifest total_batches is missing or not a number: %v", manifest["total_batches"])
+		}
+		batchCount = int(tb)
 	}
 	log.Debug().Int("batches", batchCount).Msg("found rw layer batches from manifest")
 
@@ -154,8 +159,12 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 
 			totalEntries++
 			mode := rwLayerFile.GetMode()
-			fullPath := filepath.Join(upperDir, relPath)
-			isLoaderCache := strings.HasSuffix(relPath, "ld.so.cache")
+			// SecureJoin clamps the entry within upperDir and safely resolves any
+			// symlink components
+			fullPath, serr := securejoin.SecureJoin(upperDir, relPath)
+			if serr != nil {
+				return fmt.Errorf("failed to resolve safe path for %q: %v", relPath, serr)
+			}
 
 			parentDir := filepath.Dir(fullPath)
 			if parentDir != upperDir {
@@ -190,7 +199,13 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 					log.Warn().Err(err).Str("path", fullPath).Msg("failed to set directory permissions")
 				}
 			case fileType == syscall.S_IFREG: // regular file
-				outFile, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.FileMode(mode&0o7777))
+				// Remove any existing object first, then create with O_NOFOLLOW,
+				// so a symlink restored by an earlier entry can't cause this write
+				// to truncate/overwrite the link's target.
+				if err := replaceExisting(fullPath); err != nil {
+					return err
+				}
+				outFile, err := os.OpenFile(fullPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|unix.O_NOFOLLOW, os.FileMode(mode&0o7777))
 				if err != nil {
 					return fmt.Errorf("failed to create file %s: %v", fullPath, err)
 				}
@@ -199,14 +214,6 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 					return err
 				}
 				outFile.Close()
-
-				if isLoaderCache {
-					if st, serr := os.Stat(fullPath); serr != nil {
-						log.Warn().Err(serr).Str("path", fullPath).Msg("loader cache missing right after write")
-					} else {
-						log.Info().Str("path", fullPath).Int64("size", st.Size()).Msg("wrote loader cache (ld.so.cache) into upperdir")
-					}
-				}
 			case fileType == syscall.S_IFIFO: // named pipe
 				if err := replaceExisting(fullPath); err != nil {
 					return err
@@ -240,9 +247,6 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 				}
 			}
 
-			// os.Chtimes follows symlinks, so skip them: driver symlinks (e.g.
-			// libcuda.so -> a host-injected target not present in the layer)
-			// would otherwise fail with ENOENT noise.
 			if rwLayerFile.GetMtime() > 0 && fileType != syscall.S_IFLNK {
 				mtime := time.Unix(0, int64(rwLayerFile.GetMtime()))
 				if err := os.Chtimes(fullPath, mtime, mtime); err != nil {
@@ -288,7 +292,7 @@ func writeFileContent(reader *bufio.Reader, out io.Writer) error {
 	}
 }
 
-// replaceExisting removes a filesystem object at path if it already exists, so
+// removes a filesystem object at path if it already exists, so
 // that a subsequent create (symlink/device/fifo) does not fail with EEXIST.
 func replaceExisting(path string) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
