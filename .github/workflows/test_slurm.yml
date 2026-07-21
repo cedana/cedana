@@ -1085,6 +1085,7 @@ jobs:
           echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
 
+          setup_slurm_unprivileged_user
           start_cedana_slurm_daemon
           restart_cedana_slurm_daemon_unprivileged
           validate_slurm_propagator
@@ -1117,6 +1118,7 @@ jobs:
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          SLURM_SUBMIT_USER: cedana
           GPU: "0"
         run: |
           set +e

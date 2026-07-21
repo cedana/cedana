@@ -48,7 +48,11 @@ slurm_submission_container() {
 }
 
 slurm_submit_exec() {
-    docker exec "$(slurm_submission_container)" "$@"
+    if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
+        docker exec -u "$SLURM_SUBMIT_USER" "$(slurm_submission_container)" "$@"
+    else
+        docker exec "$(slurm_submission_container)" "$@"
+    fi
 }
 
 _wait_for_port() {
@@ -1382,4 +1386,31 @@ setup_slurm_samples() {
     done
 
     info_log "cedana-samples ready in all cluster nodes"
+}
+
+setup_slurm_unprivileged_user() {
+    local user="${SLURM_SUBMIT_USER:-cedana}"
+    local uid="${SLURM_SUBMIT_UID:-2000}"
+    local all_nodes=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
+    local compute_nodes=($(_slurm_compute_containers))
+
+    info_log "Creating unprivileged submit user '$user' (uid $uid) on cluster nodes..."
+
+    for c in "${all_nodes[@]}"; do
+        docker exec "$c" bash -c "
+            id '$user' &>/dev/null || useradd -m -u '$uid' -U -s /bin/bash '$user'
+            chmod -R a+rwX /data/cedana-samples 2>/dev/null || true
+        " || {
+            error_log "Failed to create submit user '$user' in $c"
+            return 1
+        }
+    done
+
+    for c in "${compute_nodes[@]}"; do
+        docker exec "$c" bash -c "touch /var/log/cedana-slurm.log && chmod 666 /var/log/cedana-slurm.log" || true
+    done
+
+    slurm_exec sacctmgr -i add user "$user" Account=default 2>/dev/null || true
+
+    debug_log "Unprivileged submit user '$user' ready"
 }
