@@ -4,7 +4,7 @@ FROM rockylinux:8 as builder
 ARG PREBUILT_BINARIES=0
 ARG ALL_PLUGINS=0
 ARG VERSION
-ARG GO_VERSION=1.25rc1
+ARG GO_VERSION=1.25.0
 
 # Install deps
 RUN <<EOT
@@ -22,6 +22,8 @@ fi
 curl -LO https://go.dev/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz
 tar -C /usr/local -xzf go${GO_VERSION}.linux-${GOARCH}.tar.gz
 EOT
+
+ENV PATH="/usr/local/go/bin:${PATH}"
 
 ADD . /app
 WORKDIR /app
