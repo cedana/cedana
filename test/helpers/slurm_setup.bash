@@ -1246,6 +1246,9 @@ restart_cedana_slurm_daemon_unprivileged() {
             setcap $caps /usr/bin/cedana-slurm
             setcap $caps /usr/bin/cedana
             setcap $caps /usr/bin/criu
+            for b in cedana criu; do
+                findmnt "/usr/local/bin/$b" >/dev/null 2>&1 || mount --bind "/usr/bin/$b" "/usr/local/bin/$b"
+            done
         ' || {
             error_log "Failed to stage/setcap cedana/criu binaries in $c"
             return 1
