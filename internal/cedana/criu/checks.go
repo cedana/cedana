@@ -26,29 +26,24 @@ func CheckVersion(manager plugins.Manager) types.Check {
 
 		component := &daemon.HealthCheckComponent{Name: "version"}
 
-		// Check if CRIU plugin is installed, then use that binary
+		// A custom CRIU path in config takes precedence, then the plugin
+		// binary, then a CRIU found in PATH.
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); !p.IsInstalled() {
-			// Set custom path if specified in config, as a fallback
-			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-				component.Warnings = append(component.Warnings,
-					"CRIU plugin not installed but a custom CRIU path was provided. It's recommended to install the plugin for full feature support.",
-				)
-				c.SetCriuPath(custom_path)
-			} else if path, err := exec.LookPath("criu"); err == nil {
-				component.Warnings = append(component.Warnings,
-					"CRIU plugin not installed but CRIU binary found in PATH. It's recommended to install the plugin for full feature support.",
-				)
-				c.SetCriuPath(path)
-			} else {
-				installed = false
-				component.Errors = append(component.Errors,
-					"CRIU plugin is not installed. This is required for userspace C/R support.",
-				)
-			}
-		} else {
+		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
+			c.SetCriuPath(custom_path)
+		} else if p = manager.Get("criu"); p.IsInstalled() {
 			c.SetCriuPath(p.BinaryPaths()[0])
+		} else if path, err := exec.LookPath("criu"); err == nil {
+			component.Warnings = append(component.Warnings,
+				"CRIU plugin not installed but CRIU binary found in PATH. It's recommended to install the plugin for full feature support.",
+			)
+			c.SetCriuPath(path)
+		} else {
+			installed = false
+			component.Errors = append(component.Errors,
+				"CRIU plugin is not installed. This is required for userspace C/R support.",
+			)
 		}
 
 		if installed {
@@ -79,20 +74,18 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 
 		component := &daemon.HealthCheckComponent{Name: "features"}
 
-		// Check if CRIU plugin is installed, then use that binary
+		// A custom CRIU path in config takes precedence, then the plugin
+		// binary, then a CRIU found in PATH.
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); !p.IsInstalled() {
-			// Set custom path if specified in config, as a fallback
-			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-				c.SetCriuPath(custom_path)
-			} else if path, err := exec.LookPath("criu"); err == nil {
-				c.SetCriuPath(path)
-			} else {
-				installed = false
-			}
-		} else {
+		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
+			c.SetCriuPath(custom_path)
+		} else if p = manager.Get("criu"); p.IsInstalled() {
 			c.SetCriuPath(p.BinaryPaths()[0])
+		} else if path, err := exec.LookPath("criu"); err == nil {
+			c.SetCriuPath(path)
+		} else {
+			installed = false
 		}
 
 		if installed {
