@@ -1391,7 +1391,7 @@ setup_slurm_samples() {
 setup_slurm_unprivileged_user() {
     local user="${SLURM_SUBMIT_USER:-cedana}"
     local uid="${SLURM_SUBMIT_UID:-2000}"
-    local all_nodes=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
+    local all_nodes=("$SLURM_CONTROLLER_CONTAINER" "$(slurm_submission_container)" $(_slurm_compute_containers) $(_slurm_login_containers))
     local compute_nodes=($(_slurm_compute_containers))
 
     info_log "Creating unprivileged submit user '$user' (uid $uid) on cluster nodes..."
