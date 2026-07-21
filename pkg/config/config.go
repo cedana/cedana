@@ -67,6 +67,8 @@ const (
 
 	DEFAULT_SLURM_DB_PORT = 3306
 	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
+
+	DEFAULT_AWS_CREDENTIALS_MODE = "static"
 )
 
 // The default global config. This will get overwritten
@@ -124,6 +126,9 @@ var Global Config = Config{
 		Unprivileged: false,
 		DBPort:       DEFAULT_SLURM_DB_PORT,
 		DBName:       DEFAULT_SLURM_DB_NAME,
+	},
+	AWS: AWS{
+		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,
 	},
 }
 
