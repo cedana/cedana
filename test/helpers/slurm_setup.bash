@@ -1251,6 +1251,8 @@ restart_cedana_slurm_daemon_unprivileged() {
         }
         docker exec "$c" mkdir -p /etc/cedana
         docker exec -e CEDANA_SLURM_UNPRIVILEGED=1 \
+            -e CEDANA_PLUGINS_BIN_DIR=/usr/bin \
+            -e CEDANA_CRIU_BINARY_PATH=/usr/bin/criu \
             "$c" /usr/local/bin/cedana --merge-config version ||
             {
                 error_log "Failed to persist slurm.unprivileged into config on $c"
@@ -1279,25 +1281,6 @@ restart_cedana_slurm_daemon_unprivileged() {
             docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
             return 1
         fi
-    done
-
-    for c in "${compute_containers[@]}"; do
-        docker exec "$c" bash -c '
-            mkdir -p /etc/systemd/system/slurmd.service.d
-            cat >/etc/systemd/system/slurmd.service.d/cedana-unpriv.conf <<"EOF"
-[Service]
-Environment=CEDANA_PLUGINS_BIN_DIR=/usr/bin
-Environment=CEDANA_CRIU_BINARY_PATH=/usr/bin/criu
-EOF
-            grep -q "^CEDANA_PLUGINS_BIN_DIR=" /etc/default/slurmd 2>/dev/null ||
-                echo "CEDANA_PLUGINS_BIN_DIR=/usr/bin" >> /etc/default/slurmd
-            grep -q "^CEDANA_CRIU_BINARY_PATH=" /etc/default/slurmd 2>/dev/null ||
-                echo "CEDANA_CRIU_BINARY_PATH=/usr/bin/criu" >> /etc/default/slurmd
-            command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
-        ' || {
-            error_log "Failed to set unprivileged cedana env for slurmd in $c"
-            return 1
-        }
     done
 
     for c in "${compute_containers[@]}"; do
