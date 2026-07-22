@@ -71,8 +71,6 @@ func CheckCriuForCuda(manager plugins.Manager) types.Check {
 
 		component := &daemon.HealthCheckComponent{Name: "criu version"}
 
-		// A custom CRIU path in config takes precedence, then the plugin
-		// binary, then a CRIU found in PATH.
 		var p *plugins.Plugin
 		installed := true
 		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {

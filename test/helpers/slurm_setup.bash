@@ -1221,7 +1221,6 @@ start_cedana_slurm_daemon() {
     done
 }
 
-# Switch all SLURM nodes to the unprivileged dump path.
 restart_cedana_slurm_daemon_unprivileged() {
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
@@ -1283,25 +1282,29 @@ restart_cedana_slurm_daemon_unprivileged() {
     done
 
     for c in "${compute_containers[@]}"; do
-        _svc_restart "$c" slurmd /usr/sbin/slurmd || {
-            error_log "Failed to restart slurmd on $c"
+        docker exec "$c" bash -c '
+            mkdir -p /etc/systemd/system/slurmd.service.d
+            cat >/etc/systemd/system/slurmd.service.d/cedana-unpriv.conf <<"EOF"
+[Service]
+Environment=CEDANA_PLUGINS_BIN_DIR=/usr/bin
+Environment=CEDANA_CRIU_BINARY_PATH=/usr/bin/criu
+EOF
+            grep -q "^CEDANA_PLUGINS_BIN_DIR=" /etc/default/slurmd 2>/dev/null ||
+                echo "CEDANA_PLUGINS_BIN_DIR=/usr/bin" >> /etc/default/slurmd
+            grep -q "^CEDANA_CRIU_BINARY_PATH=" /etc/default/slurmd 2>/dev/null ||
+                echo "CEDANA_CRIU_BINARY_PATH=/usr/bin/criu" >> /etc/default/slurmd
+            command -v systemctl >/dev/null 2>&1 && systemctl daemon-reload >/dev/null 2>&1 || true
+        ' || {
+            error_log "Failed to set unprivileged cedana env for slurmd in $c"
             return 1
         }
     done
 
-    # Point cedana at the node-local caps-bearing binaries. Done last so the
-    # daemon start above can't overwrite it before jobs run.
-    for c in "${targets[@]}"; do
-        docker exec "$c" python3 - <<'PY' || { error_log "Failed to set node-local bin paths in config on $c"; return 1; }
-import json
-p = "/etc/cedana/config.json"
-with open(p) as f:
-    c = json.load(f)
-c.setdefault("plugins", {})["bin_dir"] = "/usr/bin"
-c.setdefault("criu", {})["binary_path"] = "/usr/bin/criu"
-with open(p, "w") as f:
-    json.dump(c, f, indent=2)
-PY
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd || {
+            error_log "Failed to restart slurmd on $c"
+            return 1
+        }
     done
 }
 
