@@ -1097,6 +1097,13 @@ jobs:
           c=$(docker ps -a --format '{{.Names}}' | grep -E '^slurm-compute-[0-9]+$' | head -1)
           [ -n "$c" ] || { echo "no compute container found"; exit 1; }
 
+          echo "=== /etc/cedana/config.json ==="
+          docker exec "$c" cat /etc/cedana/config.json 2>&1 || true
+          echo "=== getcap /usr/local/bin/criu ==="
+          docker exec "$c" getcap /usr/local/bin/criu 2>&1 || true
+          echo "=== cedana criu path resolution (as submit user) ==="
+          docker exec -u cedana -e CEDANA_CONFIG_DIR=/etc/cedana "$c" /usr/bin/cedana features 2>&1 | grep -iE "criu|path|binary" | head -20 || true
+
           for bin in /usr/bin/cedana-slurm /usr/bin/cedana /usr/bin/criu; do
             caps=$(docker exec "$c" getcap "$bin" 2>/dev/null || true)
             echo "getcap $bin: $caps"
