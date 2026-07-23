@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/endpointcreds"
 	cedanaconfig "github.com/cedana/cedana/pkg/config"
 )
 
@@ -31,12 +32,26 @@ func LoadAWSConfig(ctx context.Context, settings cedanaconfig.AWS) (cfg aws.Conf
 			settings.AccessKeyID, settings.SecretAccessKey, "",
 		)))
 	case CredentialsModeEKSPodIdentity:
-		if os.Getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI") == "" {
+		endpoint := os.Getenv("AWS_CONTAINER_CREDENTIALS_FULL_URI")
+		if endpoint == "" {
 			return cfg, fmt.Errorf("AWS_CONTAINER_CREDENTIALS_FULL_URI must be set when credentials_mode is %q", CredentialsModeEKSPodIdentity)
 		}
-		if os.Getenv("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE") == "" {
+		tokenFile := os.Getenv("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE")
+		if tokenFile == "" {
 			return cfg, fmt.Errorf("AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE must be set when credentials_mode is %q", CredentialsModeEKSPodIdentity)
 		}
+		// Pod Identity must use the injected container endpoint even when the
+		// process also has ambient AWS environment credentials. An explicit
+		// provider prevents those credentials from taking precedence.
+		options = append(options, awsconfig.WithCredentialsProvider(endpointcreds.New(
+			endpoint,
+			func(options *endpointcreds.Options) {
+				options.AuthorizationTokenProvider = endpointcreds.TokenProviderFunc(func() (string, error) {
+					value, err := os.ReadFile(tokenFile)
+					return string(value), err
+				})
+			},
+		)))
 	case CredentialsModeAmbient:
 		// The default chain supports IRSA, instance roles, environment variables,
 		// shared config files, and other AWS-supported providers.
