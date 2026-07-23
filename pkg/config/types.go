@@ -145,6 +145,8 @@ type (
 	}
 
 	AWS struct {
+		// CredentialsMode selects the AWS credential provider (static, eksPodIdentity, or ambient)
+		CredentialsMode string `json:"credentials_mode" key:"credentials_mode" yaml:"credentials_mode" mapstructure:"credentials_mode" env_aliases:"AWS_CREDENTIALS_MODE"`
 		// AccessKeyID is the AWS access key ID
 		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
 		// SecretAccessKey is the AWS secret access key
