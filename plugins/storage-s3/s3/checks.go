@@ -2,6 +2,7 @@ package s3
 
 import (
 	"context"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/config"
@@ -10,6 +11,8 @@ import (
 
 func CheckConfig() types.Check {
 	return func(ctx context.Context) []*daemon.HealthCheckComponent {
+		credentialsCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
 		components := []*daemon.HealthCheckComponent{{
 			Name: "AWS Credentials Mode",
 			Data: config.Global.AWS.CredentialsMode,
@@ -28,9 +31,9 @@ func CheckConfig() types.Check {
 		}
 
 		credentialsComponent := &daemon.HealthCheckComponent{Name: "AWS Credentials", Data: "available"}
-		cfg, err := LoadAWSConfig(ctx, config.Global.AWS)
+		cfg, err := LoadAWSConfig(credentialsCtx, config.Global.AWS)
 		if err == nil {
-			_, err = cfg.Credentials.Retrieve(ctx)
+			_, err = cfg.Credentials.Retrieve(credentialsCtx)
 		}
 		if err != nil {
 			credentialsComponent.Data = "unavailable"
