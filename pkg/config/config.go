@@ -71,6 +71,8 @@ const (
 
 	DEFAULT_SLURM_DB_PORT = 3306
 	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
+
+  DEFAULT_CSX_SOCK_PATH = "/run/csx.sock"
 )
 
 // The default global config. This will get overwritten
@@ -128,6 +130,9 @@ var Global Config = Config{
 		DBPort:       DEFAULT_SLURM_DB_PORT,
 		DBName:       DEFAULT_SLURM_DB_NAME,
 	},
+  CSX: CSX{
+    SockPath: DEFAULT_CSX_SOCK_PATH,
+  },
 }
 
 // The current config directory, set during Init
