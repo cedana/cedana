@@ -1283,6 +1283,10 @@ restart_cedana_slurm_daemon_unprivileged() {
         fi
     done
 
+    for c in "${targets[@]}"; do
+        docker exec "$c" chmod 666 /var/log/cedana-slurm.log 2>/dev/null || true
+    done
+
     for c in "${compute_containers[@]}"; do
         _svc_restart "$c" slurmd /usr/sbin/slurmd || {
             error_log "Failed to restart slurmd on $c"
