@@ -318,6 +318,12 @@ func setDefaults() {
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		defaultVal := utils.GetValue(Global, field)
+		// Keep the static credential mode as an in-memory default, but don't
+		// persist the newly added key unless it was explicitly configured.
+		// Older runtime shims use exact config decoding and reject unknown keys.
+		if tag == "aws.credentials_mode" && defaultVal == DEFAULT_AWS_CREDENTIALS_MODE {
+			continue
+		}
 		viper.SetDefault(tag, defaultVal)
 	}
 }
