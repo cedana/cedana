@@ -1352,7 +1352,7 @@ setup_slurm_samples() {
             apt-get install -y -qq git 2>/dev/null
             rm -rf /data/cedana-samples
             mkdir -p /data
-            git clone --depth 1 https://github.com/cedana/cedana-samples.git /data/cedana-samples
+            git clone --depth 1 -b feat/unprivileged-tests https://github.com/cedana/cedana-samples.git /data/cedana-samples
         ' || {
             error_log "Failed to clone cedana-samples into $c"
             return 1
