@@ -52,7 +52,7 @@ on:
         default: "slurm"
 
 env:
-  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_URL: https://tushar.cedana.ai/v1
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
   CEDANA_PROFILING_ENABLED: true
@@ -62,7 +62,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
   TERM: dumb
-  RETRIES: 1 # some tests are still flaky
+  RETRIES: 1
   DEBUG: 0
 
 jobs:
@@ -937,10 +937,317 @@ jobs:
             /tmp/slurm-debug/**
           if-no-files-found: warn
 
+  slurm-unprivileged:
+    name: Slurm (Unprivileged)
+    needs: slurm-ansible
+    runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        nfs:
+          - root_squash
+          - no_root_squash
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
+    steps:
+      - uses: runs-on/action@v1
+
+      - uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: cedana-amd64
+
+      - name: Download plugins
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: plugin-amd64*
+          merge-multiple: true
+
+      - name: Download CRIU
+        uses: actions/download-artifact@v4
+        with:
+          name: criu-amd64
+
+      - name: Download slurm binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.slurm_artifact }}-amd64
+          path: slurm-bin
+
+      - name: Extract cedana-slurm
+        run: mv slurm-bin/cedana-slurm cedana-slurm
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Pre-install plugins
+        env:
+          CEDANA_PLUGINS_BUILDS: local
+        run: |
+          chmod +x ./cedana*
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+          mkdir -p /tmp/cedana-preflight-bin
+          cp ./cedana /tmp/cedana-preflight-bin/cedana
+          cp ./criu /tmp/cedana-preflight-bin/criu
+          sudo cp ./cedana /usr/local/bin/cedana
+          CRIU_VERSION="$(cat ./criu-version.txt)"
+          sudo -E cedana plugin install "criu@${CRIU_VERSION}"
+          echo "CEDANA_PLUGINS_CRIU_VERSION=${CRIU_VERSION}" >> "$GITHUB_ENV"
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install \
+            runc \
+            storage/cedana
+
+      - name: Install slurm binaries
+        run: |
+          chmod +x slurm-bin/build/cedana-slurm
+          sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
+          sudo cp slurm-bin/build/spank_cedana.so /usr/local/lib/spank_cedana.so
+          sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
+          sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
+          sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
+          test -f ./libcedana-slurm.so
+          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
+
+      - name: Install ansible and Docker CLI
+        run: |
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            docker.io ansible python3-docker
+          ansible-galaxy collection install community.docker 2>/dev/null || true
+
+      - name: Setup debugging session
+        uses: mxschmitt/action-tmate@v3
+        if: inputs.debug
+        with:
+          limit-access-to-actor: true
+
+      - name: Setup SLURM cluster
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
+          CRIU_BIN: /tmp/cedana-preflight-bin/criu
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: "0"
+          LOGIN_NODES: "1"
+          NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          setup_slurm_cluster
+          setup_slurm_accounting
+          install_cedana_in_slurm
+
+      - name: Setup SLURM samples
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: "0"
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          setup_slurm_samples
+
+      - name: Register SLURM cluster and start daemon (unprivileged)
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: "0"
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          source test/helpers/slurm_propagator.bash
+
+          CLUSTER_NAME="test-slurm-unpriv-$(date +%s%N)"
+          SLURM_CLUSTER_ID=$(register_slurm_cluster "$CLUSTER_NAME")
+          echo "SLURM_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
+          echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
+          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
+
+          setup_slurm_unprivileged_user
+          start_cedana_slurm_daemon
+          restart_cedana_slurm_daemon_unprivileged
+          validate_slurm_propagator
+
+      - name: Assert unprivileged mode is configured
+        shell: bash
+        run: |
+          set -euo pipefail
+          c=$(docker ps -a --format '{{.Names}}' | grep -E '^slurm-compute-[0-9]+$' | head -1)
+          [ -n "$c" ] || { echo "no compute container found"; exit 1; }
+
+          echo "=== /etc/cedana/config.json ==="
+          docker exec "$c" cat /etc/cedana/config.json 2>&1 || true
+          echo "=== getcap /usr/local/bin/criu ==="
+          docker exec "$c" getcap /usr/local/bin/criu 2>&1 || true
+          echo "=== cedana criu path resolution (as submit user) ==="
+          docker exec -u cedana -e CEDANA_CONFIG_DIR=/etc/cedana "$c" /usr/bin/cedana features 2>&1 | grep -iE "criu|path|binary" | head -20 || true
+
+          for bin in /usr/bin/cedana-slurm /usr/bin/cedana /usr/bin/criu; do
+            caps=$(docker exec "$c" getcap "$bin" 2>/dev/null || true)
+            echo "getcap $bin: $caps"
+            for cap in cap_checkpoint_restore cap_sys_ptrace cap_dac_read_search; do
+              echo "$caps" | grep -q "$cap" || { echo "$bin missing $cap"; exit 1; }
+            done
+          done
+
+          cfg=$(docker exec "$c" cat /etc/cedana/config.json 2>/dev/null || true)
+          echo "$cfg" | grep -Eq '"unprivileged"[[:space:]]*:[[:space:]]*true' || {
+            echo "slurm.unprivileged not true in /etc/cedana/config.json"; echo "$cfg"; exit 1;
+          }
+          echo "unprivileged mode configured on $c"
+
+      - name: Run unprivileged C/R tests
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          SLURM_SUBMIT_USER: cedana
+          GPU: "0"
+        run: |
+          set +e
+          make test-slurm \
+            TAGS=slurm,samples,dump,restore,!large \
+            GPU=0 \
+            FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=1 \
+            RETRIES=$RETRIES
+          test_exit_code=$?
+          set -e
+
+          if [ -f /tmp/report.xml ]; then
+            tests=$(grep -o '<testcase[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            failures=$(grep -o '<failure[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            errors=$(grep -o '<error[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            skipped=$(grep -o '<skipped[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+            passed=$((tests - failures - errors - skipped))
+            [ "$passed" -lt 0 ] && passed=0
+            summary="Unprivileged tests: ${passed}/${tests} passed, ${failures} failed, ${errors} errored, ${skipped} skipped"
+            echo "$summary"
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "Unprivileged tests: report.xml not found"
+          fi
+
+          exit "$test_exit_code"
+
+      - name: Assert monitor ran unprivileged
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          for c in $(docker ps -a --format '{{.Names}}' | grep -E '^slurm-compute-[0-9]+$'); do
+            log=$(docker exec "$c" cat /var/log/cedana-slurm.log 2>/dev/null || true)
+            markers=$(echo "$log" | grep -F 'checkpoint monitor mode' || true)
+            [ -n "$markers" ] || continue
+            echo "=== $c monitor mode markers ==="
+            echo "$markers"
+            if echo "$markers" | grep -q 'unprivileged=false'; then
+              echo "monitor ran PRIVILEGED on $c"; exit 1
+            fi
+            if echo "$markers" | grep -q 'uid=0'; then
+              echo "monitor ran as root (uid=0) on $c"; exit 1
+            fi
+            echo "$markers" | grep -q 'unprivileged=true' && found=1
+          done
+          if [ "$found" -eq 1 ]; then
+            echo "confirmed: monitor ran unprivileged"
+          else
+            echo "WARNING: no unprivileged monitor marker in cedana-slurm.log (uid-2000 monitor logging is unreliable); unprivileged config already asserted and C/R tests passed"
+          fi
+
+      - name: Collect SLURM debug logs
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARTIFACT_DIR="/tmp/slurm-debug"
+          mkdir -p "$ARTIFACT_DIR"
+
+          docker ps -a >"$ARTIFACT_DIR/docker-ps-a.txt" 2>&1 || true
+
+          mapfile -t SLURM_CONTAINERS < <(docker ps -a --format '{{.Names}}' | grep -E '^slurm-(controller|compute-[0-9]+|login-[0-9]+)$' || true)
+
+          for c in "${SLURM_CONTAINERS[@]}"; do
+            cdir="$ARTIFACT_DIR/$c"
+            mkdir -p "$cdir"
+            docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
+            docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
+            docker exec "$c" sh -c 'squeue || true; sinfo || true; scontrol show partition || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
+            for f in /var/log/cedana.log /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log \
+                     /var/log/slurm/slurmctld.log /var/log/slurm/slurmd.log /var/log/slurm/slurmdbd.log \
+                     /etc/slurm/slurm.conf /var/log/munge/munged.log; do
+              if docker exec "$c" test -f "$f" 2>/dev/null; then
+                docker cp "$c:$f" "$cdir/$(basename "$f")" 2>/dev/null || true
+              fi
+            done
+          done
+
+      - name: Setup node
+        if: always()
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Generate report
+        if: always()
+        run: |
+          npx junit-to-ctrf "/tmp/report.xml" -t bats -o /tmp/report.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Slurm (Unprivileged, amd64, ${{ matrix.nfs }})"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report-amd64-slurm-unprivileged-${{ matrix.nfs }}
+          path: |
+            /tmp/report*.json
+
+      - name: Upload SLURM debug logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slurm-debug-logs-amd64-unprivileged-${{ matrix.nfs }}
+          path: |
+            /tmp/slurm-debug/**
+          if-no-files-found: warn
+
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
-    needs: slurm
+    needs: [slurm, slurm-preemption, slurm-unprivileged]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

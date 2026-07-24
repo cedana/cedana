@@ -20,19 +20,15 @@ func New[REQ, RESP any](manager plugins.Manager) types.Adapter[types.Handler[REQ
 		return func(ctx context.Context, opts types.Opts, resp *RESP, req *REQ) (func() <-chan int, error) {
 			criuInstance := criu.MakeCriu()
 
-			// Check if CRIU plugin is installed, then use that binary
 			var p *plugins.Plugin
-			if p = manager.Get("criu"); !p.IsInstalled() {
-				// Set custom path if specified in config, as a fallback
-				if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-					criuInstance.SetCriuPath(custom_path)
-				} else if path, err := exec.LookPath("criu"); err == nil {
-					criuInstance.SetCriuPath(path)
-				} else {
-					return nil, status.Error(codes.FailedPrecondition, "Please install CRIU plugin, or specify path in config or env var.")
-				}
-			} else {
+			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
+				criuInstance.SetCriuPath(custom_path)
+			} else if p = manager.Get("criu"); p.IsInstalled() {
 				criuInstance.SetCriuPath(p.BinaryPaths()[0])
+			} else if path, err := exec.LookPath("criu"); err == nil {
+				criuInstance.SetCriuPath(path)
+			} else {
+				return nil, status.Error(codes.FailedPrecondition, "Please install CRIU plugin, or specify path in config or env var.")
 			}
 
 			// Run a quick health check to ensure CRIU is functional, return first error

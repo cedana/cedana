@@ -48,7 +48,11 @@ slurm_submission_container() {
 }
 
 slurm_submit_exec() {
-    docker exec "$(slurm_submission_container)" "$@"
+    if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
+        docker exec -u "$SLURM_SUBMIT_USER" "$(slurm_submission_container)" "$@"
+    else
+        docker exec "$(slurm_submission_container)" "$@"
+    fi
 }
 
 _wait_for_port() {
@@ -1217,10 +1221,6 @@ start_cedana_slurm_daemon() {
     done
 }
 
-# Restart the cedana-slurm daemon with CEDANA_SLURM_UNPRIVILEGED=1 on all nodes.
-# Sets CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the binary via setcap,
-# then starts the daemon with CEDANA_SLURM_UNPRIVILEGED=1 so both the daemon and any monitors
-# it spawns use the embedded dump path.
 restart_cedana_slurm_daemon_unprivileged() {
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
@@ -1234,17 +1234,30 @@ restart_cedana_slurm_daemon_unprivileged() {
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
-    debug_log "Restarting cedana-slurm daemon (unprivileged/embedded) on SLURM nodes..."
+    debug_log "Restarting cedana-slurm daemon (unprivileged) on SLURM nodes..."
 
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec "$c" bash -c '
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm 2>/dev/null || true
+            caps=cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip
+            install -m 0755 /usr/local/bin/cedana /usr/bin/cedana
+            install -m 0755 /usr/local/bin/criu /usr/bin/criu
+            setcap $caps /usr/bin/cedana-slurm
+            setcap $caps /usr/bin/cedana
+            setcap $caps /usr/bin/criu
         ' || {
-            error_log "Failed to set capabilities on cedana-slurm in $c"
+            error_log "Failed to stage/setcap cedana/criu binaries in $c"
             return 1
         }
+        docker exec "$c" mkdir -p /etc/cedana
+        docker exec -e CEDANA_SLURM_UNPRIVILEGED=1 \
+            -e CEDANA_PLUGINS_BIN_DIR=/usr/bin \
+            -e CEDANA_CRIU_BINARY_PATH=/usr/bin/criu \
+            "$c" /usr/local/bin/cedana --merge-config version ||
+            {
+                error_log "Failed to persist slurm.unprivileged into config on $c"
+                return 1
+            }
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -1268,6 +1281,17 @@ restart_cedana_slurm_daemon_unprivileged() {
             docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
             return 1
         fi
+    done
+
+    for c in "${targets[@]}"; do
+        docker exec "$c" chmod 666 /var/log/cedana-slurm.log 2>/dev/null || true
+    done
+
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd || {
+            error_log "Failed to restart slurmd on $c"
+            return 1
+        }
     done
 }
 
@@ -1328,7 +1352,7 @@ setup_slurm_samples() {
             apt-get install -y -qq git 2>/dev/null
             rm -rf /data/cedana-samples
             mkdir -p /data
-            git clone --depth 1 https://github.com/cedana/cedana-samples.git /data/cedana-samples
+            git clone --depth 1 -b feat/unprivileged-tests https://github.com/cedana/cedana-samples.git /data/cedana-samples
         ' || {
             error_log "Failed to clone cedana-samples into $c"
             return 1
@@ -1344,6 +1368,8 @@ setup_slurm_samples() {
         docker exec "$c" bash -c "
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
+            apt-get install -y -qq libffi-dev build-essential 2>/dev/null || true
+            /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
         "
     done
 
@@ -1357,4 +1383,31 @@ setup_slurm_samples() {
     done
 
     info_log "cedana-samples ready in all cluster nodes"
+}
+
+setup_slurm_unprivileged_user() {
+    local user="${SLURM_SUBMIT_USER:-cedana}"
+    local uid="${SLURM_SUBMIT_UID:-2000}"
+    local all_nodes=("$SLURM_CONTROLLER_CONTAINER" "$(slurm_submission_container)" $(_slurm_compute_containers) $(_slurm_login_containers))
+    local compute_nodes=($(_slurm_compute_containers))
+
+    info_log "Creating unprivileged submit user '$user' (uid $uid) on cluster nodes..."
+
+    for c in "${all_nodes[@]}"; do
+        docker exec "$c" bash -c "
+            id '$user' &>/dev/null || useradd -m -u '$uid' -U -s /bin/bash '$user'
+            chmod -R a+rwX /data/cedana-samples 2>/dev/null || true
+        " || {
+            error_log "Failed to create submit user '$user' in $c"
+            return 1
+        }
+    done
+
+    for c in "${compute_nodes[@]}"; do
+        docker exec "$c" bash -c "touch /var/log/cedana-slurm.log && chmod 666 /var/log/cedana-slurm.log" || true
+    done
+
+    slurm_exec sacctmgr -i add user "$user" Account=default 2>/dev/null || true
+
+    debug_log "Unprivileged submit user '$user' ready"
 }
