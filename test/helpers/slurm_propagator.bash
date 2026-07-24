@@ -138,13 +138,18 @@ checkpoint_slurm_job() {
 
     debug_log "Checkpointing slurm job '$job_id' (kind=$kind, reason=$reason)..."
 
+    local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
+    cluster_id="${cluster_id//\"/}"
+
     local payload
     if ! payload=$(jq -n \
             --arg job_id "$job_id" \
             --arg job_name "job_$job_id" \
             --arg kind "$kind" \
             --arg reason "$reason" \
-            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind, "reason": $reason}'); then
+            --arg cluster_id "$cluster_id" \
+            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind, "reason": $reason}
+             + (if $cluster_id == "" then {} else {"cluster_id": $cluster_id} end)'); then
         error_log "Failed to build checkpoint request payload"
         return 1
     fi
