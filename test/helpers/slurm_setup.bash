@@ -1193,6 +1193,23 @@ start_cedana_slurm_daemon() {
             }
     done
 
+    debug_log "Waiting for slurm accounting DB before starting cedana-slurm daemon..."
+    local db_ready=false
+    for i in $(seq 1 45); do
+        if docker exec "$SLURM_CONTROLLER_CONTAINER" mysqladmin ping --silent &>/dev/null \
+            && docker exec "$SLURM_CONTROLLER_CONTAINER" test -r /etc/slurm/slurmdbd.conf \
+            && slurm_exec sacctmgr show cluster -n &>/dev/null; then
+            db_ready=true
+            break
+        fi
+        sleep 2
+    done
+    if [ "$db_ready" = false ]; then
+        error_log "slurm accounting DB not reachable after 90s; cedana-slurm SyncJobs would be disabled"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" tail -30 /var/log/slurm/slurmdbd.log 2>/dev/null || true
+        return 1
+    fi
+
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec -d \
