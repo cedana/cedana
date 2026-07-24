@@ -1130,7 +1130,7 @@ jobs:
         run: |
           set +e
           make test-slurm \
-            TAGS=slurm,samples,dump,restore,!large,!needs-root \
+            TAGS=slurm,samples,dump,restore,!large \
             GPU=0 \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \

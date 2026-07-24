@@ -25,7 +25,7 @@ load ../helpers/slurm_propagator
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15
 }
 
-# bats test_tags=dump,restore,samples,needs-root
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: Password Hashing Benchmark" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/password-hashing-benchmark.sbatch"
 

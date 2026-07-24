@@ -1368,6 +1368,8 @@ setup_slurm_samples() {
         docker exec "$c" bash -c "
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
+            apt-get install -y -qq libffi-dev build-essential 2>/dev/null || true
+            /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
         "
     done
 
