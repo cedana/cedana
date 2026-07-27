@@ -7,6 +7,7 @@ import (
 	"time"
 
 	gpu_proto "buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
+	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/profiling"
 )
 
@@ -285,6 +286,8 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 		return
 	}
 
+	addGPUTheoreticalLimitsToProfiling(ctx, profile)
+
 	workers := gpuSortedWorkers(profile)
 	displayNames := gpuPhaseDisplayNames(profile)
 
@@ -297,4 +300,36 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 	}
 
 	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers))
+}
+
+func addGPUTheoreticalLimitsToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile) {
+	for _, limit := range profile.GetTheoreticalLimits() {
+		if converted := gpuTheoreticalLimit(limit); converted != nil {
+			profiling.AddTheoreticalLimit(ctx, converted)
+		}
+	}
+}
+
+func gpuTheoreticalLimit(limit *gpu_proto.ThroughputCapability) *profiling.TheoreticalLimit {
+	if limit == nil {
+		return nil
+	}
+
+	converted := &profiling.TheoreticalLimit{
+		Name:           limit.GetName(),
+		Kind:           limit.GetKind(),
+		Direction:      limit.GetDirection(),
+		BytesPerSecond: limit.GetBytesPerSecond(),
+		Source:         limit.GetSource(),
+		Confidence:     limit.GetConfidence(),
+		Device:         limit.GetDevice(),
+		Details:        limit.GetDetails(),
+	}
+	if limit.GetFailureCode() != "" {
+		converted.Failure = &measurements.Failure{
+			Code:    limit.GetFailureCode(),
+			Message: limit.GetFailureMessage(),
+		}
+	}
+	return converted
 }
