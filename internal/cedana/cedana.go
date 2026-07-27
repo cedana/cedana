@@ -9,10 +9,12 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/version"
+	"github.com/rs/zerolog/log"
 )
 
 // Cedana implements all the capabilities that can be run without a server.
@@ -38,6 +40,14 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 
 	if config.Global.Metrics {
 		metrics.Init(ctx, wg, "cedana", version.Version)
+	}
+
+	if config.Global.Profiling.Enabled {
+		report, err := measurements.CollectHost(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to collect startup throughput measurements")
+		}
+		profiling.SetSystemTheoreticalLimits(profiling.BuildTheoreticalLimits(report))
 	}
 
 	pluginManager := plugins.NewLocalManager()

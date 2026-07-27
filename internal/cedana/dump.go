@@ -184,6 +184,7 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 		}
 
 		opts.Storage = storage
+		profiling.AttachTheoreticalLimits(ctx, dir)
 
 		streams := req.Streams
 		if streams == 0 {

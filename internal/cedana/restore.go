@@ -179,6 +179,7 @@ func pluginRestoreStorage(next types.Restore) types.Restore {
 		}
 
 		opts.Storage = storage
+		profiling.AttachTheoreticalLimits(ctx, dir)
 
 		streams, err := streamer.IsStreamable(ctx, storage, dir)
 		if err != nil {

@@ -18,6 +18,7 @@ import (
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -69,6 +70,13 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 		return nil, fmt.Errorf("failed to get host info: %w", err)
 	}
 
+	if config.Global.Profiling.Enabled {
+		report, measurementErr := measurements.CollectKnownHost(ctx, host)
+		if measurementErr != nil {
+			log.Warn().Err(measurementErr).Msg("failed to collect startup throughput measurements")
+		}
+		profiling.SetSystemTheoreticalLimits(profiling.BuildTheoreticalLimits(report))
+	}
 	var database db.DB
 	database, err = db.NewSqliteDB(ctx, config.Global.DB.Path)
 	if err != nil {
