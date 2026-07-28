@@ -109,9 +109,6 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				log.Debug().Str("path", path).Str("compression", compression).Bool("is_fuse", isFuse).Msg("starting compression of dump")
 
-        size := utils.SizeFromPath(imagesDirectory)
-        ctx = context.WithValue(ctx, "STORAGE_SIZE", size)
-
 				tarball, err := storage.Create(ctx, path)
 				if err != nil {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
