@@ -41,6 +41,12 @@ export NVIDIA_CONTAINER_TOOLKIT_VERSION=1.18.1-1
       libnvidia-container1=${NVIDIA_CONTAINER_TOOLKIT_VERSION}
 EOT
 
+RUN <<EOT
+set -eux
+apt-get update
+apt-get install -y --no-install-recommends cuda-nvrtc-12-8
+EOT
+
 # install bats
 RUN <<EOT
 set -eux

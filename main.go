@@ -22,7 +22,11 @@ func main() {
 	defer stop()
 	version.PutVersion(Version)
 
-	if err := cmd.Execute(ctx, Version); err != nil {
+	if err := run(ctx, Version); err != nil {
 		os.Exit(1)
 	}
+}
+
+func run(ctx context.Context, version string) error {
+	return cmd.Execute(ctx, version)
 }

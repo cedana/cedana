@@ -22,6 +22,7 @@ import (
 var Version string = "dev"
 
 var (
+	DumpCmd    *cobra.Command   = cmd.DumpCmd
 	RestoreCmd *cobra.Command   = cmd.RestoreCmd
 	HelperCmds []*cobra.Command = []*cobra.Command{cmd.HelperCmd}
 	CmdTheme   text.Colors      = style.HighLevelRuntimeColors

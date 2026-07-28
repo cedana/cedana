@@ -3,6 +3,7 @@ package profiling
 import (
 	"bytes"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
@@ -23,18 +24,19 @@ type Data struct {
 	IO       int64 `json:"io,omitempty"`
 	// add more othogonal fields here as needed
 
-	Parallel  bool `json:"parallel,omitempty"`
-	Redundant bool `json:"redundant,omitempty"`
+	Parallel    bool `json:"parallel,omitempty"`
+	Redundant   bool `json:"redundant,omitempty"`
+	IORedundant bool `json:"io_redundant,omitempty"`
 }
 
 // Flatten flattens the profiling data into a single list of components.
 // This is such that the duration of each component is purely the time spent in that component
 // excluding the time spent in its children.
 func Flatten(data *Data) {
-	length := len(data.Components)
+	components := data.Components
+	data.Components = make([]*Data, 0, len(components))
 
-	for i := range length {
-		component := data.Components[i]
+	for _, component := range components {
 
 		if !(component.Parallel || component.Redundant) { // only consider duration of serial components in calculating remainder
 			data.Duration -= component.Duration
@@ -42,6 +44,7 @@ func Flatten(data *Data) {
 
 		Flatten(component)
 
+		data.Components = append(data.Components, component)
 		data.Components = append(data.Components, component.Components...)
 		component.Components = nil
 	}
@@ -115,22 +118,31 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		if p.Parallel || p.Redundant {
 			durationStr = style.DisabledColors.Sprint(durationStr + "──┤")
 			duration = 0 // Don't count parallel durations towards total
-			if p.Redundant {
-				ioStr = style.DisabledColors.Sprint(ioStr)
-				io = 0 // Don't count redundant IO towards total
-			}
+		}
+		if p.Redundant || p.IORedundant {
+			ioStr = style.DisabledColors.Sprint(ioStr)
+			io = 0 // Don't count redundant IO towards total
 		}
 		totalDuration += duration
 		totalIO += io
 
 		if categoryName != "" {
 			categoryDuration[category] += duration
-			categoryIO[category] += p.IO
-			categoryIORedundant[category] = p.Redundant
+			categoryIO[category] += io
+			if p.Redundant || p.IORedundant {
+				categoryIORedundant[category] = categoryIO[category] == 0
+			} else {
+				categoryIORedundant[category] = false
+			}
 		} else {
 			categoryDuration[style.DisabledColors.Sprint("other")] += duration
-			categoryIO[style.DisabledColors.Sprint("other")] += p.IO
-			categoryIORedundant[style.DisabledColors.Sprint("other")] = p.Redundant
+			other := style.DisabledColors.Sprint("other")
+			categoryIO[other] += io
+			if p.Redundant || p.IORedundant {
+				categoryIORedundant[other] = categoryIO[other] == 0
+			} else {
+				categoryIORedundant[other] = false
+			}
 		}
 
 		tableWriter.AppendRow([]any{
@@ -196,6 +208,45 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	}
 
 	fmt.Println()
+}
+
+func EncodeJSON(data *Data) (string, error) {
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
+}
+
+func DecodeJSON(data string) (*Data, error) {
+	var d Data
+	if err := json.Unmarshal([]byte(data), &d); err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+func WriteJSON(path string, data *Data) error {
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, bytes, 0o644)
+}
+
+func ReadJSON(path string) (*Data, error) {
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var data Data
+	if err = json.Unmarshal(bytes, &data); err != nil {
+		return nil, err
+	}
+
+	return &data, nil
 }
 
 func Encode(data *Data, buf *bytes.Buffer) error {

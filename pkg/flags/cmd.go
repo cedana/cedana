@@ -18,6 +18,7 @@ var (
 	NameFlag        = Flag{Full: "name"}
 	PathFlag        = Flag{Full: "path", Short: "p"}
 	PidFileFlag     = Flag{Full: "pid-file"}
+	ResultFileFlag  = Flag{Full: "result-file"}
 	NoServerFlag    = Flag{Full: "no-server"}
 	StreamsFlag     = Flag{Full: "streams"}
 	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}
@@ -51,12 +52,13 @@ var (
 	LinkRemapFlag       = Flag{Full: "link-remap"}
 
 	// Parent flags
-	AddressFlag   = Flag{Full: "address"}
-	ProtocolFlag  = Flag{Full: "protocol"}
-	InitConfig    = Flag{Full: "init-config"}
-	MergeConfig   = Flag{Full: "merge-config"}
-	ConfigFlag    = Flag{Full: "config"}
-	ConfigDirFlag = Flag{Full: "config-dir"}
-	DBFlag        = Flag{Full: "db"}
-	ProfilingFlag = Flag{Full: "profiling"}
+	AddressFlag       = Flag{Full: "address"}
+	ProtocolFlag      = Flag{Full: "protocol"}
+	InitConfig        = Flag{Full: "init-config"}
+	MergeConfig       = Flag{Full: "merge-config"}
+	ConfigFlag        = Flag{Full: "config"}
+	ConfigDirFlag     = Flag{Full: "config-dir"}
+	DBFlag            = Flag{Full: "db"}
+	ProfilingFlag     = Flag{Full: "profiling"}
+	ProfilingPathFlag = Flag{Full: "profiling-path"}
 )

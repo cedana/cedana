@@ -5,6 +5,7 @@ INSTALL_LIB_DIR=/usr/local/lib
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
+BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
 
@@ -22,7 +23,7 @@ BINARY=cedana
 BINARY_SOURCES=$(shell find . -path ./test -prune -o -type f -name '*.go' -not -path './plugins/*' -print)
 PKG_SOURCES=$(sort $(shell find pkg -name '*.go'))
 GO_MOD_FILES=go.sum go.mod
-VERSION=$(shell git describe --tags --always)
+VERSION?=$(shell git describe --tags --always 2>/dev/null || echo dev)
 LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
 DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
@@ -31,10 +32,10 @@ cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building $(BINARY) with debug symbols..." ;\
-		$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $@ ;\
+		$(GOBUILD) -buildvcs=$(BUILDVCS) $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $@ ;\
 	else \
 		echo "Building $(BINARY)..." ;\
-		$(GOBUILD) -buildvcs=true -ldflags "$(LDFLAGS)" -o $@ ;\
+		$(GOBUILD) -buildvcs=$(BUILDVCS) -ldflags "$(LDFLAGS)" -o $@ ;\
 	fi
 
 install: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the binary
@@ -91,10 +92,10 @@ plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
 $(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building plugin $* with debug symbols..." ;\
-		$(GOBUILD) -C plugins/"$*" -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
+		$(GOBUILD) -C plugins/"$*" -buildvcs=$(BUILDVCS) $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
 	else \
 		echo "Building plugin $*..." ;\
-		$(GOBUILD) -C plugins/"$*" -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
+		$(GOBUILD) -C plugins/"$*" -buildvcs=$(BUILDVCS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
 	fi
 
 plugins-install: $(PLUGIN_INSTALL_PATHS) ## Install all plugins

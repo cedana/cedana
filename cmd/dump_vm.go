@@ -94,6 +94,9 @@ var dumpVMCmd = &cobra.Command{
 
 		if config.Global.Profiling.Enabled && data != nil {
 			profiling.Print(data, features.Theme())
+			if config.Global.Profiling.Path != "" {
+				profiling.WriteJSON(config.Global.Profiling.Path, data)
+			}
 		}
 
 		return nil
