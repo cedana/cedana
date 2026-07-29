@@ -5,7 +5,13 @@ import (
 	"os"
 	"path/filepath"
 
+	"sort"
+	"strconv"
+
+	"time"
+
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -22,6 +28,59 @@ import (
 )
 
 const CRIU_RESTORE_LOG_FILE = "criu-restore.log"
+
+func addRestoreProfiling(ctx context.Context, criuResp *criu.CriuRestoreResp) {
+	if criuResp == nil || criuResp.GetStats() == nil {
+		return
+	}
+
+	stats := criuResp.GetStats()
+	preRestoreTime := time.Duration(stats.GetPreRestoreTime()) * time.Microsecond
+	profiling.AddTimingParallelComponent(ctx, preRestoreTime, "PreRestore")
+
+	restoreTime := time.Duration(stats.GetRestoreTime()) * time.Microsecond
+	restoreCtx := profiling.AddTimingParallelComponent(ctx, restoreTime, "Restore")
+	type pidTimeEntry struct {
+		time  uint32
+		pid   uint32
+		stage string
+	}
+
+	processStats := stats.GetProcessRestoreStats()
+	var timingsByStage [][]pidTimeEntry
+	if len(processStats) > 0 {
+		// the order of time entries is preserved when deserializing
+		// protobufs, so this allows us to index using i
+		// and all ProcessRestoreStats will have the same number of timeEntries
+		timingsByStage = make([][]pidTimeEntry, len(processStats[0].GetTimeEntries()))
+	}
+
+	for _, processRestoreStats := range processStats {
+		for i, timeEntry := range processRestoreStats.GetTimeEntries() {
+			timingsByStage[i] = append(timingsByStage[i], pidTimeEntry{timeEntry.GetTime(), processRestoreStats.GetPid(), timeEntry.GetName()})
+		}
+	}
+
+	// Sort to get slowest time for stage
+	for _, timingsForStage := range timingsByStage {
+		sort.Slice(timingsForStage, func(i, j int) bool {
+			return timingsForStage[i].time > timingsForStage[j].time
+		})
+	}
+
+	// add slowest time to profiler for each stage
+	for _, timingsForStage := range timingsByStage {
+		if len(timingsForStage) == 0 {
+			continue
+		}
+		slowestEntry := timingsForStage[0]
+		pidStr := strconv.FormatUint(uint64(slowestEntry.pid), 10)
+		profiling.AddTimingParallelComponent(restoreCtx, time.Duration(slowestEntry.time)*time.Microsecond, "SlowestPID="+pidStr+"="+slowestEntry.stage)
+	}
+
+	postRestoreTime := time.Duration(criuResp.Stats.GetPostRestoreTime()) * time.Microsecond
+	profiling.AddTimingParallelComponent(ctx, postRestoreTime, "PostRestore")
+}
 
 // Returns a CRIU restore handler for the server
 func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
@@ -85,6 +144,10 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		opts.IO.Stderr,
 		opts.ExtraFiles...,
 	)
+
+	if err == nil {
+		addRestoreProfiling(ctx, criuResp)
+	}
 
 	end()
 
