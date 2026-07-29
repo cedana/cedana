@@ -3,7 +3,7 @@
 # gpu_cuda_graph.bats scenarios with template-based restore on. Skips if the
 # samples image predates the binaries.
 #
-# bats file_tags=gpu
+# bats file_tags=gpu,graph,template
 
 load ../../helpers/utils
 load ../../helpers/daemon
