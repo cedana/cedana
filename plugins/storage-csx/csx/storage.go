@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	cedana_config "github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 )
 
@@ -70,7 +69,7 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4 << 20)),
 	)
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-  conn, err := grpc.NewClient(fmt.Sprintf("unix://%s", cedana_config.Global.CSX.SockPath), opts...)
+  conn, err := grpc.NewClient(fmt.Sprintf("unix://%s", "/run/csx.sock"), opts...)
   if err != nil {
     log.Err(err).Msg("could not establish connection to CSX")
     return nil, err

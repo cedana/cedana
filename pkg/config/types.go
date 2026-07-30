@@ -40,9 +40,6 @@ type (
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
-
-    // CSX
-    CSX CSX `json:"csx" key:"csx" yaml:"csx" mapstructure:"csx"`
 	}
 
 	Slurm struct {
@@ -157,8 +154,4 @@ type (
 		// Endpoint is a custom AWS endpoint to use (e.g. for S3-compatible storage)
 		Endpoint string `json:"endpoint" key:"endpoint" yaml:"endpoint" mapstructure:"endpoint" env_aliases:"AWS_ENDPOINT"`
 	}
-
-  CSX struct {
-    SockPath string `json:"sock_path" key:"sock_path" yaml:"sock_path" mapstructure:"sock_path"`
-  }
 )
