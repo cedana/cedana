@@ -4,12 +4,14 @@ on:
   pull_request:
     types: [closed]
 
+concurrency:
+  group: ${{ github.repository }}-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  cancel-pr-workflows:
+  cancel:
+    name: Cancel
     runs-on: ubuntu-latest
     steps:
-      - name: Cancel running workflows for this PR
-        uses: styfle/cancel-workflow-action@0.12.1
-        with:
-          access_token: ${{ github.token }}
-          ignore_sha: true
+      - name: Do nothing (github concurrency should cancel the workflow)
+        run: echo "This workflow is intended to cancel any in-progress workflows for the same PR."

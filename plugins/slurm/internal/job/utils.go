@@ -72,7 +72,7 @@ func cgroupPathFromProc(pid uint32) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
 		path, ok := strings.CutPrefix(line, "0::")
 		if !ok {
 			continue
@@ -86,7 +86,7 @@ func cgroupPathFromProc(pid uint32) (string, error) {
 }
 
 func getJobCgroupPathV1(jid uint32) (string, error) {
-	v1Pattern := fmt.Sprintf("/sys/fs/cgroup/freezer/slurm/uid_*/job_%d/step_batch", jid)
+	v1Pattern := fmt.Sprintf("/sys/fs/cgroup/freezer/slurm*/uid_*/job_%d/step_batch", jid)
 
 	for attempt := range cgroupRetryAttempts {
 		matches, err := filepath.Glob(v1Pattern)
