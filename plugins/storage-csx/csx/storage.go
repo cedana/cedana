@@ -30,6 +30,7 @@ func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) 
     log.Err(err).Msg("could not open file with CSX")
     return nil, err
   }
+  log.Debug().Str("path", resp.GetPath()).Str("readID", resp.GetReadID()).Msg("got path from csx")
   return NewReader(ctx, resp.GetPath(), objectID, resp.GetReadID(), s.csxClient)
 }
 
