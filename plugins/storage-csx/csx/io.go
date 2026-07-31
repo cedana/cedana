@@ -8,6 +8,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/plugins/csx/csxgrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/csx"
+	"github.com/rs/zerolog/log"
 )
 
 type CSXWriter struct {
@@ -94,8 +95,10 @@ func (r *CSXReader) Close() error {
 func NewReader(ctx context.Context, path, objectID, readID string, csxClient csxgrpc.CSXClient) (*CSXReader, error) {
   reader, err := os.Open(path)
   if err != nil {
+    log.Debug().Err(err).Str("path", path).Msg("failed to open file with os.Open()")
     return nil, err
   }
+  log.Debug().Msg("returning CSX reader")
   return &CSXReader{
     ctx,
     objectID,
