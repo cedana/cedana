@@ -90,6 +90,10 @@ func (s *Storage) IsRemote() bool {
 	return true
 }
 
+func (s *Storage) GetPath(ctx context.Context, name string, mode cedana_io.Mode) (path string, cleanup func(), err error) {
+	return "", nil, nil
+}
+
 /////////////
 // Helpers //
 /////////////

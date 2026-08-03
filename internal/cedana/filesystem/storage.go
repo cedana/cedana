@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+
+	cedana_io "github.com/cedana/cedana/pkg/io"
 )
 
 // Default filesystem storage
@@ -57,4 +59,8 @@ func (s *Storage) ReadDir(_ context.Context, path string) ([]string, error) {
 
 func (s *Storage) IsRemote() bool {
 	return false
+}
+
+func (s *Storage) GetPath(_ context.Context, name string, _ cedana_io.Mode) (path string, cleanup func(), err error) {
+	return name, nil, nil
 }

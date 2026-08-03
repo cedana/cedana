@@ -8,7 +8,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/criu"
 	"github.com/cedana/cedana/internal/cedana/defaults"
-	"github.com/cedana/cedana/internal/cedana/filesystem"
+	fs "github.com/cedana/cedana/internal/cedana/filesystem"
 	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/internal/cedana/network"
@@ -158,7 +158,7 @@ func pluginRestoreStorage(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		dir := req.GetPath()
 
-		var storage io.Storage = &filesystem.Storage{}
+		var storage io.Storage = &fs.Storage{}
 
 		if strings.Contains(dir, "://") {
 			pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
@@ -185,7 +185,10 @@ func pluginRestoreStorage(next types.Restore) types.Restore {
 			return nil, status.Error(codes.Internal, "A minimum of 2 streams is required by streaming.")
 		}
 
-		filesystem := filesystem.RestoreFilesystem
+		filesystem := fs.RestoreFilesystem
+		if strings.Contains(dir, "csx://") {
+			filesystem = fs.CSXRestoreFilesystem
+		}
 		if streams > 1 {
 			filesystem = streamer.RestoreFilesystem(streams)
 		}

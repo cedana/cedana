@@ -30,6 +30,7 @@ func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) 
 		Mode: csx.Mode_READ_ONLY,
 	})
 	if err != nil {
+		s.ClientConn.Close()
 		log.Err(err).Msg("could not open file with CSX")
 		return nil, err
 	}
@@ -44,6 +45,7 @@ func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, erro
 		Mode: csx.Mode_WRITE_ONLY,
 	})
 	if err != nil {
+		s.ClientConn.Close()
 		log.Err(err).Msg("could not create file with CSX")
 		return nil, err
 	}
@@ -65,7 +67,43 @@ func (s *Storage) ReadDir(ctx context.Context, path string) ([]string, error) {
 }
 
 func (s *Storage) IsRemote() bool {
-	return true
+	return false
+}
+
+func (s *Storage) GetPath(ctx context.Context, name string, mode cedana_io.Mode) (path string, cleanup func(), err error) {
+	// Strip out csx://
+	objectID := filepath.Base(strings.TrimPrefix(name, PATH_PREFIX))
+	var csxMode csx.Mode
+	switch mode {
+	case cedana_io.READ_ONLY:
+		csxMode = csx.Mode_READ_ONLY
+	case cedana_io.WRITE_ONLY:
+		csxMode = csx.Mode_WRITE_ONLY
+	default:
+		return "", nil, fmt.Errorf("Invalid Mode")
+	}
+
+	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
+		ID:   objectID,
+		Mode: csxMode,
+	})
+	if err != nil {
+		s.ClientConn.Close()
+		log.Err(err).Str("name", name).Str("objectID", objectID).Msg("could not get path from CSX")
+		return "", nil, err
+	}
+
+	cleanup = func() {
+		_, err := s.csxClient.ClosePath(ctx, &csx.ClosePathReq{
+			ActionID: resp.GetActionID(),
+			ID:       objectID,
+		})
+		if err != nil {
+			log.Err(err).Str("name", name).Msg("could not close path for CSX")
+		}
+		s.ClientConn.Close()
+	}
+	return resp.GetPath(), cleanup, nil
 }
 
 func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
