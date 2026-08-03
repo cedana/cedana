@@ -19,66 +19,72 @@ import (
 const PATH_PREFIX = "csx://"
 
 type Storage struct {
-  csxClient csxgrpc.CSXClient
-  *grpc.ClientConn
+	csxClient csxgrpc.CSXClient
+	*grpc.ClientConn
 }
 
 func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) {
-  objectID := filepath.Base(strings.TrimPrefix(path, PATH_PREFIX))
-  resp, err := s.csxClient.Open(ctx, &csx.OpenReq{ObjectID: objectID})
-  if err != nil {
-    log.Err(err).Msg("could not open file with CSX")
-    return nil, err
-  }
-  log.Debug().Str("path", resp.GetPath()).Str("readID", resp.GetReadID()).Msg("got path from csx")
-  return NewReader(ctx, resp.GetPath(), objectID, resp.GetReadID(), s.csxClient)
+	objectID := filepath.Base(strings.TrimPrefix(path, PATH_PREFIX))
+	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
+		ID:   objectID,
+		Mode: csx.Mode_READ_ONLY,
+	})
+	if err != nil {
+		log.Err(err).Msg("could not open file with CSX")
+		return nil, err
+	}
+	log.Debug().Str("path", resp.GetPath()).Str("readID", resp.GetActionID()).Msg("got path from csx")
+	return NewReader(ctx, resp.GetPath(), objectID, resp.GetActionID(), s.csxClient, s.ClientConn)
 }
 
 func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, error) {
-  objectID := filepath.Base(strings.TrimPrefix(path, PATH_PREFIX))
-  resp, err := s.csxClient.Create(ctx, &csx.CreateReq{ObjectID: objectID})
-  if err != nil {
-    log.Err(err).Msg("could not create file with CSX")
-    return nil, err
-  }
+	objectID := filepath.Base(strings.TrimPrefix(path, PATH_PREFIX))
+	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
+		ID:   objectID,
+		Mode: csx.Mode_WRITE_ONLY,
+	})
+	if err != nil {
+		log.Err(err).Msg("could not create file with CSX")
+		return nil, err
+	}
 
-  return NewWriter(ctx, resp.GetPath(), objectID, resp.GetCreateID(), s.csxClient)
+	return NewWriter(ctx, resp.GetPath(), objectID, resp.GetActionID(), s.csxClient, s.ClientConn)
 }
 
 func (s *Storage) Delete(ctx context.Context, path string) error {
-  log.Info().Str("storage", "csx").Str("path", path).Msg("Delete() called")
-  return nil
+	log.Info().Str("storage", "csx").Str("path", path).Msg("Delete() called")
+	return nil
 }
 
 func (s *Storage) IsDir(ctx context.Context, path string) (bool, error) {
-  return false, nil
+	return false, nil
 }
 
 func (s *Storage) ReadDir(ctx context.Context, path string) ([]string, error) {
-  return nil, fmt.Errorf("CSX does not support reading from dir")
+	return nil, fmt.Errorf("CSX does not support reading from dir")
 }
 
 func (s *Storage) IsRemote() bool {
-  return true
+	return true
 }
 
 func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
-  var opts []grpc.DialOption
+	var opts []grpc.DialOption
 
 	opts = append(
 		opts,
-		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4 << 20)),
+		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(4<<20)),
 	)
 	opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-  conn, err := grpc.NewClient(fmt.Sprintf("unix://%s", "/run/csx.sock"), opts...)
-  if err != nil {
-    log.Err(err).Msg("could not establish connection to CSX")
-    return nil, err
-  }
+	conn, err := grpc.NewClient(fmt.Sprintf("unix://%s", "/run/csx.sock"), opts...)
+	if err != nil {
+		log.Err(err).Msg("could not establish connection to CSX")
+		return nil, err
+	}
 
-  csxClient := csxgrpc.NewCSXClient(conn)
-  return &Storage{
-    ClientConn: conn,
-    csxClient: csxClient,
-  }, nil
+	csxClient := csxgrpc.NewCSXClient(conn)
+	return &Storage{
+		ClientConn: conn,
+		csxClient:  csxClient,
+	}, nil
 }

@@ -72,11 +72,11 @@ var Registry = []Plugin{
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-storage-gcs.so"}},
 	},
-  {
-    Name: "storage/csx",
-    Type: SUPPORTED,
-    Libraries: []Binary{{Name: "libcedana-storage-csx.so"}},
-  },
+	{
+		Name:      "storage/csx",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-storage-csx.so"}},
+	},
 
 	// Others
 	{
