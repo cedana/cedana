@@ -2,7 +2,7 @@
 
 # This file assumes its being run from the same directory as the Makefile
 #
-# bats file_tags=gpu
+# bats file_tags=gpu,dedup
 
 load ../../helpers/utils
 load ../../helpers/daemon
