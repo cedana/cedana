@@ -11,7 +11,7 @@ import (
 
 	"github.com/cedana/cedana/internal/cedana/criu"
 	"github.com/cedana/cedana/internal/cedana/defaults"
-	fs "github.com/cedana/cedana/internal/cedana/filesystem"
+	"github.com/cedana/cedana/internal/cedana/filesystem"
 	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/internal/cedana/network"
@@ -167,7 +167,7 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		dir := req.GetDir()
 
-		var storage io.Storage = &fs.Storage{}
+		var storage io.Storage = &filesystem.Storage{}
 
 		if strings.Contains(dir, "://") {
 			pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
@@ -194,10 +194,7 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 			return nil, status.Error(codes.InvalidArgument, "A minimum of 2 streams are required for streaming. Specify 0 to disable streaming.")
 		}
 
-		filesystem := fs.DumpFilesystem
-		if strings.Contains(dir, "csx://") {
-			filesystem = fs.CSXDumpFilesystem
-		}
+		filesystem := filesystem.DumpFilesystem
 		if streams > 1 {
 			filesystem = streamer.DumpFilesystem(streams)
 		}

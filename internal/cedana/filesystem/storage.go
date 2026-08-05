@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-
-	cedana_io "github.com/cedana/cedana/pkg/io"
+	"path/filepath"
 )
 
 // Default filesystem storage
@@ -61,6 +60,15 @@ func (s *Storage) IsRemote() bool {
 	return false
 }
 
-func (s *Storage) GetPath(_ context.Context, name string, _ cedana_io.Mode) (path string, cleanup func(), err error) {
-	return name, nil, nil
+func (s *Storage) ReadPath(_ context.Context, path string) (string, func(), error) {
+	return path, nil, nil
+}
+
+func (s *Storage) CreatePath(_ context.Context, dir, name string) (path string, cleanup func(), err error) {
+	// Check if the provided dir exists
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return "", nil, fmt.Errorf("dump dir does not exist: %s", dir)
+	}
+
+	return filepath.Join(dir, name), nil, nil
 }

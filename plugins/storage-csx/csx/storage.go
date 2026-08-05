@@ -70,22 +70,15 @@ func (s *Storage) IsRemote() bool {
 	return false
 }
 
-func (s *Storage) GetPath(ctx context.Context, name string, mode cedana_io.Mode) (path string, cleanup func(), err error) {
+func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string, cleanup func(), err error) {
 	// Strip out csx://
-	objectID := filepath.Base(strings.TrimPrefix(name, PATH_PREFIX))
-	var csxMode csx.Mode
-	switch mode {
-	case cedana_io.READ_ONLY:
-		csxMode = csx.Mode_READ_ONLY
-	case cedana_io.WRITE_ONLY:
-		csxMode = csx.Mode_WRITE_ONLY
-	default:
-		return "", nil, fmt.Errorf("Invalid Mode")
+	if dir != PATH_PREFIX {
+		return "", nil, fmt.Errorf("invalid dir for CSX")
 	}
-
+	objectID := name
 	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
 		ID:   objectID,
-		Mode: csxMode,
+		Mode: csx.Mode_WRITE_ONLY,
 	})
 	if err != nil {
 		s.ClientConn.Close()
@@ -100,6 +93,35 @@ func (s *Storage) GetPath(ctx context.Context, name string, mode cedana_io.Mode)
 		})
 		if err != nil {
 			log.Err(err).Str("name", name).Msg("could not close path for CSX")
+		}
+		s.ClientConn.Close()
+	}
+	log.Debug().Str("Path", resp.GetPath()).Msg("Got Path from CSX")
+	return resp.GetPath(), cleanup, nil
+}
+
+func (s *Storage) ReadPath(ctx context.Context, path string) (string, func(), error) {
+	if !strings.HasPrefix(path, PATH_PREFIX) {
+		return "", nil, fmt.Errorf("Invalid Prefix for CSX")
+	}
+
+	path = strings.TrimPrefix(path, PATH_PREFIX)
+	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
+		ID:   path,
+		Mode: csx.Mode_READ_ONLY,
+	})
+	if err != nil {
+		s.ClientConn.Close()
+		log.Err(err).Str("objectID", path).Msg("could not get path from CSX")
+		return "", nil, err
+	}
+	var cleanup = func() {
+		_, err := s.csxClient.ClosePath(ctx, &csx.ClosePathReq{
+			ActionID: resp.GetActionID(),
+			ID:       path,
+		})
+		if err != nil {
+			log.Err(err).Str("objectID", path).Msg("could not close path for CSX")
 		}
 		s.ClientConn.Close()
 	}

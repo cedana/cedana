@@ -152,8 +152,12 @@ func (s *Storage) IsRemote() bool {
 	return true
 }
 
-func (s *Storage) GetPath(ctx context.Context, name string, mode cedana_io.Mode) (path string, cleanup func(), err error) {
-	return "", nil, nil
+func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string, cleanup func(), err error) {
+	return "", nil, fmt.Errorf("S3 Plugin Does not support CreatePath()")
+}
+
+func (s *Storage) ReadPath(ctx context.Context, path string) (string, func(), error) {
+	return "", nil, fmt.Errorf("S3 Plugin Does not support ReadPath()")
 }
 
 /////////////
