@@ -37,7 +37,9 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 		}
 
 		if cleanup != nil {
-			defer cleanup()
+			defer func() {
+				err = errors.Join(err, cleanup())
+			}()
 		}
 
 		if !storage.IsRemote() {

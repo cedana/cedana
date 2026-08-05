@@ -48,7 +48,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 		// if compression we use a tmp dir for CRIU and then later on create compressed
 		// file with storage, else ask the storage medium for a path
-		var cleanup func()
+		var cleanup func() error
 		var imagesDirectory string
 
 		if (compression != "" && compression != "none") || storage.IsRemote() {
@@ -60,7 +60,9 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				return nil, status.Errorf(codes.Internal, "could not get path for checkpoint: %v", err)
 			}
 			if cleanup != nil {
-				defer cleanup()
+				defer func() {
+					err = errors.Join(err, cleanup())
+				}()
 			}
 		}
 

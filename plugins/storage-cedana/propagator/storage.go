@@ -90,12 +90,12 @@ func (s *Storage) IsRemote() bool {
 	return true
 }
 
-func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string, cleanup func(), err error) {
+func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string, cleanup func() error, err error) {
 	return "", nil, fmt.Errorf("Cedana Storage Plugin Does not support CreatePath()")
 }
 
-func (s *Storage) ReadPath(ctx context.Context, path string) (string, func(), error) {
-	return "", nil, fmt.Errorf("Cedana Storage Plugin Does not support ReadPath()")
+func (s *Storage) ReadPath(ctx context.Context, path string) (string, func() error, error) {
+	return path, nil, nil
 }
 
 /////////////

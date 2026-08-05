@@ -2,6 +2,7 @@ package csx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -70,12 +71,12 @@ func (s *Storage) IsRemote() bool {
 	return false
 }
 
-func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string, cleanup func(), err error) {
+func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string, cleanup func() error, err error) {
 	// Strip out csx://
 	if dir != PATH_PREFIX {
 		return "", nil, fmt.Errorf("invalid dir for CSX")
 	}
-	objectID := name
+	objectID := filepath.Base(name)
 	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
 		ID:   objectID,
 		Mode: csx.Mode_WRITE_ONLY,
@@ -86,26 +87,23 @@ func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string
 		return "", nil, err
 	}
 
-	cleanup = func() {
-		_, err := s.csxClient.ClosePath(ctx, &csx.ClosePathReq{
+	cleanup = func() error {
+		_, closePathErr := s.csxClient.ClosePath(ctx, &csx.ClosePathReq{
 			ActionID: resp.GetActionID(),
 			ID:       objectID,
 		})
-		if err != nil {
-			log.Err(err).Str("name", name).Msg("could not close path for CSX")
-		}
-		s.ClientConn.Close()
+		return errors.Join(closePathErr, s.ClientConn.Close())
 	}
 	log.Debug().Str("Path", resp.GetPath()).Msg("Got Path from CSX")
 	return resp.GetPath(), cleanup, nil
 }
 
-func (s *Storage) ReadPath(ctx context.Context, path string) (string, func(), error) {
+func (s *Storage) ReadPath(ctx context.Context, path string) (string, func() error, error) {
 	if !strings.HasPrefix(path, PATH_PREFIX) {
 		return "", nil, fmt.Errorf("Invalid Prefix for CSX")
 	}
 
-	path = strings.TrimPrefix(path, PATH_PREFIX)
+	path = filepath.Base(strings.TrimPrefix(path, PATH_PREFIX))
 	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
 		ID:   path,
 		Mode: csx.Mode_READ_ONLY,
@@ -115,15 +113,12 @@ func (s *Storage) ReadPath(ctx context.Context, path string) (string, func(), er
 		log.Err(err).Str("objectID", path).Msg("could not get path from CSX")
 		return "", nil, err
 	}
-	var cleanup = func() {
-		_, err := s.csxClient.ClosePath(ctx, &csx.ClosePathReq{
+	cleanup := func() error {
+		_, closePathErr := s.csxClient.ClosePath(ctx, &csx.ClosePathReq{
 			ActionID: resp.GetActionID(),
 			ID:       path,
 		})
-		if err != nil {
-			log.Err(err).Str("objectID", path).Msg("could not close path for CSX")
-		}
-		s.ClientConn.Close()
+		return errors.Join(closePathErr, s.ClientConn.Close())
 	}
 	return resp.GetPath(), cleanup, nil
 }

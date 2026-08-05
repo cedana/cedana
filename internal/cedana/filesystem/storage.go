@@ -60,11 +60,11 @@ func (s *Storage) IsRemote() bool {
 	return false
 }
 
-func (s *Storage) ReadPath(_ context.Context, path string) (string, func(), error) {
+func (s *Storage) ReadPath(_ context.Context, path string) (string, func() error, error) {
 	return path, nil, nil
 }
 
-func (s *Storage) CreatePath(_ context.Context, dir, name string) (path string, cleanup func(), err error) {
+func (s *Storage) CreatePath(_ context.Context, dir, name string) (path string, cleanup func() error, err error) {
 	// Check if the provided dir exists
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		return "", nil, fmt.Errorf("dump dir does not exist: %s", dir)
