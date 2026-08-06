@@ -14,4 +14,7 @@ type Storage interface {
 	ReadDir(ctx context.Context, path string) ([]string, error)
 
 	IsRemote() bool
+
+	CreatePath(ctx context.Context, dir, name string) (string, func() error, error)
+	ReadPath(ctx context.Context, path string) (string, func() error, error)
 }

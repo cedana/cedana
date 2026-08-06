@@ -2,6 +2,7 @@ package csx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -30,6 +31,7 @@ func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) 
 		Mode: csx.Mode_READ_ONLY,
 	})
 	if err != nil {
+		s.ClientConn.Close()
 		log.Err(err).Msg("could not open file with CSX")
 		return nil, err
 	}
@@ -44,6 +46,7 @@ func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, erro
 		Mode: csx.Mode_WRITE_ONLY,
 	})
 	if err != nil {
+		s.ClientConn.Close()
 		log.Err(err).Msg("could not create file with CSX")
 		return nil, err
 	}
@@ -65,7 +68,59 @@ func (s *Storage) ReadDir(ctx context.Context, path string) ([]string, error) {
 }
 
 func (s *Storage) IsRemote() bool {
-	return true
+	return false
+}
+
+func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string, cleanup func() error, err error) {
+	// Strip out csx://
+	if dir != PATH_PREFIX {
+		return "", nil, fmt.Errorf("invalid dir for CSX")
+	}
+	objectID := filepath.Base(name)
+	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
+		ID:   objectID,
+		Mode: csx.Mode_WRITE_ONLY,
+	})
+	if err != nil {
+		s.ClientConn.Close()
+		log.Err(err).Str("name", name).Str("objectID", objectID).Msg("could not get path from CSX")
+		return "", nil, err
+	}
+
+	cleanup = func() error {
+		_, closePathErr := s.csxClient.ClosePath(ctx, &csx.ClosePathReq{
+			ActionID: resp.GetActionID(),
+			ID:       objectID,
+		})
+		return errors.Join(closePathErr, s.ClientConn.Close())
+	}
+	log.Debug().Str("Path", resp.GetPath()).Msg("Got Path from CSX")
+	return resp.GetPath(), cleanup, nil
+}
+
+func (s *Storage) ReadPath(ctx context.Context, path string) (string, func() error, error) {
+	if !strings.HasPrefix(path, PATH_PREFIX) {
+		return "", nil, fmt.Errorf("Invalid Prefix for CSX")
+	}
+
+	path = filepath.Base(strings.TrimPrefix(path, PATH_PREFIX))
+	resp, err := s.csxClient.GetPath(ctx, &csx.GetPathReq{
+		ID:   path,
+		Mode: csx.Mode_READ_ONLY,
+	})
+	if err != nil {
+		s.ClientConn.Close()
+		log.Err(err).Str("objectID", path).Msg("could not get path from CSX")
+		return "", nil, err
+	}
+	cleanup := func() error {
+		_, closePathErr := s.csxClient.ClosePath(ctx, &csx.ClosePathReq{
+			ActionID: resp.GetActionID(),
+			ID:       path,
+		})
+		return errors.Join(closePathErr, s.ClientConn.Close())
+	}
+	return resp.GetPath(), cleanup, nil
 }
 
 func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
