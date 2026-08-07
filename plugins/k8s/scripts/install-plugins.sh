@@ -38,18 +38,22 @@ echo "Determining storage plugin from CEDANA_CHECKPOINT_DIR=$CEDANA_CHECKPOINT_D
 if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
     echo "Cedana storage backend detected, adding storage/cedana plugin"
     PLUGINS="$PLUGINS storage/cedana@$CEDANA_PLUGINS_NATIVE_VERSION"
-    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/s3 storage/gcs"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/s3 storage/gcs storage/csx"
 elif [[ "$CEDANA_CHECKPOINT_DIR" == s3://* ]]; then
     echo "S3 storage backend detected, adding storage/s3 plugin"
     PLUGINS="$PLUGINS storage/s3@$CEDANA_PLUGINS_NATIVE_VERSION"
-    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/gcs"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/gcs storage/csx"
 elif [[ "$CEDANA_CHECKPOINT_DIR" == gcs://* ]]; then
     echo "GCS storage backend detected, adding storage/gcs plugin"
     PLUGINS="$PLUGINS storage/gcs@$CEDANA_PLUGINS_NATIVE_VERSION"
-    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/csx"
+elif [[ "$CEDANA_CHECKPOINT_DIR" == csx://* ]]; then
+    echo "CSX storage backend detected, adding storage/csx plugin"
+    PLUGINS="$PLUGINS storage/csx@$CEDANA_PLUGINS_NATIVE_VERSION"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/gcs"
 else
     echo "Local storage backend detected, no storage plugin needed"
-    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/gcs"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/gcs storage/csx"
 fi
 
 # check if streamer plugin is required

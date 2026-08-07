@@ -173,6 +173,7 @@ jobs:
           - storage/cedana
           - storage/s3
           - storage/gcs
+          - storage/csx
         arch:
           - amd64
           - arm64
@@ -390,6 +391,7 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-cedana.so-$ARCH
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-s3.so-$ARCH
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-gcs.so-$ARCH
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-csx.so-$ARCH || true
 
       - name: Download previous binary
         id: download-previous
@@ -412,6 +414,7 @@ jobs:
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-cedana.so-$ARCH || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-s3.so-$ARCH || true
           curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-gcs.so-$ARCH || true
+          curl -1sLf -O https://dl.cloudsmith.io/$API_KEY/cedana/$REPO/raw/versions/$TAG/libcedana-storage-csx.so-$ARCH || true
 
       - name: Generate summary
         id: summary
