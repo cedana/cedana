@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -22,6 +23,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -36,6 +38,8 @@ func init() {
 		StringP(flags.NameFlag.Full, "", "", "name of the dump")
 	dumpCmd.PersistentFlags().
 		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "run without server")
+	dumpCmd.PersistentFlags().
+		String(flags.ResultFileFlag.Full, "", "write the dump result (DumpResp) as JSON to this file")
 	dumpCmd.MarkPersistentFlagDirname(flags.DirFlag.Full)
 	dumpCmd.PersistentFlags().
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
@@ -196,6 +200,19 @@ var dumpCmd = &cobra.Command{
 
 		for _, message := range resp.GetMessages() {
 			fmt.Println(message)
+		}
+
+		// Optionally emit the structured result so non-daemon callers (e.g. the
+		// cedana-slurm monitor, which shells out here) get the same DumpResp the
+		// daemon client returns -- paths, state -- instead of scraping stdout.
+		if resultFile, _ := cmd.Flags().GetString(flags.ResultFileFlag.Full); resultFile != "" {
+			data, err := protojson.Marshal(resp)
+			if err != nil {
+				return fmt.Errorf("failed to marshal dump result: %w", err)
+			}
+			if err := os.WriteFile(resultFile, data, 0o644); err != nil {
+				return fmt.Errorf("failed to write dump result to %s: %w", resultFile, err)
+			}
 		}
 
 		return nil

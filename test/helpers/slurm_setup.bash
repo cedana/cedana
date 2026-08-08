@@ -691,7 +691,7 @@ EOF
     docker exec \
         -e CEDANA_URL="${CEDANA_URL:-}" \
         -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
-        -e CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS:-release}" \
+        -e CEDANA_PLUGINS_BUILDS="local" \
         -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
         -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
         -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
@@ -837,6 +837,36 @@ EOF
         done
     fi
 
+    if [ "${PREEMPT:-0}" = "1" ]; then
+        debug_log "Configuring SLURM partition preemption (PREEMPT=1)..."
+        local preempt_grace="${PREEMPT_GRACE_TIME:-120}"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+            set -euo pipefail
+            SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
+
+            grep -q '^PreemptType=' \"\$SLURM_CONF\" || echo 'PreemptType=preempt/partition_prio' >> \"\$SLURM_CONF\"
+            grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=CANCEL' >> \"\$SLURM_CONF\"
+            grep -q '^SchedulerParameters=' \"\$SLURM_CONF\" || echo 'SchedulerParameters=preempt_reorder_count=100,preempt_strict_order' >> \"\$SLURM_CONF\"
+
+            if grep -q '^PartitionName=debug' \"\$SLURM_CONF\"; then
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PriorityTier=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PriorityTier=1|' \"\$SLURM_CONF\"
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=CANCEL|' \"\$SLURM_CONF\"
+                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'GraceTime=' || sed -i 's|^\(PartitionName=debug .*\)|\1 GraceTime=${preempt_grace}|' \"\$SLURM_CONF\"
+            fi
+
+            if ! grep -q '^PartitionName=high ' \"\$SLURM_CONF\"; then
+                nodes=\$(grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -oE 'Nodes=[^[:space:]]+' | head -1 | cut -d= -f2)
+                echo \"PartitionName=high Nodes=\${nodes:-ALL} MaxTime=INFINITE State=UP PreemptMode=CANCEL PriorityTier=2\" >> \"\$SLURM_CONF\"
+            fi
+
+            echo '--- preemption config ---'
+            grep -E '^(PreemptType|PreemptMode|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
+        " >&"${OUTPUT_FD}" 2>&1 || {
+            error_log "Failed to configure SLURM preemption on controller"
+            return 1
+        }
+    fi
+
     debug_log "Configuring SLURM to load Cedana plugins (controller)..."
     docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash <<'SETUP_EOF' >&"${OUTPUT_FD}" 2>&1 ||
 set -euo pipefail
@@ -886,7 +916,12 @@ SETUP_EOF
             return 1
         }
 
-    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes..."
+    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes (slurm.conf only to login)..."
+    local login_containers=()
+    if [ "${LOGIN_NODES:-0}" -ge 1 ]; then
+        # shellcheck disable=SC2207
+        login_containers=($(_slurm_login_containers))
+    fi
     for conf in slurm.conf cgroup.conf plugstack.conf; do
         if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
             continue
@@ -896,6 +931,12 @@ SETUP_EOF
         for c in "${compute_containers[@]}"; do
             docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
         done
+        if [ "$conf" = "slurm.conf" ]; then
+            for c in "${login_containers[@]}"; do
+                docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
+                docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' "/etc/slurm/${conf}" 2>/dev/null || true
+            done
+        fi
         rm -f "$tmpfile"
     done
 
@@ -1138,6 +1179,17 @@ start_cedana_slurm_daemon() {
     done
 
     for c in "${targets[@]}"; do
+        docker exec "$c" mkdir -p /etc/cedana
+        docker exec \
+            -e CEDANA_CLUSTER_ID="$cluster_id" \
+            "$c" /usr/local/bin/cedana --merge-config version ||
+            {
+                error_log "Failed to persist CEDANA_CLUSTER_ID into config on $c"
+                return 1
+            }
+    done
+
+    for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
@@ -1298,7 +1350,9 @@ setup_slurm_samples() {
     debug_log "Patching sbatch files on all nodes..."
     for c in "${sample_targets[@]}"; do
         docker exec "$c" bash -c '
-            find /data/cedana-samples/slurm -name "*.sbatch" -type f -exec sed -i "s|^#!/bin/bash|#!/bin/bash\nsource /data/venv/bin/activate|" {} +
+            find /data/cedana-samples/slurm -name "*.sbatch" -type f | while read -r f; do
+                awk '\''NR==1 {print; next} !ins && $0 !~ /^[[:space:]]*#/ && $0 !~ /^[[:space:]]*$/ {print "source /data/venv/bin/activate"; ins=1} {print}'\'' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+            done
         '
     done
 

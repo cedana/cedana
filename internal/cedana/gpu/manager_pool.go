@@ -118,6 +118,9 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 	for i, controller := range remaining {
 		if acquired, _ := controller.Booking.TryLock(); acquired {
 			log.Debug().Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("clearing stale GPU controller in pool")
+			if stderr := controller.ErrBuf.String(); stderr != "" {
+				log.Error().Str("ID", controller.ID).Str("reason", remainingReason[i]).Str("stderr", stderr).Msg("stale GPU controller captured stderr")
+			}
 			m.controllers.Terminate(ctx, controller.ID)
 		}
 	}
