@@ -456,7 +456,6 @@ jobs:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
-          SLURM_VERSION: slurm-25-11-5-1
           ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
@@ -469,13 +468,20 @@ jobs:
 
           mkdir -p slurm/build
 
+          SLURM_VERSION="slurm-25-11-5-1"
+          if [ -f slurm/cedana-slurm/slurm-versions ]; then
+            SLURM_VERSION=$(cat slurm/cedana-slurm/slurm-versions | head -n 1)
+          fi
+
           VERSION_REF="${VERSION//\//-}"
+          PKG_VERSION="${VERSION_REF}-${SLURM_VERSION}"
           CHECKOUT_SHA="$(git -C slurm/cedana-slurm rev-parse HEAD)"
           ORIGIN_FILE="slurm/slurm-artifact-origin.txt"
 
           {
             echo "source_mode=s3"
             echo "source_ref=${VERSION_REF}"
+            echo "package_version=${PKG_VERSION}"
             echo "checkout_sha=${CHECKOUT_SHA}"
           } > "$ORIGIN_FILE"
 
@@ -488,7 +494,7 @@ jobs:
           )
           for binary in "${BINARIES[@]}"; do
             curl -fL \
-              "${CEDANA_URL}/plugins/download/${binary}?version=${VERSION_REF}&arch=${ARCH}&build=${BUILD}" \
+              "${CEDANA_URL}/plugins/download/${binary}?version=${PKG_VERSION}&arch=${ARCH}&build=${BUILD}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
               --output "slurm/build/${binary}"
             test -f "slurm/build/${binary}"
