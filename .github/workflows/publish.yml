@@ -573,12 +573,17 @@ jobs:
           )
 
           for FILE in "${PLUGINS[@]}"; do
-            curl -fL \
+            if curl -fL \
               "${CEDANA_URL}/plugins/download/${FILE}?version=${CURRENT_TAG}&arch=${ARCH}&build=${BUILD}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
-              --output "current/${FILE}"
-            test -f "current/${FILE}"
-            test -s "current/${FILE}"
+              --output "current/${FILE}" && \
+              test -f "current/${FILE}" && \
+              test -s "current/${FILE}"; then
+              echo "Downloaded current ${FILE} successfully."
+            else
+              echo "Warning: Failed to download current binary ${FILE}"
+              rm -f "current/${FILE}"
+            fi
           done
 
       - name: Get release info
