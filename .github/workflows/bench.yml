@@ -68,6 +68,9 @@ env:
   SAMPLES: ${{ inputs.samples }}
   RETRIES: 2
   DEBUG: 0
+  # Checkpoint images (full GPU state) go on the large instance NVMe, mounted
+  # into the run container below, so big models don't fill the small root disk.
+  DUMPS_DIR: /mnt/nvme/bench-dumps
 
 jobs:
   dry-run:
@@ -126,7 +129,9 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all
+      # Mount the large instance NVMe so checkpoint images (DUMPS_DIR) land there
+      # instead of the small root disk.
+      options: --privileged --init --ipc=host --gpus all --volume /opt/dlami/nvme:/mnt/nvme
     strategy:
       fail-fast: false
       matrix:
@@ -208,6 +213,9 @@ jobs:
           RUNTIME: ${{ matrix.runtime }}
           METRIC: ${{ matrix.metric }}
           WORKLOAD: ${{ matrix.workload }}
+          # sglang model lists are ordered smallest-first and reach up to
+          # 8-GPU models; single-node CI runs only the first (tiny) one.
+          INPUTS: ${{ contains(matrix.workload, 'sglang') && '0:1' || '' }}
         run: |
           if [ "$DEBUG" -eq 1 ]; then
             # Pre-create log files so `tail -F` can latch on immediately,
@@ -219,7 +227,7 @@ jobs:
             TAIL_PID=$!
             trap 'kill $TAIL_PID 2>/dev/null || true' EXIT
           fi
-          ./bench run $RUNTIME -m $METRIC -w $WORKLOAD -n $SAMPLES -r $RETRIES --save
+          ./bench run $RUNTIME -m $METRIC -w $WORKLOAD -n $SAMPLES -r $RETRIES ${INPUTS:+-i "$INPUTS"} --save
 
       - name: Upload logs
         if: always()
