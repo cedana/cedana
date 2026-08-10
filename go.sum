@@ -6,6 +6,8 @@ buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-202607
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260728195828-ace959031818.1/go.mod h1:kV15BFc7NMSZ8iS0sr37eQoVFeeX616LLi5HCr9zDMI=
 buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-066e26b55d4a.1 h1:ckdope26kRlHEzDE8DgbPxo1zu9u7QpExtgnvb+X2KE=
 buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-066e26b55d4a.1/go.mod h1:s/fGqnM2Tj4P8+NLPw1FJlBQbZFKtx1OUp6erbl7w8Y=
+buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-1cfd5a5487e6.1 h1:oeGFarRX1adysZ54vV9r0ILip2G73PwLAuVnj1+hDB4=
+buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-1cfd5a5487e6.1/go.mod h1:IpFDusiMM8nAbqhy4SwxLf5f3eFYKLBPO8XAX/eRFrQ=
 buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-21274741320e.1 h1:wwaqzU5kMzjeHSnMEFTRSGMRK2oj/ffeWRRQ8YH+54Y=
 buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-21274741320e.1/go.mod h1:YP7sdo3qEmeHfmEdbQlsRDogAUl2cZBFPgLxOX9CYLw=
 buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-3be4e00cb255.1 h1:aoI88bClCbhz/qlRxlgt8zakvnfgwLqbrVIEcB23NvE=
@@ -16,6 +18,8 @@ buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-c31ddb9285b0.1 h1:k
 buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-c31ddb9285b0.1/go.mod h1:wD4N41GyYKVpg5xYhKqTK00GbalEP5iriTgrE36LG6g=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-066e26b55d4a.1 h1:2Ef1nW9aS9X8wKpdDSt4UNchm0pL1AwboSg4Pz9V6Qo=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-066e26b55d4a.1/go.mod h1:o/k44wq4T7EysUzhftQDobD/0y5lNxp1YlhDFyahDTs=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-1cfd5a5487e6.1 h1:H8ScmIN/nBOwZEYAMxfGKnQI1u1coVuuyznzLXKt1YQ=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-1cfd5a5487e6.1/go.mod h1:JZfzzyrTeDVlt0+nmmwpV3gzrC3891BiOfX0w+IaGbw=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-21274741320e.1 h1:wJstLLVrtqgbtBGOL8vp7qVx2TTsnOtnjHPFUtzY6ck=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-21274741320e.1/go.mod h1:MyhsbqshQ9ELTYMhzGPnUVj6dyb7ZaMgUvDwTWxJ5YI=
 buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-3be4e00cb255.1 h1:z631NfQL/g/a6AlqzuOxGFTggZH/dQd6KMIi3YJiA+Y=
