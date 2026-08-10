@@ -9,7 +9,7 @@
 # Requires the cuda_graph_* binaries from the cedana-samples image; skips if the
 # image predates them (same convention as cuda_samples.bats).
 #
-# bats file_tags=gpu
+# bats file_tags=gpu,graph
 
 load ../../helpers/utils
 load ../../helpers/daemon
