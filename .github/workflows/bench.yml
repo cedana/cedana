@@ -58,7 +58,7 @@ on:
         type: string
         description: "Runner machine for benchmark"
         required: false
-        default: "8cpu-32g-1xL4"
+        default: "4cpu-16g-1xT4"
 
 env:
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
