@@ -151,7 +151,7 @@ func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
 //////////////////
 
 func (db *PropagatorDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
-	url := fmt.Sprintf("%s/cedana/job/checkpoints/%s", db.URL, checkpoint.JID)
+	url := fmt.Sprintf("%s/cedana/job/checkpoints/%s", db.URL, checkpoint.ID)
 
 	body, err := json.Marshal(checkpoint)
 	if err != nil {
