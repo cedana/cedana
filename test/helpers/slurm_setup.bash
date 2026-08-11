@@ -1285,7 +1285,7 @@ restart_cedana_slurm_daemon_unprivileged() {
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
             -e CEDANA_SLURM_UNPRIVILEGED=1 \
             "$c" \
-            bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
+            bash -c '/usr/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
             error_log "Failed to launch cedana-slurm daemon (unprivileged) on $c"
             return 1
         }
