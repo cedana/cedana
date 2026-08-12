@@ -13,11 +13,11 @@ fi
 YUM_PACKAGES=(
     wget git make psmisc
     libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel # CRIU
-    yq
+    yq jq
 )
 
 APT_PACKAGES=(
-    wget git make psmisc
+    wget git make psmisc jq
     libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev iptables libnftables1 # CRIU
     sysvinit-utils
 )
@@ -79,21 +79,45 @@ else
 fi
 
 # Install yq if not already installed
-# yq is needed to configure kubelet, but not available in all distros
-if ! command -v yq &> /dev/null; then
+# yq is needed to configure kubelet, but not available in all distros.
+# A distro `yq` is often the Python jq-wrapper, which has no `eval-all` and
+# silently merges to nothing — so treat that as "not installed" and put the Go
+# implementation ahead of it on PATH.
+if ! command -v yq &> /dev/null || ! yq --version 2>&1 | grep -qi "mikefarah"; then
     case "$(uname -m)" in
         x86_64)
-            wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+            YQ_ASSET=yq_linux_amd64
             ;;
         arm64 | aarch64)
-            wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
+            YQ_ASSET=yq_linux_arm64
             ;;
         *)
             echo "Unsupported architecture: $(uname -m)"
             exit 1
             ;;
     esac
-    chmod +x /usr/local/bin/yq
+    # Download to a temp path first. `wget -O /usr/local/bin/yq` truncates the
+    # target before it fetches, so a failed download leaves a 0-byte file that
+    # the shell happily "runs" as an empty script — which silently breaks every
+    # later yq merge instead of failing here.
+    YQ_TEMP=$(mktemp)
+    if ! wget -q "https://github.com/mikefarah/yq/releases/latest/download/${YQ_ASSET}" -O "$YQ_TEMP"; then
+        rm -f "$YQ_TEMP"
+        echo "Error: failed to download yq (${YQ_ASSET})" >&2
+        exit 1
+    fi
+    if [ ! -s "$YQ_TEMP" ]; then
+        rm -f "$YQ_TEMP"
+        echo "Error: downloaded yq is empty" >&2
+        exit 1
+    fi
+    chmod +x "$YQ_TEMP"
+    if ! "$YQ_TEMP" --version 2>&1 | grep -qi "mikefarah"; then
+        rm -f "$YQ_TEMP"
+        echo "Error: downloaded yq did not report itself as mikefarah/yq" >&2
+        exit 1
+    fi
+    mv "$YQ_TEMP" /usr/local/bin/yq
     echo "yq has been installed"
 else
     echo "yq is already installed"

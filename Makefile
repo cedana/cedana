@@ -348,6 +348,7 @@ DOCKER_TEST_EXEC=docker exec -it $(DOCKER_TEST_CONTAINER_NAME)
 DOCKER_TEST_REMOVE=docker rm -f $(DOCKER_TEST_CONTAINER_NAME) >/dev/null
 PLATFORM=linux/amd64,linux/arm64
 ALL_PLUGINS?=1
+PLUGINS?=k8s
 PREBUILT_BINARIES?=0
 
 PLUGIN_LIB_COPY=find /usr/local/lib -type f -name '*cedana*' -not -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
@@ -411,7 +412,7 @@ DOCKER_TEST_CREATE_SLURM_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_
 						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
 
 ifeq ($(PREBUILT_BINARIES),1)
-docker: cedana plugins ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
+docker: cedana plugins ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1], PLUGINS="<names>")
 else
 docker:
 endif
@@ -419,6 +420,7 @@ endif
 	docker buildx build --platform $(PLATFORM) \
 		--build-arg PREBUILT_BINARIES=$(PREBUILT_BINARIES) \
 		--build-arg ALL_PLUGINS=$(ALL_PLUGINS) \
+		--build-arg PLUGINS="$(PLUGINS)" \
 		--build-arg VERSION=$(VERSION) \
 		-t $(DOCKER_IMAGE) --load . ;\
 

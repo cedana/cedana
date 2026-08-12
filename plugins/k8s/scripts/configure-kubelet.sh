@@ -26,6 +26,17 @@ if ! check_tool "yq"; then
 fi
 echo "yq found at: $(command -v yq) ($(yq --version))"
 
+# Distro packages ship a jq-wrapper called `yq` that has no `eval-all`. Merging
+# with it silently produces nothing, and writing that over the kubelet config
+# leaves the node unable to start kubelet at all. Refuse to continue unless the
+# yq on PATH is the Go implementation this script is written against.
+if ! yq --version 2>&1 | grep -qi "mikefarah"; then
+    echo "Error: 'yq' at $(command -v yq) is not the mikefarah/yq implementation." >&2
+    echo "It does not support 'eval-all' and would corrupt the kubelet config." >&2
+    echo "Install it from https://github.com/mikefarah/yq#install" >&2
+    exit 1
+fi
+
 # Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
 echo "Target runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT"
@@ -103,9 +114,15 @@ if [ -n "$KUBELET_CONFIG_DIR" ]; then
         exit 1
     }
 
-    echo "$KUBELET_CONFIG_CONTENT_JSON" >"$TARGET"
-    echo "Wrote config to $TARGET:"
-    cat "$TARGET"
+    KUBELET_CONFIG_CHANGED=0
+    if [ -f "$TARGET" ] && cmp -s "$TARGET" <(echo "$KUBELET_CONFIG_CONTENT_JSON"); then
+        echo "Config at $TARGET is already up to date; skipping write"
+    else
+        echo "$KUBELET_CONFIG_CONTENT_JSON" >"$TARGET"
+        KUBELET_CONFIG_CHANGED=1
+        echo "Wrote config to $TARGET:"
+        cat "$TARGET"
+    fi
 
 elif [ -n "$KUBELET_CONFIG_FILE" ]; then
     echo "Strategy: merge into existing config file at $KUBELET_CONFIG_FILE"
@@ -137,16 +154,45 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
         exit 0
     fi
 
-    echo "Moving merged config to $KUBELET_CONFIG_FILE..."
-    mv "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE" || {
-        echo "Error: Failed to update kubelet config at $KUBELET_CONFIG_FILE" >&2
-        exit 0
-    }
+    # A merge that produced nothing, or that lost the KubeletConfiguration
+    # identity, must never reach the kubelet: an empty or malformed config file
+    # makes kubelet exit at startup and takes the whole node down. Validate
+    # before replacing, and leave the working config in place on any doubt.
+    if [ ! -s "$TEMP_CONFIG" ]; then
+        echo "Error: merged kubelet config is empty; keeping $KUBELET_CONFIG_FILE unchanged" >&2
+        rm -f "$TEMP_CONFIG"
+        exit 1
+    fi
+    if ! grep -q "KubeletConfiguration" "$TEMP_CONFIG"; then
+        echo "Error: merged kubelet config has no KubeletConfiguration kind; keeping $KUBELET_CONFIG_FILE unchanged" >&2
+        rm -f "$TEMP_CONFIG"
+        exit 1
+    fi
 
-    echo "Updated kubelet config at $KUBELET_CONFIG_FILE:"
-    cat "$KUBELET_CONFIG_FILE"
+    KUBELET_CONFIG_CHANGED=0
+    if cmp -s "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE"; then
+        echo "Config at $KUBELET_CONFIG_FILE is already up to date; skipping replace"
+        rm -f "$TEMP_CONFIG"
+    else
+        # Keep the last known-good config beside the live one so a bad merge is
+        # recoverable without rebuilding the node.
+        cp "$KUBELET_CONFIG_FILE" "$KUBELET_CONFIG_FILE.cedana-bak" 2>/dev/null || true
+        echo "Moving merged config to $KUBELET_CONFIG_FILE..."
+        mv "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE" || {
+            echo "Error: Failed to update kubelet config at $KUBELET_CONFIG_FILE" >&2
+            exit 0
+        }
+        KUBELET_CONFIG_CHANGED=1
+        echo "Updated kubelet config at $KUBELET_CONFIG_FILE:"
+        cat "$KUBELET_CONFIG_FILE"
+    fi
 else
     echo "WARNING: Neither --config-dir nor --config argument found for kubelet; skipping kubelet config update" >&2
+    exit 0
+fi
+
+if [ "${KUBELET_CONFIG_CHANGED:-0}" != "1" ]; then
+    echo "kubelet configuration is already up to date; no restart needed"
     exit 0
 fi
 
