@@ -1270,8 +1270,6 @@ restart_cedana_slurm_daemon_unprivileged() {
         docker exec -e CEDANA_SLURM_UNPRIVILEGED=1 \
             -e CEDANA_PLUGINS_BIN_DIR=/usr/bin \
             -e CEDANA_CRIU_BINARY_PATH=/usr/bin/criu \
-            -e CEDANA_CHECKPOINT_DIR=/tmp \
-            -e CEDANA_CHECKPOINT_STREAMS=0 \
             "$c" /usr/local/bin/cedana --merge-config version ||
             {
                 error_log "Failed to persist slurm.unprivileged into config on $c"

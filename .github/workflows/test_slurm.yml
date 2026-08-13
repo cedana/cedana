@@ -52,7 +52,7 @@ on:
         default: "slurm"
 
 env:
-  CEDANA_URL: https://tushar.cedana.ai/v1
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
   CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
   CEDANA_LOG_LEVEL: debug
   CEDANA_PROFILING_ENABLED: true
@@ -62,7 +62,7 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
   TERM: dumb
-  RETRIES: 1
+  RETRIES: 1 # some tests are still flaky
   DEBUG: 0
 
 jobs:
@@ -160,7 +160,7 @@ jobs:
       - name: Setup SLURM cluster
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
@@ -175,7 +175,7 @@ jobs:
 
       - name: Run ANSIBLE tests
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -471,7 +471,7 @@ jobs:
       - name: Setup SLURM cluster
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
           CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
@@ -490,7 +490,7 @@ jobs:
       - name: Setup SLURM samples
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -503,7 +503,7 @@ jobs:
       - name: Register SLURM cluster and start daemon
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -524,7 +524,7 @@ jobs:
 
       - name: Run SLURM tests
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'storage/local' && '/tmp' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
@@ -799,7 +799,7 @@ jobs:
       - name: Setup SLURM cluster
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
@@ -818,7 +818,7 @@ jobs:
       - name: Register SLURM cluster and start daemon
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -839,7 +839,7 @@ jobs:
 
       - name: Run preemption test
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -1038,7 +1038,7 @@ jobs:
       - name: Setup SLURM cluster
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
@@ -1056,7 +1056,7 @@ jobs:
       - name: Setup SLURM samples
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -1069,7 +1069,7 @@ jobs:
       - name: Register SLURM cluster and start daemon (unprivileged)
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -1120,7 +1120,7 @@ jobs:
 
       - name: Run unprivileged C/R tests
         env:
-          CEDANA_CHECKPOINT_DIR: /tmp
+          CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
