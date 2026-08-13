@@ -60,4 +60,4 @@ jobs:
       comparison_previous: true
       comparison_runtime: true
       post_summary_slack: nightly
-      runner: 8cpu-64g-1xL40S # use larger runner (bench will automatically run larger metrics)
+      runner: 8cpu-64g-1xRTX6000 # use larger runner (bench will automatically run larger metrics)
