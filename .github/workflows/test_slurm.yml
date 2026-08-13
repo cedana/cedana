@@ -704,26 +704,22 @@ jobs:
           if-no-files-found: warn
 
   slurm-preemption:
-    name: Slurm (Preemption, ${{ matrix.compute }})
+    name: Slurm (Preemption)
+    # Runs on CUDA only: the CPU preemption test is not GPU-gated, so this one
+    # job covers both it and the GPU test.
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-amd64{2}/tag=slurm-ansible/extras=s3-cache',
       github.run_id,
-      matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
-      (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || ''
+      inputs.runner_gpu,
+      inputs.runner_gpu != inputs.runner && '-cuda-12-4' || ''
       ) }}
     timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        compute:
-          - CPU
-          - CUDA
     container:
-      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: cedana/cedana-test:cuda
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
+      options: --privileged --init --ipc=host --gpus all --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: runs-on/action@v1
 
@@ -761,7 +757,6 @@ jobs:
         run: mv slurm-bin/cedana-slurm cedana-slurm
 
       - name: Download GPU plugin
-        if: ${{ matrix.compute == 'CUDA' }}
         uses: actions/download-artifact@v4
         with:
           name: gpu-amd64
@@ -771,7 +766,7 @@ jobs:
 
       - name: Pre-install plugins
         env:
-          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
+          GPU: "true"
           CEDANA_PLUGINS_BUILDS: local
         run: |
           chmod +x ./cedana*
@@ -825,7 +820,7 @@ jobs:
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          GPU: "1"
           LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: "0"
           PREEMPT: "1"
@@ -839,7 +834,6 @@ jobs:
       # The --gpu run needs cedana-samples on the compute node for its CUDA
       # victim; the CPU run builds its workload inline and does not.
       - name: Setup SLURM samples
-        if: ${{ matrix.compute == 'CUDA' }}
         shell: bash
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
@@ -859,7 +853,7 @@ jobs:
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          GPU: "1"
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -880,13 +874,13 @@ jobs:
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          GPU: "1"
           PREEMPT: "1"
         run: |
           set +e
           make test-slurm \
             TAGS=slurm,preemption \
-            GPU=${{ matrix.compute == 'CUDA' && '1' || '0' }} \
+            GPU=1 \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
             PARALLELISM=1 \
@@ -955,13 +949,13 @@ jobs:
             repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm (Preemption, amd64, ${{ matrix.compute }})"
+            testEnvironment="cedana/cedana-test" reportName="Slurm (Preemption, amd64)"
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-amd64-slurm-preemption-${{ matrix.compute }}
+          name: test-report-amd64-slurm-preemption
           path: |
             /tmp/report*.json
 
@@ -969,7 +963,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: slurm-debug-logs-amd64-preemption-${{ matrix.compute }}
+          name: slurm-debug-logs-amd64-preemption
           path: |
             /tmp/slurm-debug/**
           if-no-files-found: warn

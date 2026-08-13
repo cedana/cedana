@@ -9,6 +9,7 @@ CEDANA_SLURM_DIR="${CEDANA_SLURM_DIR:-}"
 
 SLURM_DATA_DIR="${SLURM_DATA_DIR:-/data}"
 SLURM_CONTROLLER_CONTAINER="${SLURM_CONTROLLER_CONTAINER:-slurm-controller}"
+CEDANA_INSTALL_STAGE="${CEDANA_INSTALL_STAGE:-/tmp/cedana-slurm-install}"
 # Must match docker-deploy.sh COMPUTE_NODES / LOGIN_NODES
 COMPUTE_NODES="${COMPUTE_NODES:-1}"
 LOGIN_NODES="${LOGIN_NODES:-1}"
@@ -467,12 +468,19 @@ wait_for_slurm_ready() {
 # Cedana Installation
 ##############################
 
-# Copy a host file into the controller. Only the controller is writable --
-# compute nodes mount /usr/local/{bin,lib} over NFS and inherit it from there.
+# Install a host file onto the controller; compute nodes inherit it over NFS.
+# Staging is required: /usr/local/{bin,lib} are tmpfs mounts, and a direct
+# docker cp lands in the image layer underneath them where nothing can see it.
 _install_into_controller() {
-    local src="$1" dest="$2"
-    docker cp "$src" "${SLURM_CONTROLLER_CONTAINER}:${dest}" || {
-        error_log "Failed to install $(basename "$dest") into $SLURM_CONTROLLER_CONTAINER"
+    local src="$1" dest="$2" mode="$3"
+    local stage="$CEDANA_INSTALL_STAGE"
+    local name
+    name="$(basename "$dest")"
+
+    docker cp "$src" "${SLURM_CONTROLLER_CONTAINER}:${stage}/${name}" &&
+        docker exec "$SLURM_CONTROLLER_CONTAINER" \
+            install -m "$mode" "${stage}/${name}" "$dest" || {
+        error_log "Failed to install ${name} into $SLURM_CONTROLLER_CONTAINER"
         return 1
     }
 }
@@ -561,12 +569,17 @@ install_cedana_in_slurm() {
     done
 
     debug_log "Copying ${#bins[@]} binaries and ${#libs[@]} libraries into controller..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        bash -c "rm -rf '$CEDANA_INSTALL_STAGE' && mkdir -p '$CEDANA_INSTALL_STAGE'" || {
+        error_log "Failed to prepare install staging directory in $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    }
     local f
     for f in "${bins[@]}"; do
-        _install_into_controller "$f" "/usr/local/bin/$(basename "$f")" || return 1
+        _install_into_controller "$f" "/usr/local/bin/$(basename "$f")" 0755 || return 1
     done
     for f in "${libs[@]}"; do
-        _install_into_controller "$f" "/usr/local/lib/$(basename "$f")" || return 1
+        _install_into_controller "$f" "/usr/local/lib/$(basename "$f")" 0644 || return 1
     done
 
     debug_log "Waiting for NFS-shared binaries to be visible on compute nodes..."
