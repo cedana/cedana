@@ -76,6 +76,11 @@ var setupCmd = &cobra.Command{
 			script.Chroot("/host", k8scripts.ConfigureKubelet),
 			script.Chroot("/host", scripts.ConfigureShm),
 			script.Chroot("/host", scripts.ConfigureIoUring),
+			// Runs before the service so /checkpoint exists before anything can
+			// be asked to write a checkpoint into it. Disabled unless
+			// CHECKPOINT_TMPFS_ENABLED is set, so a node that does not host
+			// checkpointed workloads gives up no memory.
+			script.Chroot("/host", scripts.ConfigureCheckpointTmpfs),
 			script.Chroot("/host", scripts.InstallService),
 		)
 		if err != nil {
