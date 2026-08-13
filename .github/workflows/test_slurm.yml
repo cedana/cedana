@@ -277,7 +277,6 @@ jobs:
 
   slurm:
     name: Slurm
-    needs: slurm-ansible
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}-{5}/extras=s3-cache',
       github.run_id,
@@ -706,7 +705,6 @@ jobs:
 
   slurm-preemption:
     name: Slurm (Preemption, ${{ matrix.compute }})
-    needs: slurm-ansible
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-amd64{2}/tag=slurm-ansible/extras=s3-cache',
       github.run_id,
@@ -978,7 +976,6 @@ jobs:
 
   slurm-unprivileged:
     name: Slurm (Unprivileged)
-    needs: slurm-ansible
     runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
     timeout-minutes: 90
     strategy:
