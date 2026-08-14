@@ -26,6 +26,14 @@ if test -f "$SERVICE_FILE"; then
 fi
 
 echo "Creating $SERVICE_FILE..."
+POD_IDENTITY_ENV=""
+if [ -n "${AWS_CONTAINER_CREDENTIALS_FULL_URI:-}" ] && [ -n "${AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE:-}" ]; then
+    POD_IDENTITY_ENV=$(cat <<EOF
+Environment="AWS_CONTAINER_CREDENTIALS_FULL_URI=${AWS_CONTAINER_CREDENTIALS_FULL_URI}"
+Environment="AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE=${AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE}"
+EOF
+)
+fi
 cat <<EOF | tee "$SERVICE_FILE" >/dev/null
 [Unit]
 Description=Cedana Daemon
@@ -34,6 +42,7 @@ ExecStart=$APP_PATH daemon start
 User=root
 Group=root
 Restart=no
+$POD_IDENTITY_ENV
 
 [Install]
 WantedBy=multi-user.target
