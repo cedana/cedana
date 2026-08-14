@@ -180,6 +180,13 @@ slurm_accounting_enabled: false
 nfs_shared_install: true
 EOF
 
+    # SLURM is built from source by the ansible role, and the SPANK ABI is
+    # version-locked, so this must match the version the plugins were built for.
+    if [ -n "${SLURM_VERSION:-}" ]; then
+        echo "slurm_version: \"${SLURM_VERSION}\"" >>"$vars_file"
+        info_log "Pinning cluster SLURM version to ${SLURM_VERSION}"
+    fi
+
     if [ "${NFS_ROOT_SQUASH:-1}" = "0" ]; then
         cat >>"$vars_file" <<'EOF'
 nfs_v4_root_export_options: "ro,fsid=0,crossmnt,no_subtree_check,no_root_squash"

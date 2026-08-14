@@ -50,6 +50,11 @@ on:
         description: "Name of the slurm binaries artifact to download"
         required: false
         default: "slurm"
+      slurm_default_version:
+        type: string
+        description: "SLURM version tag used by the single-version jobs"
+        required: false
+        default: "25-11-5-1"
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -66,6 +71,38 @@ env:
   DEBUG: 0
 
 jobs:
+  slurm-versions:
+    name: Slurm versions
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.read.outputs.matrix }}
+    steps:
+      - name: Checkout cedana-slurm
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-slurm
+          ref: main
+          path: cedana-slurm
+          token: ${{ secrets.GIT_CI_PAT }}
+
+      - name: Read slurm-versions
+        id: read
+        run: |
+          set -euo pipefail
+          # tag selects the published plugin build; version is what the ansible
+          # role builds SLURM from (slurm-25-11-5-1 -> 25-11-5-1 / 25.11.5).
+          entries=""
+          while read -r line; do
+            line="${line%%#*}"; line="$(echo "$line" | tr -d '[:space:]')"
+            [ -z "$line" ] && continue
+            tag="${line#slurm-}"
+            version="$(echo "$tag" | sed 's/-[0-9]*$//; s/-/./g')"
+            entries="${entries}{\"tag\":\"${tag}\",\"version\":\"${version}\"},"
+          done < cedana-slurm/slurm-versions
+          matrix="[${entries%,}]"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix"
+
   slurm-ansible:
     name: Slurm (Ansible)
     runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
@@ -106,7 +143,7 @@ jobs:
       - name: Download slurm binaries
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.slurm_artifact }}-amd64
+          name: ${{ inputs.slurm_artifact }}-${{ inputs.slurm_default_version }}-amd64
           path: slurm-bin
 
       - name: Extract cedana-slurm
@@ -277,6 +314,7 @@ jobs:
 
   slurm:
     name: Slurm
+    needs: slurm-versions
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}-{5}/extras=s3-cache',
       github.run_id,
@@ -296,6 +334,7 @@ jobs:
           - storage/cedana
         arch:
           - amd64
+        slurm: ${{ fromJson(needs.slurm-versions.outputs.matrix) }}
         nfs:
           - root_squash
           - no_root_squash
@@ -335,7 +374,7 @@ jobs:
       - name: Download slurm binaries
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.slurm_artifact }}-${{ matrix.arch }}
+          name: ${{ inputs.slurm_artifact }}-${{ matrix.slurm.tag }}-${{ matrix.arch }}
           path: slurm-bin
 
       - name: Extract cedana-slurm
@@ -478,6 +517,7 @@ jobs:
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
+          SLURM_VERSION: ${{ matrix.slurm.version }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -675,7 +715,7 @@ jobs:
             repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, ${{ matrix.arch }}, ${{ matrix.nfs }})"
+            testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, ${{ matrix.arch }}, ${{ matrix.slurm.tag }}, ${{ matrix.nfs }})"
 
       - name: Set sanitized storage
         if: always()
@@ -690,7 +730,7 @@ jobs:
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-slurm-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.nfs }}
+          name: test-report-${{ matrix.arch }}-slurm-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.slurm.tag }}-${{ matrix.nfs }}
           path: |
             /tmp/report*.json
 
@@ -698,7 +738,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: slurm-debug-logs-${{ matrix.arch }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.nfs }}
+          name: slurm-debug-logs-${{ matrix.arch }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.slurm.tag }}-${{ matrix.nfs }}
           path: |
             /tmp/slurm-debug/**
           if-no-files-found: warn
@@ -750,7 +790,7 @@ jobs:
       - name: Download slurm binaries
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.slurm_artifact }}-amd64
+          name: ${{ inputs.slurm_artifact }}-${{ inputs.slurm_default_version }}-amd64
           path: slurm-bin
 
       - name: Extract cedana-slurm
@@ -1014,7 +1054,7 @@ jobs:
       - name: Download slurm binaries
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.slurm_artifact }}-amd64
+          name: ${{ inputs.slurm_artifact }}-${{ inputs.slurm_default_version }}-amd64
           path: slurm-bin
 
       - name: Extract cedana-slurm

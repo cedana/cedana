@@ -8,6 +8,10 @@ permissions:
 
 on:
   workflow_call:
+    outputs:
+      slurm_versions:
+        description: SLURM versions read from cedana-slurm/slurm-versions
+        value: ${{ jobs.slurm-versions.outputs.matrix }}
     inputs:
       cedana_version:
         type: string
@@ -446,15 +450,50 @@ jobs:
           name: helm-chart
           path: cedana-helm
 
+  slurm-versions:
+    name: Slurm versions
+    if: ${{ inputs.slurm_version != 'none' }}
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.read.outputs.matrix }}
+    steps:
+      - name: Checkout cedana-slurm
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-slurm
+          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
+          path: cedana-slurm
+          token: ${{ secrets.GIT_CI_PAT }}
+
+      - name: Read slurm-versions
+        id: read
+        run: |
+          set -euo pipefail
+          # tag selects the published plugin build; version is what the ansible
+          # role builds SLURM from (slurm-25-11-5-1 -> 25-11-5-1 / 25.11.5).
+          entries=""
+          while read -r line; do
+            line="${line%%#*}"; line="$(echo "$line" | tr -d '[:space:]')"
+            [ -z "$line" ] && continue
+            tag="${line#slurm-}"
+            version="$(echo "$tag" | sed 's/-[0-9]*$//; s/-/./g')"
+            entries="${entries}{\"tag\":\"${tag}\",\"version\":\"${version}\"},"
+          done < cedana-slurm/slurm-versions
+          matrix="[${entries%,}]"
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "$matrix"
+
   slurm:
     name: Slurm
     if: ${{ inputs.slurm_version != 'none' }}
+    needs: slurm-versions
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         arch:
           - amd64
+        slurm: ${{ fromJson(needs.slurm-versions.outputs.matrix) }}
     steps:
       - name: Checkout cedana-slurm
         uses: actions/checkout@v4
@@ -472,7 +511,7 @@ jobs:
         env:
           API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
           VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
-          SLURM_VERSION: slurm-25-11-5-1
+          SLURM_VERSION: slurm-${{ matrix.slurm.tag }}
           ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
@@ -517,5 +556,5 @@ jobs:
       - name: Upload slurm artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: slurm-${{ matrix.arch }}
+          name: slurm-${{ matrix.slurm.tag }}-${{ matrix.arch }}
           path: ./slurm/*
