@@ -173,6 +173,7 @@ _dump_job_failure_info() {
     local job_id="${1:-}"
     local sample_dir="${2:-/data/cedana-samples}"
     local relevant_job_ids_csv="${3:-$job_id}"
+    local job_show out_file err_file found
 
     _capture_runtime_slurm_logs "failure-dump" "$job_id" "unknown" "$sample_dir" "$relevant_job_ids_csv"
 
@@ -188,7 +189,6 @@ _dump_job_failure_info() {
         echo "=== job output files ==="
         # Ask SLURM where it put them; the paths come from the sbatch
         # --output/--error directives and are not guessable.
-        local out_file err_file job_show found
         job_show="$(slurm_exec scontrol show job "$job_id" 2>/dev/null || true)"
         out_file="$(printf '%s' "$job_show" | grep -oE 'StdOut=[^[:space:]]+' | head -1 | cut -d= -f2-)"
         err_file="$(printf '%s' "$job_show" | grep -oE 'StdErr=[^[:space:]]+' | head -1 | cut -d= -f2-)"
@@ -198,7 +198,7 @@ _dump_job_failure_info() {
             for f in "$out_file" "$err_file"; do
                 [ -n "$f" ] || continue
                 docker exec "$c" test -f "$f" 2>/dev/null || continue
-                echo "--- $f (on $c) ---"
+                echo "--- $c:$f ---"
                 docker exec "$c" tail -50 "$f" 2>/dev/null || true
                 found=1
             done

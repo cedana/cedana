@@ -11,10 +11,6 @@ load ../helpers/slurm_propagator
 # Cedana Samples #
 ##################
 
-# Only workloads that run until they are checkpointed are listed here; the
-# one-shot CUDA samples finish before a dump can land, and the multi-GPU one
-# requests gres/gpu:2 which the test cluster cannot satisfy.
-
 # bats test_tags=dump,restore,samples,gpu
 @test "Dump/Restore: CUDA Vector Add" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-vector-add.sbatch"

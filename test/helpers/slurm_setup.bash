@@ -855,26 +855,26 @@ EOF
             _log_gpu_debug_state "$c" "post-slurm-conf-sync"
         done
 
-        # A node that registers fewer GPUs than slurm.conf declares gets drained
-        # and then silently scheduled with no GPU, so jobs fail at CUDA init
-        # instead of here. Fail setup instead.
+        # A node registering fewer GPUs than slurm.conf declares is drained and
+        # then scheduled with no GPU, so jobs fail at CUDA init instead of here.
+        debug_log "Verifying GPU GRES registration..."
         for c in "${compute_containers[@]}"; do
-            local n gres_state waited=0
-            n=$(docker exec "$c" hostname)
+            local node_hostname gres_state waited=0
+            node_hostname=$(docker exec "$c" hostname)
             while [ "$waited" -lt 60 ]; do
-                gres_state=$(slurm_exec scontrol show node "$n" 2>/dev/null |
+                gres_state=$(slurm_exec scontrol show node "$node_hostname" 2>/dev/null |
                     grep -oE 'Gres=[^[:space:]]+' | head -1 | cut -d= -f2-)
                 [ -n "$gres_state" ] && [ "$gres_state" != "(null)" ] && break
                 sleep 3
                 waited=$((waited + 3))
             done
             if [ -z "$gres_state" ] || [ "$gres_state" = "(null)" ]; then
-                error_log "$n registered no GPU GRES after ${waited}s (slurm.conf declares one)"
-                slurm_exec scontrol show node "$n" 2>/dev/null || true
+                error_log "$node_hostname registered no GPU GRES after ${waited}s"
+                slurm_exec scontrol show node "$node_hostname" 2>/dev/null || true
                 docker exec "$c" cat /etc/slurm/gres.conf 2>/dev/null || true
                 return 1
             fi
-            debug_log "$n registered GRES: $gres_state"
+            debug_log "$node_hostname registered GRES: $gres_state"
         done
     fi
 
