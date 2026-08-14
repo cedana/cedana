@@ -277,7 +277,6 @@ jobs:
 
   slurm:
     name: Slurm
-    needs: slurm-ansible
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag=slurm-{4}-{5}/extras=s3-cache',
       github.run_id,
@@ -706,15 +705,21 @@ jobs:
 
   slurm-preemption:
     name: Slurm (Preemption)
-    needs: slurm-ansible
-    runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
+    # Runs on CUDA only: the CPU preemption test is not GPU-gated, so this one
+    # job covers both it and the GPU test.
+    runs-on: ${{ format(
+      'runs-on={0}/runner={1}-amd64{2}/tag=slurm-ansible/extras=s3-cache',
+      github.run_id,
+      inputs.runner_gpu,
+      inputs.runner_gpu != inputs.runner && '-cuda-12-4' || ''
+      ) }}
     timeout-minutes: 90
     container:
-      image: cedana/cedana-test:latest
+      image: cedana/cedana-test:cuda
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
+      options: --privileged --init --ipc=host --gpus all --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: runs-on/action@v1
 
@@ -751,11 +756,17 @@ jobs:
       - name: Extract cedana-slurm
         run: mv slurm-bin/cedana-slurm cedana-slurm
 
+      - name: Download GPU plugin
+        uses: actions/download-artifact@v4
+        with:
+          name: gpu-amd64
+
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
 
       - name: Pre-install plugins
         env:
+          GPU: "true"
           CEDANA_PLUGINS_BUILDS: local
         run: |
           chmod +x ./cedana*
@@ -771,6 +782,11 @@ jobs:
           CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install \
             runc \
             storage/cedana
+          if [ "$GPU" = "true" ]; then
+            GPU_VERSION="$(cat ./gpu-version.txt)"
+            CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install "gpu@${GPU_VERSION}"
+            echo "CEDANA_PLUGINS_GPU_VERSION=${GPU_VERSION}" >> "$GITHUB_ENV"
+          fi
 
       - name: Install slurm binaries
         run: |
@@ -804,7 +820,7 @@ jobs:
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: "0"
+          GPU: "1"
           LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: "0"
           PREEMPT: "1"
@@ -815,6 +831,21 @@ jobs:
           setup_slurm_accounting
           install_cedana_in_slurm
 
+      # The --gpu run needs cedana-samples on the compute node for its CUDA
+      # victim; the CPU run builds its workload inline and does not.
+      - name: Setup SLURM samples
+        shell: bash
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: "1"
+        run: |
+          source test/helpers/utils.bash
+          source test/helpers/slurm_setup.bash
+          setup_slurm_samples
+
       - name: Register SLURM cluster and start daemon
         shell: bash
         env:
@@ -822,7 +853,7 @@ jobs:
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: "0"
+          GPU: "1"
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -843,13 +874,13 @@ jobs:
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: "0"
+          GPU: "1"
           PREEMPT: "1"
         run: |
           set +e
           make test-slurm \
             TAGS=slurm,preemption \
-            GPU=0 \
+            GPU=1 \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
             PARALLELISM=1 \
@@ -939,7 +970,6 @@ jobs:
 
   slurm-unprivileged:
     name: Slurm (Unprivileged)
-    needs: slurm-ansible
     runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
     timeout-minutes: 90
     strategy:
