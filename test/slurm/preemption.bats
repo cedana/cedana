@@ -35,6 +35,11 @@ stage_preemption_script() {
         error_log "could not read node CPU count from sinfo"
         return 1
     }
+
+    # Submitting as the job user is what makes the monitor run unprivileged;
+    # as root it would run privileged whatever the daemon mode says.
+    EXEC_USER=()
+    [ -n "${SLURM_SUBMIT_USER:-}" ] && EXEC_USER=(-u "$SLURM_SUBMIT_USER")
 }
 
 # bats test_tags=dump,restore,preemption
@@ -47,13 +52,12 @@ stage_preemption_script() {
         -e LOW_PARTITION=debug \
         -e HIGH_PARTITION=high \
         -e PREEMPTOR_CPUS="$NODE_CPUS" \
+        "${EXEC_USER[@]}" \
         "$COMPUTE" /tmp/test-preemption.sh
     echo "$output"
     [ "$status" -eq 0 ]
 }
 
-# Same flow with a CUDA victim, so the checkpoint has to carry GPU state and the
-# restore has to come back with its GRES.
 # bats test_tags=dump,restore,preemption,gpu
 @test "Preemption: Checkpoint/Restore on preempt (GPU)" {
     [ "${PREEMPT:-0}" = "1" ] || skip "preemptible partitions not configured (PREEMPT=1)"
@@ -68,6 +72,7 @@ stage_preemption_script() {
         -e LOW_PARTITION=debug \
         -e HIGH_PARTITION=high \
         -e PREEMPTOR_CPUS="$NODE_CPUS" \
+        "${EXEC_USER[@]}" \
         "$COMPUTE" /tmp/test-preemption.sh --gpu "$SLURM_GPU_WORKLOAD"
     echo "$output"
     [ "$status" -eq 0 ]
