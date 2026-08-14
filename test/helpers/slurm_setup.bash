@@ -791,12 +791,18 @@ EOF
                 debug_log "slurmd -C detected GRES '$detected_gres' on $c"
             fi
 
-            docker exec "$c" bash -c "
+            # AutoDetect=nvidia needs SLURM built against NVML, which the
+            # ansible role does not do; enumerate the devices instead.
+            docker exec "$c" bash -c '
                 mkdir -p /etc/slurm
-                echo 'AutoDetect=nvidia' > /etc/slurm/gres.conf
+                : > /etc/slurm/gres.conf
+                for dev in /dev/nvidia[0-9]*; do
+                    [ -e "$dev" ] || continue
+                    echo "Name=gpu File=$dev" >> /etc/slurm/gres.conf
+                done
                 cat /etc/slurm/gres.conf
-            " || {
-                error_log "Failed to write autodetect gres.conf on $c"
+            ' || {
+                error_log "Failed to write gres.conf on $c"
                 return 1
             }
 
@@ -847,6 +853,28 @@ EOF
 
         for c in "${compute_containers[@]}"; do
             _log_gpu_debug_state "$c" "post-slurm-conf-sync"
+        done
+
+        # A node that registers fewer GPUs than slurm.conf declares gets drained
+        # and then silently scheduled with no GPU, so jobs fail at CUDA init
+        # instead of here. Fail setup instead.
+        for c in "${compute_containers[@]}"; do
+            local n gres_state waited=0
+            n=$(docker exec "$c" hostname)
+            while [ "$waited" -lt 60 ]; do
+                gres_state=$(slurm_exec scontrol show node "$n" 2>/dev/null |
+                    grep -oE 'Gres=[^[:space:]]+' | head -1 | cut -d= -f2-)
+                [ -n "$gres_state" ] && [ "$gres_state" != "(null)" ] && break
+                sleep 3
+                waited=$((waited + 3))
+            done
+            if [ -z "$gres_state" ] || [ "$gres_state" = "(null)" ]; then
+                error_log "$n registered no GPU GRES after ${waited}s (slurm.conf declares one)"
+                slurm_exec scontrol show node "$n" 2>/dev/null || true
+                docker exec "$c" cat /etc/slurm/gres.conf 2>/dev/null || true
+                return 1
+            fi
+            debug_log "$n registered GRES: $gres_state"
         done
     fi
 

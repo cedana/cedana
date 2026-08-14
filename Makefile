@@ -118,6 +118,7 @@ TAGS?=
 ARGS?=
 RETRIES?=0
 GPU?=0
+REPORT?=
 PROVIDER?=K3s
 SKIP_HELM?=0
 HELPER_REPO?=
@@ -282,6 +283,9 @@ test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RET
 		else \
 			$(BATS_CMD_TAGS) -r test/slurm ; status=$$? ;\
 		fi ;\
+		if [ -n "$(REPORT)" ] && [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/$(REPORT).xml ;\
+		fi ;\
 		if [ $$status -ne 0 ]; then \
 			echo "Slurm e2e tests failed" ;\
 			exit $$status ;\
@@ -303,6 +307,7 @@ test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RET
 			TAGS=$(TAGS) \
 			RETRIES=$(RETRIES) \
 			GPU=$(GPU) \
+			REPORT=$(REPORT) \
 			FORMATTER=$(FORMATTER) \
 			DEBUG=$(DEBUG) ;\
 		$(DOCKER_TEST_REMOVE) ;\

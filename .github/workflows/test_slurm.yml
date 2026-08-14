@@ -581,7 +581,7 @@ jobs:
           PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
           SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
         run: |
-          TAGS="slurm,!ansible"
+          TAGS="slurm,!ansible,!preemption"
           if [ "$GPU" = "1" ]; then
             TAGS="${TAGS},gpu"
           else
@@ -595,17 +595,18 @@ jobs:
           make test-slurm \
             TAGS=$TAGS \
             GPU=$GPU \
+            REPORT=report-samples \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
             PARALLELISM=$PARALLELISM
           test_exit_code=$?
           set -e
 
-          if [ -f /tmp/report.xml ]; then
-            tests=$(grep -o '<testcase[ >]' /tmp/report.xml | wc -l | tr -d ' ')
-            failures=$(grep -o '<failure[ >]' /tmp/report.xml | wc -l | tr -d ' ')
-            errors=$(grep -o '<error[ >]' /tmp/report.xml | wc -l | tr -d ' ')
-            skipped=$(grep -o '<skipped[ >]' /tmp/report.xml | wc -l | tr -d ' ')
+          if [ -f /tmp/report-samples.xml ]; then
+            tests=$(grep -o '<testcase[ >]' /tmp/report-samples.xml | wc -l | tr -d ' ')
+            failures=$(grep -o '<failure[ >]' /tmp/report-samples.xml | wc -l | tr -d ' ')
+            errors=$(grep -o '<error[ >]' /tmp/report-samples.xml | wc -l | tr -d ' ')
+            skipped=$(grep -o '<skipped[ >]' /tmp/report-samples.xml | wc -l | tr -d ' ')
             passed=$((tests - failures - errors - skipped))
             if [ "$passed" -lt 0 ]; then
               passed=0
@@ -616,7 +617,58 @@ jobs:
               echo "$summary" >> "$GITHUB_STEP_SUMMARY"
             fi
           else
-            echo "SLURM tests: report.xml not found"
+            echo "SLURM tests: report-samples.xml not found"
+          fi
+
+          exit "$test_exit_code"
+
+      - name: Run SLURM preemption tests
+        if: ${{ !cancelled() }}
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          PARALLELISM: 1
+          SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
+          PREEMPT: "1"
+        run: |
+          TAGS="slurm,preemption"
+          if [ "$GPU" = "1" ]; then
+            TAGS="${TAGS},gpu"
+          else
+            TAGS="${TAGS},!gpu"
+          fi
+
+          set +e
+          make test-slurm \
+            TAGS=$TAGS \
+            GPU=$GPU \
+            REPORT=report-preemption \
+            FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=$PARALLELISM
+          test_exit_code=$?
+          set -e
+
+          if [ -f /tmp/report-preemption.xml ]; then
+            tests=$(grep -o '<testcase[ >]' /tmp/report-preemption.xml | wc -l | tr -d ' ')
+            failures=$(grep -o '<failure[ >]' /tmp/report-preemption.xml | wc -l | tr -d ' ')
+            errors=$(grep -o '<error[ >]' /tmp/report-preemption.xml | wc -l | tr -d ' ')
+            skipped=$(grep -o '<skipped[ >]' /tmp/report-preemption.xml | wc -l | tr -d ' ')
+            passed=$((tests - failures - errors - skipped))
+            if [ "$passed" -lt 0 ]; then
+              passed=0
+            fi
+            summary="SLURM preemption tests: ${passed}/${tests} passed, ${failures} failed, ${errors} errored, ${skipped} skipped"
+            echo "$summary"
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "SLURM preemption tests: report-preemption.xml not found"
           fi
 
           exit "$test_exit_code"
@@ -714,10 +766,10 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Generate report
+      - name: Generate report (samples)
         if: always()
         run: |
-          npx junit-to-ctrf "/tmp/report.xml" -t bats -o /tmp/report.json -e \
+          npx junit-to-ctrf "/tmp/report-samples.xml" -t bats -o /tmp/report-samples.json -e \
             appName="cedana" appVersion="$(git describe --tags --always)" \
             buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
             buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
@@ -725,6 +777,18 @@ jobs:
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
             testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
+
+      - name: Generate report (preemption)
+        if: ${{ !cancelled() }}
+        run: |
+          npx junit-to-ctrf "/tmp/report-preemption.xml" -t bats -o /tmp/report-preemption.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Slurm Preemption (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
 
       - name: Upload report
         if: always()
