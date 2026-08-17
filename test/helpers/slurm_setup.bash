@@ -492,6 +492,114 @@ _install_into_controller() {
     }
 }
 
+# Point SLURM at the GPUs on each compute node. Called by
+# install_cedana_in_slurm once the binaries are in place.
+_configure_slurm_gres() {
+    [ "${GPU:-0}" = "1" ] || return 0
+
+    local compute_containers=()
+    # shellcheck disable=SC2207
+    compute_containers=($(_slurm_compute_containers))
+
+    debug_log "Configuring SLURM GPU GRES resources..."
+    for c in "${compute_containers[@]}"; do
+        local gpu_count
+        gpu_count=$(docker exec "$c" bash -c 'ls -1 /dev/nvidia[0-9]* 2>/dev/null | wc -l' || echo "0")
+        if [ "$gpu_count" -eq 0 ]; then
+            error_log "GPU test requested but no /dev/nvidia* devices were found in $c"
+            docker exec "$c" bash -c 'ls -la /dev/nvidia* 2>/dev/null || true; nvidia-smi -L 2>/dev/null || true' || true
+            return 1
+        fi
+        debug_log "Detected $gpu_count GPU(s) on $c"
+
+        local node_hostname
+        node_hostname=$(docker exec "$c" hostname)
+
+        # AutoDetect=nvidia needs SLURM built against NVML, which the
+        # ansible role does not do; enumerate the devices instead.
+        docker exec "$c" bash -c '
+            mkdir -p /etc/slurm
+            : > /etc/slurm/gres.conf
+            for dev in /dev/nvidia[0-9]*; do
+                [ -e "$dev" ] || continue
+                echo "Name=gpu File=$dev" >> /etc/slurm/gres.conf
+            done
+            cat /etc/slurm/gres.conf
+        ' || {
+            error_log "Failed to write gres.conf on $c"
+            return 1
+        }
+
+        _log_gpu_debug_state "$c" "post-gres-config"
+
+        # Untyped, matching gres.conf: a type slurmd cannot match makes it
+        # drop the devices and register zero GPUs.
+        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+            set -euo pipefail
+            SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
+
+            grep -q '^GresTypes=' \"\$SLURM_CONF\" || \
+                echo 'GresTypes=gpu' >> \"\$SLURM_CONF\"
+            grep -q '^DebugFlags=.*NO_CONF_HASH' \"\$SLURM_CONF\" || \
+                echo 'DebugFlags=NO_CONF_HASH' >> \"\$SLURM_CONF\"
+
+            if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
+                if grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
+                    sed -i 's|^\(NodeName=$node_hostname.*\) Gres=[^[:space:]]*|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
+                else
+                    sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
+                fi
+            fi
+            echo 'GRES config updated for $node_hostname'
+        " || {
+            error_log "Failed to update slurm.conf GRES on controller for $c"
+            return 1
+        }
+    done
+
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mkdir -p /etc/slurm
+        test -f /etc/slurm/gres.conf || echo '' > /etc/slurm/gres.conf
+    "
+
+    for c in "${compute_containers[@]}"; do
+        _log_gpu_debug_state "$c" "post-gres-config-pre-sync"
+    done
+}
+
+# Add the priority tiers and GraceTime the preemption tests need.
+_configure_slurm_preemption() {
+    [ "${PREEMPT:-0}" = "1" ] || return 0
+
+    debug_log "Configuring SLURM partition preemption (PREEMPT=1)..."
+    local preempt_grace="${PREEMPT_GRACE_TIME:-120}"
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        set -euo pipefail
+        SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
+
+        grep -q '^PreemptType=' \"\$SLURM_CONF\" || echo 'PreemptType=preempt/partition_prio' >> \"\$SLURM_CONF\"
+        grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=CANCEL' >> \"\$SLURM_CONF\"
+        grep -q '^SchedulerParameters=' \"\$SLURM_CONF\" || echo 'SchedulerParameters=preempt_reorder_count=100,preempt_strict_order' >> \"\$SLURM_CONF\"
+
+        if grep -q '^PartitionName=debug' \"\$SLURM_CONF\"; then
+            grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PriorityTier=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PriorityTier=1|' \"\$SLURM_CONF\"
+            grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=CANCEL|' \"\$SLURM_CONF\"
+            grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'GraceTime=' || sed -i 's|^\(PartitionName=debug .*\)|\1 GraceTime=${preempt_grace}|' \"\$SLURM_CONF\"
+        fi
+
+        if ! grep -q '^PartitionName=high ' \"\$SLURM_CONF\"; then
+            nodes=\$(grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -oE 'Nodes=[^[:space:]]+' | head -1 | cut -d= -f2)
+            echo \"PartitionName=high Nodes=\${nodes:-ALL} MaxTime=INFINITE State=UP PreemptMode=CANCEL PriorityTier=2\" >> \"\$SLURM_CONF\"
+        fi
+
+        echo '--- preemption config ---'
+        grep -E '^(PreemptType|PreemptMode|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
+    " >&"${OUTPUT_FD}" 2>&1 || {
+        error_log "Failed to configure SLURM preemption on controller"
+        return 1
+    }
+}
+
 install_cedana_in_slurm() {
     info_log "Installing Cedana into SLURM cluster containers..."
 
@@ -765,103 +873,9 @@ EOF
         fi
     done
 
-    if [ "${GPU:-0}" = "1" ]; then
-        debug_log "Configuring SLURM GPU GRES resources..."
-        for c in "${compute_containers[@]}"; do
-            local gpu_count
-            gpu_count=$(docker exec "$c" bash -c 'ls -1 /dev/nvidia[0-9]* 2>/dev/null | wc -l' || echo "0")
-            if [ "$gpu_count" -eq 0 ]; then
-                error_log "GPU test requested but no /dev/nvidia* devices were found in $c"
-                docker exec "$c" bash -c 'ls -la /dev/nvidia* 2>/dev/null || true; nvidia-smi -L 2>/dev/null || true' || true
-                return 1
-            fi
-            debug_log "Detected $gpu_count GPU(s) on $c"
+    _configure_slurm_gres || return 1
 
-            local node_hostname
-            node_hostname=$(docker exec "$c" hostname)
-
-            # AutoDetect=nvidia needs SLURM built against NVML, which the
-            # ansible role does not do; enumerate the devices instead.
-            docker exec "$c" bash -c '
-                mkdir -p /etc/slurm
-                : > /etc/slurm/gres.conf
-                for dev in /dev/nvidia[0-9]*; do
-                    [ -e "$dev" ] || continue
-                    echo "Name=gpu File=$dev" >> /etc/slurm/gres.conf
-                done
-                cat /etc/slurm/gres.conf
-            ' || {
-                error_log "Failed to write gres.conf on $c"
-                return 1
-            }
-
-            _log_gpu_debug_state "$c" "post-gres-config"
-
-            # Untyped, matching gres.conf: a type slurmd cannot match makes it
-            # drop the devices and register zero GPUs.
-            docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-                set -euo pipefail
-                SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
-
-                grep -q '^GresTypes=' \"\$SLURM_CONF\" || \
-                    echo 'GresTypes=gpu' >> \"\$SLURM_CONF\"
-                grep -q '^DebugFlags=.*NO_CONF_HASH' \"\$SLURM_CONF\" || \
-                    echo 'DebugFlags=NO_CONF_HASH' >> \"\$SLURM_CONF\"
-
-                if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
-                    if grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
-                        sed -i 's|^\(NodeName=$node_hostname.*\) Gres=[^[:space:]]*|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
-                    else
-                        sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
-                    fi
-                fi
-                echo 'GRES config updated for $node_hostname'
-            " || {
-                error_log "Failed to update slurm.conf GRES on controller for $c"
-                return 1
-            }
-        done
-
-        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-            mkdir -p /etc/slurm
-            test -f /etc/slurm/gres.conf || echo '' > /etc/slurm/gres.conf
-        "
-
-        for c in "${compute_containers[@]}"; do
-            _log_gpu_debug_state "$c" "post-gres-config-pre-sync"
-        done
-
-    fi
-
-    if [ "${PREEMPT:-0}" = "1" ]; then
-        debug_log "Configuring SLURM partition preemption (PREEMPT=1)..."
-        local preempt_grace="${PREEMPT_GRACE_TIME:-120}"
-        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-            set -euo pipefail
-            SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
-
-            grep -q '^PreemptType=' \"\$SLURM_CONF\" || echo 'PreemptType=preempt/partition_prio' >> \"\$SLURM_CONF\"
-            grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=CANCEL' >> \"\$SLURM_CONF\"
-            grep -q '^SchedulerParameters=' \"\$SLURM_CONF\" || echo 'SchedulerParameters=preempt_reorder_count=100,preempt_strict_order' >> \"\$SLURM_CONF\"
-
-            if grep -q '^PartitionName=debug' \"\$SLURM_CONF\"; then
-                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PriorityTier=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PriorityTier=1|' \"\$SLURM_CONF\"
-                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=CANCEL|' \"\$SLURM_CONF\"
-                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'GraceTime=' || sed -i 's|^\(PartitionName=debug .*\)|\1 GraceTime=${preempt_grace}|' \"\$SLURM_CONF\"
-            fi
-
-            if ! grep -q '^PartitionName=high ' \"\$SLURM_CONF\"; then
-                nodes=\$(grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -oE 'Nodes=[^[:space:]]+' | head -1 | cut -d= -f2)
-                echo \"PartitionName=high Nodes=\${nodes:-ALL} MaxTime=INFINITE State=UP PreemptMode=CANCEL PriorityTier=2\" >> \"\$SLURM_CONF\"
-            fi
-
-            echo '--- preemption config ---'
-            grep -E '^(PreemptType|PreemptMode|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
-        " >&"${OUTPUT_FD}" 2>&1 || {
-            error_log "Failed to configure SLURM preemption on controller"
-            return 1
-        }
-    fi
+    _configure_slurm_preemption || return 1
 
     debug_log "Configuring SLURM to load Cedana plugins (controller)..."
     docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash <<'SETUP_EOF' >&"${OUTPUT_FD}" 2>&1 ||
