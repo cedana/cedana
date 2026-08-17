@@ -451,7 +451,7 @@ jobs:
     if: ${{ inputs.slurm_version != 'none' }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false
+      fail-fast: true
       matrix:
         arch:
           - amd64
