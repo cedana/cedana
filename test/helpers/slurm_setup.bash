@@ -769,7 +769,6 @@ EOF
         debug_log "Configuring SLURM GPU GRES resources..."
         for c in "${compute_containers[@]}"; do
             local gpu_count
-            local detected_gres
             gpu_count=$(docker exec "$c" bash -c 'ls -1 /dev/nvidia[0-9]* 2>/dev/null | wc -l' || echo "0")
             if [ "$gpu_count" -eq 0 ]; then
                 error_log "GPU test requested but no /dev/nvidia* devices were found in $c"
@@ -780,12 +779,6 @@ EOF
 
             local node_hostname
             node_hostname=$(docker exec "$c" hostname)
-
-            # slurmd -C reports a type it guessed without NVML (gpu:unknown),
-            # which would not match the untyped devices written to gres.conf --
-            # slurmd then discards them as "file-less" and registers zero.
-            detected_gres="gpu:$gpu_count"
-            debug_log "Using untyped GRES '$detected_gres' on $c to match gres.conf"
 
             # AutoDetect=nvidia needs SLURM built against NVML, which the
             # ansible role does not do; enumerate the devices instead.
@@ -804,40 +797,27 @@ EOF
 
             _log_gpu_debug_state "$c" "post-gres-config"
 
+            # Untyped, matching gres.conf: a type slurmd cannot match makes it
+            # drop the devices and register zero GPUs.
             docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
                 set -euo pipefail
                 SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
 
                 grep -q '^GresTypes=' \"\$SLURM_CONF\" || \
                     echo 'GresTypes=gpu' >> \"\$SLURM_CONF\"
+                grep -q '^DebugFlags=.*NO_CONF_HASH' \"\$SLURM_CONF\" || \
+                    echo 'DebugFlags=NO_CONF_HASH' >> \"\$SLURM_CONF\"
 
                 if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
-                    if ! grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
+                    if grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
+                        sed -i 's|^\(NodeName=$node_hostname.*\) Gres=[^[:space:]]*|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
+                    else
                         sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
                     fi
                 fi
                 echo 'GRES config updated for $node_hostname'
             " || {
                 error_log "Failed to update slurm.conf GRES on controller for $c"
-                return 1
-            }
-
-            docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-                set -euo pipefail
-                SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
-
-                grep -q '^DebugFlags=.*NO_CONF_HASH' \"\$SLURM_CONF\" || \
-                    echo 'DebugFlags=NO_CONF_HASH' >> \"\$SLURM_CONF\"
-
-                if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
-                    if grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
-                        sed -i 's|^\(NodeName=$node_hostname.*\) Gres=[^[:space:]]*|\1 Gres=$detected_gres|' \"\$SLURM_CONF\"
-                    else
-                        sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=$detected_gres|' \"\$SLURM_CONF\"
-                    fi
-                fi
-            " || {
-                error_log "Failed to align controller GRES with detected value '$detected_gres' for $c"
                 return 1
             }
         done
