@@ -157,7 +157,9 @@ checkpoint_slurm_job() {
     info_log "Checkpoint request payload: $payload"
 
     local response http_code body
-    local waited=0 max_wait=40 interval=3
+    # The controller syncs jobs to the propagator every 30s, so a 40s window is
+    # barely over one tick and misses whenever the tick lands unfavourably.
+    local waited=0 max_wait=120 interval=3
     while :; do
         if ! response=$(curl -sS -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoint/job" \
                 -H "Content-Type: application/json" \

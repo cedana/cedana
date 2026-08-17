@@ -242,6 +242,13 @@ _dump_job_failure_info() {
     docker exec "$SLURM_CONTROLLER_CONTAINER" \
         tail -50 /var/log/cedana-slurm.log 2>/dev/null || true
 
+    # The 50-line tail is mostly sync debug spam, so a job-sync failure minutes
+    # earlier scrolls off; that error is what explains a job never registering.
+    echo "=== job sync errors on controller ==="
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        grep -aiE "Failed to get SLURM jobs|Failed to send sync request|non-OK status for job sync|Failed to marshal sync" \
+        /var/log/cedana-slurm.log 2>/dev/null | tail -20 || echo "(none)"
+
     echo "=== cedana-slurm monitor log on controller (last 120 lines) ==="
     docker exec "$SLURM_CONTROLLER_CONTAINER" \
         tail -120 /var/log/cedana-slurm-monitor.log 2>/dev/null || true
