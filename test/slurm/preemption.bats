@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# bats file_tags=slurm
+# bats file_tags=slurm,preemption
 
 load ../helpers/utils
 load ../helpers/slurm
@@ -44,7 +44,7 @@ stage_preemption_script() {
     fi
 }
 
-# bats test_tags=dump,restore,preemption
+# bats test_tags=dump,restore
 @test "Preemption: Checkpoint/Restore on preempt" {
     [ "${PREEMPT:-0}" = "1" ] || skip "preemptible partitions not configured (PREEMPT=1)"
 
@@ -60,7 +60,7 @@ stage_preemption_script() {
     [ "$status" -eq 0 ]
 }
 
-# bats test_tags=dump,restore,preemption,gpu
+# bats test_tags=dump,restore,gpu
 @test "Preemption: Checkpoint/Restore on preempt (GPU)" {
     [ "${PREEMPT:-0}" = "1" ] || skip "preemptible partitions not configured (PREEMPT=1)"
     [ "${GPU:-0}" = "1" ] || skip "GPU tests disabled (GPU != 1)"
