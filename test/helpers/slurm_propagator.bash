@@ -312,7 +312,7 @@ poll_slurm_action_status() {
                         ;;
                 esac
             else
-                status="processing"
+                status="not-listed"
                 debug_log "Slurm $operation action not yet in checkpoints list (attempt $i/$max_attempts)"
             fi
         else
