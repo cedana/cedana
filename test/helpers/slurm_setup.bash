@@ -852,7 +852,7 @@ EOF
         "
 
         for c in "${compute_containers[@]}"; do
-            _log_gpu_debug_state "$c" "post-slurm-conf-sync"
+            _log_gpu_debug_state "$c" "post-gres-config-pre-sync"
         done
 
     fi
