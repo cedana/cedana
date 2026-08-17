@@ -6,6 +6,7 @@ import (
 	"regexp"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -78,14 +79,33 @@ func AddExternalMountsForDump(next types.Dump) types.Dump {
 			)
 		}
 
-		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
-				log.Trace().Interface("m", m).Msg("marking NVIDIA GPU mount as external")
-				req.Criu.External = append(req.Criu.External, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.MountPoint))
-			}
-			return true
+		initial := gpuExternalMountKeys(state)
+		req.Criu.External = append(req.Criu.External, initial...)
+
+		pid := state.PID
+		opts.CRIUCallback.Include(&criu.NotifyCallback{
+			Name: "gpu external mounts",
+			QueryExtFilesFunc: func(ctx context.Context) ([]string, error) {
+				frozen := &daemon.ProcessState{}
+				if err := utils.FillProcessState(ctx, pid, frozen, true); err != nil {
+					return nil, err
+				}
+				return gpuExternalMountKeys(frozen), nil
+			},
 		})
 
 		return next(ctx, opts, resp, req)
 	}
+}
+
+func gpuExternalMountKeys(state *daemon.ProcessState) []string {
+	var keys []string
+	utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+		if NVIDIA_MOUNTS_PATTERN.MatchString(m.Root) {
+			log.Trace().Interface("m", m).Msg("marking NVIDIA GPU mount as external")
+			keys = append(keys, fmt.Sprintf("mnt[%s]:%s", m.MountPoint, m.MountPoint))
+		}
+		return true
+	})
+	return keys
 }
