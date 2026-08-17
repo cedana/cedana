@@ -65,7 +65,8 @@ sleep 5
 curl -fSL \
     "${CEDANA_URL}"/download?version="$VERSION"\&arch="$ARCH"\&build="$CEDANA_PLUGINS_BUILDS" \
     -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
-    -o "$APP_PATH"
+    -o "$APP_PATH.tmp"
+mv -f "$APP_PATH.tmp" "$APP_PATH"
 chmod +x "$APP_PATH"
 
 # Delete any existing Cedana plugin libs to avoid incompatibilities with the new version

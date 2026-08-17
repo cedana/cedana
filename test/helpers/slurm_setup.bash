@@ -9,6 +9,7 @@ CEDANA_SLURM_DIR="${CEDANA_SLURM_DIR:-}"
 
 SLURM_DATA_DIR="${SLURM_DATA_DIR:-/data}"
 SLURM_CONTROLLER_CONTAINER="${SLURM_CONTROLLER_CONTAINER:-slurm-controller}"
+CEDANA_INSTALL_STAGE="${CEDANA_INSTALL_STAGE:-/tmp/cedana-slurm-install}"
 # Must match docker-deploy.sh COMPUTE_NODES / LOGIN_NODES
 COMPUTE_NODES="${COMPUTE_NODES:-1}"
 LOGIN_NODES="${LOGIN_NODES:-1}"
@@ -48,7 +49,11 @@ slurm_submission_container() {
 }
 
 slurm_submit_exec() {
-    docker exec "$(slurm_submission_container)" "$@"
+    if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
+        docker exec -u "$SLURM_SUBMIT_USER" "$(slurm_submission_container)" "$@"
+    else
+        docker exec "$(slurm_submission_container)" "$@"
+    fi
 }
 
 _wait_for_port() {
@@ -463,10 +468,26 @@ wait_for_slurm_ready() {
 # Cedana Installation
 ##############################
 
+# Install a host file onto the controller; compute nodes inherit it over NFS.
+# Staging is required: /usr/local/{bin,lib} are tmpfs mounts, and a direct
+# docker cp lands in the image layer underneath them where nothing can see it.
+_install_into_controller() {
+    local src="$1" dest="$2" mode="$3"
+    local stage="$CEDANA_INSTALL_STAGE"
+    local name
+    name="$(basename "$dest")"
+
+    docker cp "$src" "${SLURM_CONTROLLER_CONTAINER}:${stage}/${name}" &&
+        docker exec "$SLURM_CONTROLLER_CONTAINER" \
+            install -m "$mode" "${stage}/${name}" "$dest" || {
+        error_log "Failed to install ${name} into $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    }
+}
+
 install_cedana_in_slurm() {
     info_log "Installing Cedana into SLURM cluster containers..."
 
-    local install_stage="/tmp/cedana-slurm-install"
     local all_containers=("$SLURM_CONTROLLER_CONTAINER")
     local compute_containers=()
     # shellcheck disable=SC2207
@@ -518,63 +539,48 @@ install_cedana_in_slurm() {
         return 1
     fi
 
-    debug_log "Copying cedana + criu binaries into controller..."
-    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "rm -rf '$install_stage' && mkdir -p '$install_stage/bin' '$install_stage/lib'" ||
-        {
-            error_log "Failed to prepare install staging directory in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        }
-    if ! docker cp "$cedana_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana"; then
-        error_log "Failed to stage cedana binary in $SLURM_CONTROLLER_CONTAINER"
-        return 1
-    fi
-    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana" /usr/local/bin/cedana; then
-        error_log "Failed to install cedana binary in $SLURM_CONTROLLER_CONTAINER"
-        return 1
-    fi
-    if ! docker cp "$criu_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/criu"; then
-        error_log "Failed to stage criu binary in $SLURM_CONTROLLER_CONTAINER"
-        return 1
-    fi
-    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/criu" /usr/local/bin/criu; then
-        error_log "Failed to install criu binary in $SLURM_CONTROLLER_CONTAINER"
-        return 1
-    fi
-
-    debug_log "Copying plugin libraries into controller..."
-    for so in /usr/local/lib/libcedana-*.so \
-        /usr/local/lib/task_cedana.so \
-        /usr/local/lib/spank_cedana.so \
-        /usr/local/lib/cli_filter_cedana.so \
-        /usr/local/lib/job_submit_cedana.so; do
-        [ -f "$so" ] || continue
-        local so_name
-        so_name="$(basename "$so")"
-        if ! docker cp "$so" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/lib/${so_name}"; then
-            error_log "Failed to stage ${so_name} in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        fi
-        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0644 "${install_stage}/lib/${so_name}" "/usr/local/lib/${so_name}"; then
-            error_log "Failed to install ${so_name} in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        fi
-    done
-
     local cedana_slurm_bin="${CEDANA_SLURM_BIN:-/usr/local/bin/cedana-slurm}"
     if [ ! -f "$cedana_slurm_bin" ]; then
         error_log "cedana-slurm binary not found at $cedana_slurm_bin"
         return 1
     fi
 
-    debug_log "Copying cedana-slurm binary into controller..."
-    if ! docker cp "$cedana_slurm_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana-slurm"; then
-        error_log "Failed to stage cedana-slurm in $SLURM_CONTROLLER_CONTAINER"
-        return 1
+    local bins=("$cedana_bin" "$criu_bin" "$cedana_slurm_bin")
+    if [ "${GPU:-0}" = "1" ]; then
+        # `cedana run -g` spawns this; libcedana-gpu.so alone is not enough.
+        if [ ! -x /usr/local/bin/cedana-gpu-controller ]; then
+            error_log "GPU requested but /usr/local/bin/cedana-gpu-controller is missing (install the gpu plugin)"
+            return 1
+        fi
+        bins+=(/usr/local/bin/cedana-gpu-controller)
     fi
-    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana-slurm" /usr/local/bin/cedana-slurm; then
-        error_log "Failed to install cedana-slurm in $SLURM_CONTROLLER_CONTAINER"
+
+    local libs=()
+    local so
+    for so in /usr/local/lib/libcedana-*.so \
+        /usr/local/lib/task_cedana.so \
+        /usr/local/lib/spank_cedana.so \
+        /usr/local/lib/cli_filter_cedana.so \
+        /usr/local/lib/job_submit_cedana.so; do
+        [ -f "$so" ] || continue
+        # The tracer is not loaded at runtime.
+        [[ "$so" == *libcedana-gpu-tracer.so ]] && continue
+        libs+=("$so")
+    done
+
+    debug_log "Copying ${#bins[@]} binaries and ${#libs[@]} libraries into controller..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        bash -c "rm -rf '$CEDANA_INSTALL_STAGE' && mkdir -p '$CEDANA_INSTALL_STAGE'" || {
+        error_log "Failed to prepare install staging directory in $SLURM_CONTROLLER_CONTAINER"
         return 1
-    fi
+    }
+    local f
+    for f in "${bins[@]}"; do
+        _install_into_controller "$f" "/usr/local/bin/$(basename "$f")" 0755 || return 1
+    done
+    for f in "${libs[@]}"; do
+        _install_into_controller "$f" "/usr/local/lib/$(basename "$f")" 0644 || return 1
+    done
 
     debug_log "Waiting for NFS-shared binaries to be visible on compute nodes..."
     for c in "${compute_containers[@]}"; do
@@ -1189,6 +1195,23 @@ start_cedana_slurm_daemon() {
             }
     done
 
+    debug_log "Waiting for slurm accounting DB before starting cedana-slurm daemon..."
+    local db_ready=false
+    for i in $(seq 1 45); do
+        if docker exec "$SLURM_CONTROLLER_CONTAINER" mysqladmin ping --silent &>/dev/null \
+            && docker exec "$SLURM_CONTROLLER_CONTAINER" test -r /etc/slurm/slurmdbd.conf \
+            && slurm_exec sacctmgr show cluster -n &>/dev/null; then
+            db_ready=true
+            break
+        fi
+        sleep 2
+    done
+    if [ "$db_ready" = false ]; then
+        error_log "slurm accounting DB not reachable after 90s; cedana-slurm SyncJobs would be disabled"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" tail -30 /var/log/slurm/slurmdbd.log 2>/dev/null || true
+        return 1
+    fi
+
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec -d \
@@ -1217,10 +1240,6 @@ start_cedana_slurm_daemon() {
     done
 }
 
-# Restart the cedana-slurm daemon with CEDANA_SLURM_UNPRIVILEGED=1 on all nodes.
-# Sets CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the binary via setcap,
-# then starts the daemon with CEDANA_SLURM_UNPRIVILEGED=1 so both the daemon and any monitors
-# it spawns use the embedded dump path.
 restart_cedana_slurm_daemon_unprivileged() {
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
@@ -1234,17 +1253,30 @@ restart_cedana_slurm_daemon_unprivileged() {
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
-    debug_log "Restarting cedana-slurm daemon (unprivileged/embedded) on SLURM nodes..."
+    debug_log "Restarting cedana-slurm daemon (unprivileged) on SLURM nodes..."
 
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec "$c" bash -c '
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm 2>/dev/null || true
+            caps=cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip
+            install -m 0755 /usr/local/bin/cedana /usr/bin/cedana
+            install -m 0755 /usr/local/bin/criu /usr/bin/criu
+            setcap $caps /usr/bin/cedana-slurm
+            setcap $caps /usr/bin/cedana
+            setcap $caps /usr/bin/criu
         ' || {
-            error_log "Failed to set capabilities on cedana-slurm in $c"
+            error_log "Failed to stage/setcap cedana/criu binaries in $c"
             return 1
         }
+        docker exec "$c" mkdir -p /etc/cedana
+        docker exec -e CEDANA_SLURM_UNPRIVILEGED=1 \
+            -e CEDANA_PLUGINS_BIN_DIR=/usr/bin \
+            -e CEDANA_CRIU_BINARY_PATH=/usr/bin/criu \
+            "$c" /usr/local/bin/cedana --merge-config version ||
+            {
+                error_log "Failed to persist slurm.unprivileged into config on $c"
+                return 1
+            }
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -1253,7 +1285,7 @@ restart_cedana_slurm_daemon_unprivileged() {
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
             -e CEDANA_SLURM_UNPRIVILEGED=1 \
             "$c" \
-            bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
+            bash -c '/usr/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
             error_log "Failed to launch cedana-slurm daemon (unprivileged) on $c"
             return 1
         }
@@ -1268,6 +1300,17 @@ restart_cedana_slurm_daemon_unprivileged() {
             docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
             return 1
         fi
+    done
+
+    for c in "${targets[@]}"; do
+        docker exec "$c" chmod 666 /var/log/cedana-slurm.log 2>/dev/null || true
+    done
+
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd || {
+            error_log "Failed to restart slurmd on $c"
+            return 1
+        }
     done
 }
 
@@ -1328,7 +1371,7 @@ setup_slurm_samples() {
             apt-get install -y -qq git 2>/dev/null
             rm -rf /data/cedana-samples
             mkdir -p /data
-            git clone --depth 1 https://github.com/cedana/cedana-samples.git /data/cedana-samples
+            git clone --depth 1 -b feat/unprivileged-tests https://github.com/cedana/cedana-samples.git /data/cedana-samples
         ' || {
             error_log "Failed to clone cedana-samples into $c"
             return 1
@@ -1344,6 +1387,8 @@ setup_slurm_samples() {
         docker exec "$c" bash -c "
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
+            apt-get install -y -qq libffi-dev build-essential 2>/dev/null || true
+            /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
         "
     done
 
@@ -1357,4 +1402,31 @@ setup_slurm_samples() {
     done
 
     info_log "cedana-samples ready in all cluster nodes"
+}
+
+setup_slurm_unprivileged_user() {
+    local user="${SLURM_SUBMIT_USER:-cedana}"
+    local uid="${SLURM_SUBMIT_UID:-2000}"
+    local all_nodes=("$SLURM_CONTROLLER_CONTAINER" "$(slurm_submission_container)" $(_slurm_compute_containers) $(_slurm_login_containers))
+    local compute_nodes=($(_slurm_compute_containers))
+
+    info_log "Creating unprivileged submit user '$user' (uid $uid) on cluster nodes..."
+
+    for c in "${all_nodes[@]}"; do
+        docker exec "$c" bash -c "
+            id '$user' &>/dev/null || useradd -m -u '$uid' -U -s /bin/bash '$user'
+            chmod -R a+rwX /data/cedana-samples 2>/dev/null || true
+        " || {
+            error_log "Failed to create submit user '$user' in $c"
+            return 1
+        }
+    done
+
+    for c in "${compute_nodes[@]}"; do
+        docker exec "$c" bash -c "touch /var/log/cedana-slurm.log && chmod 666 /var/log/cedana-slurm.log" || true
+    done
+
+    slurm_exec sacctmgr -i add user "$user" Account=default 2>/dev/null || true
+
+    debug_log "Unprivileged submit user '$user' ready"
 }

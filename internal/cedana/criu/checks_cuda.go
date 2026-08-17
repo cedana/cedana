@@ -71,23 +71,19 @@ func CheckCriuForCuda(manager plugins.Manager) types.Check {
 
 		component := &daemon.HealthCheckComponent{Name: "criu version"}
 
-		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); !p.IsInstalled() {
-			// Set custom path if specified in config, as a fallback
-			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-				c.SetCriuPath(custom_path)
-			} else if path, err := exec.LookPath("criu"); err == nil {
-				c.SetCriuPath(path)
-			} else {
-				installed = false
-				component.Errors = append(component.Errors,
-					"CRIU plugin is not installed. This is required for CUDA C/R.",
-				)
-			}
-		} else {
+		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
+			c.SetCriuPath(custom_path)
+		} else if p = manager.Get("criu"); p.IsInstalled() {
 			c.SetCriuPath(p.BinaryPaths()[0])
+		} else if path, err := exec.LookPath("criu"); err == nil {
+			c.SetCriuPath(path)
+		} else {
+			installed = false
+			component.Errors = append(component.Errors,
+				"CRIU plugin is not installed. This is required for CUDA C/R.",
+			)
 		}
 
 		if installed {

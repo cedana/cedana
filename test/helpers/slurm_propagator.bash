@@ -138,41 +138,56 @@ checkpoint_slurm_job() {
 
     debug_log "Checkpointing slurm job '$job_id' (kind=$kind, reason=$reason)..."
 
+    local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
+    cluster_id="${cluster_id//\"/}"
+
     local payload
     if ! payload=$(jq -n \
             --arg job_id "$job_id" \
             --arg job_name "job_$job_id" \
             --arg kind "$kind" \
             --arg reason "$reason" \
-            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind, "reason": $reason}'); then
+            --arg cluster_id "$cluster_id" \
+            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind, "reason": $reason}
+             + (if $cluster_id == "" then {} else {"cluster_id": $cluster_id} end)'); then
         error_log "Failed to build checkpoint request payload"
         return 1
     fi
 
     info_log "Checkpoint request payload: $payload"
 
-    local response
-    if ! response=$(curl -sS -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoint/job" \
-            -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
-            -d "$payload" \
-        -w "%{http_code}"); then
-        error_log "Failed to checkpoint slurm job: request error"
-        return 1
-    fi
+    local response http_code body
+    local waited=0 max_wait=40 interval=3
+    while :; do
+        if ! response=$(curl -sS -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoint/job" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+                -d "$payload" \
+            -w "%{http_code}"); then
+            error_log "Failed to checkpoint slurm job: request error"
+            return 1
+        fi
 
-    local http_code="${response: -3}"
-    local body="${response%???}"
+        http_code="${response: -3}"
+        body="${response%???}"
 
-    info_log "Checkpoint response (HTTP $http_code): $body"
+        info_log "Checkpoint response (HTTP $http_code): $body"
 
-    if [ "$http_code" -eq 200 ]; then
-        echo "$body"
-        return 0
-    else
+        if [ "$http_code" -eq 200 ]; then
+            echo "$body"
+            return 0
+        fi
+
+        if [ "$http_code" -eq 404 ] && [ "$waited" -lt "$max_wait" ]; then
+            info_log "Job '$job_id' not yet registered in propagator; retrying in ${interval}s (${waited}/${max_wait}s)"
+            sleep "$interval"
+            waited=$((waited + interval))
+            continue
+        fi
+
         error_log "Failed to checkpoint slurm job (HTTP $http_code): $body"
         return 1
-    fi
+    done
 }
 
 # Restore a slurm job via propagator API
