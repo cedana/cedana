@@ -542,6 +542,7 @@ jobs:
           setup_slurm_samples
 
       - name: Register SLURM cluster and start daemon
+        id: register
         shell: bash
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
@@ -623,7 +624,7 @@ jobs:
           exit "$test_exit_code"
 
       - name: Run SLURM preemption tests
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -779,7 +780,7 @@ jobs:
             testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
 
       - name: Generate report (preemption)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
         run: |
           npx junit-to-ctrf "/tmp/report-preemption.xml" -t bats -o /tmp/report-preemption.json -e \
             appName="cedana" appVersion="$(git describe --tags --always)" \
