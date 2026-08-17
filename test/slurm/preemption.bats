@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# bats file_tags=slurm,preemption
+# bats file_tags=slurm
 
 load ../helpers/utils
 load ../helpers/slurm
