@@ -39,7 +39,9 @@ stage_preemption_script() {
     # Submitting as the job user is what makes the monitor run unprivileged;
     # as root it would run privileged whatever the daemon mode says.
     EXEC_USER=()
-    [ -n "${SLURM_SUBMIT_USER:-}" ] && EXEC_USER=(-u "$SLURM_SUBMIT_USER")
+    if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
+        EXEC_USER=(-u "$SLURM_SUBMIT_USER")
+    fi
 }
 
 # bats test_tags=dump,restore,preemption

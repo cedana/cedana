@@ -781,15 +781,11 @@ EOF
             local node_hostname
             node_hostname=$(docker exec "$c" hostname)
 
-            if ! detected_gres=$(docker exec "$c" bash -lc "/usr/sbin/slurmd -C 2>/dev/null | tr ' ' '\n' | grep '^Gres=' | cut -d= -f2- | head -n 1"); then
-                detected_gres=""
-            fi
-            if [ -z "$detected_gres" ]; then
-                detected_gres="gpu:$gpu_count"
-                debug_log "slurmd -C did not report GRES on $c, falling back to $detected_gres"
-            else
-                debug_log "slurmd -C detected GRES '$detected_gres' on $c"
-            fi
+            # slurmd -C reports a type it guessed without NVML (gpu:unknown),
+            # which would not match the untyped devices written to gres.conf --
+            # slurmd then discards them as "file-less" and registers zero.
+            detected_gres="gpu:$gpu_count"
+            debug_log "Using untyped GRES '$detected_gres' on $c to match gres.conf"
 
             # AutoDetect=nvidia needs SLURM built against NVML, which the
             # ansible role does not do; enumerate the devices instead.
