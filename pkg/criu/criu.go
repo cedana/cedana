@@ -262,6 +262,10 @@ func (c *Criu) doSwrkWithResp(
 		}
 
 		notify := resp.GetNotify()
+
+		// Only query-ext-files expects anything back other than an ack.
+		var replyOpts *criu.CriuOpts
+
 		switch notify.GetScript() {
 		case "pre-dump":
 			err = nfy.PreDump(ctx, opts)
@@ -285,6 +289,16 @@ func (c *Criu) doSwrkWithResp(
 			err = nfy.PostResume(ctx)
 		case "skip-namespaces":
 			err = nfy.SkipNamespaces(ctx, notify.GetPid())
+		case "query-ext-files":
+			var external []string
+			external, err = nfy.QueryExtFiles(ctx)
+			if err == nil {
+				replyOpts = &criu.CriuOpts{
+					// Required field, ignored by CRIU for this reply.
+					ImagesDirFd: proto.Int32(-1),
+					External:    external,
+				}
+			}
 		case "orphan-pts-master":
 			scm, err := syscall.ParseSocketControlMessage(oobB[:oobn])
 			if err != nil {
@@ -306,6 +320,7 @@ func (c *Criu) doSwrkWithResp(
 		req = criu.CriuReq{
 			Type:          &respType,
 			NotifySuccess: proto.Bool(true),
+			Opts:          replyOpts,
 		}
 	}
 
