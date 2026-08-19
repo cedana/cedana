@@ -438,6 +438,12 @@ jobs:
       matrix:
         arch:
           - amd64
+        slurm:
+          - 25-11-5-1
+          - 25-05-8-1
+          - 25-05-6-1
+          - 24-11-5-1
+          - 23-11-7-1
     steps:
       - name: Checkout cedana-slurm
         uses: actions/checkout@v4
@@ -456,6 +462,7 @@ jobs:
           CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
+          SLURM_VERSION: slurm-${{ matrix.slurm }}
           ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
@@ -467,11 +474,6 @@ jobs:
           fi
 
           mkdir -p slurm/build
-
-          SLURM_VERSION="slurm-25-11-5-1"
-          if [ -f slurm/cedana-slurm/slurm-versions ]; then
-            SLURM_VERSION=$(cat slurm/cedana-slurm/slurm-versions | head -n 1)
-          fi
 
           VERSION_REF="${VERSION//\//-}"
           PKG_VERSION="${VERSION_REF}-${SLURM_VERSION}"
@@ -505,5 +507,5 @@ jobs:
       - name: Upload slurm artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: slurm-${{ matrix.arch }}
+          name: slurm-${{ matrix.slurm }}-${{ matrix.arch }}
           path: ./slurm/*

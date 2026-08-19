@@ -8,6 +8,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
+	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 
@@ -146,6 +147,8 @@ func DetectIOUringForDump(next types.Dump) types.Dump {
 // Detects any open files that are in an external namespace
 // and sets appropriate options for CRIU.
 // Also detects any TTY files and sets options for CRIU.
+// Keeps the initial pass for older CRIU builds, then refreshes the list from
+// CRIU's query-ext-files hook after CRIU has seized the process tree.
 func AddExternalFilesForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		state := resp.GetState()
@@ -154,44 +157,69 @@ func AddExternalFilesForDump(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		mounts := make(map[uint64]any)
-		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			mounts[m.ID] = nil
-			return true
-		})
-
 		if req.GetCriu() == nil {
 			req.Criu = &criu_proto.CriuOpts{}
 		}
 
-		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
-			isPipe := strings.HasPrefix(f.Path, "pipe")
-			isSocket := strings.HasPrefix(f.Path, "socket")
-			isAnon := strings.HasPrefix(f.Path, "anon_inode")
-			isMemfd := strings.HasPrefix(f.Path, "/memfd:")
-			_, mountFound := mounts[f.MountID]
+		req.Criu.External = append(req.Criu.External, externalFileKeys(state)...)
 
-			// A file is external if it's from outside the process's mount namespace.
-			// Pipes, sockets, memfds and anon_inodes are internal (not real files from external mounts).
-			// A file is external only if its mount ID is not in the process's mount table AND it's a real file.
-			internal := mountFound || isPipe || isSocket || isAnon || isMemfd
-			external := !internal
-
-			if external {
-				if f.IsTTY {
-					log.Trace().Str("path", f.Path).Uint64("rdev", f.Rdev).Uint64("dev", f.Dev).Msg("marking TTY file as external")
-					req.Criu.External = append(req.Criu.External, fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev))
-				} else {
-					log.Trace().Str("path", f.Path).Uint64("mount_id", f.MountID).Uint64("inode", f.Inode).Msg("marking file as external")
-					req.Criu.External = append(req.Criu.External, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
-				}
-			}
-
-			return true
-		})
+		// CRIU queries again after seizing the process tree. Re-read the frozen
+		// tree so file and mount changes since the initial snapshot are included.
+		if opts.CRIUCallback != nil {
+			pid := state.PID
+			opts.CRIUCallback.Include(&criu.NotifyCallback{
+				Name: "external-files",
+				QueryExtFilesFunc: func(ctx context.Context) ([]string, error) {
+					frozen := &daemon.ProcessState{}
+					if err := utils.FillProcessState(ctx, pid, frozen, true); err != nil {
+						return nil, err
+					}
+					return externalFileKeys(frozen), nil
+				},
+			})
+		}
 
 		return next(ctx, opts, resp, req)
 	}
+}
+
+// externalFileKeys returns the CRIU '--external' keys for every open file in the state tree that lives outside the process's mount table.
+func externalFileKeys(state *daemon.ProcessState) []string {
+	mounts := make(map[uint64]any)
+	utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
+		mounts[m.ID] = nil
+		return true
+	})
+
+	var keys []string
+
+	utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
+		isPipe := strings.HasPrefix(f.Path, "pipe")
+		isSocket := strings.HasPrefix(f.Path, "socket")
+		isAnon := strings.HasPrefix(f.Path, "anon_inode")
+		isMemfd := strings.HasPrefix(f.Path, "/memfd:")
+		_, mountFound := mounts[f.MountID]
+
+		// A file is external if it's from outside the process's mount namespace.
+		// Pipes, sockets, memfds and anon_inodes are internal (not real files from external mounts).
+		// A file is external only if its mount ID is not in the process's mount table AND it's a real file.
+		internal := mountFound || isPipe || isSocket || isAnon || isMemfd
+		external := !internal
+
+		if external {
+			if f.IsTTY {
+				log.Trace().Str("path", f.Path).Uint64("rdev", f.Rdev).Uint64("dev", f.Dev).Msg("marking TTY file as external")
+				keys = append(keys, fmt.Sprintf("tty[%x:%x]", f.Rdev, f.Dev))
+			} else {
+				log.Trace().Str("path", f.Path).Uint64("mount_id", f.MountID).Uint64("inode", f.Inode).Msg("marking file as external")
+				keys = append(keys, fmt.Sprintf("file[%x:%x]", f.MountID, f.Inode))
+			}
+		}
+
+		return true
+	})
+
+	return keys
 }
 
 func AddExternalMountsForDump(next types.Dump) types.Dump {

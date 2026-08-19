@@ -173,6 +173,7 @@ _dump_job_failure_info() {
     local job_id="${1:-}"
     local sample_dir="${2:-/data/cedana-samples}"
     local relevant_job_ids_csv="${3:-$job_id}"
+    local job_show out_file err_file found
 
     _capture_runtime_slurm_logs "failure-dump" "$job_id" "unknown" "$sample_dir" "$relevant_job_ids_csv"
 
@@ -186,30 +187,24 @@ _dump_job_failure_info() {
         slurm_exec scontrol show job "$job_id" 2>/dev/null || true
 
         echo "=== job output files ==="
-        for c in $(_slurm_compute_containers); do
-            for f in $(docker exec \
-                -e SLURM_DEBUG_SAMPLE_DIR="$sample_dir" \
-                -e SLURM_DEBUG_JOB_IDS="$relevant_job_ids_csv" \
-                "$c" sh -c '
-                    sample_dir="${SLURM_DEBUG_SAMPLE_DIR:-/data/cedana-samples}"
-                    ids="${SLURM_DEBUG_JOB_IDS:-}"
-                    if [ -d "$sample_dir" ]; then
-                        IFS=","; for id in $ids; do
-                            [ -n "$id" ] || continue
-                            for suffix in out err; do
-                                f="$sample_dir/slurm-$id.$suffix"
-                                [ -f "$f" ] && printf "%s\n" "$f"
-                            done
-                        done
-                        for f in "$sample_dir/.cedana_debug.out" "$sample_dir/.cedana_debug.err"; do
-                            [ -f "$f" ] && printf "%s\n" "$f"
-                        done
-                    fi
-                ' 2>/dev/null | sort -u); do
+        # Ask SLURM where it put them; the paths come from the sbatch
+        # --output/--error directives and are not guessable.
+        job_show="$(slurm_exec scontrol show job "$job_id" 2>/dev/null || true)"
+        out_file="$(printf '%s' "$job_show" | grep -oE 'StdOut=[^[:space:]]+' | head -1 | cut -d= -f2-)"
+        err_file="$(printf '%s' "$job_show" | grep -oE 'StdErr=[^[:space:]]+' | head -1 | cut -d= -f2-)"
+
+        found=0
+        for c in "$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers); do
+            for f in "$out_file" "$err_file"; do
+                [ -n "$f" ] || continue
+                docker exec "$c" test -f "$f" 2>/dev/null || continue
                 echo "--- $c:$f ---"
-                docker exec "$c" cat "$f" 2>/dev/null || true
+                docker exec "$c" tail -50 "$f" 2>/dev/null || true
+                found=1
             done
         done
+        [ "$found" -eq 1 ] ||
+            echo "(no output for job $job_id; StdOut=${out_file:-?} StdErr=${err_file:-?})"
     fi
 
     echo "=== slurmctld.log (last 50 lines) ==="
