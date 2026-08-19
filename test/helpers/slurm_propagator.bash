@@ -140,6 +140,12 @@ checkpoint_slurm_job() {
 
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
+    # SLURM job IDs restart at 1 per cluster, so an unscoped request can resolve
+    # against another cluster's job of the same number. Never send one.
+    if [ -z "$cluster_id" ]; then
+        error_log "checkpoint_slurm_job requires a cluster id (CEDANA_CLUSTER_ID or SLURM_CLUSTER_ID)"
+        return 1
+    fi
 
     local payload
     if ! payload=$(jq -n \
@@ -148,8 +154,8 @@ checkpoint_slurm_job() {
             --arg kind "$kind" \
             --arg reason "$reason" \
             --arg cluster_id "$cluster_id" \
-            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind, "reason": $reason}
-             + (if $cluster_id == "" then {} else {"cluster_id": $cluster_id} end)'); then
+            '{"job_id": $job_id, "job_name": $job_name, "kind": $kind,
+              "reason": $reason, "cluster_id": $cluster_id}'); then
         error_log "Failed to build checkpoint request payload"
         return 1
     fi
@@ -157,7 +163,9 @@ checkpoint_slurm_job() {
     info_log "Checkpoint request payload: $payload"
 
     local response http_code body
-    local waited=0 max_wait=40 interval=3
+    # The controller syncs jobs to the propagator every 30s, so a 40s window is
+    # barely over one tick and misses whenever the tick lands unfavourably.
+    local waited=0 max_wait=120 interval=3
     while :; do
         if ! response=$(curl -sS -X POST "${PROPAGATOR_BASE_URL}/v2/slurm/checkpoint/job" \
                 -H "Content-Type: application/json" \
