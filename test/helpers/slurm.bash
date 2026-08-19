@@ -244,10 +244,14 @@ _dump_job_failure_info() {
 
     # The 50-line tail is mostly sync debug spam, so a job-sync failure minutes
     # earlier scrolls off; that error is what explains a job never registering.
+    # Capture first: grep's "no matches" status is lost through the pipe, so
+    # `|| echo` on the pipeline would never fire and the section would be blank.
     echo "=== job sync errors on controller ==="
-    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+    local sync_errors
+    sync_errors="$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
         grep -aiE "Failed to get SLURM jobs|Failed to send sync request|non-OK status for job sync|Failed to marshal sync" \
-        /var/log/cedana-slurm.log 2>/dev/null | tail -20 || echo "(none)"
+        /var/log/cedana-slurm.log 2>/dev/null | tail -20)"
+    echo "${sync_errors:-(none)}"
 
     echo "=== cedana-slurm monitor log on controller (last 120 lines) ==="
     docker exec "$SLURM_CONTROLLER_CONTAINER" \
