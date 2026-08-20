@@ -458,7 +458,6 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			if out, ok := ctx.Value(deltaResultKey{}).(*deltaResult); ok {
-				out.delta = resp.GetDelta()
 				out.parent = resp.GetParentDir()
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())

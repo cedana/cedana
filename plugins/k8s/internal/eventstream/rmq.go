@@ -366,12 +366,14 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				},
 			}
 			if req.Overrides != nil {
-				criuOpts := &criu.CriuOpts{}
-				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
-				} else {
-					dumpReq.Criu = criuOpts
+				if req.Overrides.CRIUOpts != "" {
+					criuOpts := &criu.CriuOpts{}
+					err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
+					if err != nil {
+						log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
+					} else {
+						dumpReq.Criu = criuOpts
+					}
 				}
 				dumpReq.Compression = req.Overrides.Compression
 				dumpReq.Dir = req.Overrides.Directory

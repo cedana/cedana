@@ -17,13 +17,13 @@ import (
 
 // The GPU dump runs inside a CRIU callback that only sees CriuOpts, so the
 // per-request delta flag and the resulting chain parent travel via context.
+// A non-empty parent means the dump was a delta chained onto it.
 type (
 	deltaOverrideKey struct{}
 	deltaResultKey   struct{}
 )
 
 type deltaResult struct {
-	delta  bool
 	parent string
 }
 
@@ -86,7 +86,7 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			next = next.With(AddExternalMountsForDump)
 
 			code, err = next(ctx, opts, resp, req)
-			if err == nil && result.delta {
+			if err == nil && result.parent != "" {
 				resp.GPUParent = filepath.Base(result.parent)
 			}
 			return code, err
