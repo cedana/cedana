@@ -8,8 +8,9 @@
 # Normalize the URL to ensure it includes protocol and has the correct format
 normalize_url() {
     local url="$1"
-    # Remove trailing slashes and /v1 suffix
+    # Remove trailing slashes and /v2 or /v1 suffix
     url="${url%/}"
+    url="${url%/v2}"
     url="${url%/v1}"
 
     # Add https:// if no protocol specified
