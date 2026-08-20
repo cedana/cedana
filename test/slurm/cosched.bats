@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 
-# bats file_tags=slurm,cosched
+# bats file_tags=slurm,unprivileged,cosched
 
 load ../helpers/utils
 load ../helpers/slurm
@@ -40,7 +40,7 @@ _cosched_submit() {
 
 # bats test_tags=dump,samples
 @test "Co-scheduling: two users' jobs checkpoint on the same node" {
-    [ -n "${SLURM_SUBMIT_USER:-}" ] || skip "needs an unprivileged submit user"
+    [ -n "${SLURM_SUBMIT_USER:-}" ] || skip "needs a non-root submit user (SLURM_SUBMIT_USER)"
 
     SLURM_SUBMIT_USER="$SECOND_USER" SLURM_SUBMIT_UID="$SECOND_UID" \
         setup_slurm_unprivileged_user
