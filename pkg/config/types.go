@@ -129,6 +129,8 @@ type (
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
 		// DedupEnabled sets whether to use deduplication for GPU checkpoints (reduces checkpoint size)
 		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
+		// DeltaEnabled sets whether GPU checkpoints after the first are written as deltas (incremental)
+		DeltaEnabled bool `json:"delta_enabled" key:"delta_enabled" yaml:"delta_enabled" mapstructure:"delta_enabled"`
 		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers

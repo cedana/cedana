@@ -275,6 +275,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
+		"CEDANA_GPU_DELTA_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DeltaEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
 	)
 
@@ -442,15 +443,23 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump starting")
 
-			resp, err := controller.Dump(waitCtx, &gpu.DumpReq{
+			dumpReq := &gpu.DumpReq{
 				Dir:          opts.GetImagesDir(),
 				Stream:       opts.GetStream(),
 				LeaveRunning: opts.GetLeaveRunning(),
-			})
+			}
+			if v, ok := ctx.Value(deltaOverrideKey{}).(bool); ok {
+				dumpReq.Delta = &v
+			}
+			resp, err := controller.Dump(waitCtx, dumpReq)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
 				return
+			}
+			if out, ok := ctx.Value(deltaResultKey{}).(*deltaResult); ok {
+				out.delta = resp.GetDelta()
+				out.parent = resp.GetParentDir()
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
 
