@@ -6,6 +6,9 @@ name: Download
 permissions:
   contents: write
 
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+
 on:
   workflow_call:
     inputs:
@@ -64,7 +67,6 @@ jobs:
     steps:
       - name: Download cedana
         env:
-          CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
@@ -154,7 +156,6 @@ jobs:
 
       - name: Download plugin
         env:
-          CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
         run: |
           set -euo pipefail
@@ -197,7 +198,6 @@ jobs:
     steps:
       - name: Download CRIU
         env:
-          CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.criu_version == 'release' && 'latest' || inputs.criu_version }}
         run: |
@@ -238,7 +238,6 @@ jobs:
     steps:
       - name: Download GPU binaries
         env:
-          CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.gpu_version == 'release' && 'latest' || inputs.gpu_version }}
         run: |
@@ -284,7 +283,6 @@ jobs:
     steps:
       - name: Download streamer
         env:
-          CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.streamer_version == 'release' && 'latest' || inputs.streamer_version }}
         run: |
@@ -371,7 +369,6 @@ jobs:
     steps:
       - name: Download runtime
         env:
-          CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
         run: |
@@ -459,7 +456,6 @@ jobs:
 
       - name: Resolve slurm binaries
         env:
-          CEDANA_URL: "https://rahul.cedana.ai/v2"
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
           SLURM_VERSION: slurm-${{ matrix.slurm }}
