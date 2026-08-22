@@ -44,6 +44,8 @@ func init() {
 	dumpCmd.PersistentFlags().
 		StringP(flags.CompressionFlag.Full, flags.CompressionFlag.Short, "", "compression algorithm (none, tar, gzip, lz4, zlib)")
 	dumpCmd.PersistentFlags().
+		BoolP(flags.IncrementalFlag.Full, "", false, "GPU delta (incremental) dump; overrides the controller's env default")
+	dumpCmd.PersistentFlags().
 		Int32P(flags.StreamsFlag.Full, flags.StreamsFlag.Short, 0, "number of streams to use for dump (0 for no streaming)")
 	dumpCmd.PersistentFlags().
 		StringP(flags.CriuOptsFlag.Full, flags.CriuOptsFlag.Short, "", "criu options JSON (overriddes individual CRIU flags)")
@@ -130,6 +132,11 @@ var dumpCmd = &cobra.Command{
 			Streams:     int32(streams),
 			Criu:        criuOpts,
 			Action:      daemon.DumpAction_DUMP,
+		}
+		// Only set on explicit use, so the controller's env default applies otherwise
+		if cmd.Flags().Changed(flags.IncrementalFlag.Full) {
+			incremental, _ := cmd.Flags().GetBool(flags.IncrementalFlag.Full)
+			req.GPUDelta = proto.Bool(incremental)
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.DUMP_REQ_CONTEXT_KEY, req)
