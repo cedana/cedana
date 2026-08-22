@@ -139,6 +139,7 @@ jobs:
           - storage/cedana
           - storage/s3
           - storage/gcs
+          - storage/csx
         arch:
           - amd64
           - arm64
