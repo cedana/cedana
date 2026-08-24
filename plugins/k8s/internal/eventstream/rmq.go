@@ -38,6 +38,7 @@ type EventStream struct {
 	url                string
 	checkpoints        *rabbitmq.Publisher
 	checkpointRequests *rabbitmq.Consumer
+	deleteRequests     *rabbitmq.Consumer
 	containerdAddress  string
 	lifecycleMu        sync.RWMutex
 	closeOnce          sync.Once
@@ -212,9 +213,58 @@ func (es *EventStream) Close() error {
 	return es.closeErr
 }
 
+func (es *EventStream) StartDeleteConsumer(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
+	queueName := "daemon_delete_request"
+	consumer, err := rabbitmq.NewConsumer(
+		conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsConcurrency(1),
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_delete_helper"),
+		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+			"x-expires": queryExpiryMs,
+		}),
+	)
+	if err != nil {
+		return err
+	}
+	return consumer.Run(es.DeleteHandler(ctx))
+}
+
+func (es *EventStream) DeleteHandler(ctx context.Context) rabbitmq.Handler {
+	return func(msg rabbitmq.Delivery) rabbitmq.Action {
+		var deleteReq deleteReq
+		if err := json.Unmarshal(msg.Body, &deleteReq); err != nil {
+			log.Error().Err(err).Msg("failed to unmarshal message")
+			return rabbitmq.Ack
+		}
+
+		daemonReq := &daemon.DeleteCheckpointReq{
+			Path: &deleteReq.CheckpointPath,
+		}
+
+		_, err := es.cedana.DeleteCheckpoint(ctx, daemonReq)
+		if err != nil {
+			log.Error().Err(err).Msg("could not delete checkpoint")
+      return rabbitmq.NackRequeue
+		}
+		return rabbitmq.Ack
+	}
+}
+
 /////////////
 // Helpers //
 /////////////
+
+type deleteReq struct {
+	CheckpointPath string `json:"checkpoint_path"`
+}
 
 type checkpointReq struct {
 	PodName   string `json:"pod_name"`
