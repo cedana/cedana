@@ -157,10 +157,16 @@ func startHelper(ctx context.Context) error {
 			log.Error().Err(err).Msg("failed to setup checkpoint publisher")
 			return
 		}
-		err = stream.StartCheckpointsConsumer(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
-			return
+		consumerErr := make(chan error, 2)
+		go func() {
+			consumerErr <- stream.StartCheckpointsConsumer(ctx)
+		}()
+		go func() {
+			consumerErr <- stream.StartDeleteConsumer(ctx)
+		}()
+
+		if err := <-consumerErr; err != nil {
+			log.Error().Err(err).Msg("checkpoint request consumer stopped")
 		}
 	}()
 
