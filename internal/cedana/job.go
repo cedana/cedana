@@ -9,6 +9,7 @@ import (
 	"github.com/cedana/cedana/internal/cedana/job"
 	"github.com/cedana/cedana/pkg/features"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -133,6 +134,7 @@ func (s *Server) DeleteCheckpoint(ctx context.Context, req *daemon.DeleteCheckpo
 		return nil, status.Errorf(codes.InvalidArgument, "ID must be provided")
 	}
 
+	log.Debug().Str("ID", req.GetID()).Str("path", req.GetPath()).Msg("got delete request")
 	if req.HasPath() {
 		var storage cedana_io.Storage
 		var err error
@@ -149,11 +151,12 @@ func (s *Server) DeleteCheckpoint(ctx context.Context, req *daemon.DeleteCheckpo
 			if err != nil {
 				return nil, status.Error(codes.Unavailable, err.Error())
 			}
+			log.Debug().Msg("found plugin for storage, sending delete request")
 
-      err := storage.Delete(ctx, checkpointPath)
-      if err != nil {
-        return nil, status.Error(codes.Internal, err.Error())
-      }
+			err := storage.Delete(ctx, checkpointPath)
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
+			}
 		}
 	} else {
 		checkpoint := s.jobs.GetCheckpoint(req.GetID())
