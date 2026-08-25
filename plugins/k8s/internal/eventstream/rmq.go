@@ -221,6 +221,7 @@ func (es *EventStream) StartDeleteConsumer(ctx context.Context) error {
 		return fmt.Errorf("rabbitmq connection is closed")
 	}
 
+	log.Debug().Msg("creating daemon_delete_request queue")
 	queueName := "daemon_delete_request"
 	consumer, err := rabbitmq.NewConsumer(
 		conn,
@@ -249,10 +250,11 @@ func (es *EventStream) DeleteHandler(ctx context.Context) rabbitmq.Handler {
 			Path: &deleteReq.CheckpointPath,
 		}
 
+		log.Debug().Any("deleteReq", deleteReq).Msg("Got request from queue, sending to daemon")
 		_, err := es.cedana.DeleteCheckpoint(ctx, daemonReq)
 		if err != nil {
 			log.Error().Err(err).Msg("could not delete checkpoint")
-      return rabbitmq.NackRequeue
+			return rabbitmq.NackRequeue
 		}
 		return rabbitmq.Ack
 	}

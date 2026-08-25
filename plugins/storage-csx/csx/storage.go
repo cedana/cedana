@@ -73,6 +73,7 @@ func (s *Storage) Delete(ctx context.Context, path string) error {
 	defer conn.Close()
 
 	objectID := filepath.Base(strings.TrimPrefix(path, PATH_PREFIX))
+	log.Debug().Str("ObjectID", objectID).Msg("sending delete request to CSX")
 	_, err = csxClient.Delete(ctx, &csx.DeleteReq{
 		ID: objectID,
 	})
