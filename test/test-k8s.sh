@@ -361,7 +361,8 @@ echo "✓ CEDANA_AUTH_TOKEN: ${CEDANA_AUTH_TOKEN:0:20}... (${#CEDANA_AUTH_TOKEN}
 
 # Test propagator connectivity
 echo -n "✓ Testing propagator connectivity... "
-PROPAGATOR_URL="${CEDANA_URL%/v1}"
+PROPAGATOR_URL="${CEDANA_URL%/v2}"
+PROPAGATOR_URL="${PROPAGATOR_URL%/v1}"
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" "$PROPAGATOR_URL/v2/user" 2>/dev/null || echo "000")
 if [ "$HTTP_CODE" = "200" ]; then
     echo "OK (HTTP $HTTP_CODE)"

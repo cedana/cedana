@@ -5,6 +5,7 @@ if ! declare -f normalize_url &>/dev/null; then
     normalize_url() {
         local url="$1"
         url="${url%/}"
+        url="${url%/v2}"
         url="${url%/v1}"
         if [[ ! "$url" =~ ^https?:// ]]; then
             url="https://$url"
