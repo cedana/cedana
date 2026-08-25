@@ -549,7 +549,7 @@ func (es *EventStream) publishCheckpoint(
 }
 
 func (es *EventStream) getImageSecret() (*imageSecret, error) {
-	url := es.propagator.RequestAdapter.GetBaseUrl() + "/v2/secrets"
+	url := es.propagator.RequestAdapter.GetBaseUrl() + "/secrets"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
