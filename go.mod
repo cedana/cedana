@@ -13,7 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
-	github.com/cedana/cedana-go-sdk v0.3.8-0.20260116153239-87b778d35bc8
+	github.com/cedana/cedana-go-sdk v0.3.8-0.20260827112557-3821264c5feb
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.32
