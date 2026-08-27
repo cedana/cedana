@@ -791,6 +791,12 @@ EOF
         storage/s3) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-s3.so") ;;
         storage/gcs) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-gcs.so") ;;
     esac
+    if [ "${GPU:-0}" = "1" ]; then
+        expected_runtime_paths+=(
+            "/usr/local/lib/libcedana-gpu.so"
+            "/usr/local/bin/cedana-gpu-controller"
+        )
+    fi
 
     debug_log "Installing SLURM plugin and runtime plugins on controller..."
     docker exec \
@@ -1261,13 +1267,21 @@ restart_cedana_slurm_daemon_unprivileged() {
 
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
-        docker exec "$c" bash -c '
+        # Binaries are staged onto local /usr/bin because setcap needs xattrs,
+        # which the NFS-shared /usr/local/bin cannot carry.
+        docker exec -e GPU="${GPU:-0}" "$c" bash -c '
             caps=cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip
             install -m 0755 /usr/local/bin/cedana /usr/bin/cedana
             install -m 0755 /usr/local/bin/criu /usr/bin/criu
             setcap $caps /usr/bin/cedana-slurm
             setcap $caps /usr/bin/cedana
             setcap $caps /usr/bin/criu
+            # CEDANA_PLUGINS_BIN_DIR below points the daemon at /usr/bin, so the
+            # GPU controller has to be staged here too or the plugin reads as
+            # not installed.
+            if [ "$GPU" = "1" ]; then
+                install -m 0755 /usr/local/bin/cedana-gpu-controller /usr/bin/cedana-gpu-controller
+            fi
         ' || {
             error_log "Failed to stage/setcap cedana/criu binaries in $c"
             return 1

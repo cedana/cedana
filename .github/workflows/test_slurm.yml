@@ -391,6 +391,15 @@ jobs:
             exit 1
           fi
 
+          # Both producers (download.yml, cedana-slurm build.yml) must lay the
+          # artifact out the same way; drift silently disables tests.
+          for f in cedana-slurm/ansible/docker-deploy.sh cedana-slurm/scripts/test-preemption.sh; do
+            if [ ! -f "$f" ]; then
+              echo "$f missing from slurm artifact" >&2
+              exit 1
+            fi
+          done
+
           echo "slurm-version: $(cat slurm-bin/slurm-version.txt)"
           if [ -f slurm-bin/slurm-artifact-origin.txt ]; then
             echo "slurm-artifact-origin:"
@@ -727,7 +736,7 @@ jobs:
             docker exec "$c" sh -c 'for p in $(pgrep -f "cedana-slurm monitor" 2>/dev/null || true); do echo "=== monitor pid=$p ==="; tr "\000" "\n" </proc/$p/environ 2>/dev/null | sort; done' >"$cdir/monitor-environ.txt" 2>&1 || true
             docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
             docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
-            docker exec "$c" sh -c 'echo "=== /usr/local/lib plugins ==="; ls -la /usr/local/lib/libcedana-*.so 2>/dev/null || true; echo "=== CEDANA_* env ==="; env | sort | grep "^CEDANA_" || true' >"$cdir/plugin-inventory.txt" 2>&1 || true
+            docker exec "$c" sh -c 'echo "=== /usr/local/lib plugins ==="; ls -la /usr/local/lib/libcedana-*.so 2>/dev/null || true; echo "=== /usr/local/bin plugins ==="; ls -la /usr/local/bin/cedana* /usr/local/bin/criu 2>/dev/null || true; echo "=== /usr/bin staged (unprivileged) ==="; ls -la /usr/bin/cedana* /usr/bin/criu 2>/dev/null || true; echo "=== capabilities ==="; getcap /usr/bin/cedana* /usr/bin/criu 2>/dev/null || true; echo "=== /etc/cedana ==="; cat /etc/cedana/* 2>/dev/null || true; echo "=== CEDANA_* env ==="; env | sort | grep "^CEDANA_" || true' >"$cdir/plugin-inventory.txt" 2>&1 || true
 
             for f in \
               /var/log/cedana.log \
