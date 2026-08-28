@@ -6,15 +6,19 @@ import (
 	"crypto/rand"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/mem"
 )
 
 const (
-	DefaultBenchmarkPath    = "/tmp/cedana-measure"
-	DefaultBenchmarkSamples = 3
+	DefaultBenchmarkPath                = "/tmp/cedana-measure"
+	DefaultBenchmarkSamples             = 3
+	memoryBenchmarkMaxAvailableFraction = 2
 )
 
 const (
@@ -169,18 +173,21 @@ func benchmarkMemoryCopy(ctx context.Context, sizeGB float64, samples int) (floa
 	if err := validateBenchmarkSamples(samples); err != nil {
 		return 0, 0, err
 	}
-	if sizeGB <= 0 {
-		sizeGB = 1
-	}
 	if err := ctx.Err(); err != nil {
 		return 0, 0, err
 	}
 
-	size := int(sizeGB * 1_000_000_000)
-	if size <= 0 {
-		return 0, 0, fmt.Errorf("benchmark size is too small")
+	size, sizeGB, err := benchmarkMemorySize(sizeGB)
+	if err != nil {
+		return 0, 0, err
 	}
-	sizeGB = float64(size) / 1_000_000_000
+	available, err := mem.VirtualMemoryWithContext(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+	if err := validateMemoryBenchmarkCapacity(uint64(size), available.Available); err != nil {
+		return 0, 0, err
+	}
 	src := make([]byte, size)
 	dst := make([]byte, size)
 	touchMemoryPages(src, 0x5a)
@@ -206,6 +213,31 @@ func benchmarkMemoryCopy(ctx context.Context, sizeGB float64, samples int) (floa
 	}
 	sort.Float64s(rates)
 	return rates[len(rates)/2], sizeGB, nil
+}
+
+func benchmarkMemorySize(sizeGB float64) (int, float64, error) {
+	if sizeGB <= 0 {
+		sizeGB = 1
+	}
+	if sizeGB > float64(math.MaxInt)/1_000_000_000 {
+		return 0, 0, fmt.Errorf("benchmark size is too large")
+	}
+	size := int(sizeGB * 1_000_000_000)
+	if size <= 0 {
+		return 0, 0, fmt.Errorf("benchmark size is too small")
+	}
+	return size, float64(size) / 1_000_000_000, nil
+}
+
+func validateMemoryBenchmarkCapacity(size, available uint64) error {
+	if size > math.MaxUint64/2 {
+		return fmt.Errorf("benchmark size is too large")
+	}
+	workingSet := size * 2
+	if workingSet > available/memoryBenchmarkMaxAvailableFraction {
+		return fmt.Errorf("memory benchmark needs %.1f GB for source and destination buffers; %.1f GB is currently available, and half is reserved for the host", float64(workingSet)/1_000_000_000, float64(available)/1_000_000_000)
+	}
+	return nil
 }
 
 func validateBenchmarkSamples(samples int) error {

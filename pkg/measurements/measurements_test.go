@@ -136,6 +136,16 @@ func TestBenchmarkMemoryRejectsInvalidSampleCount(t *testing.T) {
 	}
 }
 
+func TestValidateMemoryBenchmarkCapacity(t *testing.T) {
+	const gb = uint64(1_000_000_000)
+	if err := validateMemoryBenchmarkCapacity(gb, 4*gb); err != nil {
+		t.Fatalf("validateMemoryBenchmarkCapacity() error = %v", err)
+	}
+	if err := validateMemoryBenchmarkCapacity(gb, 3*gb); err == nil {
+		t.Fatal("expected capacity error")
+	}
+}
+
 func TestBenchmarkReadDetectsCorruption(t *testing.T) {
 	file, err := os.CreateTemp(t.TempDir(), "corrupt-*")
 	if err != nil {
