@@ -14,75 +14,48 @@ import (
 )
 
 func init() {
-	measurementsCmd.AddCommand(benchmarkMeasurementsCmd)
+	measureCmd.AddCommand(benchmarkMeasureCmd)
 
-	measurementsCmd.Flags().Bool("benchmark-storage", false, "benchmark cached and cold storage throughput")
-	measurementsCmd.Flags().Bool("benchmark-memory", false, "benchmark host memory copy throughput")
-	measurementsCmd.Flags().String("benchmark-path", ".", "storage path to benchmark")
-	measurementsCmd.Flags().Float64("benchmark-size-gb", 1, "benchmark working set size in GB")
-	measurementsCmd.Flags().String("storage-mode", "both", "storage benchmark mode: cached, cold, or both")
-	measurementsCmd.Flags().Bool("collect-numa", false, "collect NUMA topology rows")
-	measurementsCmd.Flags().Bool("benchmark-numa", false, "benchmark NUMA-local memory copy paths")
-	measurementsCmd.Flags().Bool("full-numa-matrix", false, "benchmark all NUMA source/target memory paths")
+	measureCmd.Flags().String("benchmark-path", measurements.DefaultBenchmarkPath, "storage path to benchmark")
+	measureCmd.Flags().Float64("benchmark-size-gb", 1, "benchmark working set size in GB")
+	measureCmd.Flags().Int("benchmark-samples", measurements.DefaultBenchmarkSamples, "number of benchmark samples")
 
-	benchmarkMeasurementsCmd.Flags().String("result-file", "", "write the memory rate to a file")
-	benchmarkMeasurementsCmd.Flags().Float64("size-gb", 1, "benchmark working set size in GB")
+	benchmarkMeasureCmd.Flags().String("result-file", "", "write the memory rate to a file")
+	benchmarkMeasureCmd.Flags().Float64("size-gb", 1, "benchmark working set size in GB")
+	benchmarkMeasureCmd.Flags().Int("samples", measurements.DefaultBenchmarkSamples, "number of benchmark samples")
 }
 
-var measurementsCmd = &cobra.Command{
-	Use:   "measurements",
+var measureCmd = &cobra.Command{
+	Use:   "measure",
 	Short: "Collect and print node throughput measurements",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		report, err := measurements.Collect(cmd.Context())
+		report := &measurements.Report{}
+		benchmarkPath, _ := cmd.Flags().GetString("benchmark-path")
+		benchmarkSizeGB, _ := cmd.Flags().GetFloat64("benchmark-size-gb")
+		benchmarkSamples, _ := cmd.Flags().GetInt("benchmark-samples")
+
+		storage, err := measurements.BenchmarkStorage(cmd.Context(), benchmarkPath, benchmarkSizeGB, benchmarkSamples)
 		if err != nil {
 			return err
 		}
-		benchmarkStorage, _ := cmd.Flags().GetBool("benchmark-storage")
-		benchmarkMemory, _ := cmd.Flags().GetBool("benchmark-memory")
-		benchmarkPath, _ := cmd.Flags().GetString("benchmark-path")
-		benchmarkSizeGB, _ := cmd.Flags().GetFloat64("benchmark-size-gb")
-		storageMode, _ := cmd.Flags().GetString("storage-mode")
-		collectNUMA, _ := cmd.Flags().GetBool("collect-numa")
-		benchmarkNUMA, _ := cmd.Flags().GetBool("benchmark-numa")
-		fullNUMAMatrix, _ := cmd.Flags().GetBool("full-numa-matrix")
-
-		if collectNUMA && !benchmarkNUMA {
-			numa, collectErr := measurements.CollectNUMA(cmd.Context())
-			if collectErr != nil {
-				return collectErr
-			}
-			report.NUMA = numa
+		report.Storage = storage
+		memory, err := measurements.BenchmarkMemory(cmd.Context(), benchmarkSizeGB, benchmarkSamples)
+		if err != nil {
+			return err
 		}
-		if benchmarkStorage {
-			modes, err := measurements.ParseStorageModes(storageMode)
-			if err != nil {
-				return err
-			}
-			report.Storage, err = measurements.BenchmarkStorage(cmd.Context(), benchmarkPath, benchmarkSizeGB, modes)
-			if err != nil {
-				return err
-			}
+		report.Memory = memory
+		numa, err := measurements.BenchmarkNUMA(cmd.Context(), benchmarkSizeGB, benchmarkSamples)
+		if err != nil {
+			return err
 		}
-		if benchmarkMemory {
-			report.Memory, err = measurements.BenchmarkMemory(cmd.Context(), benchmarkSizeGB)
-			if err != nil {
-				return err
-			}
-		}
-		if benchmarkNUMA {
-			numa, err := measurements.BenchmarkNUMA(cmd.Context(), benchmarkSizeGB, fullNUMAMatrix)
-			if err != nil {
-				return err
-			}
-			report.NUMA = append(report.NUMA, numa...)
-		}
+		report.NUMA = numa
 		printMeasurementsTable(report)
 		return nil
 	},
 }
 
-var benchmarkMeasurementsCmd = &cobra.Command{
+var benchmarkMeasureCmd = &cobra.Command{
 	Use:    "benchmark",
 	Hidden: true,
 	Args:   cobra.NoArgs,
@@ -92,7 +65,8 @@ var benchmarkMeasurementsCmd = &cobra.Command{
 			return fmt.Errorf("result file is required")
 		}
 		sizeGB, _ := cmd.Flags().GetFloat64("size-gb")
-		rate, err := measurements.BenchmarkMemoryRate(cmd.Context(), sizeGB)
+		samples, _ := cmd.Flags().GetInt("samples")
+		rate, err := measurements.BenchmarkMemoryRate(cmd.Context(), sizeGB, samples)
 		if err != nil {
 			return err
 		}
@@ -106,7 +80,7 @@ func printMeasurementsTable(report *measurements.Report) {
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
 	showFailures := hasMeasurementFailures(report)
-	header := table.Row{"section", "name", "metric", "GB/s", "source", "capacity GB", "test GB", "samples"}
+	header := table.Row{"section", "name", "metric", "GB/s", "capacity GB", "test GB", "samples"}
 	if showFailures {
 		header = append(header, "result", "detail")
 	}
@@ -115,33 +89,23 @@ func printMeasurementsTable(report *measurements.Report) {
 	for _, storage := range report.Storage {
 		testSize := formatBenchmarkSize(storage.BenchmarkSizeGB)
 		capacity := formatMeasurementGB(storage.CapacityGB)
-		appendMeasurementRow(tableWriter, showFailures, "storage", storage.Name, capacity, testSize, storage.BenchmarkRuns, storageMetric("read", storage.Mode), storage.ReadGBPerSec, storage.ReadSource, storage.ReadFailure)
-		appendMeasurementRow(tableWriter, showFailures, "storage", storage.Name, capacity, testSize, storage.BenchmarkRuns, storageMetric("write", storage.Mode), storage.WriteGBPerSec, storage.WriteSource, storage.WriteFailure)
+		appendMeasurementRow(tableWriter, showFailures, "storage", storage.Name, capacity, testSize, storage.BenchmarkRuns, storageMetric("read", storage.Mode), storage.ReadGBPerSec, storage.ReadFailure)
+		appendMeasurementRow(tableWriter, showFailures, "storage", storage.Name, capacity, testSize, storage.BenchmarkRuns, storageMetric("write", storage.Mode), storage.WriteGBPerSec, storage.WriteFailure)
 	}
 	if memory := report.Memory; memory != nil {
-		appendMeasurementRow(tableWriter, showFailures, "memory", memoryName(memory), formatMeasurementGB(memory.TotalGB), formatBenchmarkSize(memory.BenchmarkSizeGB), memory.BenchmarkRuns, memoryMetric(memory), memory.CopyGBPerSec, memory.Source, memory.Failure)
+		appendMeasurementRow(tableWriter, showFailures, "memory", memoryName(memory), formatMeasurementGB(memory.TotalGB), formatBenchmarkSize(memory.BenchmarkSizeGB), memory.BenchmarkRuns, memoryMetric(memory), memory.CopyGBPerSec, memory.Failure)
 	}
 	for _, numa := range report.NUMA {
-		appendMeasurementRow(tableWriter, showFailures, "memory", numa.Name, formatMeasurementGB(numa.MemoryGB), formatBenchmarkSize(numa.BenchmarkSizeGB), numa.BenchmarkRuns, numaMetric(numa), numa.CopyGBPerSec, numa.Source, numa.Failure)
+		appendMeasurementRow(tableWriter, showFailures, "memory", numa.Name, formatMeasurementGB(numa.MemoryGB), formatBenchmarkSize(numa.BenchmarkSizeGB), numa.BenchmarkRuns, numaMetric(numa), numa.CopyGBPerSec, numa.Failure)
 	}
-	for _, gpu := range report.GPUs {
-		appendMeasurementRow(tableWriter, showFailures, "gpu", gpuName(gpu), formatMeasurementGB(gpu.MemoryGB), "n/a", 0, "device_memory", gpu.DeviceMemoryGBPerSec, gpu.DeviceMemorySource, gpu.DeviceMemoryFailure)
-		appendMeasurementRow(tableWriter, showFailures, "gpu", gpuName(gpu), formatMeasurementGB(gpu.MemoryGB), "n/a", 0, "host_device_link", gpu.HostLinkGBPerSec, gpu.HostLinkSource, gpu.HostLinkFailure)
-	}
-	for _, failure := range report.Failures {
-		failureCopy := failure
-		appendMeasurementRow(tableWriter, showFailures, "system", failure.Operation, "n/a", "n/a", 0, "collector", nil, measurements.SourceUnknown, &failureCopy)
-	}
-
 	tableWriter.SetColumnConfigs([]table.ColumnConfig{
 		{Number: 1, Align: text.AlignLeft, AlignHeader: text.AlignLeft},
 		{Number: 2, Align: text.AlignLeft, AlignHeader: text.AlignLeft},
 		{Number: 3, Align: text.AlignLeft, AlignHeader: text.AlignLeft},
 		{Number: 4, Align: text.AlignRight, AlignHeader: text.AlignRight},
-		{Number: 5, Align: text.AlignLeft, AlignHeader: text.AlignLeft},
+		{Number: 5, Align: text.AlignRight, AlignHeader: text.AlignRight},
 		{Number: 6, Align: text.AlignRight, AlignHeader: text.AlignRight},
 		{Number: 7, Align: text.AlignRight, AlignHeader: text.AlignRight},
-		{Number: 8, Align: text.AlignRight, AlignHeader: text.AlignRight},
 	})
 	tableWriter.Render()
 }
@@ -170,14 +134,14 @@ func formatMeasurementRate(value *float64) string {
 func trimMeasurementFloat(value float64) string {
 	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.1f", value), "0"), ".")
 }
-func appendMeasurementRow(writer table.Writer, showFailures bool, section, name, capacity, testSize string, samples int, metric string, rate *float64, source string, failure *measurements.Failure) {
+func appendMeasurementRow(writer table.Writer, showFailures bool, section, name, capacity, testSize string, samples int, metric string, rate *float64, failure *measurements.Failure) {
 	result := ""
 	detail := ""
 	if isMeasurementFailure(failure) {
 		result = failure.Code
 		detail = failure.Message
 	}
-	row := table.Row{section, name, metric, formatMeasurementRate(rate), sourceStr(source), capacity, testSize, formatSamples(samples)}
+	row := table.Row{section, name, metric, formatMeasurementRate(rate), capacity, testSize, formatSamples(samples)}
 	if showFailures {
 		row = append(row, result, detail)
 	}
@@ -235,31 +199,11 @@ func memoryName(memory *measurements.MemoryMeasurement) string {
 	return "host"
 }
 
-func gpuName(gpu measurements.GPUMeasurement) string {
-	if gpu.Name != "" {
-		return gpu.Name
-	}
-	if gpu.UUID != "" {
-		return gpu.UUID
-	}
-	return "gpu"
-}
-
-func sourceStr(source string) string {
-	if source == "" {
-		return measurements.SourceUnknown
-	}
-	return source
-}
-
 func isMeasurementFailure(failure *measurements.Failure) bool {
 	return failure != nil && failure.Code != measurements.FailureNotMeasured
 }
 
 func hasMeasurementFailures(report *measurements.Report) bool {
-	if len(report.Failures) > 0 {
-		return true
-	}
 	for _, storage := range report.Storage {
 		if isMeasurementFailure(storage.ReadFailure) || isMeasurementFailure(storage.WriteFailure) {
 			return true
@@ -270,11 +214,6 @@ func hasMeasurementFailures(report *measurements.Report) bool {
 	}
 	for _, numa := range report.NUMA {
 		if isMeasurementFailure(numa.Failure) {
-			return true
-		}
-	}
-	for _, gpu := range report.GPUs {
-		if isMeasurementFailure(gpu.DeviceMemoryFailure) || isMeasurementFailure(gpu.HostLinkFailure) {
 			return true
 		}
 	}

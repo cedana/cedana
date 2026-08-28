@@ -3,7 +3,6 @@ package measurements
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,97 +10,59 @@ import (
 	"strings"
 	"syscall"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/host"
+	mem "github.com/shirou/gopsutil/v4/mem"
 )
 
 const (
-	SourceTheoretical = "theoretical"
-	SourceConfigured  = "configured"
-	SourceMeasured    = "measured"
-	SourceUnknown     = "unknown"
-
-	ConfidenceHigh   = "high"
-	ConfidenceMedium = "medium"
-	ConfidenceLow    = "low"
-	ConfidenceNone   = "none"
+	SourceConfigured = "configured"
+	SourceMeasured   = "measured"
+	SourceUnknown    = "unknown"
 )
 
 type Report struct {
-	Storage  []StorageMeasurement
-	Memory   *MemoryMeasurement
-	NUMA     []NUMAMeasurement
-	GPUs     []GPUMeasurement
-	Failures []Failure
+	Storage []StorageMeasurement
+	Memory  *MemoryMeasurement
+	NUMA    []NUMAMeasurement
 }
 
 type StorageMeasurement struct {
 	Name            string
-	Backend         string
 	CapacityGB      float64
 	Mode            string
-	CachePolicy     string
 	BenchmarkSizeGB float64
 	BenchmarkRuns   int
 	ReadGBPerSec    *float64
 	ReadSource      string
-	ReadConfidence  string
 	ReadFailure     *Failure
 	WriteGBPerSec   *float64
 	WriteSource     string
-	WriteConfidence string
 	WriteFailure    *Failure
 }
 
 type MemoryMeasurement struct {
 	HostID          string
 	Hostname        string
-	CPU             string
-	CPUVendor       string
 	TotalGB         float64
 	Placement       string
 	BenchmarkSizeGB float64
 	BenchmarkRuns   int
 	CopyGBPerSec    *float64
 	Source          string
-	Confidence      string
 	Failure         *Failure
 }
 
 type NUMAMeasurement struct {
 	Name            string
 	Kind            string
-	CPUNode         int
-	MemoryNode      int
 	Locality        string
-	CPUs            string
 	MemoryGB        float64
 	BenchmarkSizeGB float64
 	BenchmarkRuns   int
 	CopyGBPerSec    *float64
 	Source          string
-	Confidence      string
 	Failure         *Failure
-}
-
-type GPUMeasurement struct {
-	UUID                   string
-	Name                   string
-	DriverVersion          string
-	PCIBusID               string
-	NUMANode               *int
-	MemoryGB               float64
-	MemoryBusWidthBits     uint32
-	MemoryClockMaxMHz      uint32
-	DeviceMemoryGBPerSec   *float64
-	DeviceMemorySource     string
-	DeviceMemoryConfidence string
-	DeviceMemoryFailure    *Failure
-	HostLinkGBPerSec       *float64
-	HostLinkSource         string
-	HostLinkConfidence     string
-	HostLinkFailure        *Failure
 }
 
 const (
@@ -111,6 +72,7 @@ const (
 	FailureInsufficientSpace = "insufficient_space"
 	FailureNotFound          = "not_found"
 	FailureUnsupported       = "unsupported"
+	FailureUnavailable       = "unavailable"
 	FailureCacheEviction     = "cache_eviction_failed"
 	FailureNUMABinding       = "numa_binding_failed"
 	FailureDataCorruption    = "data_corruption"
@@ -175,45 +137,6 @@ func cacheEvictionFailure(operation string, err error) *Failure {
 	return failure
 }
 
-func Collect(ctx context.Context) (*Report, error) {
-	report, err := CollectHost(ctx)
-	if err != nil {
-		return report, err
-	}
-
-	gpus, err := collectGPUs(ctx)
-	if err != nil {
-		report.addFailure("collect_gpu", err)
-	}
-	report.GPUs = gpus
-
-	return report, ctx.Err()
-}
-
-func CollectHost(ctx context.Context) (*Report, error) {
-	host, hostErr := utils.GetHost(ctx)
-	report, err := CollectKnownHost(ctx, host)
-	return report, errors.Join(hostErr, err)
-}
-
-func CollectKnownHost(ctx context.Context, host *daemon.Host) (*Report, error) {
-	report := &Report{}
-
-	storage, err := CollectStorage(ctx)
-	if err != nil {
-		report.addFailure("collect_storage", err)
-	}
-	report.Storage = storage
-	report.Memory = memoryMeasurement(host)
-
-	return report, ctx.Err()
-}
-func (report *Report) addFailure(operation string, err error) {
-	if failure := measurementFailure(operation, err); failure != nil {
-		report.Failures = append(report.Failures, *failure)
-	}
-}
-
 func CollectStorage(ctx context.Context) ([]StorageMeasurement, error) {
 	partitions, err := disk.PartitionsWithContext(ctx, false)
 	if err != nil {
@@ -244,57 +167,33 @@ func CollectStorage(ctx context.Context) ([]StorageMeasurement, error) {
 			}
 		}
 		result = append(result, StorageMeasurement{
-			Name:            name,
-			Backend:         storageBackend(partition),
-			CapacityGB:      capacityGB,
-			Mode:            "inventory",
-			ReadSource:      SourceUnknown,
-			ReadConfidence:  ConfidenceNone,
-			ReadFailure:     notMeasuredFailure("storage_read", "run a storage benchmark to measure read throughput"),
-			WriteSource:     SourceUnknown,
-			WriteConfidence: ConfidenceNone,
-			WriteFailure:    notMeasuredFailure("storage_write", "run a storage benchmark to measure write throughput"),
+			Name:         name,
+			CapacityGB:   capacityGB,
+			Mode:         "inventory",
+			ReadSource:   SourceUnknown,
+			ReadFailure:  notMeasuredFailure("storage_read", "run a storage benchmark to measure read throughput"),
+			WriteSource:  SourceUnknown,
+			WriteFailure: notMeasuredFailure("storage_write", "run a storage benchmark to measure write throughput"),
 		})
 	}
 	return result, nil
 }
 
-func storageBackend(partition disk.PartitionStat) string {
-	opts := strings.ToLower(fmt.Sprint(partition.Opts))
-	fstype := strings.ToLower(partition.Fstype)
-	switch {
-	case strings.Contains(opts, "remote") || strings.Contains(opts, "network"):
-		return "remote"
-	case fstype == "nfs" || fstype == "nfs4" || fstype == "cifs" || fstype == "smbfs" || strings.HasPrefix(fstype, "fuse."):
-		return "remote"
-	case fstype != "":
-		return "local"
-	default:
-		return "unknown"
-	}
-}
-
 func collectMemory(ctx context.Context) (*MemoryMeasurement, error) {
-	host, err := utils.GetHost(ctx)
-	return memoryMeasurement(host), err
-}
-
-func memoryMeasurement(host *daemon.Host) *MemoryMeasurement {
-	if host == nil {
-		return nil
-	}
+	info, infoErr := host.InfoWithContext(ctx)
+	memory, memoryErr := mem.VirtualMemoryWithContext(ctx)
 	measurement := &MemoryMeasurement{
-		HostID: host.GetID(), Hostname: host.GetHostname(),
-		Source: SourceUnknown, Confidence: ConfidenceNone,
+		Source:  SourceUnknown,
 		Failure: notMeasuredFailure("host_memory_copy", "run a memory benchmark to measure copy throughput"),
 	}
-	if hostCPU := host.GetCPU(); hostCPU != nil {
-		measurement.CPUVendor = hostCPU.GetVendorID()
+	if info != nil {
+		measurement.HostID = info.HostID
+		measurement.Hostname = info.Hostname
 	}
-	if memory := host.GetMemory(); memory != nil {
-		measurement.TotalGB = toGB(memory.GetTotal())
+	if memory != nil {
+		measurement.TotalGB = toGB(memory.Total)
 	}
-	return measurement
+	return measurement, errors.Join(infoErr, memoryErr)
 }
 func toGB(value uint64) float64 { return float64(value) / 1_000_000_000 }
 

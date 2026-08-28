@@ -9,13 +9,12 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 )
 
 const (
-	memoryBenchmarkRuns  = 3
-	storageBenchmarkRuns = 3
+	DefaultBenchmarkPath    = "/tmp/cedana-measure"
+	DefaultBenchmarkSamples = 3
 )
 
 const (
@@ -23,30 +22,20 @@ const (
 	StorageModeCold   = "cold"
 )
 
-func ParseStorageModes(value string) ([]string, error) {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "", "both":
-		return []string{StorageModeCached, StorageModeCold}, nil
-	case StorageModeCached:
-		return []string{StorageModeCached}, nil
-	case StorageModeCold:
-		return []string{StorageModeCold}, nil
-	default:
-		return nil, fmt.Errorf("invalid storage mode %q: use cached, cold, or both", value)
+func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, samples int) ([]StorageMeasurement, error) {
+	if err := validateBenchmarkSamples(samples); err != nil {
+		return nil, err
 	}
-}
-
-func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, modes []string) ([]StorageMeasurement, error) {
 	if path == "" {
-		path = "."
+		path = DefaultBenchmarkPath
 	}
 	absolutePath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
 	}
 	path = absolutePath
-	if len(modes) == 0 {
-		modes = []string{StorageModeCached, StorageModeCold}
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return nil, err
 	}
 	if sizeGB <= 0 {
 		sizeGB = 1
@@ -60,6 +49,7 @@ func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, modes []
 	if _, err := rand.Read(pattern); err != nil {
 		return nil, err
 	}
+	modes := []string{StorageModeCached, StorageModeCold}
 	results := make([]StorageMeasurement, 0, len(modes))
 	for _, mode := range modes {
 		if err := ctx.Err(); err != nil {
@@ -68,7 +58,7 @@ func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, modes []
 		if mode != StorageModeCached && mode != StorageModeCold {
 			return nil, fmt.Errorf("unsupported storage benchmark mode %q", mode)
 		}
-		result := benchmarkStorageMode(ctx, path, sizeGB, mode, storage, pattern)
+		result := benchmarkStorageMode(ctx, path, sizeGB, samples, mode, storage, pattern)
 		results = append(results, result)
 		if err := ctx.Err(); err != nil {
 			return results, err
@@ -77,11 +67,11 @@ func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, modes []
 	return results, nil
 }
 
-func benchmarkStorageMode(ctx context.Context, path string, sizeGB float64, mode string, storage []StorageMeasurement, pattern []byte) StorageMeasurement {
+func benchmarkStorageMode(ctx context.Context, path string, sizeGB float64, samples int, mode string, storage []StorageMeasurement, pattern []byte) StorageMeasurement {
 	var result StorageMeasurement
-	readRates := make([]float64, 0, storageBenchmarkRuns)
-	writeRates := make([]float64, 0, storageBenchmarkRuns)
-	for run := range storageBenchmarkRuns {
+	readRates := make([]float64, 0, samples)
+	writeRates := make([]float64, 0, samples)
+	for run := range samples {
 		result = benchmarkStorageAt(ctx, path, sizeGB, mode, storage, pattern)
 		result.BenchmarkRuns = run + 1
 		if result.ReadFailure != nil || result.WriteFailure != nil {
@@ -98,31 +88,20 @@ func benchmarkStorageMode(ctx context.Context, path string, sizeGB float64, mode
 }
 func benchmarkStorageAt(ctx context.Context, path string, sizeGB float64, mode string, storage []StorageMeasurement, pattern []byte) StorageMeasurement {
 	mount := filepath.Clean(path)
-	backend := "unknown"
 	capacityGB := float64(0)
 	if matched := matchStorage(path, storage); matched != nil {
 		mount = matched.Name
-		backend = matched.Backend
 		capacityGB = matched.CapacityGB
 	}
 	result := StorageMeasurement{
 		Name:            mount,
-		Backend:         backend,
 		CapacityGB:      capacityGB,
 		Mode:            mode,
 		BenchmarkSizeGB: sizeGB,
 		BenchmarkRuns:   1,
 		ReadSource:      SourceUnknown,
-		ReadConfidence:  ConfidenceNone,
 		WriteSource:     SourceUnknown,
-		WriteConfidence: ConfidenceNone,
 	}
-	if mode == StorageModeCached {
-		result.CachePolicy = "page_cache"
-	} else {
-		result.CachePolicy = "fadvise_dontneed"
-	}
-
 	file, err := os.CreateTemp(path, "cedana-measurement-*")
 	if err != nil {
 		failure := measurementFailure("storage_create", err)
@@ -144,7 +123,6 @@ func benchmarkStorageAt(ctx context.Context, path string, sizeGB float64, mode s
 	}
 	result.WriteGBPerSec = &writeRate
 	result.WriteSource = SourceMeasured
-	result.WriteConfidence = ConfidenceMedium
 
 	if mode == StorageModeCold {
 		if err := evictFileCache(file); err != nil {
@@ -160,12 +138,11 @@ func benchmarkStorageAt(ctx context.Context, path string, sizeGB float64, mode s
 	}
 	result.ReadGBPerSec = &readRate
 	result.ReadSource = SourceMeasured
-	result.ReadConfidence = ConfidenceMedium
 	return result
 }
 
-func BenchmarkMemory(ctx context.Context, sizeGB float64) (*MemoryMeasurement, error) {
-	rate, sizeGB, err := benchmarkMemoryCopy(ctx, sizeGB)
+func BenchmarkMemory(ctx context.Context, sizeGB float64, samples int) (*MemoryMeasurement, error) {
+	rate, sizeGB, err := benchmarkMemoryCopy(ctx, sizeGB, samples)
 	if err != nil {
 		return nil, err
 	}
@@ -175,24 +152,23 @@ func BenchmarkMemory(ctx context.Context, sizeGB float64) (*MemoryMeasurement, e
 		memory = &MemoryMeasurement{}
 	}
 	memory.BenchmarkSizeGB = sizeGB
-	memory.BenchmarkRuns = memoryBenchmarkRuns
+	memory.BenchmarkRuns = samples
 	memory.Placement = "os_default"
 	memory.CopyGBPerSec = &rate
 	memory.Source = SourceMeasured
-	memory.Confidence = ConfidenceMedium
-	if nodes, numaErr := CollectNUMA(ctx); numaErr == nil && len(nodes) > 1 {
-		memory.Confidence = ConfidenceLow
-	}
 	memory.Failure = nil
 	return memory, err
 }
 
-func BenchmarkMemoryRate(ctx context.Context, sizeGB float64) (float64, error) {
-	rate, _, err := benchmarkMemoryCopy(ctx, sizeGB)
+func BenchmarkMemoryRate(ctx context.Context, sizeGB float64, samples int) (float64, error) {
+	rate, _, err := benchmarkMemoryCopy(ctx, sizeGB, samples)
 	return rate, err
 }
 
-func benchmarkMemoryCopy(ctx context.Context, sizeGB float64) (float64, float64, error) {
+func benchmarkMemoryCopy(ctx context.Context, sizeGB float64, samples int) (float64, float64, error) {
+	if err := validateBenchmarkSamples(samples); err != nil {
+		return 0, 0, err
+	}
 	if sizeGB <= 0 {
 		sizeGB = 1
 	}
@@ -210,8 +186,8 @@ func benchmarkMemoryCopy(ctx context.Context, sizeGB float64) (float64, float64,
 	touchMemoryPages(src, 0x5a)
 	touchMemoryPages(dst, 0xa5)
 
-	rates := make([]float64, 0, memoryBenchmarkRuns)
-	for range memoryBenchmarkRuns {
+	rates := make([]float64, 0, samples)
+	for range samples {
 		if err := ctx.Err(); err != nil {
 			return 0, 0, err
 		}
@@ -230,6 +206,13 @@ func benchmarkMemoryCopy(ctx context.Context, sizeGB float64) (float64, float64,
 	}
 	sort.Float64s(rates)
 	return rates[len(rates)/2], sizeGB, nil
+}
+
+func validateBenchmarkSamples(samples int) error {
+	if samples < 1 {
+		return fmt.Errorf("benchmark samples must be at least 1")
+	}
+	return nil
 }
 func touchMemoryPages(buffer []byte, seed byte) {
 	pageSize := os.Getpagesize()
