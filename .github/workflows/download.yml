@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 env:
-  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_URL: https://rahul.cedana.ai
 
 on:
   workflow_call:
