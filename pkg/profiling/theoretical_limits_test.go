@@ -4,88 +4,69 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"slices"
 	"testing"
 
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/measurements"
 )
 
-func TestBuildTheoreticalLimitsPreservesModeAndFailure(t *testing.T) {
-	rate := 2.5
-	report := &measurements.Report{
-		Storage: []measurements.StorageMeasurement{
-			{
-				Name: "/checkpoints", Mode: measurements.StorageModeCold,
-				BenchmarkSizeGB: 0.5, BenchmarkRuns: 1,
-				ReadGBPerSec: &rate, ReadSource: measurements.SourceMeasured,
-				ReadConfidence:  measurements.ConfidenceMedium,
-				WriteSource:     measurements.SourceUnknown,
-				WriteConfidence: measurements.ConfidenceNone,
-				WriteFailure:    &measurements.Failure{Code: measurements.FailureReadOnly, Message: "read-only filesystem"},
-			},
-		},
-	}
+func TestAddTheoreticalLimit(t *testing.T) {
+	data := &Data{Name: "dump"}
+	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
+	AddTheoreticalLimit(ctx, &TheoreticalLimit{
+		Name: "gpu_host_device_link", Value: 31_500_000_000,
+		Unit: "bytes_per_second", Device: "GPU-1",
+	})
 
-	limits := BuildTheoreticalLimits(report)
-	if len(limits) != 2 {
-		t.Fatalf("limits = %d, want 2", len(limits))
-	}
-	if limits[0].BytesPerSecond != 2_500_000_000 ||
-		limits[0].Details["mode"] != measurements.StorageModeCold ||
-		limits[0].Details["benchmark_size_gb"] != "0.500" || limits[0].Details["benchmark_runs"] != "1" {
-		t.Fatalf("read limit = %#v", limits[0])
-	}
-	if limits[1].Failure == nil || limits[1].Failure.Code != measurements.FailureReadOnly {
-		t.Fatalf("write failure = %#v", limits[1].Failure)
+	if len(data.TheoreticalLimits) != 1 || data.TheoreticalLimits[0].Device != "GPU-1" {
+		t.Fatalf("limits = %#v", data.TheoreticalLimits)
 	}
 }
 
-func TestAttachTheoreticalLimitsSelectsOperationMount(t *testing.T) {
-	t.Cleanup(func() { SetSystemTheoreticalLimits(nil) })
-	SetSystemTheoreticalLimits([]*TheoreticalLimit{
-		{Name: "/", Kind: LimitKindStorage, Direction: "read", Device: "/"},
-		{Name: "/mnt/checkpoints", Kind: LimitKindStorage, Direction: "read", Device: "/mnt/checkpoints"},
-		{Name: "host_memory", Kind: LimitKindHostMemory},
-	})
-	data := &Data{Name: "dump"}
-	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
-	AttachTheoreticalLimits(ctx, "/mnt/checkpoints/job-1")
-
-	if len(data.TheoreticalLimits) != 2 {
-		t.Fatalf("limits = %#v, want matched storage plus host memory", data.TheoreticalLimits)
+func TestTheoreticalLimitDisplay(t *testing.T) {
+	limit := &TheoreticalLimit{Name: "gpu_host_device_link", Value: 31_500_000_000, Unit: "bytes_per_second"}
+	if got := limitDisplayName(limit.Name); got != "host link" {
+		t.Fatalf("display name = %q", got)
 	}
-	for _, limit := range data.TheoreticalLimits {
-		if limit.Kind == LimitKindStorage && limit.Device != "/mnt/checkpoints" {
-			t.Fatalf("attached wrong storage limit: %#v", limit)
-		}
+	if got := limitRateString(limit); got != "31.5 GB/s" {
+		t.Fatalf("rate = %q", got)
+	}
+}
+
+func TestTheoreticalLimitsSummaryGroupsMultipleDevices(t *testing.T) {
+	limits := []*TheoreticalLimit{
+		{Name: "gpu_device_memory", Value: 2_039_000_000_000, Unit: "bytes_per_second", Device: "GPU-1"},
+		{Name: "gpu_host_device_link", Value: 31_500_000_000, Unit: "bytes_per_second", Device: "GPU-1"},
+		{Name: "gpu_device_memory", Value: 1_555_000_000_000, Unit: "bytes_per_second", Device: "GPU-2"},
+		{Name: "gpu_host_device_link", Value: 63_000_000_000, Unit: "bytes_per_second", Device: "GPU-2"},
+	}
+	got := theoreticalLimitsSummary(limits)
+	want := []string{
+		"GPU-1 limits: device memory 2039 GB/s, host link 31.5 GB/s",
+		"GPU-2 limits: device memory 1555 GB/s, host link 63 GB/s",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("summary = %#v, want %#v", got, want)
 	}
 }
 
 func TestFlattenLiftsTheoreticalLimitsToRoot(t *testing.T) {
 	child := &Data{
-		Name: "storage",
-		TheoreticalLimits: []*TheoreticalLimit{
-			{Name: "storage", Kind: LimitKindStorage, Device: "/checkpoints"},
-		},
+		TheoreticalLimits: []*TheoreticalLimit{{Name: "gpu_device_memory"}},
 	}
 	data := &Data{Name: "dump", Components: []*Data{child}}
-
 	Flatten(data)
 
-	if len(data.TheoreticalLimits) != 1 || data.TheoreticalLimits[0].Device != "/checkpoints" {
-		t.Fatalf("root limits = %#v", data.TheoreticalLimits)
-	}
-	if len(child.TheoreticalLimits) != 0 {
-		t.Fatalf("child limits were not cleared: %#v", child.TheoreticalLimits)
+	if len(data.TheoreticalLimits) != 1 || len(child.TheoreticalLimits) != 0 {
+		t.Fatalf("limits = %#v child = %#v", data.TheoreticalLimits, child.TheoreticalLimits)
 	}
 }
-func TestTheoreticalLimitsGobRoundTrip(t *testing.T) {
-	data := &Data{
-		Name: "restore",
-		TheoreticalLimits: []*TheoreticalLimit{
-			{Name: "gpu_host_device_link", Kind: LimitKindHostDeviceLink, BytesPerSecond: 31_500_000_000},
-		},
-	}
+
+func TestTheoreticalLimitsRoundTrip(t *testing.T) {
+	data := &Data{TheoreticalLimits: []*TheoreticalLimit{{
+		Name: "gpu_device_memory", Value: 2_039_000_000_000, Unit: "bytes_per_second",
+	}}}
+
 	var buffer bytes.Buffer
 	if err := Encode(data, &buffer); err != nil {
 		t.Fatal(err)
@@ -94,34 +75,19 @@ func TestTheoreticalLimitsGobRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(decoded.TheoreticalLimits) != 1 || decoded.TheoreticalLimits[0].BytesPerSecond != 31_500_000_000 {
+	if len(decoded.TheoreticalLimits) != 1 || decoded.TheoreticalLimits[0].Value != data.TheoreticalLimits[0].Value {
 		t.Fatalf("decoded limits = %#v", decoded.TheoreticalLimits)
 	}
-}
 
-func TestTheoreticalLimitsJSONRoundTripPreservesIO(t *testing.T) {
-	original := &Data{
-		Name: "dump",
-		IO:   4096,
-		TheoreticalLimits: []*TheoreticalLimit{
-			{
-				Name: "host_memory", Kind: LimitKindHostMemory,
-				Failure: &measurements.Failure{Code: measurements.FailureNotMeasured, Message: "benchmark not requested"},
-			},
-		},
-	}
-	encoded, err := json.Marshal(original)
+	encoded, err := json.Marshal(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var decoded Data
-	if err := json.Unmarshal(encoded, &decoded); err != nil {
+	var decodedJSON Data
+	if err := json.Unmarshal(encoded, &decodedJSON); err != nil {
 		t.Fatal(err)
 	}
-	if decoded.IO != original.IO {
-		t.Fatalf("decoded IO = %d, want %d", decoded.IO, original.IO)
-	}
-	if len(decoded.TheoreticalLimits) != 1 || decoded.TheoreticalLimits[0].Failure == nil {
-		t.Fatalf("decoded limits = %#v", decoded.TheoreticalLimits)
+	if len(decodedJSON.TheoreticalLimits) != 1 || decodedJSON.TheoreticalLimits[0].Value != data.TheoreticalLimits[0].Value {
+		t.Fatalf("decoded JSON limits = %#v", decodedJSON.TheoreticalLimits)
 	}
 }

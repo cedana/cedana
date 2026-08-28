@@ -29,7 +29,7 @@ func init() {
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(freezeCmd)
 	rootCmd.AddCommand(unfreezeCmd)
-	rootCmd.AddCommand(measurementsCmd)
+	rootCmd.AddCommand(measureCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	// Add helper cmds from plugins

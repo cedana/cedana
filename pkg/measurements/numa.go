@@ -12,68 +12,53 @@ import (
 	"strings"
 )
 
-func CollectNUMA(ctx context.Context) ([]NUMAMeasurement, error) {
+func BenchmarkNUMA(ctx context.Context, sizeGB float64, samples int) ([]NUMAMeasurement, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil
+	}
+	if err := validateBenchmarkSamples(samples); err != nil {
+		return nil, err
 	}
 	nodes, err := discoverNUMANodes(numaSysfsPath)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]NUMAMeasurement, 0, len(nodes))
-	for _, node := range nodes {
-		if err := ctx.Err(); err != nil {
-			return result, err
-		}
-		result = append(result, NUMAMeasurement{
-			Name: fmt.Sprintf("numa%d", node.ID), Kind: "numa_node",
-			CPUNode: node.ID, MemoryNode: node.ID, Locality: "local",
-			CPUs: node.CPUs, MemoryGB: node.MemoryGB,
-			Source: SourceConfigured, Confidence: ConfidenceHigh,
-		})
-	}
-	return result, nil
-}
-
-func BenchmarkNUMA(ctx context.Context, sizeGB float64, fullMatrix bool) ([]NUMAMeasurement, error) {
-	if runtime.GOOS != "linux" {
+	if len(nodes) < 2 {
 		return nil, nil
-	}
-	nodes, err := discoverNUMANodes(numaSysfsPath)
-	if err != nil {
-		return nil, err
 	}
 	if sizeGB <= 0 {
 		sizeGB = 1
 	}
 	numactl, err := exec.LookPath("numactl")
 	if err != nil {
-		return nil, err
+		return []NUMAMeasurement{{
+			Name: "numa", Kind: "host_memory_copy", Source: SourceUnknown,
+			Failure: &Failure{
+				Code:      FailureUnavailable,
+				Operation: "numa_memory_copy",
+				Message:   "numactl is not installed; NUMA benchmarks were not run",
+			},
+		}}, nil
 	}
 
 	result := make([]NUMAMeasurement, 0, len(nodes)*len(nodes))
 	for _, source := range nodes {
 		for _, target := range nodes {
-			if !fullMatrix && source.ID != target.ID {
-				continue
-			}
 			if err := ctx.Err(); err != nil {
 				return result, err
 			}
 			measurement := NUMAMeasurement{
 				Name: numaPathName(source.ID, target.ID), Kind: "host_memory_copy",
-				CPUNode: source.ID, MemoryNode: target.ID,
 				Locality: numaLocality(source.ID, target.ID), MemoryGB: target.MemoryGB,
-				CPUs: source.CPUs, BenchmarkSizeGB: sizeGB, BenchmarkRuns: memoryBenchmarkRuns,
-				Source: SourceUnknown, Confidence: ConfidenceNone,
+				BenchmarkSizeGB: sizeGB, BenchmarkRuns: samples,
+				Source: SourceUnknown,
 			}
-			rate, benchmarkErr := benchmarkNUMAMemoryAccess(ctx, numactl, source.ID, target.ID, sizeGB)
+			rate, benchmarkErr := benchmarkNUMAMemoryAccess(ctx, numactl, source.ID, target.ID, sizeGB, samples)
 			if benchmarkErr != nil {
 				measurement.Failure = measurementFailure("numa_memory_copy", benchmarkErr)
 			} else {
 				measurement.CopyGBPerSec = &rate
 				measurement.Source = SourceMeasured
-				measurement.Confidence = ConfidenceMedium
 			}
 			result = append(result, measurement)
 		}
@@ -83,7 +68,6 @@ func BenchmarkNUMA(ctx context.Context, sizeGB float64, fullMatrix bool) ([]NUMA
 
 type numaNode struct {
 	ID       int
-	CPUs     string
 	MemoryGB float64
 }
 
@@ -99,9 +83,6 @@ func discoverNUMANodes(root string) ([]numaNode, error) {
 			continue
 		}
 		node := numaNode{ID: id}
-		if cpus, readErr := os.ReadFile(filepath.Join(match, "cpulist")); readErr == nil {
-			node.CPUs = strings.TrimSpace(string(cpus))
-		}
 		if meminfo, readErr := os.ReadFile(filepath.Join(match, "meminfo")); readErr == nil {
 			node.MemoryGB = parseNUMAMemTotalGB(string(meminfo))
 		}
@@ -111,7 +92,7 @@ func discoverNUMANodes(root string) ([]numaNode, error) {
 	return nodes, nil
 }
 
-func benchmarkNUMAMemoryAccess(ctx context.Context, numactl string, cpuNode, memoryNode int, sizeGB float64) (float64, error) {
+func benchmarkNUMAMemoryAccess(ctx context.Context, numactl string, cpuNode, memoryNode int, sizeGB float64, samples int) (float64, error) {
 	outputFile, err := os.CreateTemp("", "cedana-numa-benchmark-*")
 	if err != nil {
 		return 0, err
@@ -128,8 +109,9 @@ func benchmarkNUMAMemoryAccess(ctx context.Context, numactl string, cpuNode, mem
 		"--cpunodebind", strconv.Itoa(cpuNode),
 		"--membind", strconv.Itoa(memoryNode),
 		os.Args[0],
-		"measurements", "benchmark",
+		"measure", "benchmark",
 		"--size-gb", strconv.FormatFloat(sizeGB, 'f', -1, 64),
+		"--samples", strconv.Itoa(samples),
 		"--result-file", outputPath,
 	)
 	output, err := cmd.CombinedOutput()

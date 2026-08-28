@@ -7,7 +7,6 @@ import (
 	"time"
 
 	gpu_proto "buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
-	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/profiling"
 )
 
@@ -310,26 +309,15 @@ func addGPUTheoreticalLimitsToProfiling(ctx context.Context, profile *gpu_proto.
 	}
 }
 
-func gpuTheoreticalLimit(limit *gpu_proto.ThroughputCapability) *profiling.TheoreticalLimit {
+func gpuTheoreticalLimit(limit *gpu_proto.Measurement) *profiling.TheoreticalLimit {
 	if limit == nil {
 		return nil
 	}
 
-	converted := &profiling.TheoreticalLimit{
-		Name:           limit.GetName(),
-		Kind:           limit.GetKind(),
-		Direction:      limit.GetDirection(),
-		BytesPerSecond: limit.GetBytesPerSecond(),
-		Source:         limit.GetSource(),
-		Confidence:     limit.GetConfidence(),
-		Device:         limit.GetDevice(),
-		Details:        limit.GetDetails(),
+	return &profiling.TheoreticalLimit{
+		Name:   limit.GetName(),
+		Value:  limit.GetValue(),
+		Unit:   limit.GetUnit(),
+		Device: limit.GetDevice(),
 	}
-	if limit.GetFailureCode() != "" {
-		converted.Failure = &measurements.Failure{
-			Code:    limit.GetFailureCode(),
-			Message: limit.GetFailureMessage(),
-		}
-	}
-	return converted
 }

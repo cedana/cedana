@@ -8,24 +8,7 @@ import (
 	"os"
 	"syscall"
 	"testing"
-
-	"github.com/shirou/gopsutil/v4/disk"
 )
-
-func TestStorageBackend(t *testing.T) {
-	cases := map[string]string{
-		"ext4": "local",
-		"nfs":  "remote",
-		"":     "unknown",
-	}
-
-	for fstype, want := range cases {
-		got := storageBackend(disk.PartitionStat{Fstype: fstype})
-		if got != want {
-			t.Fatalf("storageBackend(%q) = %q, want %q", fstype, got, want)
-		}
-	}
-}
 
 func TestMatchStorageUsesLongestMount(t *testing.T) {
 	storage := []StorageMeasurement{
@@ -46,31 +29,6 @@ func TestParseNUMAMemTotalGB(t *testing.T) {
 	want := float64(12345678*1024) / 1_000_000_000
 	if got != want {
 		t.Fatalf("parseNUMAMemTotalGB = %f, want %f", got, want)
-	}
-}
-
-func TestNormalizePCIBusID(t *testing.T) {
-	if got := normalizePCIBusID("00000000:17:00.0"); got != "0000:17:00.0" {
-		t.Fatalf("normalizePCIBusID = %q, want 0000:17:00.0", got)
-	}
-}
-
-func TestGPUDeviceMemoryGBPerSec(t *testing.T) {
-	got := gpuDeviceMemoryGBPerSec(1000, 256)
-	if got == nil {
-		t.Fatal("gpuDeviceMemoryGBPerSec returned nil")
-	}
-	if *got != 64 {
-		t.Fatalf("gpuDeviceMemoryGBPerSec = %f, want 64", *got)
-	}
-}
-func TestPCIeLinkGBPerSec(t *testing.T) {
-	got := pcieLinkGBPerSec(16, 16)
-	if got == nil {
-		t.Fatal("pcieLinkGBPerSec returned nil")
-	}
-	if diff := *got - 31.50769230769231; diff < -0.000001 || diff > 0.000001 {
-		t.Fatalf("pcieLinkGBPerSec = %f, want 31.507692", *got)
 	}
 }
 
@@ -95,25 +53,12 @@ func TestMeasurementFailureCodes(t *testing.T) {
 	}
 }
 
-func TestParseStorageModes(t *testing.T) {
-	modes, err := ParseStorageModes("both")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(modes) != 2 || modes[0] != StorageModeCached || modes[1] != StorageModeCold {
-		t.Fatalf("modes = %#v", modes)
-	}
-	if _, err := ParseStorageModes("mystery"); err == nil {
-		t.Fatal("expected invalid mode error")
-	}
-}
-
 func TestBenchmarkStorageSeparatesCachedAndColdModes(t *testing.T) {
 	results, err := BenchmarkStorage(
 		context.Background(),
 		t.TempDir(),
 		0.01,
-		[]string{StorageModeCached, StorageModeCold},
+		2,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -127,7 +72,7 @@ func TestBenchmarkStorageSeparatesCachedAndColdModes(t *testing.T) {
 		if result.Mode != mode {
 			t.Fatalf("result[%d].Mode = %q, want %q", i, result.Mode, mode)
 		}
-		if result.BenchmarkSizeGB != 0.01 || result.BenchmarkRuns != storageBenchmarkRuns {
+		if result.BenchmarkSizeGB != 0.01 || result.BenchmarkRuns != 2 {
 			t.Fatalf("result[%d] context = size:%f runs:%d", i, result.BenchmarkSizeGB, result.BenchmarkRuns)
 		}
 		if result.CapacityGB <= 0 {
@@ -155,20 +100,22 @@ func TestBenchmarkStorageResolvesRelativePathForMountMatching(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results, err := BenchmarkStorage(context.Background(), ".", 0.001, []string{StorageModeCached})
+	results, err := BenchmarkStorage(context.Background(), ".", 0.001, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 1 {
-		t.Fatalf("results = %d, want 1", len(results))
+	if len(results) != 2 {
+		t.Fatalf("results = %d, want 2", len(results))
 	}
-	if results[0].Name == "." {
-		t.Fatal("relative benchmark path was not matched to its mount")
+	for _, result := range results {
+		if result.Name == "." {
+			t.Fatal("relative benchmark path was not matched to its mount")
+		}
 	}
 }
 
 func TestBenchmarkMemoryBacksPagesAndRecordsSamples(t *testing.T) {
-	measurement, err := BenchmarkMemory(context.Background(), 0.01)
+	measurement, err := BenchmarkMemory(context.Background(), 0.01, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,8 +125,14 @@ func TestBenchmarkMemoryBacksPagesAndRecordsSamples(t *testing.T) {
 	if measurement.Placement != "os_default" {
 		t.Fatalf("placement = %q, want os_default", measurement.Placement)
 	}
-	if measurement.BenchmarkSizeGB != 0.01 || measurement.BenchmarkRuns != memoryBenchmarkRuns {
+	if measurement.BenchmarkSizeGB != 0.01 || measurement.BenchmarkRuns != 2 {
 		t.Fatalf("context = size:%f runs:%d", measurement.BenchmarkSizeGB, measurement.BenchmarkRuns)
+	}
+}
+
+func TestBenchmarkMemoryRejectsInvalidSampleCount(t *testing.T) {
+	if _, err := BenchmarkMemory(context.Background(), 0.01, 0); err == nil {
+		t.Fatal("expected invalid sample count error")
 	}
 }
 
@@ -203,7 +156,7 @@ func TestBenchmarkStorageReturnsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := BenchmarkStorage(ctx, t.TempDir(), 0.001, []string{StorageModeCached})
+	_, err := BenchmarkStorage(ctx, t.TempDir(), 0.001, 1)
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v, want context.Canceled", err)
 	}
