@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 env:
-  CEDANA_URL: https://rahul.cedana.ai
+  CEDANA_URL: https://rahul.cedana.ai/v1
 
 on:
   workflow_call:
