@@ -11,8 +11,5 @@ var InstallPlugins string
 //go:embed uninstall.sh
 var Uninstall string
 
-//go:embed csx-uninstall.sh
-var CSXUninstall string
-
 //go:embed configure-kubelet.sh
 var ConfigureKubelet string
