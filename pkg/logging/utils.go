@@ -6,6 +6,7 @@ import (
 	"bufio"
 	"context"
 	"os"
+	"os/user"
 	"path/filepath"
 
 	"github.com/rs/zerolog"
@@ -90,11 +91,11 @@ func LogFile(program string) string {
 	if os.Geteuid() == 0 {
 		return filepath.Join("/var/log", "cedana-"+program+".log")
 	}
-	homeDir, err := os.UserHomeDir()
+	user, err := user.Current()
 	if err != nil {
 		os.MkdirAll(filepath.Join(os.TempDir(), "cedana", "logs"), 0o755)
 		return filepath.Join(os.TempDir(), "cedana", "logs", "cedana-"+program+".log")
 	}
-	os.MkdirAll(filepath.Join(homeDir, ".cedana", "logs"), 0o755)
-	return filepath.Join(homeDir, ".cedana", "logs", "cedana-"+program+".log")
+	os.MkdirAll(filepath.Join(user.HomeDir, ".cedana", "logs"), 0o755)
+	return filepath.Join(user.HomeDir, ".cedana", "logs", "cedana-"+program+".log")
 }
