@@ -52,7 +52,7 @@ checkpoint_pod() {
     }')
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/checkpoint/pod" \
+    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v1/checkpoint/pod" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -d "$payload" \
@@ -111,7 +111,7 @@ restore_pod() {
     fi
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/restore/pod" \
+    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v1/restore/pod" \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -d "$payload" \
@@ -150,7 +150,7 @@ poll_action_status() {
 
     for i in $(seq 1 $timeout); do
         local response
-        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/checkpoint/status/${action_id}" \
+        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v1/checkpoint/status/${action_id}" \
                 -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -w "%{http_code}")
 
@@ -186,7 +186,7 @@ poll_action_status() {
             debug_log "Warning: Dedicated status endpoint not found, trying general actions endpoint..."
             # Fallback to general actions endpoint
             local actions_response
-            actions_response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
+            actions_response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v1/actions" \
                     -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
                 -w "%{http_code}")
 
@@ -249,7 +249,7 @@ get_checkpoint_id_from_action() {
     debug_log "Getting checkpoint ID for action '$action_id'..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v1/actions" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
@@ -287,7 +287,7 @@ cleanup_checkpoint() {
     debug_log "Deprecating checkpoint '$checkpoint_id'..."
 
     local response
-    response=$(curl -s -X PATCH "${PROPAGATOR_BASE_URL}/v2/checkpoints/deprecate/${checkpoint_id}" \
+    response=$(curl -s -X PATCH "${PROPAGATOR_BASE_URL}/v1/checkpoints/deprecate/${checkpoint_id}" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
@@ -322,7 +322,7 @@ validate_propagator_connectivity() {
     debug_log "Validating propagator service connectivity..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/user" \
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v1/user" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
@@ -362,7 +362,7 @@ get_checkpoints() {
 
     debug_log "Retrieving checkpoints from propagator..."
 
-    local url="${PROPAGATOR_BASE_URL}/v2/checkpoints"
+    local url="${PROPAGATOR_BASE_URL}/v1/checkpoints"
     if [ -n "$cluster_id" ]; then
         url="${url}?cluster_id=${cluster_id}"
     fi
@@ -428,7 +428,7 @@ get_latest_pod_action_id() {
     debug_log "Getting latest action ID for pod '$pod_id'..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions/from_pod/${pod_id}" \
+    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v1/actions/from_pod/${pod_id}" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
@@ -459,7 +459,7 @@ register_cluster() {
     debug_log "Registering a new cluster with name '$name'..."
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/cluster" \
+    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v1/cluster" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{ "cluster_name": "'"${name}"'" }' \
@@ -488,7 +488,7 @@ deregister_cluster() {
     debug_log "Deregistering a new cluster with ID '$id'..."
 
     local response
-    response=$(curl -s -X DELETE "${PROPAGATOR_BASE_URL}/v2/cluster/${id}" \
+    response=$(curl -s -X DELETE "${PROPAGATOR_BASE_URL}/v1/cluster/${id}" \
             -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
         -w "%{http_code}")
 
