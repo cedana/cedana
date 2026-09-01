@@ -110,6 +110,7 @@ Cedana supports checkpointing/restoring to/from remote storage, through storage 
 - [Amazon S3](storage/s3.md)
 - [Google Cloud Storage](storage/gcs.md)
 - [Cedana Storage](storage/cedana.md)
+- [Cedana Storage Express](storage/csx.md)
 
 ## Advanced
 
