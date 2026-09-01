@@ -6,3 +6,4 @@ Checkpoint/restore to/from Google Cloud Storage is currently WIP.
 
 - [Amazon S3](s3.md)
 - [Cedana Storage](cedana.md)
+- [Cedana Storage Express](csx.md)
