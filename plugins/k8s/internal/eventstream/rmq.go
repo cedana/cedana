@@ -68,7 +68,7 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 		hostname = "unknown"
 	}
 	clientName := fmt.Sprintf("cedana-daemon-%s-%d", hostname, time.Now().UnixNano())
-	url, err := propagator.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
+	url, err := propagator.V1().Discover().ByName("rabbitmq").Get(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover rabbitmq service: %v", err)
 	}
@@ -315,7 +315,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			}
 			specMap[i] = spec
 
-			checkpointId, err := es.propagator.V2().Checkpoints().Post(ctx, nil)
+			checkpointId, err := es.propagator.V1().Checkpoints().Post(ctx, nil)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to create checkpoint in propagator")
 				return rabbitmq.Ack
@@ -549,7 +549,7 @@ func (es *EventStream) publishCheckpoint(
 }
 
 func (es *EventStream) getImageSecret() (*imageSecret, error) {
-	url := es.propagator.RequestAdapter.GetBaseUrl() + "/v2/secrets"
+	url := es.propagator.RequestAdapter.GetBaseUrl() + "/secrets"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
