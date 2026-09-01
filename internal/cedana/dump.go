@@ -184,7 +184,6 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 		}
 
 		opts.Storage = storage
-
 		streams := req.Streams
 		if streams == 0 {
 			streams = config.Global.Checkpoint.Streams

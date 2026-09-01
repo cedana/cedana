@@ -285,6 +285,8 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 		return
 	}
 
+	addGPUTheoreticalLimitsToProfiling(ctx, profile)
+
 	workers := gpuSortedWorkers(profile)
 	displayNames := gpuPhaseDisplayNames(profile)
 
@@ -297,4 +299,25 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 	}
 
 	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers))
+}
+
+func addGPUTheoreticalLimitsToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile) {
+	for _, limit := range profile.GetTheoreticalLimits() {
+		if converted := gpuTheoreticalLimit(limit); converted != nil {
+			profiling.AddTheoreticalLimit(ctx, converted)
+		}
+	}
+}
+
+func gpuTheoreticalLimit(limit *gpu_proto.Measurement) *profiling.TheoreticalLimit {
+	if limit == nil {
+		return nil
+	}
+
+	return &profiling.TheoreticalLimit{
+		Name:   limit.GetName(),
+		Value:  limit.GetValue(),
+		Unit:   limit.GetUnit(),
+		Device: limit.GetDevice(),
+	}
 }

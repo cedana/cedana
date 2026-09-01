@@ -27,6 +27,7 @@ type Data struct {
 	Parallel    bool `json:"parallel,omitempty"`
 	Redundant   bool `json:"redundant,omitempty"`
 	IORedundant bool `json:"io_redundant,omitempty"`
+	TheoreticalLimits []*TheoreticalLimit `json:"theoretical_limits,omitempty"`
 }
 
 // Flatten flattens the profiling data into a single list of components.
@@ -43,6 +44,8 @@ func Flatten(data *Data) {
 		}
 
 		Flatten(component)
+		data.TheoreticalLimits = append(data.TheoreticalLimits, component.TheoreticalLimits...)
+		component.TheoreticalLimits = nil
 
 		data.Components = append(data.Components, component)
 		data.Components = append(data.Components, component.Components...)
@@ -74,7 +77,7 @@ func Clean(data *Data) {
 
 		Clean(component)
 
-		if component.Duration == 0 && component.IO == 0 && component.Name == "" {
+		if component.Duration == 0 && component.IO == 0 && component.Name == "" && len(component.TheoreticalLimits) == 0 {
 			newComponents = append(newComponents, component.Components...)
 		} else {
 			newComponents = append(newComponents, component)
@@ -208,6 +211,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	}
 
 	fmt.Println()
+	PrintTheoreticalLimits(data)
 }
 
 func EncodeJSON(data *Data) (string, error) {
