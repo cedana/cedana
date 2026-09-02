@@ -95,6 +95,7 @@ For all available CLI options, see [CLI reference](references/cli/cedana.md). Di
 - [Amazon S3](guides/storage/s3.md)
 - [Google Cloud Storage](guides/storage/gcs.md)
 - [Cedana Storage](guides/storage/cedana.md)
+- [Cedana Storage Express](guides/storage/csx.md)
 
 ### Developer guides
 
