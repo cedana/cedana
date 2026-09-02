@@ -60,6 +60,7 @@ const (
 	DEFAULT_GPU_SHM_SIZE          = 8 * utils.GIBIBYTE
 	DEFAULT_GPU_DEBUG             = false
 	DEFAULT_GPU_DEDUP_ENABLED     = false
+	DEFAULT_GPU_DELTA_ENABLED     = false
 	DEFAULT_GPU_TEMPLATES_ENABLED = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
@@ -113,6 +114,7 @@ var Global Config = Config{
 		ShmSize:          DEFAULT_GPU_SHM_SIZE,
 		Debug:            DEFAULT_GPU_DEBUG,
 		DedupEnabled:     DEFAULT_GPU_DEDUP_ENABLED,
+		DeltaEnabled:     DEFAULT_GPU_DELTA_ENABLED,
 		TemplatesEnabled: DEFAULT_GPU_TEMPLATES_ENABLED,
 	},
 	CRIU: CRIU{
