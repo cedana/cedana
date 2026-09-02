@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/flags"
@@ -11,10 +10,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	DIR_PATH      = "/etc/cedana"
-	DIR_PATH_USER string
-)
+var DIR_PATH = "/etc/cedana"
 
 const (
 	FILE_NAME  = "config"
@@ -143,17 +139,6 @@ func init() {
 		panic(fmt.Errorf("failed to unmarshal default config: %w", err))
 	}
 
-	if os.Geteuid() != 0 {
-		homeDir, err := os.UserConfigDir()
-		if err == nil {
-			DIR_PATH_USER = filepath.Join(homeDir, "cedana")
-		} else {
-			DIR_PATH_USER = DIR_PATH
-		}
-	} else {
-		DIR_PATH_USER = DIR_PATH
-	}
-
 	var configStr string
 	var configDir string
 	var initConfig bool
@@ -214,8 +199,6 @@ func Load(args ...Args) (err error) {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH_USER
-	} else {
 		Dir = a.ConfigDir
 	}
 
@@ -256,8 +239,6 @@ func Init(args ...Args) error {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH_USER
-	} else {
 		Dir = a.ConfigDir
 	}
 
