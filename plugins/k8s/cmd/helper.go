@@ -121,6 +121,7 @@ var destroyCmd = &cobra.Command{
 		err := script.Run(
 			log.With().Str("operation", "destroy").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
 			script.Chroot("/host", scripts.ResetService),
+			script.Chroot("/host", k8scripts.CSXUninstall),
 			k8scripts.Uninstall,
 		)
 		if err != nil {
@@ -156,10 +157,16 @@ func startHelper(ctx context.Context) error {
 			log.Error().Err(err).Msg("failed to setup checkpoint publisher")
 			return
 		}
-		err = stream.StartCheckpointsConsumer(ctx)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to setup checkpint request consumer")
-			return
+		consumerErr := make(chan error, 2)
+		go func() {
+			consumerErr <- stream.StartCheckpointsConsumer(ctx)
+		}()
+		go func() {
+			consumerErr <- stream.StartDeleteConsumer(ctx)
+		}()
+
+		if err := <-consumerErr; err != nil {
+			log.Error().Err(err).Msg("checkpoint request consumer stopped")
 		}
 	}()
 

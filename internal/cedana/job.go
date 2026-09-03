@@ -125,18 +125,3 @@ func (s *Server) ListCheckpoints(ctx context.Context, req *daemon.ListCheckpoint
 
 	return &daemon.ListCheckpointsResp{Checkpoints: checkpoints}, nil
 }
-
-func (s *Server) DeleteCheckpoint(ctx context.Context, req *daemon.DeleteCheckpointReq) (*daemon.DeleteCheckpointResp, error) {
-	if req.ID == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "ID must be provided")
-	}
-
-	checkpoint := s.jobs.GetCheckpoint(req.GetID())
-	if checkpoint == nil {
-		return nil, status.Errorf(codes.NotFound, "checkpoint not found")
-	}
-
-	s.jobs.DeleteCheckpoint(req.GetID())
-
-	return &daemon.DeleteCheckpointResp{}, nil
-}

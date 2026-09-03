@@ -65,7 +65,22 @@ func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, erro
 }
 
 func (s *Storage) Delete(ctx context.Context, path string) error {
-	log.Info().Str("storage", "csx").Str("path", path).Msg("Delete() called")
+	conn, csxClient, err := s.newCSXClient()
+	if err != nil {
+		log.Err(err).Msg("could not establish connection to CSX")
+		return err
+	}
+	defer conn.Close()
+
+	objectID := filepath.Base(strings.TrimPrefix(path, PATH_PREFIX))
+	log.Debug().Str("ObjectID", objectID).Msg("sending delete request to CSX")
+	_, err = csxClient.Delete(ctx, &csx.DeleteReq{
+		ID: objectID,
+	})
+	if err != nil {
+		log.Err(err).Str("objectID", objectID).Msg("failed to delete object")
+		return err
+	}
 	return nil
 }
 
