@@ -104,6 +104,8 @@ teardown_file() {
     cedana run --no-server runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" &
     cedana_pid=$!
 
+    sleep 2 # so we don't "cancel" cedana run itself while it's still starting up the process
+
     wait_for_file "$pid_file" 5
     pid=$(cat "$pid_file")
 
@@ -636,6 +638,8 @@ teardown_file() {
 
     wait_for_file "$pid_file" 5
     pid=$(cat "$pid_file")
+
+    sleep 2 # so we don't "cancel" cedana run itself while it's still starting up the process
 
     kill -TERM "$cedana_pid"
     wait_for_no_pid "$pid" 5
