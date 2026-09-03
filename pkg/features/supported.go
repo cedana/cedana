@@ -42,13 +42,12 @@ var (
 	UnfreezeHandler       = plugins.Feature[types.Unfreeze]{Symbol: "UnfreezeHandler", Description: "Unfreeze handler"}
 
 	// Run
-	RunHandler           = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}
-	RunServerlessSupport = plugins.Feature[bool]{Symbol: "RunServerlessSupport", Description: "Run handler (serverless)"}
-	RunMiddleware        = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddleware", Description: "Run middleware"}
-	RunMiddlewareLate    = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddlewareLate", Description: "Run middleware (late)"}
-	KillSignal           = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
-	Cleanup              = plugins.Feature[func(ctx context.Context, details *daemon.Details) error]{Symbol: "Cleanup", Description: "Custom cleanup"}
-	Reaper               = plugins.Feature[bool]{Symbol: "Reaper", Description: "Custom reaper"}
+	RunHandler        = plugins.Feature[types.Run]{Symbol: "RunHandler", Description: "Run handler"}
+	RunMiddleware     = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddleware", Description: "Run middleware"}
+	RunMiddlewareLate = plugins.Feature[types.Middleware[types.Run]]{Symbol: "RunMiddlewareLate", Description: "Run middleware (late)"}
+	KillSignal        = plugins.Feature[syscall.Signal]{Symbol: "KillSignal", Description: "Custom kill signal"}
+	Cleanup           = plugins.Feature[func(ctx context.Context, details *daemon.Details) error]{Symbol: "Cleanup", Description: "Custom cleanup"}
+	ServerlessSupport = plugins.Feature[bool]{Symbol: "ServerlessSupport", Description: "Support for serverless mode"}
 
 	// Manage
 	ManageHandler = plugins.Feature[types.Run]{Symbol: "ManageHandler", Description: "Manage handler"}

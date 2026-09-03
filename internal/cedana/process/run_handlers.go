@@ -2,7 +2,6 @@ package process
 
 import (
 	"context"
-	"os"
 	"os/exec"
 	"syscall"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -49,10 +47,6 @@ func Run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		cmd.SysProcAttr.Setsid = false                     // Use the current session
 		cmd.SysProcAttr.GidMappingsEnableSetgroups = false // Avoid permission issues when running as non-root user
 		cmd.SysProcAttr.Credential = nil                   // Current user's credentials (caller)
-		if isatty.IsTerminal(os.Stdin.Fd()) {
-			cmd.SysProcAttr.Foreground = isatty.IsTerminal(os.Stdin.Fd()) // Run in the foreground to catch signals
-			cmd.SysProcAttr.Ctty = int(os.Stdin.Fd())                     // Set the controlling terminal
-		}
 	}
 
 	err = cmd.Start()

@@ -4,17 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-
 	"sort"
 	"strconv"
-
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -118,15 +115,15 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	// handle it when and how it wants to.
 
 	var exitCode chan int
-	var ok bool
-	reaper, _ := features.Reaper.IsAvailable(req.Type)
-	if !reaper || req.Type == "process" {
+	var reaper bool
+
+	// Use existing exit code channel if available. For e.g. the runc plugin handles
+	// reaping restored containers on it's own, to correctly handle signal forwarding etc.
+	// so it creates an exit code handler earlier in the chain. So, the runc plugin
+	// is considered a reaper and we don't try to reap here.
+	exitCode, reaper = ctx.Value(keys.EXIT_CODE_CHANNEL_CONTEXT_KEY).(chan int)
+	if !reaper {
 		exitCode = make(chan int, 1)
-	} else {
-		exitCode, ok = ctx.Value(keys.EXIT_CODE_CHANNEL_CONTEXT_KEY).(chan int)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "exit code channel must be set by now since plugin '%s' is a reaper", req.Type)
-		}
 	}
 	code = channel.Broadcaster(exitCode)
 

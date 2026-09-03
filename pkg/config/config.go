@@ -10,9 +10,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-var DIR_PATH = "/etc/cedana"
-
 const (
+	DIR_PATH   = "/etc/cedana"
 	FILE_NAME  = "config"
 	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
@@ -199,11 +198,12 @@ func Load(args ...Args) (err error) {
 	}
 
 	if a.ConfigDir == "" {
+		Dir = DIR_PATH
+	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
 
@@ -239,11 +239,12 @@ func Init(args ...Args) error {
 	}
 
 	if a.ConfigDir == "" {
+		Dir = DIR_PATH
+	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)

@@ -44,6 +44,8 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		process.InheritFilesForRestore,
 		process.AddExternalMountsForRestore,
 		process.SetupIO[daemon.RestoreReq, daemon.RestoreResp],
+		process.ForwardSignals[daemon.RestoreReq, daemon.RestoreResp],
+
 		criu.CheckOptsForRestore,
 	}
 
@@ -98,6 +100,8 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		process.InheritFilesForRestore,
 		process.AddExternalMountsForRestore,
 		process.SetupIO[daemon.RestoreReq, daemon.RestoreResp],
+		process.ForwardSignals[daemon.RestoreReq, daemon.RestoreResp],
+
 		criu.CheckOptsForRestore,
 	}
 
@@ -210,6 +214,12 @@ func pluginRestoreHandler() types.Restore {
 				handler = pluginHandler
 				return nil
 			}, t)
+			if opts.Serverless {
+				supported, _ := features.ServerlessSupport.IsAvailable(t)
+				if !supported {
+					return nil, fmt.Errorf("plugin '%s' does not support serverless restore", t)
+				}
+			}
 			if err == nil {
 				var end func()
 				ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
@@ -238,6 +248,8 @@ func pluginRestoreHandler() types.Restore {
 		if resp.GetState().GetGPUEnabled() {
 			handler = handler.With(gpu.InterceptionRestore)
 		}
+
+		// TODO: Add GPU tracing restore adapter. Requires update to state proto.
 
 		return handler(ctx, opts, resp, req)
 	}

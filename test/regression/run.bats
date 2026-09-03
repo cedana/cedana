@@ -66,6 +66,22 @@ teardown_file() {
     assert_exists "$pid_file"
 }
 
+# bats test_tags=serverless
+@test "run process (without daemon, signal forwarding)" {
+    pid_file=/tmp/$(unix_nano).pid
+
+    cedana run --no-server process --pid-file "$pid_file" "$WORKLOADS"/date-loop.sh 20 &
+    cedana_pid=$!
+
+    wait_for_file "$pid_file" 5
+    pid=$(cat "$pid_file")
+
+    kill -TERM "$cedana_pid"
+    wait_for_no_pid "$pid" 5
+    run wait $cedana_pid
+    assert_equal $status 42
+}
+
 @test "run non-existent process" {
     jid=$(unix_nano)
 

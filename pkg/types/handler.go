@@ -140,6 +140,23 @@ func GID[REQ any](req *REQ) uint32 {
 	}
 }
 
+func Type[REQ any](req *REQ) string {
+	switch r := any(req).(type) {
+	case *daemon.RunReq:
+		return r.Type
+	case *daemon.RestoreReq:
+		return r.Type
+	case *daemon.DumpReq:
+		return r.Type
+	case *daemon.DumpVMReq:
+		return r.Type
+	case *daemon.RestoreVMReq:
+		return r.Type
+	default:
+		panic("unsupported type for Type extraction")
+	}
+}
+
 func IsRestore[REQ any](req *REQ) bool {
 	switch any(req).(type) {
 	case *daemon.RestoreReq:
