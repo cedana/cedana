@@ -35,7 +35,10 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$CEDANA_PLUGINS_SLURM_WLM_VERSION"
     # Example output: "v0.9.291-slurm-25-11-5-1"
     # We extract just the version part: "v0.9.291"
     latest_version=$($APP_PATH plugin list slurm/wlm | awk '/AVAILABLE VERSION/ {getline; print $NF}')
-    [[ -n "$latest_version" ]] || { echo "Error: could not parse version from 'cedana plugin list slurm/wlm'" >&2; exit 1; }
+    [[ -n "$latest_version" ]] || {
+        echo "Error: could not parse version from 'cedana plugin list slurm/wlm'" >&2
+        exit 1
+    }
     CEDANA_PLUGINS_SLURM_WLM_VERSION=$(echo "$latest_version" | grep -oP '^v[0-9]+\.[0-9]+\.[0-9]+')
     detected_slurm_version=$(_detect_slurm_version)
     if [ -n "$detected_slurm_version" ]; then
@@ -63,6 +66,22 @@ if [ "$CEDANA_PLUGINS_GPU_VERSION" != "none" ]; then
     PLUGINS="$PLUGINS gpu@$CEDANA_PLUGINS_GPU_VERSION"
 else
     PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE gpu"
+fi
+
+# Try to load values from /etc/cedana/config.json if they're not set in environment
+if [[ -f "/etc/cedana/config.json" ]]; then
+    if command -v jq &>/dev/null; then
+        # Use jq if available
+        [[ -z "${CEDANA_CHECKPOINT_DIR:-}" ]] && CEDANA_CHECKPOINT_DIR=$(jq -r '.checkpoint.dir // empty' /etc/cedana/config.json 2>/dev/null || true)
+    else
+        # Fallback to grep if jq is not available. Newlines are stripped so both
+        # pretty-printed and minified JSON work, and the [^{}]* bound keeps the
+        # match inside the "checkpoint" object.
+        [[ -z "${CEDANA_CHECKPOINT_DIR:-}" ]] && CEDANA_CHECKPOINT_DIR=$(tr -d '\n' </etc/cedana/config.json | grep -oP '"checkpoint"\s*:\s*\{[^{}]*"dir"\s*:\s*"\K[^"]*' | head -1 || true)
+    fi
+else
+    # avoid unbound var errors
+    export CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-}"
 fi
 
 # check if a storage plugin is required
