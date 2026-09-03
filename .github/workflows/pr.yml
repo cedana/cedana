@@ -60,7 +60,7 @@ jobs:
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
-      slurm_version: main
+      slurm_version: feature/ced-2177-fix-signal-forwarding-in-slurm # TODO: revert after tested
 
   publish:
     name: Publish
