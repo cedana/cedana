@@ -55,10 +55,15 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" && "$CEDANA_PLUGINS_SLURM_WLM_VERSION"
     fi
 fi
 
+# slurm/tests is not built per-SLURM-version, so it only takes the plain
+# version (e.g. "v0.9.291"), without the "-slurm-25-11-5-1" tag suffix.
+CEDANA_PLUGINS_SLURM_TESTS_VERSION="${CEDANA_PLUGINS_SLURM_WLM_VERSION%%-slurm-*}"
+
 # XXX: We always install the GPU plugin for now until auto-detection is added
 PLUGINS=" \
     criu@$CEDANA_PLUGINS_CRIU_VERSION \
-    slurm/wlm@$CEDANA_PLUGINS_SLURM_WLM_VERSION"
+    slurm/wlm@$CEDANA_PLUGINS_SLURM_WLM_VERSION \
+    slurm/tests@$CEDANA_PLUGINS_SLURM_TESTS_VERSION"
 
 PLUGINS_TO_REMOVE=""
 
