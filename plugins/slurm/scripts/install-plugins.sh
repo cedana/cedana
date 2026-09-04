@@ -136,7 +136,7 @@ fi
 CRIU_PATH="${CEDANA_PLUGINS_BIN_DIR}/criu"
 if [ -x "$CRIU_PATH" ]; then
     if command -v setcap &>/dev/null; then
-        if ! setcap cap_checkpoint_restore,cap_sys_ptrace,cap_dac_read_search+eip "$CRIU_PATH"; then
+        if ! setcap cap_checkpoint_restore,cap_sys_ptrace+eip "$CRIU_PATH"; then
             echo "Warning: Failed to set capabilities on $CRIU_PATH, CRIU may not work as an unprivileged user" >&2
         fi
     else
