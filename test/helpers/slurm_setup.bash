@@ -1265,6 +1265,11 @@ restart_cedana_slurm_daemon_unprivileged() {
             caps=cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip
             install -m 0755 /usr/local/bin/cedana /usr/bin/cedana
             install -m 0755 /usr/local/bin/criu /usr/bin/criu
+            # bin_dir is repointed to /usr/bin below, so anything cedana execs
+            # has to be here too or the plugin looks uninstalled.
+            if [ -x /usr/local/bin/cedana-gpu-controller ]; then
+                install -m 0755 /usr/local/bin/cedana-gpu-controller /usr/bin/cedana-gpu-controller
+            fi
             setcap $caps /usr/bin/cedana-slurm
             setcap $caps /usr/bin/cedana
             setcap $caps /usr/bin/criu
