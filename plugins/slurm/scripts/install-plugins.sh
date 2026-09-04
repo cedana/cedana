@@ -130,6 +130,18 @@ if ! echo 4194304 >/proc/sys/fs/pipe-max-size; then
     echo "Warning: Failed to set pipe-max-size to 4194304, streaming performance may be degraded" >&2
 fi
 
+# Set CRIU capabilities, in case it's run as an unprivileged user
+CRIU_PATH="${CEDANA_PLUGINS_BIN_DIR}/criu"
+if [ -x "$CRIU_PATH" ]; then
+    if command -v setcap &>/dev/null; then
+        if ! setcap cap_checkpoint_restore,cap_sys_ptrace,cap_dac_read_search+eip "$CRIU_PATH"; then
+            echo "Warning: Failed to set capabilities on $CRIU_PATH, CRIU may not work as an unprivileged user" >&2
+        fi
+    else
+        echo "Warning: setcap not found, skipping capabilities setup for $CRIU_PATH, CRIU may not work as an unprivileged user" >&2
+    fi
+fi
+
 ##########################
 # Setup SLURM/WLM plugin #
 ##########################
