@@ -16,7 +16,6 @@ import (
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -99,17 +98,6 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	criuOpts.LogLevel = proto.Int32(config.Global.CRIU.LogLevel)
 	criuOpts.LogToStderr = proto.Bool(false)
 	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
-
-	// Change ownership of the dump directory
-	uids := resp.GetState().GetUIDs()
-	gids := resp.GetState().GetGIDs()
-	if len(uids) == 0 || len(gids) == 0 {
-		return nil, status.Error(codes.Internal, "missing UIDs/GIDs in process state")
-	}
-	err = utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
-	}
 
 	// NOTE: We don't handle reaping if the plugin has indicated that it's a 'reaper', assuming it will
 	// handle it when and how it wants to.
