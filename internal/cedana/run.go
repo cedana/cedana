@@ -33,6 +33,7 @@ func (s *Server) Run(ctx context.Context, req *daemon.RunReq) (*daemon.RunResp, 
 		pluginRunMiddleware, // middleware from plugins
 
 		process.SetupIO[daemon.RunReq, daemon.RunResp],
+		process.ForwardSignals[daemon.RunReq, daemon.RunResp],
 	}
 
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
@@ -70,6 +71,7 @@ func (s *Cedana) Run(req *daemon.RunReq) (exitCode <-chan int, err error) {
 		pluginRunMiddleware, // middleware from plugins
 
 		process.SetupIO[daemon.RunReq, daemon.RunResp],
+		process.ForwardSignals[daemon.RunReq, daemon.RunResp],
 	}
 
 	run := pluginRunHandler().With(middleware...) // even the handler depends on the type of job
@@ -141,7 +143,7 @@ func pluginRunHandler() types.Run {
 				return nil
 			}, t)
 			if opts.Serverless {
-				supported, _ := features.RunServerlessSupport.IsAvailable(t)
+				supported, _ := features.ServerlessSupport.IsAvailable(t)
 				if !supported {
 					return nil, fmt.Errorf("plugin '%s' does not support serverless run", t)
 				}

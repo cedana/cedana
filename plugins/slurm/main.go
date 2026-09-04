@@ -29,6 +29,8 @@ var (
 )
 
 var (
+	ServerlessSupport bool = true
+
 	FreezeHandler   types.Freeze   = cgroup.Freeze
 	UnfreezeHandler types.Unfreeze = cgroup.Unfreeze
 
