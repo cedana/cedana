@@ -582,7 +582,7 @@ jobs:
           PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
           SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
         run: |
-          TAGS="slurm,!ansible,!preemption"
+          TAGS="slurm,!ansible,!preemption,!unprivileged"
           if [ "$GPU" = "1" ]; then
             TAGS="${TAGS},gpu"
           else
@@ -670,6 +670,56 @@ jobs:
             fi
           else
             echo "SLURM preemption tests: report-preemption.xml not found"
+          fi
+
+          exit "$test_exit_code"
+
+      - name: Run SLURM unprivileged tests
+        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' }}
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          PARALLELISM: 1
+          SLURM_SUBMIT_USER: cedana
+        run: |
+          TAGS="slurm,unprivileged"
+          if [ "$GPU" = "1" ]; then
+            TAGS="${TAGS},gpu"
+          else
+            TAGS="${TAGS},!gpu"
+          fi
+
+          set +e
+          make test-slurm \
+            TAGS=$TAGS \
+            GPU=$GPU \
+            REPORT=report-unprivileged \
+            FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=$PARALLELISM
+          test_exit_code=$?
+          set -e
+
+          if [ -f /tmp/report-unprivileged.xml ]; then
+            tests=$(grep -o '<testcase[ >]' /tmp/report-unprivileged.xml | wc -l | tr -d ' ')
+            failures=$(grep -o '<failure[ >]' /tmp/report-unprivileged.xml | wc -l | tr -d ' ')
+            errors=$(grep -o '<error[ >]' /tmp/report-unprivileged.xml | wc -l | tr -d ' ')
+            skipped=$(grep -o '<skipped[ >]' /tmp/report-unprivileged.xml | wc -l | tr -d ' ')
+            passed=$((tests - failures - errors - skipped))
+            if [ "$passed" -lt 0 ]; then
+              passed=0
+            fi
+            summary="SLURM unprivileged tests: ${passed}/${tests} passed, ${failures} failed, ${errors} errored, ${skipped} skipped"
+            echo "$summary"
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "SLURM unprivileged tests: report-unprivileged.xml not found"
           fi
 
           exit "$test_exit_code"
@@ -790,6 +840,18 @@ jobs:
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
             testEnvironment="cedana/cedana-test" reportName="Slurm Preemption (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
+
+      - name: Generate report (unprivileged)
+        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' }}
+        run: |
+          npx junit-to-ctrf "/tmp/report-unprivileged.xml" -t bats -o /tmp/report-unprivileged.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Slurm Unprivileged (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
 
       - name: Upload report
         if: always()
