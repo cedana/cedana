@@ -17,11 +17,13 @@ var gpuFunctionPhaseNames = map[string]string{
 	"dumpCudaMemory":              "gpu_memory",
 	"dumpCudaCalls":               "cuda_calls",
 	"dumpHostGpuMemory":           "host_memory",
+	"dumpMemVerify":               "verify_memory",
 	"restoreShareableHandles":     "shareable_handles",
 	"replayContextlessCalls":      "contextless_calls",
 	"restoreVirtualMemory":        "virtual_memory",
 	"restoreMemory":               "gpu_memory",
 	"restoreCalls":                "cuda_calls",
+	"restoreMemVerify":            "verify_memory",
 	"readHostMemory":              "host_memory",
 }
 
