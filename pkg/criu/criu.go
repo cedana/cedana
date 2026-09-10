@@ -105,8 +105,54 @@ func (c *Criu) Cleanup() error {
 	return errors.Join(errs...)
 }
 
+// growSendBuffer makes sure a single SOCK_SEQPACKET message of n bytes fits in the
+// socket's send buffer. The kernel rejects it with EMSGSIZE if n > sk_sndbuf - 32,
+// and the default (net.core.wmem_default, ~208 KiB) is easily exceeded by a request
+// with many external mounts/files. SO_SNDBUFFORCE bypasses wmem_max but needs
+// CAP_NET_ADMIN, so fall back to SO_SNDBUF.
+func growSendBuffer(conn *net.UnixConn, n int) error {
+	raw, err := conn.SyscallConn()
+	if err != nil {
+		return err
+	}
+	var sockErr error
+	err = raw.Control(func(fd uintptr) {
+		cur, err := syscall.GetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF)
+		if err != nil {
+			sockErr = err
+			return
+		}
+		want := n + 32 // kernel stores double this, so it always fits
+		if want <= cur {
+			return
+		}
+		if syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUFFORCE, want) != nil {
+			sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, want)
+		}
+	})
+	return errors.Join(err, sockErr)
+}
+
+// dedupe removes duplicate keys while keeping first-seen order.
+func dedupe(keys []string) []string {
+	seen := make(map[string]struct{}, len(keys))
+	out := keys[:0]
+	for _, k := range keys {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	return out
+}
+
 func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn int, err error) {
 	cln := c.swrkSk
+
+	if err = growSendBuffer(cln, len(reqB)); err != nil {
+		return nil, 0, nil, 0, err
+	}
 
 	// Try write a couple of times
 	for range 5 {
@@ -232,6 +278,11 @@ func (c *Criu) doSwrkWithResp(
 	}
 
 	for {
+		// Adapters walk the whole process tree, so the same mount/file key
+		// shows up once per process; collapse them before sending.
+		if req.Opts != nil {
+			req.Opts.External = dedupe(req.Opts.External)
+		}
 		reqB, err := proto.Marshal(&req)
 		if err != nil {
 			return nil, err
