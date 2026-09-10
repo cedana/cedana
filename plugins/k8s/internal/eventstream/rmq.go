@@ -246,10 +246,10 @@ func (es *EventStream) DeleteHandler(ctx context.Context) rabbitmq.Handler {
 			return rabbitmq.Ack
 		}
 
-    if deleteReq.CheckpointPath == "" {
-      log.Error().Msg("request has empty checkpoint path")
-      return rabbitmq.Ack
-    }
+		if deleteReq.CheckpointPath == "" {
+			log.Error().Msg("request has empty checkpoint path")
+			return rabbitmq.Ack
+		}
 
 		daemonReq := &daemon.DeleteCheckpointReq{
 			Path: &deleteReq.CheckpointPath,
