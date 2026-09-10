@@ -1,6 +1,7 @@
 package criu
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,8 +11,10 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/utils"
@@ -105,15 +108,13 @@ func (c *Criu) Cleanup() error {
 	return errors.Join(errs...)
 }
 
-// growSendBuffer makes sure a single SOCK_SEQPACKET message of n bytes fits in the
-// socket's send buffer. The kernel rejects it with EMSGSIZE if n > sk_sndbuf - 32,
-// and the default (net.core.wmem_default, ~208 KiB) is easily exceeded by a request
-// with many external mounts/files. SO_SNDBUFFORCE bypasses wmem_max but needs
-// CAP_NET_ADMIN, so fall back to SO_SNDBUF.
-func growSendBuffer(conn *net.UnixConn, n int) error {
+// growSendBuffer grows the send buffer for an n-byte seqpacket message and returns
+// what actually fits: the kernel returns EMSGSIZE if n > sk_sndbuf - 32, and plain
+// SO_SNDBUF is silently clamped to wmem_max without CAP_NET_ADMIN.
+func growSendBuffer(conn *net.UnixConn, n int) (avail int, err error) {
 	raw, err := conn.SyscallConn()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	var sockErr error
 	err = raw.Control(func(fd uintptr) {
@@ -122,23 +123,122 @@ func growSendBuffer(conn *net.UnixConn, n int) error {
 			sockErr = err
 			return
 		}
-		want := n + 32 // kernel stores double this, so it always fits
-		if want <= cur {
-			return
+		want := n + 32 // kernel doubles this
+		if want > cur {
+			if syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUFFORCE, want) != nil {
+				if sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, want); sockErr != nil {
+					return
+				}
+			}
+			cur, sockErr = syscall.GetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF)
 		}
-		if syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUFFORCE, want) != nil {
-			sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, want)
-		}
+		avail = cur - 32
 	})
-	return errors.Join(err, sockErr)
+	return avail, errors.Join(err, sockErr)
 }
 
-// dedupe removes duplicate keys while keeping first-seen order.
-func dedupe(keys []string) []string {
+// marshalToFit serializes req to fit one seqpacket message: drops externals CRIU
+// already knows (sent), and if the initial request is still too large, moves the
+// rest into a CRIU config file. The caller removes the returned file.
+func (c *Criu) marshalToFit(req *criu.CriuReq, sent map[string]struct{}) (reqB []byte, cfgPath string, err error) {
+	opts := req.Opts
+	var all []string
+	if opts != nil {
+		opts.External = dedupe(opts.External, sent)
+		all = opts.External
+	}
+
+	reqB, avail, err := c.marshalAndGrow(req)
+	if err != nil {
+		return nil, "", err
+	}
+
+	if len(reqB) > avail && opts != nil && req.GetType() != criu.CriuReqType_NOTIFY && len(opts.External) > 0 {
+		cfgPath, err = spillExternals(opts)
+		if err != nil {
+			return nil, "", err
+		}
+		if reqB, avail, err = c.marshalAndGrow(req); err != nil {
+			return nil, cfgPath, err
+		}
+	}
+
+	if len(reqB) > avail {
+		return nil, cfgPath, fmt.Errorf(
+			"CRIU request (%d bytes) exceeds the socket send buffer (%d bytes); raise net.core.wmem_max or grant CAP_NET_ADMIN",
+			len(reqB), avail,
+		)
+	}
+
+	for _, k := range all {
+		sent[k] = struct{}{}
+	}
+	return reqB, cfgPath, nil
+}
+
+func (c *Criu) marshalAndGrow(req *criu.CriuReq) (reqB []byte, avail int, err error) {
+	reqB, err = proto.Marshal(req)
+	if err != nil {
+		return nil, 0, err
+	}
+	avail, err = growSendBuffer(c.swrkSk, len(reqB))
+	return reqB, avail, err
+}
+
+// spillExternals moves opts.External into a CRIU config file (CRIU appends those
+// to the RPC ones). Keys its parser can't represent stay inline.
+func spillExternals(opts *criu.CriuOpts) (string, error) {
+	f, err := os.CreateTemp("", "cedana-criu-external-*.conf")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var buf bytes.Buffer
+	if prev := opts.GetConfigFile(); prev != "" {
+		b, err := os.ReadFile(prev)
+		if err != nil {
+			return f.Name(), fmt.Errorf("read CRIU config file %s: %w", prev, err)
+		}
+		buf.Write(b)
+		if len(b) > 0 && b[len(b)-1] != '\n' {
+			buf.WriteByte('\n')
+		}
+	}
+
+	inline := opts.External[:0]
+	for _, k := range opts.External {
+		if configSafe(k) {
+			fmt.Fprintf(&buf, "external %s\n", k)
+		} else {
+			inline = append(inline, k)
+		}
+	}
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		return f.Name(), err
+	}
+
+	opts.External = inline
+	opts.ConfigFile = proto.String(f.Name())
+	return f.Name(), nil
+}
+
+func configSafe(key string) bool {
+	return key != "" &&
+		!strings.ContainsAny(key, "#\"\\") &&
+		!strings.ContainsFunc(key, unicode.IsSpace) &&
+		!strings.ContainsFunc(key, unicode.IsControl)
+}
+
+// dedupe removes duplicate keys and any already in skip, keeping first-seen order.
+func dedupe(keys []string, skip map[string]struct{}) []string {
 	seen := make(map[string]struct{}, len(keys))
 	out := keys[:0]
 	for _, k := range keys {
 		if _, ok := seen[k]; ok {
+			continue
+		}
+		if _, ok := skip[k]; ok {
 			continue
 		}
 		seen[k] = struct{}{}
@@ -149,10 +249,6 @@ func dedupe(keys []string) []string {
 
 func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn int, err error) {
 	cln := c.swrkSk
-
-	if err = growSendBuffer(cln, len(reqB)); err != nil {
-		return nil, 0, nil, 0, err
-	}
 
 	// Try write a couple of times
 	for range 5 {
@@ -277,13 +373,19 @@ func (c *Criu) doSwrkWithResp(
 		}
 	}
 
-	for {
-		// Adapters walk the whole process tree, so the same mount/file key
-		// shows up once per process; collapse them before sending.
-		if req.Opts != nil {
-			req.Opts.External = dedupe(req.Opts.External)
+	sent := make(map[string]struct{}) // externals CRIU already knows
+	var cfgPath string
+	defer func() {
+		if cfgPath != "" {
+			os.Remove(cfgPath)
 		}
-		reqB, err := proto.Marshal(&req)
+	}()
+
+	for {
+		reqB, path, err := c.marshalToFit(&req, sent)
+		if path != "" {
+			cfgPath = path
+		}
 		if err != nil {
 			return nil, err
 		}
