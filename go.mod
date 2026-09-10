@@ -3,12 +3,12 @@ module github.com/cedana/cedana
 go 1.25.0
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-20260728195828-a1724c235a1a.1
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-20260728195828-a1724c235a1a.1
-	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260728195828-ace959031818.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-1cfd5a5487e6.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-1cfd5a5487e6.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.11-20260728195828-03f2aa41270d.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-20260909161930-d73a667e1b80.1
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-20260909161930-d73a667e1b80.1
+	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-ee0924127337.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-00000000000000-ee0924127337.1
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.11-20260909161930-8954d37dad13.1
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
@@ -63,7 +63,6 @@ require (
 )
 
 require (
-	buf.build/gen/go/cedana/criu/grpc/go v1.6.2-20260909161930-8954d37dad13.1 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
