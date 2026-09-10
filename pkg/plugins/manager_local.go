@@ -98,7 +98,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 				found += 1
 				size += stat.Size()
 				plublishedAt = stat.ModTime()
-				sum, _ := utils.FileMD5Sum(filepath.Join(path, file.Name))
+				sum, _ := utils.FileCRC32Sum(filepath.Join(path, file.Name))
 				totalSum.WriteString(sum)
 				break
 			}

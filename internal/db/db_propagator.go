@@ -35,7 +35,7 @@ func NewPropagatorDB(ctx context.Context, connection config.Connection, fallback
 ///////////
 
 func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
-	url := fmt.Sprintf("%s/jobs/%s", db.URL, job.JID)
+	url := fmt.Sprintf("%s/cedana/jobs/%s", db.URL, job.JID)
 
 	body, err := json.Marshal(job)
 	if err != nil {
@@ -63,7 +63,7 @@ func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
 }
 
 func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s/jobs", db.URL)
+	url := fmt.Sprintf("%s/cedana/jobs", db.URL)
 	if len(jids) > 0 {
 		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
 	}
@@ -95,7 +95,7 @@ func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon
 }
 
 func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s/jobs", db.URL)
+	url := fmt.Sprintf("%s/cedana/jobs", db.URL)
 	if len(hostIDs) > 0 {
 		url += fmt.Sprintf("?host_ids=%s", strings.Join(hostIDs, ","))
 	}
@@ -126,7 +126,7 @@ func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string
 }
 
 func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
-	url := fmt.Sprintf("%s/jobs/%s", db.URL, jid)
+	url := fmt.Sprintf("%s/cedana/jobs/%s", db.URL, jid)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
@@ -151,7 +151,7 @@ func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
 //////////////////
 
 func (db *PropagatorDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
-	url := fmt.Sprintf("%s/checkpoints/%s", db.URL, checkpoint.ID)
+	url := fmt.Sprintf("%s/cedana/job/checkpoints/%s", db.URL, checkpoint.JID)
 
 	body, err := json.Marshal(checkpoint)
 	if err != nil {
@@ -179,7 +179,7 @@ func (db *PropagatorDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Ch
 }
 
 func (db *PropagatorDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error) {
-	url := fmt.Sprintf("%s/checkpoints", db.URL)
+	url := fmt.Sprintf("%s/cedana/job/checkpoints", db.URL)
 	if len(ids) > 0 {
 		url += fmt.Sprintf("?ids=%s", strings.Join(ids, ","))
 	}
@@ -210,7 +210,7 @@ func (db *PropagatorDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*
 }
 
 func (db *PropagatorDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
-	url := fmt.Sprintf("%s/checkpoints", db.URL)
+	url := fmt.Sprintf("%s/cedana/job/checkpoints", db.URL)
 	if len(jids) > 0 {
 		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
 	}
@@ -241,7 +241,7 @@ func (db *PropagatorDB) ListCheckpointsByJIDs(ctx context.Context, jids ...strin
 }
 
 func (db *PropagatorDB) DeleteCheckpoint(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/checkpoints/%s", db.URL, id)
+	url := fmt.Sprintf("%s/cedana/job/checkpoints/%s", db.URL, id)
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err

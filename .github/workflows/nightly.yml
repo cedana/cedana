@@ -30,6 +30,7 @@ jobs:
       helm_chart_version: ${{ vars.NIGHTLY_HELM_CHART_VERSION }}
       controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
       containerd_runtime_version: ${{ vars.NIGHTLY_CONTAINERD_RUNTIME_VERSION }}
+      slurm_version: ${{ vars.NIGHTLY_SLURM_VERSION }}
 
   test:
     name: Test

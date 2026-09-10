@@ -49,7 +49,7 @@ type Plugin struct {
 
 type Binary struct {
 	Name       string `json:"name"`
-	Checksum   string `json:"checksum"`     // MD5
+	Checksum   string `json:"checksum"`     // CRC32
 	InstallDir string `json:"install_path"` // Fixed path where the binary must be installed
 }
 
@@ -167,7 +167,7 @@ func (p *Plugin) SyncInstalled() {
 		}
 		found += 1
 		size += s.Size()
-		p.Libraries[i].Checksum, _ = utils.FileMD5Sum(path)
+		p.Libraries[i].Checksum, _ = utils.FileCRC32Sum(path)
 	}
 	if found < len(p.Libraries) {
 		return
@@ -186,7 +186,7 @@ func (p *Plugin) SyncInstalled() {
 		}
 		found += 1
 		size += s.Size()
-		p.Binaries[i].Checksum, _ = utils.FileMD5Sum(path)
+		p.Binaries[i].Checksum, _ = utils.FileCRC32Sum(path)
 	}
 	if found < len(p.Binaries) {
 		return

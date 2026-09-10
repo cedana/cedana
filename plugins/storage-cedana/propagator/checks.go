@@ -26,7 +26,7 @@ func CheckConfig() types.Check {
 			})
 		}
 
-		propagator := sdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken).V2()
+		propagator := sdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken).V1()
 		_, err := propagator.User().Get(ctx, nil)
 		if err == nil {
 			components = append(components, &daemon.HealthCheckComponent{

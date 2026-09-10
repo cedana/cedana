@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	sdk "github.com/cedana/cedana-go-sdk"
-	"github.com/cedana/cedana-go-sdk/v2"
+	v1 "github.com/cedana/cedana-go-sdk/v1"
 	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 )
@@ -16,7 +16,7 @@ const PATH_PREFIX = "cedana://"
 
 // Cedana managed storage
 type Storage struct {
-	*v2.V2RequestBuilder
+	*v1.V1RequestBuilder
 }
 
 func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
@@ -24,7 +24,7 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 	authToken := config.Global.Connection.AuthToken
 
 	// Creating the client is no extra compute/work as this is not a durable connection
-	return &Storage{sdk.NewCedanaClient(url, authToken).V2()}, nil
+	return &Storage{sdk.NewCedanaClient(url, authToken).V1()}, nil
 }
 
 func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) {
