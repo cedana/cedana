@@ -578,12 +578,13 @@ _configure_slurm_preemption() {
         SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
 
         grep -q '^PreemptType=' \"\$SLURM_CONF\" || echo 'PreemptType=preempt/partition_prio' >> \"\$SLURM_CONF\"
-        grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=CANCEL' >> \"\$SLURM_CONF\"
+        grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=REQUEUE' >> \"\$SLURM_CONF\"
+        grep -q '^PreemptParameters=' \"\$SLURM_CONF\" || echo 'PreemptParameters=send_user_signal' >> \"\$SLURM_CONF\"
         grep -q '^SchedulerParameters=' \"\$SLURM_CONF\" || echo 'SchedulerParameters=preempt_reorder_count=100,preempt_strict_order' >> \"\$SLURM_CONF\"
 
         if grep -q '^PartitionName=debug' \"\$SLURM_CONF\"; then
             grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PriorityTier=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PriorityTier=1|' \"\$SLURM_CONF\"
-            grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=CANCEL|' \"\$SLURM_CONF\"
+            grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=REQUEUE|' \"\$SLURM_CONF\"
             grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'GraceTime=' || sed -i 's|^\(PartitionName=debug .*\)|\1 GraceTime=${preempt_grace}|' \"\$SLURM_CONF\"
         fi
 
@@ -593,7 +594,7 @@ _configure_slurm_preemption() {
         fi
 
         echo '--- preemption config ---'
-        grep -E '^(PreemptType|PreemptMode|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
+        grep -E '^(PreemptType|PreemptMode|PreemptParameters|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
     " >&"${OUTPUT_FD}" 2>&1 || {
         error_log "Failed to configure SLURM preemption on controller"
         return 1

@@ -121,8 +121,6 @@ jobs:
         run: git config --global --add safe.directory "$(pwd)"
 
       - name: Pre-install plugins
-        env:
-          CEDANA_PLUGINS_BUILDS: local
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
@@ -131,23 +129,18 @@ jobs:
           cp ./cedana /tmp/cedana-preflight-bin/cedana
           cp ./criu /tmp/cedana-preflight-bin/criu
           sudo cp ./cedana /usr/local/bin/cedana
-          CRIU_VERSION="$(cat ./criu-version.txt)"
-          sudo -E cedana plugin install "criu@${CRIU_VERSION}"
-          echo "CEDANA_PLUGINS_CRIU_VERSION=${CRIU_VERSION}" >> "$GITHUB_ENV"
-          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install \
+          sudo -E cedana plugin install criu
+          sudo -E cedana plugin install \
             runc \
             storage/cedana
 
       - name: Install slurm binaries
         run: |
-          chmod +x slurm-bin/build/cedana-slurm
-          sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
-          sudo cp slurm-bin/build/spank_cedana.so /usr/local/lib/spank_cedana.so
-          sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
-          sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
-          sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
           test -f ./libcedana-slurm.so
-          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
+          sudo -E cedana plugin install slurm
+          cd slurm-bin/build
+          chmod +x ./cedana-slurm
+          sudo -E cedana plugin install slurm/wlm
 
       - name: Install ansible and Docker CLI
         run: |
@@ -411,7 +404,6 @@ jobs:
       - name: Pre-install plugins
         env:
           GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
-          CEDANA_PLUGINS_BUILDS: local
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
@@ -420,29 +412,21 @@ jobs:
           cp ./cedana /tmp/cedana-preflight-bin/cedana
           cp ./criu /tmp/cedana-preflight-bin/criu
           sudo cp ./cedana /usr/local/bin/cedana
-          CRIU_VERSION="$(cat ./criu-version.txt)"
-          sudo -E cedana plugin install "criu@${CRIU_VERSION}"
-          echo "CEDANA_PLUGINS_CRIU_VERSION=${CRIU_VERSION}" >> "$GITHUB_ENV"
-          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install \
+          sudo -E cedana plugin install criu
+          sudo -E cedana plugin install \
             runc \
             storage/cedana \
             storage/s3
           if [ "$GPU" = "true" ]; then
-            GPU_VERSION="$(cat ./gpu-version.txt)"
-            CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install "gpu@${GPU_VERSION}"
-            echo "CEDANA_PLUGINS_GPU_VERSION=${GPU_VERSION}" >> "$GITHUB_ENV"
+            sudo -E cedana plugin install gpu
           fi
 
       - name: Install slurm binaries
         run: |
           chmod +x slurm-bin/build/cedana-slurm
-          sudo cp slurm-bin/build/cedana-slurm /usr/local/bin/cedana-slurm
-          sudo cp slurm-bin/build/spank_cedana.so /usr/local/lib/spank_cedana.so
-          sudo cp slurm-bin/build/task_cedana.so /usr/local/lib/task_cedana.so
-          sudo cp slurm-bin/build/cli_filter_cedana.so /usr/local/lib/cli_filter_cedana.so
-          sudo cp slurm-bin/build/job_submit_cedana.so /usr/local/lib/job_submit_cedana.so
-          test -f ./libcedana-slurm.so
-          CEDANA_PLUGINS_BUILDS=local sudo -E cedana plugin install slurm
+          sudo -E cedana plugin install slurm
+          cd slurm-bin/build
+          sudo -E cedana plugin install slurm/wlm
 
       - name: Capture preflight binary metadata
         shell: bash
