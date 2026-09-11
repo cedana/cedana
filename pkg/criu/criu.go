@@ -108,86 +108,15 @@ func (c *Criu) Cleanup() error {
 	return errors.Join(errs...)
 }
 
-// growSendBuffer grows the send buffer for an n-byte seqpacket message and returns
-// what actually fits: the kernel returns EMSGSIZE if n > sk_sndbuf - 32, and plain
-// SO_SNDBUF is silently clamped to wmem_max without CAP_NET_ADMIN.
-func growSendBuffer(conn *net.UnixConn, n int) (avail int, err error) {
-	raw, err := conn.SyscallConn()
-	if err != nil {
-		return 0, err
+// externalsToConfig moves opts.External into a CRIU config file, so the external
+// list never counts against the RPC socket's per-message size limit (the kernel
+// rejects a seqpacket message larger than sk_sndbuf-32, ~208 KiB by default). CRIU
+// appends config-file externals to the RPC ones; keys its parser can't represent
+// (it strips at '#', splits on whitespace) stay inline. Returns the file to remove.
+func externalsToConfig(opts *criu.CriuOpts) (string, error) {
+	if len(opts.External) == 0 {
+		return "", nil
 	}
-	var sockErr error
-	err = raw.Control(func(fd uintptr) {
-		cur, err := syscall.GetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF)
-		if err != nil {
-			sockErr = err
-			return
-		}
-		want := n + 32 // kernel doubles this
-		if want > cur {
-			if syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUFFORCE, want) != nil {
-				if sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF, want); sockErr != nil {
-					return
-				}
-			}
-			cur, sockErr = syscall.GetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF)
-		}
-		avail = cur - 32
-	})
-	return avail, errors.Join(err, sockErr)
-}
-
-// marshalToFit serializes req to fit one seqpacket message: drops externals CRIU
-// already knows (sent), and if the initial request is still too large, moves the
-// rest into a CRIU config file. The caller removes the returned file.
-func (c *Criu) marshalToFit(req *criu.CriuReq, sent map[string]struct{}) (reqB []byte, cfgPath string, err error) {
-	opts := req.Opts
-	var all []string
-	if opts != nil {
-		opts.External = dedupe(opts.External, sent)
-		all = opts.External
-	}
-
-	reqB, avail, err := c.marshalAndGrow(req)
-	if err != nil {
-		return nil, "", err
-	}
-
-	if len(reqB) > avail && opts != nil && req.GetType() != criu.CriuReqType_NOTIFY && len(opts.External) > 0 {
-		cfgPath, err = spillExternals(opts)
-		if err != nil {
-			return nil, "", err
-		}
-		if reqB, avail, err = c.marshalAndGrow(req); err != nil {
-			return nil, cfgPath, err
-		}
-	}
-
-	if len(reqB) > avail {
-		return nil, cfgPath, fmt.Errorf(
-			"CRIU request (%d bytes) exceeds the socket send buffer (%d bytes); raise net.core.wmem_max or grant CAP_NET_ADMIN",
-			len(reqB), avail,
-		)
-	}
-
-	for _, k := range all {
-		sent[k] = struct{}{}
-	}
-	return reqB, cfgPath, nil
-}
-
-func (c *Criu) marshalAndGrow(req *criu.CriuReq) (reqB []byte, avail int, err error) {
-	reqB, err = proto.Marshal(req)
-	if err != nil {
-		return nil, 0, err
-	}
-	avail, err = growSendBuffer(c.swrkSk, len(reqB))
-	return reqB, avail, err
-}
-
-// spillExternals moves opts.External into a CRIU config file (CRIU appends those
-// to the RPC ones). Keys its parser can't represent stay inline.
-func spillExternals(opts *criu.CriuOpts) (string, error) {
 	f, err := os.CreateTemp("", "cedana-criu-external-*.conf")
 	if err != nil {
 		return "", err
@@ -230,15 +159,13 @@ func configSafe(key string) bool {
 		!strings.ContainsFunc(key, unicode.IsControl)
 }
 
-// dedupe removes duplicate keys and any already in skip, keeping first-seen order.
-func dedupe(keys []string, skip map[string]struct{}) []string {
+// dedupe removes duplicate keys, keeping first-seen order. Adapters walk the whole
+// process tree, so the same mount/file key shows up once per process.
+func dedupe(keys []string) []string {
 	seen := make(map[string]struct{}, len(keys))
 	out := keys[:0]
 	for _, k := range keys {
 		if _, ok := seen[k]; ok {
-			continue
-		}
-		if _, ok := skip[k]; ok {
 			continue
 		}
 		seen[k] = struct{}{}
@@ -256,6 +183,9 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 		wrote, _, err = cln.WriteMsgUnix(reqB, nil, nil)
 		if err == nil && wrote == len(reqB) {
 			break
+		}
+		if errors.Is(err, syscall.EMSGSIZE) {
+			return nil, 0, nil, 0, fmt.Errorf("CRIU request (%d bytes) exceeds the socket send buffer: %w", len(reqB), err)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -373,19 +303,24 @@ func (c *Criu) doSwrkWithResp(
 		}
 	}
 
-	sent := make(map[string]struct{}) // externals CRIU already knows
-	var cfgPath string
-	defer func() {
+	if opts != nil {
+		opts.External = dedupe(opts.External)
+		cfgPath, err := externalsToConfig(opts)
 		if cfgPath != "" {
-			os.Remove(cfgPath)
+			defer os.Remove(cfgPath)
 		}
-	}()
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	for {
-		reqB, path, err := c.marshalToFit(&req, sent)
-		if path != "" {
-			cfgPath = path
+		// Notify replies (query-ext-files) carry only the post-seize delta,
+		// so they stay inline.
+		if req.Opts != nil {
+			req.Opts.External = dedupe(req.Opts.External)
 		}
+		reqB, err := proto.Marshal(&req)
 		if err != nil {
 			return nil, err
 		}
