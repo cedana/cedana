@@ -42,6 +42,14 @@ stage_preemption_script() {
     if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
         EXEC_USER=(-u "$SLURM_SUBMIT_USER")
     fi
+
+    # docker exec does not inherit this process's environment, so the script's
+    # checkpoint API verification needs these forwarded explicitly.
+    EXEC_ENV=(
+        -e CEDANA_URL="${CEDANA_URL:-}"
+        -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}"
+        -e CEDANA_CLUSTER_ID="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
+    )
 }
 
 # bats test_tags=dump,restore
@@ -54,6 +62,7 @@ stage_preemption_script() {
         -e LOW_PARTITION=debug \
         -e HIGH_PARTITION=high \
         -e PREEMPTOR_CPUS="$NODE_CPUS" \
+        "${EXEC_ENV[@]}" \
         "${EXEC_USER[@]}" \
         "$COMPUTE" /tmp/test-preemption.sh
     echo "$output"
@@ -74,6 +83,7 @@ stage_preemption_script() {
         -e LOW_PARTITION=debug \
         -e HIGH_PARTITION=high \
         -e PREEMPTOR_CPUS="$NODE_CPUS" \
+        "${EXEC_ENV[@]}" \
         "${EXEC_USER[@]}" \
         "$COMPUTE" /tmp/test-preemption.sh --gpu "$SLURM_GPU_WORKLOAD"
     echo "$output"
