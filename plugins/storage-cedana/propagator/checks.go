@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	sdk "github.com/cedana/cedana-go-sdk"
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/types"
 )
@@ -26,7 +26,7 @@ func CheckConfig() types.Check {
 			})
 		}
 
-		propagator := sdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken).V1()
+		propagator := propagatorsdk.NewClient(config.Global.Connection.URL, config.Global.Connection.AuthToken).V1()
 		_, err := propagator.User().Get(ctx, nil)
 		if err == nil {
 			components = append(components, &daemon.HealthCheckComponent{

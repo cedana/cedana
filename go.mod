@@ -13,7 +13,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
-	github.com/cedana/cedana-go-sdk v0.3.9-0.20260911202311-58d2b2e923d8
+	github.com/cedana/cedana-propagator-sdk/go v0.0.0-20260913033859-9aeb6ff696c8
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.32
@@ -28,6 +28,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/mdlayher/vsock v1.2.1
+	github.com/microsoft/kiota-abstractions-go v1.9.3
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/moby/sys/userns v0.1.0
 	github.com/opencontainers/cgroups v0.0.5
@@ -112,7 +113,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
-	github.com/microsoft/kiota-abstractions-go v1.9.3 // indirect
 	github.com/microsoft/kiota-http-go v1.5.5 // indirect
 	github.com/microsoft/kiota-serialization-form-go v1.1.2 // indirect
 	github.com/microsoft/kiota-serialization-json-go v1.1.2 // indirect

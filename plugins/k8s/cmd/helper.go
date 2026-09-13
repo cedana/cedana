@@ -23,7 +23,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	cedanagosdk "github.com/cedana/cedana-go-sdk"
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 )
 
 const DAEMON_LOG_PATH = "/host/var/log/cedana-daemon.log"
@@ -32,7 +32,7 @@ var containerdAddress = "/run/containerd/containerd.sock"
 
 var (
 	cedana     *client.Client
-	propagator *cedanagosdk.ApiClient
+	propagator *propagatorsdk.ApiClient
 )
 
 func init() {
@@ -90,7 +90,7 @@ var setupCmd = &cobra.Command{
 		}
 		defer cedana.Close()
 
-		propagator = cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
+		propagator = propagatorsdk.NewClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
 
 		err = startHelper(ctx)
 		if err != nil {
