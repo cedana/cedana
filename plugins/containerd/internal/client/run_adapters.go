@@ -66,12 +66,15 @@ func CreateContainer(next types.Run) types.Run {
 				)
 			}
 
-			configJson, err := json.Marshal(config.Global)
+			var configJson []byte
+			var executablePath string
+
+			configJson, err = json.Marshal(config.Global)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to marshal config: %v", err)
 			}
 
-			executablePath, err := os.Executable()
+			executablePath, err = os.Executable()
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get executable path: %v", err)
 			}
