@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-func TestInitOmitsImplicitStaticAWSCredentialsMode(t *testing.T) {
+func TestInitPersistsDefaultAWSCredentialsMode(t *testing.T) {
 	originalGlobal := Global
 	originalDir := Dir
 	t.Cleanup(func() {
@@ -46,8 +46,8 @@ func TestInitOmitsImplicitStaticAWSCredentialsMode(t *testing.T) {
 	if !ok {
 		t.Fatalf("persisted AWS config has type %T", persisted["aws"])
 	}
-	if _, ok := aws["credentials_mode"]; ok {
-		t.Fatal("implicit static credentials mode was persisted")
+	if got := aws["credentials_mode"]; got != DEFAULT_AWS_CREDENTIALS_MODE {
+		t.Fatalf("persisted credentials mode = %v, want %q", got, DEFAULT_AWS_CREDENTIALS_MODE)
 	}
 }
 
