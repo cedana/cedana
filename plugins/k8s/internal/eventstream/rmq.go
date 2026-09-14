@@ -18,7 +18,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	cedanagosdk "github.com/cedana/cedana-go-sdk"
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -33,7 +33,7 @@ import (
 
 type EventStream struct {
 	cedana     *client.Client
-	propagator *cedanagosdk.ApiClient
+	propagator *propagatorsdk.ApiClient
 
 	url                string
 	checkpoints        *rabbitmq.Publisher
@@ -56,7 +56,7 @@ var defaultDumpOpts = &criu.CriuOpts{
 
 var queryExpiryMs = 30 * time.Minute.Milliseconds()
 
-func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string) (*EventStream, error) {
+func New(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.ApiClient, containerdAddress string) (*EventStream, error) {
 	if cedana == nil {
 		return nil, fmt.Errorf("cedana client is nil")
 	}
