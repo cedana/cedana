@@ -143,25 +143,27 @@ func init() {
 	var initConfig bool
 	var mergeConfig bool
 
+	// NOTE: This runs before cobra parses flags, so both the `--flag value` and
+	// `--flag=value` forms must be handled here. Prefix matching without the
+	// '=' would misparse one flag as another (e.g. `--config-dir` as
+	// `--config`).
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "--"+flags.ConfigFlag.Full && i+1 < len(args) {
+		switch {
+		case arg == "--"+flags.ConfigFlag.Full && i+1 < len(args):
 			configStr = args[i+1]
 			i++
-		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigFlag.Full); ok {
-			configStr = after
-		}
-		if arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args) {
+		case strings.HasPrefix(arg, "--"+flags.ConfigFlag.Full+"="):
+			configStr = strings.TrimPrefix(arg, "--"+flags.ConfigFlag.Full+"=")
+		case arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args):
 			configDir = args[i+1]
 			i++
-		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigDirFlag.Full); ok {
-			configDir = after
-		}
-		if arg == "--"+flags.InitConfig.Full {
+		case strings.HasPrefix(arg, "--"+flags.ConfigDirFlag.Full+"="):
+			configDir = strings.TrimPrefix(arg, "--"+flags.ConfigDirFlag.Full+"=")
+		case arg == "--"+flags.InitConfig.Full:
 			initConfig = true
-		}
-		if arg == "--"+flags.MergeConfig.Full {
+		case arg == "--"+flags.MergeConfig.Full:
 			mergeConfig = true
 		}
 	}
