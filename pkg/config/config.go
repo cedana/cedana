@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/flags"
@@ -11,12 +10,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	DIR_PATH      = "/etc/cedana"
-	DIR_PATH_USER string
-)
-
 const (
+	DIR_PATH   = "/etc/cedana"
 	FILE_NAME  = "config"
 	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
@@ -72,6 +67,8 @@ const (
 
 	DEFAULT_SLURM_DB_PORT = 3306
 	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
+
+	DEFAULT_AWS_CREDENTIALS_MODE = "static"
 )
 
 // The default global config. This will get overwritten
@@ -130,6 +127,9 @@ var Global Config = Config{
 		DBPort:       DEFAULT_SLURM_DB_PORT,
 		DBName:       DEFAULT_SLURM_DB_NAME,
 	},
+	AWS: AWS{
+		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,
+	},
 }
 
 // The current config directory, set during Init
@@ -143,41 +143,32 @@ func init() {
 		panic(fmt.Errorf("failed to unmarshal default config: %w", err))
 	}
 
-	if os.Geteuid() != 0 {
-		homeDir, err := os.UserConfigDir()
-		if err == nil {
-			DIR_PATH_USER = filepath.Join(homeDir, "cedana")
-		} else {
-			DIR_PATH_USER = DIR_PATH
-		}
-	} else {
-		DIR_PATH_USER = DIR_PATH
-	}
-
 	var configStr string
 	var configDir string
 	var initConfig bool
 	var mergeConfig bool
 
+	// NOTE: This runs before cobra parses flags, so both the `--flag value` and
+	// `--flag=value` forms must be handled here. Prefix matching without the
+	// '=' would misparse one flag as another (e.g. `--config-dir` as
+	// `--config`).
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "--"+flags.ConfigFlag.Full && i+1 < len(args) {
+		switch {
+		case arg == "--"+flags.ConfigFlag.Full && i+1 < len(args):
 			configStr = args[i+1]
 			i++
-		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigFlag.Full); ok {
-			configStr = after
-		}
-		if arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args) {
+		case strings.HasPrefix(arg, "--"+flags.ConfigFlag.Full+"="):
+			configStr = strings.TrimPrefix(arg, "--"+flags.ConfigFlag.Full+"=")
+		case arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args):
 			configDir = args[i+1]
 			i++
-		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigDirFlag.Full); ok {
-			configDir = after
-		}
-		if arg == "--"+flags.InitConfig.Full {
+		case strings.HasPrefix(arg, "--"+flags.ConfigDirFlag.Full+"="):
+			configDir = strings.TrimPrefix(arg, "--"+flags.ConfigDirFlag.Full+"=")
+		case arg == "--"+flags.InitConfig.Full:
 			initConfig = true
-		}
-		if arg == "--"+flags.MergeConfig.Full {
+		case arg == "--"+flags.MergeConfig.Full:
 			mergeConfig = true
 		}
 	}
@@ -214,13 +205,12 @@ func Load(args ...Args) (err error) {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH_USER
+		Dir = DIR_PATH
 	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
 
@@ -256,13 +246,12 @@ func Init(args ...Args) error {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH_USER
+		Dir = DIR_PATH
 	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
