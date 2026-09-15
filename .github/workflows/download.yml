@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 env:
-  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_URL: https://rahul.cedana.ai/v1
 
 on:
   workflow_call:
@@ -50,6 +50,11 @@ on:
       slurm_version:
         type: string
         description: Version for cedana-slurm binaries (branch name, tag or "release" for latest release)
+        required: false
+        default: "none"
+      csx_version:
+        type: string
+        description: Version for csx binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
 
@@ -505,3 +510,44 @@ jobs:
         with:
           name: slurm-${{ matrix.slurm }}-${{ matrix.arch }}
           path: ./slurm/*
+
+  csx:
+    name: CSX
+    if: ${{ inputs.csx_version != 'none' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Download CSX
+        env:
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: ${{ inputs.csx_version == 'release' && 'latest' || inputs.csx_version }}
+        run: |
+          set -euo pipefail
+          BUILD="alpha"
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+            BUILD=""
+          fi
+          mkdir -p csx
+
+          ARCH="${{ matrix.arch }}"
+          FILE="csx"
+
+          curl -fL \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "csx/${FILE}"
+
+          test -f "csx/${FILE}"
+          test -s "csx/${FILE}"
+          echo "${VERSION}" > csx/csx-version.txt
+
+      - name: Upload CSX
+        uses: actions/upload-artifact@v4
+        with:
+          name: csx-${{ matrix.arch }}
+          path: ./csx/*
