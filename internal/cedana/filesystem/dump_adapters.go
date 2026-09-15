@@ -193,14 +193,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				}
 			}
 		} else {
-			// Nothing else to do, just set the path and
-			// add profiling data manually as no IO could be measured
-			defer func() {
-				size := utils.SizeFromPath(imagesDirectory)
-				profiling.ApplyContextThroughputLimit(ctx)
-				profiling.AddIO(ctx, size)
-			}()
-
+			ctx = profiling.WithStorageTransfer(ctx)
 			// If imagesDirectory was provided by a plugin
 			// dump path to be req.Dir + req.Name
 			if strings.Contains(req.Dir, "://") {

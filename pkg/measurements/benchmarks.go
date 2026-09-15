@@ -28,6 +28,10 @@ const (
 )
 
 func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, samples int) ([]StorageMeasurement, error) {
+	return benchmarkStorageModes(ctx, path, sizeGB, samples, StorageModeCached, StorageModeCold)
+}
+
+func benchmarkStorageModes(ctx context.Context, path string, sizeGB float64, samples int, modes ...string) ([]StorageMeasurement, error) {
 	if err := validateBenchmarkSamples(samples); err != nil {
 		return nil, err
 	}
@@ -54,7 +58,6 @@ func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, samples 
 	if _, err := rand.Read(pattern); err != nil {
 		return nil, err
 	}
-	modes := []string{StorageModeCached, StorageModeCold}
 	results := make([]StorageMeasurement, 0, len(modes))
 	for _, mode := range modes {
 		if err := ctx.Err(); err != nil {
@@ -73,12 +76,12 @@ func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, samples 
 }
 
 func CalibrateStorage(ctx context.Context, path string) (*StorageCalibration, error) {
-	results, err := BenchmarkStorage(ctx, path, storageCalibrationSizeGB, DefaultBenchmarkSamples)
+	results, err := benchmarkStorageModes(ctx, path, storageCalibrationSizeGB, DefaultBenchmarkSamples, StorageModeCached)
 	if err != nil {
 		return nil, err
 	}
 	for _, result := range results {
-		if result.Mode != StorageModeCold {
+		if result.Mode != StorageModeCached {
 			continue
 		}
 		if result.ReadFailure != nil {
@@ -96,7 +99,7 @@ func CalibrateStorage(ctx context.Context, path string) (*StorageCalibration, er
 			WriteThroughput: int64(*result.WriteGBPerSec * 1_000_000_000),
 		}, nil
 	}
-	return nil, fmt.Errorf("storage calibration did not produce cold results")
+	return nil, fmt.Errorf("storage calibration did not produce cached results")
 }
 
 func benchmarkStorageMode(ctx context.Context, path string, sizeGB float64, samples int, mode string, storage []StorageMeasurement, pattern []byte) StorageMeasurement {

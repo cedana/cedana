@@ -42,6 +42,16 @@ func TestContextThroughputLimitAppliesToCurrentComponent(t *testing.T) {
 	}
 }
 
+func TestHasData(t *testing.T) {
+	if HasData(context.Background()) {
+		t.Fatal("empty context has profiling data")
+	}
+	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, &Data{})
+	if !HasData(ctx) {
+		t.Fatal("profiling context was not detected")
+	}
+}
+
 func TestIOComponentInheritsThroughputLimit(t *testing.T) {
 	data := &Data{}
 	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
@@ -70,6 +80,18 @@ func TestAddIOComponentInheritsThroughputLimit(t *testing.T) {
 	}
 	if data.Components[0].MaxThroughput != 100 || data.Components[0].MinDuration != (2500*time.Millisecond).Nanoseconds() {
 		t.Fatalf("component = %#v", data.Components[0])
+	}
+}
+
+func TestStorageTransferUsesCurrentProfileComponent(t *testing.T) {
+	data := &Data{}
+	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
+	ctx = WithThroughputLimit(ctx, ThroughputLimit{MaxThroughput: 100})
+	ctx = WithStorageTransfer(ctx)
+	AddStorageTransfer(ctx, 250)
+
+	if data.IO != 250 || data.MaxThroughput != 100 || data.MinDuration != (2500*time.Millisecond).Nanoseconds() {
+		t.Fatalf("data = %#v", data)
 	}
 }
 

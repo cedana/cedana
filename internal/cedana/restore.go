@@ -15,7 +15,6 @@ import (
 	"github.com/cedana/cedana/internal/cedana/process"
 	"github.com/cedana/cedana/internal/cedana/streamer"
 	"github.com/cedana/cedana/internal/cedana/validation"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/measurements"
@@ -182,7 +181,7 @@ func pluginRestoreStorage(calibrator *measurements.StorageCalibrator) types.Adap
 			}
 
 			opts.Storage = storage
-			if config.Global.Profiling.Enabled && !storage.IsRemote() && calibrator != nil {
+			if profiling.HasData(ctx) && !storage.IsRemote() && calibrator != nil {
 				calibration, found, calibrationErr := calibrator.Lookup(ctx, dir)
 				if calibrationErr != nil {
 					log.Debug().Err(calibrationErr).Str("path", dir).Msg("storage calibration unavailable")

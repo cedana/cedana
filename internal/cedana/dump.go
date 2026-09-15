@@ -186,7 +186,7 @@ func pluginDumpStorage(calibrator *measurements.StorageCalibrator) types.Adapter
 			}
 
 			opts.Storage = storage
-			if config.Global.Profiling.Enabled && !storage.IsRemote() && calibrator != nil {
+			if profiling.HasData(ctx) && !storage.IsRemote() && calibrator != nil {
 				calibration, calibrationErr := calibrator.Calibrate(ctx, dir)
 				if calibrationErr != nil {
 					log.Debug().Err(calibrationErr).Str("path", dir).Msg("storage calibration unavailable")

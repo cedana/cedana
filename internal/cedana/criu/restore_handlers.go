@@ -153,6 +153,7 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 		return nil, status.Errorf(codes.Internal, "failed CRIU restore: %v", err)
 	}
+	profiling.AddStorageTransfer(ctx, utils.SizeFromPath(criuOpts.GetImagesDir()))
 	resp.PID = uint32(*criuResp.Pid)
 
 	if !reaper || req.Type == "process" {

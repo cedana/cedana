@@ -302,7 +302,7 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 		}
 
 		var limit *profiling.ThroughputLimit
-		if phaseName == "host_memory" {
+		if phaseName == "gpu_memory" {
 			limit = hostDeviceLimit
 		}
 		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName), limit)

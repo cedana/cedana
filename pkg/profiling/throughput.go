@@ -22,12 +22,30 @@ type ThroughputLimit struct {
 }
 
 type throughputLimitContextKey struct{}
+type storageTransferContextKey struct{}
+
+func HasData(ctx context.Context) bool {
+	_, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	return ok
+}
 
 func WithThroughputLimit(ctx context.Context, limit ThroughputLimit) context.Context {
 	if limit.MaxThroughput <= 0 {
 		return ctx
 	}
 	return context.WithValue(ctx, throughputLimitContextKey{}, limit)
+}
+
+func WithStorageTransfer(ctx context.Context) context.Context {
+	return context.WithValue(ctx, storageTransferContextKey{}, struct{}{})
+}
+
+func AddStorageTransfer(ctx context.Context, n int64) {
+	if _, ok := ctx.Value(storageTransferContextKey{}).(struct{}); !ok {
+		return
+	}
+	ApplyContextThroughputLimit(ctx)
+	AddIO(ctx, n)
 }
 
 func ApplyContextThroughputLimit(ctx context.Context) {
