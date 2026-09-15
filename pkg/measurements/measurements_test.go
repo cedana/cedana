@@ -8,6 +8,7 @@ import (
 	"os"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestMatchStorageUsesLongestMount(t *testing.T) {
@@ -111,6 +112,31 @@ func TestBenchmarkStorageResolvesRelativePathForMountMatching(t *testing.T) {
 		if result.Name == "." {
 			t.Fatal("relative benchmark path was not matched to its mount")
 		}
+	}
+}
+
+func TestStorageCalibratorCachesResource(t *testing.T) {
+	calibrator := NewStorageCalibrator(1, time.Hour)
+	first, err := calibrator.Calibrate(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := calibrator.Calibrate(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatal("expected cached calibration")
+	}
+	if first.Resource == "" || first.ReadThroughput <= 0 || first.WriteThroughput <= 0 {
+		t.Fatalf("calibration = %#v", first)
+	}
+	fromCache, found, err := calibrator.Lookup(context.Background(), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found || fromCache != first {
+		t.Fatalf("lookup = (%p, %t), want (%p, true)", fromCache, found, first)
 	}
 }
 

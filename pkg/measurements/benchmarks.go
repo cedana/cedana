@@ -19,6 +19,7 @@ const (
 	DefaultBenchmarkPath                = "/tmp/cedana-measure"
 	DefaultBenchmarkSamples             = 3
 	memoryBenchmarkMaxAvailableFraction = 2
+	storageCalibrationSizeGB            = 0.0001
 )
 
 const (
@@ -69,6 +70,33 @@ func BenchmarkStorage(ctx context.Context, path string, sizeGB float64, samples 
 		}
 	}
 	return results, nil
+}
+
+func CalibrateStorage(ctx context.Context, path string) (*StorageCalibration, error) {
+	results, err := BenchmarkStorage(ctx, path, storageCalibrationSizeGB, DefaultBenchmarkSamples)
+	if err != nil {
+		return nil, err
+	}
+	for _, result := range results {
+		if result.Mode != StorageModeCold {
+			continue
+		}
+		if result.ReadFailure != nil {
+			return nil, fmt.Errorf("storage read calibration: %s", result.ReadFailure.Message)
+		}
+		if result.WriteFailure != nil {
+			return nil, fmt.Errorf("storage write calibration: %s", result.WriteFailure.Message)
+		}
+		if result.ReadGBPerSec == nil || result.WriteGBPerSec == nil {
+			return nil, fmt.Errorf("storage calibration did not produce read and write throughput")
+		}
+		return &StorageCalibration{
+			Resource:        result.Name,
+			ReadThroughput:  int64(*result.ReadGBPerSec * 1_000_000_000),
+			WriteThroughput: int64(*result.WriteGBPerSec * 1_000_000_000),
+		}, nil
+	}
+	return nil, fmt.Errorf("storage calibration did not produce cold results")
 }
 
 func benchmarkStorageMode(ctx context.Context, path string, sizeGB float64, samples int, mode string, storage []StorageMeasurement, pattern []byte) StorageMeasurement {

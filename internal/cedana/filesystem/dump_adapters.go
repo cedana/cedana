@@ -197,6 +197,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			// add profiling data manually as no IO could be measured
 			defer func() {
 				size := utils.SizeFromPath(imagesDirectory)
+				profiling.ApplyContextThroughputLimit(ctx)
 				profiling.AddIO(ctx, size)
 			}()
 

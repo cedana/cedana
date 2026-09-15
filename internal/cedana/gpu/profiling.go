@@ -3,6 +3,7 @@ package gpu
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 	"time"
 
@@ -265,20 +266,23 @@ func gpuWorkerProfileTags(row gpuWorkerTimingRow, stats gpuDurationStats) []any 
 	return tags
 }
 
-func addGPUWorkerTimingRowToProfiling(ctx context.Context, row gpuWorkerTimingRow, stats gpuDurationStats) {
+func addGPUWorkerTimingRowToProfiling(ctx context.Context, row gpuWorkerTimingRow, stats gpuDurationStats, limit *profiling.ThroughputLimit) {
 	functionCtx := addGPUFunctionProfileToProfiling(
 		ctx,
 		gpuProfileDuration(row.durationNs),
 		gpuWorkerProfileTags(row, stats)...,
 	)
+	if limit != nil {
+		profiling.SetThroughputLimit(functionCtx, *limit)
+	}
 	profiling.AddIO(functionCtx, int64(row.bytes))
 	profiling.MarkIORedundant(functionCtx)
 }
 
-func addGPUWorkerTimingRowsToProfiling(ctx context.Context, rows []gpuWorkerTimingRow) {
+func addGPUWorkerTimingRowsToProfiling(ctx context.Context, rows []gpuWorkerTimingRow, limit *profiling.ThroughputLimit) {
 	stats := gpuWorkerDurationStats(rows)
 	for _, row := range rows {
-		addGPUWorkerTimingRowToProfiling(ctx, row, stats)
+		addGPUWorkerTimingRowToProfiling(ctx, row, stats, limit)
 	}
 }
 
@@ -287,39 +291,40 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 		return
 	}
 
-	addGPUTheoreticalLimitsToProfiling(ctx, profile)
-
 	workers := gpuSortedWorkers(profile)
 	displayNames := gpuPhaseDisplayNames(profile)
+	hostDeviceLimit := gpuHostDeviceLimit(profile)
 
 	for _, phaseName := range gpuProfilePhaseOrder(profile, workers) {
 		displayName := displayNames[phaseName]
 		if displayName == "" {
 			displayName = phaseName
 		}
-		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName))
+
+		var limit *profiling.ThroughputLimit
+		if phaseName == "host_memory" {
+			limit = hostDeviceLimit
+		}
+		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName), limit)
 	}
 
-	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers))
+	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers), nil)
 }
 
-func addGPUTheoreticalLimitsToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile) {
+func gpuHostDeviceLimit(profile *gpu_proto.GpuProfile) *profiling.ThroughputLimit {
+	var result *profiling.ThroughputLimit
 	for _, limit := range profile.GetTheoreticalLimits() {
-		if converted := gpuTheoreticalLimit(limit); converted != nil {
-			profiling.AddTheoreticalLimit(ctx, converted)
+		if limit.GetName() != "gpu_host_device_link" || limit.GetUnit() != "bytes_per_second" || limit.GetValue() > math.MaxInt64 {
+			continue
+		}
+		if result != nil {
+			return nil
+		}
+		result = &profiling.ThroughputLimit{
+			MaxThroughput: int64(limit.GetValue()),
+			Source:        "theoretical",
+			Resource:      limit.GetDevice(),
 		}
 	}
-}
-
-func gpuTheoreticalLimit(limit *gpu_proto.Measurement) *profiling.TheoreticalLimit {
-	if limit == nil {
-		return nil
-	}
-
-	return &profiling.TheoreticalLimit{
-		Name:   limit.GetName(),
-		Value:  limit.GetValue(),
-		Unit:   limit.GetUnit(),
-		Device: limit.GetDevice(),
-	}
+	return result
 }

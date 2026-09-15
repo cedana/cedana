@@ -9,6 +9,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -17,8 +18,9 @@ import (
 
 // Cedana implements all the capabilities that can be run without a server.
 type Cedana struct {
-	plugins plugins.Manager
-	gpus    gpu.Manager
+	plugins           plugins.Manager
+	gpus              gpu.Manager
+	storageCalibrator *measurements.StorageCalibrator
 
 	wg       *sync.WaitGroup
 	lifetime context.Context
@@ -48,11 +50,12 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	}
 
 	return &Cedana{
-		plugins:  pluginManager,
-		gpus:     gpuManager,
-		wg:       wg,
-		lifetime: ctx,
-		cancel:   cancel,
+		plugins:           pluginManager,
+		gpus:              gpuManager,
+		storageCalibrator: measurements.NewStorageCalibrator(0, 0),
+		wg:                wg,
+		lifetime:          ctx,
+		cancel:            cancel,
 	}, nil
 }
 

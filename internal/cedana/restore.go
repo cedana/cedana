@@ -15,8 +15,10 @@ import (
 	"github.com/cedana/cedana/internal/cedana/process"
 	"github.com/cedana/cedana/internal/cedana/streamer"
 	"github.com/cedana/cedana/internal/cedana/validation"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -33,7 +35,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
 
-		pluginRestoreStorage, // detects and plugs in the storage to use
+		pluginRestoreStorage(s.storageCalibrator), // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
@@ -89,7 +91,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
 
-		pluginRestoreStorage, // detects and plugs in the storage to use
+		pluginRestoreStorage(s.storageCalibrator), // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
@@ -158,42 +160,57 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 // Detects and plugs in the storage to use from the specified path,
 // If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
-func pluginRestoreStorage(next types.Restore) types.Restore {
-	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-		dir := req.GetPath()
+func pluginRestoreStorage(calibrator *measurements.StorageCalibrator) types.Adapter[types.Restore] {
+	return func(next types.Restore) types.Restore {
+		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+			dir := req.GetPath()
 
-		var storage io.Storage = &filesystem.Storage{}
+			var storage io.Storage = &filesystem.Storage{}
 
-		if strings.Contains(dir, "://") {
-			pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
-			err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
-				if newPluginStorage == nil {
-					return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
+			if strings.Contains(dir, "://") {
+				pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
+				err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
+					if newPluginStorage == nil {
+						return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
+					}
+					storage, err = newPluginStorage(ctx)
+					return err
+				}, pluginName)
+				if err != nil {
+					return nil, status.Error(codes.Unavailable, err.Error())
 				}
-				storage, err = newPluginStorage(ctx)
-				return err
-			}, pluginName)
-			if err != nil {
-				return nil, status.Error(codes.Unavailable, err.Error())
 			}
-		}
 
-		opts.Storage = storage
-		streams, err := streamer.IsStreamable(ctx, storage, dir)
-		if err != nil {
-			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to detect restore filesystem to use: %v", err))
-		}
+			opts.Storage = storage
+			if config.Global.Profiling.Enabled && !storage.IsRemote() && calibrator != nil {
+				calibration, found, calibrationErr := calibrator.Lookup(ctx, dir)
+				if calibrationErr != nil {
+					log.Debug().Err(calibrationErr).Str("path", dir).Msg("storage calibration unavailable")
+				} else if found {
+					ctx = profiling.WithThroughputLimit(ctx, profiling.ThroughputLimit{
+						MaxThroughput: calibration.ReadThroughput,
+						Source:        "measured",
+						Resource:      calibration.Resource,
+						Direction:     "read",
+					})
+				}
+			}
+			streams, err := streamer.IsStreamable(ctx, storage, dir)
+			if err != nil {
+				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to detect restore filesystem to use: %v", err))
+			}
 
-		if streams == 1 {
-			return nil, status.Error(codes.Internal, "A minimum of 2 streams is required by streaming.")
-		}
+			if streams == 1 {
+				return nil, status.Error(codes.Internal, "A minimum of 2 streams is required by streaming.")
+			}
 
-		filesystem := filesystem.RestoreFilesystem
-		if streams > 1 {
-			filesystem = streamer.RestoreFilesystem(streams)
-		}
+			filesystem := filesystem.RestoreFilesystem
+			if streams > 1 {
+				filesystem = streamer.RestoreFilesystem(streams)
+			}
 
-		return next.With(filesystem)(ctx, opts, resp, req)
+			return next.With(filesystem)(ctx, opts, resp, req)
+		}
 	}
 }
 

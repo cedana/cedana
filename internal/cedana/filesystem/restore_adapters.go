@@ -56,6 +56,7 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 			imagesDirectory = path
 			// Add profiling data manually as no IO can be measured
 			size := utils.SizeFromPath(imagesDirectory)
+			profiling.ApplyContextThroughputLimit(ctx)
 			profiling.AddIO(ctx, size)
 		} else {
 			// Create a temporary directory for the restore

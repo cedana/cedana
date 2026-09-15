@@ -3,12 +3,15 @@ package measurements
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/shirou/gopsutil/v4/disk"
 	"github.com/shirou/gopsutil/v4/host"
@@ -19,6 +22,9 @@ const (
 	SourceConfigured = "configured"
 	SourceMeasured   = "measured"
 	SourceUnknown    = "unknown"
+
+	DefaultStorageCalibrationEntries = 64
+	DefaultStorageCalibrationTTL     = 30 * time.Minute
 )
 
 type Report struct {
@@ -39,6 +45,145 @@ type StorageMeasurement struct {
 	WriteGBPerSec   *float64
 	WriteSource     string
 	WriteFailure    *Failure
+}
+
+type StorageCalibration struct {
+	Resource        string
+	ReadThroughput  int64
+	WriteThroughput int64
+}
+
+type StorageCalibrator struct {
+	mu      sync.Mutex
+	entries map[string]*storageCalibrationEntry
+	max     int
+	ttl     time.Duration
+}
+
+type storageCalibrationEntry struct {
+	calibration *StorageCalibration
+	err         error
+	expiresAt   time.Time
+	ready       chan struct{}
+}
+
+func NewStorageCalibrator(maxEntries int, ttl time.Duration) *StorageCalibrator {
+	if maxEntries <= 0 {
+		maxEntries = DefaultStorageCalibrationEntries
+	}
+	if ttl <= 0 {
+		ttl = DefaultStorageCalibrationTTL
+	}
+	return &StorageCalibrator{
+		entries: make(map[string]*storageCalibrationEntry),
+		max:     maxEntries,
+		ttl:     ttl,
+	}
+}
+
+func (c *StorageCalibrator) Calibrate(ctx context.Context, path string) (*StorageCalibration, error) {
+	resource, err := storageResource(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+
+	c.mu.Lock()
+	c.evictExpired(time.Now())
+	if entry := c.entries[resource]; entry != nil {
+		ready := entry.ready
+		c.mu.Unlock()
+		select {
+		case <-ready:
+			return entry.calibration, entry.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if !c.evictOne() {
+		c.mu.Unlock()
+		return nil, fmt.Errorf("storage calibration cache is full")
+	}
+	entry := &storageCalibrationEntry{ready: make(chan struct{})}
+	c.entries[resource] = entry
+	c.mu.Unlock()
+
+	calibration, err := CalibrateStorage(ctx, path)
+
+	c.mu.Lock()
+	entry.calibration = calibration
+	entry.err = err
+	entry.expiresAt = time.Now().Add(c.ttl)
+	close(entry.ready)
+	c.mu.Unlock()
+	return calibration, err
+}
+
+func (c *StorageCalibrator) Lookup(ctx context.Context, path string) (*StorageCalibration, bool, error) {
+	resource, err := storageResource(ctx, path)
+	if err != nil {
+		return nil, false, err
+	}
+
+	c.mu.Lock()
+	c.evictExpired(time.Now())
+	entry := c.entries[resource]
+	if entry == nil {
+		c.mu.Unlock()
+		return nil, false, nil
+	}
+	ready := entry.ready
+	c.mu.Unlock()
+
+	select {
+	case <-ready:
+		if entry.err != nil || entry.calibration == nil {
+			return nil, false, entry.err
+		}
+		return entry.calibration, true, nil
+	case <-ctx.Done():
+		return nil, false, ctx.Err()
+	}
+}
+
+func (c *StorageCalibrator) evictExpired(now time.Time) {
+	for resource, entry := range c.entries {
+		if !entry.expiresAt.IsZero() && !entry.expiresAt.After(now) {
+			delete(c.entries, resource)
+		}
+	}
+}
+
+func (c *StorageCalibrator) evictOne() bool {
+	if len(c.entries) < c.max {
+		return true
+	}
+	for resource, entry := range c.entries {
+		select {
+		case <-entry.ready:
+			delete(c.entries, resource)
+			return true
+		default:
+		}
+	}
+	return false
+}
+
+func storageResource(ctx context.Context, path string) (string, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	if info, statErr := os.Stat(path); statErr == nil && !info.IsDir() {
+		path = filepath.Dir(path)
+	}
+	storage, err := CollectStorage(ctx)
+	if err != nil {
+		return "", err
+	}
+	if matched := matchStorage(path, storage); matched != nil {
+		return matched.Name, nil
+	}
+	return path, nil
 }
 
 type MemoryMeasurement struct {

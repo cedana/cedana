@@ -83,6 +83,7 @@ func IO[T any](ctx context.Context, w T, f ...any) T {
 	}
 
 	data.Name = getName(f...)
+	applyContextThroughputLimit(ctx, data)
 
 	var span trace.Span
 	var beginning time.Time
@@ -94,7 +95,7 @@ func IO[T any](ctx context.Context, w T, f ...any) T {
 
 	end := func(n *int) {
 		data.Duration += time.Since(beginning).Nanoseconds()
-		data.IO += int64(*n)
+		data.AddIO(int64(*n))
 		span.End()
 	}
 
@@ -128,6 +129,7 @@ func IOComponent[T any](ctx context.Context, w T, f ...any) T {
 	}
 
 	component := &Data{Name: getName(f...)}
+	applyContextThroughputLimit(ctx, component)
 	data.Components = append(data.Components, component)
 
 	var span trace.Span
@@ -140,7 +142,7 @@ func IOComponent[T any](ctx context.Context, w T, f ...any) T {
 
 	end := func(n *int) {
 		component.Duration += time.Since(beginning).Nanoseconds()
-		component.IO += int64(*n)
+		component.AddIO(int64(*n))
 		span.End()
 	}
 
@@ -174,6 +176,7 @@ func IOParallelComponent[T any](ctx context.Context, w T, f ...any) T {
 	}
 
 	component := &Data{Name: getName(f...), Parallel: true}
+	applyContextThroughputLimit(ctx, component)
 	data.Components = append(data.Components, component)
 
 	var span trace.Span
@@ -186,7 +189,7 @@ func IOParallelComponent[T any](ctx context.Context, w T, f ...any) T {
 
 	end := func(n *int) {
 		component.Duration += time.Since(beginning).Nanoseconds()
-		component.IO += int64(*n)
+		component.AddIO(int64(*n))
 		span.End()
 	}
 
@@ -219,6 +222,7 @@ func IORedundantComponent[T any](ctx context.Context, w T, f ...any) T {
 	}
 
 	component := &Data{Name: getName(f...), Redundant: true}
+	applyContextThroughputLimit(ctx, component)
 	data.Components = append(data.Components, component)
 
 	var span trace.Span
@@ -231,7 +235,7 @@ func IORedundantComponent[T any](ctx context.Context, w T, f ...any) T {
 
 	end := func(n *int) {
 		component.Duration += time.Since(beginning).Nanoseconds()
-		component.IO += int64(*n)
+		component.AddIO(int64(*n))
 		span.End()
 	}
 
@@ -280,6 +284,7 @@ func IOCategory[T any](ctx context.Context, w T, category string, f ...any) T {
 	}
 
 	childComponent := &Data{Name: getName(f...)}
+	applyContextThroughputLimit(ctx, childComponent)
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	var span trace.Span
@@ -294,7 +299,7 @@ func IOCategory[T any](ctx context.Context, w T, category string, f ...any) T {
 		duration := time.Since(beginning)
 		categoryComponent.Duration += duration.Nanoseconds()
 		childComponent.Duration += duration.Nanoseconds()
-		childComponent.IO += int64(*n)
+		childComponent.AddIO(int64(*n))
 		span.End()
 	}
 
@@ -343,6 +348,7 @@ func IOParallelCategory[T any](ctx context.Context, w T, category string, f ...a
 	}
 
 	childComponent := &Data{Name: getName(f...), Parallel: true}
+	applyContextThroughputLimit(ctx, childComponent)
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	var span trace.Span
@@ -356,7 +362,7 @@ func IOParallelCategory[T any](ctx context.Context, w T, category string, f ...a
 	end := func(n *int) {
 		// Don't count parallel durations towards the category total
 		childComponent.Duration = time.Since(beginning).Nanoseconds()
-		childComponent.IO += int64(*n)
+		childComponent.AddIO(int64(*n))
 		span.End()
 	}
 
@@ -404,6 +410,7 @@ func IORedundantCategory[T any](ctx context.Context, w T, category string, f ...
 	}
 
 	childComponent := &Data{Name: getName(f...), Redundant: true}
+	applyContextThroughputLimit(ctx, childComponent)
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	var span trace.Span
@@ -417,7 +424,7 @@ func IORedundantCategory[T any](ctx context.Context, w T, category string, f ...
 	end := func(n *int) {
 		// Don't count parallel durations towards the category total
 		childComponent.Duration = time.Since(beginning).Nanoseconds()
-		childComponent.IO += int64(*n)
+		childComponent.AddIO(int64(*n))
 		span.End()
 	}
 
@@ -446,7 +453,7 @@ func AddIO(ctx context.Context, n int64) {
 	if !ok {
 		return
 	}
-	data.IO += n
+	data.AddIO(n)
 }
 
 // MarkRedundant marks the current profiling component as display-only for totals.
@@ -475,8 +482,9 @@ func AddIOComponent(ctx context.Context, n int64, f ...any) {
 	}
 
 	component := &Data{Name: getName(f...)}
+	applyContextThroughputLimit(ctx, component)
 	data.Components = append(data.Components, component)
-	component.IO += n
+	component.AddIO(n)
 }
 
 func AddIOCategory(ctx context.Context, n int64, category string, f ...any) {
@@ -502,6 +510,7 @@ func AddIOCategory(ctx context.Context, n int64, category string, f ...any) {
 	}
 
 	childComponent := &Data{Name: getName(f...)}
+	applyContextThroughputLimit(ctx, childComponent)
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
-	childComponent.IO += n
+	childComponent.AddIO(n)
 }

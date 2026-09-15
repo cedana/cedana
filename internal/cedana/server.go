@@ -18,6 +18,7 @@ import (
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -99,10 +100,11 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 
 	server = &Server{
 		Cedana: Cedana{
-			gpus:     gpuManager,
-			plugins:  pluginManager,
-			wg:       wg,
-			lifetime: ctx,
+			gpus:              gpuManager,
+			plugins:           pluginManager,
+			storageCalibrator: measurements.NewStorageCalibrator(0, 0),
+			wg:                wg,
+			lifetime:          ctx,
 		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(

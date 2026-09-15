@@ -12,6 +12,38 @@ import (
 	"strings"
 )
 
+const (
+	numaBenchmarkChildEnv   = "CEDANA_NUMA_BENCHMARK"
+	numaBenchmarkSizeEnv    = "CEDANA_NUMA_BENCHMARK_SIZE_GB"
+	numaBenchmarkSamplesEnv = "CEDANA_NUMA_BENCHMARK_SAMPLES"
+	numaBenchmarkOutputEnv  = "CEDANA_NUMA_BENCHMARK_OUTPUT"
+)
+
+// RunNUMABenchmarkChild handles the bound child process started by BenchmarkNUMA.
+// It is intentionally not a user-facing Cedana command.
+func RunNUMABenchmarkChild(ctx context.Context) (bool, error) {
+	if os.Getenv(numaBenchmarkChildEnv) == "" {
+		return false, nil
+	}
+
+	sizeGB, err := strconv.ParseFloat(os.Getenv(numaBenchmarkSizeEnv), 64)
+	if err != nil {
+		return true, fmt.Errorf("parse NUMA benchmark size: %w", err)
+	}
+	samples, err := strconv.Atoi(os.Getenv(numaBenchmarkSamplesEnv))
+	if err != nil {
+		return true, fmt.Errorf("parse NUMA benchmark samples: %w", err)
+	}
+	rate, err := BenchmarkMemoryRate(ctx, sizeGB, samples)
+	if err != nil {
+		return true, err
+	}
+	if err := os.WriteFile(os.Getenv(numaBenchmarkOutputEnv), []byte(strconv.FormatFloat(rate, 'f', -1, 64)), 0o600); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
 func BenchmarkNUMA(ctx context.Context, sizeGB float64, samples int) ([]NUMAMeasurement, error) {
 	if runtime.GOOS != "linux" {
 		return nil, nil
@@ -109,10 +141,12 @@ func benchmarkNUMAMemoryAccess(ctx context.Context, numactl string, cpuNode, mem
 		"--cpunodebind", strconv.Itoa(cpuNode),
 		"--membind", strconv.Itoa(memoryNode),
 		os.Args[0],
-		"measure", "benchmark",
-		"--size-gb", strconv.FormatFloat(sizeGB, 'f', -1, 64),
-		"--samples", strconv.Itoa(samples),
-		"--result-file", outputPath,
+	)
+	cmd.Env = append(os.Environ(),
+		numaBenchmarkChildEnv+"=1",
+		numaBenchmarkSizeEnv+"="+strconv.FormatFloat(sizeGB, 'f', -1, 64),
+		numaBenchmarkSamplesEnv+"="+strconv.Itoa(samples),
+		numaBenchmarkOutputEnv+"="+outputPath,
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
