@@ -95,6 +95,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
+	tableWriter.AppendHeader(table.Row{"DURATION", "BEST", "CATEGORY", "IO", "COMPONENT"})
 
 	categoryDuration := make(map[string]time.Duration)
 	categoryIO := make(map[string]int64)
@@ -118,7 +119,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		durationStr := DurationStr(duration, precision)
 		minDurationStr := ""
 		if p.MinDuration > 0 {
-			minDurationStr = style.DisabledColors.Sprint("best " + DurationStr(time.Duration(p.MinDuration), precision))
+			minDurationStr = style.DisabledColors.Sprint(DurationStr(time.Duration(p.MinDuration), precision))
 		}
 		io := p.IO
 		ioStr := utils.SizeStr(io)
@@ -187,6 +188,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		tableWriter = table.NewWriter()
 		tableWriter.SetStyle(style.TableStyle)
 		tableWriter.SetOutputMirror(os.Stdout)
+		tableWriter.AppendHeader(table.Row{"DURATION", "PERCENT", "IO", "CATEGORY"})
 
 		for category, duration := range categoryDuration {
 			percentage := (float64(duration) / float64(totalDuration)) * 100
