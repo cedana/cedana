@@ -14,8 +14,6 @@ load_lib assert
 load_lib file
 
 setup_file() {
-    skip "Disabled until snapshotter issues fixed"
-
     do_once pull_images
     setup_file_daemon
     check_env CONTAINERD_SNAPSHOTTER
@@ -308,4 +306,79 @@ teardown_file() {
     debug cedana restore job "$jid" --path "$dump_file"
 
     run cedana job kill "$jid"
+}
+
+####################
+### crun runtime ###
+####################
+
+# Containers using the crun runtime run under the same shim as runc
+# (io.containerd.runc.v2), with just a different runtime binary. The dump
+# should detect this and route to the crun plugin, and the restore should
+# recreate the container with the same runtime binary.
+
+# bats test_tags=crun,manage
+@test "manage container (crun runtime)" {
+    id=$(unix_nano)
+    image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
+
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --detach --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id"
+
+    wait_for_file "$pid_file"
+
+    cedana manage containerd "$id" --jid "$id"
+
+    run cedana ps
+    assert_success
+    assert_output --partial "$id"
+
+    run cedana job kill "$id"
+}
+
+# bats test_tags=crun,dump
+@test "dump container (crun runtime)" {
+    id=$(unix_nano)
+    image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
+
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+
+    wait_for_file "$pid_file" && sleep 1
+
+    run cedana dump containerd "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run ctr task kill "$id"
+}
+
+# bats test_tags=crun,restore
+@test "restore container (crun runtime)" {
+    id=$(unix_nano)
+    image="docker.io/library/nginx:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+    port=$(random_free_port)
+
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+
+    wait_for_file "$pid_file" && sleep 1
+
+    run cedana dump containerd "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+    ctr container delete "$id"
+
+    cedana restore containerd --path "$dump_file" --id "$id"
+
+    # the restored container should still be manageable with the crun binary
+    run crun --root "/run/containerd/runc/default" state "$id"
+    assert_success
+    assert_output --partial "running"
+
+    run ctr task kill "$id"
 }

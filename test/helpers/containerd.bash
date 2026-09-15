@@ -12,8 +12,11 @@ pull_images() {
         exit 1
     fi
 
-    ctr image pull docker.io/library/alpine:latest
-    ctr image pull docker.io/library/nginx:latest
+    # NOTE: --local is required, as the (default) transfer-service pull fails
+    # with "no unpack platforms defined" on containerd 2.x with our config,
+    # and it also does not honor --snapshotter for unpacking
+    ctr image pull --local --snapshotter "$CONTAINERD_SNAPSHOTTER" docker.io/library/alpine:latest
+    ctr image pull --local --snapshotter "$CONTAINERD_SNAPSHOTTER" docker.io/library/nginx:latest
     # Add more images as needed
 }
 

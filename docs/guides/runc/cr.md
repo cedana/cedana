@@ -1,5 +1,9 @@
 # Checkpoint/restore runc
 
+{% hint style="info" %}
+Containers checkpointed or restored with Cedana remain fully manageable with the crun CLI (`runc state`, `runc kill`, `runc delete`, etc.).
+{% endhint %}
+
 ## Prerequisites
 
 1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).

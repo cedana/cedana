@@ -280,6 +280,7 @@ jobs:
       matrix:
         plugin:
           - runc
+          - crun
           - containerd
           - crio
           - storage/cedana
