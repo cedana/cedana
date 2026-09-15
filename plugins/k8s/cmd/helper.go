@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -67,6 +68,12 @@ var setupCmd = &cobra.Command{
 			metrics.Init(ctx, wg, "cedana-helper", version.Version)
 		}
 
+		restorePodIdentityEnv, err := prepareHostPodIdentityEnvironment()
+		if err != nil {
+			return fmt.Errorf("prepare EKS Pod Identity for host daemon: %w", err)
+		}
+		defer restorePodIdentityEnv()
+
 		err = script.Run(
 			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
 			script.Chroot("/host", scripts.ResetService),
@@ -100,6 +107,49 @@ var setupCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// prepareHostPodIdentityEnvironment translates the projected token's
+// container path to the same file under the host kubelet volume. The setup
+// command is about to chroot and start a host systemd service, where the
+// container-only /var/run/secrets path does not exist.
+func prepareHostPodIdentityEnvironment() (restore func(), err error) {
+	restore = func() {}
+	if config.Global.AWS.CredentialsMode != "eksPodIdentity" {
+		return restore, nil
+	}
+
+	const tokenEnv = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE"
+	tokenPath := os.Getenv(tokenEnv)
+	if tokenPath == "" {
+		return restore, fmt.Errorf("%s is not set", tokenEnv)
+	}
+	tokenInfo, err := os.Stat(tokenPath)
+	if err != nil {
+		return restore, fmt.Errorf("stat projected token: %w", err)
+	}
+
+	pattern := "/host/var/lib/kubelet/pods/*/volumes/kubernetes.io~projected/eks-pod-identity-token/eks-pod-identity-token"
+	candidates, err := filepath.Glob(pattern)
+	if err != nil {
+		return restore, fmt.Errorf("find host projected tokens: %w", err)
+	}
+	for _, candidate := range candidates {
+		candidateInfo, statErr := os.Stat(candidate)
+		if statErr != nil || !os.SameFile(tokenInfo, candidateInfo) {
+			continue
+		}
+
+		hostPath := strings.TrimPrefix(candidate, "/host")
+		if err := os.Setenv(tokenEnv, hostPath); err != nil {
+			return restore, fmt.Errorf("set host token path: %w", err)
+		}
+		return func() {
+			_ = os.Setenv(tokenEnv, tokenPath)
+		}, nil
+	}
+
+	return restore, fmt.Errorf("could not map projected token %q to a host kubelet volume", tokenPath)
 }
 
 var destroyCmd = &cobra.Command{
