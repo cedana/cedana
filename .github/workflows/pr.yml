@@ -59,7 +59,7 @@ jobs:
       streamer_version: main
       helm_chart_version: main
       controller_version: main
-      containerd_runtime_version: swarnim/cedana-ver-bump
+      containerd_runtime_version: cedana
       slurm_version: main
 
   publish:
