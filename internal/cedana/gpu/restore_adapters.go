@@ -51,8 +51,15 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			var id string
 
+			singleProc, isSingleProc := gpus.(*ManagerSingleProc)
+
 			if req.GPUID != "" {
 				id = req.GPUID
+			} else if isSingleProc && state.GetGPUID() != "" {
+				// Nothing to attach to since the restored process comes back already running the
+				// library, watching the control path its original ID names.
+				id = state.GetGPUID()
+				singleProc.AdoptOnPID(ctx, pid, id)
 			} else {
 				_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
 				id, err = gpus.Attach(ctx, pid)
@@ -62,7 +69,13 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 				}
 			}
 
-			next = next.With(InheritFilesForRestore, AddMountsForRestore)
+			if isSingleProc {
+				// Nothing to inherit since the controller's shared-memory segment existed to carry
+				// records between two processes, and there is only one now. Still need the device mounts
+				next = next.With(AddMountsForRestore)
+			} else {
+				next = next.With(InheritFilesForRestore, AddMountsForRestore)
+			}
 
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id))

@@ -61,6 +61,7 @@ const (
 	DEFAULT_GPU_DEBUG             = false
 	DEFAULT_GPU_DEDUP_ENABLED     = false
 	DEFAULT_GPU_TEMPLATES_ENABLED = false
+	DEFAULT_GPU_SINGLE_PROCESS    = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -114,6 +115,7 @@ var Global Config = Config{
 		Debug:            DEFAULT_GPU_DEBUG,
 		DedupEnabled:     DEFAULT_GPU_DEDUP_ENABLED,
 		TemplatesEnabled: DEFAULT_GPU_TEMPLATES_ENABLED,
+		SingleProcess:    DEFAULT_GPU_SINGLE_PROCESS,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,

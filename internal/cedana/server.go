@@ -86,8 +86,14 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 
 	pluginManager := plugins.NewLocalManager()
 
-	gpuPoolSize := config.Global.GPU.PoolSize
-	gpuManager, err := gpu.NewPoolManager(ctx, wg, gpuPoolSize, pluginManager)
+	var gpuManager gpu.Manager
+	if config.Global.GPU.SingleProcess {
+		// no pooling needed
+		gpuManager, err = gpu.NewSingleProcManager(ctx, wg, pluginManager)
+	} else {
+		gpuPoolSize := config.Global.GPU.PoolSize
+		gpuManager, err = gpu.NewPoolManager(ctx, wg, gpuPoolSize, pluginManager)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}

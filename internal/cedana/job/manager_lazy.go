@@ -163,9 +163,20 @@ func (m *ManagerLazy) Get(ctx context.Context, jid string) *Job {
 	// trees the request will return on deadline rather than hang the daemon.
 	job.SyncDeep(ctx)
 
-	if !job.GPUEnabled() && m.gpus.IsAttached(job.GetPID()) {
-		job.SetGPUEnabled(true)
-		m.pending <- action{putJob, jid}
+	if m.gpus.IsAttached(job.GetPID()) {
+		changed := false
+		if !job.GPUEnabled() {
+			job.SetGPUEnabled(true)
+			changed = true
+		}
+
+		if id := m.gpus.GetID(job.GetPID()); id != "" && job.GPUID() != id {
+			job.SetGPUID(id)
+			changed = true
+		}
+		if changed {
+			m.pending <- action{putJob, jid}
+		}
 	}
 
 	return job

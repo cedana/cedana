@@ -42,7 +42,13 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 
 	pluginManager := plugins.NewLocalManager()
 
-	gpuManager, err := gpu.NewSimpleManager(ctx, wg, pluginManager)
+	var gpuManager gpu.Manager
+	var err error
+	if config.Global.GPU.SingleProcess {
+		gpuManager, err = gpu.NewSingleProcManager(ctx, wg, pluginManager)
+	} else {
+		gpuManager, err = gpu.NewSimpleManager(ctx, wg, pluginManager)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create GPU manager: %w", err)
 	}

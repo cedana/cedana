@@ -131,6 +131,10 @@ type (
 		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
 		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
+		// SingleProcess runs the GPU engine inside the application process instead of a
+		// separate cedana-gpu-controller. No controller is spawned, and freeze/dump/unfreeze
+		// are driven over a control file the interposed library polls.
+		SingleProcess bool `json:"single_process" key:"single_process" yaml:"single_process" mapstructure:"single_process"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 	}

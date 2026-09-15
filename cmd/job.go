@@ -10,6 +10,7 @@ import (
 	"github.com/xeonx/timeago"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/internal/cedana/gpu"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -30,6 +31,7 @@ func init() {
 	jobCmd.AddCommand(killJobCmd)
 	jobCmd.AddCommand(deleteJobCmd)
 	jobCmd.AddCommand(attachJobCmd)
+	jobCmd.AddCommand(profileJobCmd)
 	jobCmd.AddCommand(inspectJobCmd)
 	jobCmd.AddCommand(jobCheckpointCmd)
 
@@ -438,3 +440,37 @@ var (
 		},
 	}
 )
+
+var profileJobCmd = &cobra.Command{
+	Use:   "profile <JID>",
+	Short: "Ask a running GPU job to write out its CUDA TSC profile",
+	Long: "Every rank writes cedana-tsc-profile-<pid>.log into its GPU log directory.\n" +
+		"The job must have been started with CEDANA_GPU_PROFILING_ENABLED=1.",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: RunningJIDs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+		if !ok {
+			return fmt.Errorf("invalid client in context")
+		}
+
+		jid := args[0]
+		resp, err := client.Get(cmd.Context(), &daemon.GetReq{JID: jid})
+		if err != nil {
+			return err
+		}
+
+		id := resp.GetJob().GetState().GetGPUID()
+		if id == "" {
+			return fmt.Errorf("job %s has no GPU attached, so there is no profile to write", jid)
+		}
+
+		if err := gpu.DumpProfile(cmd.Context(), id); err != nil {
+			return err
+		}
+
+		fmt.Printf("Wrote the TSC profile for job %s. Look for cedana-tsc-profile-*.log in %s\n",
+			jid, gpu.LogDir(id))
+		return nil
+	},
+}

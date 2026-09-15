@@ -59,6 +59,9 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			}
 			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
+			if _, singleProc := gpus.(*ManagerSingleProc); singleProc {
+				ctx = context.WithValue(ctx, keys.GPU_SINGLE_PROC_CONTEXT_KEY, true)
+			}
 
 			code, err = next(ctx, opts, resp, req)
 			if err != nil {
@@ -203,6 +206,12 @@ func ProcessInterception(next types.Run) types.Run {
 
 		req.Env = append(req.Env, "CEDANA_GPU_ID="+id)
 		req.Env = append(req.Env, "CEDANA_GPU_LOG_DIR="+logDir)
+		if singleProc, _ := ctx.Value(keys.GPU_SINGLE_PROC_CONTEXT_KEY).(bool); singleProc {
+			// Run the engine in this process, and tell it where to watch for freeze/dump/
+			// unfreeze. No more controller
+			req.Env = append(req.Env, "CEDANA_GPU_IN_PROCESS=1")
+			req.Env = append(req.Env, "CEDANA_GPU_CONTROL="+ControlPrefix(id))
+		}
 		req.Env = append(req.Env, fmt.Sprintf("LD_PRELOAD=%s:%s", libSymlink, utils.Getenv(req.Env, "LD_PRELOAD")))
 
 		return next(ctx, opts, resp, req)

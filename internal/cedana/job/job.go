@@ -196,6 +196,24 @@ func (j *Job) SetGPUEnabled(enabled bool) {
 	j.proto.State.GPUEnabled = enabled
 }
 
+// SetGPUID records which GPU engine a job is attached to. Written when the job's state is
+// reconciled against the GPU manager
+func (j *Job) SetGPUID(id string) {
+	j.Lock()
+	defer j.Unlock()
+	if j.proto.State == nil {
+		j.proto.State = &daemon.ProcessState{}
+	}
+
+	j.proto.State.GPUID = id
+}
+
+func (j *Job) GPUID() string {
+	j.RLock()
+	defer j.RUnlock()
+	return j.proto.GetState().GetGPUID()
+}
+
 ///////////////
 /// Helpers ///
 ///////////////

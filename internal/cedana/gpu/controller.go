@@ -792,6 +792,10 @@ func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthChec
 /// HELPERS ///
 ///////////////
 
+func LogDir(id string) string {
+	return fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, id)
+}
+
 func EnsureLogDir(id string, uid, gid uint32) (string, error) {
 	dir := fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, id)
 	err := os.MkdirAll(dir, 0o755)
