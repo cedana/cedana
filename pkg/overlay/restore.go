@@ -242,7 +242,9 @@ func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, ma
 				log.Warn().Err(err).Str("path", fullPath).Msg("failed to set ownership")
 			}
 
-			if mode&syscall.S_IFLNK == 0 {
+			// Must be a file-type comparison, not a bitmask test: S_IFLNK
+			// (0120000) shares bits with S_IFREG/S_IFCHR/S_IFBLK/S_IFSOCK
+			if fileType != syscall.S_IFLNK {
 				if err := unix.Chmod(fullPath, mode&0o7777); err != nil {
 					log.Warn().Err(err).Str("path", fullPath).Msg("failed to set permissions")
 				}
