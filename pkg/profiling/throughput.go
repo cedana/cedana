@@ -112,3 +112,20 @@ func (data *Data) updateMinDuration() {
 	}
 	data.MinDuration = int64(minDuration)
 }
+
+func finalizeMeasuredThroughputLimits(data *Data) {
+	if data == nil {
+		return
+	}
+	for _, component := range data.Components {
+		finalizeMeasuredThroughputLimits(component)
+	}
+	if data.Tags[ThroughputSourceTag] != "measured" || data.Duration <= 0 || data.IO <= 0 {
+		return
+	}
+	observedThroughput := int64(math.Ceil(float64(data.IO) * float64(time.Second) / float64(data.Duration)))
+	if observedThroughput > data.MaxThroughput {
+		data.MaxThroughput = observedThroughput
+		data.updateMinDuration()
+	}
+}
