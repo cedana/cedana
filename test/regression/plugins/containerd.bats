@@ -317,7 +317,7 @@ teardown_file() {
 # should detect this and route to the crun plugin, and the restore should
 # recreate the container with the same runtime binary.
 
-# bats test_tags=crun,manage
+# bats test_tags=manage
 @test "manage container (crun runtime)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
@@ -337,7 +337,7 @@ teardown_file() {
     run cedana job kill "$id"
 }
 
-# bats test_tags=crun,dump
+# bats test_tags=dump
 @test "dump container (crun runtime)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
@@ -356,7 +356,7 @@ teardown_file() {
     run ctr task kill "$id"
 }
 
-# bats test_tags=crun,restore
+# bats test_tags=restore
 @test "restore container (crun runtime)" {
     id=$(unix_nano)
     image="docker.io/library/nginx:latest"
