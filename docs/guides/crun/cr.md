@@ -1,6 +1,6 @@
 # Checkpoint/restore crun
 
-{% hint style="info" %}
+{% hint style="success" %}
 crun is CLI-compatible with runc, so checkpoint/restore for crun containers works just like for [runc](../runc/cr.md) containers. Containers checkpointed or restored with Cedana remain fully manageable with the crun CLI (`crun state`, `crun kill`, `crun delete`, etc.).
 {% endhint %}
 

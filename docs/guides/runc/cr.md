@@ -1,7 +1,7 @@
 # Checkpoint/restore runc
 
-{% hint style="info" %}
-Containers checkpointed or restored with Cedana remain fully manageable with the crun CLI (`runc state`, `runc kill`, `runc delete`, etc.).
+{% hint style="success" %}
+Containers checkpointed or restored with Cedana remain fully manageable with the runc CLI (`runc state`, `runc kill`, `runc delete`, etc.).
 {% endhint %}
 
 ## Prerequisites
