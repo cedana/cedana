@@ -282,7 +282,6 @@ jobs:
           - runc
           - crun
           - containerd
-          - crio
           - storage/cedana
           - storage/s3
           - storage/gcs
