@@ -77,7 +77,7 @@ jobs:
   # pinned to the first entry, and the remaining legs are generated here and appended
   # with `include`. Revert the commit that added this to sweep every version again.
   versions:
-    name: Versions
+    name: Slurm Matrix
     runs-on: ubuntu-latest
     outputs:
       compat: ${{ steps.compat.outputs.legs }}
@@ -93,7 +93,12 @@ jobs:
             | map({compute: "CPU", slurm: ., unprivileged: "0", nfs: "no_root_squash"})' \
             <<<"$SLURM_VERSIONS")
           echo "legs=$legs" >> "$GITHUB_OUTPUT"
-          echo "Smoke-testing: $(jq -c '[.[].slurm]' <<<"$legs")"
+
+          # What the matrix below will run, so it is visible without reading job names.
+          echo "Swept in full (every compute/unprivileged/NFS combination):"
+          jq -r '.[0] | "  \(.)"' <<<"$SLURM_VERSIONS"
+          echo "Smoke-tested (one CPU leg each):"
+          jq -r '.[] | "  \(.slurm)"' <<<"$legs"
 
   slurm-ansible:
     name: Slurm (Ansible)
