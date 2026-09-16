@@ -97,12 +97,18 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create job manager: %w", err)
 	}
+	storageCalibrator := measurements.NewStorageCalibrator(0, 0)
+	if path := config.Global.Checkpoint.Dir; path != "" && !strings.Contains(path, "://") {
+		if _, err := storageCalibrator.Calibrate(ctx, path); err != nil {
+			log.Debug().Err(err).Str("path", path).Msg("default storage calibration unavailable")
+		}
+	}
 
 	server = &Server{
 		Cedana: Cedana{
 			gpus:              gpuManager,
 			plugins:           pluginManager,
-			storageCalibrator: measurements.NewStorageCalibrator(0, 0),
+			storageCalibrator: storageCalibrator,
 			wg:                wg,
 			lifetime:          ctx,
 		},
