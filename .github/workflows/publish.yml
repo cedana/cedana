@@ -271,6 +271,7 @@ jobs:
             "storage/cedana"
             "storage/s3"
             "storage/gcs"
+            "storage/csx"
           )
 
           PIDS=()
@@ -535,6 +536,7 @@ jobs:
             "libcedana-storage-cedana.so"
             "libcedana-storage-gcs.so"
             "libcedana-storage-s3.so"
+            "libcedana-storage-csx.so"
           )
 
           if [[ -n "${PREVIOUS_TAG}" ]]; then
@@ -581,6 +583,7 @@ jobs:
             "libcedana-storage-cedana.so"
             "libcedana-storage-gcs.so"
             "libcedana-storage-s3.so"
+            "libcedana-storage-csx.so"
           )
 
           for FILE in "${PLUGINS[@]}"; do
