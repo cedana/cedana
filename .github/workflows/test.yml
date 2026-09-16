@@ -339,7 +339,7 @@ jobs:
         run: |
           make install
           # Plugins below are used across multiple tests, so install them always
-          sudo -E criu storage/cedana storage/s3 storage/gcs
+          sudo -E cedana plugin install criu storage/cedana storage/s3 storage/gcs
           sudo -E cedana plugin install ${{ matrix.plugin }}
           if [ "${{ matrix.plugin }}" = "containerd" ]; then
             sudo -E cedana plugin install runc crun containerd/runtime-runc
