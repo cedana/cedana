@@ -19,7 +19,7 @@ const (
 	DefaultBenchmarkPath                = "/tmp/cedana-measure"
 	DefaultBenchmarkSamples             = 3
 	memoryBenchmarkMaxAvailableFraction = 2
-	storageCalibrationSizeGB            = 0.0001
+	storageCalibrationSizeGB            = 1
 )
 
 const (

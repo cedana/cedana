@@ -89,8 +89,6 @@ func Clean(data *Data) {
 
 // Print prints the profiling data in a very readable format.
 func Print(data *Data, categoryColors ...map[string]text.Colors) {
-	finalizeMeasuredThroughputLimits(data)
-
 	var totalDuration time.Duration
 	var totalIO int64
 

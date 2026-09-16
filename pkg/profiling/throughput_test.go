@@ -95,40 +95,6 @@ func TestStorageTransferUsesCurrentProfileComponent(t *testing.T) {
 	}
 }
 
-func TestMeasuredMinDurationDoesNotExceedObservedDuration(t *testing.T) {
-	data := &Data{
-		Duration:      (1 * time.Second).Nanoseconds(),
-		IO:            250,
-		MaxThroughput: 100,
-		MinDuration:   (2500 * time.Millisecond).Nanoseconds(),
-		Tags:          map[string]string{ThroughputSourceTag: "measured"},
-	}
-
-	finalizeMeasuredThroughputLimits(data)
-
-	if data.MinDuration != data.Duration {
-		t.Fatalf("min duration = %s, want observed duration %s", time.Duration(data.MinDuration), time.Duration(data.Duration))
-	}
-	if data.MaxThroughput != 250 {
-		t.Fatalf("max throughput = %d, want observed 250", data.MaxThroughput)
-	}
-}
-
-func TestTheoreticalMinDurationIsNotCapped(t *testing.T) {
-	data := &Data{
-		Duration:    (1 * time.Second).Nanoseconds(),
-		IO:          250,
-		MinDuration: (2500 * time.Millisecond).Nanoseconds(),
-		Tags:        map[string]string{ThroughputSourceTag: "theoretical"},
-	}
-
-	finalizeMeasuredThroughputLimits(data)
-
-	if data.MinDuration != (2500 * time.Millisecond).Nanoseconds() {
-		t.Fatalf("min duration = %s", time.Duration(data.MinDuration))
-	}
-}
-
 func TestThroughputFieldsRoundTrip(t *testing.T) {
 	data := &Data{
 		IO:            250,

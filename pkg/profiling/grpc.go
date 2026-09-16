@@ -49,7 +49,6 @@ func AttachTrailer(ctx context.Context) error {
 
 	Clean(data)
 	Flatten(data)
-	finalizeMeasuredThroughputLimits(data)
 
 	var md metadata.MD
 	md, ok = metadata.FromOutgoingContext(ctx)
