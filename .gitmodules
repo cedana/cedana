@@ -2,3 +2,7 @@
 	path = plugins/runc
 	url = git@github.com:cedana/cedana-runc.git
 	branch = main
+[submodule "plugins/crun"]
+	path = plugins/crun
+	url = git@github.com:cedana/cedana-crun.git
+	branch = main

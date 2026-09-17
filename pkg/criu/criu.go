@@ -1,6 +1,7 @@
 package criu
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,8 +11,10 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/utils"
@@ -105,6 +108,72 @@ func (c *Criu) Cleanup() error {
 	return errors.Join(errs...)
 }
 
+// externalsToConfig moves opts.External into a CRIU config file, so the external
+// list never counts against the RPC socket's per-message size limit (the kernel
+// rejects a seqpacket message larger than sk_sndbuf-32, ~208 KiB by default). CRIU
+// appends config-file externals to the RPC ones; keys its parser can't represent
+// (it strips at '#', splits on whitespace) stay inline. Returns the file to remove.
+func externalsToConfig(opts *criu.CriuOpts) (string, error) {
+	if len(opts.External) == 0 {
+		return "", nil
+	}
+	f, err := os.CreateTemp("", "cedana-criu-external-*.conf")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var buf bytes.Buffer
+	if prev := opts.GetConfigFile(); prev != "" {
+		b, err := os.ReadFile(prev)
+		if err != nil {
+			return f.Name(), fmt.Errorf("read CRIU config file %s: %w", prev, err)
+		}
+		buf.Write(b)
+		if len(b) > 0 && b[len(b)-1] != '\n' {
+			buf.WriteByte('\n')
+		}
+	}
+
+	inline := opts.External[:0]
+	for _, k := range opts.External {
+		if configSafe(k) {
+			fmt.Fprintf(&buf, "external %s\n", k)
+		} else {
+			inline = append(inline, k)
+		}
+	}
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		return f.Name(), err
+	}
+
+	opts.External = inline
+	opts.ConfigFile = proto.String(f.Name())
+	return f.Name(), nil
+}
+
+func configSafe(key string) bool {
+	return key != "" &&
+		!strings.ContainsAny(key, "#\"\\") &&
+		!strings.ContainsFunc(key, unicode.IsSpace) &&
+		!strings.ContainsFunc(key, unicode.IsControl)
+}
+
+// dedupe removes duplicate keys, keeping first-seen order. Adapters walk the whole
+// process tree, so the same mount/file key shows up once per process.
+func dedupe(keys []string) []string {
+	seen := make(map[string]struct{}, len(keys))
+	out := keys[:0]
+	for _, k := range keys {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	return out
+}
+
 func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn int, err error) {
 	cln := c.swrkSk
 
@@ -114,6 +183,9 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 		wrote, _, err = cln.WriteMsgUnix(reqB, nil, nil)
 		if err == nil && wrote == len(reqB) {
 			break
+		}
+		if errors.Is(err, syscall.EMSGSIZE) {
+			return nil, 0, nil, 0, fmt.Errorf("CRIU request (%d bytes) exceeds the socket send buffer: %w", len(reqB), err)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -231,7 +303,23 @@ func (c *Criu) doSwrkWithResp(
 		}
 	}
 
+	if opts != nil {
+		opts.External = dedupe(opts.External)
+		cfgPath, err := externalsToConfig(opts)
+		if cfgPath != "" {
+			defer os.Remove(cfgPath)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for {
+		// Notify replies (query-ext-files) carry only the post-seize delta,
+		// so they stay inline.
+		if req.Opts != nil {
+			req.Opts.External = dedupe(req.Opts.External)
+		}
 		reqB, err := proto.Marshal(&req)
 		if err != nil {
 			return nil, err

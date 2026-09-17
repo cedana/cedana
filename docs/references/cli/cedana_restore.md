@@ -14,7 +14,7 @@ Restore a container/process
   -h, --help               help for restore
       --leave-stopped      leave the process stopped after restore
       --link-remap         remap links to invisible files during restore
-      --no-server          select how to run restores
+      --no-server          run without server
   -o, --out string         log path to forward stdout/err
   -p, --path string        path of dump
       --pid-file string    file to write PID to
@@ -26,17 +26,21 @@ Restore a container/process
 ### Options inherited from parent commands
 
 ```
-      --address string      address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)
-      --config string       one-time config JSON string (merge with existing config)
-      --config-dir string   custom config directory
-      --profiling           enable profiling/show profiling data
-      --protocol string     protocol to use (TCP, UNIX, VSOCK)
+      --address string          address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)
+      --config string           one-time config JSON string (merge with existing config)
+      --config-dir string       custom config directory
+      --init-config             initialize config file with defaults and env var overrides
+      --merge-config            same as --init-config but does not overwrite existing config file, only merges new values into it
+      --profiling               enable profiling/show profiling data
+      --profiling-path string   path to write profiling JSON to (if enabled)
+      --protocol string         protocol to use (TCP, UNIX, VSOCK)
 ```
 
 ### SEE ALSO
 
 * [cedana](cedana.md)	 - Root command for Cedana
 * [cedana restore containerd](cedana_restore_containerd.md)	 - Restore a containerd container
+* [cedana restore crun](cedana_restore_crun.md)	 - Restore a crun container
 * [cedana restore job](cedana_restore_job.md)	 - Restore a managed process/container (job)
 * [cedana restore process](cedana_restore_process.md)	 - Restore a process
 * [cedana restore runc](cedana_restore_runc.md)	 - Restore a runc container

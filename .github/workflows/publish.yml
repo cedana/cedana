@@ -250,6 +250,7 @@ jobs:
 
           PLUGINS=(
             "runc"
+            "crun"
             "containerd"
             "crio"
             "kata"
@@ -516,6 +517,7 @@ jobs:
             "libcedana-cloud-hypervisor.so"
             "libcedana-containerd.so"
             "libcedana-crio.so"
+            "libcedana-crun.so"
             "libcedana-k8s.so"
             "libcedana-kata.so"
             "libcedana-runc.so"
@@ -562,6 +564,7 @@ jobs:
             "libcedana-cloud-hypervisor.so"
             "libcedana-containerd.so"
             "libcedana-crio.so"
+            "libcedana-crun.so"
             "libcedana-k8s.so"
             "libcedana-kata.so"
             "libcedana-runc.so"
@@ -585,35 +588,12 @@ jobs:
             fi
           done
 
-      - name: Get release info
-        id: release-info
-        uses: pozetroninc/github-action-get-latest-release@master
-        with:
-          token: ${{ github.token }}
-          excludes: draft
-          repository: ${{ github.repository }}
-
-      - name: Generate summary
-        id: summary
-        env:
-          RELEASE_TITLE: "cedana"
-          RELEASE_DESCRIPTION: "**${{ steps.tag.outputs.tag }}**"
-          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
-          RELEASE_BODY: "${{ steps.release-info.outputs.description }}"
-          TAG: ${{ steps.tag.outputs.tag }}
-          BINARIES_DIR: current
-          PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
-          PREVIOUS_BINARIES_DIR: previous
-        run: |
-          echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
-          echo "slack-summary=$(scripts/ci/release-summary-slack)" >> $GITHUB_OUTPUT
-
       - name: Post summary
-        id: slack-patch
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        uses: cedana/cedana-publish-summary@v1
         with:
-          payload: |
-            ${{ steps.summary.outputs.slack-summary }}
+          title: cedana
+          tag: ${{ steps.tag.outputs.tag }}
+          previous-tag: ${{ steps.previous-tag.outputs.tag }}
+          binaries-dir: current
+          previous-binaries-dir: previous
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
