@@ -279,9 +279,13 @@ func addGPUWorkerTimingRowToProfiling(ctx context.Context, row gpuWorkerTimingRo
 	profiling.MarkIORedundant(functionCtx)
 }
 
-func addGPUWorkerTimingRowsToProfiling(ctx context.Context, rows []gpuWorkerTimingRow, limit *profiling.ThroughputLimit) {
+func addGPUWorkerTimingRowsToProfiling(ctx context.Context, rows []gpuWorkerTimingRow, profile *gpu_proto.GpuProfile, phaseName string) {
 	stats := gpuWorkerDurationStats(rows)
 	for _, row := range rows {
+		var limit *profiling.ThroughputLimit
+		if phaseName == "gpu_memory" {
+			limit = gpuHostDeviceLimit(profile, row.worker.GetGPUDevice())
+		}
 		addGPUWorkerTimingRowToProfiling(ctx, row, stats, limit)
 	}
 }
@@ -293,7 +297,6 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 
 	workers := gpuSortedWorkers(profile)
 	displayNames := gpuPhaseDisplayNames(profile)
-	hostDeviceLimit := gpuHostDeviceLimit(profile)
 
 	for _, phaseName := range gpuProfilePhaseOrder(profile, workers) {
 		displayName := displayNames[phaseName]
@@ -301,20 +304,20 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 			displayName = phaseName
 		}
 
-		var limit *profiling.ThroughputLimit
-		if phaseName == "gpu_memory" {
-			limit = hostDeviceLimit
-		}
-		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName), limit)
+		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName), profile, phaseName)
 	}
 
-	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers), nil)
+	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers), profile, "")
 }
 
-func gpuHostDeviceLimit(profile *gpu_proto.GpuProfile) *profiling.ThroughputLimit {
+func gpuHostDeviceLimit(profile *gpu_proto.GpuProfile, device string) *profiling.ThroughputLimit {
+	if device == "" {
+		return nil
+	}
+
 	var result *profiling.ThroughputLimit
 	for _, limit := range profile.GetTheoreticalLimits() {
-		if limit.GetName() != "gpu_host_device_link" || limit.GetUnit() != "bytes_per_second" || limit.GetValue() > math.MaxInt64 {
+		if limit.GetName() != "gpu_host_device_link" || limit.GetUnit() != "bytes_per_second" || limit.GetDevice() != device || limit.GetValue() > math.MaxInt64 {
 			continue
 		}
 		if result != nil {
