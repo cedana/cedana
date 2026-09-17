@@ -35,6 +35,11 @@ on:
         description: "Run slurm tests"
         required: false
         default: true
+      slurm_versions:
+        type: string
+        description: "SLURM versions to test, from download.yml's output (JSON array)"
+        required: false
+        default: ""
       parallelism:
         type: number
         description: "Parallelism for running tests"
@@ -527,10 +532,12 @@ jobs:
   slurm:
     name: Slurm
     uses: ./.github/workflows/test_slurm.yml
-    if: ${{ inputs.slurm }}
+    # Empty means download's slurm job was skipped, so there are no artifacts to test.
+    if: ${{ inputs.slurm && inputs.slurm_versions != '' }}
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
+      slurm_versions: ${{ inputs.slurm_versions }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}

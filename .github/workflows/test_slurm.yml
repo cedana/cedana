@@ -45,16 +45,10 @@ on:
         description: "Post test summary"
         required: false
         default: false
-      slurm_artifact:
+      slurm_versions:
         type: string
-        description: "Name of the slurm binaries artifact to download"
-        required: false
-        default: "slurm"
-      slurm_default_version:
-        type: string
-        description: "SLURM version tag used by the single-version jobs"
-        required: false
-        default: "25-11-5-1"
+        description: "SLURM versions to test, from cedana-slurm's slurm-versions (JSON array)"
+        required: true
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -71,6 +65,41 @@ env:
   DEBUG: 0
 
 jobs:
+  # Restricts how much of the matrix below actually runs. Sweeping every SLURM version
+  # across every option costs more than the SLURM tests are currently fast enough to
+  # afford, so only the first entry of cedana-slurm's slurm-versions is swept in full
+  # and every other version gets a single CPU leg. That first entry is also what
+  # cedana-slurm publishes as latest, so the swept version is the one users get.
+  #
+  # This needs a job because there is no way to express it in matrix syntax: `exclude`
+  # entries must be literal YAML, so they cannot say "every version except the first"
+  # when the version list only exists at runtime. Instead the `slurm` dimension below is
+  # pinned to the first entry, and the remaining legs are generated here and appended
+  # with `include`. Revert the commit that added this to sweep every version again.
+  versions:
+    name: Slurm Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      compat: ${{ steps.compat.outputs.legs }}
+    steps:
+      - name: List versions to smoke-test
+        id: compat
+        env:
+          SLURM_VERSIONS: ${{ inputs.slurm_versions }}
+        run: |
+          set -euo pipefail
+          # Everything after the first entry, which the matrix below sweeps in full.
+          legs=$(jq -c '.[1:]
+            | map({compute: "CPU", slurm: ., unprivileged: "0", nfs: "no_root_squash"})' \
+            <<<"$SLURM_VERSIONS")
+          echo "legs=$legs" >> "$GITHUB_OUTPUT"
+
+          # What the matrix below will run, so it is visible without reading job names.
+          echo "Swept in full (every compute/unprivileged/NFS combination):"
+          jq -r '.[0] | "  \(.)"' <<<"$SLURM_VERSIONS"
+          echo "Smoke-tested (one CPU leg each):"
+          jq -r '.[] | "  \(.slurm)"' <<<"$legs"
+
   slurm-ansible:
     name: Slurm (Ansible)
     runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
@@ -111,7 +140,7 @@ jobs:
       - name: Download slurm binaries
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.slurm_artifact }}-${{ inputs.slurm_default_version }}-amd64
+          name: ${{ fromJSON(inputs.slurm_versions)[0] }}-amd64
           path: slurm-bin
 
       - name: Extract cedana-slurm
@@ -275,6 +304,7 @@ jobs:
 
   slurm:
     name: Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }})
+    needs: versions
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-amd64{2}/tag=slurm-{3}/extras=s3-cache',
       github.run_id,
@@ -289,12 +319,9 @@ jobs:
         compute:
           - CPU
           - CUDA
+        # Swept version: the first entry. The `versions` job appends the rest below.
         slurm:
-          - 25-11-5-1
-          - 25-05-8-1
-          - 25-05-6-1
-          - 24-11-5-1
-          - 23-11-7-1
+          - ${{ fromJSON(inputs.slurm_versions)[0] }}
         unprivileged:
           - "0"
           - "1"
@@ -302,34 +329,10 @@ jobs:
           - root_squash
           - no_root_squash
         exclude:
-          # Non-default versions sweep on CPU only, privileged, no root_squash;
-          # the default version carries the GPU, unprivileged and squash legs.
-          - compute: CUDA
-            slurm: 25-05-8-1
-          - compute: CUDA
-            slurm: 25-05-6-1
-          - compute: CUDA
-            slurm: 24-11-5-1
-          - compute: CUDA
-            slurm: 23-11-7-1
-          - unprivileged: "1"
-            slurm: 25-05-8-1
-          - unprivileged: "1"
-            slurm: 25-05-6-1
-          - unprivileged: "1"
-            slurm: 24-11-5-1
-          - unprivileged: "1"
-            slurm: 23-11-7-1
-          - nfs: root_squash
-            slurm: 25-05-8-1
-          - nfs: root_squash
-            slurm: 25-05-6-1
-          - nfs: root_squash
-            slurm: 24-11-5-1
-          - nfs: root_squash
-            slurm: 23-11-7-1
           - compute: CUDA
             nfs: root_squash
+        # One CPU leg for each remaining version, from the `versions` job.
+        include: ${{ fromJSON(needs.versions.outputs.compat) }}
     container:
       image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
@@ -366,7 +369,7 @@ jobs:
       - name: Download slurm binaries
         uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.slurm_artifact }}-${{ matrix.slurm }}-amd64
+          name: ${{ matrix.slurm }}-amd64
           path: slurm-bin
 
       - name: Extract cedana-slurm
@@ -505,8 +508,8 @@ jobs:
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
 
-          # 25-11-5-1 -> 25.11.5, the version the ansible role builds.
-          export SLURM_VERSION="$(echo '${{ matrix.slurm }}' | sed 's/-[0-9]*$//; s/-/./g')"
+          # slurm-25-11-5-1 -> 25.11.5, the version the ansible role builds from source.
+          export SLURM_VERSION="$(echo '${{ matrix.slurm }}' | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
 
           setup_slurm_cluster
           setup_slurm_accounting
