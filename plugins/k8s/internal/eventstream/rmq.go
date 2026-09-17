@@ -226,7 +226,6 @@ func (es *EventStream) StartDeleteConsumer(ctx context.Context) error {
 	consumer, err := rabbitmq.NewConsumer(
 		conn,
 		queueName,
-		rabbitmq.WithConsumerOptionsExchangeDurable,
 		rabbitmq.WithConsumerOptionsConcurrency(1),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_delete_helper"),
 	)
