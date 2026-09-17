@@ -39,6 +39,7 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ github.ref }}
+      slurm_versions: ${{ needs.download.outputs.slurm_versions }}
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug }}
       large: true # include large tests
       runner: 8cpu # use larger runner
