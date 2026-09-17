@@ -198,7 +198,9 @@ jobs:
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
 
-          NODE_IMAGE="cedana/cedana-slurm-node:slurm-${{ inputs.slurm_default_version }}"
+          SLURM_TAG="${{ fromJSON(inputs.slurm_versions)[0] }}"
+          export SLURM_VERSION="$(echo "$SLURM_TAG" | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
+          NODE_IMAGE="cedana/cedana-slurm-node:${SLURM_TAG}"
           if docker pull "$NODE_IMAGE" >/dev/null 2>&1; then
             export SLURM_BASE_IMAGE="$NODE_IMAGE"
             echo "Using prebaked node image $NODE_IMAGE"
@@ -520,7 +522,7 @@ jobs:
           # slurm-25-11-5-1 -> 25.11.5, the version the ansible role builds from source.
           export SLURM_VERSION="$(echo '${{ matrix.slurm }}' | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
 
-          NODE_IMAGE="cedana/cedana-slurm-node:slurm-${{ matrix.slurm }}"
+          NODE_IMAGE="cedana/cedana-slurm-node:${{ matrix.slurm }}"
           if docker pull "$NODE_IMAGE" >/dev/null 2>&1; then
             export SLURM_BASE_IMAGE="$NODE_IMAGE"
             echo "Using prebaked node image $NODE_IMAGE"
