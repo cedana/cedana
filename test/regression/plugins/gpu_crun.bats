@@ -39,14 +39,14 @@ teardown_file() {
 ### Run ###
 ###########
 
-@test "[$GPU_INFO] run GPU container (non-GPU binary)" {
+@test "[$GPU_INFO] run GPU container (crun, non-GPU binary)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle_cuda "echo hello")"
 
     debug cedana run crun --bundle "$bundle" --jid "$jid" --gpu-enabled --attach
 }
 
-@test "[$GPU_INFO] run GPU container (GPU binary)" {
+@test "[$GPU_INFO] run GPU container (crun, GPU binary)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy")"
 
@@ -54,7 +54,7 @@ teardown_file() {
 }
 
 # bats test_tags=serverless
-@test "[$GPU_INFO] run GPU container (GPU binary, without daemon)" {
+@test "[$GPU_INFO] run GPU container (crun, GPU binary, without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy")"
 
@@ -66,7 +66,7 @@ teardown_file() {
 ############
 
 # bats test_tags=dump
-@test "[$GPU_INFO] dump GPU container (non-GPU binary)" {
+@test "[$GPU_INFO] dump GPU container (crun, non-GPU binary)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle_cuda "date-loop.sh")"
 
@@ -81,7 +81,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump
-@test "[$GPU_INFO] dump GPU container (vector add)" {
+@test "[$GPU_INFO] dump GPU container (crun, vector add)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
@@ -96,7 +96,7 @@ teardown_file() {
 }
 
 # bats test_tags=dump,hostmem
-@test "[$GPU_INFO] dump GPU container (vector add hostmem)" {
+@test "[$GPU_INFO] dump GPU container (crun, vector add hostmem)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
 
@@ -110,9 +110,8 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-
 # bats test_tags=dump
-@test "[$GPU_INFO] dump GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] dump GPU container (crun, mem throughput saxpy)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
@@ -131,7 +130,7 @@ teardown_file() {
 ###############
 
 # bats test_tags=restore
-@test "[$GPU_INFO] restore GPU container (non-GPU binary)" {
+@test "[$GPU_INFO] restore GPU container (crun, non-GPU binary)" {
     jid=$(unix_nano)
     bundle="$(create_workload_bundle_cuda "date-loop.sh")"
 
@@ -156,7 +155,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "[$GPU_INFO] restore GPU container (vector add)" {
+@test "[$GPU_INFO] restore GPU container (crun, vector add)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add")"
 
@@ -181,7 +180,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore,hostmem
-@test "[$GPU_INFO] restore GPU container (vector add hostmem)" {
+@test "[$GPU_INFO] restore GPU container (crun, vector add hostmem)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
 
@@ -206,7 +205,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore,crcr,hostmem
-@test "[$GPU_INFO] restore->dump->restore GPU container (vector add hostmem)" {
+@test "[$GPU_INFO] restore->dump->restore GPU container (crun, vector add hostmem)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/vector_add_host")"
 
@@ -238,7 +237,7 @@ teardown_file() {
 }
 
 # bats test_tags=restore
-@test "[$GPU_INFO] restore GPU container (mem throughput saxpy)" {
+@test "[$GPU_INFO] restore GPU container (crun, mem throughput saxpy)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
@@ -263,11 +262,11 @@ teardown_file() {
 }
 
 # bats test_tags=restore,serverless
-@test "[$GPU_INFO] restore GPU container (mem throughput saxpy, without daemon)" {
+@test "[$GPU_INFO] restore GPU container (crun, mem throughput saxpy, without daemon)" {
     jid=$(unix_nano)
     bundle="$(create_samples_workload_bundle_cuda "gpu_smr/mem-throughput-saxpy-loop")"
 
-    debug cedana run crun --bundle "$bundle" --gpu-enabled --no-server --detach "$jid" > /dev/null 2>&1 < /dev/null
+    debug cedana run crun --bundle "$bundle" --gpu-enabled --no-server --detach "$jid" >/dev/null 2>&1 </dev/null
 
     sleep 1
 
