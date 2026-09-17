@@ -45,6 +45,17 @@ func CreateContainer(next types.Run) types.Run {
 				return nil, status.Errorf(codes.Internal, "failed to get image: %v", err)
 			}
 
+			// Ensure the image is unpacked for the snapshotter in use
+			unpacked, err := image.IsUnpacked(ctx, details.Snapshotter)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to check if image is unpacked: %v", err)
+			}
+			if !unpacked {
+				if err := image.Unpack(ctx, details.Snapshotter); err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to unpack image for snapshotter %s: %v", details.Snapshotter, err)
+				}
+			}
+
 			specOpts := []oci.SpecOpts{
 				oci.WithImageConfig(image),
 				oci.WithHostNamespace(specs.NetworkNamespace),
@@ -102,8 +113,10 @@ func CreateContainer(next types.Run) types.Run {
 				ctx,
 				details.ID,
 				containerd.WithImage(image),
-				containerd.WithNewSnapshot(details.ID, image),
+				// NOTE: snapshotter must be set before the new snapshot is
+				// created, else it's created in the default snapshotter
 				containerd.WithSnapshotter(details.Snapshotter),
+				containerd.WithNewSnapshot(details.ID, image),
 				containerd.WithNewSpec(specOpts...),
 				containerd.WithRuntime(newRuntime, &options.Options{}),
 			)
