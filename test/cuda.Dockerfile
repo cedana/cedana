@@ -8,6 +8,7 @@ LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 ARG GO_VERSION=1.25.1
 ARG KUBECTL_VERSION=1.33.0
 ARG K9S_VERSION=latest
+ARG CRUN_VERSION=1.28
 
 # install packages
 RUN <<EOT
@@ -23,6 +24,26 @@ apt-get update
 for pkg in $APT_PACKAGES; do
     apt-get install -y --no-install-recommends $pkg || echo "failed to install $pkg" >&2
 done
+EOT
+
+# install crun
+RUN <<EOT
+set -eux
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)
+        CRUN_ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        CRUN_ARCH="arm64"
+        ;;
+    *)
+        echo "Unsupported architecture for crun: $ARCH"
+        exit 1
+        ;;
+esac
+wget -q https://github.com/containers/crun/releases/download/${CRUN_VERSION}/crun-${CRUN_VERSION}-linux-"${CRUN_ARCH}" -O /usr/local/bin/crun
+chmod +x /usr/local/bin/crun
 EOT
 
 # Install NVIDIA container toolkit
@@ -180,6 +201,10 @@ snapshotter = "native"
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
           runtime_type = "io.containerd.runc.v2"
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.crun]
+          runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.crun.options]
+            BinaryName = "crun"
 CONFIG
 nvidia-ctk runtime configure --runtime=containerd
 EOT

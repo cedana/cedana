@@ -84,7 +84,7 @@ func AddExternalMountsForDump(next types.Dump) types.Dump {
 
 		pid := state.PID
 		opts.CRIUCallback.Include(&criu.NotifyCallback{
-			Name: "gpu external mounts",
+			Name: "external-files",
 			QueryExtFilesFunc: func(ctx context.Context) ([]string, error) {
 				frozen := &daemon.ProcessState{}
 				if err := utils.FillProcessState(ctx, pid, frozen, true); err != nil {
