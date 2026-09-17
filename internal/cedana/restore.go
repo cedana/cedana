@@ -34,7 +34,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
 
-		pluginRestoreStorage(s.storageCalibrator), // detects and plugs in the storage to use
+		pluginRestoreStorage(s.storageCalibrator, s.storageObservedThroughput), // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
@@ -90,7 +90,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
 
-		pluginRestoreStorage(s.storageCalibrator), // detects and plugs in the storage to use
+		pluginRestoreStorage(s.storageCalibrator, s.storageObservedThroughput), // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
@@ -159,7 +159,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 // Detects and plugs in the storage to use from the specified path,
 // If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
-func pluginRestoreStorage(calibrator *measurements.StorageCalibrator) types.Adapter[types.Restore] {
+func pluginRestoreStorage(calibrator *measurements.StorageCalibrator, observed *profiling.ObservedThroughputCache) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			dir := req.GetPath()
@@ -193,6 +193,14 @@ func pluginRestoreStorage(calibrator *measurements.StorageCalibrator) types.Adap
 						Direction:     "read",
 					})
 				}
+			}
+			if resource := storageObservedResource(storage, dir, "read"); resource != "" {
+				ctx = profiling.WithObservedThroughput(ctx, observed, resource, "read")
+				defer func() {
+					if err == nil {
+						profiling.RecordObservedThroughput(ctx)
+					}
+				}()
 			}
 			streams, err := streamer.IsStreamable(ctx, storage, dir)
 			if err != nil {

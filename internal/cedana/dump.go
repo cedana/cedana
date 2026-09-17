@@ -3,6 +3,8 @@ package cedana
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"path"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -36,7 +38,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
 
-		pluginDumpStorage(s.storageCalibrator), // detects and plugs in the storage to use
+		pluginDumpStorage(s.storageCalibrator, s.storageObservedThroughput), // detects and plugs in the storage to use
 		pluginDumpMiddleware,                   // middleware from plugins
 
 		// By now we should have the PID
@@ -88,7 +90,7 @@ func (s *Cedana) Dump(req *daemon.DumpReq) (*daemon.DumpResp, error) {
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
 
-		pluginDumpStorage(s.storageCalibrator), // detects and plugs in the storage to use
+		pluginDumpStorage(s.storageCalibrator, s.storageObservedThroughput), // detects and plugs in the storage to use
 		pluginDumpMiddleware,                   // middleware from plugins
 
 		// By now we should have the PID
@@ -164,7 +166,7 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 // Detects and plugs in the storage to use from the specified path,
 // If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
-func pluginDumpStorage(calibrator *measurements.StorageCalibrator) types.Adapter[types.Dump] {
+func pluginDumpStorage(calibrator *measurements.StorageCalibrator, observed *profiling.ObservedThroughputCache) types.Adapter[types.Dump] {
 	return func(next types.Dump) types.Dump {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 			dir := req.GetDir()
@@ -208,6 +210,15 @@ func pluginDumpStorage(calibrator *measurements.StorageCalibrator) types.Adapter
 				return nil, status.Error(codes.InvalidArgument, "A minimum of 2 streams are required for streaming. Specify 0 to disable streaming.")
 			}
 
+			if resource := storageObservedResource(storage, dir, "write"); resource != "" {
+				ctx = profiling.WithObservedThroughput(ctx, observed, resource, "write")
+				defer func() {
+					if err == nil {
+						profiling.RecordObservedThroughput(ctx)
+					}
+				}()
+			}
+
 			filesystem := filesystem.DumpFilesystem
 			if streams > 1 {
 				filesystem = streamer.DumpFilesystem(streams)
@@ -216,6 +227,28 @@ func pluginDumpStorage(calibrator *measurements.StorageCalibrator) types.Adapter
 			return next.With(filesystem)(ctx, opts, resp, req)
 		}
 	}
+}
+
+func storageObservedResource(storage io.Storage, location, direction string) string {
+	if storage == nil || !storage.IsRemote() {
+		return ""
+	}
+
+	target, err := url.Parse(location)
+	if err != nil || target.Scheme == "" || target.Host == "" {
+		return ""
+	}
+	target.User = nil
+	target.RawQuery = ""
+	target.ForceQuery = false
+	target.Fragment = ""
+	target.RawFragment = ""
+	target.RawPath = ""
+	target.Path = path.Clean("/" + strings.TrimPrefix(target.Path, "/"))
+	if direction == "read" {
+		target.Path = path.Dir(target.Path)
+	}
+	return target.String()
 }
 
 // Detects and returns the plugin-specific dump handler, if implemented by the

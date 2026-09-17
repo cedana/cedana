@@ -12,6 +12,14 @@ import (
 	"github.com/cedana/cedana/pkg/keys"
 )
 
+type nopWriteCloser struct {
+	io.Writer
+}
+
+func (nopWriteCloser) Close() error {
+	return nil
+}
+
 func TestThroughputLimitDerivesMinDuration(t *testing.T) {
 	data := &Data{}
 	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
@@ -95,12 +103,66 @@ func TestStorageTransferUsesCurrentProfileComponent(t *testing.T) {
 	}
 }
 
+func TestObservedThroughputAppliesToStorageCategory(t *testing.T) {
+	cache := NewObservedThroughputCache(0, time.Minute)
+	cache.record(observedThroughputKey{
+		resource:  "s3://checkpoints/prod",
+		direction: "write",
+		shape:     "upload",
+	}, 100, int64(time.Second))
+
+	data := &Data{}
+	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
+	ctx = WithObservedThroughput(ctx, cache, "s3://checkpoints/prod", "write")
+	var rawWriter io.WriteCloser = nopWriteCloser{Writer: io.Discard}
+	writer := IOCategory(ctx, rawWriter, "storage", "upload")
+	if _, err := writer.Write(make([]byte, 25)); err != nil {
+		t.Fatal(err)
+	}
+
+	component := data.Components[0].Components[0]
+	if component.ObservedThroughput != 100 || component.ObservedDuration != (250*time.Millisecond).Nanoseconds() {
+		t.Fatalf("component = %#v", component)
+	}
+	if component.Tags[ObservedResourceTag] != "s3://checkpoints/prod" || component.Tags[ObservedDirectionTag] != "write" {
+		t.Fatalf("tags = %#v", component.Tags)
+	}
+}
+
+func TestObservedThroughputRecordsSuccessfulComponents(t *testing.T) {
+	cache := NewObservedThroughputCache(0, time.Minute)
+	data := &Data{Components: []*Data{{
+		Name:     "upload",
+		Duration: int64(time.Second),
+		IO:       100,
+		Tags: map[string]string{
+			ObservedResourceTag:  "s3://checkpoints/prod",
+			ObservedDirectionTag: "write",
+			ObservedShapeTag:     "upload",
+		},
+	}}}
+	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
+	ctx = WithObservedThroughput(ctx, cache, "s3://checkpoints/prod", "write")
+	RecordObservedThroughput(ctx)
+
+	rate, found := cache.lookup(observedThroughputKey{
+		resource:  "s3://checkpoints/prod",
+		direction: "write",
+		shape:     "upload",
+	})
+	if !found || rate != 100 {
+		t.Fatalf("rate = %d, found = %t", rate, found)
+	}
+}
+
 func TestThroughputFieldsRoundTrip(t *testing.T) {
 	data := &Data{
-		IO:            250,
-		MaxThroughput: 100,
-		MinDuration:   (2500 * time.Millisecond).Nanoseconds(),
-		Tags:          map[string]string{ThroughputSourceTag: "measured"},
+		IO:                250,
+		MaxThroughput:     100,
+		MinDuration:       (2500 * time.Millisecond).Nanoseconds(),
+		ObservedThroughput: 125,
+		ObservedDuration:   (2 * time.Second).Nanoseconds(),
+		Tags:              map[string]string{ThroughputSourceTag: "measured"},
 	}
 
 	var buffer bytes.Buffer
@@ -111,7 +173,7 @@ func TestThroughputFieldsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if decoded.MaxThroughput != data.MaxThroughput || decoded.MinDuration != data.MinDuration {
+	if decoded.MaxThroughput != data.MaxThroughput || decoded.MinDuration != data.MinDuration || decoded.ObservedThroughput != data.ObservedThroughput || decoded.ObservedDuration != data.ObservedDuration {
 		t.Fatalf("decoded = %#v", decoded)
 	}
 

@@ -18,9 +18,10 @@ import (
 
 // Cedana implements all the capabilities that can be run without a server.
 type Cedana struct {
-	plugins           plugins.Manager
-	gpus              gpu.Manager
-	storageCalibrator *measurements.StorageCalibrator
+	plugins                   plugins.Manager
+	gpus                      gpu.Manager
+	storageCalibrator         *measurements.StorageCalibrator
+	storageObservedThroughput *profiling.ObservedThroughputCache
 
 	wg       *sync.WaitGroup
 	lifetime context.Context
@@ -50,12 +51,13 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	}
 
 	return &Cedana{
-		plugins:           pluginManager,
-		gpus:              gpuManager,
-		storageCalibrator: measurements.NewStorageCalibrator(0, 0),
-		wg:                wg,
-		lifetime:          ctx,
-		cancel:            cancel,
+		plugins:                   pluginManager,
+		gpus:                      gpuManager,
+		storageCalibrator:         measurements.NewStorageCalibrator(0, 0),
+		storageObservedThroughput: profiling.NewObservedThroughputCache(0, 0),
+		wg:                        wg,
+		lifetime:                  ctx,
+		cancel:                    cancel,
 	}, nil
 }
 

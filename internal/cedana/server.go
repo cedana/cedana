@@ -106,11 +106,12 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 
 	server = &Server{
 		Cedana: Cedana{
-			gpus:              gpuManager,
-			plugins:           pluginManager,
-			storageCalibrator: storageCalibrator,
-			wg:                wg,
-			lifetime:          ctx,
+			gpus:                      gpuManager,
+			plugins:                   pluginManager,
+			storageCalibrator:         storageCalibrator,
+			storageObservedThroughput: profiling.NewObservedThroughputCache(0, 0),
+			wg:                        wg,
+			lifetime:                  ctx,
 		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(
