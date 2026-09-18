@@ -77,6 +77,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      slurm_versions: ${{ needs.download.outputs.slurm_versions }}
 
   bench:
     name: Bench
