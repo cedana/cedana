@@ -262,6 +262,7 @@ jobs:
 
           PLUGINS=(
             "runc"
+            "crun"
             "containerd"
             "crio"
             "kata"
@@ -529,6 +530,7 @@ jobs:
             "libcedana-cloud-hypervisor.so"
             "libcedana-containerd.so"
             "libcedana-crio.so"
+            "libcedana-crun.so"
             "libcedana-k8s.so"
             "libcedana-kata.so"
             "libcedana-runc.so"
@@ -576,6 +578,7 @@ jobs:
             "libcedana-cloud-hypervisor.so"
             "libcedana-containerd.so"
             "libcedana-crio.so"
+            "libcedana-crun.so"
             "libcedana-k8s.so"
             "libcedana-kata.so"
             "libcedana-runc.so"

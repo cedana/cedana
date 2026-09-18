@@ -4,7 +4,7 @@ Root command for Cedana
 
 ### Synopsis
 
-```
+
  ________  _______   ________  ________  ________   ________
 |\   ____\|\  ___ \ |\   ___ \|\   __  \|\   ___  \|\   __  \
 \ \  \___|\ \   __/|\ \  \_|\ \ \  \|\  \ \  \\ \  \ \  \|\  \
@@ -12,22 +12,25 @@ Root command for Cedana
   \ \  \____\ \  \_|\ \ \  \_\\ \ \  \ \  \ \  \\ \  \ \  \ \  \
    \ \_______\ \_______\ \_______\ \__\ \__\ \__\\ \__\ \__\ \__\
     \|_______|\|_______|\|_______|\|__|\|__|\|__| \|__|\|__|\|__|
-```
+
     
 Instance Brokerage, Orchestration and Migration System.
 Property of Cedana, Corp.
 
-v0.9.279
+v0.9.301-9-g43a606ff
 
 ### Options
 
 ```
-      --address string      address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)
-      --config string       one-time config JSON string (merge with existing config)
-      --config-dir string   custom config directory
-  -h, --help                help for cedana
-      --profiling           enable profiling/show profiling data
-      --protocol string     protocol to use (TCP, UNIX, VSOCK)
+      --address string          address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)
+      --config string           one-time config JSON string (merge with existing config)
+      --config-dir string       custom config directory
+  -h, --help                    help for cedana
+      --init-config             initialize config file with defaults and env var overrides
+      --merge-config            same as --init-config but does not overwrite existing config file, only merges new values into it
+      --profiling               enable profiling/show profiling data
+      --profiling-path string   path to write profiling JSON to (if enabled)
+      --protocol string         protocol to use (TCP, UNIX, VSOCK)
 ```
 
 ### SEE ALSO
@@ -55,5 +58,7 @@ v0.9.279
 * [cedana query](cedana_query.md)	 - Query containers/processes
 * [cedana restore](cedana_restore.md)	 - Restore a container/process
 * [cedana run](cedana_run.md)	 - Run a managed process/container (create a job)
+* [cedana slurm](cedana_slurm.md)	 - Helper for setting up and running in Slurm
 * [cedana unfreeze](cedana_unfreeze.md)	 - Unfreeze a container/process
+* [cedana version](cedana_version.md)	 - Print the version of Cedana
 

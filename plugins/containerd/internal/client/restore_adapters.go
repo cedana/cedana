@@ -100,6 +100,23 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 			}
 		}
 
+		// Read runtime binary from dump (set for runtimes that run under
+		// another runtime's shim, e.g. crun under io.containerd.runc.v2)
+
+		var runtimeBinary string
+
+		file, err = opts.DumpFs.Open(containerd_keys.DUMP_RUNTIME_BINARY_KEY)
+		if err == nil {
+			defer file.Close()
+			bytes, err := io.ReadAll(file)
+			if err != nil {
+				log.Warn().Err(err).Msg("could not read runtime binary from dump, will use the runtime's default")
+			} else {
+				log.Debug().Str("binary", string(bytes)).Msg("read runtime binary from dump")
+				runtimeBinary = string(bytes)
+			}
+		}
+
 		snapshotKey := details.ID
 
 		file, err = opts.DumpFs.Open(containerd_keys.DUMP_SNAPSHOT_KEY)
@@ -142,16 +159,29 @@ func CreateContainerForRestore(next types.Restore) types.Restore {
 		}
 		newRuntime := plugin.BinaryPaths()[0]
 
-		log.Debug().Str("current_runtime", runtime).Str("plugin", pluginName).Str("new_runtime", newRuntime).Msg("using cedana containerd runtime for restore")
+		log.Debug().Str("current_runtime", runtime).Str("plugin", pluginName).Str("new_runtime", newRuntime).Str("runtime_binary", runtimeBinary).Msg("using cedana containerd runtime for restore")
+
+		// Ensure the image is unpacked for the snapshotter in use
+		unpacked, err := image.IsUnpacked(ctx, snapshotter)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to check if image is unpacked: %v", err)
+		}
+		if !unpacked {
+			if err := image.Unpack(ctx, snapshotter); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to unpack image for snapshotter %s: %v", snapshotter, err)
+			}
+		}
 
 		container, err = client.NewContainer(
 			ctx,
 			details.ID,
 			containerd.WithImage(image),
-			containerd.WithNewSnapshot(snapshotKey, image),
+			// NOTE: snapshotter must be set before the new snapshot is
+			// created, else it's created in the default snapshotter
 			containerd.WithSnapshotter(snapshotter),
+			containerd.WithNewSnapshot(snapshotKey, image),
 			containerd.WithNewSpec(specOpts...),
-			containerd.WithRuntime(newRuntime, &options.Options{}),
+			containerd.WithRuntime(newRuntime, &options.Options{BinaryName: runtimeBinary}),
 		)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to create container for restore: %v", err)

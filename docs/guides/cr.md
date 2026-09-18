@@ -10,7 +10,7 @@ To checkpoint:
 cedana dump <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, `job`, etc. See [features](../get-started/features.md) for all plugins that support checkpointing.
+Where `<type>` can be `process`, `containerd`, `runc`, `crun`, `job`, etc. See [features](../get-started/features.md) for all plugins that support checkpointing.
 
 For example, to checkpoint a process:
 
@@ -32,7 +32,7 @@ See [CLI reference](../references/cli/cedana_dump_process.md) for all available 
 cedana restore <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, `job`, etc. See [features](../get-started/features.md) for all plugins that support restoring.
+Where `<type>` can be `process`, `containerd`, `runc`, `crun`, `job`, etc. See [features](../get-started/features.md) for all plugins that support restoring.
 
 For example, to restore a process:
 
@@ -116,6 +116,7 @@ Cedana supports checkpointing/restoring to/from remote storage, through storage 
 
 - [Checkpoint/restore with GPUs](gpu/cr.md)
 - [Checkpoint/restore runc](runc/cr.md)
-- [Checkpoint/restore containerd](runc/cr.md)
+- [Checkpoint/restore crun](crun/cr.md)
+- [Checkpoint/restore containerd](containerd/cr.md)
 - [Checkpoint/restore streamer](streamer/cr.md)
 - [Checkpoint/restore kubernetes](k8s/cr.md)

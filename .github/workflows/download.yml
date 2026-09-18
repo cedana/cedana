@@ -52,6 +52,10 @@ on:
         description: Version for cedana-slurm binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+    outputs:
+      slurm_versions:
+        description: "SLURM versions, from cedana-slurm's slurm-versions file (JSON array)"
+        value: ${{ jobs.slurm-versions.outputs.versions }}
 
 jobs:
   cedana:
@@ -134,6 +138,7 @@ jobs:
       matrix:
         plugin:
           - runc
+          - crun
           - containerd
           - crio
           - kata
@@ -427,21 +432,45 @@ jobs:
           name: helm-chart
           path: cedana-helm
 
+  # cedana-slurm's slurm-versions file is the single source of truth for which SLURM
+  # versions exist. Read it here so this workflow and test_slurm.yml agree.
+  slurm-versions:
+    name: Slurm Versions
+    if: ${{ inputs.slurm_version != 'none' }}
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.read.outputs.versions }}
+    steps:
+      - name: Checkout cedana-slurm
+        uses: actions/checkout@v4
+        with:
+          repository: cedana/cedana-slurm
+          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
+          token: ${{ secrets.GIT_CI_PAT }}
+          sparse-checkout: slurm-versions
+          sparse-checkout-cone-mode: false
+
+      - name: Read slurm-versions
+        id: read
+        run: |
+          set -euo pipefail
+          # Entries are SchedMD git tags ("slurm-25-11-5-1") and are used verbatim.
+          versions=$(sed -E 's/#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' slurm-versions | grep -v '^$')
+          json=$(jq -Rsc 'split("\n") | map(select(. != ""))' <<<"$versions")
+          echo "versions=$json" >> "$GITHUB_OUTPUT"
+          echo "Resolved SLURM versions: $json"
+
   slurm:
     name: Slurm
     if: ${{ inputs.slurm_version != 'none' }}
+    needs: slurm-versions
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
         arch:
           - amd64
-        slurm:
-          - 25-11-5-1
-          - 25-05-8-1
-          - 25-05-6-1
-          - 24-11-5-1
-          - 23-11-7-1
+        slurm: ${{ fromJSON(needs.slurm-versions.outputs.versions) }}
     steps:
       - name: Checkout cedana-slurm
         uses: actions/checkout@v4
@@ -459,7 +488,7 @@ jobs:
         env:
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
-          SLURM_VERSION: slurm-${{ matrix.slurm }}
+          SLURM_VERSION: ${{ matrix.slurm }}
           ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
@@ -504,5 +533,5 @@ jobs:
       - name: Upload slurm artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: slurm-${{ matrix.slurm }}-${{ matrix.arch }}
+          name: ${{ matrix.slurm }}-${{ matrix.arch }}
           path: ./slurm/*

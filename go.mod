@@ -20,6 +20,7 @@ require (
 	github.com/containerd/containerd/api v1.8.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v0.2.1
+	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/cyphar/filepath-securejoin v0.5.1
 	github.com/gofrs/flock v0.12.1
@@ -91,7 +92,6 @@ require (
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.7 // indirect
-	github.com/containerd/typeurl/v2 v2.1.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
