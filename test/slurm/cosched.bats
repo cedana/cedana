@@ -19,8 +19,9 @@ load ../helpers/slurm_propagator
 # A different name each run, so a test that only works for one hardcoded user
 # fails somewhere rather than everywhere.
 COSCHED_NAMES=(brandon yash will neel james)
-SECOND_USER="${SLURM_SECOND_USER:-${COSCHED_NAMES[$RANDOM % ${#COSCHED_NAMES[@]}]}}"
-SECOND_UID="${SLURM_SECOND_UID:-2001}"
+_cosched_idx=$((RANDOM % ${#COSCHED_NAMES[@]}))
+SECOND_USER="${SLURM_SECOND_USER:-${COSCHED_NAMES[$_cosched_idx]}}"
+SECOND_UID="${SLURM_SECOND_UID:-$((2001 + _cosched_idx))}"
 COSCHED_SAMPLE="${COSCHED_SAMPLE:-cpu/counting.sbatch}"
 
 # Submits a long-running sample as $1. Unlike slurm_submit_job this caps memory:
