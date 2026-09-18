@@ -41,6 +41,11 @@ var Registry = []Plugin{
 		Libraries: []Binary{{Name: "libcedana-runc.so"}},
 	},
 	{
+		Name:      "crun",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-crun.so"}},
+	},
+	{
 		Name:      "containerd",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-containerd.so"}},
@@ -71,6 +76,11 @@ var Registry = []Plugin{
 		Name:      "storage/gcs",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-storage-gcs.so"}},
+	},
+	{
+		Name:      "storage/csx",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-storage-csx.so"}},
 	},
 
 	// Others

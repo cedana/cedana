@@ -2,11 +2,10 @@ package metrics
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"sync"
 
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -36,7 +35,7 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string) {
 
 	initPropagator()
 
-	err := getCreds()
+	err := getCreds(ctx)
 	if err != nil {
 		handleErr(err)
 		return
@@ -90,38 +89,25 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string) {
 }
 
 // getCreds fetches OpenTelemetry credentials from the Cedana endpoint
-func getCreds() error {
+func getCreds(ctx context.Context) error {
 	url := config.Global.Connection.URL
 	authToken := config.Global.Connection.AuthToken
 	if url == "" || authToken == "" {
 		return fmt.Errorf("connection URL or AuthToken unset in config/env")
 	}
 
-	credentialsURL := url + "/otel/credentials"
-	req, err := http.NewRequest(http.MethodGet, credentialsURL, nil)
+	creds, err := propagatorsdk.NewClient(url, authToken).V1().Otel().Credentials().Get(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", authToken))
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to fetch credentials: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch otel credentials, status code: %d", resp.StatusCode)
+		return fmt.Errorf("failed to fetch otel credentials: %w", err)
 	}
 
-	Credentials = &Creds{}
-	if err := json.NewDecoder(resp.Body).Decode(&Credentials); err != nil {
-		return fmt.Errorf("failed to decode credentials: %w", err)
-	}
-
-	if Credentials.Endpoint == "" || Credentials.Headers == "" {
+	endpoint := creds.GetOTELEXPORTEROTLPENDPOINT()
+	headers := creds.GetOTELEXPORTEROTLPHEADERS()
+	if endpoint == nil || headers == nil || *endpoint == "" || *headers == "" {
 		return fmt.Errorf("received incomplete credentials from server")
 	}
+
+	Credentials = &Creds{Endpoint: *endpoint, Headers: *headers}
 
 	return nil
 }

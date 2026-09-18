@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	sdk "github.com/cedana/cedana-go-sdk"
-	v1 "github.com/cedana/cedana-go-sdk/v1"
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
+	v1 "github.com/cedana/cedana-propagator-sdk/go/v1"
 	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 )
@@ -24,7 +24,7 @@ func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 	authToken := config.Global.Connection.AuthToken
 
 	// Creating the client is no extra compute/work as this is not a durable connection
-	return &Storage{sdk.NewCedanaClient(url, authToken).V1()}, nil
+	return &Storage{propagatorsdk.NewClient(url, authToken).V1()}, nil
 }
 
 func (s *Storage) Open(ctx context.Context, path string) (io.ReadCloser, error) {
@@ -88,6 +88,14 @@ func (s *Storage) ReadDir(ctx context.Context, path string) ([]string, error) {
 
 func (s *Storage) IsRemote() bool {
 	return true
+}
+
+func (s *Storage) CreatePath(ctx context.Context, dir, name string) (path string, cleanup func(cancel bool) error, err error) {
+	return "", nil, fmt.Errorf("Cedana Storage Plugin Does not support CreatePath()")
+}
+
+func (s *Storage) ReadPath(ctx context.Context, path string) (string, func() error, error) {
+	return path, nil, nil
 }
 
 /////////////

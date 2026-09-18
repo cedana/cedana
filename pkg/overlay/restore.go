@@ -6,15 +6,18 @@
 // use it.
 //
 // The Linux overlayfs contract states that modifying the underlying
-// upper/lower directories of a *mounted* overlay is undefined behavior
-// Therefore the RW layer must be restored into the upperdir *before*
-// the overlay is mounted:
-//   - Kubernetes pods: the containerd shim (cedana-containerd-runtime) populates
-//     the upperdir just before it mounts the rootfs.
-//   - CLI `cedana restore`: the containerd plugin populates the freshly-prepared
-//     snapshot's upperdir before NewTask mounts it.
+// upper/lower directories of a *mounted* overlay is undefined behavior.
+// Therefore the RW layer must be restored into the upperdir *before* the
+// overlay is mounted, and only the component that performs the mount can do
+// that: the containerd shim (cedana-containerd-runtime), which populates the
+// upperdir just before mount.All on every restore path (Kubernetes and CLI
+// alike). It drops a marker so the runc plugin's post-mount restore is a
+// no-op.
 //
-// Both drop a marker so the runc plugin's post-mount restore is a no-op.
+// The runc plugin's post-mount restore remains as a fallback for the cases
+// the shim cannot handle (no readable checkpoint directory, e.g. streamed
+// dumps whose RW layer lives inside stream shards, or plain runc restores
+// where the overlay was mounted by a third party).
 package overlay
 
 import (
@@ -42,13 +45,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// RW-layer dump file names. These mirror the runc plugin's keys
-// (plugins/runc/pkg/keys) but are inlined here so this package has no
-// dependency on the plugins/runc submodule, keeping it importable by the
-// containerd runtime shim as a plain module dependency.
+// RW-layer dump file names. This is the single source of truth: the dump side
+// (plugins/runc) and every restore site (runc plugin, containerd plugin, and
+// the containerd runtime shim) reference these constants.
 const (
-	dumpRWLayerManifestKey    = "rw-layer.manifest"
-	dumpRWLayerBatchFormatter = "rw-layer-%d.img"
+	DumpRWLayerManifestKey    = "rw-layer.manifest"
+	DumpRWLayerBatchFormatter = "rw-layer-%d.img"
 )
 
 // RestoredMarker is dropped in the snapshot directory (the parent of the
@@ -84,16 +86,25 @@ func UpperDirFromMountOptions(options []string) (string, error) {
 }
 
 // RestoreToUpperDir reads the RW-layer batches from the dump filesystem and
-// writes them into upperDir. No-op if dump has no RW-layer manifest
-func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err error) {
-	var manifestFile io.ReadCloser
-	manifestPath := dumpRWLayerManifestKey
-	manifestFile, err = dump.Open(manifestPath)
+// writes them into upperDir. Returns restored=false (and no error) if the
+// dump has no readable RW-layer manifest — e.g. the checkpoint has no RW
+// layer at all, or it is a streamed dump whose RW layer lives inside stream
+// shards. Callers must only drop the restored marker when restored is true,
+// otherwise the post-mount fallback (which may have a streaming-capable dump
+// filesystem) would be skipped and the RW layer silently lost.
+func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (restored bool, err error) {
+	manifestFile, err := dump.Open(DumpRWLayerManifestKey)
 	if err != nil {
 		log.Debug().Err(err).Msg("no RW layer manifest found, skipping restore")
-		return nil
+		return false, nil
 	}
-	manifestFile = profiling.IORedundantComponent(ctx, manifestFile, manifestPath)
+	return true, restoreFromManifest(ctx, dump, upperDir, manifestFile)
+}
+
+// restoreFromManifest reads the RW-layer batches listed in the manifest and
+// writes their entries into upperDir. Closes manifestFile.
+func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, manifestFile io.ReadCloser) (err error) {
+	manifestFile = profiling.IORedundantComponent(ctx, manifestFile, DumpRWLayerManifestKey)
 	defer manifestFile.Close()
 
 	totalEntries := 0
@@ -127,7 +138,7 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 	log.Debug().Int("batches", batchCount).Msg("found rw layer batches from manifest")
 
 	for batchIdx := 0; batchIdx < batchCount; batchIdx++ {
-		filePath := fmt.Sprintf(dumpRWLayerBatchFormatter, batchIdx)
+		filePath := fmt.Sprintf(DumpRWLayerBatchFormatter, batchIdx)
 
 		var inFile io.ReadCloser
 		inFile, err = dump.Open(filePath)
@@ -176,15 +187,15 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 
 			fileType := mode & syscall.S_IFMT
 
-			switch {
-			case fileType == syscall.S_IFLNK: // symlink
+			switch fileType {
+			case syscall.S_IFLNK: // symlink
 				if err := replaceExisting(fullPath); err != nil {
 					return err
 				}
 				if err := os.Symlink(rwLayerFile.GetSymlinkTarget(), fullPath); err != nil {
 					return fmt.Errorf("failed to create symlink %s: %v", fullPath, err)
 				}
-			case fileType == syscall.S_IFBLK || fileType == syscall.S_IFCHR: // device / whiteout
+			case syscall.S_IFBLK, syscall.S_IFCHR: // device / whiteout
 				if err := replaceExisting(fullPath); err != nil {
 					return err
 				}
@@ -192,14 +203,14 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 				if err := unix.Mknod(fullPath, rwLayerFile.GetMode(), int(dev)); err != nil {
 					return fmt.Errorf("failed to create device %s: %v", fullPath, err)
 				}
-			case fileType == syscall.S_IFDIR: // directory
+			case syscall.S_IFDIR: // directory
 				if err := os.MkdirAll(fullPath, 0o755); err != nil {
 					return fmt.Errorf("failed to create directory %s: %v", fullPath, err)
 				}
 				if err := unix.Chmod(fullPath, mode&0o7777); err != nil {
 					log.Warn().Err(err).Str("path", fullPath).Msg("failed to set directory permissions")
 				}
-			case fileType == syscall.S_IFREG: // regular file
+			case syscall.S_IFREG: // regular file
 				// Remove any existing object first, then create with O_NOFOLLOW,
 				// so a symlink restored by an earlier entry can't cause this write
 				// to truncate/overwrite the link's target.
@@ -215,7 +226,7 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (err
 					return err
 				}
 				outFile.Close()
-			case fileType == syscall.S_IFIFO: // named pipe
+			case syscall.S_IFIFO: // named pipe
 				if err := replaceExisting(fullPath); err != nil {
 					return err
 				}
