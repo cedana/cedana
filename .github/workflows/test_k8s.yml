@@ -275,10 +275,10 @@ jobs:
           make install
           sudo -E cedana plugin install \
             runc \
+            crun \
             containerd \
-            crio \
-            criu \
             containerd/runtime-runc \
+            criu \
             storage/cedana \
             storage/s3 \
             storage/gcs

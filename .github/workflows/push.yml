@@ -55,6 +55,7 @@ jobs:
       controller_version: main
       containerd_runtime_version: cedana
       slurm_version: main
+      csx_version: main
 
   publish:
     name: Publish
@@ -75,6 +76,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      slurm_versions: ${{ needs.download.outputs.slurm_versions }}
 
   bench:
     name: Bench

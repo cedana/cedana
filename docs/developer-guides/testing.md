@@ -20,7 +20,8 @@ test
 │   │   ├── gpu_streamer.bats
 │   │   ├── streamer.bats
 │   │   ├── streamer_runc.bats
-│   │   └── runc.bats
+│   │   ├── runc.bats
+│   │   └── crun.bats
 │   ├── helpers
 │   │   └── ...
 └── workloads

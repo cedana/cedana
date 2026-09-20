@@ -16,7 +16,7 @@ To run a new managed job:
 cedana run <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, etc. See [features](../get-started/features.md) for all plugins that support running managed jobs.
+Where `<type>` can be `process`, `containerd`, `runc`, `crun`, etc. See [features](../get-started/features.md) for all plugins that support running managed jobs.
 
 For example, to run a new managed process:
 
@@ -34,7 +34,7 @@ It's also possible to start managing an existing process/container:
 cedana manage <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, etc. See [features](../get-started/features.md) for all plugins that support managing existing jobs.
+Where `<type>` can be `process`, `containerd`, `runc`, `crun`, etc. See [features](../get-started/features.md) for all plugins that support managing existing jobs.
 
 For example, to manage an existing process:
 
@@ -50,7 +50,7 @@ It's also possible to start managing an upcoming process/container:
 cedana manage --upcoming <type> ...
 ```
 
-Where `<type>` can be `process`, `containerd`, `runc`, etc. See [features](../get-started/features.md) for all plugins that support managing upcoming jobs. The manage command will block and wait for the process/container to become available.
+Where `<type>` can be `process`, `containerd`, `runc`, `crun`, etc. See [features](../get-started/features.md) for all plugins that support managing upcoming jobs. The manage command will block and wait for the process/container to become available.
 
 For example, to manage an existing runc container:
 
