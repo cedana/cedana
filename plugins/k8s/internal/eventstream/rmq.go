@@ -190,11 +190,13 @@ func (es *EventStream) Close() error {
 	es.closeOnce.Do(func() {
 		es.lifecycleMu.Lock()
 		consumer := es.checkpointRequests
+		deleteConsumer := es.deleteRequests
 		publisher := es.checkpoints
 		conn := es.Conn
 		es.checkpointRequests = nil
 		es.checkpoints = nil
 		es.Conn = nil
+		es.deleteRequests = nil
 		es.lifecycleMu.Unlock()
 
 		if consumer != nil {
@@ -202,6 +204,9 @@ func (es *EventStream) Close() error {
 		}
 		if publisher != nil {
 			publisher.Close()
+		}
+		if deleteConsumer != nil {
+			deleteConsumer.Close()
 		}
 		if conn != nil {
 			if err := conn.Close(); err != nil {
@@ -245,7 +250,34 @@ func (es *EventStream) StartDeleteConsumer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	return consumer.Run(es.DeleteHandler(ctx))
+
+	es.lifecycleMu.Lock()
+	if es.Conn == nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.deleteRequests != nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("checkpoints consumer is already running")
+	}
+	es.deleteRequests = consumer
+	es.lifecycleMu.Unlock()
+
+	defer func() {
+		es.lifecycleMu.Lock()
+		if es.deleteRequests == consumer {
+			es.deleteRequests = nil
+		}
+		es.lifecycleMu.Unlock()
+	}()
+
+	if err := consumer.Run(es.DeleteHandler(ctx)); err != nil {
+		consumer.Close()
+		return err
+	}
+	return nil
 }
 
 func (es *EventStream) DeleteHandler(ctx context.Context) rabbitmq.Handler {

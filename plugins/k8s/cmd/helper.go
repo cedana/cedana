@@ -215,7 +215,7 @@ func startHelper(ctx context.Context) error {
 		}()
 
 		if err := <-consumerErr; err != nil {
-			log.Error().Err(err).Msg("checkpoint request consumer stopped")
+			log.Error().Err(err).Msg("rabbitmq consumers stopped")
 		}
 	}()
 
