@@ -53,6 +53,8 @@ jobs:
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
+      slurm_version: main
+      csx_version: main
 
   publish:
     name: Publish
@@ -62,7 +64,8 @@ jobs:
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
       github: true
-      cloudsmith: true
+      propagator: true
+      propagator_repo: cedana
       dockerhub: true
       dockerhub_latest: true
       post_summary: true
@@ -74,6 +77,7 @@ jobs:
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
+      slurm_versions: ${{ needs.download.outputs.slurm_versions }}
 
   bench:
     name: Bench

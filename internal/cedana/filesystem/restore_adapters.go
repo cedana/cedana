@@ -31,6 +31,17 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 		var isDir bool
 		var imagesDirectory string
 
+		path, cleanup, err := storage.ReadPath(ctx, path)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to ReadPath: %v", err)
+		}
+
+		if cleanup != nil {
+			defer func() {
+				err = errors.Join(err, cleanup())
+			}()
+		}
+
 		if !storage.IsRemote() {
 			stat, err := os.Stat(path)
 			if err != nil {
@@ -43,7 +54,7 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 
 		if !storage.IsRemote() && isDir {
 			imagesDirectory = path
-      // Add profiling data manually as no IO can be measured
+			// Add profiling data manually as no IO can be measured
 			size := utils.SizeFromPath(imagesDirectory)
 			profiling.AddIO(ctx, size)
 		} else {

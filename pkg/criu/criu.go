@@ -1,6 +1,7 @@
 package criu
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,11 +9,15 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/utils"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -62,8 +67,14 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
 	}
 
+	// Pin this goroutine to its OS thread so that Pdeathsig does not
+	// fire prematurely due to Go's M:N goroutine scheduling recycling
+	// the thread that spawned swrk. Unlocked in Cleanup.
+	runtime.LockOSThread()
+
 	err = cmd.Start()
 	if err != nil {
+		runtime.UnlockOSThread()
 		clnNet.Close()
 		return err
 	}
@@ -85,11 +96,82 @@ func (c *Criu) Cleanup() error {
 		// XXX: We don't use s.swrkCmd.Wait() because it can hang forever
 		// since the stdin, stdout, and stderr copy might not be over.
 		if _, err := c.swrkCmd.Process.Wait(); err != nil {
-			errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			// ECHILD means the process was already reaped (e.g. by the
+			// embedding process's signal handler or the Go runtime).
+			if !errors.Is(err, syscall.ECHILD) {
+				errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			}
 		}
 		c.swrkCmd = nil
+		runtime.UnlockOSThread()
 	}
 	return errors.Join(errs...)
+}
+
+// externalsToConfig moves opts.External into a CRIU config file, so the external
+// list never counts against the RPC socket's per-message size limit (the kernel
+// rejects a seqpacket message larger than sk_sndbuf-32, ~208 KiB by default). CRIU
+// appends config-file externals to the RPC ones; keys its parser can't represent
+// (it strips at '#', splits on whitespace) stay inline. Returns the file to remove.
+func externalsToConfig(opts *criu.CriuOpts) (string, error) {
+	if len(opts.External) == 0 {
+		return "", nil
+	}
+	f, err := os.CreateTemp("", "cedana-criu-external-*.conf")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var buf bytes.Buffer
+	if prev := opts.GetConfigFile(); prev != "" {
+		b, err := os.ReadFile(prev)
+		if err != nil {
+			return f.Name(), fmt.Errorf("read CRIU config file %s: %w", prev, err)
+		}
+		buf.Write(b)
+		if len(b) > 0 && b[len(b)-1] != '\n' {
+			buf.WriteByte('\n')
+		}
+	}
+
+	inline := opts.External[:0]
+	for _, k := range opts.External {
+		if configSafe(k) {
+			fmt.Fprintf(&buf, "external %s\n", k)
+		} else {
+			inline = append(inline, k)
+		}
+	}
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		return f.Name(), err
+	}
+
+	opts.External = inline
+	opts.ConfigFile = proto.String(f.Name())
+	return f.Name(), nil
+}
+
+func configSafe(key string) bool {
+	return key != "" &&
+		!strings.ContainsAny(key, "#\"\\") &&
+		!strings.ContainsFunc(key, unicode.IsSpace) &&
+		!strings.ContainsFunc(key, unicode.IsControl)
+}
+
+// dedupe removes duplicate keys, keeping first-seen order. Adapters walk the whole
+// process tree, so the same mount/file key shows up once per process.
+func dedupe(keys []string) []string {
+	seen := make(map[string]struct{}, len(keys))
+	out := keys[:0]
+	for _, k := range keys {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	return out
 }
 
 func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn int, err error) {
@@ -102,17 +184,28 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 		if err == nil && wrote == len(reqB) {
 			break
 		}
+		if errors.Is(err, syscall.EMSGSIZE) {
+			return nil, 0, nil, 0, fmt.Errorf("CRIU request (%d bytes) exceeds the socket send buffer: %w", len(reqB), err)
+		}
 		time.Sleep(100 * time.Millisecond)
 	}
 	if err != nil {
 		return nil, 0, nil, 0, err
 	}
 
-	respB = make([]byte, 2*4096)
+	// CRIU on restore will respond with profiling data
+	// so allocate a larger buffer.
+	// Profiling data will at max ~100 KB for a 1000
+	// process tree, this should be more than enough.
+	respB = make([]byte, 1*utils.MEBIBYTE)
 	oobB = make([]byte, 4096)
-	n, oobn, _, _, err = cln.ReadMsgUnix(respB, oobB)
+	var flags int
+	n, oobn, flags, _, err = cln.ReadMsgUnix(respB, oobB)
 	if err != nil {
 		return nil, 0, nil, 0, err
+	}
+	if flags&syscall.MSG_TRUNC != 0 {
+		err = fmt.Errorf("MSG_TRUNC was returned, try providing a larger buffer")
 	}
 
 	return respB, n, oobB, oobn, err
@@ -158,6 +251,10 @@ func (c *Criu) doSwrkWithResp(
 		opts.NotifyScripts = proto.Bool(true)
 	}
 
+	if !utils.IsRootUser() && opts != nil {
+		opts.Unprivileged = proto.Bool(true)
+	}
+
 	if features != nil {
 		req.Features = features
 	}
@@ -187,7 +284,7 @@ func (c *Criu) doSwrkWithResp(
 				return nil, fmt.Errorf("initialize-restore failed: %w", err)
 			}
 			defer func() {
-				err := nfy.FinalizeRestore(ctx, opts)
+				err := nfy.FinalizeRestore(ctx, opts, retErr)
 				if err != nil {
 					retErr = errors.Join(retErr, err)
 				}
@@ -198,7 +295,7 @@ func (c *Criu) doSwrkWithResp(
 				return nil, fmt.Errorf("initialize-dump failed: %w", err)
 			}
 			defer func() {
-				err := nfy.FinalizeDump(ctx, opts)
+				err := nfy.FinalizeDump(ctx, opts, retErr)
 				if err != nil {
 					retErr = errors.Join(retErr, err)
 				}
@@ -206,7 +303,23 @@ func (c *Criu) doSwrkWithResp(
 		}
 	}
 
+	if opts != nil {
+		opts.External = dedupe(opts.External)
+		cfgPath, err := externalsToConfig(opts)
+		if cfgPath != "" {
+			defer os.Remove(cfgPath)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for {
+		// Notify replies (query-ext-files) carry only the post-seize delta,
+		// so they stay inline.
+		if req.Opts != nil {
+			req.Opts.External = dedupe(req.Opts.External)
+		}
 		reqB, err := proto.Marshal(&req)
 		if err != nil {
 			return nil, err
@@ -237,6 +350,10 @@ func (c *Criu) doSwrkWithResp(
 		}
 
 		notify := resp.GetNotify()
+
+		// Only query-ext-files expects anything back other than an ack.
+		var replyOpts *criu.CriuOpts
+
 		switch notify.GetScript() {
 		case "pre-dump":
 			err = nfy.PreDump(ctx, opts)
@@ -258,6 +375,18 @@ func (c *Criu) doSwrkWithResp(
 			err = nfy.PreResume(ctx)
 		case "post-resume":
 			err = nfy.PostResume(ctx)
+		case "skip-namespaces":
+			err = nfy.SkipNamespaces(ctx, notify.GetPid())
+		case "query-ext-files":
+			var external []string
+			external, err = nfy.QueryExtFiles(ctx)
+			if err == nil {
+				replyOpts = &criu.CriuOpts{
+					// Required field, ignored by CRIU for this reply.
+					ImagesDirFd: proto.Int32(-1),
+					External:    external,
+				}
+			}
 		case "orphan-pts-master":
 			scm, err := syscall.ParseSocketControlMessage(oobB[:oobn])
 			if err != nil {
@@ -279,6 +408,7 @@ func (c *Criu) doSwrkWithResp(
 		req = criu.CriuReq{
 			Type:          &respType,
 			NotifySuccess: proto.Bool(true),
+			Opts:          replyOpts,
 		}
 	}
 
@@ -385,7 +515,14 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	args := []string{"check"}
 	args = append(args, flags...)
 
-	cmd := exec.Command(c.swrkPath, args...)
+	if !utils.IsRootUser() {
+		args = append(args, "--unprivileged")
+	}
+
+	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

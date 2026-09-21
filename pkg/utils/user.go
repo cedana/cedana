@@ -28,5 +28,5 @@ func GetRootCredentials() *syscall.Credential {
 }
 
 func IsRootUser() bool {
-	return os.Getuid() == 0
+	return os.Geteuid() == 0
 }

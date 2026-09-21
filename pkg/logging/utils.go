@@ -6,6 +6,8 @@ import (
 	"bufio"
 	"context"
 	"os"
+	"os/user"
+	"path/filepath"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -80,4 +82,20 @@ func LastMsgFromFile(logfile string, format ...func([]byte) (string, error)) (la
 	}
 
 	return lastMsg, nil
+}
+
+// LogFile returns the path to a log file based on program name and whether the program is running as root or not.
+// If the program is running as root, it will return /var/log/cedana-<program>.log, otherwise it will return
+// $HOME/.cedana/logs/cedana-<program>.log
+func LogFile(program string) string {
+	if os.Geteuid() == 0 {
+		return filepath.Join("/var/log", "cedana-"+program+".log")
+	}
+	user, err := user.Current()
+	if err != nil {
+		os.MkdirAll(filepath.Join(os.TempDir(), "cedana", "logs"), 0o755)
+		return filepath.Join(os.TempDir(), "cedana", "logs", "cedana-"+program+".log")
+	}
+	os.MkdirAll(filepath.Join(user.HomeDir, ".cedana", "logs"), 0o755)
+	return filepath.Join(user.HomeDir, ".cedana", "logs", "cedana-"+program+".log")
 }

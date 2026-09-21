@@ -71,3 +71,4 @@ To enable streaming by default, set the `Checkpoint.Dir` field in the [configura
 
 - [Amazon S3](s3.md)
 - [Google Cloud Storage](gcs.md)
+- [Cedana Storage Express](csx.md)

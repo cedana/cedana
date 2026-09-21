@@ -36,7 +36,7 @@ func init() {
 	restoreCmd.PersistentFlags().
 		StringP(flags.PidFileFlag.Full, flags.PidFileFlag.Short, "", "file to write PID to")
 	restoreCmd.PersistentFlags().
-		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "select how to run restores")
+		BoolP(flags.NoServerFlag.Full, flags.NoServerFlag.Short, false, "run without server")
 	restoreCmd.PersistentFlags().
 		StringP(flags.PathFlag.Full, flags.PathFlag.Short, "", "path of dump")
 	restoreCmd.PersistentFlags().
@@ -139,7 +139,8 @@ var restoreCmd = &cobra.Command{
 					flags.OutFlag.Full,
 					flags.AttachFlag.Full,
 					flags.AttachableFlag.Full,
-				))
+				),
+			)
 		}
 
 		env := os.Environ()
@@ -150,17 +151,18 @@ var restoreCmd = &cobra.Command{
 
 		// Create half-baked request
 		req := &daemon.RestoreReq{
-			Path:       path,
-			PidFile:    pidFile,
-			Log:        log,
-			Attachable: attach || attachable,
-			Criu:       criuOpts,
-			Env:        env,
-			GPUID:      gpuID,
-			UID:        user.Uid,
-			GID:        user.Gid,
-			Groups:     user.Groups,
-			Details:    &daemon.Details{},
+			Path:            path,
+			PidFile:         pidFile,
+			Log:             log,
+			Attachable:      attach || attachable,
+			WaitFirstMaster: attach,
+			Criu:            criuOpts,
+			Env:             env,
+			GPUID:           gpuID,
+			UID:             user.Uid,
+			GID:             user.Gid,
+			Groups:          user.Groups,
+			Details:         &daemon.Details{},
 		}
 
 		ctx := context.WithValue(cmd.Context(), keys.RESTORE_REQ_CONTEXT_KEY, req)
@@ -206,37 +208,41 @@ var restoreCmd = &cobra.Command{
 			code, err := cedana.Restore(req)
 			if err != nil {
 				cedana.Finalize()
-				cedana.Wait()
 				return utils.GRPCErrorColored(err)
 			}
 
 			data := cedana.Finalize()
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
+				if config.Global.Profiling.Path != "" {
+					profiling.WriteJSON(config.Global.Profiling.Path, data)
+				}
 			}
-			cedana.Wait()
 
 			os.Exit(<-code)
 		} else {
-			client, ok := cmd.Context().Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
+			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {
 				return fmt.Errorf("invalids client in context")
 			}
 			defer client.Close()
 
 			// Assuming request is now ready to be sent to the server
-			resp, data, err := client.Restore(cmd.Context(), req)
+			resp, data, err := client.Restore(ctx, req)
 			if err != nil {
 				return err
 			}
 
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
+				if config.Global.Profiling.Path != "" {
+					profiling.WriteJSON(config.Global.Profiling.Path, data)
+				}
 			}
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {
-				return client.Attach(cmd.Context(), &daemon.AttachReq{PID: resp.PID})
+				return client.Attach(ctx, &daemon.AttachReq{PID: resp.PID})
 			}
 
 			for _, message := range resp.GetMessages() {

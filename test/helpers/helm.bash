@@ -22,10 +22,17 @@ helm_install_cedana() {
 
     # Use upgrade --install for idempotent installs
     if [ -e "$HELM_CHART" ]; then
+        debug_log "Using local helm chart at $HELM_CHART"
         helm_cmd="helm upgrade --install cedana $HELM_CHART" # local path to chart
+        if [ -f "$HELM_CHART/.values.yaml" ]; then
+            debug_log "Using additional values from $HELM_CHART/.values.yaml"
+            helm_cmd="$helm_cmd -f $HELM_CHART/.values.yaml"
+        fi
     elif [ -n "$HELM_CHART" ]; then
+        debug_log "Using helm chart version $HELM_CHART from OCI registry"
         helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm --version $HELM_CHART"
     else
+        debug_log "Using latest helm chart from OCI registry"
         helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
     fi
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
@@ -74,8 +81,12 @@ helm_install_cedana() {
     if [ -n "$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsContainerdRuntimeVersion=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION"
     fi
-    if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+    if [ "$GPU" == "1" ]; then
+        if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+        fi
+    else
+        helm_cmd="$helm_cmd --set config.pluginsGpuVersion=none"
     fi
     if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
         helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
@@ -84,7 +95,7 @@ helm_install_cedana() {
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     fi
 
-    helm_cmd="$helm_cmd --wait --timeout=5m"
+    helm_cmd="$helm_cmd --wait --timeout=7m"
 
     debug "$helm_cmd" || {
         error_log "Failed to install helm chart"
@@ -119,6 +130,7 @@ helm_uninstall_cedana() {
     debug_log "Waiting for all pods in $namespace namespace to terminate..."
 
     wait_for_cmd_fail 120 "kubectl get pods -n $namespace --no-headers 2>/dev/null | grep -q ."
+    wait_for_cmd_fail 30 "kubectl get namespaces | grep -q $namespace"
 
     debug_log "Helm chart uninstalled successfully"
 }

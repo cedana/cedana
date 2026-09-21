@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -17,6 +18,7 @@ import (
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -44,20 +46,31 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			return nil, status.Errorf(codes.Unimplemented, "unsupported compression format '%s'", compression)
 		}
 
-		async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
+		// if compression we use a tmp dir for CRIU and then later on create compressed
+		// file with storage, else ask the storage medium for a path
+		var cleanup func(bool) error
+		var imagesDirectory string
 
-		// If remote storage, we instead use a temporary directory for CRIU
-		if storage.IsRemote() {
+		if (compression != "" && compression != "none") || storage.IsRemote() {
 			dir = os.TempDir()
+			imagesDirectory = filepath.Join(dir, req.Name)
+		} else {
+			imagesDirectory, cleanup, err = storage.CreatePath(ctx, req.Dir, req.Name)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "could not get path for checkpoint: %v", err)
+			}
+			if cleanup != nil {
+				defer func() {
+					cancel := false
+					if err != nil {
+						cancel = true
+					}
+					err = errors.Join(err, cleanup(cancel))
+				}()
+			}
 		}
 
-		// Check if the provided dir exists
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
-			return nil, status.Errorf(codes.InvalidArgument, "dump dir does not exist: %s", dir)
-		}
-
-		// Create a new directory within the dump dir, where dump will happen
-		imagesDirectory := filepath.Join(dir, req.Name)
+		async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
 
 		// Create the directory
 		if err := os.Mkdir(imagesDirectory, DUMP_DIR_PERMS); err != nil {
@@ -101,6 +114,14 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			path := req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
 			compress := func(ctx context.Context) (err error) {
+				// detect FuseFs if dir is not remote and not provided by a plugin
+				isFuse, err := isFuseFS(req.Dir, !storage.IsRemote() && !strings.Contains(req.Dir, "://"))
+				if err != nil {
+					return fmt.Errorf("failed to determine filesystem type: %w", err)
+				}
+
+				log.Debug().Str("path", path).Str("compression", compression).Bool("is_fuse", isFuse).Msg("starting compression of dump")
+
 				tarball, err := storage.Create(ctx, path)
 				if err != nil {
 					return fmt.Errorf("failed to create tarball in storage: %w", err)
@@ -112,7 +133,8 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
-				err = io.Tar(imagesDirectory, tarball, compression)
+
+				err = io.Tar(imagesDirectory, tarball, compression, isFuse)
 				if err != nil {
 					storage.Delete(ctx, path)
 					os.RemoveAll(imagesDirectory)
@@ -177,9 +199,35 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				size := utils.SizeFromPath(imagesDirectory)
 				profiling.AddIO(ctx, size)
 			}()
-			resp.Paths = append(resp.Paths, imagesDirectory)
+
+			// If imagesDirectory was provided by a plugin
+			// dump path to be req.Dir + req.Name
+			if strings.Contains(req.Dir, "://") {
+				resp.Paths = append(resp.Paths, req.Dir+req.Name)
+			} else {
+				resp.Paths = append(resp.Paths, imagesDirectory)
+			}
 		}
 
 		return next(ctx, opts, resp, req)
 	}
+}
+
+func isFuseFS(path string, stat bool) (bool, error) {
+	if !stat {
+		return false, nil
+	}
+	var statfs unix.Statfs_t
+	if err := unix.Statfs(path, &statfs); err != nil {
+		return false, fmt.Errorf("failed to get statfs for %s: %w", path, err)
+	}
+
+	// FUSE magic number is 0x65735546
+	// https://github.com/torvalds/linux/blob/master/include/uapi/linux/magic.h#L39
+	const FUSE_SUPER_MAGIC = 0x65735546
+	if statfs.Type == FUSE_SUPER_MAGIC {
+		return true, nil
+	}
+
+	return false, nil
 }

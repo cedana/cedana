@@ -2,7 +2,6 @@ package job
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -23,11 +22,11 @@ const SLURM_SCRIPT_FILE = "slurm_script"
 func GetSlurmJobForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		jid := req.GetDetails().GetSlurm().GetJobID()
-		hostname := req.GetDetails().GetSlurm().GetHostname()
+		pid := req.GetDetails().GetSlurm().GetPID()
 
-		path := fmt.Sprintf("/system.slice/%s_slurmstepd.scope/job_%d/step_batch/user/task_special", hostname, jid)
-		if _, err := os.Stat("/sys/fs/cgroup" + path); os.IsNotExist(err) {
-			return nil, status.Errorf(codes.NotFound, "cgroup path for slurm job %d does not exist: %s", jid, path)
+		path, err := ResolveJobCgroupPath(jid, pid)
+		if err != nil {
+			return nil, err
 		}
 
 		config := &cgroups.Cgroup{

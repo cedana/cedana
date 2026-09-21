@@ -14,11 +14,9 @@ func ValidateRestoreRequest(next types.Restore) types.Restore {
 		if req.GetDetails().GetSlurm() == nil {
 			return nil, status.Errorf(codes.InvalidArgument, "missing slurm run options")
 		}
-		if req.GetDetails().GetSlurm().GetID() == "" {
-			return nil, status.Errorf(codes.InvalidArgument, "missing id")
+		if req.GetDetails().GetSlurm().GetJobID() == 0 {
+			return nil, status.Errorf(codes.InvalidArgument, "missing slurm job id")
 		}
-		// NOTE:Just as the runc binary works, the cwd might just be the bundle, so
-		// bundle arg can be empty.
 
 		return next(ctx, opts, resp, req)
 	}

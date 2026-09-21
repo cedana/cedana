@@ -50,8 +50,8 @@ env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   FORMATTER: junit
-  RETRIES: 1
-  DEBUG: ${{ vars.DEBUG_REGRESSION }}
+  RETRIES: 1 # some tests are still flaky
+  DEBUG: 0
 
 jobs:
   cuda:
@@ -62,22 +62,44 @@ jobs:
       fail-fast: false
       matrix:
         cuda_version:
-          # - 11-8  TODO: re-enable once compatibility is fixed
           # - 12-2
-          - 12-4
+          # - 12-4
           - 12-8
+          - 13-2
         cr:
           - default
           - streamer
         arch:
           - amd64
           - arm64
+        exclude: # to reduce CI minutes
+          - cuda_version: 12-2
+            cr: streamer
+          - cuda_version: 12-2
+            cr: default
+            arch: arm64
+          - cuda_version: 12-4
+            cr: default
+          - cuda_version: 12-4
+            cr: streamer
+            arch: amd64
+          - cuda_version: 12-8
+            cr: streamer
+          - cuda_version: 12-8
+            cr: default
+            arch: arm64
+          - cuda_version: 13-2
+            cr: default
+            arch: arm64
+          - cuda_version: 13-2
+            cr: streamer
+            arch: amd64
     container:
       image: cedana/cedana-test:cuda
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --ipc=host --gpus all --cgroupns=host
+      options: --privileged --init --ipc=host --device nvidia.com/gpu=all --cgroupns=host
     steps:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
@@ -110,6 +132,13 @@ jobs:
         with:
           name: gpu-${{ matrix.arch }}
 
+      - name: Download containerd runtime
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: containerd-runtime-${{ matrix.arch }}-*
+          merge-multiple: true
+
       - name: Download CRIU
         uses: actions/download-artifact@v4
         with:
@@ -126,7 +155,9 @@ jobs:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
         run: |
           make install
-          sudo -E cedana plugin install runc containerd crio criu storage/cedana storage/s3 storage/gcs
+          # Plugins below are used across multiple tests, so install them always
+          sudo -E cedana plugin install criu runc crun containerd containerd/runtime-runc
+          sudo -E cedana plugin install storage/cedana storage/s3 storage/gcs
           sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
           if [ "$STREAMER" = "true" ]; then
             sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
@@ -145,7 +176,7 @@ jobs:
         env:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
-          PARALLELISM: ${{ inputs.parallelism }}
+          PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
@@ -160,6 +191,16 @@ jobs:
               make test-regression TAGS=gpu,!streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
+
+      - name: Run cuda-samples interception check
+        # Samples are CUDA 12.8-built. Run on the 12.8 runner, and on the 13.2
+        # runner for backward-compat (12.8 binaries under a newer driver).
+        # Missing samples auto-skip, so the same curated list is safe on both.
+        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        run: |
+          mkdir -p /tmp/cuda-samples
+          bats --filter-tags cuda-samples -r test/regression \
+            --output /tmp/cuda-samples --report-formatter junit
 
       - name: Setup node
         if: always()
@@ -191,6 +232,18 @@ jobs:
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
             testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
 
+      - name: Generate report (cuda-samples)
+        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        run: |
+          npx junit-to-ctrf "/tmp/cuda-samples/report.xml" -t bats -o /tmp/report-cuda-samples.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="CUDA samples (intercepted, ${{ matrix.cuda_version }})"
+
       - name: Upload report
         if: always()
         id: upload-report
@@ -209,10 +262,10 @@ jobs:
       fail-fast: false
       matrix:
         cuda_version:
-          # - 11-8  TODO: re-enable once compatibility is fixed
           # - 12-2
-          - 12-4
+          # - 12-4
           - 12-8
+          - 13-2
         arch:
           - amd64
           - arm64

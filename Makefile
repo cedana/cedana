@@ -5,10 +5,9 @@ INSTALL_LIB_DIR=/usr/local/lib
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
+BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
-
-DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
 ifndef VERBOSE
 .SILENT:
@@ -24,18 +23,19 @@ BINARY=cedana
 BINARY_SOURCES=$(shell find . -path ./test -prune -o -type f -name '*.go' -not -path './plugins/*' -print)
 PKG_SOURCES=$(sort $(shell find pkg -name '*.go'))
 GO_MOD_FILES=go.sum go.mod
-VERSION=$(shell git describe --tags --always)
+VERSION?=$(shell git describe --tags --always 2>/dev/null || echo dev)
 LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
+DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
 cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building $(BINARY) with debug symbols..." ;\
-		$(GOBUILD) -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $@ ;\
+		$(GOBUILD) -buildvcs=$(BUILDVCS) $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -o $@ ;\
 	else \
 		echo "Building $(BINARY)..." ;\
-		$(GOBUILD) -buildvcs=true -ldflags "$(LDFLAGS)" -o $@ ;\
+		$(GOBUILD) -buildvcs=$(BUILDVCS) -ldflags "$(LDFLAGS)" -o $@ ;\
 	fi
 
 install: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the binary
@@ -46,16 +46,16 @@ $(INSTALL_BIN_DIR)/$(BINARY): $(OUT_DIR)/$(BINARY)
 start: $(INSTALL_BIN_DIR)/$(BINARY) ## Start the daemon
 	$(SUDO) $(BINARY) daemon start
 
-install-systemd: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the systemd daemon
-	@echo "Installing systemd service..."
-	$(SUDO) $(SCRIPTS_DIR)/host/systemd-install.sh
+install-service: $(INSTALL_BIN_DIR)/$(BINARY) ## Install the daemon as a service
+	@echo "Installing service..."
+	$(SUDO) $(SCRIPTS_DIR)/install-service.sh
 
-reset-systemd: ## Reset the systemd daemon
-	@echo "Stopping systemd service..."
-	$(SUDO) $(SCRIPTS_DIR)/host/systemd-reset.sh ;\
+reset-service: ## Reset the daemon service
+	@echo "Stopping service..."
+	$(SUDO) $(SCRIPTS_DIR)/reset-service.sh
 	sleep 1
 
-reset: reset-systemd reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
+reset: reset-service reset-plugins reset-db reset-config reset-tmp reset-logs ## Reset (everything)
 	@echo "Resetting cedana..."
 	$(SUDO) pkill $(BINARY) || true
 	rm -f $(OUT_DIR)/$(BINARY)
@@ -67,7 +67,7 @@ reset-db: ## Reset the local database
 
 reset-config: ## Reset configuration files
 	@echo "Resetting configuration..."
-	rm -rf ~/.cedana
+	$(SUDO) rm -rf /etc/cedana
 
 reset-tmp: ## Reset temporary files
 	@echo "Resetting temporary files..."
@@ -92,10 +92,10 @@ plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
 $(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building plugin $* with debug symbols..." ;\
-		$(GOBUILD) -C plugins/"$*" -buildvcs=true $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
+		$(GOBUILD) -C plugins/"$*" -buildvcs=$(BUILDVCS) $(DEBUG_FLAGS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
 	else \
 		echo "Building plugin $*..." ;\
-		$(GOBUILD) -C plugins/"$*" -buildvcs=true -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
+		$(GOBUILD) -C plugins/"$*" -buildvcs=$(BUILDVCS) -ldflags "$(LDFLAGS)" -buildmode=plugin -o $@ ;\
 	fi
 
 plugins-install: $(PLUGIN_INSTALL_PATHS) ## Install all plugins
@@ -118,6 +118,7 @@ TAGS?=
 ARGS?=
 RETRIES?=0
 GPU?=0
+REPORT?=
 PROVIDER?=K3s
 SKIP_HELM?=0
 HELPER_REPO?=
@@ -128,22 +129,23 @@ CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
+BATS_CMD_TAGS=export BATS_NO_FAIL_FOCUS_RUN=1; export BATS_RETRIES=$(RETRIES); bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
-BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_TEST_RETRIES=$(RETRIES) bats \
+BATS_CMD=export BATS_NO_FAIL_FOCUS_RUN=1; export BATS_RETRIES=$(RETRIES); bats \
 		        --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 
-test: test-unit test-regression test-k8s ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test: test-unit test-regression test-k8s test-slurm ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
 test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
-	$(GOCMD) test -v $(GOMODULE)/...test -bench=. -benchmem
+	$(GOCMD) test -v $(GOMODULE)/... -bench=. -benchmem
 
 test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
+		echo "Retries: $(RETRIES)" ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		echo "\nUsing unique instance of daemon per test...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -202,11 +204,15 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
+		echo "Retries: $(RETRIES)" ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
 		if [ "$(TAGS)" = "" ]; then \
 			$(BATS_CMD) -r test/k8s ; status=$$? ;\
 		else \
 			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
+		fi ;\
+		if [ -n "$(REPORT)" ] && [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/$(REPORT).xml ;\
 		fi ;\
 		if [ $$status -ne 0 ]; then \
 			echo "Kubernetes e2e tests failed" ;\
@@ -233,6 +239,7 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
 				GPU=$(GPU) \
+				REPORT=$(REPORT) \
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
 				CLUSTER_ID=$(CLUSTER_ID) \
@@ -255,6 +262,7 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
 				GPU=$(GPU) \
+				REPORT=$(REPORT) \
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
 				CLUSTER_ID=$(CLUSTER_ID) \
@@ -268,6 +276,46 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				$$MAKE_ADDITIONAL_OPTS ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
+	fi
+
+test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+	if [ -f /.dockerenv ]; then \
+		echo "Running slurm e2e tests..." ;\
+		echo "Retries: $(RETRIES)" ;\
+		echo "Parallelism: $(PARALLELISM)" ;\
+		if [ "$(TAGS)" = "" ]; then \
+			$(BATS_CMD) -r test/slurm ; status=$$? ;\
+		else \
+			$(BATS_CMD_TAGS) -r test/slurm ; status=$$? ;\
+		fi ;\
+		if [ -n "$(REPORT)" ] && [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/$(REPORT).xml ;\
+		fi ;\
+		if [ $$status -ne 0 ]; then \
+			echo "Slurm e2e tests failed" ;\
+			exit $$status ;\
+		else \
+			echo "All slurm e2e tests passed!" ;\
+		fi ;\
+	else \
+		if [ "$(GPU)" = "1" ]; then \
+			echo "Running in container $(DOCKER_TEST_IMAGE_CUDA)..." ;\
+			$(DOCKER_TEST_CREATE_SLURM_CUDA) ;\
+		else \
+			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
+			$(DOCKER_TEST_CREATE_SLURM) ;\
+		fi ;\
+		$(DOCKER_TEST_START) ;\
+		$(SLURM_ARTIFACTS_INSTALL) ;\
+		$(DOCKER_TEST_EXEC) make test-slurm \
+			PARALLELISM=$(PARALLELISM) \
+			TAGS=$(TAGS) \
+			RETRIES=$(RETRIES) \
+			GPU=$(GPU) \
+			REPORT=$(REPORT) \
+			FORMATTER=$(FORMATTER) \
+			DEBUG=$(DEBUG) ;\
+		$(DOCKER_TEST_REMOVE) ;\
 	fi
 
 test-enter: ## Enter the test environment
@@ -347,7 +395,36 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null
 
-docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
+CEDANA_SLURM_DIR?=$(shell if [ -d ../cedana-slurm ]; then cd ../cedana-slurm && pwd; fi)
+SLURM_ARTIFACTS_DIR?=$(shell if [ -d ../artifacts ]; then cd ../artifacts && pwd; fi)
+DOCKER_TEST_CREATE_SLURM_OPTS=$(if $(CEDANA_SLURM_DIR),-v $(CEDANA_SLURM_DIR):/cedana-slurm,) $(if $(SLURM_ARTIFACTS_DIR),-v $(SLURM_ARTIFACTS_DIR):/artifacts:ro,)
+
+SLURM_ARTIFACTS_INSTALL=docker exec $(DOCKER_TEST_CONTAINER_NAME) bash -c '\
+	if [ -d /artifacts ]; then \
+		cp -f /artifacts/cedana/cedana /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/criu/criu /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/slurm/build/cedana-slurm /usr/local/bin/ 2>/dev/null; \
+		cp -f /artifacts/plugin-slurm/libcedana-slurm.so /usr/local/lib/ 2>/dev/null; \
+		cp -f /artifacts/slurm/build/*.so /usr/local/lib/ 2>/dev/null; \
+		chmod +x /usr/local/bin/cedana /usr/local/bin/criu /usr/local/bin/cedana-slurm 2>/dev/null; \
+	fi'
+
+DOCKER_TEST_CREATE_SLURM=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_CREATE_SLURM_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
+						$(PLUGIN_LIB_COPY) && \
+						$(PLUGIN_BIN_COPY) && \
+						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
+DOCKER_TEST_CREATE_SLURM_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_CREATE_SLURM_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
+						$(PLUGIN_LIB_COPY) && \
+						$(PLUGIN_BIN_COPY) && \
+						$(PLUGIN_LIB_COPY_GPU) && \
+						$(PLUGIN_BIN_COPY_GPU) && \
+						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
+
+ifeq ($(PREBUILT_BINARIES),1)
+docker: cedana plugins ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERSION=<version>, PREBUILT_BINARIES=[0|1], ALL_PLUGINS=[0|1])
+else
+docker:
+endif
 	@echo "Building helper Docker image..."
 	docker buildx build --platform $(PLATFORM) \
 		--build-arg PREBUILT_BINARIES=$(PREBUILT_BINARIES) \
@@ -355,7 +432,7 @@ docker: ## Build the helper Docker image (PLATFORM=linux/amd64,linux/arm64, VERS
 		--build-arg VERSION=$(VERSION) \
 		-t $(DOCKER_IMAGE) --load . ;\
 
-docker-push: ## Push the helper Docker image (DOCKER_IMAGE=<image>)
+docker-push: docker ## Push the helper Docker image (DOCKER_IMAGE=<image>)
 	@echo "Pushing helper Docker image..."
 	docker push $(DOCKER_IMAGE)
 

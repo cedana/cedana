@@ -3,13 +3,10 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"os"
 
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -32,6 +29,7 @@ func init() {
 	rootCmd.AddCommand(checkCmd)
 	rootCmd.AddCommand(freezeCmd)
 	rootCmd.AddCommand(unfreezeCmd)
+	rootCmd.AddCommand(versionCmd)
 
 	// Add helper cmds from plugins
 	features.HelperCmds.IfAvailable(
@@ -46,6 +44,10 @@ func init() {
 		String(flags.ConfigFlag.Full, "", "one-time config JSON string (merge with existing config)")
 	rootCmd.PersistentFlags().String(flags.ConfigDirFlag.Full, "", "custom config directory")
 	rootCmd.MarkPersistentFlagDirname(flags.ConfigDirFlag.Full)
+	rootCmd.PersistentFlags().
+		Bool(flags.InitConfig.Full, false, "initialize config file with defaults and env var overrides")
+	rootCmd.PersistentFlags().
+		Bool(flags.MergeConfig.Full, false, "same as --init-config but does not overwrite existing config file, only merges new values into it")
 	rootCmd.MarkFlagsMutuallyExclusive(flags.ConfigFlag.Full, flags.ConfigDirFlag.Full)
 	rootCmd.PersistentFlags().
 		StringP(flags.ProtocolFlag.Full, flags.ProtocolFlag.Short, "", "protocol to use (TCP, UNIX, VSOCK)")
@@ -53,11 +55,14 @@ func init() {
 		StringP(flags.AddressFlag.Full, flags.AddressFlag.Short, "", "address to use (host:port for TCP, path for UNIX, cid:port for VSOCK)")
 	rootCmd.PersistentFlags().
 		BoolP(flags.ProfilingFlag.Full, flags.ProfilingFlag.Short, false, "enable profiling/show profiling data")
+	rootCmd.PersistentFlags().
+		StringP(flags.ProfilingPathFlag.Full, flags.ProfilingPathFlag.Short, "", "path to write profiling JSON to (if enabled)")
 
 	// Bind to config
 	viper.BindPFlag("protocol", rootCmd.PersistentFlags().Lookup(flags.ProtocolFlag.Full))
 	viper.BindPFlag("address", rootCmd.PersistentFlags().Lookup(flags.AddressFlag.Full))
 	viper.BindPFlag("profiling.enabled", rootCmd.PersistentFlags().Lookup(flags.ProfilingFlag.Full))
+	viper.BindPFlag("profiling.path", rootCmd.PersistentFlags().Lookup(flags.ProfilingPathFlag.Full))
 }
 
 var rootCmd = &cobra.Command{
@@ -77,32 +82,22 @@ var rootCmd = &cobra.Command{
 		"\nInstance Brokerage, Orchestration and Migration System." +
 		"\nProperty of Cedana, Corp.\n",
 
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		conf, _ := cmd.Flags().GetString(flags.ConfigFlag.Full)
-		confDir, _ := cmd.Flags().GetString(flags.ConfigDirFlag.Full)
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		logging.Init(logging.ConsoleWriter)
+	},
+}
 
-		if confDir == "" {
-			confDir = os.Getenv("CEDANA_CONFIG_DIR")
-		}
-
-		if err := config.Init(config.InitArgs{
-			Config:    conf,
-			ConfigDir: confDir,
-		}); err != nil {
-			return fmt.Errorf("Failed to initialize config: %w", err)
-		}
-
-		logging.SetLogger(logging.ConsoleWriter)
-
-		return nil
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print the version of Cedana",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(rootCmd.Version)
 	},
 }
 
 func Execute(ctx context.Context, version string) error {
-	ctx = log.With().Str("context", "cmd").Logger().WithContext(ctx)
-
 	rootCmd.Version = version
-	revision := getRevision()
+	revision := GetRevision()
 	versionTemplate := rootCmd.VersionTemplate()
 	if revision != "" {
 		versionTemplate = fmt.Sprintf("git: %s\n%s", revision, versionTemplate)

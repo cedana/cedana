@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 )
 
-var searchPath = os.Getenv("CEDANA_PLUGINS_LOCAL_SEARCH_PATH")
+var searchPath = config.Global.Plugins.LocalSearchPath
 
 type LocalManager struct {
 	searchPath string
@@ -97,7 +98,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 				found += 1
 				size += stat.Size()
 				plublishedAt = stat.ModTime()
-				sum, _ := utils.FileMD5Sum(filepath.Join(path, file.Name))
+				sum, _ := utils.FileCRC32Sum(filepath.Join(path, file.Name))
 				totalSum.WriteString(sum)
 				break
 			}
@@ -300,7 +301,7 @@ func (m *LocalManager) Remove(names []string) (chan int, chan string, chan error
 				continue
 			}
 
-			msgs <- style.NegativeColors.Sprintf("Removed %s", name)
+			msgs <- style.WarningColors.Sprintf("Removed %s", name)
 			removed <- 1
 		}
 	}()

@@ -4,15 +4,18 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/channel"
-	"github.com/cedana/cedana/pkg/features"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
@@ -21,6 +24,59 @@ import (
 )
 
 const CRIU_RESTORE_LOG_FILE = "criu-restore.log"
+
+func addRestoreProfiling(ctx context.Context, criuResp *criu.CriuRestoreResp) {
+	if criuResp == nil || criuResp.GetStats() == nil {
+		return
+	}
+
+	stats := criuResp.GetStats()
+	preRestoreTime := time.Duration(stats.GetPreRestoreTime()) * time.Microsecond
+	profiling.AddTimingParallelComponent(ctx, preRestoreTime, "PreRestore")
+
+	restoreTime := time.Duration(stats.GetRestoreTime()) * time.Microsecond
+	restoreCtx := profiling.AddTimingParallelComponent(ctx, restoreTime, "Restore")
+	type pidTimeEntry struct {
+		time  uint32
+		pid   uint32
+		stage string
+	}
+
+	processStats := stats.GetProcessRestoreStats()
+	var timingsByStage [][]pidTimeEntry
+	if len(processStats) > 0 {
+		// the order of time entries is preserved when deserializing
+		// protobufs, so this allows us to index using i
+		// and all ProcessRestoreStats will have the same number of timeEntries
+		timingsByStage = make([][]pidTimeEntry, len(processStats[0].GetTimeEntries()))
+	}
+
+	for _, processRestoreStats := range processStats {
+		for i, timeEntry := range processRestoreStats.GetTimeEntries() {
+			timingsByStage[i] = append(timingsByStage[i], pidTimeEntry{timeEntry.GetTime(), processRestoreStats.GetPid(), timeEntry.GetName()})
+		}
+	}
+
+	// Sort to get slowest time for stage
+	for _, timingsForStage := range timingsByStage {
+		sort.Slice(timingsForStage, func(i, j int) bool {
+			return timingsForStage[i].time > timingsForStage[j].time
+		})
+	}
+
+	// add slowest time to profiler for each stage
+	for _, timingsForStage := range timingsByStage {
+		if len(timingsForStage) == 0 {
+			continue
+		}
+		slowestEntry := timingsForStage[0]
+		pidStr := strconv.FormatUint(uint64(slowestEntry.pid), 10)
+		profiling.AddTimingParallelComponent(restoreCtx, time.Duration(slowestEntry.time)*time.Microsecond, "SlowestPID="+pidStr+"="+slowestEntry.stage)
+	}
+
+	postRestoreTime := time.Duration(criuResp.Stats.GetPostRestoreTime()) * time.Microsecond
+	profiling.AddTimingParallelComponent(ctx, postRestoreTime, "PostRestore")
+}
 
 // Returns a CRIU restore handler for the server
 func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
@@ -39,34 +95,23 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	// Set CRIU server
 	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
-	criuOpts.LogLevel = proto.Int32(logLevel())
-	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
+	criuOpts.LogLevel = proto.Int32(config.Global.CRIU.LogLevel)
 	criuOpts.LogToStderr = proto.Bool(false)
-
-	// Change ownership of the dump directory
-	uids := resp.GetState().GetUIDs()
-	gids := resp.GetState().GetGIDs()
-	if len(uids) == 0 || len(gids) == 0 {
-		return nil, status.Error(codes.Internal, "missing UIDs/GIDs in process state")
-	}
-	err = utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
-	}
+	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 
 	// NOTE: We don't handle reaping if the plugin has indicated that it's a 'reaper', assuming it will
 	// handle it when and how it wants to.
 
 	var exitCode chan int
-	var ok bool
-	reaper, _ := features.Reaper.IsAvailable(req.Type)
-	if !reaper || req.Type == "process" {
+	var reaper bool
+
+	// Use existing exit code channel if available. For e.g. the runc plugin handles
+	// reaping restored containers on it's own, to correctly handle signal forwarding etc.
+	// so it creates an exit code handler earlier in the chain. So, the runc plugin
+	// is considered a reaper and we don't try to reap here.
+	exitCode, reaper = ctx.Value(keys.EXIT_CODE_CHANNEL_CONTEXT_KEY).(chan int)
+	if !reaper {
 		exitCode = make(chan int, 1)
-	} else {
-		exitCode, ok = ctx.Value(keys.EXIT_CODE_CHANNEL_CONTEXT_KEY).(chan int)
-		if !ok {
-			return nil, status.Errorf(codes.Internal, "exit code channel must be set by now since plugin '%s' is a reaper", req.Type)
-		}
 	}
 	code = channel.Broadcaster(exitCode)
 
@@ -84,6 +129,10 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 		opts.IO.Stderr,
 		opts.ExtraFiles...,
 	)
+
+	if err == nil {
+		addRestoreProfiling(ctx, criuResp)
+	}
 
 	end()
 

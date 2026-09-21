@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,30 +18,45 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	cedanagosdk "github.com/cedana/cedana-go-sdk"
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
-	"github.com/gogo/protobuf/proto"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
+	"google.golang.org/protobuf/proto"
 )
 
 type EventStream struct {
 	cedana     *client.Client
-	propagator *cedanagosdk.ApiClient
+	propagator *propagatorsdk.ApiClient
 
-	url               string
-	checkpoints       *rabbitmq.Publisher
-	containerdAddress string
+	url                string
+	checkpoints        *rabbitmq.Publisher
+	checkpointRequests *rabbitmq.Consumer
+	containerdAddress  string
+	lifecycleMu        sync.RWMutex
+	closeOnce          sync.Once
+	closeErr           error
 	*rabbitmq.Conn
 }
 
-func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.ApiClient, containerdAddress string) (*EventStream, error) {
+var defaultDumpOpts = &criu.CriuOpts{
+	LeaveRunning:      proto.Bool(true),
+	TcpEstablished:    proto.Bool(true),
+	TcpSkipInFlight:   proto.Bool(true),
+	LinkRemap:         proto.Bool(true),
+	ManageCgroups:     proto.Bool(true),
+	ManageCgroupsMode: criu.CriuCgMode_CG_NONE.Enum(),
+}
+
+var queryExpiryMs = 30 * time.Minute.Milliseconds()
+
+func New(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.ApiClient, containerdAddress string) (*EventStream, error) {
 	if cedana == nil {
 		return nil, fmt.Errorf("cedana client is nil")
 	}
@@ -52,7 +68,7 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 		hostname = "unknown"
 	}
 	clientName := fmt.Sprintf("cedana-daemon-%s-%d", hostname, time.Now().UnixNano())
-	url, err := propagator.V2().Discover().ByName("rabbitmq").Get(ctx, nil)
+	url, err := propagator.V1().Discover().ByName("rabbitmq").Get(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to discover rabbitmq service: %v", err)
 	}
@@ -80,9 +96,16 @@ func New(ctx context.Context, cedana *client.Client, propagator *cedanagosdk.Api
 }
 
 func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
 	queueName := "cedana_daemon_helper-" + rand.Text()
 	consumer, err := rabbitmq.NewConsumer(
-		es.Conn,
+		conn,
 		queueName,
 		rabbitmq.WithConsumerOptionsExchangeName("daemon_broadcast_request"),
 		rabbitmq.WithConsumerOptionsConcurrency(10),
@@ -90,6 +113,11 @@ func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
 		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_helper"),
 		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsQueueExclusive,
+		rabbitmq.WithConsumerOptionsQueueAutoDelete,
+		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+			"x-expires": queryExpiryMs,
+		}),
 		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
 			RoutingKey:     "",
 			BindingOptions: rabbitmq.BindingOptions{},
@@ -98,22 +126,90 @@ func (es *EventStream) StartCheckpointsConsumer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = consumer.Run(es.checkpointHandler(ctx))
-	if err != nil {
+
+	es.lifecycleMu.Lock()
+	if es.Conn == nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.checkpointRequests != nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("checkpoints consumer is already running")
+	}
+	es.checkpointRequests = consumer
+	es.lifecycleMu.Unlock()
+
+	defer func() {
+		es.lifecycleMu.Lock()
+		if es.checkpointRequests == consumer {
+			es.checkpointRequests = nil
+		}
+		es.lifecycleMu.Unlock()
+	}()
+
+	if err := consumer.Run(es.checkpointHandler(ctx)); err != nil {
+		consumer.Close()
 		return err
 	}
 	return nil
 }
 
 func (es *EventStream) StartCheckpointsPublisher(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
 	publisher, err := rabbitmq.NewPublisher(
-		es.Conn,
+		conn,
 	)
 	if err != nil {
 		return err
 	}
+
+	es.lifecycleMu.Lock()
+	defer es.lifecycleMu.Unlock()
+	if es.Conn == nil {
+		publisher.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.checkpoints != nil {
+		publisher.Close()
+		return fmt.Errorf("checkpoints publisher is already running")
+	}
 	es.checkpoints = publisher
 	return nil
+}
+
+func (es *EventStream) Close() error {
+	es.closeOnce.Do(func() {
+		es.lifecycleMu.Lock()
+		consumer := es.checkpointRequests
+		publisher := es.checkpoints
+		conn := es.Conn
+		es.checkpointRequests = nil
+		es.checkpoints = nil
+		es.Conn = nil
+		es.lifecycleMu.Unlock()
+
+		if consumer != nil {
+			consumer.Close()
+		}
+		if publisher != nil {
+			publisher.Close()
+		}
+		if conn != nil {
+			if err := conn.Close(); err != nil {
+				es.closeErr = errors.Join(es.closeErr, fmt.Errorf("failed to close rabbitmq connection: %w", err))
+			}
+		}
+	})
+
+	return es.closeErr
 }
 
 /////////////
@@ -148,6 +244,7 @@ type checkpointInfo struct {
 	GPU            bool          `json:"gpu"`
 	Platform       string        `json:"platform"`
 	ProfilingInfo  profilingInfo `json:"profiling_info"`
+	Info           info          `json:"info"`
 	ContainerOrder int           `json:"container_order"`
 }
 
@@ -155,6 +252,13 @@ type profilingInfo struct {
 	Raw           *profiling.Data `json:"raw"`
 	TotalDuration int64           `json:"total_duration"`
 	TotalIO       int64           `json:"total_io"`
+}
+
+type info struct {
+	Profiling     *profiling.Data `json:"profiling"`
+	TotalDuration int64           `json:"total_duration"`
+	TotalIO       int64           `json:"total_io"`
+	Error         string          `json:"error,omitempty"`
 }
 
 type imageSecret struct {
@@ -211,7 +315,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			}
 			specMap[i] = spec
 
-			checkpointId, err := es.propagator.V2().Checkpoints().Post(ctx, nil)
+			checkpointId, err := es.propagator.V1().Checkpoints().Post(ctx, nil)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to create checkpoint in propagator")
 				return rabbitmq.Ack
@@ -253,12 +357,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			dumpReq := &daemon.DumpReq{
 				Name: checkpointIdMap[i],
 				Type: "containerd",
-				Criu: &criu.CriuOpts{
-					LeaveRunning:    proto.Bool(true),
-					TcpEstablished:  proto.Bool(true),
-					TcpSkipInFlight: proto.Bool(true),
-					LinkRemap:       proto.Bool(true),
-				},
+				Criu: defaultDumpOpts,
 				Details: &daemon.Details{
 					Containerd: container,
 				},
@@ -374,14 +473,23 @@ func (es *EventStream) publishCheckpoint(
 	dumpErr error,
 ) error {
 	log := *log.Ctx(ctx)
+	es.lifecycleMu.RLock()
+	publisher := es.checkpoints
+	es.lifecycleMu.RUnlock()
+	if publisher == nil {
+		return fmt.Errorf("checkpoints publisher is not initialized")
+	}
+
 	ci := checkpointInfo{
 		ActionId:       actionId,
 		PodId:          podId,
 		CheckpointId:   checkpointId,
 		ContainerOrder: containerOrder,
+		Info:           info{},
 	}
 	if dumpErr != nil {
 		ci.Status = "error"
+		ci.Info.Error = dumpErr.Error() // TODO: Capture more related logs
 	} else {
 		ci.Status = "success"
 	}
@@ -415,18 +523,20 @@ func (es *EventStream) publishCheckpoint(
 				totalIO += component.IO
 			}
 		}
-		profilingInfo := profilingInfo{
+		ci.Info.Profiling = profilingData
+		ci.Info.TotalDuration = totalDuration
+		ci.Info.TotalIO = totalIO
+		ci.ProfilingInfo = profilingInfo{
 			Raw:           profilingData,
 			TotalDuration: totalDuration,
 			TotalIO:       totalIO,
 		}
-		ci.ProfilingInfo = profilingInfo
 	}
 	data, err := json.Marshal(ci)
 	if err != nil {
 		return err
 	}
-	err = es.checkpoints.Publish(data, []string{"checkpoint_response"})
+	err = publisher.Publish(data, []string{"checkpoint_response"})
 	if err != nil {
 		return err
 	}
@@ -439,7 +549,7 @@ func (es *EventStream) publishCheckpoint(
 }
 
 func (es *EventStream) getImageSecret() (*imageSecret, error) {
-	url := es.propagator.RequestAdapter.GetBaseUrl() + "/v2/secrets"
+	url := es.propagator.RequestAdapter.GetBaseUrl() + "/secrets"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err

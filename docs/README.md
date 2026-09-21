@@ -86,7 +86,8 @@ For all available CLI options, see [CLI reference](references/cli/cedana.md). Di
 - [Checkpoint/restore basics](guides/cr.md)
 - [Checkpoint/restore with GPUs](guides/gpu/cr.md)
 - [Checkpoint/restore runc](guides/runc/cr.md)
-- [Checkpoint/restore containerd](guides/runc/cr.md)
+- [Checkpoint/restore crun](guides/crun/cr.md)
+- [Checkpoint/restore containerd](guides/containerd/cr.md)
 - [Checkpoint/restore streamer](guides/streamer/cr.md)
 - [Checkpoint/restore kubernetes](guides/k8s/cr.md)
 
@@ -95,6 +96,7 @@ For all available CLI options, see [CLI reference](references/cli/cedana.md). Di
 - [Amazon S3](guides/storage/s3.md)
 - [Google Cloud Storage](guides/storage/gcs.md)
 - [Cedana Storage](guides/storage/cedana.md)
+- [Cedana Storage Express](guides/storage/csx.md)
 
 ### Developer guides
 

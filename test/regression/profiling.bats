@@ -39,7 +39,8 @@ teardown_file() {
 @test "run process (profiling output off)" {
     jid=$(unix_nano)
 
-    run cedana run process echo hello --jid "$jid" --profiling=false
+    CEDANA_PROFILING_ENABLED=false
+    run cedana run process echo hello --jid "$jid"
     assert_success
     refute_output --partial "total"
 }
@@ -57,7 +58,8 @@ teardown_file() {
 @test "run process (profiling output off, without daemon)" {
     jid=$(unix_nano)
 
-    run cedana run process echo hello --jid "$jid" --profiling=false --no-server
+    CEDANA_PROFILING_ENABLED=false
+    run cedana run process echo hello --jid "$jid" --no-server
     assert_success
     refute_output --partial "total"
 }
@@ -79,7 +81,8 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana dump process $pid --profiling=false
+    CEDANA_PROFILING_ENABLED=false
+    run cedana dump process $pid
     assert_success
     refute_output --partial "total"
 
@@ -109,13 +112,14 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh &
     pid=$!
 
-    run cedana dump process $pid --profiling=false
+    CEDANA_PROFILING_ENABLED=false
+    run cedana dump process $pid
     assert_success
     refute_output --partial "total"
 
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
 
-    run cedana restore process --path "$dump_file" --profiling=false
+    run cedana restore process --path "$dump_file"
     assert_success
     refute_output --partial "total"
 
@@ -145,13 +149,14 @@ teardown_file() {
     "$WORKLOADS"/date-loop.sh 3 &
     pid=$!
 
-    run cedana dump process $pid --profiling=false
+    CEDANA_PROFILING_ENABLED=false
+    run cedana dump process $pid
     assert_success
     refute_output --partial "total"
 
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
 
-    run cedana restore process --path "$dump_file" --profiling=false --no-server
+    run cedana restore process --path "$dump_file" --no-server
     assert_success
     refute_output --partial "total"
 

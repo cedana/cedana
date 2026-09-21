@@ -30,14 +30,19 @@ on:
         description: "Run kubernetes tests"
         required: false
         default: true
+      slurm:
+        type: boolean
+        description: "Run slurm tests"
+        required: false
+        default: true
+      slurm_versions:
+        type: string
+        description: "SLURM versions to test, from download.yml's output (JSON array)"
+        required: false
+        default: ""
       parallelism:
         type: number
         description: "Parallelism for running tests"
-        required: false
-        default: 2
-      parallelism_gpu:
-        type: number
-        description: "Parallelism for running GPU tests"
         required: false
         default: 2
       runner:
@@ -64,8 +69,8 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   AWS_REGION: ${{ vars.AWS_REGION }}
   FORMATTER: junit
-  RETRIES: 1
-  DEBUG: ${{ vars.DEBUG_REGRESSION }}
+  RETRIES: 0
+  DEBUG: 0
 
 jobs:
   unit:
@@ -78,7 +83,7 @@ jobs:
           - amd64
           - arm64
     container:
-      image: golang:1.25rc3-bullseye
+      image: golang:1.25-bookworm
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
@@ -89,7 +94,9 @@ jobs:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
+          submodules: recursive
           fetch-tags: true
+          token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
         uses: actions/download-artifact@v4
@@ -102,6 +109,11 @@ jobs:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
+
+      - name: Download streamer plugin # if provided from a caller workflow, will be later installed
+        uses: actions/download-artifact@v4
+        with:
+          name: streamer-${{ matrix.arch }}
 
       - name: Make executable
         run: |
@@ -124,8 +136,11 @@ jobs:
       fail-fast: false
       matrix:
         name:
-          - k8s-setup-host
-          # - slurm-setup-host
+          - install-deps
+          - install-service
+          - reset-service
+          - configure-shm
+          - configure-io-uring
         arch:
           - amd64
           - arm64
@@ -148,15 +163,13 @@ jobs:
         run: |
           sudo chmod +x ./cedana
           sudo cp ./cedana /usr/local/bin/
-          sudo mkdir -p /cedana/scripts/host
-          sudo cp -r ./scripts/host/* /cedana/scripts/host
           sudo \
             ENV="CI" \
             CEDANA_URL="${CEDANA_URL}" \
             CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}" \
             CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL}" \
             CEDANA_PLUGINS_BUILDS="${CEDANA_PLUGINS_BUILDS}" \
-            /cedana/scripts/host/${{ matrix.name }}.sh
+            scripts/${{ matrix.name }}.sh
 
   basic:
     name: Basic
@@ -216,7 +229,7 @@ jobs:
       - name: Run regression tests
         env:
           LARGE: ${{ inputs.large }}
-          PARALLELISM: ${{ inputs.parallelism }}
+          PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
           if [ "$LARGE" = "true" ]; then
             make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
@@ -272,8 +285,8 @@ jobs:
       matrix:
         plugin:
           - runc
+          - crun
           - containerd
-          - crio
           - storage/cedana
           - storage/s3
           - storage/gcs
@@ -329,9 +342,11 @@ jobs:
       - name: Install
         run: |
           make install
-          sudo -E cedana plugin install ${{ matrix.plugin }} criu runc storage/cedana storage/s3 storage/gcs
+          # Plugins below are used across multiple tests, so install them always
+          sudo -E cedana plugin install criu storage/cedana storage/s3 storage/gcs
+          sudo -E cedana plugin install ${{ matrix.plugin }}
           if [ "${{ matrix.plugin }}" = "containerd" ]; then
-            sudo -E cedana plugin install containerd/runtime-runc
+            sudo -E cedana plugin install runc crun containerd/runtime-runc
           fi
 
       - name: Mark git dir as safe
@@ -414,7 +429,6 @@ jobs:
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
-      parallelism_gpu: ${{ inputs.parallelism_gpu }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       post_summary: false # Will post consolidated summary instead
@@ -427,7 +441,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
-      parallelism: ${{ inputs.parallelism_gpu }}
+      parallelism: ${{ inputs.parallelism }}
       runner: ${{ inputs.runner_gpu }}
       post_summary: false # Will post consolidated summary instead
 
@@ -515,10 +529,28 @@ jobs:
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
+  slurm:
+    name: Slurm
+    uses: ./.github/workflows/test_slurm.yml
+    # Empty means download's slurm job was skipped, so there are no artifacts to test.
+    if: ${{ inputs.slurm && inputs.slurm_versions != '' }}
+    secrets: inherit
+    with:
+      ref: ${{ inputs.ref }}
+      slurm_versions: ${{ inputs.slurm_versions }}
+      debug: ${{ inputs.debug }}
+      large: ${{ inputs.large }}
+      runner: ${{ inputs.runner }}
+      runner_gpu: ${{ inputs.runner_gpu }}
+      # Pinned to 1 because SLURM tests share a single cluster instance.
+      # Running them in parallel can cause resource collisions and flaky tests.
+      parallelism: 1
+      post_summary: false # Will post consolidated summary instead
+
   post-summary:
     name: Post Summary
     if: always()
-    needs: [basic, plugin, streamer, gpu, k3s, eks, gke, nebius]
+    needs: [basic, plugin, streamer, gpu, k3s, eks, gke, nebius, slurm]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

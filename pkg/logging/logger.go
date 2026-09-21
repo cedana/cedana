@@ -36,26 +36,23 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 }
 
 func init() {
-	initLogger(config.Global.LogLevel, io.Discard)
-}
-
-func initLogger(level string, writers ...io.Writer) {
-	var err error
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-
-	Level, err = zerolog.ParseLevel(level)
-	if err != nil || level == "" { // allow turning off logging
-		Level = zerolog.Disabled
-	}
-
-	for _, w := range writers {
-		AddLogger(w)
-	}
+	Init(io.Discard)
 }
 
-func AddLogger(writer io.Writer) {
+func Init(writer io.Writer) {
+	SetLevel(config.Global.LogLevel)
+	GlobalWriter = writer
+	log.Logger = zerolog.New(GlobalWriter).
+		Level(Level).
+		With().
+		Timestamp().
+		Logger().Hook(LineInfoHook{})
+}
+
+func Add(writer io.Writer) {
 	if GlobalWriter == nil || GlobalWriter == io.Discard {
-		SetLogger(writer)
+		Init(writer)
 		return
 	}
 	log.Logger = zerolog.New(io.MultiWriter(GlobalWriter, writer)).
@@ -65,16 +62,7 @@ func AddLogger(writer io.Writer) {
 		Logger().Hook(LineInfoHook{})
 }
 
-func SetLogger(writer io.Writer) {
-	GlobalWriter = writer
-	log.Logger = zerolog.New(GlobalWriter).
-		Level(Level).
-		With().
-		Timestamp().
-		Logger().Hook(LineInfoHook{})
-}
-
-func GetLogger() *zerolog.Logger {
+func Get() *zerolog.Logger {
 	return &log.Logger
 }
 

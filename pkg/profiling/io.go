@@ -449,6 +449,24 @@ func AddIO(ctx context.Context, n int64) {
 	data.IO += n
 }
 
+// MarkRedundant marks the current profiling component as display-only for totals.
+func MarkRedundant(ctx context.Context) {
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return
+	}
+	data.Redundant = true
+}
+
+// MarkIORedundant marks only the current profiling component's I/O as display-only for totals.
+func MarkIORedundant(ctx context.Context) {
+	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
+	if !ok {
+		return
+	}
+	data.IORedundant = true
+}
+
 func AddIOComponent(ctx context.Context, n int64, f ...any) {
 	var data *Data
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)

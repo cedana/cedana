@@ -23,12 +23,27 @@ var Registry = []Plugin{
 		Binaries:  []Binary{{Name: "cuda-checkpoint", InstallDir: "/usr/local/bin"}}, // Do not change
 		Libraries: []Binary{{Name: "cuda_plugin.so", InstallDir: "/usr/lib/criu"}},   // Do not change
 	},
+	{
+		Name:      "criu/nvidia-dev",
+		Type:      EXTERNAL,
+		Libraries: []Binary{{Name: "nvidia-dev-plugin.so", InstallDir: "/usr/lib/criu"}}, // Do not change
+	},
+	{
+		Name:      "criu/infiniband",
+		Type:      EXTERNAL,
+		Libraries: []Binary{{Name: "infiniband-plugin.so", InstallDir: "/usr/lib/criu"}}, // Do not change
+	},
 
 	// Container runtimes
 	{
 		Name:      "runc",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-runc.so"}},
+	},
+	{
+		Name:      "crun",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-crun.so"}},
 	},
 	{
 		Name:      "containerd",
@@ -61,6 +76,11 @@ var Registry = []Plugin{
 		Name:      "storage/gcs",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-storage-gcs.so"}},
+	},
+	{
+		Name:      "storage/csx",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-storage-csx.so"}},
 	},
 
 	// Others
@@ -101,9 +121,16 @@ var Registry = []Plugin{
 		Name: "slurm/wlm",
 		Type: EXTERNAL,
 		Libraries: []Binary{
-			{Name: "libslurm-cedana.so", InstallDir: "/usr/lib/x86_64-linux-gnu/slurm-wlm "},
-			{Name: "task-cedana.so", InstallDir: "/usr/lib/x86_64-linux-gnu/slurm-wlm "},
+			{Name: "spank_cedana.so"},
+			{Name: "task_cedana.so"},
+			{Name: "cli_filter_cedana.so"},
+			{Name: "job_submit_cedana.so"},
 		},
-		Binaries: []Binary{{Name: "cedana-slurm-daemon"}},
+		Binaries: []Binary{{Name: "cedana-slurm"}},
+	},
+	{
+		Name:     "slurm/tests",
+		Type:     EXTERNAL,
+		Binaries: []Binary{{Name: "test-preemption.sh"}},
 	},
 }

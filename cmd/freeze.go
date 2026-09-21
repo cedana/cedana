@@ -38,7 +38,9 @@ func init() {
 
 			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
 				newFlag := *f
-				jobFreezeCmd.Flags().AddFlag(&newFlag)
+				if jobFreezeCmd.Flags().Lookup(newFlag.Name) == nil {
+					jobFreezeCmd.Flags().AddFlag(&newFlag)
+				}
 				newFlag.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
 			})
 			return nil
@@ -96,6 +98,9 @@ var freezeCmd = &cobra.Command{
 
 		if config.Global.Profiling.Enabled && data != nil {
 			profiling.Print(data, features.Theme())
+			if config.Global.Profiling.Path != "" {
+				profiling.WriteJSON(config.Global.Profiling.Path, data)
+			}
 		}
 
 		for _, message := range resp.GetMessages() {

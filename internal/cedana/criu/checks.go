@@ -26,29 +26,22 @@ func CheckVersion(manager plugins.Manager) types.Check {
 
 		component := &daemon.HealthCheckComponent{Name: "version"}
 
-		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); !p.IsInstalled() {
-			// Set custom path if specified in config, as a fallback
-			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-				component.Warnings = append(component.Warnings,
-					"CRIU plugin not installed but a custom CRIU path was provided. It's recommended to install the plugin for full feature support.",
-				)
-				c.SetCriuPath(custom_path)
-			} else if path, err := exec.LookPath("criu"); err == nil {
-				component.Warnings = append(component.Warnings,
-					"CRIU plugin not installed but CRIU binary found in PATH. It's recommended to install the plugin for full feature support.",
-				)
-				c.SetCriuPath(path)
-			} else {
-				installed = false
-				component.Errors = append(component.Errors,
-					"CRIU plugin is not installed. This is required for userspace C/R support.",
-				)
-			}
-		} else {
+		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
+			c.SetCriuPath(custom_path)
+		} else if p = manager.Get("criu"); p.IsInstalled() {
 			c.SetCriuPath(p.BinaryPaths()[0])
+		} else if path, err := exec.LookPath("criu"); err == nil {
+			component.Warnings = append(component.Warnings,
+				"CRIU plugin not installed but CRIU binary found in PATH. It's recommended to install the plugin for full feature support.",
+			)
+			c.SetCriuPath(path)
+		} else {
+			installed = false
+			component.Errors = append(component.Errors,
+				"CRIU plugin is not installed. This is required for userspace C/R support.",
+			)
 		}
 
 		if installed {
@@ -79,20 +72,16 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 
 		component := &daemon.HealthCheckComponent{Name: "features"}
 
-		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); !p.IsInstalled() {
-			// Set custom path if specified in config, as a fallback
-			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-				c.SetCriuPath(custom_path)
-			} else if path, err := exec.LookPath("criu"); err == nil {
-				c.SetCriuPath(path)
-			} else {
-				installed = false
-			}
-		} else {
+		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
+			c.SetCriuPath(custom_path)
+		} else if p = manager.Get("criu"); p.IsInstalled() {
 			c.SetCriuPath(p.BinaryPaths()[0])
+		} else if path, err := exec.LookPath("criu"); err == nil {
+			c.SetCriuPath(path)
+		} else {
+			installed = false
 		}
 
 		if installed {
@@ -155,10 +144,10 @@ func parseCheckOutput(out string) (warnings, errors []string) {
 	// other lines are ignored. must return a list of warnings and errors.
 
 	for line := range strings.SplitSeq(out, "\n") {
-		if strings.HasPrefix(line, "Warn") {
-			warnings = append(warnings, strings.TrimSpace(strings.TrimPrefix(line, "Warn")))
-		} else if strings.HasPrefix(line, "Error") {
-			errors = append(errors, strings.TrimSpace(strings.TrimPrefix(line, "Error")))
+		if after, ok := strings.CutPrefix(line, "Warn"); ok {
+			warnings = append(warnings, strings.TrimSpace(after))
+		} else if after0, ok0 := strings.CutPrefix(line, "Error"); ok0 {
+			errors = append(errors, strings.TrimSpace(after0))
 		}
 	}
 

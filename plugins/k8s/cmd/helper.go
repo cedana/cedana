@@ -7,44 +7,33 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/metrics"
+	"github.com/cedana/cedana/pkg/script"
 	"github.com/cedana/cedana/pkg/version"
 	"github.com/cedana/cedana/plugins/k8s/internal/eventstream"
-	"github.com/cedana/cedana/plugins/k8s/pkg/utils"
+	k8scripts "github.com/cedana/cedana/plugins/k8s/scripts"
+	"github.com/cedana/cedana/scripts"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"google.golang.org/grpc"
 
-	cedanagosdk "github.com/cedana/cedana-go-sdk"
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 )
 
 const DAEMON_LOG_PATH = "/host/var/log/cedana-daemon.log"
 
 var containerdAddress = "/run/containerd/containerd.sock"
 
-//go:embed scripts/setup.sh
-var setupScript string
-
-//go:embed scripts/start.sh
-var startScript string
-
-//go:embed scripts/stop.sh
-var stopScript string
-
-//go:embed scripts/cleanup.sh
-var cleanupScript string
-
 var (
 	cedana     *client.Client
-	propagator *cedanagosdk.ApiClient
+	propagator *propagatorsdk.ApiClient
 )
 
 func init() {
@@ -53,6 +42,8 @@ func init() {
 	if addr := os.Getenv("CONTAINERD_ADDRESS"); addr != "" {
 		containerdAddress = addr
 	}
+
+	script.Source(scripts.Utils)
 }
 
 var HelperCmd = &cobra.Command{
@@ -77,12 +68,22 @@ var setupCmd = &cobra.Command{
 			metrics.Init(ctx, wg, "cedana-helper", version.Version)
 		}
 
-		err = setupDaemon(
-			ctx,
-			logging.Writer(
-				log.With().Str("operation", "setup").Logger().WithContext(ctx),
-				zerolog.DebugLevel,
-			),
+		restorePodIdentityEnv, err := prepareHostPodIdentityEnvironment()
+		if err != nil {
+			return fmt.Errorf("prepare EKS Pod Identity for host daemon: %w", err)
+		}
+		defer restorePodIdentityEnv()
+
+		err = script.Run(
+			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
+			script.Chroot("/host", scripts.ResetService),
+			script.Chroot("/host", scripts.InstallDeps),
+			k8scripts.Install,
+			script.Chroot("/host", k8scripts.InstallPlugins),
+			script.Chroot("/host", k8scripts.ConfigureKubelet),
+			script.Chroot("/host", scripts.ConfigureShm),
+			script.Chroot("/host", scripts.ConfigureIoUring),
+			script.Chroot("/host", scripts.InstallService),
 		)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup daemon")
@@ -96,7 +97,7 @@ var setupCmd = &cobra.Command{
 		}
 		defer cedana.Close()
 
-		propagator = cedanagosdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
+		propagator = propagatorsdk.NewClient(config.Global.Connection.URL, config.Global.Connection.AuthToken)
 
 		err = startHelper(ctx)
 		if err != nil {
@@ -106,6 +107,49 @@ var setupCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// prepareHostPodIdentityEnvironment translates the projected token's
+// container path to the same file under the host kubelet volume. The setup
+// command is about to chroot and start a host systemd service, where the
+// container-only /var/run/secrets path does not exist.
+func prepareHostPodIdentityEnvironment() (restore func(), err error) {
+	restore = func() {}
+	if config.Global.AWS.CredentialsMode != "eksPodIdentity" {
+		return restore, nil
+	}
+
+	const tokenEnv = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE"
+	tokenPath := os.Getenv(tokenEnv)
+	if tokenPath == "" {
+		return restore, fmt.Errorf("%s is not set", tokenEnv)
+	}
+	tokenInfo, err := os.Stat(tokenPath)
+	if err != nil {
+		return restore, fmt.Errorf("stat projected token: %w", err)
+	}
+
+	pattern := "/host/var/lib/kubelet/pods/*/volumes/kubernetes.io~projected/eks-pod-identity-token/eks-pod-identity-token"
+	candidates, err := filepath.Glob(pattern)
+	if err != nil {
+		return restore, fmt.Errorf("find host projected tokens: %w", err)
+	}
+	for _, candidate := range candidates {
+		candidateInfo, statErr := os.Stat(candidate)
+		if statErr != nil || !os.SameFile(tokenInfo, candidateInfo) {
+			continue
+		}
+
+		hostPath := strings.TrimPrefix(candidate, "/host")
+		if err := os.Setenv(tokenEnv, hostPath); err != nil {
+			return restore, fmt.Errorf("set host token path: %w", err)
+		}
+		return func() {
+			_ = os.Setenv(tokenEnv, tokenPath)
+		}, nil
+	}
+
+	return restore, fmt.Errorf("could not map projected token %q to a host kubelet volume", tokenPath)
 }
 
 var destroyCmd = &cobra.Command{
@@ -124,40 +168,18 @@ var destroyCmd = &cobra.Command{
 			metrics.Init(ctx, wg, "cedana-helper", version.Version)
 		}
 
-		err := destroyDaemon(
-			ctx,
-			logging.Writer(
-				log.With().Str("operation", "destroy").Logger().WithContext(ctx),
-				zerolog.DebugLevel,
-			),
+		err := script.Run(
+			log.With().Str("operation", "destroy").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
+			script.Chroot("/host", scripts.ResetService),
+			k8scripts.Uninstall,
 		)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to destroy daemon")
-			return fmt.Errorf("error destroying host: %w", err)
+			log.Error().Err(err).Msg("failed to uninstall cedana")
+			return fmt.Errorf("error uninstalling: %w", err)
 		}
 
 		return nil
 	},
-}
-
-func setupDaemon(ctx context.Context, logger ...io.Writer) error {
-	return utils.RunScript(ctx, setupScript, logger...)
-}
-
-func startDaemon(ctx context.Context) error {
-	return utils.RunScript(ctx, startScript)
-}
-
-func stopDaemon(ctx context.Context) error {
-	return utils.RunScript(context.WithoutCancel(ctx), stopScript)
-}
-
-func destroyDaemon(ctx context.Context, logger ...io.Writer) error {
-	return utils.RunScript(context.WithoutCancel(ctx), cleanupScript, logger...)
-}
-
-func isDaemonRunning(ctx context.Context) (bool, error) {
-	return cedana.HealthCheckConnection(ctx, grpc.WaitForReady(true))
 }
 
 func startHelper(ctx context.Context) error {
@@ -173,7 +195,11 @@ func startHelper(ctx context.Context) error {
 
 	go func() {
 		defer cancel()
-		defer stream.Close()
+		defer func() {
+			if err := stream.Close(); err != nil {
+				log.Error().Err(err).Msg("failed to close checkpoint event stream")
+			}
+		}()
 		log.Debug().Msg("listening on event stream for checkpoint requests")
 		err := stream.StartCheckpointsPublisher(ctx)
 		if err != nil {
@@ -217,7 +243,7 @@ func startHelper(ctx context.Context) error {
 
 	<-ctx.Done()
 	log.Info().Err(ctx.Err()).Msg("stopping daemon")
-	err = stopDaemon(ctx)
+	err = script.Run(ctx, script.Chroot("/host", scripts.ResetService))
 	if err != nil {
 		log.Error().Err(err).Msg("error stopping daemon")
 	}

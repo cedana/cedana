@@ -102,7 +102,7 @@ func DumpRootfs(next types.Dump) types.Dump {
 			PostDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 				return <-rootfsErr
 			},
-			FinalizeDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+			FinalizeDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts, criuErr error) error {
 				return <-rootfsErr
 			},
 		})

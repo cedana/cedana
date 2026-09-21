@@ -68,17 +68,15 @@ var QueryCmd = &cobra.Command{
 		tableWriter.SetStyle(style.TableStyle)
 
 		tableWriter.AppendHeader(table.Row{
-			"Sandbox ID",
-			"Name",
-			"Namespace",
-			"Runtime",
-			"Containers",
+			"Pod ID",
+			"Pod Name",
+			"Pod Namespace",
+			"Container ID",
+			"Container Runtime",
 		})
 
 		tableWriter.SetColumnConfigs([]table.ColumnConfig{
 			{Name: "Sandbox ID", AutoMerge: true},
-			{Name: "Name", AutoMerge: true},
-			{Name: "Namespace", AutoMerge: true},
 		})
 		tableWriter.SortBy([]table.SortBy{
 			{Name: "Name", Mode: table.Asc},
@@ -90,8 +88,8 @@ var QueryCmd = &cobra.Command{
 					pod.ID,
 					pod.Name,
 					pod.Namespace,
-					utils.Runtime(pod),
 					container.ID,
+					utils.Runtime(pod),
 				})
 			}
 		}

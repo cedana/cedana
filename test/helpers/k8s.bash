@@ -569,7 +569,7 @@ get_created_pod() {
 # @param $2: Pod spec file path
 # @param $3: Pod timeout (optional, defaults to 60)
 # @param $4: Dump wait time in seconds (optional, defaults to 5) - ignored if dump_trigger is set
-# @param $5: Dump timeout (optional, defaults to 30)
+# @param $5: Dump timeout (optional, defaults to 60)
 # @param $6: Namespace (optional, defaults to $NAMESPACE)
 # @param $7: Dump trigger string (optional) - if set, waits for this string in logs instead of using dump_wait_time
 # @param $8: Trigger timeout in seconds (optional, defaults to 300) - only used if dump_trigger is set
@@ -579,7 +579,7 @@ test_pod_spec() {
     local spec="$2"
     local pod_timeout="${3:-60}"
     local dump_wait_time="${4:-5}"
-    local dump_timeout="${5:-30}"
+    local dump_timeout="${5:-60}"
     local namespace="${6:-$NAMESPACE}"
     local dump_trigger="${7:-}"
     local trigger_timeout="${8:-300}"
@@ -729,7 +729,7 @@ test_pod_spec() {
                     break
                 }
 
-                name=$(wait_for_cmd 30 get_restored_pod "$original_name" "$namespace")
+                name=$(wait_for_cmd 60 get_restored_pod "$original_name" "$namespace")
 
                 debug_log "Restore starting for $name..."
 

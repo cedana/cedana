@@ -144,13 +144,5 @@
       "/proc/scsi"
     ],
     "readonlyPaths": ["/proc/bus", "/proc/fs", "/proc/irq", "/proc/sys", "/proc/sysrq-trigger"]
-  },
-  "hooks": {
-    "prestart": [
-      {
-        "path": "/usr/bin/nvidia-container-runtime-hook",
-        "args": ["nvidia-container-runtime-hook", "prestart"]
-      }
-    ]
   }
 }

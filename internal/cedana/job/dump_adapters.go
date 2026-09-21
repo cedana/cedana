@@ -23,7 +23,7 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.InvalidArgument, "missing JID for managed dump")
 			}
 
-			job := jobs.Get(jid)
+			job := jobs.Get(ctx, jid)
 			if job == nil {
 				return nil, status.Errorf(codes.NotFound, "job %s not found", jid)
 			}
@@ -50,9 +50,16 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 				return code, err
 			}
 
-			job.Sync(resp.GetState())
+			job.Sync(ctx, resp.GetState())
 
 			jobs.AddCheckpoint(jid, resp.GetPaths())
+
+			// Wait for job exit & cleanup
+			if !req.Criu.GetLeaveRunning() {
+				if err := <-jobs.Done(jid); err != nil {
+					resp.Messages = append(resp.Messages, err.Error())
+				}
+			}
 
 			return code, nil
 		}

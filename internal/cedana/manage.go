@@ -85,7 +85,7 @@ func pluginManageHandler() types.Run {
 		if req.GPUEnabled || req.GPUTracing {
 			msg := fmt.Sprintf("GPU interception/tracing for %s must be manually enabled.\n"+
 				"You may use the `--no-server` run option with `--gpu-enabled` or `--gpu-tracing` to spawn %s", t, t)
-			log.Warn().Msgf(msg)
+			log.Warn().Msg(msg)
 			resp.Messages = append(resp.Messages, msg)
 		}
 		return handler(ctx, opts, resp, req)

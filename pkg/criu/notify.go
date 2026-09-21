@@ -11,8 +11,8 @@ type Notify interface {
 	Initialize(ctx context.Context, criuPid int32) error
 	InitializeDump(ctx context.Context, opts *criu.CriuOpts) error
 	InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error
-	FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error
-	FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error
+	FinalizeDump(ctx context.Context, opts *criu.CriuOpts, err error) error
+	FinalizeRestore(ctx context.Context, opts *criu.CriuOpts, err error) error
 	PreDump(ctx context.Context, opts *criu.CriuOpts) error
 	PostDump(ctx context.Context, opts *criu.CriuOpts) error
 	PreRestore(ctx context.Context, opts *criu.CriuOpts) error
@@ -21,9 +21,11 @@ type Notify interface {
 	NetworkUnlock(ctx context.Context) error
 	SetupNamespaces(ctx context.Context, pid int32) error
 	PostSetupNamespaces(ctx context.Context) error
+	SkipNamespaces(ctx context.Context, pid int32) error
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
+	QueryExtFiles(ctx context.Context) ([]string, error) // return external file keys after CRIU has seized the process tree.
 }
 
 // NoNotify struct
@@ -45,12 +47,12 @@ func (c NoNotify) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) er
 }
 
 // FinalizeDump NoNotify
-func (c NoNotify) FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error {
+func (c NoNotify) FinalizeDump(ctx context.Context, opts *criu.CriuOpts, err error) error {
 	return nil
 }
 
 // FinalizeRestore NoNotify
-func (c NoNotify) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+func (c NoNotify) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts, err error) error {
 	return nil
 }
 
@@ -94,6 +96,11 @@ func (c NoNotify) PostSetupNamespaces(ctx context.Context) error {
 	return nil
 }
 
+// SkipNamespaces NoNotify
+func (c NoNotify) SkipNamespaces(ctx context.Context, pid int32) error {
+	return nil
+}
+
 // PreResume NoNotify
 func (c NoNotify) PreResume(ctx context.Context) error {
 	return nil
@@ -106,4 +113,8 @@ func (c NoNotify) PostResume(ctx context.Context) error {
 
 func (c NoNotify) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	return nil
+}
+
+func (c NoNotify) QueryExtFiles(ctx context.Context) ([]string, error) {
+	return nil, nil
 }

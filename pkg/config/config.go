@@ -3,17 +3,15 @@ package config
 import (
 	"fmt"
 	"os"
-	"os/user"
-	"path/filepath"
-	"strconv"
 	"strings"
 
+	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/spf13/viper"
 )
 
 const (
-	DIR_NAME   = ".cedana"
+	DIR_PATH   = "/etc/cedana"
 	FILE_NAME  = "config"
 	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
@@ -31,10 +29,11 @@ const (
 	DEFAULT_LOG_LEVEL           = "info"
 	DEFAULT_LOG_LEVEL_NO_SERVER = "warn"
 
-	DEFAULT_CHECKPOINT_COMPRESSION = "none"
-	DEFAULT_CHECKPOINT_DIR         = "/tmp"
-	DEFAULT_CHECKPOINT_STREAMS     = 0
-	DEFAULT_CHECKPOINT_ASYNC       = false
+	DEFAULT_CHECKPOINT_COMPRESSION            = "none"
+	DEFAULT_CHECKPOINT_DIR                    = "/tmp"
+	DEFAULT_CHECKPOINT_STREAMS                = 0
+	DEFAULT_CHECKPOINT_ASYNC                  = false
+	DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB = 4000
 
 	DEFAULT_DB_REMOTE = false
 	DEFAULT_DB_PATH   = "/tmp/cedana.db"
@@ -43,25 +42,33 @@ const (
 	DEFAULT_PROFILING_DETAILED  = true
 	DEFAULT_PROFILING_PRECISION = "auto"
 
-	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai"
+	DEFAULT_CONNECTION_URL        = "https://sandbox.cedana.ai/v1"
 	DEFAULT_CONNECTION_AUTH_TOKEN = ""
 
 	DEFAULT_METRICS = false
 
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
-	DEFAULT_GPU_POOL_SIZE = 0
-	DEFAULT_GPU_LOG_DIR   = "/tmp"
-	DEFAULT_GPU_SOCK_DIR  = "/tmp"
-	DEFAULT_GPU_SHM_SIZE  = 8 * utils.GIBIBYTE
-	DEFAULT_GPU_DEBUG     = false
+	DEFAULT_GPU_POOL_SIZE         = 0
+	DEFAULT_GPU_LOG_DIR           = "/tmp"
+	DEFAULT_GPU_SOCK_DIR          = "/tmp"
+	DEFAULT_GPU_SHM_SIZE          = 8 * utils.GIBIBYTE
+	DEFAULT_GPU_DEBUG             = false
+	DEFAULT_GPU_DEDUP_ENABLED     = false
+	DEFAULT_GPU_TEMPLATES_ENABLED = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
+	DEFAULT_CRIU_LOG_LEVEL      = 2
 
 	DEFAULT_PLUGINS_LIB_DIR = "/usr/local/lib"
 	DEFAULT_PLUGINS_BIN_DIR = "/usr/local/bin"
 	DEFAULT_PLUGINS_BUILDS  = "release"
+
+	DEFAULT_SLURM_DB_PORT = 3306
+	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
+
+	DEFAULT_AWS_CREDENTIALS_MODE = "static"
 )
 
 // The default global config. This will get overwritten
@@ -74,10 +81,11 @@ var Global Config = Config{
 	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Metrics:          DEFAULT_METRICS,
 	Checkpoint: Checkpoint{
-		Dir:         DEFAULT_CHECKPOINT_DIR,
-		Compression: DEFAULT_CHECKPOINT_COMPRESSION,
-		Streams:     DEFAULT_CHECKPOINT_STREAMS,
-		Async:       DEFAULT_CHECKPOINT_ASYNC,
+		Dir:               DEFAULT_CHECKPOINT_DIR,
+		Compression:       DEFAULT_CHECKPOINT_COMPRESSION,
+		Streams:           DEFAULT_CHECKPOINT_STREAMS,
+		Async:             DEFAULT_CHECKPOINT_ASYNC,
+		StreamMemoryLimit: DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB,
 	},
 	DB: DB{
 		Remote: DEFAULT_DB_REMOTE,
@@ -96,13 +104,16 @@ var Global Config = Config{
 		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,
 	},
 	GPU: GPU{
-		PoolSize: DEFAULT_GPU_POOL_SIZE,
-		LogDir:   DEFAULT_GPU_LOG_DIR,
-		SockDir:  DEFAULT_GPU_SOCK_DIR,
-		ShmSize:  DEFAULT_GPU_SHM_SIZE,
-		Debug:    DEFAULT_GPU_DEBUG,
+		PoolSize:         DEFAULT_GPU_POOL_SIZE,
+		LogDir:           DEFAULT_GPU_LOG_DIR,
+		SockDir:          DEFAULT_GPU_SOCK_DIR,
+		ShmSize:          DEFAULT_GPU_SHM_SIZE,
+		Debug:            DEFAULT_GPU_DEBUG,
+		DedupEnabled:     DEFAULT_GPU_DEDUP_ENABLED,
+		TemplatesEnabled: DEFAULT_GPU_TEMPLATES_ENABLED,
 	},
 	CRIU: CRIU{
+		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
 		LeaveRunning:  DEFAULT_CRIU_LEAVE_RUNNING,
 		ManageCgroups: DEFAULT_CRIU_MANAGE_CGROUPS,
 	},
@@ -110,6 +121,14 @@ var Global Config = Config{
 		LibDir: DEFAULT_PLUGINS_LIB_DIR,
 		BinDir: DEFAULT_PLUGINS_BIN_DIR,
 		Builds: DEFAULT_PLUGINS_BUILDS,
+	},
+	Slurm: Slurm{
+		Unprivileged: false,
+		DBPort:       DEFAULT_SLURM_DB_PORT,
+		DBName:       DEFAULT_SLURM_DB_NAME,
+	},
+	AWS: AWS{
+		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,
 	},
 }
 
@@ -119,43 +138,81 @@ var Dir string
 func init() {
 	setDefaults()
 	bindEnvVars()
-	viper.Unmarshal(&Global)
-}
-
-type InitArgs struct {
-	Config    string
-	ConfigDir string
-}
-
-func Init(args InitArgs) error {
-	user, err := user.Current()
+	err := viper.Unmarshal(&Global)
 	if err != nil {
-		return err
+		panic(fmt.Errorf("failed to unmarshal default config: %w", err))
 	}
 
-	if args.ConfigDir == "" {
-		homeDir := user.HomeDir
-		Dir = filepath.Join(homeDir, DIR_NAME)
+	var configStr string
+	var configDir string
+	var initConfig bool
+	var mergeConfig bool
+
+	// NOTE: This runs before cobra parses flags, so both the `--flag value` and
+	// `--flag=value` forms must be handled here. Prefix matching without the
+	// '=' would misparse one flag as another (e.g. `--config-dir` as
+	// `--config`).
+	args := os.Args[1:]
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--"+flags.ConfigFlag.Full && i+1 < len(args):
+			configStr = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--"+flags.ConfigFlag.Full+"="):
+			configStr = strings.TrimPrefix(arg, "--"+flags.ConfigFlag.Full+"=")
+		case arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args):
+			configDir = args[i+1]
+			i++
+		case strings.HasPrefix(arg, "--"+flags.ConfigDirFlag.Full+"="):
+			configDir = strings.TrimPrefix(arg, "--"+flags.ConfigDirFlag.Full+"=")
+		case arg == "--"+flags.InitConfig.Full:
+			initConfig = true
+		case arg == "--"+flags.MergeConfig.Full:
+			mergeConfig = true
+		}
+	}
+	if configDir == "" {
+		configDir = os.Getenv("CEDANA_CONFIG_DIR")
+	}
+	if initConfig || mergeConfig {
+		err = Init(Args{
+			Config:    configStr,
+			ConfigDir: configDir,
+			Merge:     mergeConfig,
+		})
 	} else {
-		Dir = args.ConfigDir
+		err = Load(Args{
+			Config:    configStr,
+			ConfigDir: configDir,
+		})
+	}
+	if err != nil {
+		panic(fmt.Errorf("failed to initialize config: %w", err))
+	}
+}
+
+type Args struct {
+	Config    string
+	ConfigDir string
+	Merge     bool
+}
+
+func Load(args ...Args) (err error) {
+	var a Args
+	if len(args) > 0 {
+		a = args[0]
+	}
+
+	if a.ConfigDir == "" {
+		Dir = DIR_PATH
+	} else {
+		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
-
-	// Create config directory if it does not exist
-	_, err = os.Stat(Dir)
-	if os.IsNotExist(err) {
-		err = os.MkdirAll(Dir, DIR_PERM)
-		if err != nil {
-			return err
-		}
-	}
-	uid, _ := strconv.Atoi(user.Uid)
-	gid, _ := strconv.Atoi(user.Gid)
-	os.Chown(Dir, uid, gid)
 
 	err = viper.ReadInConfig()
 	if err != nil {
@@ -164,14 +221,73 @@ func Init(args InitArgs) error {
 		}
 	}
 
-	if args.Config != "" {
-		reader := strings.NewReader(args.Config)
+	if a.Config != "" {
+		reader := strings.NewReader(a.Config)
 		err = viper.MergeConfig(reader)
 		if err != nil {
 			return fmt.Errorf("Provided config string is invalid: %w", err)
 		}
+	}
+
+	err = viper.UnmarshalExact(&Global)
+	if err != nil {
+		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
+	}
+
+	return nil
+}
+
+// Init initializes and writes the config file. Overwrites any existing config file, and the values
+// used are from the global defaults overridden by env vars.
+func Init(args ...Args) error {
+	var a Args
+	if len(args) > 0 {
+		a = args[0]
+	}
+
+	if a.ConfigDir == "" {
+		Dir = DIR_PATH
 	} else {
-		viper.SafeWriteConfig() // Will only overwrite if file does not exist, ignore other errors
+		Dir = a.ConfigDir
+	}
+
+	viper.AddConfigPath(Dir)
+	viper.SetConfigPermissions(FILE_PERM)
+	viper.SetConfigType(FILE_TYPE)
+	viper.SetConfigName(FILE_NAME)
+
+	// Create config directory if it does not exist
+	_, err := os.Stat(Dir)
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(Dir, DIR_PERM)
+		if err != nil {
+			return err
+		}
+	}
+
+	if a.Merge {
+		err = viper.ReadInConfig()
+		if err != nil {
+			if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+				return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
+			}
+		}
+	}
+
+	if a.Config != "" {
+		reader := strings.NewReader(a.Config)
+		err = viper.MergeConfig(reader)
+		if err != nil {
+			return fmt.Errorf("Provided config string is invalid: %w", err)
+		}
+	}
+
+	err = viper.SafeWriteConfig()
+	if err != nil {
+		err = viper.WriteConfig()
+		if err != nil {
+			return fmt.Errorf("Failed to write config file: %w", err)
+		}
 	}
 
 	err = viper.UnmarshalExact(&Global)
@@ -184,12 +300,12 @@ func Init(args InitArgs) error {
 
 // Loads the global defaults into viper
 func setDefaults() {
+	viper.SetTypeByDefaultValue(true)
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		defaultVal := utils.GetValue(Global, field)
 		viper.SetDefault(tag, defaultVal)
 	}
-	viper.SetTypeByDefaultValue(true)
 }
 
 // Add bindings for env vars so env vars can be used as backup
@@ -199,6 +315,8 @@ func setDefaults() {
 //
 // Example: The field `cli.wait_for_ready` will bind to env var `CEDANA_CLI_WAIT_FOR_READY`.
 func bindEnvVars() {
+	viper.SetEnvPrefix(ENV_PREFIX)
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	for _, field := range utils.ListLeaves(Config{}) {
 		tag := utils.GetTag(Config{}, field, FILE_TYPE)
 		envVar := ENV_PREFIX + "_" + strings.ToUpper(strings.ReplaceAll(tag, ".", "_"))

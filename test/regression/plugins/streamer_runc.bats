@@ -43,11 +43,12 @@ teardown_file() {
     wait_for_file "$pid_file"
     sleep 1
 
-    run cedana dump runc "$id" --streams 1 --compression none
+    run cedana dump runc "$id" --streams 2 --compression none
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
 
     run runc kill "$id" KILL
     run runc delete "$id"
@@ -124,11 +125,12 @@ teardown_file() {
     wait_for_file "$pid_file"
     sleep 1
 
-    run cedana dump runc "$id" --streams 1 --compression none
+    run cedana dump runc "$id" --streams 2 --compression none
     assert_success
     dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
     assert_exists "$dump_file"
     assert_exists "$dump_file/img-0"
+    assert_exists "$dump_file/img-1"
 
     cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
 

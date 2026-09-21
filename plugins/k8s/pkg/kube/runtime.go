@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 
-	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/plugins/k8s/internal/defaults"
 )
 
 // RuntimeClient is the interface that K8s runtime clients must implement
 type RuntimeClient interface {
 	String() string
-	Pods(context.Context, *k8s.QueryReq) (*k8s.QueryResp, error)
+	Query(context.Context, *daemon.QueryReq) (*daemon.QueryResp, error)
 }
 
 // CurrentRuntimeClient returns the current K8s runtime client in use
@@ -42,6 +42,6 @@ func (c *RuntimeClientUnimplemented) String() string {
 	return "unimplemented"
 }
 
-func (c *RuntimeClientUnimplemented) Pods(context.Context, *k8s.QueryReq) (*k8s.QueryResp, error) {
+func (c *RuntimeClientUnimplemented) Query(context.Context, *daemon.QueryReq) (*daemon.QueryResp, error) {
 	return nil, errors.New("not implemented")
 }

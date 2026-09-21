@@ -24,14 +24,13 @@ var checkCmd = &cobra.Command{
 		ctx := cmd.Context()
 		full, _ := cmd.Flags().GetBool(flags.FullFlag.Full)
 
-		logging.SetLogger(io.Discard)
+		logging.Init(io.Discard)
 
 		cedana, err := cedana.New(ctx, "run")
 		if err != nil {
 			return fmt.Errorf("Error: failed to create cedana root: %v", err)
 		}
 
-		defer cedana.Wait()
 		defer cedana.Finalize()
 
 		resp, err := cedana.HealthCheck(ctx, &daemon.HealthCheckReq{Full: full})

@@ -35,12 +35,26 @@ type (
 		GPU GPU `json:"gpu" key:"gpu" yaml:"gpu" mapstructure:"gpu"`
 		// Plugin settings
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
+		// SLURM settings
+		Slurm Slurm `json:"slurm" key:"slurm" yaml:"slurm" mapstructure:"slurm"`
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+	}
 
-		// Internal use only (for metrics and logging)
-		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id"`
+	Slurm struct {
+		// Unprivileged uses an embedded cedana instance for dump instead of the cedana daemon.
+		// Requires CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the cedana-slurm binary.
+		// Can also be set with CEDANA_SLURM_UNPRIVILEGED=1.
+		Unprivileged bool `json:"unprivileged" key:"unprivileged" yaml:"unprivileged" mapstructure:"unprivileged"`
+		// DBHost is the hostname of the slurmdbd database server
+		DBHost string `json:"db_host" key:"db_host" yaml:"db_host" mapstructure:"db_host"`
+		// DBSocket is the socket path of the slurmdbd database server (if using UNIX socket connection)
+		DBSocket string `json:"db_socket" key:"db_socket" yaml:"db_socket" mapstructure:"db_socket"`
+		// DBPort is the port of the slurmdbd database server
+		DBPort int `json:"db_port" key:"db_port" yaml:"db_port" mapstructure:"db_port"`
+		// DBName is the name of the slurmdbd database to connect to
+		DBName string `json:"db_name" key:"db_name" yaml:"db_name" mapstructure:"db_name"`
 	}
 
 	Connection struct {
@@ -48,6 +62,8 @@ type (
 		URL string `json:"url" key:"url" yaml:"url" mapstructure:"url" env_aliases:"CEDANA_URL"`
 		// AuthToken is your authentication token for the Cedana endpoint
 		AuthToken string `json:"auth_token" key:"auth_token" yaml:"auth_token" mapstructure:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
+		// ClusterID is the cluster ID (for SLURM/K8s)
+		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id" env_aliases:"CEDANA_CLUSTER_ID"`
 	}
 
 	Checkpoint struct {
@@ -59,9 +75,12 @@ type (
 		// Compression is the default compression algorithm to use for checkpoints
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 		// Streams specifies the number of parallel streams to use when checkpointing.
+		// Default is 0 for no streaming, a minimum of 2 is required otherwise.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
+		// The amount of memory streamer is allowed to use (in MB)
+		StreamMemoryLimit uint64 `json:"stream_memory_limit" key:"stream_memory_limit" yaml:"stream_memory_limit" mapstructure:"stream_memory_limit"`
 		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
-		// checkpoint reqeust to return early.
+		// checkpoint request to return early.
 		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
 	}
 
@@ -79,6 +98,8 @@ type (
 		Detailed bool `json:"detailed" key:"detailed" yaml:"detailed" mapstructure:"detailed"`
 		// Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
 		Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
+		// Path is the path to write profiling JSON data to (if enabled)
+		Path string `json:"path" key:"path" yaml:"path" mapstructure:"path"`
 	}
 
 	Client struct {
@@ -93,6 +114,8 @@ type (
 		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
 		// ManageCgroups sets the default cgroup C/R mode for CRIU (default, cg_none, props, soft, full, strict, ignore)
 		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
+		// LogLevel sets the default log level for CRIU (2 - errors, 3 - warnings, 4 - debug)
+		LogLevel int32 `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
 	}
 
 	GPU struct {
@@ -102,12 +125,12 @@ type (
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
 		// SockDir is the directory to use for the GPU sockets
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
-		// Track metrics associated with observability
-		Observability bool `json:"observability" key:"observability" yaml:"observability" mapstructure:"observability"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
-		// LdLibPath holds any additional directories to search for GPU libraries
-		LdLibPath string `json:"ld_lib_path" key:"ld_lib_path" yaml:"ld_lib_path" mapstructure:"ld_lib_path"`
+		// DedupEnabled sets whether to use deduplication for GPU checkpoints (reduces checkpoint size)
+		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
+		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
+		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 	}
@@ -118,10 +141,14 @@ type (
 		// LibDir is the directory where plugin libraries are stored
 		LibDir string `json:"lib_dir" key:"lib_dir" yaml:"lib_dir" mapstructure:"lib_dir" env_aliases:"CEDANA_PLUGINS_LIB_DIR"`
 		// Builds is the build versions to list/download for plugins (release, alpha)
-		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds"`
+		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds" env_aliases:"CEDANA_PLUGINS_BUILD"`
+		// LocalSearchPath is a colon-separated list of local directories to search for locally built plugins
+		LocalSearchPath string `json:"local_search_path" key:"local_search_path" yaml:"local_search_path" mapstructure:"local_search_path"`
 	}
 
 	AWS struct {
+		// CredentialsMode selects the AWS credential provider (static, eksPodIdentity, or ambient)
+		CredentialsMode string `json:"credentials_mode" key:"credentials_mode" yaml:"credentials_mode" mapstructure:"credentials_mode" env_aliases:"AWS_CREDENTIALS_MODE"`
 		// AccessKeyID is the AWS access key ID
 		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
 		// SecretAccessKey is the AWS secret access key

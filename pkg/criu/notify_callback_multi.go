@@ -60,9 +60,9 @@ func (n NotifyCallbackMulti) InitializeRestore(ctx context.Context, opts *criu.C
 	return nil
 }
 
-func (n NotifyCallbackMulti) FinalizeDump(ctx context.Context, opts *criu.CriuOpts) error {
+func (n NotifyCallbackMulti) FinalizeDump(ctx context.Context, opts *criu.CriuOpts, err error) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].FinalizeDump(ctx, opts)
+		err := n.callbacks[i].FinalizeDump(ctx, opts, err)
 		if err != nil {
 			return err
 		}
@@ -70,9 +70,9 @@ func (n NotifyCallbackMulti) FinalizeDump(ctx context.Context, opts *criu.CriuOp
 	return nil
 }
 
-func (n NotifyCallbackMulti) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts) error {
+func (n NotifyCallbackMulti) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts, err error) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].FinalizeRestore(ctx, opts)
+		err := n.callbacks[i].FinalizeRestore(ctx, opts, err)
 		if err != nil {
 			return err
 		}
@@ -178,6 +178,28 @@ func (n NotifyCallbackMulti) PostSetupNamespaces(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (n NotifyCallbackMulti) SkipNamespaces(ctx context.Context, pid int32) error {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		err := n.callbacks[i].SkipNamespaces(ctx, pid)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallbackMulti) QueryExtFiles(ctx context.Context) ([]string, error) {
+	var external []string
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		files, err := n.callbacks[i].QueryExtFiles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		external = append(external, files...)
+	}
+	return external, nil
 }
 
 func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) error {

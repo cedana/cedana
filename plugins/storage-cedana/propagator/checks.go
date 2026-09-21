@@ -4,8 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
-	sdk "github.com/cedana/cedana-go-sdk"
-	"github.com/cedana/cedana-go-sdk/models"
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/types"
 )
@@ -27,7 +26,7 @@ func CheckConfig() types.Check {
 			})
 		}
 
-		propagator := sdk.NewCedanaClient(config.Global.Connection.URL, config.Global.Connection.AuthToken).V2()
+		propagator := propagatorsdk.NewClient(config.Global.Connection.URL, config.Global.Connection.AuthToken).V1()
 		_, err := propagator.User().Get(ctx, nil)
 		if err == nil {
 			components = append(components, &daemon.HealthCheckComponent{
@@ -35,13 +34,7 @@ func CheckConfig() types.Check {
 				Data: "valid",
 			})
 		} else {
-			var errMsg string
-			switch v := err.(type) {
-			case *models.HttpError:
-				errMsg = *v.GetMessage()
-			default:
-				errMsg = err.Error()
-			}
+			errMsg := err.Error()
 			components = append(components, &daemon.HealthCheckComponent{
 				Name:   "auth token",
 				Data:   "invalid",

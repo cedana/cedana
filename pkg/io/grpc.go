@@ -133,6 +133,7 @@ func NewStreamIOSlave(
 	ctx context.Context,
 	wg *sync.WaitGroup,
 	pid uint32,
+	waitFirstMaster bool,
 ) (stdIn *StreamIOReader, stdOut *StreamIOWriter, stdErr *StreamIOWriter) {
 	in := make(chan []byte, channelBufLen)
 	out := make(chan []byte, channelBufLen)
@@ -154,16 +155,18 @@ func NewStreamIOSlave(
 		defer DeleteIOSlave(&slave.PID)
 
 		masters := map[grpc.BidiStreamingServer[daemon.AttachReq, daemon.AttachResp]]any{}
-		// Wait for first master before doing anything, so that no out/err is lost
-	wait_first_master:
-		for {
-			select {
-			case <-ctx.Done():
-				close(in)
-				return
-			case master := <-slave.master:
-				masters[master] = nil
-				break wait_first_master
+		if waitFirstMaster {
+			// Wait for first master before doing anything, so that no out/err is lost
+		wait_first_master:
+			for {
+				select {
+				case <-ctx.Done():
+					close(in)
+					return
+				case master := <-slave.master:
+					masters[master] = nil
+					break wait_first_master
+				}
 			}
 		}
 	exit:

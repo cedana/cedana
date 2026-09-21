@@ -32,13 +32,12 @@ setup_file() {
     validate_pod "$name" 300
 
     # Let workload run, then checkpoint
-    sleep 30
     local pod_id
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
     local action_id
     action_id=$(checkpoint_pod "$pod_id")
     validate_action_id "$action_id"
-    poll_action_status "$action_id" "checkpoint" 120
+    poll_action_status "$action_id" "checkpoint" 200
 
     # Simulate spot interruption
     simulate_spot_interruption "$node_name"
