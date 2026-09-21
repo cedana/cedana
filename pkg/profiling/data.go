@@ -97,7 +97,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
-	tableWriter.AppendHeader(table.Row{"DURATION", "BEST", "OBSERVED BEST", "CATEGORY", "IO", "COMPONENT"})
+	tableWriter.AppendHeader(table.Row{"DURATION", "LOWER BOUND", "OBSERVED BEST", "CATEGORY", "IO", "COMPONENT"})
 
 	categoryDuration := make(map[string]time.Duration)
 	categoryIO := make(map[string]int64)
