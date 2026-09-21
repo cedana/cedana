@@ -4,16 +4,39 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 )
 
-// Records the external namespaces added to a dump, so that restore inherits exactly those
+// Records how the external namespaces were handled on dump, so that restore mirrors it exactly
 const EXTERNAL_NAMESPACES_FILE = "external_namespaces.json"
+
+type Handling string
+
+const (
+	// Namespace is left out of the dump using --external, and inherited on restore using --inherit-fd
+	HandlingExternal Handling = "external"
+	// CRIU runs inside the namespace, for both dump and restore, so it's unaware of it
+	HandlingEnter Handling = "enter"
+)
+
+type ExternalNamespace struct {
+	Type     configs.NamespaceType
+	Handling Handling
+	Holder   HolderKind
+}
+
+type externalNamespaceJSON struct {
+	Type     string     `json:"type"`
+	Handling Handling   `json:"handling"`
+	Holder   HolderKind `json:"holder,omitempty"`
+}
 
 func CriuNsToKey(t configs.NamespaceType) string {
 	return "extRoot" + strings.ToTitle(
@@ -79,10 +102,53 @@ func addExternalNamespace(req *daemon.DumpReq, t configs.NamespaceType, inode ui
 	req.Criu.External = append(req.Criu.External, external)
 }
 
-func saveExternalNamespaces(fs afero.Fs, nsTypes []configs.NamespaceType) error {
-	names := make([]string, 0, len(nsTypes))
-	for _, t := range nsTypes {
-		names = append(names, configs.NsName(t))
+// handlingFor decides what can be done about an external namespace of this type, if anything
+func handlingFor(t configs.NamespaceType, version int) (handling Handling, reason string) {
+	if t == configs.NEWNS {
+		return HandlingEnter, ""
+	}
+	if ok, reason := criuSupportsExternal(t, version); !ok {
+		return "", reason
+	}
+	return HandlingExternal, ""
+}
+
+// inHostNamespace is conservative, any failure to tell means no
+func inHostNamespace(t configs.NamespaceType, pid uint32) bool {
+	ino, err := nsInode(nsPathOf(t, pid))
+	if err != nil {
+		return false
+	}
+	hostIno, err := hostNsInode(t)
+	if err != nil {
+		return false
+	}
+	return ino == hostIno
+}
+
+// visibleInNamespace checks that path is the very same file for us as for pid in its mount namespace
+func visibleInNamespace(pid uint32, path string) (bool, error) {
+	var ours, theirs unix.Stat_t
+	if err := unix.Stat(path, &ours); err != nil {
+		return false, fmt.Errorf("failed to stat %s: %w", path, err)
+	}
+	if err := unix.Stat(fmt.Sprintf("/proc/%d/root%s", pid, path), &theirs); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to stat %s as seen by %d: %w", path, pid, err)
+	}
+	return ours.Dev == theirs.Dev && ours.Ino == theirs.Ino, nil
+}
+
+func saveExternalNamespaces(fs afero.Fs, namespaces []ExternalNamespace) error {
+	entries := make([]externalNamespaceJSON, 0, len(namespaces))
+	for _, ns := range namespaces {
+		entries = append(entries, externalNamespaceJSON{
+			Type:     configs.NsName(ns.Type),
+			Handling: ns.Handling,
+			Holder:   ns.Holder,
+		})
 	}
 
 	file, err := fs.Create(EXTERNAL_NAMESPACES_FILE)
@@ -91,11 +157,11 @@ func saveExternalNamespaces(fs afero.Fs, nsTypes []configs.NamespaceType) error 
 	}
 	defer file.Close()
 
-	return json.NewEncoder(file).Encode(names)
+	return json.NewEncoder(file).Encode(entries)
 }
 
 // loadExternalNamespaces returns nothing if the dump has no external namespaces recorded
-func loadExternalNamespaces(fs afero.Fs) ([]configs.NamespaceType, error) {
+func loadExternalNamespaces(fs afero.Fs) ([]ExternalNamespace, error) {
 	file, err := fs.Open(EXTERNAL_NAMESPACES_FILE)
 	if err != nil {
 		if exists, _ := afero.Exists(fs, EXTERNAL_NAMESPACES_FILE); !exists {
@@ -110,19 +176,34 @@ func loadExternalNamespaces(fs afero.Fs) ([]configs.NamespaceType, error) {
 		return nil, err
 	}
 
-	var names []string
-	if err := json.Unmarshal(contents, &names); err != nil {
+	var raw []json.RawMessage
+	if err := json.Unmarshal(contents, &raw); err != nil {
 		return nil, err
 	}
 
-	nsTypes := make([]configs.NamespaceType, 0, len(names))
-	for _, name := range names {
-		t, ok := nsTypeFromName(name)
-		if !ok {
-			return nil, fmt.Errorf("unknown namespace type %q", name)
+	namespaces := make([]ExternalNamespace, 0, len(raw))
+	for _, r := range raw {
+		var entry externalNamespaceJSON
+
+		// Used to be a plain list of names, from when --external was the only handling
+		if err := json.Unmarshal(r, &entry.Type); err == nil {
+			entry.Handling = HandlingExternal
+		} else if err := json.Unmarshal(r, &entry); err != nil {
+			return nil, err
 		}
-		nsTypes = append(nsTypes, t)
+
+		t, ok := nsTypeFromName(entry.Type)
+		if !ok {
+			return nil, fmt.Errorf("unknown namespace type %q", entry.Type)
+		}
+		switch entry.Handling {
+		case HandlingExternal, HandlingEnter:
+		default:
+			return nil, fmt.Errorf("unknown handling %q for %s namespace", entry.Handling, entry.Type)
+		}
+
+		namespaces = append(namespaces, ExternalNamespace{Type: t, Handling: entry.Handling, Holder: entry.Holder})
 	}
 
-	return nsTypes, nil
+	return namespaces, nil
 }

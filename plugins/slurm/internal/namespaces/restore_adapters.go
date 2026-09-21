@@ -112,8 +112,8 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 	}
 }
 
-// Counterpart of AddRecognizedExternalNamespacesForDump. Inherits exactly the
-// external namespaces that were recorded in the dump, from the job being restored into.
+// Counterpart of AddRecognizedExternalNamespacesForDump. Mirrors exactly what was recorded
+// in the dump, using the namespaces of the job being restored into.
 // Does nothing if the dump has no external namespaces recorded.
 func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
@@ -122,11 +122,11 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 			return next(ctx, opts, resp, req)
 		}
 
-		nsTypes, err := loadExternalNamespaces(opts.DumpFs)
+		namespaces, err := loadExternalNamespaces(opts.DumpFs)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to load external namespaces from dump: %v", err)
 		}
-		if len(nsTypes) == 0 {
+		if len(namespaces) == 0 {
 			return next(ctx, opts, resp, req)
 		}
 
@@ -136,9 +136,10 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 		}
 
 		// When restoring from within the job, its namespaces are our own
+		self := uint32(os.Getpid())
 		pid := req.GetDetails().GetSlurm().GetPID()
 		if pid == 0 {
-			pid = uint32(os.Getpid())
+			pid = self
 		}
 
 		if req.Criu == nil {
@@ -148,10 +149,53 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 			opts.InheritFdMap = map[string]int32{}
 		}
 
-		for _, t := range nsTypes {
+		for _, ns := range namespaces {
+			t := ns.Type
+			name := configs.NsName(t)
+			nsPath := nsPathOf(t, pid)
+
+			if ns.Handling == HandlingEnter {
+				if t != configs.NEWNS {
+					return nil, status.Errorf(codes.FailedPrecondition, "dump has an entered %s namespace: only possible for mnt", name)
+				}
+				if inHostNamespace(t, pid) {
+					log.Warn().Msgf("job was dumped from its own %s namespace but is being restored into the host's, is this node set up differently?", name)
+				}
+
+				ours, err := nsInode(nsPathOf(t, self))
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to stat own %s namespace: %v", name, err)
+				}
+				theirs, err := nsInode(nsPath)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to stat %s: %v", nsPath, err)
+				}
+				if ours == theirs {
+					continue // already inside
+				}
+
+				if !inHostNamespace(configs.NEWPID, pid) {
+					return nil, status.Errorf(codes.FailedPrecondition,
+						"dump needs CRIU to run inside the job's %s namespace, which is not possible as the job is not in the host's pid namespace", name)
+				}
+				if dir := req.GetCriu().GetImagesDir(); dir != "" {
+					visible, err := visibleInNamespace(pid, dir)
+					if err != nil {
+						return nil, status.Errorf(codes.Internal, "failed to check dump dir: %v", err)
+					}
+					if !visible {
+						return nil, status.Errorf(codes.FailedPrecondition, "dump dir %s is not the same inside the job's %s namespace", dir, name)
+					}
+				}
+
+				log.Debug().Str("path", nsPath).Msgf("running CRIU inside the job's %s namespace", name)
+				opts.CRIU.SetMountNamespace(nsPath)
+				continue
+			}
+
 			// The dump has this namespace as external, so there's no restoring without it
 			if ok, reason := criuSupportsExternal(t, version); !ok {
-				return nil, status.Errorf(codes.FailedPrecondition, "dump has an external %s namespace: %s", configs.NsName(t), reason)
+				return nil, status.Errorf(codes.FailedPrecondition, "dump has an external %s namespace: %s", name, reason)
 			}
 
 			// CRIU wants the information about an existing namespace
@@ -167,7 +211,6 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 			}
 			opts.InheritFdMap[key] = fd
 
-			nsPath := nsPathOf(t, pid)
 			nsFd, err := os.Open(nsPath)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "external namespace file %s does not exist: %v", nsPath, err)
