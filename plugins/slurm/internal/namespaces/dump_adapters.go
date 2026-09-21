@@ -84,11 +84,14 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 	}
 }
 
-// Detects the namespaces of the job that are external (created and pinned by slurm,
-// see RecognizeExternalNamespaces) and adds only those to the dump. Unlike
-// AddExternalNamespacesForDump, this does not touch CRIU opts when the job is
-// simply running in the host's namespaces.
-// The namespaces added are recorded in the dump, for InheritRecognizedNamespacesForRestore.
+// Detects the namespaces of the job that are external (created by whatever launched it,
+// see RecognizeExternalNamespaces) and handles only those. Unlike AddExternalNamespacesForDump,
+// this does not touch CRIU opts when the job is simply running in the host's namespaces.
+//
+//	net, pid -> left out of the dump using --external
+//	mnt      -> CRIU is run inside it, as it has no notion of an external mount namespace
+//
+// What was done is recorded in the dump, for InheritRecognizedNamespacesForRestore.
 func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		pid := req.GetDetails().GetSlurm().GetPID()
@@ -107,30 +110,55 @@ func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
 		}
 
-		var added []configs.NamespaceType
+		var handled []ExternalNamespace
 
 		for _, ns := range recognized {
-			if ok, reason := criuSupportsExternal(ns.Type, version); !ok {
-				log.Warn().
-					Str("path", ns.Path).
-					Msgf("%s, skipping external %s namespace handling", reason, configs.NsName(ns.Type))
+			name := configs.NsName(ns.Type)
+
+			handling, reason := handlingFor(ns.Type, version)
+
+			// Inside a mount namespace that comes with a PID namespace, /proc is that of the
+			// PID namespace. CRIU would be looking for itself and the job in the wrong place.
+			if handling == HandlingEnter && !inHostNamespace(configs.NEWPID, pid) {
+				handling, reason = "", "job is not in the host's pid namespace"
+			}
+
+			log := log.With().Str("holder", string(ns.Holder)).Str("path", ns.Path).Uint64("inode", ns.Inode).Logger()
+
+			switch handling {
+			case HandlingExternal:
+				log.Debug().Msgf("adding external %s namespace", name)
+				addExternalNamespace(req, ns.Type, ns.Inode)
+
+			case HandlingEnter:
+				// CRIU opens some files by path, and so will plugins
+				if dir := req.GetCriu().GetImagesDir(); dir != "" {
+					visible, err := visibleInNamespace(pid, dir)
+					if err != nil {
+						return nil, status.Errorf(codes.Internal, "failed to check dump dir: %v", err)
+					}
+					if !visible {
+						return nil, status.Errorf(codes.FailedPrecondition,
+							"dump dir %s is not the same inside the job's %s namespace (held by %s %s), use a dir that is not private to the job",
+							dir, name, ns.Holder, ns.Path)
+					}
+				}
+				log.Debug().Msgf("running CRIU inside external %s namespace", name)
+				opts.CRIU.SetMountNamespace(ns.Path)
+
+			default:
+				log.Warn().Msgf("%s, skipping external %s namespace handling", reason, name)
 				continue
 			}
 
-			log.Debug().
-				Str("path", ns.Path).
-				Uint64("inode", ns.Inode).
-				Msgf("adding external %s namespace", configs.NsName(ns.Type))
-
-			addExternalNamespace(req, ns.Type, ns.Inode)
-			added = append(added, ns.Type)
+			handled = append(handled, ExternalNamespace{Type: ns.Type, Handling: handling, Holder: ns.Holder})
 		}
 
-		if len(added) > 0 {
+		if len(handled) > 0 {
 			if opts.DumpFs == nil {
 				return nil, status.Error(codes.FailedPrecondition, "dump filesystem is nil, cannot save external namespaces")
 			}
-			if err := saveExternalNamespaces(opts.DumpFs, added); err != nil {
+			if err := saveExternalNamespaces(opts.DumpFs, handled); err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to save external namespaces to dump: %v", err)
 			}
 		}

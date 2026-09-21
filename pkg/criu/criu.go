@@ -26,6 +26,7 @@ type Criu struct {
 	swrkCmd  *exec.Cmd
 	swrkSk   *net.UnixConn
 	swrkPath string
+	mntNs    string
 }
 
 // MakeCriu returns the Criu object required for most operations
@@ -39,6 +40,19 @@ func MakeCriu() *Criu {
 // if it is in a non standard location
 func (c *Criu) SetCriuPath(path string) {
 	c.swrkPath = path
+}
+
+// SetMountNamespace makes CRIU run inside the mount namespace at path (e.g. /proc/<pid>/ns/mnt).
+// CRIU only dumps/restores a mount namespace if it differs from its own, so this is how a mount
+// namespace that is external to the process tree (created by its launcher) is left alone.
+// Requires nsenter, since a multithreaded process can't setns into a mount namespace itself.
+func (c *Criu) SetMountNamespace(path string) {
+	c.mntNs = path
+}
+
+// MountNamespace returns the mount namespace CRIU is set to run inside, if any
+func (c *Criu) MountNamespace() string {
+	return c.mntNs
 }
 
 // Prepare sets up everything for the RPC communication to CRIU
@@ -59,6 +73,17 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 
 	args := []string{"swrk", strconv.Itoa(3 + len(extraFiles))}
 	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
+	if c.mntNs != "" {
+		// nsenter does not fork when only entering a mount namespace, so
+		// the PID, Pdeathsig and inherited fds all carry over to CRIU.
+		nsenter, err := exec.LookPath("nsenter")
+		if err != nil {
+			clnNet.Close()
+			return fmt.Errorf("nsenter is required to run CRIU inside mount namespace %s: %w", c.mntNs, err)
+		}
+		args = append([]string{"--mount=" + c.mntNs, "--", c.swrkPath}, args...)
+		cmd = exec.CommandContext(ctx, nsenter, args...)
+	}
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
@@ -113,11 +138,13 @@ func (c *Criu) Cleanup() error {
 // rejects a seqpacket message larger than sk_sndbuf-32, ~208 KiB by default). CRIU
 // appends config-file externals to the RPC ones; keys its parser can't represent
 // (it strips at '#', splits on whitespace) stay inline. Returns the file to remove.
-func externalsToConfig(opts *criu.CriuOpts) (string, error) {
+//
+// CRIU opens the file by path, so dir must be visible to it. Empty dir means the default temp dir.
+func externalsToConfig(opts *criu.CriuOpts, dir string) (string, error) {
 	if len(opts.External) == 0 {
 		return "", nil
 	}
-	f, err := os.CreateTemp("", "cedana-criu-external-*.conf")
+	f, err := os.CreateTemp(dir, "cedana-criu-external-*.conf")
 	if err != nil {
 		return "", err
 	}
@@ -305,7 +332,13 @@ func (c *Criu) doSwrkWithResp(
 
 	if opts != nil {
 		opts.External = dedupe(opts.External)
-		cfgPath, err := externalsToConfig(opts)
+		// Inside another mount namespace the temp dir may well be private to it (e.g. /tmp),
+		// whereas the images dir is known to be reachable.
+		cfgDir := ""
+		if c.mntNs != "" {
+			cfgDir = opts.GetImagesDir()
+		}
+		cfgPath, err := externalsToConfig(opts, cfgDir)
 		if cfgPath != "" {
 			defer os.Remove(cfgPath)
 		}

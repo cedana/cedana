@@ -1,15 +1,19 @@
 package namespaces
 
-// Recognizes which namespaces of a slurm job are external, i.e. created and
-// held open by slurm rather than by the job itself.
+// Recognizes which namespaces of a slurm job are external, i.e. created by whatever
+// launched the job rather than by the job itself. Sites do this differently, so this
+// keys on how the namespace is held, not on what made it:
 //
 // Slurm's namespace/linux plugin pins each namespace it creates by bind-mounting
 // /proc/<pid>/ns/<type> onto <basepath>/<jobid>/.ns/<type>. Such a pin shows up
 // in mountinfo as an nsfs mount whose root is '<type>:[<inode>]'.
 // https://github.com/SchedMD/slurm/blob/035cb8f0b5d1fb6a375b27f2ecde106b84473ed5/src/plugins/namespace/linux/namespace_linux.c#L788-L805
+//
+// A PAM session module instead calls unshare() in the process opening the session
+// (slurmstepd, or sshd for pam_slurm_adopt), leaving nothing on disk. The namespace is
+// then held by that process, an ancestor of the job.
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"os"
@@ -25,23 +29,34 @@ import (
 const (
 	nsfsType = "nsfs"
 
-	// How far up the process tree to look for a mount namespace that can see the pins
-	maxMountinfoAncestors = 8
+	// How far up the process tree to look, for a mount namespace
+	// that can see the pins or for a process holding a namespace
+	maxAncestors = 8
+)
+
+type HolderKind string
+
+const (
+	HolderPin     HolderKind = "pin"     // bind-mounted nsfs file
+	HolderProcess HolderKind = "process" // ancestor of the job, outside the dumped tree
 )
 
 var nsfsRootPattern = regexp.MustCompile(`^(\w+):\[(\d+)\]$`)
 
-// RecognizedNamespace is a namespace the job lives in that is held open by
-// something outside the job (a bind-mounted nsfs file).
+// RecognizedNamespace is a namespace the job lives in that is
+// held open by something outside the job.
 type RecognizedNamespace struct {
 	Type  configs.NamespaceType
 	Inode uint64
-	Path  string // nsfs pin, e.g. <basepath>/<jobid>/.ns/pid
+
+	Holder    HolderKind
+	Path      string // always usable to open the namespace. For HolderPin it's the pin, e.g. <basepath>/<jobid>/.ns/pid
+	HolderPID uint32 // HolderProcess: closest ancestor sharing the namespace
 }
 
 // RecognizeExternalNamespaces returns the namespaces of pid that differ from
-// the host's and are pinned by an nsfs mount. Returns nothing if the process
-// is simply running in the host's namespaces.
+// the host's and are held from outside, by an nsfs mount or by an ancestor. Returns
+// nothing if the process is simply running in the host's namespaces.
 func RecognizeExternalNamespaces(pid uint32) ([]RecognizedNamespace, error) {
 	if pid == 0 {
 		return nil, fmt.Errorf("invalid pid %d", pid)
@@ -72,16 +87,25 @@ func RecognizeExternalNamespaces(pid uint32) ([]RecognizedNamespace, error) {
 	}
 
 	pins := pinnedNamespaces(pid)
+	ancestors := ancestorHolders(pid, jobInodes, hostInodes, pins)
 
-	return classifyNamespaces(jobInodes, hostInodes, pins), nil
+	return classifyNamespaces(jobInodes, hostInodes, pins, ancestors), nil
 }
 
 // classifyNamespaces picks out the external namespaces, in the stable order of configs.NamespaceTypes().
 //
-//	same inode as host   -> host namespace, ignored
-//	differs, pinned      -> external
-//	differs, not pinned  -> private to the job, left for CRIU to dump as usual
-func classifyNamespaces(jobInodes, hostInodes map[configs.NamespaceType]uint64, pins map[uint64]string) []RecognizedNamespace {
+//	same inode as host          -> host namespace, ignored
+//	differs, pinned             -> external, held by the pin
+//	differs, ancestor shares it -> external, held by the ancestor
+//	differs, neither            -> private to the job, left for CRIU to dump as usual
+//
+// An ancestor sharing the namespace is proof enough, since the dump is rooted at the job.
+// Whatever a process above the root is also in, was not created by the tree being dumped.
+func classifyNamespaces(
+	jobInodes, hostInodes map[configs.NamespaceType]uint64,
+	pins map[uint64]string,
+	ancestors map[configs.NamespaceType]uint32,
+) []RecognizedNamespace {
 	var recognized []RecognizedNamespace
 
 	for _, t := range configs.NamespaceTypes() {
@@ -92,18 +116,52 @@ func classifyNamespaces(jobInodes, hostInodes map[configs.NamespaceType]uint64, 
 		if hostIno, ok := hostInodes[t]; ok && hostIno == ino {
 			continue
 		}
-		path, ok := pins[ino]
-		if !ok {
-			log.Warn().
-				Str("type", configs.NsName(t)).
-				Uint64("inode", ino).
-				Msg("namespace differs from host but no nsfs pin is visible, treating it as private to the job")
+		if path, ok := pins[ino]; ok {
+			recognized = append(recognized, RecognizedNamespace{Type: t, Inode: ino, Holder: HolderPin, Path: path})
 			continue
 		}
-		recognized = append(recognized, RecognizedNamespace{Type: t, Inode: ino, Path: path})
+		if holder, ok := ancestors[t]; ok {
+			recognized = append(recognized, RecognizedNamespace{
+				Type: t, Inode: ino, Holder: HolderProcess, Path: nsPathOf(t, holder), HolderPID: holder,
+			})
+			continue
+		}
+		log.Warn().
+			Str("type", configs.NsName(t)).
+			Uint64("inode", ino).
+			Msg("namespace differs from host but nothing outside the job is seen holding it, treating it as private to the job")
 	}
 
 	return recognized
+}
+
+// ancestorHolders returns, for each namespace that differs from the host's and is not
+// pinned, the closest ancestor of pid that is in the same namespace.
+func ancestorHolders(
+	pid uint32,
+	jobInodes, hostInodes map[configs.NamespaceType]uint64,
+	pins map[uint64]string,
+) map[configs.NamespaceType]uint32 {
+	holders := map[configs.NamespaceType]uint32{}
+
+	wanted := map[configs.NamespaceType]uint64{}
+	for t, ino := range jobInodes {
+		if _, pinned := pins[ino]; !pinned && hostInodes[t] != ino {
+			wanted[t] = ino
+		}
+	}
+
+	for i, p := 0, parentOf(pid); i < maxAncestors && p > 1 && len(wanted) > 0; i, p = i+1, parentOf(p) {
+		for t, ino := range wanted {
+			// May not be allowed to look, in which case this ancestor is of no help
+			if ancestorIno, err := nsInode(nsPathOf(t, p)); err == nil && ancestorIno == ino {
+				holders[t] = p
+				delete(wanted, t)
+			}
+		}
+	}
+
+	return holders
 }
 
 // pinnedNamespaces returns inode -> mountpoint for all visible nsfs pins.
@@ -137,7 +195,7 @@ func pinnedNamespaces(pid uint32) map[uint64]string {
 	read("/proc/self")
 	read("/proc/1")
 
-	for i, p := 0, parentOf(pid); i < maxMountinfoAncestors && p > 1; i, p = i+1, parentOf(p) {
+	for i, p := 0, parentOf(pid); i < maxAncestors && p > 1; i, p = i+1, parentOf(p) {
 		read(fmt.Sprintf("/proc/%d", p))
 	}
 
@@ -146,33 +204,20 @@ func pinnedNamespaces(pid uint32) map[uint64]string {
 
 // pinnedNamespacesFromReader adds the nsfs pins found in mountinfo to pins. First pin for an inode wins.
 func pinnedNamespacesFromReader(mountinfo io.Reader, pins map[uint64]string) error {
-	scanner := bufio.NewScanner(mountinfo)
-	for scanner.Scan() {
-		// 412 98 0:4 pid:[4026532715] /var/spool/slurmd/1234/.ns/pid rw,nosuid shared:1 - nsfs nsfs rw
-		// (0) (1) (2) (3: root)       (4: mountpoint)                ...optional...  (-) (fstype)
-		fields := strings.Fields(scanner.Text())
-		if len(fields) < 7 {
+	mounts, err := parseMountinfo(mountinfo)
+	for _, m := range mounts {
+		if m.FSType != nsfsType {
 			continue
 		}
-		sep := -1
-		for i := 6; i < len(fields); i++ {
-			if fields[i] == "-" {
-				sep = i
-				break
-			}
-		}
-		if sep < 0 || sep+1 >= len(fields) || fields[sep+1] != nsfsType {
-			continue
-		}
-		_, ino, ok := parseNsfsRoot(fields[3])
+		_, ino, ok := parseNsfsRoot(m.Root)
 		if !ok {
 			continue
 		}
 		if _, ok := pins[ino]; !ok {
-			pins[ino] = unescapeMountinfo(fields[4])
+			pins[ino] = m.Mountpoint
 		}
 	}
-	return scanner.Err()
+	return err
 }
 
 // parseNsfsRoot parses the root of an nsfs mount, e.g. 'pid:[4026532715]'
