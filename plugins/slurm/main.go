@@ -9,6 +9,7 @@ import (
 	"github.com/cedana/cedana/plugins/slurm/cmd"
 	"github.com/cedana/cedana/plugins/slurm/internal/cgroup"
 	"github.com/cedana/cedana/plugins/slurm/internal/defaults"
+	"github.com/cedana/cedana/plugins/slurm/internal/filesystem"
 	"github.com/cedana/cedana/plugins/slurm/internal/job"
 	"github.com/cedana/cedana/plugins/slurm/internal/namespaces"
 	"github.com/cedana/cedana/plugins/slurm/internal/network"
@@ -45,9 +46,11 @@ var (
 		// Otherwise it causes `operation failed (msg:Error (compel/src/lib/infect.c:262): Unseizable non-zombie 2443832 found`
 		// cgroup.UseCgroupFreezerIfAvailableForDump,
 
-		// Only adds the namespaces that slurm's namespace plugin has actually created for the job
+		// Only handles the namespaces that were actually created for the job by its launcher,
+		// be it slurm's namespace plugin or a site's own (e.g. a PAM module)
 		// https://github.com/SchedMD/slurm/blob/035cb8f0b5d1fb6a375b27f2ecde106b84473ed5/src/plugins/namespace/linux/namespace_linux.c#L112-L138
 		namespaces.AddRecognizedExternalNamespacesForDump,
+		filesystem.DumpPrivateMounts, // depends on the above
 
 		network.LockNetworkBeforeDump,
 	}
@@ -58,8 +61,9 @@ var (
 		job.GetSlurmJobForRestore,
 		cgroup.ApplyCgroupsOnRestore,
 
-		// Inherits the namespaces that were added as external on dump
+		// Mirrors how external namespaces were handled on dump
 		namespaces.InheritRecognizedNamespacesForRestore,
+		filesystem.RestorePrivateMounts,
 
 		network.UnlockNetworkAfterRestore,
 	}

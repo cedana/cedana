@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -33,12 +34,16 @@ func TestExternalsToConfig(t *testing.T) {
 		ConfigFile: proto.String(prev.Name()),
 		External:   []string{"mnt[/a]:/a", "mnt[/has space]:/x", "file[1:2]", "mnt[/has#hash]:/y"},
 	}
-	path, err := externalsToConfig(opts)
+	dir := t.TempDir()
+	path, err := externalsToConfig(opts, dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Remove(path) })
 
+	if filepath.Dir(path) != dir {
+		t.Fatalf("config %q not created in %q", path, dir)
+	}
 	if opts.GetConfigFile() != path {
 		t.Fatalf("ConfigFile not updated: %q", opts.GetConfigFile())
 	}
@@ -53,7 +58,7 @@ func TestExternalsToConfig(t *testing.T) {
 
 func TestExternalsToConfigNoExternals(t *testing.T) {
 	opts := &criu.CriuOpts{ConfigFile: proto.String("/keep/me")}
-	path, err := externalsToConfig(opts)
+	path, err := externalsToConfig(opts, "")
 	if err != nil || path != "" || opts.GetConfigFile() != "/keep/me" {
 		t.Fatalf("path=%q cfg=%q err=%v", path, opts.GetConfigFile(), err)
 	}
