@@ -103,6 +103,10 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 			log.Debug().Err(err).Str("path", path).Msg("default storage calibration unavailable")
 		}
 	}
+	numaCalibrator, numaErr := measurements.NewNUMACalibrator(ctx)
+	if numaErr != nil {
+		log.Debug().Err(numaErr).Msg("NUMA throughput calibration unavailable")
+	}
 
 	server = &Server{
 		Cedana: Cedana{
@@ -110,6 +114,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 			plugins:                   pluginManager,
 			storageCalibrator:         storageCalibrator,
 			storageObservedThroughput: profiling.NewObservedThroughputCache(0, 0),
+			numaCalibrator:            numaCalibrator,
 			wg:                        wg,
 			lifetime:                  ctx,
 		},

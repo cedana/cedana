@@ -26,6 +26,8 @@ import (
 )
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
+	ctx = profiling.WithNUMAThroughput(ctx, s.numaCalibrator)
+
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 

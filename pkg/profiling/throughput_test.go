@@ -20,6 +20,16 @@ func (nopWriteCloser) Close() error {
 	return nil
 }
 
+type testNUMAThroughputLimiter struct {
+	throughput int64
+	resource   string
+	ok         bool
+}
+
+func (l testNUMAThroughputLimiter) LimitForPID(uint32) (int64, string, bool) {
+	return l.throughput, l.resource, l.ok
+}
+
 func TestThroughputLimitDerivesMinDuration(t *testing.T) {
 	data := &Data{}
 	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
@@ -36,6 +46,18 @@ func TestThroughputLimitDerivesMinDuration(t *testing.T) {
 	}
 	if data.Tags[ThroughputSourceTag] != "measured" || data.Tags[ThroughputResourceTag] != "mount:/checkpoints" || data.Tags[ThroughputDirectionTag] != "write" {
 		t.Fatalf("tags = %#v", data.Tags)
+	}
+}
+
+func TestNUMAThroughputLimit(t *testing.T) {
+	ctx := WithNUMAThroughput(context.Background(), testNUMAThroughputLimiter{
+		throughput: 100,
+		resource:   "numa0->numa1",
+		ok:         true,
+	})
+	limit := NUMAThroughputLimit(ctx, 42)
+	if limit == nil || limit.MaxThroughput != 100 || limit.Resource != "numa0->numa1" || limit.Source != "measured" {
+		t.Fatalf("limit = %#v", limit)
 	}
 }
 

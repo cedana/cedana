@@ -285,6 +285,8 @@ func addGPUWorkerTimingRowsToProfiling(ctx context.Context, rows []gpuWorkerTimi
 		var limit *profiling.ThroughputLimit
 		if phaseName == "gpu_memory" {
 			limit = gpuHostDeviceLimit(profile, row.worker.GetGPUDevice())
+		} else if phaseName == "host_memory" {
+			limit = profiling.NUMAThroughputLimit(ctx, row.worker.GetPID())
 		}
 		addGPUWorkerTimingRowToProfiling(ctx, row, stats, limit)
 	}

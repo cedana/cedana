@@ -22,6 +22,7 @@ type Cedana struct {
 	gpus                      gpu.Manager
 	storageCalibrator         *measurements.StorageCalibrator
 	storageObservedThroughput *profiling.ObservedThroughputCache
+	numaCalibrator            *measurements.NUMACalibrator
 
 	wg       *sync.WaitGroup
 	lifetime context.Context

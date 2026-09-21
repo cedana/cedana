@@ -31,6 +31,8 @@ import (
 )
 
 func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpResp, error) {
+	ctx = profiling.WithNUMAThroughput(ctx, s.numaCalibrator)
+
 	// The order below is the order followed before executing
 	// the final handler (criu.Dump).
 

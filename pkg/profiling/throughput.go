@@ -29,6 +29,12 @@ type ThroughputLimit struct {
 type throughputLimitContextKey struct{}
 type storageTransferContextKey struct{}
 type observedThroughputContextKey struct{}
+type numaThroughputContextKey struct{}
+
+// NUMAThroughputLimiter provides a measured host-memory limit for a process.
+type NUMAThroughputLimiter interface {
+	LimitForPID(pid uint32) (int64, string, bool)
+}
 
 type ObservedThroughputCache struct {
 	mu       sync.Mutex
@@ -93,6 +99,31 @@ func WithObservedThroughput(ctx context.Context, cache *ObservedThroughputCache,
 		resource:  resource,
 		direction: direction,
 	})
+}
+
+// WithNUMAThroughput makes process-specific NUMA limits available to profile components.
+func WithNUMAThroughput(ctx context.Context, limiter NUMAThroughputLimiter) context.Context {
+	if limiter == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, numaThroughputContextKey{}, limiter)
+}
+
+// NUMAThroughputLimit returns the measured host-memory limit for a profiled process.
+func NUMAThroughputLimit(ctx context.Context, pid uint32) *ThroughputLimit {
+	limiter, ok := ctx.Value(numaThroughputContextKey{}).(NUMAThroughputLimiter)
+	if !ok {
+		return nil
+	}
+	throughput, resource, ok := limiter.LimitForPID(pid)
+	if !ok || throughput <= 0 {
+		return nil
+	}
+	return &ThroughputLimit{
+		MaxThroughput: throughput,
+		Source:        "measured",
+		Resource:      resource,
+	}
 }
 
 func AddStorageTransfer(ctx context.Context, n int64) {
