@@ -221,13 +221,26 @@ func (es *EventStream) StartDeleteConsumer(ctx context.Context) error {
 		return fmt.Errorf("rabbitmq connection is closed")
 	}
 
-	queueName := "daemon_delete_request"
+	queueName := "daemon_delete_request-" + rand.Text()
 	log.Debug().Msgf("creating %v queue for processing checkpoint delete requests", queueName)
 	consumer, err := rabbitmq.NewConsumer(
 		conn,
 		queueName,
+		rabbitmq.WithConsumerOptionsExchangeName("daemon_delete_request"),
 		rabbitmq.WithConsumerOptionsConcurrency(1),
+		rabbitmq.WithConsumerOptionsExchangeDeclare,
+		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
 		rabbitmq.WithConsumerOptionsConsumerName("cedana_delete_helper"),
+		rabbitmq.WithConsumerOptionsRoutingKey(""),
+		rabbitmq.WithConsumerOptionsQueueExclusive,
+		rabbitmq.WithConsumerOptionsQueueAutoDelete,
+		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
+			"x-expires": queryExpiryMs,
+		}),
+		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
+			RoutingKey:     "",
+			BindingOptions: rabbitmq.BindingOptions{},
+		}),
 	)
 	if err != nil {
 		return err
