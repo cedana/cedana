@@ -71,24 +71,70 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 					return next(ctx, opts, resp, req)
 				}
 
-				// CRIU expects the information about an external namespace
-				// like this: --external <TYPE>[<inode>]:<key>
-				// This <key> is always 'extRoot<TYPE>NS'.
-
 				var ns unix.Stat_t
 				if err := unix.Stat(nsPath, &ns); err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to stat %s: %v", nsPath, err)
 				}
-				external := fmt.Sprintf("%s[%d]:%s", configs.NsName(t), ns.Ino, CriuNsToKey(t))
 
-				if req.Criu == nil {
-					req.Criu = &criu_proto.CriuOpts{}
-				}
-
-				req.Criu.External = append(req.Criu.External, external)
+				addExternalNamespace(req, t, uint64(ns.Ino))
 			}
 
 			return next(ctx, opts, resp, req)
 		}
+	}
+}
+
+// Detects the namespaces of the job that are external (created and pinned by slurm,
+// see RecognizeExternalNamespaces) and adds only those to the dump. Unlike
+// AddExternalNamespacesForDump, this does not touch CRIU opts when the job is
+// simply running in the host's namespaces.
+// The namespaces added are recorded in the dump, for InheritRecognizedNamespacesForRestore.
+func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		pid := req.GetDetails().GetSlurm().GetPID()
+
+		recognized, err := RecognizeExternalNamespaces(pid)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to recognize external namespaces: %v", err)
+		}
+		if len(recognized) == 0 {
+			log.Debug().Uint32("PID", pid).Msg("no external namespaces recognized")
+			return next(ctx, opts, resp, req)
+		}
+
+		version, err := opts.CRIU.GetCriuVersion(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
+		}
+
+		var added []configs.NamespaceType
+
+		for _, ns := range recognized {
+			if ok, reason := criuSupportsExternal(ns.Type, version); !ok {
+				log.Warn().
+					Str("path", ns.Path).
+					Msgf("%s, skipping external %s namespace handling", reason, configs.NsName(ns.Type))
+				continue
+			}
+
+			log.Debug().
+				Str("path", ns.Path).
+				Uint64("inode", ns.Inode).
+				Msgf("adding external %s namespace", configs.NsName(ns.Type))
+
+			addExternalNamespace(req, ns.Type, ns.Inode)
+			added = append(added, ns.Type)
+		}
+
+		if len(added) > 0 {
+			if opts.DumpFs == nil {
+				return nil, status.Error(codes.FailedPrecondition, "dump filesystem is nil, cannot save external namespaces")
+			}
+			if err := saveExternalNamespaces(opts.DumpFs, added); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to save external namespaces to dump: %v", err)
+			}
+		}
+
+		return next(ctx, opts, resp, req)
 	}
 }
