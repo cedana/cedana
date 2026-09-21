@@ -17,7 +17,45 @@ const (
 	numaBenchmarkSizeEnv    = "CEDANA_NUMA_BENCHMARK_SIZE_GB"
 	numaBenchmarkSamplesEnv = "CEDANA_NUMA_BENCHMARK_SAMPLES"
 	numaBenchmarkOutputEnv  = "CEDANA_NUMA_BENCHMARK_OUTPUT"
+	numaCalibrationSizeGB   = 0.1
+	numaCalibrationSamples  = 3
 )
+
+type NUMACalibrator struct {
+	limits map[string]int64
+}
+
+// NewNUMACalibrator measures the host NUMA copy matrix for profile limits.
+func NewNUMACalibrator(ctx context.Context) (*NUMACalibrator, error) {
+	measurements, err := BenchmarkNUMA(ctx, numaCalibrationSizeGB, numaCalibrationSamples)
+	if err != nil {
+		return nil, err
+	}
+
+	calibrator := &NUMACalibrator{limits: make(map[string]int64)}
+	for _, measurement := range measurements {
+		if measurement.CopyGBPerSec == nil || *measurement.CopyGBPerSec <= 0 {
+			continue
+		}
+		calibrator.limits[measurement.Name] = int64(*measurement.CopyGBPerSec * 1_000_000_000)
+	}
+	return calibrator, nil
+}
+
+// LimitForPID returns a measured NUMA copy limit when the process placement is unambiguous.
+func (c *NUMACalibrator) LimitForPID(pid uint32) (int64, string, bool) {
+	if c == nil || len(c.limits) == 0 || pid == 0 {
+		return 0, "", false
+	}
+
+	cpuNode, memoryNode, ok := numaPlacementForPID(pid)
+	if !ok {
+		return 0, "", false
+	}
+	resource := numaPathName(cpuNode, memoryNode)
+	limit, ok := c.limits[resource]
+	return limit, resource, ok
+}
 
 // RunNUMABenchmarkChild handles the bound child process started by BenchmarkNUMA.
 // It is intentionally not a user-facing Cedana command.
@@ -199,4 +237,104 @@ func numaLocality(cpuNode, memoryNode int) string {
 		return "local"
 	}
 	return "remote"
+}
+
+func numaPlacementForPID(pid uint32) (int, int, bool) {
+	if runtime.GOOS != "linux" {
+		return 0, 0, false
+	}
+
+	status, err := os.ReadFile(filepath.Join("/proc", strconv.FormatUint(uint64(pid), 10), "status"))
+	if err != nil {
+		return 0, 0, false
+	}
+	return numaPlacementFromStatus(string(status), numaNodeForCPU)
+}
+
+func numaPlacementFromStatus(status string, nodeForCPU func(int) (int, bool)) (int, int, bool) {
+	cpus, ok := statusNUMAList(status, "Cpus_allowed_list")
+	if !ok {
+		return 0, 0, false
+	}
+	memoryNodes, ok := statusNUMAList(status, "Mems_allowed_list")
+	if !ok || len(memoryNodes) != 1 {
+		return 0, 0, false
+	}
+
+	cpuNode, ok := singleNUMANodeForCPUs(cpus, nodeForCPU)
+	if !ok {
+		return 0, 0, false
+	}
+	return cpuNode, memoryNodes[0], true
+}
+
+func statusNUMAList(status, field string) ([]int, bool) {
+	prefix := field + ":"
+	for _, line := range strings.Split(status, "\n") {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		values, err := parseNUMAList(strings.TrimSpace(strings.TrimPrefix(line, prefix)))
+		return values, err == nil && len(values) > 0
+	}
+	return nil, false
+}
+
+func parseNUMAList(value string) ([]int, error) {
+	if value == "" {
+		return nil, fmt.Errorf("empty NUMA list")
+	}
+
+	seen := make(map[int]struct{})
+	for _, part := range strings.Split(value, ",") {
+		bounds := strings.SplitN(part, "-", 2)
+		start, err := strconv.Atoi(bounds[0])
+		if err != nil || start < 0 {
+			return nil, fmt.Errorf("invalid NUMA list %q", value)
+		}
+		end := start
+		if len(bounds) == 2 {
+			end, err = strconv.Atoi(bounds[1])
+			if err != nil || end < start {
+				return nil, fmt.Errorf("invalid NUMA list %q", value)
+			}
+		}
+		for node := start; node <= end; node++ {
+			seen[node] = struct{}{}
+		}
+	}
+
+	result := make([]int, 0, len(seen))
+	for node := range seen {
+		result = append(result, node)
+	}
+	sort.Ints(result)
+	return result, nil
+}
+
+func singleNUMANodeForCPUs(cpus []int, nodeForCPU func(int) (int, bool)) (int, bool) {
+	var node int
+	for i, cpu := range cpus {
+		cpuNode, ok := nodeForCPU(cpu)
+		if !ok {
+			return 0, false
+		}
+		if i > 0 && cpuNode != node {
+			return 0, false
+		}
+		node = cpuNode
+	}
+	return node, len(cpus) > 0
+}
+
+func numaNodeForCPU(cpu int) (int, bool) {
+	matches, err := filepath.Glob(filepath.Join("/sys/devices/system/cpu", fmt.Sprintf("cpu%d", cpu), "node*"))
+	if err != nil || len(matches) != 1 {
+		return 0, false
+	}
+	cpuNode, err := strconv.Atoi(strings.TrimPrefix(filepath.Base(matches[0]), "node"))
+	if err != nil || cpuNode < 0 {
+		return 0, false
+	}
+	return cpuNode, true
 }

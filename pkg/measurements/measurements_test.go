@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"slices"
 	"syscall"
 	"testing"
 	"time"
@@ -30,6 +31,42 @@ func TestParseNUMAMemTotalGB(t *testing.T) {
 	want := float64(12345678*1024) / 1_000_000_000
 	if got != want {
 		t.Fatalf("parseNUMAMemTotalGB = %f, want %f", got, want)
+	}
+}
+
+func TestParseNUMAList(t *testing.T) {
+	got, err := parseNUMAList("0-2,4,2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int{0, 1, 2, 4}
+	if !slices.Equal(got, want) {
+		t.Fatalf("parseNUMAList = %v, want %v", got, want)
+	}
+	if _, err := parseNUMAList("2-1"); err == nil {
+		t.Fatal("expected invalid range error")
+	}
+}
+
+func TestNUMAPlacementFromStatus(t *testing.T) {
+	status := "Cpus_allowed_list:\t8-11\nMems_allowed_list:\t1\n"
+	nodeForCPU := func(cpu int) (int, bool) {
+		if cpu >= 8 && cpu <= 11 {
+			return 1, true
+		}
+		return 0, false
+	}
+	cpuNode, memoryNode, ok := numaPlacementFromStatus(status, nodeForCPU)
+	if !ok || cpuNode != 1 || memoryNode != 1 {
+		t.Fatalf("placement = (%d, %d, %t), want (1, 1, true)", cpuNode, memoryNode, ok)
+	}
+}
+
+func TestNUMAPlacementFromStatusRejectsAmbiguousCPUs(t *testing.T) {
+	status := "Cpus_allowed_list:\t0-1\nMems_allowed_list:\t0\n"
+	nodeForCPU := func(cpu int) (int, bool) { return cpu, true }
+	if _, _, ok := numaPlacementFromStatus(status, nodeForCPU); ok {
+		t.Fatal("expected ambiguous CPU placement to be rejected")
 	}
 }
 
