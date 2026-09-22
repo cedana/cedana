@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"runtime"
 	"sync"
@@ -24,6 +25,7 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/gofrs/flock"
@@ -37,6 +39,8 @@ import (
 
 const (
 	CONTROLLER_PROCESS_NAME                = "cedana-gpu-controller"
+	GPU_FLUSH_PENDING_FILE                 = "gpu-flush-pending"
+	GPU_IMAGE_COMPLETE_FILE                = "gpu-dump-complete"
 	CONTROLLER_ADDRESS_FORMATTER           = "unix://%s/cedana-gpu-controller-%s.sock"
 	CONTROLLER_SOCKET_FORMATTER            = "%s/cedana-gpu-controller-%s.sock"
 	CONTROLLER_SOCKET_PATTERN              = "cedana-gpu-controller-(.*).sock"
@@ -60,6 +64,7 @@ const (
 	FREEZE_TIMEOUT    = 1 * time.Minute
 	UNFREEZE_TIMEOUT  = 1 * time.Minute
 	DUMP_TIMEOUT      = 10 * time.Minute
+	FLUSH_TIMEOUT     = 30 * time.Minute
 	RESTORE_TIMEOUT   = 10 * time.Minute
 	HEALTH_TIMEOUT    = 30 * time.Second
 	INFO_TIMEOUT      = 30 * time.Second
@@ -380,6 +385,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 	log := log.With().Str("plugin", "gpu").Str("ID", id).Logger()
 
+	var freezeStart, freezeDone, gpuDumpDone, unfreezeStart, unfreezeDone time.Time
+
 	callback.InitializeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		pid := uint32(opts.GetPid())
 		log := log.With().Uint32("PID", pid).Logger()
@@ -404,7 +411,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 		log.Info().Msg("GPU freeze starting")
 
+		freezeStart = time.Now()
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})
+		freezeDone = time.Now()
 		if err != nil {
 			log.Error().Err(err).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
@@ -453,10 +462,11 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
+			gpuDumpDone = time.Now()
 
 			log.Info().Msg("GPU dump complete")
 		}()
-		return <-dumpErr
+		return nil
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
@@ -478,32 +488,40 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			return nil
 		}
 
-		err := <-dumpErr // Ensure GPU dump has finished before unfreezing
+		err := <-dumpErr // Ensure the GPU state has been captured before unfreezing
 
-		if !opts.GetLeaveRunning() && criuErr == nil {
-			return err
+		var unfreezeErr error
+		if opts.GetLeaveRunning() || criuErr != nil {
+			// NOTE: Unfreeze must complete even if parent context is cancelled, so process can resume
+			waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
+			defer cancel()
+
+			// Cancel on early external termination
+			go func() {
+				<-controller.Terminated
+				cancel()
+			}()
+
+			log.Info().Msg("GPU unfreeze starting")
+
+			unfreezeStart = time.Now()
+			_, unfreezeErr = controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
+			unfreezeDone = time.Now()
+			if unfreezeErr != nil {
+				log.Error().Err(unfreezeErr).Msg("failed to unfreeze GPU")
+			} else {
+				log.Info().Msg("GPU unfreeze completed")
+			}
 		}
 
-		// NOTE: Unfreeze must complete even if parent context is cancelled, so process can resume
-		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
-		defer cancel()
+		reportFrozenWindow(ctx, freezeStart, freezeDone, gpuDumpDone, unfreezeStart,
+			unfreezeDone, &log)
 
-		// Cancel on early external termination
-		go func() {
-			<-controller.Terminated
-			cancel()
-		}()
+		_, endWait := profiling.StartTimingCategory(ctx, "gpu", waitImageComplete)
+		waitErr := waitImageComplete(ctx, opts.GetImagesDir(), &log)
+		endWait()
 
-		log.Info().Msg("GPU unfreeze starting")
-
-		_, unfreezeErr := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
-		if unfreezeErr != nil {
-			log.Error().Err(unfreezeErr).Msg("failed to unfreeze GPU")
-		} else {
-			log.Info().Msg("GPU unfreeze completed")
-		}
-
-		return errors.Join(err, utils.GRPCError(unfreezeErr))
+		return errors.Join(err, utils.GRPCError(unfreezeErr), waitErr)
 	}
 
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
@@ -802,4 +820,72 @@ func EnsureLogDir(id string, uid, gid uint32) (string, error) {
 		return "", err
 	}
 	return dir, os.Chown(dir, int(uid), int(gid))
+}
+
+func waitImageComplete(ctx context.Context, dir string, log *zerolog.Logger) error {
+	if dir == "" {
+		return nil
+	}
+	pending := filepath.Join(dir, GPU_FLUSH_PENDING_FILE)
+	if _, err := os.Stat(pending); err != nil {
+		return nil
+	}
+
+	complete := filepath.Join(dir, GPU_IMAGE_COMPLETE_FILE)
+	start := time.Now()
+	log.Info().Msg("waiting for the GPU checkpoint to finish writing")
+
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	deadline := time.After(FLUSH_TIMEOUT)
+	for {
+		if _, err := os.Stat(complete); err == nil {
+			log.Info().Dur("waited", time.Since(start)).Msg("GPU checkpoint written")
+			return nil
+		}
+		select {
+		case <-ticker.C:
+		case <-deadline:
+			return fmt.Errorf("timed out after %s waiting for the GPU checkpoint to finish writing", FLUSH_TIMEOUT)
+		case <-ctx.Done():
+			log.Warn().Msg("context cancelled while the GPU checkpoint was still being written")
+		}
+	}
+}
+
+func reportFrozenWindow(ctx context.Context, freezeStart, freezeDone, gpuDumpDone,
+	unfreezeStart, unfreezeDone time.Time, log *zerolog.Logger,
+) {
+	if freezeStart.IsZero() || unfreezeDone.IsZero() {
+		return
+	}
+
+	total := unfreezeDone.Sub(freezeStart)
+	gpuFreeze := freezeDone.Sub(freezeStart)
+	gpuUnfreeze := unfreezeDone.Sub(unfreezeStart)
+	var gpuDump, criuFrozen time.Duration
+	if !gpuDumpDone.IsZero() {
+		gpuDump = gpuDumpDone.Sub(freezeDone)
+	}
+	if !unfreezeStart.IsZero() {
+		criuFrozen = unfreezeStart.Sub(freezeDone)
+	}
+
+	profiling.AddTimingComponent(ctx, total, "frozen.total")
+	profiling.AddTimingComponent(ctx, gpuFreeze, "frozen.gpu.freeze")
+	if gpuDump > 0 {
+		profiling.AddTimingComponent(ctx, gpuDump, "frozen.gpu.dump")
+	}
+	if criuFrozen > 0 {
+		profiling.AddTimingComponent(ctx, criuFrozen, "frozen.criu")
+	}
+	profiling.AddTimingComponent(ctx, gpuUnfreeze, "frozen.gpu.unfreeze")
+
+	log.Info().
+		Dur("total", total).
+		Dur("gpu_freeze", gpuFreeze).
+		Dur("gpu_dump", gpuDump).
+		Dur("criu", criuFrozen).
+		Dur("gpu_unfreeze", gpuUnfreeze).
+		Msg("application frozen window (gpu dump and criu overlap, so parts exceed total)")
 }

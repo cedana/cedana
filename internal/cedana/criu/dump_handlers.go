@@ -2,11 +2,17 @@ package criu
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/config"
+	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -56,6 +62,14 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 		return nil, status.Errorf(codes.Internal, "failed to change ownership of dump directory: %v", err)
 	}
 
+	if rounds := predumpRounds(); rounds > 0 {
+		if err := preDump(ctx, opts, criuOpts, rounds, &log); err != nil {
+			log.Warn().Err(err).Msg("pre-dump failed; dumping without a parent image")
+			criuOpts.TrackMem = nil
+			criuOpts.ParentImg = nil
+		}
+	}
+
 	log.Info().Msg("CRIU dump starting")
 	log.Debug().Interface("opts", criuOpts).Msg("CRIU dump options")
 
@@ -80,4 +94,54 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	log.Info().Msg("CRIU dump complete")
 
 	return channel.Broadcaster(utils.WaitForPidCtx(opts.Lifetime, resp.State.PID)), nil
+}
+
+// predumpRounds reads how many pre-dump passes to run before the real dump.
+func predumpRounds() int {
+	v := os.Getenv("CEDANA_CRIU_PREDUMP_ROUNDS")
+	if v == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}
+
+func preDump(ctx context.Context, opts types.Opts, criuOpts *criu_proto.CriuOpts, rounds int, log *zerolog.Logger) error {
+	parent := ""
+	for i := range rounds {
+		name := fmt.Sprintf("parent-%d", i)
+		dir := filepath.Join(criuOpts.GetImagesDir(), name)
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			return fmt.Errorf("failed to create pre-dump dir: %w", err)
+		}
+		f, err := os.Open(dir)
+		if err != nil {
+			return fmt.Errorf("failed to open pre-dump dir: %w", err)
+		}
+
+		pre := proto.Clone(criuOpts).(*criu_proto.CriuOpts)
+		pre.ImagesDir = proto.String(dir)
+		pre.ImagesDirFd = proto.Int32(int32(f.Fd()))
+		pre.TrackMem = proto.Bool(true)
+		pre.LeaveRunning = proto.Bool(true)
+		if parent != "" {
+			pre.ParentImg = proto.String(filepath.Join("..", parent))
+		}
+
+		start := time.Now()
+		err = opts.CRIU.PreDump(ctx, pre, &criu_client.NotifyCallback{Name: "pre-dump"})
+		f.Close()
+		if err != nil {
+			return fmt.Errorf("pre-dump pass %d failed: %w", i, err)
+		}
+		log.Info().Int("pass", i).Dur("took", time.Since(start)).Msg("CRIU pre-dump pass complete")
+		parent = name
+	}
+
+	criuOpts.TrackMem = proto.Bool(true)
+	criuOpts.ParentImg = proto.String(parent)
+	return nil
 }

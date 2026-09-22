@@ -113,7 +113,10 @@ var dumpCmd = &cobra.Command{
 			FileLocks:       proto.Bool(fileLocks),
 			ShellJob:        proto.Bool(shellJob),
 			LinkRemap:       proto.Bool(linkRemap),
-			External:        external,
+			// Requires kernel >= 5.6 && libnftables libraries
+			// Set this is an opt and default nftables for now, but we can make this a real option later.
+			NetworkLock: criu.CriuNetworkLockMethod_NFTABLES.Enum(),
+			External:    external,
 		}
 		if criuOptsJSON != "" {
 			err := json.Unmarshal([]byte(criuOptsJSON), criuOpts)
