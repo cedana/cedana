@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 )
 
 const (
@@ -22,39 +23,85 @@ const (
 )
 
 type NUMACalibrator struct {
-	limits map[string]int64
+	mu              sync.Mutex
+	entries         map[string]*numaCalibrationEntry
+	placementForPID func(uint32) (int, int, bool)
+	benchmark       func(context.Context, int, int, float64, int) (float64, error)
 }
 
-// NewNUMACalibrator measures the host NUMA copy matrix for profile limits.
-func NewNUMACalibrator(ctx context.Context) (*NUMACalibrator, error) {
-	measurements, err := BenchmarkNUMA(ctx, numaCalibrationSizeGB, numaCalibrationSamples)
-	if err != nil {
-		return nil, err
-	}
+type numaCalibrationEntry struct {
+	throughput int64
+	err        error
+	ready      chan struct{}
+}
 
-	calibrator := &NUMACalibrator{limits: make(map[string]int64)}
-	for _, measurement := range measurements {
-		if measurement.CopyGBPerSec == nil || *measurement.CopyGBPerSec <= 0 {
-			continue
-		}
-		calibrator.limits[measurement.Name] = int64(*measurement.CopyGBPerSec * 1_000_000_000)
+// NewNUMACalibrator calibrates only the NUMA routes used by profiled processes.
+func NewNUMACalibrator() *NUMACalibrator {
+	return newNUMACalibrator(numaPlacementForPID, BenchmarkNUMARoute)
+}
+
+func newNUMACalibrator(
+	placementForPID func(uint32) (int, int, bool),
+	benchmark func(context.Context, int, int, float64, int) (float64, error),
+) *NUMACalibrator {
+	return &NUMACalibrator{
+		entries:         make(map[string]*numaCalibrationEntry),
+		placementForPID: placementForPID,
+		benchmark:       benchmark,
 	}
-	return calibrator, nil
 }
 
 // LimitForPID returns a measured NUMA copy limit when the process placement is unambiguous.
-func (c *NUMACalibrator) LimitForPID(pid uint32) (int64, string, bool) {
-	if c == nil || len(c.limits) == 0 || pid == 0 {
+func (c *NUMACalibrator) LimitForPID(ctx context.Context, pid uint32) (int64, string, bool) {
+	if c == nil || pid == 0 {
 		return 0, "", false
 	}
 
-	cpuNode, memoryNode, ok := numaPlacementForPID(pid)
+	cpuNode, memoryNode, ok := c.placementForPID(pid)
 	if !ok {
 		return 0, "", false
 	}
 	resource := numaPathName(cpuNode, memoryNode)
-	limit, ok := c.limits[resource]
-	return limit, resource, ok
+
+	throughput, err := c.calibrate(ctx, resource, cpuNode, memoryNode)
+	if err != nil || throughput <= 0 {
+		return 0, resource, false
+	}
+	return throughput, resource, true
+}
+
+func (c *NUMACalibrator) calibrate(ctx context.Context, resource string, cpuNode, memoryNode int) (int64, error) {
+	c.mu.Lock()
+	if entry := c.entries[resource]; entry != nil {
+		ready := entry.ready
+		c.mu.Unlock()
+		select {
+		case <-ready:
+			return entry.throughput, entry.err
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+	}
+
+	entry := &numaCalibrationEntry{ready: make(chan struct{})}
+	c.entries[resource] = entry
+	c.mu.Unlock()
+
+	rate, err := c.benchmark(ctx, cpuNode, memoryNode, numaCalibrationSizeGB, numaCalibrationSamples)
+	throughput := int64(rate * 1_000_000_000)
+	if rate <= 0 && err == nil {
+		err = fmt.Errorf("NUMA benchmark returned non-positive throughput")
+	}
+
+	c.mu.Lock()
+	entry.throughput = throughput
+	entry.err = err
+	close(entry.ready)
+	if err != nil {
+		delete(c.entries, resource)
+	}
+	c.mu.Unlock()
+	return throughput, err
 }
 
 // RunNUMABenchmarkChild handles the bound child process started by BenchmarkNUMA.
@@ -134,6 +181,24 @@ func BenchmarkNUMA(ctx context.Context, sizeGB float64, samples int) ([]NUMAMeas
 		}
 	}
 	return result, nil
+}
+
+// BenchmarkNUMARoute measures one CPU-to-memory NUMA route.
+func BenchmarkNUMARoute(ctx context.Context, cpuNode, memoryNode int, sizeGB float64, samples int) (float64, error) {
+	if runtime.GOOS != "linux" {
+		return 0, fmt.Errorf("NUMA benchmarks are only supported on linux")
+	}
+	if err := validateBenchmarkSamples(samples); err != nil {
+		return 0, err
+	}
+	if sizeGB <= 0 {
+		sizeGB = 1
+	}
+	numactl, err := exec.LookPath("numactl")
+	if err != nil {
+		return 0, err
+	}
+	return benchmarkNUMAMemoryAccess(ctx, numactl, cpuNode, memoryNode, sizeGB, samples)
 }
 
 type numaNode struct {

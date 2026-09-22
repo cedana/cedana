@@ -26,7 +26,7 @@ type testNUMAThroughputLimiter struct {
 	ok         bool
 }
 
-func (l testNUMAThroughputLimiter) LimitForPID(uint32) (int64, string, bool) {
+func (l testNUMAThroughputLimiter) LimitForPID(context.Context, uint32) (int64, string, bool) {
 	return l.throughput, l.resource, l.ok
 }
 

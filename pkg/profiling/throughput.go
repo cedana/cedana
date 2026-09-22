@@ -33,7 +33,7 @@ type numaThroughputContextKey struct{}
 
 // NUMAThroughputLimiter provides a measured host-memory limit for a process.
 type NUMAThroughputLimiter interface {
-	LimitForPID(pid uint32) (int64, string, bool)
+	LimitForPID(ctx context.Context, pid uint32) (int64, string, bool)
 }
 
 type ObservedThroughputCache struct {
@@ -115,7 +115,7 @@ func NUMAThroughputLimit(ctx context.Context, pid uint32) *ThroughputLimit {
 	if !ok {
 		return nil
 	}
-	throughput, resource, ok := limiter.LimitForPID(pid)
+	throughput, resource, ok := limiter.LimitForPID(ctx, pid)
 	if !ok || throughput <= 0 {
 		return nil
 	}
