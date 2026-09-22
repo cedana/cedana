@@ -193,16 +193,35 @@ CONFIG_CHANGED=false
 # with an external containerd (--container-runtime-endpoint) it is never
 # generated and templates are never rendered, so fall through to the regular
 # containerd flow below in that case.
+# Resolve a k3s/RKE2 data dir: --data-dir flag of the running process, then
+# config.yaml, then the default location
+rancher_data_dir() {
+    local name="$1" pid args dir=""
+    pid=$(pidof -s "$name" 2>/dev/null || true)
+    if [ -n "$pid" ]; then
+        args=$(ps -o args= -p "$pid" 2>/dev/null || true)
+        dir=$(echo "$args" | sed -n 's/.*--data-dir[= ]\+\([^ ]*\).*/\1/p')
+    fi
+    if [ -z "$dir" ] && [ -f "/etc/rancher/$name/config.yaml" ]; then
+        dir=$(sed -n 's/^[[:space:]]*data-dir:[[:space:]]*//p' "/etc/rancher/$name/config.yaml" | head -n 1 | tr -d '"' | tr -d "'")
+    fi
+    echo "${dir:-/var/lib/rancher/$name}"
+}
+
 RANCHER_SERVICES=""
-if [ -f /var/lib/rancher/rke2/agent/etc/containerd/config.toml ]; then
-    echo "RKE2 node detected (with managed containerd)"
-    RANCHER_CONFIG_DIR="/var/lib/rancher/rke2/agent/etc/containerd"
-    RANCHER_SERVICES="rke2-server rke2-agent"
-elif [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
-    echo "k3s node detected (with managed containerd)"
-    RANCHER_CONFIG_DIR="/var/lib/rancher/k3s/agent/etc/containerd"
-    RANCHER_SERVICES="k3s k3s-agent"
-fi
+for RANCHER_NAME in rke2 k3s; do
+    RANCHER_DATA_DIR=$(rancher_data_dir "$RANCHER_NAME")
+    if [ -f "$RANCHER_DATA_DIR/agent/etc/containerd/config.toml" ]; then
+        echo "$RANCHER_NAME node detected (with managed containerd, data dir: $RANCHER_DATA_DIR)"
+        RANCHER_CONFIG_DIR="$RANCHER_DATA_DIR/agent/etc/containerd"
+        if [ "$RANCHER_NAME" = "rke2" ]; then
+            RANCHER_SERVICES="rke2-server rke2-agent"
+        else
+            RANCHER_SERVICES="k3s k3s-agent"
+        fi
+        break
+    fi
+done
 
 if [ -n "$RANCHER_SERVICES" ]; then
     mkdir -p "$RANCHER_CONFIG_DIR"
@@ -238,6 +257,8 @@ if [ -n "$RANCHER_SERVICES" ]; then
     else
         echo "Cedana runtime config already exists in $TEMPLATE, skipping"
     fi
+
+    RESTART_STAMP_FILES="$TEMPLATE"
 else
     CONTAINERD_CONFIG_PATH=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
     CONTAINERD_CONFD_DIR="$(dirname "$CONTAINERD_CONFIG_PATH")/conf.d"
@@ -307,12 +328,21 @@ else
         mkdir -p "$CONTAINERD_CONFD_DIR"
 
         if ! grep -qF "$CONTAINERD_CONFD_DIR/*.toml" "$CONTAINERD_CONFIG_PATH"; then
-            if grep -q '^imports = \[' "$CONTAINERD_CONFIG_PATH"; then
+            if grep -q '^imports = \[.*\]' "$CONTAINERD_CONFIG_PATH"; then
                 echo "Appending conf.d glob to existing imports in $CONTAINERD_CONFIG_PATH"
                 sed -i "s|^imports = \[\(.*\)\]|imports = [\1, \"$CONTAINERD_CONFD_DIR/*.toml\"]|" "$CONTAINERD_CONFIG_PATH"
+            elif grep -q '^imports = \[' "$CONTAINERD_CONFIG_PATH"; then
+                # Multiline imports array: add the glob right after the opening
+                # bracket (TOML allows a trailing comma before the closing one)
+                echo "Adding conf.d glob to multiline imports in $CONTAINERD_CONFIG_PATH"
+                sed -i "/^imports = \[/a \"$CONTAINERD_CONFD_DIR/*.toml\"," "$CONTAINERD_CONFIG_PATH"
             else
                 echo "Adding imports line to $CONTAINERD_CONFIG_PATH"
                 sed -i "/^version = 3/a imports = [\"$CONTAINERD_CONFD_DIR/*.toml\"]" "$CONTAINERD_CONFIG_PATH"
+            fi
+            if ! grep -qF "$CONTAINERD_CONFD_DIR/*.toml" "$CONTAINERD_CONFIG_PATH"; then
+                echo "ERROR: Failed to add $CONTAINERD_CONFD_DIR/*.toml to imports in $CONTAINERD_CONFIG_PATH, please add it manually" >&2
+                exit 1
             fi
             CONFIG_CHANGED=true
         else
@@ -327,27 +357,67 @@ else
             echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
         fi
     fi
+
+    RESTART_STAMP_FILES="$TARGET_CONFIG $CONTAINERD_CONFIG_PATH"
 fi
 
-if [ "$CONFIG_CHANGED" = false ]; then
-    echo "Containerd runtime configuration already up to date, no restart needed"
-    exit 0
-fi
-
+# Determine which service provides containerd on this node
+RESTART_SERVICE="containerd"
 if [ -n "$RANCHER_SERVICES" ]; then
-    # The generated config.toml is only re-rendered from the template when the
-    # k3s/RKE2 service restarts (this does not disrupt running containers)
+    RESTART_SERVICE=""
     for SERVICE in $RANCHER_SERVICES; do
         if systemctl is-active --quiet "$SERVICE"; then
-            echo "Restarting $SERVICE to regenerate the containerd configuration..."
-            (systemctl restart "$SERVICE" && echo "Restarted $SERVICE successfully") ||
-                echo "WARNING: Failed to restart $SERVICE, please restart manually" >&2
-            exit 0
+            RESTART_SERVICE="$SERVICE"
+            break
         fi
     done
-    echo "WARNING: No active service found among: $RANCHER_SERVICES; restart it manually to apply the containerd configuration" >&2
-else
-    echo "Restarting containerd to pick up the new runtime configuration..."
-    (systemctl restart containerd && echo "Restarted containerd successfully") ||
-        echo "WARNING: Failed to restart containerd, please restart manually" >&2
+    if [ -z "$RESTART_SERVICE" ]; then
+        echo "WARNING: No active service found among: $RANCHER_SERVICES; restart it manually to apply the containerd configuration" >&2
+        exit 0
+    fi
 fi
+
+# Epoch time the service's main process started (0 if unknown)
+service_started_at() {
+    local pid elapsed
+    pid=$(systemctl show -p MainPID --value "$1" 2>/dev/null || true)
+    if [ -z "$pid" ] || [ "$pid" = "0" ]; then
+        echo 0
+        return
+    fi
+    elapsed=$(ps -o etimes= -p "$pid" 2>/dev/null | head -n 1 | tr -d ' ')
+    if [ -z "$elapsed" ]; then
+        echo 0
+        return
+    fi
+    echo $(($(date +%s) - elapsed))
+}
+
+# Even when the config is already up to date, restart if the service hasn't
+# started since the config was last written (e.g. a previous run wrote the
+# config but its restart failed)
+if [ "$CONFIG_CHANGED" = false ]; then
+    STARTED_AT=$(service_started_at "$RESTART_SERVICE")
+    NEWEST_MTIME=0
+    for FILE in $RESTART_STAMP_FILES; do
+        [ -f "$FILE" ] || continue
+        MTIME=$(stat -c %Y "$FILE")
+        if [ "$MTIME" -gt "$NEWEST_MTIME" ]; then
+            NEWEST_MTIME=$MTIME
+        fi
+    done
+    if [ "$STARTED_AT" -eq 0 ] || [ "$STARTED_AT" -ge "$NEWEST_MTIME" ]; then
+        echo "Containerd runtime configuration already up to date, no restart needed"
+        exit 0
+    fi
+    echo "Containerd runtime configuration up to date but not applied ($RESTART_SERVICE started before it was written)"
+fi
+
+# k3s/RKE2 only re-render config.toml from the template on service restart;
+# no restart here disrupts running containers
+echo "Restarting $RESTART_SERVICE to pick up the cedana runtime configuration..."
+if ! systemctl restart "$RESTART_SERVICE"; then
+    echo "ERROR: Failed to restart $RESTART_SERVICE, please restart manually" >&2
+    exit 1
+fi
+echo "Restarted $RESTART_SERVICE successfully"

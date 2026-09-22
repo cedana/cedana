@@ -76,6 +76,17 @@ if [ -z "$KUBELET_PID" ]; then
 fi
 echo "Found kubelet process (PID=$KUBELET_PID)"
 
+# True if kubelet (re)started after the given config file was last written,
+# i.e. the config is already in effect (guards against a previous run that
+# wrote the config but failed to restart kubelet)
+kubelet_has_config() {
+    local elapsed started
+    elapsed=$(ps -o etimes= -p "$KUBELET_PID" 2>/dev/null | head -n 1 | tr -d ' ')
+    [ -n "$elapsed" ] || return 1
+    started=$(($(date +%s) - elapsed))
+    [ "$started" -ge "$(stat -c %Y "$1")" ]
+}
+
 echo "Reading kubelet arguments..."
 KUBELET_ARGS=$(ps -o args= -p "$KUBELET_PID")
 if [ -z "$KUBELET_ARGS" ]; then
@@ -97,7 +108,7 @@ if [ -n "$KUBELET_CONFIG_DIR" ]; then
     TARGET="$KUBELET_CONFIG_DIR/99-cedana.conf"
     echo "Strategy: drop-in config dir, writing to $TARGET"
 
-    if [ "$(cat "$TARGET" 2>/dev/null)" = "$KUBELET_CONFIG_CONTENT_JSON" ]; then
+    if [ "$(cat "$TARGET" 2>/dev/null)" = "$KUBELET_CONFIG_CONTENT_JSON" ] && kubelet_has_config "$TARGET"; then
         echo "Kubelet config already up to date at $TARGET, no restart needed"
         exit 0
     fi
@@ -142,7 +153,7 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
         exit 0
     fi
 
-    if cmp -s "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE"; then
+    if cmp -s "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE" && kubelet_has_config "$KUBELET_CONFIG_FILE"; then
         echo "Kubelet config already up to date at $KUBELET_CONFIG_FILE, no restart needed"
         rm -f "$TEMP_CONFIG"
         exit 0
