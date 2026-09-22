@@ -97,6 +97,11 @@ if [ -n "$KUBELET_CONFIG_DIR" ]; then
     TARGET="$KUBELET_CONFIG_DIR/99-cedana.conf"
     echo "Strategy: drop-in config dir, writing to $TARGET"
 
+    if [ "$(cat "$TARGET" 2>/dev/null)" = "$KUBELET_CONFIG_CONTENT_JSON" ]; then
+        echo "Kubelet config already up to date at $TARGET, no restart needed"
+        exit 0
+    fi
+
     echo "Ensuring config dir exists: $KUBELET_CONFIG_DIR"
     mkdir -p "$KUBELET_CONFIG_DIR" || {
         echo "Error: Failed to create config dir: $KUBELET_CONFIG_DIR" >&2
@@ -133,6 +138,12 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
 
     else
         echo "WARNING: Unsupported kubelet configuration file type: .$FILE_EXTENSION, skipping kubelet config update" >&2
+        rm -f "$TEMP_CONFIG"
+        exit 0
+    fi
+
+    if cmp -s "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE"; then
+        echo "Kubelet config already up to date at $KUBELET_CONFIG_FILE, no restart needed"
         rm -f "$TEMP_CONFIG"
         exit 0
     fi
