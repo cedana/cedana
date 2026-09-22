@@ -188,13 +188,18 @@ CONFIG_CHANGED=false
 # Instead, both support extending the generated config through a template that
 # includes the built-in "base" template: config.toml.tmpl (config version 2) or
 # config-v3.toml.tmpl (config version 3, containerd 2.0+, k3s/RKE2 v1.31.6+/v1.32.2+).
+#
+# The generated config.toml only exists if k3s/RKE2 actually manages containerd;
+# with an external containerd (--container-runtime-endpoint) it is never
+# generated and templates are never rendered, so fall through to the regular
+# containerd flow below in that case.
 RANCHER_SERVICES=""
-if [ -d /var/lib/rancher/rke2 ]; then
-    echo "RKE2 node detected"
+if [ -f /var/lib/rancher/rke2/agent/etc/containerd/config.toml ]; then
+    echo "RKE2 node detected (with managed containerd)"
     RANCHER_CONFIG_DIR="/var/lib/rancher/rke2/agent/etc/containerd"
     RANCHER_SERVICES="rke2-server rke2-agent"
-elif [ -d /var/lib/rancher/k3s ]; then
-    echo "k3s node detected"
+elif [ -f /var/lib/rancher/k3s/agent/etc/containerd/config.toml ]; then
+    echo "k3s node detected (with managed containerd)"
     RANCHER_CONFIG_DIR="/var/lib/rancher/k3s/agent/etc/containerd"
     RANCHER_SERVICES="k3s k3s-agent"
 fi
