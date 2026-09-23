@@ -36,7 +36,7 @@ helm_install_cedana() {
         helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
     fi
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
-    helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"
+    helm_cmd="$helm_cmd --set config.url=${CEDANA_CLUSTER_URL:-$CEDANA_URL}"
     helm_cmd="$helm_cmd --set config.authToken=$CEDANA_AUTH_TOKEN"
     helm_cmd="$helm_cmd --set config.clusterId=$cluster_id"
     helm_cmd="$helm_cmd --set config.logLevel=$CEDANA_LOG_LEVEL"
