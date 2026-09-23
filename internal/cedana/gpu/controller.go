@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"runtime"
 	"sync"
@@ -39,8 +38,6 @@ import (
 
 const (
 	CONTROLLER_PROCESS_NAME                = "cedana-gpu-controller"
-	GPU_FLUSH_PENDING_FILE                 = "gpu-flush-pending"
-	GPU_IMAGE_COMPLETE_FILE                = "gpu-dump-complete"
 	CONTROLLER_ADDRESS_FORMATTER           = "unix://%s/cedana-gpu-controller-%s.sock"
 	CONTROLLER_SOCKET_FORMATTER            = "%s/cedana-gpu-controller-%s.sock"
 	CONTROLLER_SOCKET_PATTERN              = "cedana-gpu-controller-(.*).sock"
@@ -427,6 +424,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
 	// do the GPU dump in parallel to CRIU dump.
 	var dumpErr chan error
+	var flushPending bool // GPU image still being written after the dump returned
 	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		pid := uint32(opts.GetPid())
 		log := log.With().Uint32("PID", pid).Logger()
@@ -462,6 +460,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
+			flushPending = resp.GetFlushPending()
 			gpuDumpDone = time.Now()
 
 			log.Info().Msg("GPU dump complete")
@@ -517,11 +516,14 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		reportFrozenWindow(ctx, freezeStart, freezeDone, gpuDumpDone, unfreezeStart,
 			unfreezeDone, &log)
 
-		_, endWait := profiling.StartTimingCategory(ctx, "gpu", waitImageComplete)
-		waitErr := waitImageComplete(ctx, opts.GetImagesDir(), &log)
-		endWait()
+		var flushErr error
+		if err == nil && flushPending {
+			_, endWait := profiling.StartTimingCategory(ctx, "gpu", controller.WaitForFlush)
+			flushErr = controller.WaitForFlush(ctx, &log)
+			endWait()
+		}
 
-		return errors.Join(err, utils.GRPCError(unfreezeErr), waitErr)
+		return errors.Join(err, utils.GRPCError(unfreezeErr), flushErr)
 	}
 
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
@@ -775,6 +777,31 @@ func (c *controller) WaitForInfo(ctx context.Context, req *gpu.InfoReq) (*gpu.In
 	return resp, nil
 }
 
+// WaitForFlush blocks until the GPU controller has finished writing the last dump's image,
+// which it does after the dump RPC returns when the application was unfrozen early.
+func (c *controller) WaitForFlush(ctx context.Context, log *zerolog.Logger) error {
+	waitCtx, cancel := context.WithTimeout(ctx, FLUSH_TIMEOUT)
+	defer cancel()
+
+	// Cancel on early termination
+	go func() {
+		<-c.Terminated
+		cancel()
+	}()
+
+	start := time.Now()
+	log.Info().Msg("waiting for the GPU checkpoint to finish writing")
+
+	_, err := c.WaitFlush(waitCtx, &gpu.WaitFlushReq{})
+	if err != nil {
+		log.Error().Err(err).Msg("GPU checkpoint failed to finish writing")
+		return fmt.Errorf("failed to write GPU checkpoint: %v", utils.GRPCErrorShort(err, c.ErrBuf.String()))
+	}
+
+	log.Info().Dur("waited", time.Since(start)).Msg("GPU checkpoint written")
+	return nil
+}
+
 // Health checks the GPU controller, blocking on connection until ready.
 // This can be used as a proxy to wait for the controller to be ready.
 func (c *controller) WaitForHealthCheck(ctx context.Context, req *gpu.HealthCheckReq) ([]*daemon.HealthCheckComponent, error) {
@@ -820,37 +847,6 @@ func EnsureLogDir(id string, uid, gid uint32) (string, error) {
 		return "", err
 	}
 	return dir, os.Chown(dir, int(uid), int(gid))
-}
-
-func waitImageComplete(ctx context.Context, dir string, log *zerolog.Logger) error {
-	if dir == "" {
-		return nil
-	}
-	pending := filepath.Join(dir, GPU_FLUSH_PENDING_FILE)
-	if _, err := os.Stat(pending); err != nil {
-		return nil
-	}
-
-	complete := filepath.Join(dir, GPU_IMAGE_COMPLETE_FILE)
-	start := time.Now()
-	log.Info().Msg("waiting for the GPU checkpoint to finish writing")
-
-	ticker := time.NewTicker(250 * time.Millisecond)
-	defer ticker.Stop()
-	deadline := time.After(FLUSH_TIMEOUT)
-	for {
-		if _, err := os.Stat(complete); err == nil {
-			log.Info().Dur("waited", time.Since(start)).Msg("GPU checkpoint written")
-			return nil
-		}
-		select {
-		case <-ticker.C:
-		case <-deadline:
-			return fmt.Errorf("timed out after %s waiting for the GPU checkpoint to finish writing", FLUSH_TIMEOUT)
-		case <-ctx.Done():
-			log.Warn().Msg("context cancelled while the GPU checkpoint was still being written")
-		}
-	}
 }
 
 func reportFrozenWindow(ctx context.Context, freezeStart, freezeDone, gpuDumpDone,

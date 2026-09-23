@@ -1,7 +1,11 @@
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-e232d4a465bb.1 h1:xJg9VO6hX6VJWboBMQV3MfOM74udRE11I5k22CTbR0I=
+buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-e232d4a465bb.1/go.mod h1:cpZw+4brWJdy23IcPM5Dm91Vf8+5HBTaaue5xeFBXhc=
 buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-20260728195828-a1724c235a1a.1 h1:St6ycbtlxxf/RdPFAAfPGgt6q3QlhBsagI5Mk1nLRDg=
 buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-20260728195828-a1724c235a1a.1/go.mod h1:yc3AAvq/pJLVbxDJllgmCbucivhB880Ko/kb1WBxVC4=
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-20260728195828-a1724c235a1a.1 h1:O1u+4LKkzCVEWkFyq8vPGUiBEeFiaJhwa/kD0LchPzk=
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-20260728195828-a1724c235a1a.1/go.mod h1:znSpHYvR3Agq2j6C/gIG5YgxIrWx/pk9HJ38yOp0E8Q=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-e232d4a465bb.2 h1:FqBgoG+ExPUPb+NeHSaRt3zr995YArwp6hkCKJbtrR4=
+buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-e232d4a465bb.2/go.mod h1:QYzc9NgAsGt0mAfdkjfVrH7nX3GL242JTfzqYC1wiq4=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260728195828-ace959031818.1 h1:fui0ILz1KFaiPCvqQxYV18zgbWtZ6jtAFXkigixKfkQ=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260728195828-ace959031818.1/go.mod h1:kV15BFc7NMSZ8iS0sr37eQoVFeeX616LLi5HCr9zDMI=
 buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-20260728195828-9e5b1c3cbe15.1 h1:2ncY+Xp6S3OiQmQyiFQlXWbeHUPe4uuRUEFaGBUwofU=
@@ -450,6 +454,7 @@ google.golang.org/protobuf v1.27.1/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQ
 google.golang.org/protobuf v1.28.1/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
 google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
+google.golang.org/protobuf v1.36.12/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c h1:Hei/4ADfdWqJk1ZMxUNpqntNwaWcugrBjAiHlqqRiVk=
 gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c/go.mod h1:JHkPIbrfpd72SG/EVd6muEfDQjcINNoR0C8j2r3qZ4Q=
