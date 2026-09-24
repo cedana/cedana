@@ -164,136 +164,260 @@ fi
 
 echo "Starting containerd runtime configuration..."
 
-# k8s path - detect containerd config version
-CONTAINERD_CONFIG_PATH=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
-echo "Using containerd config path: $CONTAINERD_CONFIG_PATH"
-
-if [ ! -f "$CONTAINERD_CONFIG_PATH" ]; then
-    echo "ERROR: containerd config file not found at $CONTAINERD_CONFIG_PATH" >&2
-    exit 1
-fi
-
-# Detect containerd config version
-CONTAINERD_VERSION=""
-if grep -q 'version = 2' "$CONTAINERD_CONFIG_PATH"; then
-    CONTAINERD_VERSION=2
-elif grep -q 'version = 3' "$CONTAINERD_CONFIG_PATH"; then
-    CONTAINERD_VERSION=3
-else
-    echo "ERROR: Unsupported containerd config version. Only version 2 and 3 are supported." >&2
-    exit 1
-fi
-
-echo "Detected containerd config version $CONTAINERD_VERSION"
-
-CONTAINERD_CONFD_DIR=${CONTAINERD_CONFD_DIR:-"/etc/containerd/conf.d"}
-echo "Using conf.d directory: $CONTAINERD_CONFD_DIR"
-
-# Check if the node is a part of rke2 cluster
-# Editing the generated config.toml directly is not persistent.
-# It gets regenerated on restarting the rke2-server/agent.
-# Instead, we modify config.toml.tmpl, which is the template RKE2 uses to
-# recreate the final containerd configuration across restarts.
-if [ -d "/var/lib/rancher/rke2" ]; then
-    RKE2_CONFIG="/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"
-    echo "Configuring rke2 config.toml.tmpl $RKE2_CONFIG"
-
-    sudo mkdir -p "$(dirname "$RKE2_CONFIG")"
-
-    if [ ! -f "$RKE2_CONFIG" ]; then
-        cat <<EOF | sudo tee "$RKE2_CONFIG" >/dev/null
-{{ template "base" . }}
-EOF
-    fi
-
-    # only append if not already present
-    if ! grep -q 'runtimes."cedana"' "$RKE2_CONFIG"; then
-        cat <<EOF | sudo tee -a "$RKE2_CONFIG" >/dev/null
-
+# The CRI plugin config key differs between containerd config version 2 and 3
+cedana_runtime_config() {
+    if [ "$1" = "3" ]; then
+        cat <<END_CAT
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
+  runtime_type = "io.containerd.runc.v2"
+  runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
+END_CAT
+    else
+        cat <<END_CAT
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
   runtime_type = "io.containerd.runc.v2"
-  runtime_path = "$CEDANA_PLUGINS_BIN_DIR/cedana-shim-runc-v2"
-EOF
-    fi
-fi
-
-if [ "$CONTAINERD_VERSION" = "2" ]; then
-    echo "Applying containerd v2 config strategy..."
-    # Version 2: Copy last conf.d file (excluding 999-cedana.toml) if exists, then add config
-    # This is because merging multiple runtimes in version 2 is problematic
-    # See https://github.com/containerd/containerd/issues/5837 (fixed in v3)
-
-    # Find the last .toml file lexicographically (excluding 999-cedana.toml)
-    if [ -d "$CONTAINERD_CONFD_DIR" ]; then
-        echo "Scanning $CONTAINERD_CONFD_DIR for existing .toml files..."
-        LAST_CONFD_FILE=$(find "$CONTAINERD_CONFD_DIR" -maxdepth 1 -type f -name "*.toml" ! -name "999-cedana.toml" 2>/dev/null | sort | tail -n 1)
-        echo "Last existing conf.d file: ${LAST_CONFD_FILE:-<none found>}"
-    else
-        echo "conf.d directory does not exist, skipping scan"
-        LAST_CONFD_FILE=""
-    fi
-
-    if [ -n "$LAST_CONFD_FILE" ]; then
-        TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
-        echo "Copying existing config from $LAST_CONFD_FILE to $TARGET_CONFIG"
-        cp "$LAST_CONFD_FILE" "$TARGET_CONFIG"
-        echo "" >>"$TARGET_CONFIG"
-    else
-        # Directly add to main config if no conf.d files exist, so that when NVIDIA plugin is added
-        # later it can copy from this and not miss the cedana config.
-        echo "No existing conf.d files found, will directly add to $CONTAINERD_CONFIG_PATH"
-        TARGET_CONFIG="$CONTAINERD_CONFIG_PATH"
-    fi
-
-    if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
-        echo "Adding cedana runtime config to $TARGET_CONFIG"
-        cat >>"$TARGET_CONFIG" <<END_CAT
-[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
-    runtime_type = "io.containerd.runc.v2"
-    runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
+  runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
 END_CAT
-        echo "Cedana runtime config written to $TARGET_CONFIG"
-    else
-        echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
     fi
+}
 
-elif [ "$CONTAINERD_VERSION" = "3" ]; then
-    echo "Applying containerd v3 config strategy..."
-    # Version 3: Ensure imports exist, then create conf.d file with only cedana config
-    TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
+CONFIG_CHANGED=false
 
-    # Ensure conf.d directory exists
-    echo "Ensuring conf.d directory exists: $CONTAINERD_CONFD_DIR"
-    mkdir -p "$CONTAINERD_CONFD_DIR"
+# k3s and RKE2 manage containerd themselves: <data-dir>/agent/etc/containerd/config.toml
+# is regenerated on every service start, so editing it directly is not persistent.
+# Instead, both support extending the generated config through a template that
+# includes the built-in "base" template: config.toml.tmpl (config version 2) or
+# config-v3.toml.tmpl (config version 3, containerd 2.0+, k3s/RKE2 v1.31.6+/v1.32.2+).
+#
+# The generated config.toml only exists if k3s/RKE2 actually manages containerd;
+# with an external containerd (--container-runtime-endpoint) it is never
+# generated and templates are never rendered, so fall through to the regular
+# containerd flow below in that case.
+# Resolve a k3s/RKE2 data dir: --data-dir flag of the running process, then
+# config.yaml, then the default location
+rancher_data_dir() {
+    local name="$1" pid args dir=""
+    pid=$(pidof -s "$name" 2>/dev/null || true)
+    if [ -n "$pid" ]; then
+        args=$(ps -o args= -p "$pid" 2>/dev/null || true)
+        dir=$(echo "$args" | sed -n 's/.*--data-dir[= ]\+\([^ ]*\).*/\1/p')
+    fi
+    if [ -z "$dir" ] && [ -f "/etc/rancher/$name/config.yaml" ]; then
+        dir=$(sed -n 's/^[[:space:]]*data-dir:[[:space:]]*//p' "/etc/rancher/$name/config.yaml" | head -n 1 | tr -d '"' | tr -d "'")
+    fi
+    echo "${dir:-/var/lib/rancher/$name}"
+}
 
-    # Ensure imports line exists in main config
-    if ! grep -q 'imports = \[.*"/etc/containerd/conf.d/\*\.toml".*\]' "$CONTAINERD_CONFIG_PATH"; then
-        echo "conf.d glob not found in imports, updating $CONTAINERD_CONFIG_PATH..."
-        # Check if imports line already exists but doesn't include conf.d
-        if grep -q '^imports = \[' "$CONTAINERD_CONFIG_PATH"; then
-            echo "Existing imports line found, appending conf.d glob"
-            sed -i 's|^imports = \[\(.*\)\]|imports = [\1, "/etc/containerd/conf.d/*.toml"]|' "$CONTAINERD_CONFIG_PATH"
+RANCHER_SERVICES=""
+for RANCHER_NAME in rke2 k3s; do
+    RANCHER_DATA_DIR=$(rancher_data_dir "$RANCHER_NAME")
+    if [ -f "$RANCHER_DATA_DIR/agent/etc/containerd/config.toml" ]; then
+        echo "$RANCHER_NAME node detected (with managed containerd, data dir: $RANCHER_DATA_DIR)"
+        RANCHER_CONFIG_DIR="$RANCHER_DATA_DIR/agent/etc/containerd"
+        if [ "$RANCHER_NAME" = "rke2" ]; then
+            RANCHER_SERVICES="rke2-server rke2-agent"
         else
-            echo "No imports line found, inserting after version = 3"
-            sed -i '/^version = 3/a imports = ["/etc/containerd/conf.d/*.toml"]' "$CONTAINERD_CONFIG_PATH"
+            RANCHER_SERVICES="k3s k3s-agent"
         fi
-        echo "Updated imports in $CONTAINERD_CONFIG_PATH"
+        break
+    fi
+done
+
+if [ -n "$RANCHER_SERVICES" ]; then
+    mkdir -p "$RANCHER_CONFIG_DIR"
+
+    # An existing template takes precedence (config-v3.toml.tmpl wins over
+    # config.toml.tmpl); otherwise match the version of the generated config.
+    if [ -f "$RANCHER_CONFIG_DIR/config-v3.toml.tmpl" ]; then
+        TEMPLATE="$RANCHER_CONFIG_DIR/config-v3.toml.tmpl"
+        CONTAINERD_VERSION=3
+    elif [ -f "$RANCHER_CONFIG_DIR/config.toml.tmpl" ]; then
+        TEMPLATE="$RANCHER_CONFIG_DIR/config.toml.tmpl"
+        CONTAINERD_VERSION=2
+    elif grep -qs 'version = 3' "$RANCHER_CONFIG_DIR/config.toml"; then
+        TEMPLATE="$RANCHER_CONFIG_DIR/config-v3.toml.tmpl"
+        CONTAINERD_VERSION=3
     else
-        echo "conf.d glob already present in imports, no changes needed"
+        TEMPLATE="$RANCHER_CONFIG_DIR/config.toml.tmpl"
+        CONTAINERD_VERSION=2
+    fi
+    echo "Using containerd config template $TEMPLATE (config version $CONTAINERD_VERSION)"
+
+    if [ ! -f "$TEMPLATE" ]; then
+        echo '{{ template "base" . }}' >"$TEMPLATE"
     fi
 
-    if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
-        echo "Creating cedana runtime config at $TARGET_CONFIG"
-        cat >"$TARGET_CONFIG" <<END_CAT
-[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
-    runtime_type = "io.containerd.runc.v2"
-    runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
-END_CAT
-        echo "Cedana runtime config written to $TARGET_CONFIG"
+    if ! grep -q 'runtimes."cedana"' "$TEMPLATE"; then
+        echo "Adding cedana runtime config to $TEMPLATE"
+        {
+            echo ""
+            cedana_runtime_config "$CONTAINERD_VERSION"
+        } >>"$TEMPLATE"
+        CONFIG_CHANGED=true
     else
-        echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
+        echo "Cedana runtime config already exists in $TEMPLATE, skipping"
+    fi
+
+    RESTART_STAMP_FILES="$TEMPLATE"
+else
+    CONTAINERD_CONFIG_PATH=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
+    CONTAINERD_CONFD_DIR="$(dirname "$CONTAINERD_CONFIG_PATH")/conf.d"
+    echo "Using containerd config path: $CONTAINERD_CONFIG_PATH"
+
+    if [ ! -f "$CONTAINERD_CONFIG_PATH" ]; then
+        echo "ERROR: containerd config file not found at $CONTAINERD_CONFIG_PATH" >&2
+        exit 1
+    fi
+
+    # Detect containerd config version
+    if grep -q 'version = 2' "$CONTAINERD_CONFIG_PATH"; then
+        CONTAINERD_VERSION=2
+    elif grep -q 'version = 3' "$CONTAINERD_CONFIG_PATH"; then
+        CONTAINERD_VERSION=3
+    else
+        echo "ERROR: Unsupported containerd config version. Only version 2 and 3 are supported." >&2
+        exit 1
+    fi
+    echo "Detected containerd config version $CONTAINERD_VERSION"
+
+    if [ "$CONTAINERD_VERSION" = "2" ]; then
+        # Version 2: conf.d imports cannot merge multiple runtime tables
+        # (https://github.com/containerd/containerd/issues/5837, fixed in v3),
+        # so copy the last conf.d file (lexicographically) and append the
+        # cedana runtime to the copy.
+        LAST_CONFD_FILE=""
+        if [ -d "$CONTAINERD_CONFD_DIR" ]; then
+            LAST_CONFD_FILE=$(find "$CONTAINERD_CONFD_DIR" -maxdepth 1 -type f -name "*.toml" ! -name "999-cedana.toml" 2>/dev/null | sort | tail -n 1)
+        fi
+
+        if [ -n "$LAST_CONFD_FILE" ]; then
+            TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
+            echo "Basing cedana runtime config on last existing conf.d file: $LAST_CONFD_FILE"
+            NEW_CONFIG=$(
+                cat "$LAST_CONFD_FILE"
+                echo ""
+                cedana_runtime_config 2
+            )
+            if [ "$NEW_CONFIG" != "$(cat "$TARGET_CONFIG" 2>/dev/null)" ]; then
+                echo "Writing cedana runtime config to $TARGET_CONFIG"
+                echo "$NEW_CONFIG" >"$TARGET_CONFIG"
+                CONFIG_CHANGED=true
+            else
+                echo "Cedana runtime config already up to date in $TARGET_CONFIG, skipping"
+            fi
+        else
+            # Directly add to main config if no conf.d files exist, so that
+            # when the NVIDIA plugin is added later it can copy from this and
+            # not miss the cedana config.
+            TARGET_CONFIG="$CONTAINERD_CONFIG_PATH"
+            if ! grep -q 'runtimes."cedana"' "$TARGET_CONFIG"; then
+                echo "No conf.d files found, adding cedana runtime config to $TARGET_CONFIG"
+                {
+                    echo ""
+                    cedana_runtime_config 2
+                } >>"$TARGET_CONFIG"
+                CONFIG_CHANGED=true
+            else
+                echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
+            fi
+        fi
+    else
+        # Version 3: conf.d files merge properly, so ship a dedicated conf.d
+        # file with only the cedana runtime and make sure it gets imported.
+        TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
+        mkdir -p "$CONTAINERD_CONFD_DIR"
+
+        if ! grep -qF "$CONTAINERD_CONFD_DIR/*.toml" "$CONTAINERD_CONFIG_PATH"; then
+            if grep -q '^imports = \[.*\]' "$CONTAINERD_CONFIG_PATH"; then
+                echo "Appending conf.d glob to existing imports in $CONTAINERD_CONFIG_PATH"
+                sed -i "s|^imports = \[\(.*\)\]|imports = [\1, \"$CONTAINERD_CONFD_DIR/*.toml\"]|" "$CONTAINERD_CONFIG_PATH"
+            elif grep -q '^imports = \[' "$CONTAINERD_CONFIG_PATH"; then
+                # Multiline imports array: add the glob right after the opening
+                # bracket (TOML allows a trailing comma before the closing one)
+                echo "Adding conf.d glob to multiline imports in $CONTAINERD_CONFIG_PATH"
+                sed -i "/^imports = \[/a \"$CONTAINERD_CONFD_DIR/*.toml\"," "$CONTAINERD_CONFIG_PATH"
+            else
+                echo "Adding imports line to $CONTAINERD_CONFIG_PATH"
+                sed -i "/^version = 3/a imports = [\"$CONTAINERD_CONFD_DIR/*.toml\"]" "$CONTAINERD_CONFIG_PATH"
+            fi
+            if ! grep -qF "$CONTAINERD_CONFD_DIR/*.toml" "$CONTAINERD_CONFIG_PATH"; then
+                echo "ERROR: Failed to add $CONTAINERD_CONFD_DIR/*.toml to imports in $CONTAINERD_CONFIG_PATH, please add it manually" >&2
+                exit 1
+            fi
+            CONFIG_CHANGED=true
+        else
+            echo "conf.d glob already present in imports, no changes needed"
+        fi
+
+        if ! grep -qs 'runtimes."cedana"' "$TARGET_CONFIG"; then
+            echo "Creating cedana runtime config at $TARGET_CONFIG"
+            cedana_runtime_config 3 >"$TARGET_CONFIG"
+            CONFIG_CHANGED=true
+        else
+            echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
+        fi
+    fi
+
+    RESTART_STAMP_FILES="$TARGET_CONFIG $CONTAINERD_CONFIG_PATH"
+fi
+
+# Determine which service provides containerd on this node
+RESTART_SERVICE="containerd"
+if [ -n "$RANCHER_SERVICES" ]; then
+    RESTART_SERVICE=""
+    for SERVICE in $RANCHER_SERVICES; do
+        if systemctl is-active --quiet "$SERVICE"; then
+            RESTART_SERVICE="$SERVICE"
+            break
+        fi
+    done
+    if [ -z "$RESTART_SERVICE" ]; then
+        echo "WARNING: No active service found among: $RANCHER_SERVICES; restart it manually to apply the containerd configuration" >&2
+        exit 0
     fi
 fi
 
-echo "Restarting containerd to pick up the new runtime configuration..."
-(systemctl restart containerd && echo "Restarted containerd successfully") || echo "WARNING: Failed to restart containerd, please restart manually" >&2
+# Epoch time the service's main process started (0 if unknown)
+service_started_at() {
+    local pid elapsed
+    pid=$(systemctl show -p MainPID --value "$1" 2>/dev/null || true)
+    if [ -z "$pid" ] || [ "$pid" = "0" ]; then
+        echo 0
+        return
+    fi
+    elapsed=$(ps -o etimes= -p "$pid" 2>/dev/null | head -n 1 | tr -d ' ')
+    if [ -z "$elapsed" ]; then
+        echo 0
+        return
+    fi
+    echo $(($(date +%s) - elapsed))
+}
+
+# Even when the config is already up to date, restart if the service hasn't
+# started since the config was last written (e.g. a previous run wrote the
+# config but its restart failed)
+if [ "$CONFIG_CHANGED" = false ]; then
+    STARTED_AT=$(service_started_at "$RESTART_SERVICE")
+    NEWEST_MTIME=0
+    for FILE in $RESTART_STAMP_FILES; do
+        [ -f "$FILE" ] || continue
+        MTIME=$(stat -c %Y "$FILE")
+        if [ "$MTIME" -gt "$NEWEST_MTIME" ]; then
+            NEWEST_MTIME=$MTIME
+        fi
+    done
+    if [ "$STARTED_AT" -eq 0 ] || [ "$STARTED_AT" -ge "$NEWEST_MTIME" ]; then
+        echo "Containerd runtime configuration already up to date, no restart needed"
+        exit 0
+    fi
+    echo "Containerd runtime configuration up to date but not applied ($RESTART_SERVICE started before it was written)"
+fi
+
+# k3s/RKE2 only re-render config.toml from the template on service restart;
+# no restart here disrupts running containers
+echo "Restarting $RESTART_SERVICE to pick up the cedana runtime configuration..."
+if ! systemctl restart "$RESTART_SERVICE"; then
+    echo "ERROR: Failed to restart $RESTART_SERVICE, please restart manually" >&2
+    exit 1
+fi
+echo "Restarted $RESTART_SERVICE successfully"
