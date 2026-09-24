@@ -3,13 +3,11 @@ package gpu
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/plugins"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 )
 
@@ -118,11 +116,6 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 	// Remove controllers not in either free or busy list
 
 	for i, controller := range remaining {
-		// Only clear another user's controller once its process has exited. While it runs, its
-		// state here can lag behind its own process attaching it, so it may not really be stale.
-		if controller.UID != uint32(os.Getuid()) && utils.PidRunning(controller.PID) {
-			continue
-		}
 		acquired, err := controller.Booking.TryLock()
 		if err != nil {
 			log.Debug().Err(err).Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("failed to lock stale GPU controller for clearing")
