@@ -178,10 +178,18 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			if err != nil {
 				continue
 			}
+			// Open an existing booking file without O_CREATE: if another user owns it,
+			// fs.protected_regular denies O_CREATE opens in /dev/shm, even for root. Controllers
+			// spawned manually (GPU debug mode) have no booking file, so create one for them.
+			bookingPath := fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id)
+			bookingFlag := os.O_CREATE | os.O_RDWR
+			if _, err := os.Stat(bookingPath); err == nil {
+				bookingFlag = os.O_RDWR
+			}
 			c = &controller{
 				ID:         id,
 				Address:    fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id),
-				Booking:    flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR)),
+				Booking:    flock.New(bookingPath, flock.SetFlag(bookingFlag)),
 				UID:        fileInfo.Sys().(*syscall.Stat_t).Uid,
 				GID:        fileInfo.Sys().(*syscall.Stat_t).Gid,
 				Terminated: make(chan int, 1),
