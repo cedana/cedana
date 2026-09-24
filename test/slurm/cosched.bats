@@ -39,6 +39,13 @@ _cosched_submit() {
     echo "$out" | tail -1 | cut -d';' -f1 | tr -d '[:space:]'
 }
 
+# Runs after every attempt, so a failed attempt's jobs do not hold the node and
+# leave a retry's jobs pending.
+teardown() {
+    cancel_slurm_job "${job_a:-}"
+    cancel_slurm_job "${job_b:-}"
+}
+
 # bats test_tags=dump,samples
 @test "Co-scheduling: two users' jobs checkpoint on the same node" {
     [ -n "${SLURM_SUBMIT_USER:-}" ] || skip "needs a non-root submit user (SLURM_SUBMIT_USER)"
@@ -46,7 +53,7 @@ _cosched_submit() {
     SLURM_SUBMIT_USER="$SECOND_USER" SLURM_SUBMIT_UID="$SECOND_UID" \
         setup_slurm_unprivileged_user
 
-    local job_a job_b
+    # Not local, so teardown can cancel them.
     job_a=$(_cosched_submit "$SLURM_SUBMIT_USER")
     job_b=$(_cosched_submit "$SECOND_USER")
     [ -n "$job_a" ] && [ -n "$job_b" ]
@@ -63,13 +70,14 @@ _cosched_submit() {
     [ -n "$host_a" ]
     [ "$host_a" = "$host_b" ]
 
+    # RUNNING is set when a job is allocated, before its cedana monitor has
+    # subscribed to checkpoint requests. A request sent earlier is lost.
+    sleep 5
+
     local action_a action_b
     action_a=$(checkpoint_slurm_job "$job_a")
     action_b=$(checkpoint_slurm_job "$job_b")
 
     poll_slurm_action_status "$action_a" checkpoint 180
     poll_slurm_action_status "$action_b" checkpoint 180
-
-    cancel_slurm_job "$job_a" || true
-    cancel_slurm_job "$job_b" || true
 }
