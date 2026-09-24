@@ -270,7 +270,10 @@ func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, ma
 		}
 	}
 
-	unix.Sync()
+	// No global sync(2) here: it waits for every dirty page on the node (a fresh
+	// checkpoint alone can be hundreds of GB) and the overlay mount that follows
+	// reads through the page cache regardless. Durability of the upperdir is not
+	// a restore requirement.
 	return nil
 }
 
