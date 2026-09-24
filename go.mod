@@ -6,9 +6,9 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-e232d4a465bb.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-e232d4a465bb.2
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260728195828-ace959031818.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-20260728195828-9e5b1c3cbe15.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.11-20260728195828-9e5b1c3cbe15.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.11-20260728195828-03f2aa41270d.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-60c2b130e766.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-60c2b130e766.2
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-adae6b6816cc.2
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
@@ -153,7 +153,3 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260226221140-a57be14db171 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
 )
-
-replace buf.build/gen/go/cedana/cedana/protocolbuffers/go => /tmp/claude-1000/-home-brandonsmith-work-cedana-gpu/db57025c-93b7-40b4-9c53-50061f77c330/scratchpad/genmods/pb
-
-replace buf.build/gen/go/cedana/cedana/grpc/go => /tmp/claude-1000/-home-brandonsmith-work-cedana-gpu/db57025c-93b7-40b4-9c53-50061f77c330/scratchpad/genmods/grpc
