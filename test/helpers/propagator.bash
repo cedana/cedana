@@ -69,6 +69,40 @@ checkpoint_pod() {
     fi
 }
 
+checkpoint_pod_by_name() {
+    local name="$1"
+    local namespace="$2"
+
+    if [ -z "$name" ] || [ -z "$namespace" ]; then
+        error_log "checkpoint_pod_by_name requires pod name and namespace"
+        return 1
+    fi
+
+    debug_log "Checkpointing pod '$namespace/$name' by name..."
+
+    local payload
+    payload=$(jq -n --arg name "$name" --arg namespace "$namespace" \
+        '{"pod_name": $name, "namespace": $namespace}')
+
+    local response
+    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/checkpoint/pod" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -d "$payload" \
+        -w "%{http_code}")
+
+    local http_code="${response: -3}"
+    local body="${response%???}"
+
+    if [ "$http_code" -eq 200 ]; then
+        echo "$body"
+        return 0
+    else
+        error_log "Failed to checkpoint pod by name (HTTP $http_code): $body"
+        return 1
+    fi
+}
+
 # Restore a pod via propagator API
 # @param $1: Action ID from checkpoint operation
 # @param $2: Cluster ID (optional, uses same cluster if not provided)
