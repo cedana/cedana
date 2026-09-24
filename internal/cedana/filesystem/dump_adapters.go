@@ -193,7 +193,6 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				}
 			}
 		} else {
-			ctx = profiling.WithStorageTransfer(ctx)
 			// If imagesDirectory was provided by a plugin
 			// dump path to be req.Dir + req.Name
 			if strings.Contains(req.Dir, "://") {

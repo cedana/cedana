@@ -3,7 +3,6 @@ package gpu
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"time"
 
@@ -39,6 +38,7 @@ type gpuWorkerTimingRow struct {
 	workerPosition int
 	name           string
 	durationNs     int64
+	referenceNs    int64
 	bytes          uint64
 }
 
@@ -136,6 +136,7 @@ func gpuPhaseRows(workers []*gpu_proto.WorkerProfile, phaseName, displayName str
 			workerPosition: i,
 			name:           displayName,
 			durationNs:     durationNs,
+			referenceNs:    phase.GetReferenceDurationNs(),
 			bytes:          bytes,
 		})
 	}
@@ -266,29 +267,23 @@ func gpuWorkerProfileTags(row gpuWorkerTimingRow, stats gpuDurationStats) []any 
 	return tags
 }
 
-func addGPUWorkerTimingRowToProfiling(ctx context.Context, row gpuWorkerTimingRow, stats gpuDurationStats, limit *profiling.ThroughputLimit) {
+func addGPUWorkerTimingRowToProfiling(ctx context.Context, row gpuWorkerTimingRow, stats gpuDurationStats) {
 	functionCtx := addGPUFunctionProfileToProfiling(
 		ctx,
 		gpuProfileDuration(row.durationNs),
 		gpuWorkerProfileTags(row, stats)...,
 	)
-	if limit != nil {
-		profiling.SetThroughputLimit(functionCtx, *limit)
-	}
 	profiling.AddIO(functionCtx, int64(row.bytes))
+	if row.referenceNs > 0 {
+		profiling.SetMinDuration(functionCtx, gpuProfileDuration(row.referenceNs))
+	}
 	profiling.MarkIORedundant(functionCtx)
 }
 
-func addGPUWorkerTimingRowsToProfiling(ctx context.Context, rows []gpuWorkerTimingRow, profile *gpu_proto.GpuProfile, phaseName string) {
+func addGPUWorkerTimingRowsToProfiling(ctx context.Context, rows []gpuWorkerTimingRow) {
 	stats := gpuWorkerDurationStats(rows)
 	for _, row := range rows {
-		var limit *profiling.ThroughputLimit
-		if phaseName == "gpu_memory" {
-			limit = gpuHostDeviceLimit(profile, row.worker.GetGPUDevice())
-		} else if phaseName == "host_memory" {
-			limit = profiling.NUMAThroughputLimit(ctx, row.worker.GetPID())
-		}
-		addGPUWorkerTimingRowToProfiling(ctx, row, stats, limit)
+		addGPUWorkerTimingRowToProfiling(ctx, row, stats)
 	}
 }
 
@@ -306,30 +301,8 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 			displayName = phaseName
 		}
 
-		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName), profile, phaseName)
+		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName))
 	}
 
-	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers), profile, "")
-}
-
-func gpuHostDeviceLimit(profile *gpu_proto.GpuProfile, device string) *profiling.ThroughputLimit {
-	if device == "" {
-		return nil
-	}
-
-	var result *profiling.ThroughputLimit
-	for _, limit := range profile.GetTheoreticalLimits() {
-		if limit.GetName() != "gpu_host_device_link" || limit.GetUnit() != "bytes_per_second" || limit.GetDevice() != device || limit.GetValue() > math.MaxInt64 {
-			continue
-		}
-		if result != nil {
-			return nil
-		}
-		result = &profiling.ThroughputLimit{
-			MaxThroughput: int64(limit.GetValue()),
-			Source:        "theoretical",
-			Resource:      limit.GetDevice(),
-		}
-	}
-	return result
+	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers))
 }

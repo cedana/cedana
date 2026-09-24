@@ -17,7 +17,6 @@ import (
 	"github.com/cedana/cedana/internal/cedana/validation"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/io"
-	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -26,8 +25,6 @@ import (
 )
 
 func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.RestoreResp, error) {
-	ctx = profiling.WithNUMAThroughput(ctx, s.numaCalibrator)
-
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
@@ -36,7 +33,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
 
-		pluginRestoreStorage(s.storageCalibrator, s.storageObservedThroughput), // detects and plugs in the storage to use
+		pluginRestoreStorage(), // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
@@ -92,7 +89,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
 
-		pluginRestoreStorage(s.storageCalibrator, s.storageObservedThroughput), // detects and plugs in the storage to use
+		pluginRestoreStorage(), // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
@@ -161,7 +158,7 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 // Detects and plugs in the storage to use from the specified path,
 // If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
-func pluginRestoreStorage(calibrator *measurements.StorageCalibrator, observed *profiling.ObservedThroughputCache) types.Adapter[types.Restore] {
+func pluginRestoreStorage() types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			dir := req.GetPath()
@@ -183,27 +180,6 @@ func pluginRestoreStorage(calibrator *measurements.StorageCalibrator, observed *
 			}
 
 			opts.Storage = storage
-			if profiling.HasData(ctx) && !storage.IsRemote() && calibrator != nil {
-				calibration, found, calibrationErr := calibrator.Lookup(ctx, dir)
-				if calibrationErr != nil {
-					log.Debug().Err(calibrationErr).Str("path", dir).Msg("storage calibration unavailable")
-				} else if found {
-					ctx = profiling.WithThroughputLimit(ctx, profiling.ThroughputLimit{
-						MaxThroughput: calibration.ReadThroughput,
-						Source:        "measured",
-						Resource:      calibration.Resource,
-						Direction:     "read",
-					})
-				}
-			}
-			if resource := storageObservedResource(storage, dir, "read"); resource != "" {
-				ctx = profiling.WithObservedThroughput(ctx, observed, resource, "read")
-				defer func() {
-					if err == nil {
-						profiling.RecordObservedThroughput(ctx)
-					}
-				}()
-			}
 			streams, err := streamer.IsStreamable(ctx, storage, dir)
 			if err != nil {
 				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to detect restore filesystem to use: %v", err))

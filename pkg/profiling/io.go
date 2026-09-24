@@ -92,7 +92,6 @@ func IO[T any](ctx context.Context, w T, f ...any) T {
 	}
 
 	data.Name = getName(f...)
-	applyContextThroughputLimit(ctx, data)
 
 	var span trace.Span
 	var beginning time.Time
@@ -138,7 +137,6 @@ func IOComponent[T any](ctx context.Context, w T, f ...any) T {
 	}
 
 	component := &Data{Name: getName(f...)}
-	applyContextThroughputLimit(ctx, component)
 	data.Components = append(data.Components, component)
 
 	var span trace.Span
@@ -185,7 +183,6 @@ func IOParallelComponent[T any](ctx context.Context, w T, f ...any) T {
 	}
 
 	component := &Data{Name: getName(f...), Parallel: true}
-	applyContextThroughputLimit(ctx, component)
 	data.Components = append(data.Components, component)
 
 	var span trace.Span
@@ -231,7 +228,6 @@ func IORedundantComponent[T any](ctx context.Context, w T, f ...any) T {
 	}
 
 	component := &Data{Name: getName(f...), Redundant: true}
-	applyContextThroughputLimit(ctx, component)
 	data.Components = append(data.Components, component)
 
 	var span trace.Span
@@ -293,8 +289,6 @@ func IOCategory[T any](ctx context.Context, w T, category string, f ...any) T {
 	}
 
 	childComponent := &Data{Name: getName(f...)}
-	applyContextObservedThroughput(ctx, childComponent)
-	applyContextThroughputLimit(ctx, childComponent)
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	var span trace.Span
@@ -358,8 +352,6 @@ func IOParallelCategory[T any](ctx context.Context, w T, category string, f ...a
 	}
 
 	childComponent := &Data{Name: getName(f...), Parallel: true}
-	applyContextObservedThroughput(ctx, childComponent)
-	applyContextThroughputLimit(ctx, childComponent)
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	var span trace.Span
@@ -421,7 +413,6 @@ func IORedundantCategory[T any](ctx context.Context, w T, category string, f ...
 	}
 
 	childComponent := &Data{Name: getName(f...), Redundant: true}
-	applyContextThroughputLimit(ctx, childComponent)
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 
 	var span trace.Span
@@ -493,7 +484,6 @@ func AddIOComponent(ctx context.Context, n int64, f ...any) {
 	}
 
 	component := &Data{Name: getName(f...)}
-	applyContextThroughputLimit(ctx, component)
 	data.Components = append(data.Components, component)
 	component.AddIO(n)
 }
@@ -521,7 +511,6 @@ func AddIOCategory(ctx context.Context, n int64, category string, f ...any) {
 	}
 
 	childComponent := &Data{Name: getName(f...)}
-	applyContextThroughputLimit(ctx, childComponent)
 	categoryComponent.Components = append(categoryComponent.Components, childComponent)
 	childComponent.AddIO(n)
 }

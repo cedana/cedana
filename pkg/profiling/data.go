@@ -23,11 +23,7 @@ type Data struct {
 	Duration int64 `json:"duration,omitempty"`
 	IO       int64 `json:"io,omitempty"`
 
-	MaxThroughput int64 `json:"max_throughput,omitempty"`
 	MinDuration int64 `json:"min_duration,omitempty"`
-	ObservedThroughput int64 `json:"observed_throughput,omitempty"`
-	ObservedDuration int64 `json:"observed_duration,omitempty"`
-	Tags map[string]string `json:"tags,omitempty"`
 
 	Parallel    bool `json:"parallel,omitempty"`
 	Redundant   bool `json:"redundant,omitempty"`
@@ -79,7 +75,7 @@ func Clean(data *Data) {
 
 		Clean(component)
 
-		if component.Duration == 0 && component.IO == 0 && component.MaxThroughput == 0 && component.ObservedThroughput == 0 && component.Name == "" {
+		if component.Duration == 0 && component.IO == 0 && component.MinDuration == 0 && component.Name == "" {
 			newComponents = append(newComponents, component.Components...)
 		} else {
 			newComponents = append(newComponents, component)
@@ -97,7 +93,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
-	tableWriter.AppendHeader(table.Row{"DURATION", "LOWER BOUND", "OBSERVED BEST", "CATEGORY", "IO", "COMPONENT"})
+	tableWriter.AppendHeader(table.Row{"DURATION", "MIN DURATION", "CATEGORY", "IO", "COMPONENT"})
 
 	categoryDuration := make(map[string]time.Duration)
 	categoryIO := make(map[string]int64)
@@ -122,10 +118,6 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		minDurationStr := ""
 		if p.MinDuration > 0 {
 			minDurationStr = style.DisabledColors.Sprint(DurationStr(time.Duration(p.MinDuration), precision))
-		}
-		observedDurationStr := ""
-		if p.ObservedDuration > 0 {
-			observedDurationStr = style.DisabledColors.Sprint(DurationStr(time.Duration(p.ObservedDuration), precision))
 		}
 		io := p.IO
 		ioStr := utils.SizeStr(io)
@@ -162,7 +154,6 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		tableWriter.AppendRow([]any{
 			durationStr,
 			minDurationStr,
-			observedDurationStr,
 			category,
 			ioStr,
 			style.DisabledColors.Sprint(name),
@@ -173,17 +164,15 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		DurationStr(totalDuration, precision),
 		"",
 		"",
-		"",
 		utils.SizeStr(totalIO),
 		fmt.Sprintf("%s (total)", data.Name),
 	})
 	tableWriter.SetColumnConfigs([]table.ColumnConfig{
 		{Number: 1, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
 		{Number: 2, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
-		{Number: 3, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
-		{Number: 4, Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
-		{Number: 5, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
-		{Number: 6, Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
+		{Number: 3, Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
+		{Number: 4, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
+		{Number: 5, Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
 	})
 
 	if config.Global.Profiling.Detailed {

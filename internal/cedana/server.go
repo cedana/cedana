@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
@@ -18,7 +17,6 @@ import (
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/logging"
-	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -97,23 +95,12 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create job manager: %w", err)
 	}
-	storageCalibrator := measurements.NewStorageCalibrator(0, 0)
-	if path := config.Global.Checkpoint.Dir; path != "" && !strings.Contains(path, "://") {
-		if _, err := storageCalibrator.Calibrate(ctx, path); err != nil {
-			log.Debug().Err(err).Str("path", path).Msg("default storage calibration unavailable")
-		}
-	}
-	numaCalibrator := measurements.NewNUMACalibrator()
-
 	server = &Server{
 		Cedana: Cedana{
-			gpus:                      gpuManager,
-			plugins:                   pluginManager,
-			storageCalibrator:         storageCalibrator,
-			storageObservedThroughput: profiling.NewObservedThroughputCache(0, 0),
-			numaCalibrator:            numaCalibrator,
-			wg:                        wg,
-			lifetime:                  ctx,
+			gpus:     gpuManager,
+			plugins:  pluginManager,
+			wg:       wg,
+			lifetime: ctx,
 		},
 		grpcServer: grpc.NewServer(
 			grpc.ChainStreamInterceptor(

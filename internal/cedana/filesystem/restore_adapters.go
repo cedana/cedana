@@ -53,7 +53,6 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 
 		if !storage.IsRemote() && isDir {
 			imagesDirectory = path
-			ctx = profiling.WithStorageTransfer(ctx)
 		} else {
 			// Create a temporary directory for the restore
 			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().UnixNano()))

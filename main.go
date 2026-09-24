@@ -7,7 +7,6 @@ import (
 	"syscall"
 
 	"github.com/cedana/cedana/cmd"
-	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/version"
 )
 
@@ -29,8 +28,5 @@ func main() {
 }
 
 func run(ctx context.Context, version string) error {
-	if handled, err := measurements.RunNUMABenchmarkChild(ctx); handled {
-		return err
-	}
 	return cmd.Execute(ctx, version)
 }

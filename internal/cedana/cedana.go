@@ -9,7 +9,6 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
-	"github.com/cedana/cedana/pkg/measurements"
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -20,9 +19,6 @@ import (
 type Cedana struct {
 	plugins                   plugins.Manager
 	gpus                      gpu.Manager
-	storageCalibrator         *measurements.StorageCalibrator
-	storageObservedThroughput *profiling.ObservedThroughputCache
-	numaCalibrator            *measurements.NUMACalibrator
 
 	wg       *sync.WaitGroup
 	lifetime context.Context
@@ -54,8 +50,6 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	return &Cedana{
 		plugins:                   pluginManager,
 		gpus:                      gpuManager,
-		storageCalibrator:         measurements.NewStorageCalibrator(0, 0),
-		storageObservedThroughput: profiling.NewObservedThroughputCache(0, 0),
 		wg:                        wg,
 		lifetime:                  ctx,
 		cancel:                    cancel,
