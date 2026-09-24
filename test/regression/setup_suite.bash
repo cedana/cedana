@@ -21,8 +21,6 @@ setup_suite() {
     fi
 
     debug cedana plugin install criu@criu-dev
-    # hack for testing
-    debug cedana plugin install csx@feature/ced-2370-add-csx-regression-tests
     start_containerd
 }
 

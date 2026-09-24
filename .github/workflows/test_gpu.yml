@@ -159,6 +159,7 @@ jobs:
           sudo -E cedana plugin install criu runc crun containerd containerd/runtime-runc
           sudo -E cedana plugin install storage/cedana storage/s3 storage/gcs storage/csx
           sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
+          sudo -E cedana plugin install csx@feature/ced-2370-add-csx-regression-tests
           if [ "$STREAMER" = "true" ]; then
             sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
           fi

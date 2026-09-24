@@ -345,6 +345,7 @@ jobs:
           make install
           # Plugins below are used across multiple tests, so install them always
           sudo -E cedana plugin install criu storage/cedana storage/s3 storage/gcs
+          sudo -E cedana plugin install csx@feature/ced-2370-add-csx-regression-tests
           sudo -E cedana plugin install ${{ matrix.plugin }}
           if [ "${{ matrix.plugin }}" = "containerd" ]; then
             sudo -E cedana plugin install runc crun containerd/runtime-runc
