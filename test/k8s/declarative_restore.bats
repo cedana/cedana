@@ -123,7 +123,6 @@ teardown() {
 
 # bats test_tags=restore,declarative,scaleup
 @test "Restore: CEDANA_CHECKPOINT restores a new replica while the source pod is still running" {
-    skip "restoring while the source pod runs hangs until the source is deleted; enable once the runtime fix lands"
 
     local id label source replica action_id
     id=$TEST_ID
