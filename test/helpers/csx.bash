@@ -33,6 +33,7 @@ setup_csx_daemon() {
     CSX_SOCK=$(random_sock)
     export CEDANA_CSX_SOCK_ADDR="$CSX_SOCK"
     export CEDANA_CSX_NFS_PATH=/tmp/csx-"$(basename "$CSX_SOCK")"
+    export CEDANA_CSX_TMP_DIR=/cedana/tmpdir-"$(basename "$CSX_SOCK")"
     export CEDANA_CSX_MEMORY_CACHE_PATH=/cedana/memstore-"$(basename "$CSX_SOCK")"
     export CEDANA_CSX_LOCAL_DISK_CACHE_PATH=/cedana/diskstore-"$(basename "$CSX_SOCK")"
     debug start_csx_daemon_at "$CSX_SOCK"
