@@ -278,6 +278,10 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
+		"CEDANA_GPU_STAGING_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.StagingEnabled),
+		"CEDANA_GPU_STAGING_BUDGET_MB="+fmt.Sprintf("%v", config.Global.GPU.StagingBudgetMB),
+		"CEDANA_GPU_STAGING_SLAB_MB="+fmt.Sprintf("%v", config.Global.GPU.StagingSlabMB),
+		"CEDANA_GPU_ASYNC_FLUSH="+fmt.Sprintf("%v", config.Global.GPU.AsyncFlush),
 	)
 
 	cmd.Env = append(cmd.Env, env...)
@@ -393,6 +397,11 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			return fmt.Errorf("GPU controller not found, is the process still running?")
 		}
 
+		if !sameNamespace(os.Getpid(), int(pid), "pid") {
+			opts.SkipMnt = append(opts.SkipMnt, opts.GetImagesDir())
+			log.Debug().Str("mount", opts.GetImagesDir()).Msg("skipping GPU images bind mount in CRIU dump")
+		}
+
 		// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
 		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
 		controller.Termination.Lock()
@@ -481,7 +490,13 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		log := log.With().Uint32("PID", pid).Logger()
 
 		controller := p.Get(id)
-		defer controller.Termination.Unlock()
+
+		unlock := true
+		defer func() {
+			if unlock {
+				controller.Termination.Unlock()
+			}
+		}()
 
 		if dumpErr == nil { // Dump was never started
 			return nil
@@ -518,9 +533,18 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 		var flushErr error
 		if err == nil && flushPending {
-			_, endWait := profiling.StartTimingCategory(ctx, "gpu", controller.WaitForFlush)
-			flushErr = controller.WaitForFlush(ctx, &log)
-			endWait()
+			if deferred := deferredFlushesFrom(ctx); deferred != nil && opts.GetLeaveRunning() {
+				unlock = false
+				deferred.add(func(ctx context.Context) error {
+					defer controller.Termination.Unlock()
+					return controller.WaitForFlush(ctx, &log)
+				})
+				log.Info().Msg("GPU image still writing; its wait is deferred to FinishDump")
+			} else {
+				_, endWait := profiling.StartTimingCategory(ctx, "gpu", controller.WaitForFlush)
+				flushErr = controller.WaitForFlush(ctx, &log)
+				endWait()
+			}
 		}
 
 		return errors.Join(err, utils.GRPCError(unfreezeErr), flushErr)
@@ -884,4 +908,13 @@ func reportFrozenWindow(ctx context.Context, freezeStart, freezeDone, gpuDumpDon
 		Dur("criu", criuFrozen).
 		Dur("gpu_unfreeze", gpuUnfreeze).
 		Msg("application frozen window (gpu dump and criu overlap, so parts exceed total)")
+}
+
+func sameNamespace(a, b int, ns string) bool {
+	la, errA := os.Readlink(fmt.Sprintf("/proc/%d/ns/%s", a, ns))
+	lb, errB := os.Readlink(fmt.Sprintf("/proc/%d/ns/%s", b, ns))
+	if errA != nil || errB != nil {
+		return true
+	}
+	return la == lb
 }

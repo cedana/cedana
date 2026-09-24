@@ -116,6 +116,8 @@ type (
 		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
 		// LogLevel sets the default log level for CRIU (2 - errors, 3 - warnings, 4 - debug)
 		LogLevel int32 `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
+		// PredumpRounds is how many CRIU pre-dump passes to run before a dump (0 disables pre-dump)
+		PredumpRounds int `json:"predump_rounds" key:"predump_rounds" yaml:"predump_rounds" mapstructure:"predump_rounds"`
 	}
 
 	GPU struct {
@@ -133,6 +135,14 @@ type (
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
+		// StagingEnabled sets whether GPU dumps copy into pinned staging slabs and write them off the capture path
+		StagingEnabled bool `json:"staging_enabled" key:"staging_enabled" yaml:"staging_enabled" mapstructure:"staging_enabled"`
+		// StagingBudgetMB is the pinned staging memory per GPU worker, in MiB
+		StagingBudgetMB int64 `json:"staging_budget_mb" key:"staging_budget_mb" yaml:"staging_budget_mb" mapstructure:"staging_budget_mb"`
+		// StagingSlabMB is the size of one staging slab, and the largest single device-to-host copy, in MiB
+		StagingSlabMB int64 `json:"staging_slab_mb" key:"staging_slab_mb" yaml:"staging_slab_mb" mapstructure:"staging_slab_mb"`
+		// AsyncFlush sets whether a GPU dump returns once captured, finishing its writes after the process resumes
+		AsyncFlush bool `json:"async_flush" key:"async_flush" yaml:"async_flush" mapstructure:"async_flush"`
 	}
 
 	Plugins struct {

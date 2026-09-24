@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -98,15 +97,7 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 // predumpRounds reads how many pre-dump passes to run before the real dump.
 func predumpRounds() int {
-	v := os.Getenv("CEDANA_CRIU_PREDUMP_ROUNDS")
-	if v == "" {
-		return 0
-	}
-	n, err := strconv.Atoi(v)
-	if err != nil || n < 0 {
-		return 0
-	}
-	return n
+	return max(config.Global.CRIU.PredumpRounds, 0)
 }
 
 func preDump(ctx context.Context, opts types.Opts, criuOpts *criu_proto.CriuOpts, rounds int, log *zerolog.Logger) error {

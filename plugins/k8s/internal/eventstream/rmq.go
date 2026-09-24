@@ -361,6 +361,9 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				Details: &daemon.Details{
 					Containerd: container,
 				},
+				// Return once the GPU state is captured, so the pod can be unfrozen before the image
+				// finishes writing
+				DeferGPUFlush: true,
 			}
 			if req.Overrides != nil {
 				criuOpts := &criu.CriuOpts{}
@@ -383,20 +386,22 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 		errMap := make(map[int]error)
 		wg.Add(len(dumpReqs))
 
+		unfreezeAll := sync.OnceFunc(func() {
+			for i, dumpReq := range dumpReqs {
+				if _, _, err := es.cedana.Unfreeze(ctx, dumpReq); err != nil {
+					log.Error().Err(err).Int("container_order", i).Str("container", containers[i].ID).
+						Msg("failed to unfreeze container")
+				}
+			}
+		})
+		defer unfreezeAll()
+
 		for i, dumpReq := range dumpReqs {
-			log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
 			go func() {
 				defer wg.Done()
 				_, _, err = es.cedana.Freeze(ctx, dumpReq)
 				if err != nil {
 					errMap[i] = err
-				}
-			}()
-
-			defer func() {
-				_, _, err = es.cedana.Unfreeze(ctx, dumpReq)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to unfreeze container")
 				}
 			}()
 		}
@@ -429,31 +434,54 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 
 		wg.Add(len(dumpReqs))
 
+		type dumpResult struct {
+			resp      *daemon.DumpResp
+			profiling *profiling.Data
+			err       error
+		}
+		results := make([]dumpResult, len(dumpReqs))
 		for i, dumpReq := range dumpReqs {
 			go func() {
 				defer wg.Done()
-				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
+				resp, profiling, err := es.cedana.Dump(ctx, dumpReq)
+				results[i] = dumpResult{resp, profiling, err}
+			}()
+		}
+
+		wg.Wait()
+
+		// Every container is captured
+		unfreezeAll()
+		log.Info().Msg("all containers dumped and unfrozen, waiting for images to finish writing")
+
+		wg.Add(len(dumpReqs))
+		for i := range dumpReqs {
+			go func() {
+				defer wg.Done()
+				r := results[i]
 				var path string
 				var state *daemon.ProcessState
-				if err == nil {
-					path = dumpResp.Paths[0]
-					state = dumpResp.State
+				if r.err == nil {
+					path = r.resp.Paths[0]
+					state = r.resp.State
+					if _, err := es.cedana.FinishDump(ctx, &daemon.FinishDumpReq{Path: path}); err != nil {
+						r.err = err
+					}
 				}
 				es.publishCheckpoint(
 					log.WithContext(ctx),
 					req.PodName,
 					req.ActionId,
 					checkpointIdMap[i],
-					profiling,
+					r.profiling,
 					path,
 					state,
 					i,
 					specMap[i],
-					err,
+					r.err,
 				)
 			}()
 		}
-
 		wg.Wait()
 
 		return rabbitmq.Ack

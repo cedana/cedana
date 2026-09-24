@@ -153,3 +153,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260226221140-a57be14db171 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
 )
+
+replace buf.build/gen/go/cedana/cedana/protocolbuffers/go => /tmp/claude-1000/-home-brandonsmith-work-cedana-gpu/db57025c-93b7-40b4-9c53-50061f77c330/scratchpad/genmods/pb
+
+replace buf.build/gen/go/cedana/cedana/grpc/go => /tmp/claude-1000/-home-brandonsmith-work-cedana-gpu/db57025c-93b7-40b4-9c53-50061f77c330/scratchpad/genmods/grpc

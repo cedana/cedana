@@ -24,15 +24,16 @@ import (
 )
 
 const (
-	MAX_MSG_SIZE             = 6 << 20 // 6MiB instead of default 4MiB
-	DEFAULT_DUMP_TIMEOUT     = 10 * time.Minute
-	DEFAULT_FREEZE_TIMEOUT   = 1 * time.Minute
-	DEFAULT_UNFREEZE_TIMEOUT = 1 * time.Minute
-	DEFAULT_RESTORE_TIMEOUT  = 10 * time.Minute
-	DEFAULT_RUN_TIMEOUT      = 1 * time.Minute
-	DEFAULT_MANAGE_TIMEOUT   = 1 * time.Minute
-	DEFAULT_DB_TIMEOUT       = 20 * time.Second
-	DEFAULT_HEALTH_TIMEOUT   = 1 * time.Minute
+	MAX_MSG_SIZE                = 6 << 20 // 6MiB instead of default 4MiB
+	DEFAULT_DUMP_TIMEOUT        = 10 * time.Minute
+	DEFAULT_FREEZE_TIMEOUT      = 1 * time.Minute
+	DEFAULT_UNFREEZE_TIMEOUT    = 1 * time.Minute
+	DEFAULT_RESTORE_TIMEOUT     = 10 * time.Minute
+	DEFAULT_FINISH_DUMP_TIMEOUT = 30 * time.Minute // a deferred GPU flush writes the whole image
+	DEFAULT_RUN_TIMEOUT         = 1 * time.Minute
+	DEFAULT_MANAGE_TIMEOUT      = 1 * time.Minute
+	DEFAULT_DB_TIMEOUT          = 20 * time.Second
+	DEFAULT_HEALTH_TIMEOUT      = 1 * time.Minute
 )
 
 type Client struct {
@@ -140,6 +141,19 @@ func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq, opts ...grpc.Ca
 	}
 
 	return resp, data, nil
+}
+
+// FinishDump waits for the GPU image of a dump made with DeferGPUFlush to finish writing.
+func (c *Client) FinishDump(ctx context.Context, args *daemon.FinishDumpReq, opts ...grpc.CallOption) (*daemon.FinishDumpResp, error) {
+	ctx, cancel := context.WithTimeout(ctx, DEFAULT_FINISH_DUMP_TIMEOUT)
+	defer cancel()
+	opts = addDefaultOptions(opts)
+
+	resp, err := c.daemonClient.FinishDump(ctx, args, opts...)
+	if err != nil {
+		return resp, utils.GRPCErrorColored(err)
+	}
+	return resp, nil
 }
 
 func (c *Client) Restore(

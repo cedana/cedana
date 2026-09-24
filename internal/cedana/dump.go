@@ -65,10 +65,21 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	}
 	resp := &daemon.DumpResp{}
 
+	var deferred *gpu.DeferredFlushes
+	if req.GetDeferGPUFlush() {
+		ctx, deferred = gpu.WithDeferredFlushes(ctx)
+	}
+
 	_, err := dump(ctx, opts, resp, req)
 	if err != nil {
+		if deferred != nil && deferred.Pending() {
+			go deferred.Wait(context.WithoutCancel(ctx))
+		}
 		log.Error().Err(err).Str("type", req.Type).Msg("dump failed")
 		return nil, err
+	}
+	if deferred != nil && deferred.Pending() {
+		s.deferFlush(resp.Paths, deferred)
 	}
 
 	log.Info().Strs("paths", resp.Paths).Str("type", req.Type).Msg("dump successful")
