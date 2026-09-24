@@ -121,6 +121,15 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 			log.Debug().Err(err).Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("failed to lock stale GPU controller for clearing")
 		}
 		if acquired {
+			// Re-check under the lock: whoever booked the controller attaches it before releasing the
+			// lock, so it may have been attached since it was synced above.
+			if controller.Sync(ctx, false) == nil {
+				controller.syncFails = 0
+				if status, _ := controller.Status(); status != CONTROLLER_STALE {
+					controller.Booking.Unlock()
+					continue
+				}
+			}
 			log.Debug().Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("clearing stale GPU controller in pool")
 			if stderr := controller.ErrBuf.String(); stderr != "" {
 				log.Error().Str("ID", controller.ID).Str("reason", remainingReason[i]).Str("stderr", stderr).Msg("stale GPU controller captured stderr")
