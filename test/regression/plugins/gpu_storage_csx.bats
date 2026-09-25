@@ -18,6 +18,7 @@ setup_file() {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
+    setup_file_csx_daemon
     setup_file_daemon
 }
 
@@ -33,6 +34,7 @@ teardown() {
 
 teardown_file() {
     teardown_file_daemon
+    teardown_file_csx_daemon
 }
 
 ############
