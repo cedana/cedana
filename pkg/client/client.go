@@ -25,7 +25,7 @@ import (
 
 const (
 	MAX_MSG_SIZE             = 6 << 20 // 6MiB instead of default 4MiB
-	DEFAULT_DUMP_TIMEOUT     = 10 * time.Minute
+	DEFAULT_DUMP_TIMEOUT     = 60 * time.Minute
 	DEFAULT_FREEZE_TIMEOUT   = 1 * time.Minute
 	DEFAULT_UNFREEZE_TIMEOUT = 1 * time.Minute
 	DEFAULT_RESTORE_TIMEOUT  = 10 * time.Minute

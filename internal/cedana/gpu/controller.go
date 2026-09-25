@@ -59,7 +59,7 @@ const (
 
 	FREEZE_TIMEOUT    = 1 * time.Minute
 	UNFREEZE_TIMEOUT  = 1 * time.Minute
-	DUMP_TIMEOUT      = 10 * time.Minute
+	DUMP_TIMEOUT      = 60 * time.Minute
 	RESTORE_TIMEOUT   = 10 * time.Minute
 	HEALTH_TIMEOUT    = 30 * time.Second
 	INFO_TIMEOUT      = 30 * time.Second
