@@ -12,6 +12,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/csx"
 	"github.com/rs/zerolog/log"
 
+	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 )
 
@@ -150,6 +151,6 @@ func (s *Storage) ReadPath(ctx context.Context, path string) (string, func() err
 
 func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 	return &Storage{
-		sockAddr: "/run/csx.sock",
+		sockAddr: config.Global.CSX.SockAddr,
 	}, nil
 }

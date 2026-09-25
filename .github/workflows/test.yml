@@ -290,6 +290,7 @@ jobs:
           - storage/cedana
           - storage/s3
           - storage/gcs
+          - storage/csx
         arch:
           - amd64
           - arm64
@@ -333,10 +334,19 @@ jobs:
           pattern: containerd-runtime-${{ matrix.arch }}-*
           merge-multiple: true
 
+      - name: Download CSX
+        if: matrix.plugin == 'storage/csx'
+        uses: actions/download-artifact@v4
+        with:
+          name: csx-${{ matrix.arch }}
+
       - name: Make executable
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
+          if [ "${{ matrix.plugin }}" = "storage/csx" ]; then
+            chmod +x ./csx
+          fi
           echo "$PWD" >> $GITHUB_PATH
 
       - name: Install
@@ -347,6 +357,9 @@ jobs:
           sudo -E cedana plugin install ${{ matrix.plugin }}
           if [ "${{ matrix.plugin }}" = "containerd" ]; then
             sudo -E cedana plugin install runc crun containerd/runtime-runc
+          fi
+          if [ "${{ matrix.plugin }}" = "storage/csx" ]; then
+            sudo -E cedana plugin install csx
           fi
 
       - name: Mark git dir as safe

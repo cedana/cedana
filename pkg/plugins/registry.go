@@ -133,4 +133,9 @@ var Registry = []Plugin{
 		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "test-preemption.sh"}},
 	},
+	{
+		Name:     "csx",
+		Type:     EXTERNAL,
+		Binaries: []Binary{{Name: "csx"}},
+	},
 }
