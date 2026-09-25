@@ -14,6 +14,7 @@ load_lib file
 export CEDANA_LOG_LEVEL=trace
 
 setup_file() {
+    setup_file_csx_daemon
     setup_file_daemon
 }
 
@@ -28,6 +29,7 @@ teardown() {
 }
 
 teardown_file() {
+    teardown_file_csx_daemon
     teardown_file_daemon
 }
 

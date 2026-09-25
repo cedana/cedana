@@ -31,6 +31,7 @@ start_csx_daemon_at() {
 
 setup_csx_daemon() {
     CSX_SOCK=$(random_sock)
+    export CSX_SOCK
     export CEDANA_CSX_SOCK_ADDR="$CSX_SOCK"
     export CEDANA_CSX_NFS_PATH=/tmp/csx-"$(basename "$CSX_SOCK")"
     export CEDANA_CSX_TMP_DIR=/cedana/tmpdir-"$(basename "$CSX_SOCK")"
@@ -51,10 +52,36 @@ stop_csx_daemon() {
 }
 
 teardown_csx_daemon() {
-    stop_csx_daemon "$CSX_SOCK"
-    rm -rf /tmp/csx-"$(basename "$CSX_SOCK")"
-    rm -rf /cedana/tmpdir-"$(basename "$CSX_SOCK")"
-    rm -rf /cedana/memstore-"$(basename "$CSX_SOCK")"
-    rm -rf /cedana/diskstore-"$(basename "$CSX_SOCK")"
-    rm -f /tmp/csx-daemon-"$(basename "$CSX_SOCK")".log
+    if ! env_exists "PERSIST_DAEMON"; then
+        stop_csx_daemon "$CSX_SOCK"
+        rm -rf /tmp/csx-"$(basename "$CSX_SOCK")"
+        rm -rf /cedana/tmpdir-"$(basename "$CSX_SOCK")"
+        rm -rf /cedana/memstore-"$(basename "$CSX_SOCK")"
+        rm -rf /cedana/diskstore-"$(basename "$CSX_SOCK")"
+        rm -f /tmp/csx-daemon-"$(basename "$CSX_SOCK")".log
+    fi
+}
+
+setup_file_csx_daemon() {
+    if env_exists "PERSIST_DAEMON"; then
+        CSX_SOCK=$(random_sock)
+        export CEDANA_CSX_SOCK_ADDR="$CSX_SOCK"
+        export CEDANA_CSX_NFS_PATH=/tmp/csx-"$(basename "$CSX_SOCK")"
+        export CEDANA_CSX_TMP_DIR=/cedana/tmpdir-"$(basename "$CSX_SOCK")"
+        export CEDANA_CSX_MEMORY_CACHE_PATH=/cedana/memstore-"$(basename "$CSX_SOCK")"
+        export CEDANA_CSX_LOCAL_DISK_CACHE_PATH=/cedana/diskstore-"$(basename "$CSX_SOCK")"
+        debug start_csx_daemon_at "$CSX_SOCK"
+        export CSX_SOCK
+    fi
+}
+
+teardown_file_csx_daemon() {
+    if env_exists "PERSIST_DAEMON"; then
+        stop_csx_daemon "$CSX_SOCK"
+        rm -rf /tmp/csx-"$(basename "$CSX_SOCK")"
+        rm -rf /cedana/tmpdir-"$(basename "$CSX_SOCK")"
+        rm -rf /cedana/memstore-"$(basename "$CSX_SOCK")"
+        rm -rf /cedana/diskstore-"$(basename "$CSX_SOCK")"
+        rm -f /tmp/csx-daemon-"$(basename "$CSX_SOCK")".log
+    fi
 }
