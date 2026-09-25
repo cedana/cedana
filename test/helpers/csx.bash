@@ -62,10 +62,7 @@ start_csx_daemon() {
 
 cleanup_csx_daemon() {
     stop_csx_daemon "$CSX_SOCK"
-    rm -rf /tmp/csx-"$(basename "$CSX_SOCK")"
-    rm -rf /cedana/tmpdir-"$(basename "$CSX_SOCK")"
-    rm -rf /cedana/memstore-"$(basename "$CSX_SOCK")"
-    rm -rf /cedana/diskstore-"$(basename "$CSX_SOCK")"
+    rm -rf "$CEDANA_CSX_NFS_PATH"
     rm -f "$(csx_daemon_log_file "$CSX_SOCK")"
 }
 

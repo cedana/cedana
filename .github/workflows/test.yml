@@ -335,6 +335,7 @@ jobs:
           merge-multiple: true
 
       - name: Download CSX
+        if: matrix.plugin == 'storage/csx'
         uses: actions/download-artifact@v4
         with:
           name: csx-${{ matrix.arch }}
@@ -343,7 +344,9 @@ jobs:
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
-          chmod +x ./csx
+          if [ "${{ matrix.plugin }}" = "storage/csx" ]; then
+            chmod +x ./csx
+          fi
           echo "$PWD" >> $GITHUB_PATH
 
       - name: Install
@@ -351,10 +354,12 @@ jobs:
           make install
           # Plugins below are used across multiple tests, so install them always
           sudo -E cedana plugin install criu storage/cedana storage/s3 storage/gcs
-          sudo -E cedana plugin install csx
           sudo -E cedana plugin install ${{ matrix.plugin }}
           if [ "${{ matrix.plugin }}" = "containerd" ]; then
             sudo -E cedana plugin install runc crun containerd/runtime-runc
+          fi
+          if [ "${{ matrix.plugin }}" = "storage/csx" ]; then
+            sudo -E cedana plugin install csx
           fi
 
       - name: Mark git dir as safe
