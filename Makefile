@@ -129,10 +129,10 @@ CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=export BATS_NO_FAIL_FOCUS_RUN=1; export BATS_RETRIES=$(RETRIES); bats \
+BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
-BATS_CMD=export BATS_NO_FAIL_FOCUS_RUN=1; export BATS_RETRIES=$(RETRIES); bats \
+BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) \
 				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
 
