@@ -57,6 +57,11 @@ on:
         description: Version for csx binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+      propagator_version:
+        type: string
+        description: Version for propagator image (branch name, tag or "release" for latest release)
+        required: false
+        default: "none"
     outputs:
       slurm_versions:
         description: "SLURM versions, from cedana-slurm's slurm-versions file (JSON array)"
@@ -364,6 +369,65 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: controller-image-name
+          path: /tmp/image-name/*
+          if-no-files-found: error
+
+  # Artifact names match cedana-propagator's build workflow, so its CI can
+  # reuse test workflows with a freshly built image without this job.
+  propagator:
+    name: Propagator
+    if: ${{ inputs.propagator_version != 'none' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Get digest
+        env:
+          GH_TOKEN: ${{ secrets.GIT_CI_PAT }}
+          VERSION: ${{ inputs.propagator_version }}
+        run: |
+          set -euo pipefail
+          # Releases are only tagged by version, so resolve "release" to the latest one
+          if [ "$VERSION" = "release" ]; then
+            IMAGE_NAME=cedana/cedana-propagator
+            TAG=$(gh release view --repo cedana/cedana-propagator --json tagName --jq .tagName)
+          elif [ "${VERSION#v}" != "$VERSION" ]; then
+            IMAGE_NAME=cedana/cedana-propagator
+            TAG=$VERSION
+          else
+            IMAGE_NAME=cedana/cedana-propagator-test
+            TAG=$VERSION
+          fi
+          mkdir -p /tmp/digests
+          mkdir -p /tmp/image-name
+          TAG=$(echo $TAG | sed 's/\//-/g')
+          docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
+          touch "/tmp/digests/${digest#sha256:}"
+          echo "$IMAGE_NAME" > /tmp/image-name/name.txt
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: propagator-digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+
+      - name: Upload image name
+        if: ${{ matrix.arch == 'amd64' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: propagator-image-name
           path: /tmp/image-name/*
           if-no-files-found: error
 

@@ -42,6 +42,11 @@ setup_cluster() {
     elif [ -n "$HELPER_TAG" ]; then
         preload_images "$HELPER_REPO:$HELPER_TAG"
     fi
+    if [ -n "$PROPAGATOR_DIGEST" ]; then
+        preload_images "$PROPAGATOR_REPO@$PROPAGATOR_DIGEST"
+    elif [ -n "$PROPAGATOR_TAG" ]; then
+        preload_images "$PROPAGATOR_REPO:$PROPAGATOR_TAG"
+    fi
     if [ "${GPU:-0}" = "1" ]; then
         preload_images "cedana/cedana-test:cuda" # likely available as we are running inside it
         preload_images "cedana/cedana-samples:cuda"

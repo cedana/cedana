@@ -26,6 +26,8 @@
 #   CEDANA_NAMESPACE                - Namespace for Cedana components (default: cedana-system)
 #   NAMESPACE                       - Namespace for test pods (default: test)
 #   SAMPLES_DIR                     - Path to cedana-samples/kubernetes (default: auto-detect)
+#   PROPAGATOR_REPO                 - If set (with PROPAGATOR_DIGEST or PROPAGATOR_TAG), deploy this
+#                                     propagator into the cluster and test against it (see propagator_deploy.bash)
 
 ################################################################################
 # Setup and Configuration
@@ -42,6 +44,7 @@ source "${BATS_TEST_DIRNAME}"/../helpers/providers/provider.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/k8s.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/helm.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/propagator.bash
+source "${BATS_TEST_DIRNAME}"/../helpers/propagator_deploy.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/metrics.bash
 
 # Generate cluster name if not provided
@@ -55,8 +58,10 @@ export CEDANA_NAMESPACE="${CEDANA_NAMESPACE:-cedana-system}"
 export TAIL_PID=""
 
 setup_suite() {
-    check_env CEDANA_URL
-    check_env CEDANA_AUTH_TOKEN
+    if ! propagator_enabled; then
+        check_env CEDANA_URL
+        check_env CEDANA_AUTH_TOKEN
+    fi
 
     install_kubectl
     install_helm
@@ -72,6 +77,10 @@ setup_suite() {
     fi
 
     debug_log "Connected to $PROVIDER cluster: $(kubectl config current-context)"
+
+    if propagator_enabled; then
+        deploy_propagator
+    fi
 
     # Start tailing logs in background
     tail_all_logs "$CEDANA_NAMESPACE" 600 &
@@ -145,6 +154,10 @@ teardown_suite() {
         deregister_cluster "$CLUSTER_ID"
     else
         debug_log "Skipping cluster deregistration"
+    fi
+
+    if propagator_enabled; then
+        teardown_propagator
     fi
 
     # Teardown cluster using provider
