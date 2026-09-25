@@ -53,5 +53,8 @@ stop_csx_daemon() {
 teardown_csx_daemon() {
     stop_csx_daemon "$CSX_SOCK"
     rm -rf /tmp/csx-"$(basename "$CSX_SOCK")"
+    rm -rf /cedana/tmpdir-"$(basename "$CSX_SOCK")"
+    rm -rf /cedana/memstore-"$(basename "$CSX_SOCK")"
+    rm -rf /cedana/diskstore-"$(basename "$CSX_SOCK")"
     rm -f /tmp/csx-daemon-"$(basename "$CSX_SOCK")".log
 }

@@ -61,7 +61,7 @@ jobs:
       controller_version: main
       containerd_runtime_version: cedana
       slurm_version: main
-      csx_version: main
+      csx_version: feature/ced-2370-add-csx-regression-tests
 
   publish:
     name: Publish
