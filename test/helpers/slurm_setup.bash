@@ -159,7 +159,9 @@ _svc_restart() {
 # Copy the controller's SLURM config to the other nodes. /etc/slurm is local
 # to each node (not NFS), so every edit made on the controller has to be pushed
 # out. Login nodes only get slurm.conf, minus the cli_filter plugin, and the
-# overlay it includes. Any extra file names given are pushed to compute nodes.
+# overlay it includes. Any extra file names given are pushed to compute nodes,
+# and must exist on the controller. Fails if any copy fails, since a node left
+# on the old config would still come up ready.
 _sync_slurm_conf() {
     local compute_containers=() login_containers=()
     # shellcheck disable=SC2207
@@ -169,27 +171,45 @@ _sync_slurm_conf() {
         login_containers=($(_slurm_login_containers))
     fi
 
+    local overlay_name
+    overlay_name="$(basename "$SLURM_CONF_OVERLAY")"
+
     debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes (slurm.conf only to login)..."
-    for conf in slurm.conf cgroup.conf plugstack.conf "$(basename "$SLURM_CONF_OVERLAY")" "$@"; do
+    local conf c targets
+    for conf in slurm.conf cgroup.conf plugstack.conf "$overlay_name" "$@"; do
         if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
+            case " $* " in
+            *" $conf "*)
+                error_log "/etc/slurm/${conf} not found on $SLURM_CONTROLLER_CONTAINER"
+                return 1
+                ;;
+            esac
             continue
         fi
-        local tmpfile="/tmp/slurm-${conf}.sync.$$"
-        docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile"
-        for c in "${compute_containers[@]}"; do
-            docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
-        done
-        if [ "$conf" = "slurm.conf" ]; then
-            for c in "${login_containers[@]}"; do
-                docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
-                docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' "/etc/slurm/${conf}" 2>/dev/null || true
-            done
-        elif [ "$conf" = "$(basename "$SLURM_CONF_OVERLAY")" ]; then
-            for c in "${login_containers[@]}"; do
-                docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
-            done
+
+        targets=("${compute_containers[@]}")
+        if [ "$conf" = "slurm.conf" ] || [ "$conf" = "$overlay_name" ]; then
+            targets+=("${login_containers[@]}")
         fi
+
+        local tmpfile="/tmp/slurm-${conf}.sync.$$"
+        docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile" || {
+            error_log "Failed to copy /etc/slurm/${conf} from $SLURM_CONTROLLER_CONTAINER"
+            rm -f "$tmpfile"
+            return 1
+        }
+        for c in "${targets[@]}"; do
+            docker cp "$tmpfile" "${c}:/etc/slurm/${conf}" || {
+                error_log "Failed to copy /etc/slurm/${conf} to $c"
+                rm -f "$tmpfile"
+                return 1
+            }
+        done
         rm -f "$tmpfile"
+    done
+
+    for c in "${login_containers[@]}"; do
+        docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' /etc/slurm/slurm.conf 2>/dev/null || true
     done
 }
 
@@ -655,7 +675,7 @@ slurm_conf_overlay_apply() {
     }
 
     _slurm_conf_include_overlay || return 1
-    _sync_slurm_conf "${names[@]}"
+    _sync_slurm_conf "${names[@]}" || return 1
     _restart_slurm_daemons || return 1
     wait_for_slurm_ready 180
 }
@@ -686,7 +706,7 @@ slurm_conf_overlay_reset() {
         return 1
     }
 
-    _sync_slurm_conf
+    _sync_slurm_conf || return 1
     _restart_slurm_daemons || return 1
     wait_for_slurm_ready 180
 }
@@ -1164,7 +1184,7 @@ SETUP_EOF
     }
     _slurm_conf_include_overlay || return 1
 
-    _sync_slurm_conf
+    _sync_slurm_conf || return 1
 
     debug_log "Verifying Cedana plugin libs (NFS) and slurm.conf (local) on compute nodes..."
     for c in "${compute_containers[@]}"; do
