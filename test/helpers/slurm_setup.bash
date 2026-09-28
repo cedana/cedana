@@ -156,6 +156,79 @@ _svc_restart() {
     return 1
 }
 
+# Copy the controller's SLURM config to the other nodes. /etc/slurm is local
+# to each node (not NFS), so every edit made on the controller has to be pushed
+# out. Login nodes only get slurm.conf, minus the cli_filter plugin.
+_sync_slurm_conf() {
+    local compute_containers=() login_containers=()
+    # shellcheck disable=SC2207
+    compute_containers=($(_slurm_compute_containers))
+    if [ "${LOGIN_NODES:-0}" -ge 1 ]; then
+        # shellcheck disable=SC2207
+        login_containers=($(_slurm_login_containers))
+    fi
+
+    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes (slurm.conf only to login)..."
+    for conf in slurm.conf cgroup.conf plugstack.conf; do
+        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
+            continue
+        fi
+        local tmpfile="/tmp/slurm-${conf}.sync.$$"
+        docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile"
+        for c in "${compute_containers[@]}"; do
+            docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
+        done
+        if [ "$conf" = "slurm.conf" ]; then
+            for c in "${login_containers[@]}"; do
+                docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
+                docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' "/etc/slurm/${conf}" 2>/dev/null || true
+            done
+        fi
+        rm -f "$tmpfile"
+    done
+}
+
+# Restart slurmctld, then slurmd on the controller and every compute node, so
+# they reread their config.
+_restart_slurm_daemons() {
+    local compute_containers=()
+    # shellcheck disable=SC2207
+    compute_containers=($(_slurm_compute_containers))
+
+    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld ||
+        {
+            error_log "Failed to restart slurmctld"
+            return 1
+        }
+    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmd /usr/sbin/slurmd ||
+        {
+            error_log "Failed to restart controller slurmd"
+            return 1
+        }
+    _log_gpu_debug_state "$SLURM_CONTROLLER_CONTAINER" "post-controller-slurmd-restart"
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd ||
+            {
+                error_log "Failed to restart slurmd on $c"
+                return 1
+            }
+        _log_gpu_debug_state "$c" "post-slurmd-restart"
+    done
+    sleep 5
+
+    if [ "${GPU:-0}" = "1" ]; then
+        debug_log "Clearing transient GPU drain state after SLURM restarts..."
+        for c in "${compute_containers[@]}"; do
+            local node_hostname
+            node_hostname=$(docker exec "$c" hostname)
+            # slurmctld may briefly drain the node while it still sees the
+            # pre-restart registration without GRES; clear that once slurmd is back.
+            slurm_exec scontrol update NodeName="$node_hostname" State=RESUME \
+                >/dev/null 2>&1 || true
+        done
+    fi
+}
+
 ##############################
 # Cluster Setup
 ##############################
@@ -928,29 +1001,7 @@ SETUP_EOF
             return 1
         }
 
-    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes (slurm.conf only to login)..."
-    local login_containers=()
-    if [ "${LOGIN_NODES:-0}" -ge 1 ]; then
-        # shellcheck disable=SC2207
-        login_containers=($(_slurm_login_containers))
-    fi
-    for conf in slurm.conf cgroup.conf plugstack.conf; do
-        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
-            continue
-        fi
-        local tmpfile="/tmp/slurm-${conf}.sync.$$"
-        docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile"
-        for c in "${compute_containers[@]}"; do
-            docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
-        done
-        if [ "$conf" = "slurm.conf" ]; then
-            for c in "${login_containers[@]}"; do
-                docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
-                docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' "/etc/slurm/${conf}" 2>/dev/null || true
-            done
-        fi
-        rm -f "$tmpfile"
-    done
+    _sync_slurm_conf
 
     debug_log "Verifying Cedana plugin libs (NFS) and slurm.conf (local) on compute nodes..."
     for c in "${compute_containers[@]}"; do
@@ -1031,38 +1082,7 @@ SETUP_EOF
     done
 
     debug_log "Restarting SLURM services to load task_cedana plugin..."
-    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld ||
-        {
-            error_log "Failed to restart slurmctld"
-            return 1
-        }
-    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmd /usr/sbin/slurmd ||
-        {
-            error_log "Failed to restart controller slurmd"
-            return 1
-        }
-    _log_gpu_debug_state "$SLURM_CONTROLLER_CONTAINER" "post-controller-slurmd-restart"
-    for c in "${compute_containers[@]}"; do
-        _svc_restart "$c" slurmd /usr/sbin/slurmd ||
-            {
-                error_log "Failed to restart slurmd on $c"
-                return 1
-            }
-        _log_gpu_debug_state "$c" "post-slurmd-restart"
-    done
-    sleep 5
-
-    if [ "${GPU:-0}" = "1" ]; then
-        debug_log "Clearing transient GPU drain state after SLURM restarts..."
-        for c in "${compute_containers[@]}"; do
-            local node_hostname
-            node_hostname=$(docker exec "$c" hostname)
-            # slurmctld may briefly drain the node while it still sees the
-            # pre-restart registration without GRES; clear that once slurmd is back.
-            slurm_exec scontrol update NodeName="$node_hostname" State=RESUME \
-                >/dev/null 2>&1 || true
-        done
-    fi
+    _restart_slurm_daemons || return 1
 
     debug_log "Restarting cedana daemon on all nodes (post-SLURM restart)..."
     for c in "${all_containers[@]}"; do
