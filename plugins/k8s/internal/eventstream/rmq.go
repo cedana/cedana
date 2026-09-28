@@ -293,11 +293,11 @@ func (es *EventStream) DeleteHandler(ctx context.Context) rabbitmq.Handler {
 			return rabbitmq.Ack
 		}
 
-		daemonReq := &daemon.DeleteCheckpointReq{
-			Path: &deleteReq.CheckpointPath,
+		daemonReq := &daemon.DeletePathReq{
+			Path: deleteReq.CheckpointPath,
 		}
 
-		_, err := es.cedana.DeleteCheckpoint(ctx, daemonReq)
+		_, err := es.cedana.DeletePath(ctx, daemonReq)
 		if err != nil {
 			log.Error().Err(err).Msg("could not delete checkpoint")
 			return rabbitmq.NackDiscard
