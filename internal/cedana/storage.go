@@ -37,6 +37,7 @@ func (s *Server) DeletePath(ctx context.Context, req *daemon.DeletePathReq) (*da
     if err != nil {
       return nil, status.Error(codes.Internal, err.Error())
     }
+    return &daemon.DeletePathResp{}, nil
   }
 	return nil, status.Errorf(codes.InvalidArgument, "Path does not correspond to any storage plugin")
 }
