@@ -135,6 +135,7 @@ func (s *Server) DeleteCheckpoint(ctx context.Context, req *daemon.DeleteCheckpo
 	if checkpoint == nil {
 		return nil, status.Errorf(codes.NotFound, "checkpoint not found")
 	}
+
 	s.jobs.DeleteCheckpoint(req.GetID())
 
 	return &daemon.DeleteCheckpointResp{}, nil
