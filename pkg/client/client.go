@@ -356,6 +356,12 @@ func (c *Client) DeleteCheckpoint(ctx context.Context, args *daemon.DeleteCheckp
 	return resp, utils.GRPCErrorColored(err)
 }
 
+func (c *Client) DeletePath(ctx context.Context, args *daemon.DeletePathReq, opts ...grpc.CallOption) (*daemon.DeletePathResp, error) {
+	opts = addDefaultOptions(opts)
+	resp, err := c.daemonClient.DeletePath(ctx, args, opts...)
+	return resp, utils.GRPCErrorColored(err)
+}
+
 func (c *Client) Query(ctx context.Context, args *daemon.QueryReq, opts ...grpc.CallOption) (*daemon.QueryResp, error) {
 	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DB_TIMEOUT)
 	defer cancel()
