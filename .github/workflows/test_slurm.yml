@@ -574,7 +574,7 @@ jobs:
           PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
           SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
         run: |
-          TAGS="slurm,!ansible,!preemption,!unprivileged"
+          TAGS="slurm,!ansible,!preemption,!unprivileged,!namespace"
           if [ "$GPU" = "1" ]; then
             TAGS="${TAGS},gpu"
           else
@@ -716,6 +716,57 @@ jobs:
 
           exit "$test_exit_code"
 
+      # Restarts SLURM with a different config, so it runs last and on its own.
+      - name: Run SLURM namespace tests
+        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
+        env:
+          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_BIN: /usr/local/bin/cedana
+          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
+          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
+          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          PARALLELISM: 1
+          SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
+        run: |
+          TAGS="slurm,namespace"
+          if [ "$GPU" = "1" ]; then
+            TAGS="${TAGS},gpu"
+          else
+            TAGS="${TAGS},!gpu"
+          fi
+
+          set +e
+          make test-slurm \
+            TAGS=$TAGS \
+            GPU=$GPU \
+            REPORT=report-namespace \
+            FORMATTER=$FORMATTER \
+            DEBUG=$DEBUG \
+            PARALLELISM=$PARALLELISM
+          test_exit_code=$?
+          set -e
+
+          if [ -f /tmp/report-namespace.xml ]; then
+            tests=$(grep -o '<testcase[ >]' /tmp/report-namespace.xml | wc -l | tr -d ' ')
+            failures=$(grep -o '<failure[ >]' /tmp/report-namespace.xml | wc -l | tr -d ' ')
+            errors=$(grep -o '<error[ >]' /tmp/report-namespace.xml | wc -l | tr -d ' ')
+            skipped=$(grep -o '<skipped[ >]' /tmp/report-namespace.xml | wc -l | tr -d ' ')
+            passed=$((tests - failures - errors - skipped))
+            if [ "$passed" -lt 0 ]; then
+              passed=0
+            fi
+            summary="SLURM namespace tests: ${passed}/${tests} passed, ${failures} failed, ${errors} errored, ${skipped} skipped"
+            echo "$summary"
+            if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+              echo "$summary" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          else
+            echo "SLURM namespace tests: report-namespace.xml not found"
+          fi
+
+          exit "$test_exit_code"
+
       - name: Collect SLURM debug logs
         if: always()
         shell: bash
@@ -806,6 +857,18 @@ jobs:
       - name: Label reports # with the job name, so the summary can link to it
         if: always()
         run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }})" |' {} +
+
+      - name: Generate report (namespace)
+        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
+        run: |
+          npx junit-to-ctrf "/tmp/report-namespace.xml" -t bats -o /tmp/report-namespace.json -e \
+            appName="cedana" appVersion="$(git describe --tags --always)" \
+            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
+            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
+            testEnvironment="cedana/cedana-test" reportName="Slurm Namespace (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
 
       - name: Upload report
         if: always()
