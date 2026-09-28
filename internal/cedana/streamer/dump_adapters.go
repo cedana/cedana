@@ -106,6 +106,11 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 
 			path := req.Dir + string(os.PathSeparator) + req.Name // do not use filepath.Join as it removes a slash
 
+			ext, err := cedana_io.ExtForCompression(compression)
+			if err != nil {
+				return nil, err
+			}
+
 			var streamStorage cedana_io.Storage
 			var storagePath string
 
@@ -117,7 +122,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				storagePath = path
 			}
 
-			var waitForIO func() error
+			var waitForIO func() ([]string, error)
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
 				ctx,
 				imgStreamer.BinaryPaths()[0],
@@ -132,12 +137,29 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
 			}
 
+			// Sets the checksum of the dump, which is that of a manifest of its shards as written.
+			// When async, the shards are first written locally and then uploaded as is, so the checksum
+			// is already known before the upload.
+			setChecksum := func(shardChecksums []string) {
+				manifest := &cedana_io.Manifest{}
+				for i, checksum := range shardChecksums {
+					manifest.Add(fmt.Sprintf(IMG_FILE_FORMATTER, i)+ext, checksum)
+				}
+				checksum := manifest.Sum()
+				if checksum == "" {
+					return
+				}
+				log.Debug().Str("path", path).Strs("shards", shardChecksums).Str("checksum", checksum).Msg("checksummed dump")
+				if resp.Checksums == nil {
+					resp.Checksums = map[string]string{}
+				}
+				resp.Checksums[path] = checksum
+			}
+
 			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
 			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`
 			if async {
-				ext, _ := cedana_io.ExtForCompression(compression)
-
 				upload := func(ctx context.Context) error {
 					var wg sync.WaitGroup
 					errCh := make(chan error, streams)
@@ -183,10 +205,12 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				}
 
 				defer func() {
-					err = errors.Join(err, waitForIO())
+					shardChecksums, waitErr := waitForIO()
+					err = errors.Join(err, waitErr)
 					if err != nil {
 						return
 					}
+					setChecksum(shardChecksums)
 
 					// Use a detached context for async upload since the parent request
 					// context will be canceled after the dump completes.
@@ -203,8 +227,12 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				// Sync upload, wait for IO completion in PostDumpFunc
 				defer func() {
 					_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
-					err = errors.Join(err, waitForIO())
+					shardChecksums, waitErr := waitForIO()
+					err = errors.Join(err, waitErr)
 					end()
+					if err == nil {
+						setChecksum(shardChecksums)
+					}
 				}()
 			}
 

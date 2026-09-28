@@ -2,6 +2,9 @@ package streamer
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,7 +72,8 @@ func TestGlob(t *testing.T) {
 		}
 	}
 
-	if err := waitDump(); err != nil {
+	shardChecksums, err := waitDump()
+	if err != nil {
 		t.Fatalf("dump wait failed: %v", err)
 	}
 
@@ -88,6 +92,21 @@ func TestGlob(t *testing.T) {
 
 	if totalBytes == 0 {
 		t.Fatal("No data written to shards! Dump may have failed.")
+	}
+
+	if len(shardChecksums) != int(streams) {
+		t.Fatalf("expected %d shard checksums, got %d", streams, len(shardChecksums))
+	}
+	for i, checksum := range shardChecksums {
+		shard := filepath.Join(shardDir, fmt.Sprintf(IMG_FILE_FORMATTER, i))
+		data, err := os.ReadFile(shard)
+		if err != nil {
+			t.Fatalf("failed to read shard %s: %v", shard, err)
+		}
+		sum := sha256.Sum256(data)
+		if expected := "sha256:" + hex.EncodeToString(sum[:]); checksum != expected {
+			t.Fatalf("checksum of shard %d is %s, expected %s", i, checksum, expected)
+		}
 	}
 
 	t.Log("Phase 2: Serve - reading files from shards and testing afero.Glob")

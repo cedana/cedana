@@ -78,3 +78,40 @@ func TestCheckpointReqForCluster(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckpointInfoChecksum(t *testing.T) {
+	info := checkpointInfo{
+		ActionId: "checkpoint-action",
+		Status:   "success",
+		Path:     "cedana://checkpoints/dump.tar.lz4",
+		Checksum: "sha256:abc123",
+	}
+
+	payload, err := json.Marshal(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if string(fields["checksum"]) != `"sha256:abc123"` {
+		t.Fatalf("checkpoint payload must carry the checksum: %s", fields["checksum"])
+	}
+
+	info.Checksum = ""
+
+	payload, err = json.Marshal(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fields = map[string]json.RawMessage{}
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields["checksum"]; ok {
+		t.Fatal("checkpoint payload must omit the checksum when none was computed")
+	}
+}

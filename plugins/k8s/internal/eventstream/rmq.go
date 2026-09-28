@@ -349,6 +349,7 @@ type checkpointInfo struct {
 	CheckpointName string        `json:"checkpoint_name"`
 	Status         string        `json:"status"`
 	Path           string        `json:"path"`
+	Checksum       string        `json:"checksum,omitempty"`
 	GPU            bool          `json:"gpu"`
 	Platform       string        `json:"platform"`
 	ProfilingInfo  profilingInfo `json:"profiling_info"`
@@ -529,6 +530,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					nil,
 					"",
+					"",
 					nil,
 					i,
 					specMap[i],
@@ -546,10 +548,11 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			go func() {
 				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
-				var path string
+				var path, checksum string
 				var state *daemon.ProcessState
 				if err == nil {
 					path = dumpResp.Paths[0]
+					checksum = dumpResp.Checksums[path]
 					state = dumpResp.State
 				}
 				es.publishCheckpoint(
@@ -559,6 +562,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					profiling,
 					path,
+					checksum,
 					state,
 					i,
 					specMap[i],
@@ -580,6 +584,7 @@ func (es *EventStream) publishCheckpoint(
 	checkpointId string,
 	profilingData *profiling.Data,
 	path string,
+	checksum string,
 	state *daemon.ProcessState,
 	containerOrder int,
 	containerSpec *specs.Spec,
@@ -618,6 +623,7 @@ func (es *EventStream) publishCheckpoint(
 		ci.GPU = state.GetGPUEnabled()
 		ci.Platform = state.GetHost().GetPlatform()
 		ci.Path = path
+		ci.Checksum = checksum
 	}
 
 	if profilingData != nil {
@@ -656,7 +662,7 @@ func (es *EventStream) publishCheckpoint(
 	if dumpErr != nil {
 		log.Error().Err(dumpErr).Msg("checkpoint published with error")
 	} else {
-		log.Info().Str("path", path).Bool("GPU", ci.GPU).Msg("checkpoint published")
+		log.Info().Str("path", path).Str("checksum", ci.Checksum).Bool("GPU", ci.GPU).Msg("checkpoint published")
 	}
 	return nil
 }

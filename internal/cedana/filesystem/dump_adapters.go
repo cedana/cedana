@@ -113,6 +113,8 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			}
 			path := req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
+			var checksum string
+
 			compress := func(ctx context.Context) (err error) {
 				// detect FuseFs if dir is not remote and not provided by a plugin
 				isFuse, err := isFuseFS(req.Dir, !storage.IsRemote() && !strings.Contains(req.Dir, "://"))
@@ -132,6 +134,9 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
+				// Checksum what storage receives, i.e. the tarball after compression
+				sum := io.NewChecksumWriter(tarball)
+				tarball = sum
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
 
 				err = io.Tar(imagesDirectory, tarball, compression, isFuse)
@@ -141,10 +146,20 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					return fmt.Errorf("failed to create tarball: %w", err)
 				}
 
-				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
+				checksum = sum.Sum()
+
+				log.Debug().Str("path", path).Str("compression", compression).Str("checksum", checksum).Msg("created tarball")
 
 				os.RemoveAll(imagesDirectory)
 				return nil
+			}
+
+			// Only to be called while the response has not yet been returned
+			setChecksum := func() {
+				if resp.Checksums == nil {
+					resp.Checksums = map[string]string{}
+				}
+				resp.Checksums[path] = checksum
 			}
 
 			resp.Paths = append(resp.Paths, path)
@@ -153,6 +168,9 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			// will continue running regardless of the success of the dump/compress/upload. If leave-running is not set,
 			// then we need to ensure that the dump is compressed/uploaded in the post-dump hook so that it
 			// can be resumed on failure.
+			//
+			// When async, the response is returned before the compress/upload is complete, so the
+			// checksum cannot be set on it.
 
 			if async {
 				defer func() {
@@ -181,12 +199,20 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			} else {
 				if req.GetCriu().GetLeaveRunning() {
 					defer func() {
-						err = errors.Join(err, compress(ctx))
+						compressErr := compress(ctx)
+						if compressErr == nil {
+							setChecksum()
+						}
+						err = errors.Join(err, compressErr)
 					}()
 				} else {
 					callback := &criu_client.NotifyCallback{
 						PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) (err error) {
-							return compress(ctx)
+							err = compress(ctx)
+							if err == nil {
+								setChecksum()
+							}
+							return err
 						},
 					}
 					opts.CRIUCallback.Include(callback)
