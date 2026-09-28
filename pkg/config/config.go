@@ -229,7 +229,7 @@ func Load(args ...Args) (err error) {
 		}
 	}
 
-	err = viper.UnmarshalExact(&Global)
+	err = viper.Unmarshal(&Global)
 	if err != nil {
 		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
 	}
@@ -290,7 +290,7 @@ func Init(args ...Args) error {
 		}
 	}
 
-	err = viper.UnmarshalExact(&Global)
+	err = viper.Unmarshal(&Global)
 	if err != nil {
 		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
 	}
