@@ -158,7 +158,8 @@ _svc_restart() {
 
 # Copy the controller's SLURM config to the other nodes. /etc/slurm is local
 # to each node (not NFS), so every edit made on the controller has to be pushed
-# out. Login nodes only get slurm.conf, minus the cli_filter plugin.
+# out. Login nodes only get slurm.conf, minus the cli_filter plugin, and the
+# overlay it includes. Any extra file names given are pushed to compute nodes.
 _sync_slurm_conf() {
     local compute_containers=() login_containers=()
     # shellcheck disable=SC2207
@@ -169,7 +170,7 @@ _sync_slurm_conf() {
     fi
 
     debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes (slurm.conf only to login)..."
-    for conf in slurm.conf cgroup.conf plugstack.conf; do
+    for conf in slurm.conf cgroup.conf plugstack.conf "$(basename "$SLURM_CONF_OVERLAY")" "$@"; do
         if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
             continue
         fi
@@ -182,6 +183,10 @@ _sync_slurm_conf() {
             for c in "${login_containers[@]}"; do
                 docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
                 docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' "/etc/slurm/${conf}" 2>/dev/null || true
+            done
+        elif [ "$conf" = "$(basename "$SLURM_CONF_OVERLAY")" ]; then
+            for c in "${login_containers[@]}"; do
+                docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
             done
         fi
         rm -f "$tmpfile"
@@ -542,6 +547,156 @@ wait_for_slurm_ready() {
     docker exec "$SLURM_CONTROLLER_CONTAINER" \
         tail -20 /var/log/munge/munged.log 2>/dev/null || true
     return 1
+}
+
+##############################
+# SLURM Config Overlay
+##############################
+
+# Tests that need a different SLURM config layer it over the baseline instead
+# of editing slurm.conf. slurm.conf ends with an Include of the overlay, and for
+# a key set more than once SLURM uses the latest value, so the overlay wins.
+# Empty, it changes nothing.
+SLURM_CONF_OVERLAY="/etc/slurm/overlay.conf"
+# Names of the extra files (e.g. job_container.conf) the overlay installed into
+# /etc/slurm, so a reset knows what to remove.
+SLURM_CONF_OVERLAY_FILES="/etc/slurm/overlay.files"
+
+# Make the overlay Include the last line of the controller's slurm.conf, moving
+# it there if something has appended settings after it.
+_slurm_conf_include_overlay() {
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        set -euo pipefail
+        touch '$SLURM_CONF_OVERLAY' '$SLURM_CONF_OVERLAY_FILES'
+        sed -i '\|^Include $SLURM_CONF_OVERLAY\$|d' /etc/slurm/slurm.conf
+        echo 'Include $SLURM_CONF_OVERLAY' >> /etc/slurm/slurm.conf
+    " || {
+        error_log "Failed to include $SLURM_CONF_OVERLAY in slurm.conf"
+        return 1
+    }
+}
+
+# Cancel every job in the queue and wait for it to drain. Changing SLURM's
+# config under running jobs can break them, and a job left over from an
+# earlier test would otherwise run under the new config.
+_slurm_cancel_all_jobs() {
+    local jobs
+    jobs="$(slurm_exec squeue -h -o '%i' 2>/dev/null | tr '\n' ' ')"
+    [ -n "${jobs// /}" ] || return 0
+
+    warn_log "Cancelling leftover SLURM jobs before reconfiguring: $jobs"
+    # shellcheck disable=SC2086
+    slurm_exec scancel $jobs 2>/dev/null || true
+
+    # Cancelled jobs stay listed while they complete, up to KillWait (30s).
+    local waited=0
+    while [ "$waited" -lt 120 ]; do
+        [ -z "$(slurm_exec squeue -h -o '%i' 2>/dev/null)" ] && return 0
+        sleep 2
+        waited=$((waited + 2))
+    done
+
+    error_log "SLURM jobs still queued ${waited}s after cancelling them"
+    slurm_exec squeue 2>/dev/null || true
+    return 1
+}
+
+# Apply a SLURM config overlay: the slurm.conf fragment on stdin, plus any extra
+# config files given as paths, which are installed into /etc/slurm under their
+# basename. Replaces any overlay already applied. Restarts SLURM.
+#
+#   slurm_conf_overlay_apply "$BATS_FILE_TMPDIR/job_container.conf" <<'EOF'
+#   JobContainerType=job_container/tmpfs
+#   EOF
+slurm_conf_overlay_apply() {
+    local fragment f name
+    local names=()
+    fragment="$(cat)"
+
+    for f in "$@"; do
+        name="$(basename "$f")"
+        case "$name" in
+        slurm.conf | cgroup.conf | plugstack.conf | gres.conf | slurmdbd.conf | \
+            "$(basename "$SLURM_CONF_OVERLAY")" | "$(basename "$SLURM_CONF_OVERLAY_FILES")")
+            # A reset deletes these files, so they cannot be baseline config.
+            error_log "Overlay file $name would replace baseline SLURM config"
+            return 1
+            ;;
+        esac
+        [ -f "$f" ] || {
+            error_log "Overlay file $f not found"
+            return 1
+        }
+        names+=("$name")
+    done
+
+    info_log "Applying SLURM config overlay${names[*]:+ (with ${names[*]})}..."
+    printf '%s\n' "$fragment" >&"${OUTPUT_FD}"
+
+    _slurm_cancel_all_jobs || return 1
+
+    printf '%s\n' "$fragment" |
+        docker exec -i "$SLURM_CONTROLLER_CONTAINER" sh -c 'cat > "$1"' _ "$SLURM_CONF_OVERLAY" || {
+        error_log "Failed to write $SLURM_CONF_OVERLAY"
+        return 1
+    }
+    for f in "$@"; do
+        docker exec -i "$SLURM_CONTROLLER_CONTAINER" \
+            sh -c 'cat > "$1"' _ "/etc/slurm/$(basename "$f")" <"$f" || {
+            error_log "Failed to install $(basename "$f") into /etc/slurm"
+            return 1
+        }
+    done
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        sh -c 'out="$1"; shift; for n; do echo "$n"; done > "$out"' \
+        _ "$SLURM_CONF_OVERLAY_FILES" "${names[@]}" || {
+        error_log "Failed to record overlay files in $SLURM_CONF_OVERLAY_FILES"
+        return 1
+    }
+
+    _slurm_conf_include_overlay || return 1
+    _sync_slurm_conf "${names[@]}"
+    _restart_slurm_daemons || return 1
+    wait_for_slurm_ready 180
+}
+
+# Remove the overlay applied by slurm_conf_overlay_apply, returning SLURM to its
+# baseline config. Restarts SLURM.
+slurm_conf_overlay_reset() {
+    info_log "Resetting SLURM config overlay..."
+
+    _slurm_cancel_all_jobs || return 1
+
+    local names=()
+    read -ra names <<<"$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        cat "$SLURM_CONF_OVERLAY_FILES" 2>/dev/null | tr '\n' ' ')"
+
+    if [ "${#names[@]}" -gt 0 ]; then
+        local c
+        for c in "$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers); do
+            docker exec "$c" sh -c 'cd /etc/slurm && rm -f -- "$@"' _ "${names[@]}" || {
+                error_log "Failed to remove overlay files from $c"
+                return 1
+            }
+        done
+    fi
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        sh -c ': > "$1" && : > "$2"' _ "$SLURM_CONF_OVERLAY" "$SLURM_CONF_OVERLAY_FILES" || {
+        error_log "Failed to clear $SLURM_CONF_OVERLAY"
+        return 1
+    }
+
+    _sync_slurm_conf
+    _restart_slurm_daemons || return 1
+    wait_for_slurm_ready 180
+}
+
+# Print the value SLURM is actually running with for a key, as reported by
+# `scontrol show config` (empty if the key is not reported).
+slurm_conf_value() {
+    local key="$1"
+    slurm_exec scontrol show config 2>/dev/null |
+        awk -v key="$key" '$1 == key { sub(/^[^=]*=[[:space:]]*/, ""); print; exit }'
 }
 
 ##############################
@@ -1000,6 +1155,14 @@ SETUP_EOF
             error_log "SLURM plugin setup failed on controller"
             return 1
         }
+
+    debug_log "Adding empty SLURM config overlay (see slurm_conf_overlay_apply)..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        sh -c ': > "$1" && : > "$2"' _ "$SLURM_CONF_OVERLAY" "$SLURM_CONF_OVERLAY_FILES" || {
+        error_log "Failed to create $SLURM_CONF_OVERLAY"
+        return 1
+    }
+    _slurm_conf_include_overlay || return 1
 
     _sync_slurm_conf
 
