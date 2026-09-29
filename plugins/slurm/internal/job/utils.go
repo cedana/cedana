@@ -60,6 +60,30 @@ func getJobCgroupPathV2(jid uint32) (string, error) {
 	return "", status.Errorf(codes.NotFound, "cgroup v2 path for slurm job %d not found", jid)
 }
 
+// pickJobPID picks a process of the job out of those in its cgroup. Ourselves if we're one
+// of them, otherwise the one with the lowest PID still around.
+func pickJobPID(pids []int, self uint32, exists func(pid uint32) bool) uint32 {
+	var picked uint32
+	for _, p := range pids {
+		if p <= 0 {
+			continue
+		}
+		pid := uint32(p)
+		if pid == self {
+			return self
+		}
+		if (picked == 0 || pid < picked) && exists(pid) {
+			picked = pid
+		}
+	}
+	return picked
+}
+
+func processExists(pid uint32) bool {
+	_, err := os.Stat(fmt.Sprintf("/proc/%d", pid))
+	return err == nil
+}
+
 func selfInJobCgroup(pid, jid uint32) bool {
 	path, err := cgroupPathFromProc(pid)
 	if err != nil {
