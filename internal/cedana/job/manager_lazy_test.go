@@ -226,8 +226,8 @@ func TestManagerLazy_SyncWithDB_Pruning(t *testing.T) {
 		t.Errorf("expected persisted checkpoint %s to exist", cidPersisted)
 	}
 
-	if _, ok := m.checkpoints.Load(cidStale); !ok {
-		t.Errorf("expected checkpoint %s to remain in memory after stale job pruning", cidStale)
+	if _, ok := m.checkpoints.Load(cidStale); ok {
+		t.Errorf("expected checkpoint %s to be removed from memory after its job was pruned", cidStale)
 	}
 }
 
@@ -277,5 +277,155 @@ func TestManagerLazy_SyncWithDB_PutJob(t *testing.T) {
 
 	if _, ok := m.deletedJobs.Load(jid); ok {
 		t.Fatalf("job should be removed from deletedJobs after successful DB sync")
+	}
+}
+
+func TestManagerLazy_AddCheckpointRace(t *testing.T) {
+	ctx := context.Background()
+	mockdb := newMockDB()
+
+	m := &ManagerLazy{
+		jobs:               sync.Map{},
+		checkpoints:        sync.Map{},
+		deletedJobs:        sync.Map{},
+		deletedCheckpoints: sync.Map{},
+		unpersistedJobs:    sync.Map{},
+		pendingCheckpoints: make(map[string]struct{}),
+		pending:            make(chan action, 64),
+		db:                 mockdb,
+	}
+
+	jidStale := "job-stale"
+	_, _ = m.New(jidStale, "process")
+	m.unpersistedJobs.Delete(jidStale)
+
+	m.AddCheckpoint(jidStale, []string{"/tmp/test"})
+
+	var addedCpID string
+	m.checkpoints.Range(func(key, value any) bool {
+		addedCpID = key.(string)
+		return true
+	})
+
+	if addedCpID == "" {
+		t.Fatalf("expected checkpoint to be added to memory")
+	}
+
+	if _, ok := m.pendingCheckpoints[addedCpID]; !ok {
+		t.Fatalf("expected checkpoint to be in pendingCheckpoints")
+	}
+
+	err := m.syncWithDB(ctx, action{typ: initialize, id: ""})
+	if err != nil {
+		t.Fatalf("syncWithDB initialize failed: %v", err)
+	}
+
+	if m.Exists(jidStale) {
+		t.Fatalf("expected stale job to be pruned")
+	}
+
+	if _, ok := m.checkpoints.Load(addedCpID); !ok {
+		t.Fatalf("checkpoint was prematurely removed from memory before putCheckpoint could run")
+	}
+
+	var foundPutAction bool
+	for len(m.pending) > 0 {
+		act := <-m.pending
+		if act.typ == putCheckpoint && act.id == addedCpID {
+			foundPutAction = true
+			err = m.syncWithDB(ctx, act)
+			if err != nil {
+				t.Fatalf("putCheckpoint failed: %v", err)
+			}
+		}
+	}
+
+	if !foundPutAction {
+		t.Fatalf("putCheckpoint action was not queued")
+	}
+
+	cps, _ := mockdb.ListCheckpointsByJIDs(ctx, jidStale)
+	if len(cps) == 0 {
+		t.Fatalf("checkpoint was not saved to DB")
+	}
+
+	if _, ok := m.checkpoints.Load(addedCpID); ok {
+		t.Fatalf("checkpoint was not removed from memory after successful DB write for pruned job")
+	}
+}
+
+func TestManagerLazy_CompareAndDeleteSafety(t *testing.T) {
+	mockdb := newMockDB()
+
+	m := &ManagerLazy{
+		jobs:               sync.Map{},
+		checkpoints:        sync.Map{},
+		deletedJobs:        sync.Map{},
+		deletedCheckpoints: sync.Map{},
+		unpersistedJobs:    sync.Map{},
+		pendingCheckpoints: make(map[string]struct{}),
+		pending:            make(chan action, 64),
+		db:                 mockdb,
+	}
+
+	jid := "job-replaced"
+	oldJob, _ := m.New(jid, "process")
+	m.unpersistedJobs.Delete(jid)
+
+	newJob := newJob(jid, "process", nil)
+	m.jobs.Store(jid, newJob)
+
+	deleted := m.jobs.CompareAndDelete(jid, oldJob)
+
+	if deleted {
+		t.Fatalf("CompareAndDelete mistakenly deleted the replacement job")
+	}
+
+	if !m.Exists(jid) {
+		t.Fatalf("replacement job was lost")
+	}
+}
+
+func TestManagerLazy_DeleteCheckpoint_ReachesDB(t *testing.T) {
+	ctx := context.Background()
+	mockdb := newMockDB()
+
+	m := &ManagerLazy{
+		jobs:               sync.Map{},
+		checkpoints:        sync.Map{},
+		deletedJobs:        sync.Map{},
+		deletedCheckpoints: sync.Map{},
+		unpersistedJobs:    sync.Map{},
+		pendingCheckpoints: make(map[string]struct{}),
+		pending:            make(chan action, 64),
+		db:                 mockdb,
+	}
+
+	jid := "test-job-cp-delete"
+	m.New(jid, "process")
+
+	cid := "test-cp-delete"
+	m.checkpoints.Store(cid, &daemon.Checkpoint{ID: cid, JID: jid})
+	mockdb.PutCheckpoint(ctx, &daemon.Checkpoint{ID: cid, JID: jid})
+
+	m.DeleteCheckpoint(cid)
+
+	if _, ok := m.checkpoints.Load(cid); ok {
+		t.Fatalf("checkpoint should be removed from memory")
+	}
+	if _, ok := m.deletedCheckpoints.Load(cid); !ok {
+		t.Fatalf("checkpoint should be marked as deleted")
+	}
+
+	<-m.pending
+
+	err := m.syncWithDB(ctx, action{typ: putCheckpoint, id: cid})
+	if err != nil {
+		t.Fatalf("syncWithDB failed: %v", err)
+	}
+
+	cps, _ := mockdb.ListCheckpointsByJIDs(ctx, jid)
+	if len(cps) != 0 {
+		t.Fatalf("checkpoint should be deleted from DB")
 	}
 }

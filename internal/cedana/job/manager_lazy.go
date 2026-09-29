@@ -33,6 +33,8 @@ type ManagerLazy struct {
 	deletedJobs        sync.Map // to keep track of deleted jobs
 	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
 	unpersistedJobs    sync.Map // to keep track of jobs created locally but not yet synced to DB
+	cpMu               sync.Mutex
+	pendingCheckpoints map[string]struct{}
 
 	host    *daemon.Host
 	plugins plugins.Manager
@@ -78,6 +80,7 @@ func NewManagerLazy(
 		deletedJobs:        sync.Map{},
 		deletedCheckpoints: sync.Map{},
 		unpersistedJobs:    sync.Map{},
+		pendingCheckpoints: make(map[string]struct{}),
 		pending:            make(chan action, 64),
 		wg:                 &sync.WaitGroup{},
 		host:               host,
@@ -391,6 +394,9 @@ func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
 		return
 	}
 
+	var added []string
+
+	m.cpMu.Lock()
 	for _, path := range paths {
 		checkpoint := &daemon.Checkpoint{
 			ID:   uuid.New().String(),
@@ -399,9 +405,14 @@ func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
 			Time: time.Now().UnixMilli(),
 			Size: utils.SizeFromPath(path),
 		}
+		m.pendingCheckpoints[checkpoint.ID] = struct{}{}
 		m.checkpoints.Store(checkpoint.ID, checkpoint)
+		added = append(added, checkpoint.ID)
+	}
+	m.cpMu.Unlock()
 
-		m.pending <- action{putCheckpoint, checkpoint.ID}
+	for _, id := range added {
+		m.pending <- action{putCheckpoint, id}
 	}
 }
 
@@ -451,6 +462,10 @@ func (m *ManagerLazy) DeleteCheckpoint(id string) {
 	m.checkpoints.Delete(id)
 
 	m.deletedCheckpoints.Store(id, c)
+
+	m.cpMu.Lock()
+	delete(m.pendingCheckpoints, id)
+	m.cpMu.Unlock()
 
 	m.pending <- action{putCheckpoint, id}
 }
@@ -526,7 +541,15 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			}
 
 			// Evict stale job and clean up its memory checkpoints
-			m.jobs.CompareAndDelete(jid, job)
+			if m.jobs.CompareAndDelete(jid, job) {
+				m.cpMu.Lock()
+				for _, checkpoint := range m.ListCheckpoints(jid) {
+					if _, pending := m.pendingCheckpoints[checkpoint.ID]; !pending {
+						m.checkpoints.Delete(checkpoint.ID)
+					}
+				}
+				m.cpMu.Unlock()
+			}
 			return true
 		})
 
@@ -550,6 +573,14 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 		checkpoint, ok := m.checkpoints.Load(id)
 		if ok {
 			err = m.db.PutCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
+			if err == nil {
+				m.cpMu.Lock()
+				delete(m.pendingCheckpoints, id)
+				if !m.Exists(checkpoint.(*daemon.Checkpoint).JID) {
+					m.checkpoints.Delete(id)
+				}
+				m.cpMu.Unlock()
+			}
 		} else if _, deleted := m.deletedCheckpoints.Load(id); deleted {
 			err = m.db.DeleteCheckpoint(ctx, id)
 			if err == nil {
