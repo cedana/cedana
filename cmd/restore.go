@@ -211,13 +211,14 @@ var restoreCmd = &cobra.Command{
 				return utils.GRPCErrorColored(err)
 			}
 
-			data := cedana.Finalize()
+			data := cedana.Profile()
 			if config.Global.Profiling.Enabled && data != nil {
 				profiling.Print(data, features.Theme())
 				if config.Global.Profiling.Path != "" {
 					profiling.WriteJSON(config.Global.Profiling.Path, data)
 				}
 			}
+			cedana.Wait()
 
 			os.Exit(<-code)
 		} else {
