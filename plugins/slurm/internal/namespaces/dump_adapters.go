@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func IgnoreNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[types.Dump] {
@@ -131,16 +132,16 @@ func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
 				addExternalNamespace(req, ns.Type, ns.Inode)
 
 			case HandlingEnter:
-				// CRIU opens some files by path, and so will plugins
+				// CRIU gets to the images through the fd it's given, but opens some files by path, and
+				// so will plugins. The dump dir may not be there for the job (e.g. in /tmp, of which it has its own).
 				if dir := req.GetCriu().GetImagesDir(); dir != "" {
-					visible, err := visibleInNamespace(pid, dir)
+					reachable, err := reachableFromNamespace(pid, dir)
 					if err != nil {
 						return nil, status.Errorf(codes.Internal, "failed to check dump dir: %v", err)
 					}
-					if !visible {
-						return nil, status.Errorf(codes.FailedPrecondition,
-							"dump dir %s is not the same inside the job's %s namespace (held by %s %s), use a dir that is not private to the job",
-							dir, name, ns.Holder, ns.Path)
+					if reachable != dir {
+						log.Debug().Str("dir", dir).Str("through", reachable).Msgf("dump dir is not the same inside the job's %s namespace, going through our root", name)
+						req.Criu.ImagesDir = proto.String(reachable)
 					}
 				}
 				// Not by where it's held, as a pin may only be visible from the mount namespace it was made in

@@ -2,12 +2,16 @@ package namespaces
 
 import (
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 )
 
 const testMountinfo = `22 1 8:1 / / rw,relatime shared:1 - ext4 /dev/sda1 rw
@@ -367,5 +371,32 @@ func TestUnescapeMountinfo(t *testing.T) {
 		if got := unescapeMountinfo(in); got != expected {
 			t.Errorf("unescapeMountinfo(%q) = %q, expected %q", in, got, expected)
 		}
+	}
+}
+
+func TestReachableFromNamespace(t *testing.T) {
+	self := uint32(os.Getpid())
+	dir := t.TempDir()
+
+	// Our own mount namespace, so there as it is
+	got, err := reachableFromNamespace(self, dir)
+	if err != nil || got != dir {
+		t.Errorf("expected %q, got %q, %v", dir, got, err)
+	}
+
+	if _, err := reachableFromNamespace(self, filepath.Join(dir, "missing")); err == nil {
+		t.Error("expected an error for what is not there for us either")
+	}
+
+	// What it would be given otherwise has to be the same to us
+	var direct, through unix.Stat_t
+	if err := unix.Stat(dir, &direct); err != nil {
+		t.Fatal(err)
+	}
+	if err := unix.Stat(filepath.Join(fmt.Sprintf("/proc/%d/root", self), dir), &through); err != nil {
+		t.Fatal(err)
+	}
+	if direct.Dev != through.Dev || direct.Ino != through.Ino {
+		t.Error("not the same through our root")
 	}
 }

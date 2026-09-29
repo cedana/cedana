@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -140,6 +141,20 @@ func visibleInNamespace(pid uint32, path string) (bool, error) {
 		return false, fmt.Errorf("failed to stat %s as seen by %d: %w", path, pid, err)
 	}
 	return ours.Dev == theirs.Dev && ours.Ino == theirs.Ino, nil
+}
+
+// reachableFromNamespace returns path if it's visible to pid in its mount namespace, and the
+// way to it through our root otherwise (/proc/<our pid>/root/<path>). That one is the same file
+// to us and to anything in our PID namespace, whatever its mount namespace.
+func reachableFromNamespace(pid uint32, path string) (string, error) {
+	visible, err := visibleInNamespace(pid, path)
+	if err != nil {
+		return "", err
+	}
+	if visible {
+		return path, nil
+	}
+	return filepath.Join(fmt.Sprintf("/proc/%d/root", os.Getpid()), path), nil
 }
 
 func saveExternalNamespaces(fs afero.Fs, namespaces []ExternalNamespace) error {
