@@ -92,3 +92,28 @@ func TestParseSlurmstepdJobID(t *testing.T) {
 		})
 	}
 }
+
+func TestPickJobPID(t *testing.T) {
+	all := func(uint32) bool { return true }
+	tests := []struct {
+		name   string
+		pids   []int
+		self   uint32
+		exists func(uint32) bool
+		want   uint32
+	}{
+		{"no processes", nil, 100, all, 0},
+		{"ourselves when in the job", []int{40, 100, 30}, 100, all, 100},
+		{"lowest when outside the job", []int{40, 30, 50}, 100, all, 30},
+		{"skips the ones gone", []int{40, 30, 50}, 100, func(pid uint32) bool { return pid != 30 }, 40},
+		{"all gone", []int{40, 30}, 100, func(uint32) bool { return false }, 0},
+		{"invalid", []int{0, -1}, 100, all, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := pickJobPID(tt.pids, tt.self, tt.exists); got != tt.want {
+				t.Fatalf("pickJobPID(%v, %d) = %d; want %d", tt.pids, tt.self, got, tt.want)
+			}
+		})
+	}
+}

@@ -135,11 +135,12 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
 		}
 
-		// When restoring from within the job, its namespaces are our own
+		// Never our own for lack of one, as we (e.g. the daemon) may well be outside of the job
 		self := uint32(os.Getpid())
 		pid := req.GetDetails().GetSlurm().GetPID()
 		if pid == 0 {
-			pid = self
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"dump has external namespaces, but no process of slurm job %d was found to take them from", req.GetDetails().GetSlurm().GetJobID())
 		}
 
 		if req.Criu == nil {
