@@ -55,13 +55,6 @@ Use `GPU=1` to include all GPU tests. If `GPU=0`, any tests that require GPU-sup
 
 Use `TAGS` to filter tests by tags. For example, `make test-regression TAGS=runc` will run all tests tagged with `runc`. `make test-regression TAGS=runc,gpu` will run all tests tagged with `runc` and `gpu`. If `gpu` tag is included, you must set `GPU=1` to run the tests, otherwise they will be skipped.
 
-### SLURM e2e tests
-
-The SLURM suite (`make test-slurm`) stands up a throwaway SLURM cluster in Docker
-and runs the tests under `test/slurm/` against it. It needs a few extra bits of
-setup (sibling checkouts, a propagator token, and optionally a prebaked node
-image), so it has its own guide: [local-slurm-ci](./local-slurm-ci/README.md).
-
 ### Test modes
 
 Each test command above runs the test suite **two times**, in different modes:
@@ -74,3 +67,7 @@ This is to allow catching bugs that may arise due to the daemon's state being pe
 Each test command is also configured to run parallel-y, configured by the `PARALLELISM` variable passed to the test command. E.g. `make test-regression PARALLELISM=4` will run at most 4 tests in parallel at a time.
 
 For mode 1, parallelism offers no benefits apart from fast execution time, as each test is completely isolated. However, for mode 2, parallelism may shed light on bugs in the daemon when it's handling multiple requests concurrently.
+
+### SLURM e2e tests
+
+The SLURM suite (`make test-slurm`) is separate from the modes above: it runs BATS once against a throwaway SLURM cluster stood up in Docker, not twice, and it does not use the daemon/DB mode split. It also needs some extra setup (sibling checkouts, a propagator token, and optionally a prebaked node image), so it has its own guide: [local-slurm-ci](./local-slurm-ci/README.md).

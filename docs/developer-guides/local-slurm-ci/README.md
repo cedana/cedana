@@ -48,32 +48,38 @@ container needs `--privileged` and the socket mount.
 
 ## Build the binaries first
 
-The test container is populated with whatever you have built locally, so build
-before you run.
+The test container is populated from your host's `/usr/local/bin` and
+`/usr/local/lib` (anything matching `*cedana*`, plus `criu`), so everything the
+cluster needs has to be installed there before you run.
 
-In this repo:
-
-```
-make all
-```
-
-That produces `cedana`, `criu` (installed as a plugin), and the Cedana plugin
-`.so` files under `/usr/local`.
-
-In `../cedana-slurm`:
+In this repo, build and install cedana and its plugins, then install CRIU
+(`make all` does not pull CRIU, it comes as a downloaded plugin):
 
 ```
 make all
+cedana plugin install criu
 ```
 
-That produces the `cedana-slurm` binary and the `spank_cedana.so`,
-`task_cedana.so`, `cli_filter_cedana.so`, and `job_submit_cedana.so` plugins.
-The test container mounts `../cedana-slurm` at `/cedana-slurm` and installs these
-during cluster setup.
+`make all` installs `cedana` to `/usr/local/bin` and the `libcedana-*.so`
+plugins (including `libcedana-slurm.so`) to `/usr/local/lib`. `cedana plugin
+install criu` puts `criu` in `/usr/local/bin`.
+
+In `../cedana-slurm`, build the SPANK/task plugins and the `cedana-slurm` binary.
+The build lands under `build/<version>/`, not `/usr/local`, so copy it in:
+
+```
+cd ../cedana-slurm
+make all
+sudo cp build/*/cedana-slurm /usr/local/bin/
+sudo cp build/*/*.so /usr/local/lib/
+```
+
+That covers `cedana-slurm`, `spank_cedana.so`, `task_cedana.so`,
+`cli_filter_cedana.so`, and `job_submit_cedana.so`.
 
 If you would rather use prebuilt artifacts instead of building, drop them in
-`../artifacts` (cedana, criu, and the slurm build outputs) and they get copied in
-automatically.
+`../artifacts` (with `cedana/cedana`, `criu/criu`, and `slurm/build/*`) and the
+`make test-slurm` step copies them into the container for you.
 
 ## Run
 
@@ -97,14 +103,15 @@ make test-slurm TAGS='cosched'
 
 ## Options
 
-All of these are passed on the `make test-slurm` command line or via the
-environment.
+Pass these on the `make test-slurm` command line (`make test-slurm VAR=value`) or
+export them before running. The SLURM-specific ones are forwarded into the test
+container so the setup script inside sees them.
 
 | Option | Default | What it does |
 |--------|---------|--------------|
 | `TAGS` | (all) | bats tag filter, e.g. `slurm,!gpu` |
-| `GPU` | `0` | `1` runs the CUDA suite in the `:cuda` image with `--gpus=all` |
-| `PARALLELISM` | `1` | bats `--jobs`; keep at 1 for SLURM, the cluster is shared state |
+| `GPU` | `0` | `1` uses the `:cuda` image with `--gpus=all` and enables the GPU tag |
+| `PARALLELISM` | `8` | bats `--jobs`. Set `PARALLELISM=1` for SLURM; the cluster is shared state and parallel jobs interfere |
 | `RETRIES` | `0` | retries per test |
 | `DEBUG` | `0` | `1` keeps more logging and leaves debug output around |
 | `SLURM_BASE_IMAGE` | (unset) | use a prebaked node image instead of building SLURM from source |
@@ -112,8 +119,17 @@ environment.
 | `LOGIN_NODES` | `1` | number of login node containers |
 | `NFS_ROOT_SQUASH` | `1` | `0` exports the shared dirs with `no_root_squash` |
 
-`COMPUTE_NODES`, `LOGIN_NODES`, and `NFS_ROOT_SQUASH` are read by the setup
-helpers and `docker-deploy.sh`; export them before running.
+The default `PARALLELISM` is 8, which is wrong for SLURM since the whole suite
+shares one cluster. Always pass `PARALLELISM=1` here:
+
+```
+make test-slurm PARALLELISM=1
+```
+
+`GPU=1` selects the CUDA image and turns on the `gpu` tag, but note the GPU
+sample tests in `test/slurm/gpu.bats` are currently skipped (GPU checkpoints
+aren't registered by the propagator yet), so a `GPU=1` run mainly exercises the
+CUDA build of the non-GPU paths.
 
 ## Prebaked images vs building from source
 
@@ -145,10 +161,12 @@ docker build -t cedana-slurm-node:slurm-25-11-5-1 \
 
 ## Debugging a failing run
 
-Get a shell in the test container without running the suite:
+Get a shell in the test container without running the suite. Use
+`test-enter-slurm`, not `test-enter`: only the SLURM variant mounts
+`../cedana-slurm` at `/cedana-slurm` and copies the plugins in.
 
 ```
-make test-enter          # or test-enter-cuda for GPU
+make test-enter-slurm            # add GPU=1 for the CUDA image
 ```
 
 From there you can bring the cluster up by hand and inspect it:
@@ -178,12 +196,14 @@ bats test/slurm/preemption.bats
 ## Cleanup
 
 A normal run tears the cluster down on its own. If a run is interrupted, the node
-containers and network can be left behind. Remove them with:
+containers and network can be left behind. This removes the controller plus any
+numbered compute and login nodes (adjust if you ran with more), the network, and
+the outer test container:
 
 ```
-docker rm -f slurm-controller slurm-compute-01 slurm-login-01
+docker rm -f $(docker ps -aq --filter 'name=^slurm-')
 docker network rm slurm-net
-docker rm -f cedana-test    # the outer test container
+docker rm -f cedana-test
 ```
 
 ## Troubleshooting
