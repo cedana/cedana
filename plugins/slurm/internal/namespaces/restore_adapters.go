@@ -179,13 +179,15 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 					return nil, status.Errorf(codes.FailedPrecondition,
 						"dump needs CRIU to run inside the job's %s namespace, which is not possible as the job is not in the host's pid namespace", name)
 				}
+				// Same as on dump, the dump dir may not be there for the job
 				if dir := req.GetCriu().GetImagesDir(); dir != "" {
-					visible, err := visibleInNamespace(pid, dir)
+					reachable, err := reachableFromNamespace(pid, dir)
 					if err != nil {
 						return nil, status.Errorf(codes.Internal, "failed to check dump dir: %v", err)
 					}
-					if !visible {
-						return nil, status.Errorf(codes.FailedPrecondition, "dump dir %s is not the same inside the job's %s namespace", dir, name)
+					if reachable != dir {
+						log.Debug().Str("dir", dir).Str("through", reachable).Msgf("dump dir is not the same inside the job's %s namespace, going through our root", name)
+						req.Criu.ImagesDir = proto.String(reachable)
 					}
 				}
 
