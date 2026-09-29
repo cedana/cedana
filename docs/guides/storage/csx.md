@@ -18,7 +18,7 @@ Once the Cedana daemon is running, start the CSX daemon:
 sudo ./csx
 ```
 
-The CSX daemon requires root privileges because it creates `tmpfs` mounts. The **storage/csx** plugin connects to its Unix socket at `/run/csx.sock`, so the CSX daemon must remain running while checkpointing or restoring.
+The CSX daemon requires root privileges because it creates `tmpfs` mounts. The **storage/csx** plugin connects to its Unix socket, configured by `CSX.SockAddr` in the [daemon configuration](../../get-started/configuration.md), so the CSX daemon must remain running while checkpointing or restoring.
 Complete documentation for the CSX daemon is work in progress.
 
 ## Checkpoint

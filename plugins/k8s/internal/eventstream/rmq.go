@@ -321,8 +321,17 @@ type checkpointReq struct {
 	Namespace string `json:"namespace"`
 	Kind      string `json:"kind"`
 	ActionId  string `json:"action_id"`
+	// Checkpoint requests are broadcast to every daemon in the org, so this scopes one
+	// to a single cluster. Optional for older propagators.
+	ClusterId *string `json:"cluster_id"`
 
 	Overrides *checkpointOverrides `json:"overrides,omitempty"`
+}
+
+// forCluster reports whether the request targets clusterID. A request without a cluster
+// id, or a daemon without one, keeps the old match-by-name behaviour.
+func (r *checkpointReq) forCluster(clusterID string) bool {
+	return r.ClusterId == nil || *r.ClusterId == "" || clusterID == "" || *r.ClusterId == clusterID
 }
 
 type checkpointOverrides struct {
@@ -376,6 +385,11 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			return rabbitmq.Ack
 		}
 		log := log.With().Str("action_id", req.ActionId).Str("kind", req.Kind).Str("pod", req.PodName).Str("namespace", req.Namespace).Logger()
+
+		if !req.forCluster(config.Global.Connection.ClusterID) {
+			log.Trace().Str("cluster_id", *req.ClusterId).Msg("checkpoint request is for another cluster")
+			return rabbitmq.Ack
+		}
 
 		query := &daemon.QueryReq{
 			Type: "k8s",
