@@ -157,7 +157,7 @@ teardown_file() {
     run cedana job kill "$jid"
 }
 
-# bats test_tags=restore,bhavik
+# bats test_tags=restore
 @test "(CSX) restore process (new job, without daemon)" {
     jid=$(unix_nano)
     code=42
