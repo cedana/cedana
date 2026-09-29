@@ -137,7 +137,9 @@ func WriteTo(src *os.File, dst io.Writer, compression string) (n int64, err erro
 	if err != nil {
 		return 0, err
 	}
-	defer writer.Close()
+	defer func() {
+		err = errors.Join(err, writer.Close())
+	}()
 
 	return src.WriteTo(writer)
 }
