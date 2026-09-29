@@ -4,7 +4,6 @@ package filesystem
 
 import (
 	"context"
-	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
@@ -32,33 +31,38 @@ func RestorePrivateMounts(next types.Restore) types.Restore {
 			return next(ctx, opts, resp, req)
 		}
 
-		// When restoring from within the job, its mounts are our own
+		// Never our own for lack of one, as we (e.g. the daemon) may well be outside of the job
 		pid := req.GetDetails().GetSlurm().GetPID()
 		if pid == 0 {
-			pid = uint32(os.Getpid())
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"dump has private mounts, but no process of slurm job %d was found to restore them through", req.GetDetails().GetSlurm().GetJobID())
 		}
 
 		private, err := namespaces.RecognizePrivateMounts(pid)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to recognize private mounts: %v", err)
 		}
-		fstypes := map[string]string{}
+		destinations := map[string]namespaces.PrivateMount{}
 		for _, m := range private {
-			fstypes[m.Mountpoint] = m.FSType
+			destinations[m.Mountpoint] = m
 		}
 
 		// Check all before touching any. If the job being restored into does not have the mount
 		// to itself, this node is set up differently and we'd be writing the job's files into
 		// what is shared with the host (e.g. its /var/tmp).
 		for _, m := range mounts {
-			fstype, ok := fstypes[m.Mountpoint]
+			destination, ok := destinations[m.Mountpoint]
 			if !ok {
 				return nil, status.Errorf(codes.FailedPrecondition,
 					"dump has the contents of a private %s on %s, but the job being restored into does not have a private mount there", m.FSType, m.Mountpoint)
 			}
-			if fstype != m.FSType {
+			if destination.FSType != m.FSType {
 				return nil, status.Errorf(codes.FailedPrecondition,
-					"dump has the contents of a private %s on %s, but the job being restored into has a %s there", m.FSType, m.Mountpoint, fstype)
+					"dump has the contents of a private %s on %s, but the job being restored into has a %s there", m.FSType, m.Mountpoint, destination.FSType)
+			}
+			if destination.OnHost {
+				return nil, status.Errorf(codes.FailedPrecondition,
+					"dump has the contents of a private %s on %s, but what the job being restored into has there is mounted on the host as well", m.FSType, m.Mountpoint)
 			}
 		}
 
