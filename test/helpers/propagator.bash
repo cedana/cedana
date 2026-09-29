@@ -57,10 +57,12 @@ checkpoint_pod() {
             --arg runc_root "$runc_root" \
             --arg pod_name "$name" \
             --arg namespace "$namespace" \
+            --arg cluster_id "$CLUSTER_ID" \
             '{
             "pod_id": $pod_id,
             "runc_root": $runc_root
-    } + (if $pod_name != "" then {"pod_name": $pod_name, "namespace": $namespace} else {} end)')
+    } + (if $pod_name != "" then {"pod_name": $pod_name, "namespace": $namespace} else {} end)
+      + (if $cluster_id != "" then {"cluster_id": $cluster_id} else {} end)')
 
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/checkpoint/pod" \
@@ -93,8 +95,10 @@ checkpoint_pod_by_name() {
     debug_log "Checkpointing pod '$namespace/$name' by name..."
 
     local payload
-    payload=$(jq -n --arg name "$name" --arg namespace "$namespace" \
-        '{"pod_name": $name, "namespace": $namespace}')
+    # The request is broadcast to every cluster; cluster_id keeps it to this one.
+    payload=$(jq -n --arg name "$name" --arg namespace "$namespace" --arg cluster_id "$CLUSTER_ID" \
+        '{"pod_name": $name, "namespace": $namespace}
+         + (if $cluster_id != "" then {"cluster_id": $cluster_id} else {} end)')
 
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/checkpoint/pod" \
