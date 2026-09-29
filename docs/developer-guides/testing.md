@@ -55,6 +55,13 @@ Use `GPU=1` to include all GPU tests. If `GPU=0`, any tests that require GPU-sup
 
 Use `TAGS` to filter tests by tags. For example, `make test-regression TAGS=runc` will run all tests tagged with `runc`. `make test-regression TAGS=runc,gpu` will run all tests tagged with `runc` and `gpu`. If `gpu` tag is included, you must set `GPU=1` to run the tests, otherwise they will be skipped.
 
+### SLURM e2e tests
+
+The SLURM suite (`make test-slurm`) stands up a throwaway SLURM cluster in Docker
+and runs the tests under `test/slurm/` against it. It needs a few extra bits of
+setup (sibling checkouts, a propagator token, and optionally a prebaked node
+image), so it has its own guide: [local-slurm-ci](./local-slurm-ci/README.md).
+
 ### Test modes
 
 Each test command above runs the test suite **two times**, in different modes:
