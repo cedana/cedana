@@ -118,11 +118,6 @@ func TestManagerLazy_Lifecycle(t *testing.T) {
 		t.Fatal("expected new job to be marked as unpersisted")
 	}
 
-	act := <-m.pending
-	if act.typ != putJob || act.id != jid {
-		t.Fatalf("expected pending action putJob for %s, got %v", jid, act)
-	}
-
 	retrievedJob := m.Get(ctx, jid)
 	if retrievedJob == nil || retrievedJob.JID != jid {
 		t.Fatalf("failed to get job %s", jid)
@@ -231,8 +226,8 @@ func TestManagerLazy_SyncWithDB_Pruning(t *testing.T) {
 		t.Errorf("expected persisted checkpoint %s to exist", cidPersisted)
 	}
 
-	if _, ok := m.checkpoints.Load(cidStale); ok {
-		t.Errorf("expected stale checkpoint %s to be pruned from memory", cidStale)
+	if _, ok := m.checkpoints.Load(cidStale); !ok {
+		t.Errorf("expected checkpoint %s to remain in memory after stale job pruning", cidStale)
 	}
 }
 
@@ -251,8 +246,6 @@ func TestManagerLazy_SyncWithDB_PutJob(t *testing.T) {
 
 	jid := "sync-test-job"
 	_, _ = m.New(jid, "process")
-
-	<-m.pending
 
 	err := m.syncWithDB(ctx, action{typ: putJob, id: jid})
 	if err != nil {

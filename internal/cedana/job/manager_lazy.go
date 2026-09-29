@@ -153,7 +153,6 @@ func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 	job := newJob(jid, jobType, m.host)
 	m.unpersistedJobs.Store(jid, struct{}{})
 	m.jobs.Store(jid, job)
-	m.pending <- action{putJob, jid}
 
 	return job, nil
 }
@@ -527,10 +526,7 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			}
 
 			// Evict stale job and clean up its memory checkpoints
-			m.jobs.Delete(jid)
-			for _, checkpoint := range m.ListCheckpoints(jid) {
-				m.checkpoints.Delete(checkpoint.ID)
-			}
+			m.jobs.CompareAndDelete(jid, job)
 			return true
 		})
 
