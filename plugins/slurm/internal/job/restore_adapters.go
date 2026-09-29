@@ -27,10 +27,14 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		details := req.GetDetails().GetSlurm()
 		jid := details.GetJobID()
 		pid := details.GetPID()
+		self := uint32(os.Getpid())
 		if pid == 0 {
-			if self := uint32(os.Getpid()); selfInJobCgroup(self, jid) {
+			if selfInJobCgroup(self, jid) {
 				pid = self
 			}
+		} else if path, err := cgroupPathFromProc(pid); err == nil && !inJobCgroup(path, jid) {
+			// Its namespaces and mounts are what the job gets restored into
+			return nil, status.Errorf(codes.FailedPrecondition, "PID %d is not of slurm job %d, it's in cgroup %s", pid, jid, path)
 		}
 
 		path, err := ResolveJobCgroupPath(jid, pid)
@@ -56,6 +60,20 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		}
 		if st == cgroups.Frozen {
 			return nil, status.Errorf(codes.FailedPrecondition, "container's cgroup unexpectedly frozen")
+		}
+
+		// We may be outside of the job (e.g. the daemon), whose processes are then the only way to
+		// its namespaces and mounts. Not having one is for whatever needs it to complain about.
+		if pid == 0 {
+			pids, err := manager.GetAllPids()
+			if err != nil {
+				log.Warn().Err(err).Uint32("job_id", jid).Msg("failed to get the processes of the job")
+			}
+			pid = pickJobPID(pids, self, processExists)
+		}
+		if pid != 0 {
+			log.Debug().Uint32("job_id", jid).Uint32("pid", pid).Msg("using process of the job for its namespaces and mounts")
+			details.PID = pid
 		}
 
 		return next(ctx, opts, resp, req)
