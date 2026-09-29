@@ -60,6 +60,11 @@ on:
         description: "Webhook URL for posting summary to Slack"
         required: false
         default: ""
+      k8s_sync_modes:
+        type: string
+        description: "Controller cluster sync modes for kubernetes tests, as a JSON array of 'sync' and/or 'no-sync'"
+        required: false
+        default: '["sync", "no-sync"]'
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -464,6 +469,7 @@ jobs:
       runner_gpu: ${{ inputs.runner_gpu }}
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
+      sync_modes: ${{ inputs.k8s_sync_modes }}
 
   eks:
     name: Kubernetes
@@ -480,6 +486,7 @@ jobs:
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
+      sync_modes: ${{ inputs.k8s_sync_modes }}
 
   eks-karpenter:
     name: Kubernetes
@@ -496,6 +503,7 @@ jobs:
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
+      sync_modes: ${{ inputs.k8s_sync_modes }}
 
   gke:
     name: Kubernetes
@@ -512,6 +520,7 @@ jobs:
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
+      sync_modes: ${{ inputs.k8s_sync_modes }}
 
   nebius:
     name: Kubernetes
@@ -528,6 +537,7 @@ jobs:
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
+      sync_modes: ${{ inputs.k8s_sync_modes }}
 
   slurm:
     name: Slurm

@@ -50,6 +50,11 @@ on:
         description: "Post test summary"
         required: false
         default: false
+      sync_modes:
+        type: string
+        description: "Controller cluster sync modes to test, as a JSON array of 'sync' and/or 'no-sync'"
+        required: false
+        default: '["sync", "no-sync"]'
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -99,13 +104,14 @@ jobs:
   k8s:
     name: Kubernetes
     runs-on: ${{ format(
-      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
+      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}-{6}/extras=s3-cache',
       github.run_id,
       matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
       matrix.arch,
       (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
       matrix.cr,
-      matrix.storage
+      matrix.storage,
+      matrix.sync
       ) }}
     timeout-minutes: 240
     needs: propagator-connectivity
@@ -127,6 +133,9 @@ jobs:
         arch:
           - amd64
           - arm64
+        # no-sync: the controller never syncs cluster state to the propagator, so every
+        # flow must work from the request alone.
+        sync: ${{ fromJSON(inputs.sync_modes) }}
         exclude:
           # XXX: To reduce overusage of CI minutes
           - platform: K3s
@@ -304,6 +313,7 @@ jobs:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}
+          CEDANA_CLUSTER_SYNC: ${{ matrix.sync == 'no-sync' && 'false' || 'true' }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large && '1' || '0' }}
@@ -390,7 +400,7 @@ jobs:
             repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
             commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
             osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
+            testEnvironment="cedana/cedana-test" reportName="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.arch }}, ${{ matrix.sync }})"
 
       - name: Set sanitized storage
         if: always()
@@ -405,7 +415,7 @@ jobs:
         id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
+          name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.sync }}
           path: |
             /tmp/report*.json
 

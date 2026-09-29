@@ -95,6 +95,10 @@ helm_install_cedana() {
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     fi
 
+    if [ -n "$CEDANA_CLUSTER_SYNC" ]; then
+        helm_cmd="$helm_cmd --set controllerManager.clusterSync=$CEDANA_CLUSTER_SYNC"
+    fi
+
     helm_cmd="$helm_cmd --wait --timeout=7m"
 
     debug "$helm_cmd" || {
@@ -103,6 +107,32 @@ helm_install_cedana() {
         return 1
     }
     debug_log "Helm chart installed"
+}
+
+# Fails unless the installed controller really runs without cluster sync. An older
+# chart ignores controllerManager.clusterSync and an older image ignores
+# CEDANA_CLUSTER_SYNC; either way the controller would keep syncing and the
+# no-sync suite would pass without testing anything.
+helm_verify_no_sync() {
+    local namespace="$1"
+    local selector="app.kubernetes.io/component=manager"
+
+    debug_log "Verifying the controller runs with cluster sync disabled..."
+
+    local env_value
+    env_value=$(kubectl get deploy -n "$namespace" -l "$selector" \
+        -o jsonpath='{.items[0].spec.template.spec.containers[?(@.name=="manager")].env[?(@.name=="CEDANA_CLUSTER_SYNC")].value}')
+    if [ "$env_value" != "false" ]; then
+        error_log "Controller deployment has CEDANA_CLUSTER_SYNC='$env_value', want 'false'; the helm chart predates controllerManager.clusterSync"
+        return 1
+    fi
+
+    wait_for_cmd 60 "kubectl logs -n $namespace -l $selector -c manager --tail=-1 | grep -q 'cluster sync to the propagator disabled'" || {
+        error_log "Controller never logged that cluster sync is disabled; the controller image predates CEDANA_CLUSTER_SYNC"
+        return 1
+    }
+
+    debug_log "Controller cluster sync is disabled"
 }
 
 helm_is_cedana_installed() {

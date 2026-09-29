@@ -94,6 +94,9 @@ setup_suite() {
 
         helm_uninstall_cedana "$CEDANA_NAMESPACE"
         helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
+        if [ "$CEDANA_CLUSTER_SYNC" = "false" ]; then
+            helm_verify_no_sync "$CEDANA_NAMESPACE"
+        fi
     else
         debug_log "Skipping helm install (SKIP_HELM=1)"
         if [ -z "$CLUSTER_ID" ]; then

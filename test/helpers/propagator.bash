@@ -39,16 +39,28 @@ checkpoint_pod() {
         return 1
     fi
 
-    debug_log "Checkpointing pod '$pod_id' with runc root '$runc_root'..."
+    # The propagator resolves a bare pod_id from pods synced by the controller, so a
+    # pod it has not seen yet (or any pod when cluster sync is off) would 404.
+    # Sending the name and namespace lets it checkpoint without synced state.
+    local pod_ref namespace="" name=""
+    pod_ref=$(kubectl get pods -A -o json 2>/dev/null |
+        jq -r --arg uid "$pod_id" '.items[] | select(.metadata.uid == $uid) | "\(.metadata.namespace) \(.metadata.name)"' | head -n 1)
+    if [ -n "$pod_ref" ]; then
+        read -r namespace name <<< "$pod_ref"
+    fi
+
+    debug_log "Checkpointing pod '$pod_id' ($namespace/$name) with runc root '$runc_root'..."
 
     local payload
     payload=$(jq -n \
             --arg pod_id "$pod_id" \
             --arg runc_root "$runc_root" \
+            --arg pod_name "$name" \
+            --arg namespace "$namespace" \
             '{
             "pod_id": $pod_id,
             "runc_root": $runc_root
-    }')
+    } + (if $pod_name != "" then {"pod_name": $pod_name, "namespace": $namespace} else {} end)')
 
     local response
     response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/checkpoint/pod" \
