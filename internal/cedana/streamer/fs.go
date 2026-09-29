@@ -466,12 +466,12 @@ func (fs *Fs) waitForStreamerReady(name string) error {
 		}
 		if !resp.HasStatus() {
 			if !resp.Exists {
-				return fmt.Errorf("file does not exist: %s", name)
+				return fmt.Errorf("%w: %s", os.ErrNotExist, name)
 			}
 		} else {
 			status := resp.GetStatus()
 			if status == img_streamer.FileStatus_DOES_NOT_EXIST {
-				return fmt.Errorf("file does not exist: %s", name)
+				return fmt.Errorf("%w: %s", os.ErrNotExist, name)
 			} else if status == img_streamer.FileStatus_NOT_READY {
 				time.Sleep(RETRY_INTERVAL)
 				continue

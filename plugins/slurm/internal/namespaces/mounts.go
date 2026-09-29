@@ -27,6 +27,10 @@ type mount struct {
 type PrivateMount struct {
 	Mountpoint string
 	FSType     string
+
+	// The host has the filesystem mounted as well, be it elsewhere or another part of it
+	// (e.g. its /dev/shm bind-mounted on the job's /var/tmp). What's in it is not the job's alone.
+	OnHost bool
 }
 
 // RecognizePrivateMounts returns the mounts of pid that differ from what the host has
@@ -56,8 +60,10 @@ func RecognizePrivateMounts(pid uint32) ([]PrivateMount, error) {
 // It's the same mount if it's the same part (root) of the same filesystem instance (device).
 func privateMounts(job, host []mount) []PrivateMount {
 	hostTop := map[string]mount{}
+	hostDevices := map[string]bool{}
 	for _, m := range host {
 		hostTop[m.Mountpoint] = m
+		hostDevices[m.Device] = true
 	}
 
 	jobTop := map[string]mount{}
@@ -75,7 +81,7 @@ func privateMounts(job, host []mount) []PrivateMount {
 		if h, ok := hostTop[mountpoint]; ok && h.Device == m.Device && h.Root == m.Root {
 			continue
 		}
-		private = append(private, PrivateMount{Mountpoint: m.Mountpoint, FSType: m.FSType})
+		private = append(private, PrivateMount{Mountpoint: m.Mountpoint, FSType: m.FSType, OnHost: hostDevices[m.Device]})
 	}
 
 	return private

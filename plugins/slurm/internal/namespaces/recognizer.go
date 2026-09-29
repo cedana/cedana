@@ -9,6 +9,10 @@ package namespaces
 // in mountinfo as an nsfs mount whose root is '<type>:[<inode>]'.
 // https://github.com/SchedMD/slurm/blob/035cb8f0b5d1fb6a375b27f2ecde106b84473ed5/src/plugins/namespace/linux/namespace_linux.c#L788-L805
 //
+// A pin alone says nothing of who the namespace belongs to, as that's also how e.g.
+// 'ip netns add' keeps a namespace (/run/netns/<name>). Only the pins of the job count,
+// those with its ID in their path.
+//
 // A PAM session module instead calls unshare() in the process opening the session
 // (slurmstepd, or sshd for pam_slurm_adopt), leaving nothing on disk. The namespace is
 // then held by that process, an ancestor of the job.
@@ -49,15 +53,17 @@ type RecognizedNamespace struct {
 	Type  configs.NamespaceType
 	Inode uint64
 
-	Holder    HolderKind
-	Path      string // always usable to open the namespace. For HolderPin it's the pin, e.g. <basepath>/<jobid>/.ns/pid
+	Holder HolderKind
+	// Where it's held. For HolderPin it's the pin, e.g. <basepath>/<jobid>/.ns/pid, as seen from the
+	// mount namespace it was found in, which may not be ours. To open the namespace, use the job's own /proc/<pid>/ns.
+	Path      string
 	HolderPID uint32 // HolderProcess: closest ancestor sharing the namespace
 }
 
-// RecognizeExternalNamespaces returns the namespaces of pid that differ from
-// the host's and are held from outside, by an nsfs mount or by an ancestor. Returns
+// RecognizeExternalNamespaces returns the namespaces of pid, a process of job jobID, that differ
+// from the host's and are held from outside, by an nsfs mount or by an ancestor. Returns
 // nothing if the process is simply running in the host's namespaces.
-func RecognizeExternalNamespaces(pid uint32) ([]RecognizedNamespace, error) {
+func RecognizeExternalNamespaces(pid uint32, jobID uint32) ([]RecognizedNamespace, error) {
 	if pid == 0 {
 		return nil, fmt.Errorf("invalid pid %d", pid)
 	}
@@ -86,7 +92,7 @@ func RecognizeExternalNamespaces(pid uint32) ([]RecognizedNamespace, error) {
 		hostInodes[t] = hostIno
 	}
 
-	pins := pinnedNamespaces(pid)
+	pins := pinnedNamespaces(pid, jobID)
 	ancestors := ancestorHolders(pid, jobInodes, hostInodes, pins)
 
 	return classifyNamespaces(jobInodes, hostInodes, pins, ancestors), nil
@@ -164,13 +170,13 @@ func ancestorHolders(
 	return holders
 }
 
-// pinnedNamespaces returns inode -> mountpoint for all visible nsfs pins.
+// pinnedNamespaces returns inode -> mountpoint for all visible nsfs pins of the job.
 //
 // Slurm makes <basepath>/<jobid> a private mount, so the pins are only visible
 // in the mount namespace where slurmstepd created them. We check ours, init's, and
 // then walk up from the job. The job's own mount namespace is of no use, as the
 // pins are created in its parent.
-func pinnedNamespaces(pid uint32) map[uint64]string {
+func pinnedNamespaces(pid uint32, jobID uint32) map[uint64]string {
 	pins := map[uint64]string{}
 	seen := map[uint64]bool{} // mount namespaces already read
 
@@ -187,7 +193,7 @@ func pinnedNamespaces(pid uint32) map[uint64]string {
 			return
 		}
 		defer file.Close()
-		if err := pinnedNamespacesFromReader(file, pins); err != nil {
+		if err := pinnedNamespacesFromReader(file, jobID, pins); err != nil {
 			log.Trace().Err(err).Msgf("failed to parse %s/mountinfo", proc)
 		}
 	}
@@ -202,11 +208,11 @@ func pinnedNamespaces(pid uint32) map[uint64]string {
 	return pins
 }
 
-// pinnedNamespacesFromReader adds the nsfs pins found in mountinfo to pins. First pin for an inode wins.
-func pinnedNamespacesFromReader(mountinfo io.Reader, pins map[uint64]string) error {
+// pinnedNamespacesFromReader adds the nsfs pins of the job found in mountinfo to pins. First pin for an inode wins.
+func pinnedNamespacesFromReader(mountinfo io.Reader, jobID uint32, pins map[uint64]string) error {
 	mounts, err := parseMountinfo(mountinfo)
 	for _, m := range mounts {
-		if m.FSType != nsfsType {
+		if m.FSType != nsfsType || !pinOfJob(m.Mountpoint, jobID) {
 			continue
 		}
 		_, ino, ok := parseNsfsRoot(m.Root)
@@ -218,6 +224,18 @@ func pinnedNamespacesFromReader(mountinfo io.Reader, pins map[uint64]string) err
 		}
 	}
 	return err
+}
+
+// pinOfJob checks for the job's ID in the path of the pin, as in <basepath>/<jobid>/.ns/<type>
+// (namespace/linux) or <basepath>/<jobid>/.ns (job_container/tmpfs)
+func pinOfJob(mountpoint string, jobID uint32) bool {
+	id := strconv.FormatUint(uint64(jobID), 10)
+	for _, component := range strings.Split(mountpoint, "/") {
+		if component == id {
+			return true
+		}
+	}
+	return false
 }
 
 // parseNsfsRoot parses the root of an nsfs mount, e.g. 'pid:[4026532715]'
