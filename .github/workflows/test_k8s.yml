@@ -54,7 +54,7 @@ on:
         type: string
         description: "Controller cluster sync modes to test, as a JSON array of 'sync' and/or 'no-sync'"
         required: false
-        default: '["sync", "no-sync"]'
+        default: '["no-sync"]'
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}

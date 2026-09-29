@@ -57,8 +57,9 @@ jobs:
       criu_version: criu-dev
       gpu_version: main
       streamer_version: main
-      helm_chart_version: main
-      controller_version: main
+      # XXX: pinned to the no-sync branches until they merge; revert both to main then.
+      helm_chart_version: swarnim/controller-no-sync
+      controller_version: swarnim/controller-no-sync
       containerd_runtime_version: cedana
       slurm_version: main
       csx_version: main
