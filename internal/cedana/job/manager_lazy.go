@@ -32,6 +32,7 @@ type ManagerLazy struct {
 	checkpoints        sync.Map
 	deletedJobs        sync.Map // to keep track of deleted jobs
 	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
+	unpersistedJobs    sync.Map // to keep track of jobs created locally but not yet synced to DB
 
 	host    *daemon.Host
 	plugins plugins.Manager
@@ -72,13 +73,17 @@ func NewManagerLazy(
 	}
 
 	manager := &ManagerLazy{
-		jobs:    sync.Map{},
-		pending: make(chan action, 64),
-		wg:      &sync.WaitGroup{},
-		host:    host,
-		plugins: plugins,
-		gpus:    gpuManager,
-		db:      db,
+		jobs:               sync.Map{},
+		checkpoints:        sync.Map{},
+		deletedJobs:        sync.Map{},
+		deletedCheckpoints: sync.Map{},
+		unpersistedJobs:    sync.Map{},
+		pending:            make(chan action, 64),
+		wg:                 &sync.WaitGroup{},
+		host:               host,
+		plugins:            plugins,
+		gpus:               gpuManager,
+		db:                 db,
 	}
 
 	err := manager.Sync(lifetime)
@@ -146,7 +151,9 @@ func (m *ManagerLazy) New(jid string, jobType string) (*Job, error) {
 	}
 
 	job := newJob(jid, jobType, m.host)
+	m.unpersistedJobs.Store(jid, struct{}{})
 	m.jobs.Store(jid, job)
+	m.pending <- action{putJob, jid}
 
 	return job, nil
 }
@@ -187,6 +194,7 @@ func (m *ManagerLazy) Delete(jid string) {
 		return
 	}
 	m.jobs.Delete(jid)
+	m.unpersistedJobs.Delete(jid)
 
 	m.deletedJobs.Store(jid, job)
 
@@ -473,8 +481,12 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 		if err != nil {
 			return err
 		}
+
+		dbJIDs := make(map[string]struct{}, len(jobProtos))
 		for _, proto := range jobProtos {
 			job := fromProto(proto)
+			dbJIDs[job.JID] = struct{}{}
+
 			_, deleted := m.deletedJobs.Load(job.JID)
 
 			if !deleted && (!m.Exists(job.JID) || job.IsRemote()) {
@@ -491,19 +503,50 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 			}
 		}
 
-		// TODO: Can also remove stale jobs from memory. But need to be careful
-		// about race conditions. For now, we just keep them in memory until daemon
-		// is restarted.
+		// Prune stale jobs from memory that no longer exist in the DB,
+		// are not running locally, and are not pending initial DB sync or local deletion.
+		m.jobs.Range(func(key, val any) bool {
+			jid := key.(string)
+			job := val.(*Job)
+
+			// Keep if present in DB
+			if _, inDB := dbJIDs[jid]; inDB {
+				return true
+			}
+			// Keep if pending local deletion sync
+			if _, deleted := m.deletedJobs.Load(jid); deleted {
+				return true
+			}
+			// Keep if newly created and pending initial DB insert sync
+			if _, unpersisted := m.unpersistedJobs.Load(jid); unpersisted {
+				return true
+			}
+			// Keep if currently running locally
+			if job.IsRunning() {
+				return true
+			}
+
+			// Evict stale job and clean up its memory checkpoints
+			m.jobs.Delete(jid)
+			for _, checkpoint := range m.ListCheckpoints(jid) {
+				m.checkpoints.Delete(checkpoint.ID)
+			}
+			return true
+		})
 
 	case putJob:
 		jid := action.id
 		job, ok := m.jobs.Load(jid)
 		if ok {
 			err = m.db.PutJob(ctx, job.(*Job).GetProto())
+			if err == nil {
+				m.unpersistedJobs.Delete(jid)
+			}
 		} else if _, deleted := m.deletedJobs.Load(jid); deleted {
 			err = m.db.DeleteJob(ctx, jid)
 			if err == nil {
 				m.deletedJobs.Delete(jid)
+				m.unpersistedJobs.Delete(jid)
 			}
 		}
 	case putCheckpoint:
