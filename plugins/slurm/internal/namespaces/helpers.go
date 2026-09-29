@@ -2,6 +2,7 @@ package namespaces
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -164,7 +165,8 @@ func saveExternalNamespaces(fs afero.Fs, namespaces []ExternalNamespace) error {
 func loadExternalNamespaces(fs afero.Fs) ([]ExternalNamespace, error) {
 	file, err := fs.Open(EXTERNAL_NAMESPACES_FILE)
 	if err != nil {
-		if exists, _ := afero.Exists(fs, EXTERNAL_NAMESPACES_FILE); !exists {
+		// Anything else (e.g. a failing streamer) is not the same as there being none
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, err
