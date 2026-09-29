@@ -212,13 +212,13 @@ var restoreCmd = &cobra.Command{
 			}
 
 			data := cedana.Profile()
-			if config.Global.Profiling.Enabled && data != nil {
-				profiling.Print(data, features.Theme())
-				if config.Global.Profiling.Path != "" {
-					profiling.WriteJSON(config.Global.Profiling.Path, data)
-				}
+			if config.Global.Profiling.Enabled && data != nil && config.Global.Profiling.Path != "" {
+				profiling.WriteJSON(config.Global.Profiling.Path, data)
 			}
 			cedana.Wait()
+			if config.Global.Profiling.Enabled && data != nil {
+				profiling.Print(data, features.Theme())
+			}
 
 			os.Exit(<-code)
 		} else {
