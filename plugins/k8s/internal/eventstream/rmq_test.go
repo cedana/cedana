@@ -56,3 +56,25 @@ func TestCheckpointErrorDoesNotReplaceActionID(t *testing.T) {
 		t.Fatalf("terminal error missing from payload: %q", decoded.Info.Error)
 	}
 }
+
+func TestCheckpointReqForCluster(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	cases := []struct {
+		name    string
+		req     *string
+		daemon  string
+		matches bool
+	}{
+		{"same cluster", ptr("a"), "a", true},
+		{"other cluster", ptr("b"), "a", false},
+		{"request without cluster", nil, "a", true},
+		{"request with empty cluster", ptr(""), "a", true},
+		{"daemon without cluster", ptr("b"), "", true},
+	}
+	for _, c := range cases {
+		req := checkpointReq{ClusterId: c.req}
+		if got := req.forCluster(c.daemon); got != c.matches {
+			t.Errorf("%s: forCluster = %v, want %v", c.name, got, c.matches)
+		}
+	}
+}
