@@ -572,14 +572,17 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 		id := action.id
 		checkpoint, ok := m.checkpoints.Load(id)
 		if ok {
-			err = m.db.PutCheckpoint(ctx, checkpoint.(*daemon.Checkpoint))
+			cp := checkpoint.(*daemon.Checkpoint)
+
+			err = m.db.PutCheckpoint(ctx, cp)
 			if err == nil {
 				m.cpMu.Lock()
 				delete(m.pendingCheckpoints, id)
-				if !m.Exists(checkpoint.(*daemon.Checkpoint).JID) {
+				m.cpMu.Unlock()
+
+				if !m.Exists(cp.JID) {
 					m.checkpoints.Delete(id)
 				}
-				m.cpMu.Unlock()
 			}
 		} else if _, deleted := m.deletedCheckpoints.Load(id); deleted {
 			err = m.db.DeleteCheckpoint(ctx, id)
