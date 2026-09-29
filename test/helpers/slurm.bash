@@ -353,6 +353,12 @@ cancel_slurm_job() {
 # C/R Test Orchestrator
 ##############################
 
+# Runs an action sequence (e.g. SUBMIT_DUMP_RESTORE) against a sample job.
+#
+# Set SLURM_JOB_CHECK to the name of a function to run extra checks on the
+# job: it is called as `<fn> pre-dump <job_id>` just before each dump and as
+# `<fn> post-restore <job_id>` once a restored job is running. A non-zero
+# return fails the sequence.
 test_slurm_job() {
     local action_sequence="$1"
     local sbatch_file="$2"
@@ -407,6 +413,14 @@ test_slurm_job() {
                 error="Cannot DUMP — no active job ID"
                 break
             }
+
+            if [ -n "${SLURM_JOB_CHECK:-}" ]; then
+                "$SLURM_JOB_CHECK" pre-dump "$job_id" ||
+                    {
+                        error="Pre-dump check failed for job $job_id"
+                        break
+                    }
+            fi
 
             local _host
             _host="$(_get_batch_host "$job_id")"
@@ -552,6 +566,14 @@ test_slurm_job() {
                 }
 
             info_log "Restored job $job_id is running"
+
+            if [ -n "${SLURM_JOB_CHECK:-}" ]; then
+                "$SLURM_JOB_CHECK" post-restore "$job_id" ||
+                    {
+                        error="Post-restore check failed for job $job_id"
+                        break
+                    }
+            fi
             submitted=true
             ;;
 
