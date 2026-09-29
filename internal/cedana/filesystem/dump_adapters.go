@@ -170,7 +170,8 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			// can be resumed on failure.
 			//
 			// When async, the response is returned before the compress/upload is complete, so the
-			// checksum cannot be set on it.
+			// checksum cannot be set on it. Instead, the path is marked as pending on the response
+			// and the checksum is available from the upload's result once it has ended.
 
 			if async {
 				defer func() {
@@ -187,12 +188,17 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					// context will be canceled after the dump completes.
 					compressCtx := context.WithoutCancel(ctx)
 
+					finish := opts.Uploads.Start(path)
+					resp.Pending = append(resp.Pending, path)
+
 					opts.WG.Go(func() {
 						log.Info().Msg("async dump compress/upload started")
 						if compressErr := compress(compressCtx); compressErr != nil {
 							log.Error().Err(compressErr).Msg("async compress/upload failed")
+							finish("", compressErr)
 						} else {
 							log.Info().Msg("async dump compress/upload completed")
+							finish(checksum, nil)
 						}
 					})
 				}()

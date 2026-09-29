@@ -115,3 +115,40 @@ func TestCheckpointInfoChecksum(t *testing.T) {
 		t.Fatal("checkpoint payload must omit the checksum when none was computed")
 	}
 }
+
+func TestCheckpointInfoUploadPending(t *testing.T) {
+	info := checkpointInfo{
+		ActionId:      "checkpoint-action",
+		Status:        "success",
+		Path:          "s3://checkpoints/dump.tar.lz4",
+		UploadPending: true,
+	}
+
+	payload, err := json.Marshal(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if string(fields["upload_pending"]) != "true" {
+		t.Fatalf("checkpoint payload must say that the upload is pending: %s", fields["upload_pending"])
+	}
+
+	info.UploadPending = false
+
+	payload, err = json.Marshal(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fields = map[string]json.RawMessage{}
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := fields["upload_pending"]; ok {
+		t.Fatal("checkpoint payload must omit upload_pending for a checkpoint that is already uploaded")
+	}
+}

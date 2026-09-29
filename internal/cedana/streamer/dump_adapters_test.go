@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -17,7 +19,45 @@ import (
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/upload"
 )
+
+// Local storage that reports itself as remote, and that can be made
+// to fail the upload of one of the shards.
+type remoteStorage struct {
+	filesystem.Storage
+	failOn string
+}
+
+func (s *remoteStorage) IsRemote() bool {
+	return true
+}
+
+func (s *remoteStorage) Create(ctx context.Context, path string) (io.WriteCloser, error) {
+	if s.failOn != "" && filepath.Base(path) == s.failOn {
+		return nil, errors.New("storage unavailable")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), filesystem.DUMP_DIR_PERMS); err != nil {
+		return nil, err
+	}
+	return s.Storage.Create(ctx, path)
+}
+
+// Checksum of a streamed dump, recomputed from its shards as stored
+func checksumOfShards(t *testing.T, path string, streams int32, ext string) string {
+	var manifest string
+	for i := range streams {
+		shard := fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext
+		data, err := os.ReadFile(filepath.Join(path, shard))
+		if err != nil {
+			t.Fatalf("failed to read shard %s: %v", shard, err)
+		}
+		sum := sha256.Sum256(data)
+		manifest += shard + " sha256:" + hex.EncodeToString(sum[:]) + "\n"
+	}
+	sum := sha256.Sum256([]byte(manifest))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
 
 // Plugin manager that reports the plugins required for streaming as installed
 type streamingPlugins struct {
@@ -105,22 +145,110 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 					t.Fatalf("checksum is for %s, which is not in paths %v", path, resp.Paths)
 				}
 
-				// Recompute from the shards as stored
-				var manifest string
-				for i := range streams {
-					shard := fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext
-					data, err := os.ReadFile(filepath.Join(path, shard))
-					if err != nil {
-						t.Fatalf("failed to read shard %s: %v", shard, err)
-					}
-					sum := sha256.Sum256(data)
-					manifest += shard + " sha256:" + hex.EncodeToString(sum[:]) + "\n"
-				}
-				sum := sha256.Sum256([]byte(manifest))
-				if expected := "sha256:" + hex.EncodeToString(sum[:]); checksum != expected {
+				if expected := checksumOfShards(t, path, streams, ext); checksum != expected {
 					t.Fatalf("checksum is %s, expected %s", checksum, expected)
 				}
 			}
 		})
 	}
+
+	t.Run("Async", func(t *testing.T) {
+		opts := types.Opts{
+			WG:           &sync.WaitGroup{},
+			CRIUCallback: &criu_client.NotifyCallbackMulti{},
+			Storage:      &remoteStorage{},
+			Plugins:      &streamingPlugins{streamerBinary: streamerBinary},
+			Uploads:      upload.NewRegistry(),
+		}
+		req := &daemon.DumpReq{
+			Dir:         t.TempDir(),
+			Name:        fmt.Sprintf("dump-async-%d", os.Getpid()),
+			Compression: "lz4",
+			Streams:     streams,
+			Async:       true,
+		}
+		resp := &daemon.DumpResp{}
+
+		_, err := DumpFilesystem(streams)(dumpImages)(ctx, opts, resp, req)
+		if err != nil {
+			t.Fatalf("dump failed: %v", err)
+		}
+
+		if len(resp.Paths) != 1 {
+			t.Fatalf("expected 1 path, got %v", resp.Paths)
+		}
+		if !slices.Equal(resp.Pending, resp.Paths) {
+			t.Fatalf("expected the path to be pending, got %v", resp.Pending)
+		}
+		path := resp.Paths[0]
+
+		// The shards are written before they are uploaded, so the checksum is already known
+		checksum := resp.Checksums[path]
+		if checksum == "" {
+			t.Fatalf("expected a checksum, got %v", resp.Checksums)
+		}
+
+		result, err := opts.Uploads.Wait(ctx, path)
+		if err != nil {
+			t.Fatalf("failed to wait for upload: %v", err)
+		}
+		if result.Err != nil {
+			t.Fatalf("upload failed: %v", result.Err)
+		}
+		if result.Checksum != checksum {
+			t.Fatalf("upload has checksum %s, response has %s", result.Checksum, checksum)
+		}
+		if expected := checksumOfShards(t, path, streams, ".lz4"); checksum != expected {
+			t.Fatalf("checksum is %s, expected %s", checksum, expected)
+		}
+
+		opts.WG.Wait()
+	})
+
+	t.Run("AsyncUploadFails", func(t *testing.T) {
+		opts := types.Opts{
+			WG:           &sync.WaitGroup{},
+			CRIUCallback: &criu_client.NotifyCallbackMulti{},
+			Storage:      &remoteStorage{failOn: fmt.Sprintf(IMG_FILE_FORMATTER, 1) + ".lz4"},
+			Plugins:      &streamingPlugins{streamerBinary: streamerBinary},
+			Uploads:      upload.NewRegistry(),
+		}
+		req := &daemon.DumpReq{
+			Dir:         t.TempDir(),
+			Name:        fmt.Sprintf("dump-async-fails-%d", os.Getpid()),
+			Compression: "lz4",
+			Streams:     streams,
+			Async:       true,
+		}
+		resp := &daemon.DumpResp{}
+
+		// The dump itself succeeds, as the upload happens after it has returned
+		_, err := DumpFilesystem(streams)(dumpImages)(ctx, opts, resp, req)
+		if err != nil {
+			t.Fatalf("dump failed: %v", err)
+		}
+		path := resp.Paths[0]
+
+		result, err := opts.Uploads.Wait(ctx, path)
+		if err != nil {
+			t.Fatalf("failed to wait for upload: %v", err)
+		}
+		if result.Err == nil {
+			t.Fatal("expected the upload to fail")
+		}
+		if result.Checksum != "" {
+			t.Fatalf("expected no checksum for a failed upload, got %s", result.Checksum)
+		}
+
+		opts.WG.Wait()
+
+		// The shards that did get uploaded must not be left behind
+		shards, err := filepath.Glob(filepath.Join(path, "img-*"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(shards) != 0 {
+			t.Fatalf("expected no remote shards after a failed upload, got %v", shards)
+		}
+	})
 }

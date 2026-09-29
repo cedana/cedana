@@ -140,12 +140,12 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			// Sets the checksum of the dump, which is that of a manifest of its shards as written.
 			// When async, the shards are first written locally and then uploaded as is, so the checksum
 			// is already known before the upload.
-			setChecksum := func(shardChecksums []string) {
+			setChecksum := func(shardChecksums []string) (checksum string) {
 				manifest := &cedana_io.Manifest{}
 				for i, checksum := range shardChecksums {
 					manifest.Add(fmt.Sprintf(IMG_FILE_FORMATTER, i)+ext, checksum)
 				}
-				checksum := manifest.Sum()
+				checksum = manifest.Sum()
 				if checksum == "" {
 					return
 				}
@@ -154,12 +154,17 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					resp.Checksums = map[string]string{}
 				}
 				resp.Checksums[path] = checksum
+				return
 			}
 
 			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
 			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`
 			if async {
+				remoteShard := func(i int32) string {
+					return path + string(os.PathSeparator) + fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext // do not use filepath.Join as it removes a slash
+				}
+
 				upload := func(ctx context.Context) error {
 					var wg sync.WaitGroup
 					errCh := make(chan error, streams)
@@ -170,7 +175,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							defer wg.Done()
 
 							localPath := filepath.Join(imagesDirectory, fmt.Sprintf(IMG_FILE_FORMATTER, i)+ext)
-							remotePath := path + string(os.PathSeparator) + fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext // do not use filepath.Join as it removes a slash
+							remotePath := remoteShard(i)
 
 							src, err := streamStorage.Open(ctx, localPath)
 							if err != nil {
@@ -184,9 +189,11 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 								errCh <- fmt.Errorf("failed to create remote shard %d: %w", i, err)
 								return
 							}
-							defer dst.Close()
 
-							if _, err := io.Copy(dst, src); err != nil {
+							// A remote shard is only complete once it has been closed
+							_, err = io.Copy(dst, src)
+							err = errors.Join(err, dst.Close())
+							if err != nil {
 								errCh <- fmt.Errorf("failed to upload shard %d: %w", i, err)
 							}
 						}(i)
@@ -200,6 +207,15 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						uploadErr = errors.Join(uploadErr, e)
 					}
 
+					// Do not leave behind a checkpoint that is only partly uploaded
+					if uploadErr != nil {
+						for i := range streams {
+							if err := storage.Delete(ctx, remoteShard(i)); err != nil {
+								log.Debug().Err(err).Str("path", remoteShard(i)).Msg("could not remove remote shard after failed upload")
+							}
+						}
+					}
+
 					os.RemoveAll(imagesDirectory)
 					return uploadErr
 				}
@@ -210,16 +226,23 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					if err != nil {
 						return
 					}
-					setChecksum(shardChecksums)
+					checksum := setChecksum(shardChecksums)
 
 					// Use a detached context for async upload since the parent request
 					// context will be canceled after the dump completes.
 					uploadCtx := context.WithoutCancel(ctx)
 
+					finish := opts.Uploads.Start(path)
+					resp.Pending = append(resp.Pending, path)
+
 					opts.WG.Go(func() {
 						log.Info().Msg("async dump upload started")
 						if uploadErr := upload(uploadCtx); uploadErr != nil {
 							log.Error().Err(uploadErr).Msg("async upload failed")
+							finish("", uploadErr)
+						} else {
+							log.Info().Msg("async dump upload completed")
+							finish(checksum, nil)
 						}
 					})
 				}()

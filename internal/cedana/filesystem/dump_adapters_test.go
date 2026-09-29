@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -15,6 +17,7 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/upload"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,6 +28,19 @@ type remoteStorage struct {
 
 func (s *remoteStorage) IsRemote() bool {
 	return true
+}
+
+// Remote storage that cannot be written to
+type failingStorage struct {
+	remoteStorage
+}
+
+func (s *failingStorage) Create(_ context.Context, path string) (io.WriteCloser, error) {
+	return nil, errors.New("storage unavailable")
+}
+
+func (s *failingStorage) Delete(_ context.Context, path string) error {
+	return nil
 }
 
 // Stands in for the CRIU dump. Writes images to the images directory,
@@ -124,6 +140,7 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 			WG:           &sync.WaitGroup{},
 			CRIUCallback: &criu_client.NotifyCallbackMulti{},
 			Storage:      &remoteStorage{},
+			Uploads:      upload.NewRegistry(),
 		}
 		req := &daemon.DumpReq{
 			Dir:         t.TempDir(),
@@ -145,14 +162,90 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 		if len(resp.Checksums) != 0 {
 			t.Fatalf("expected no checksum, got %v", resp.Checksums)
 		}
+		if !slices.Equal(resp.Pending, resp.Paths) {
+			t.Fatalf("expected the path to be pending, got %v", resp.Pending)
+		}
+
+		result, err := opts.Uploads.Wait(ctx, resp.Paths[0])
+		if err != nil {
+			t.Fatalf("failed to wait for upload: %v", err)
+		}
+		if result.Err != nil {
+			t.Fatalf("upload failed: %v", result.Err)
+		}
+		if expected := checksumOfFile(t, resp.Paths[0]); result.Checksum != expected {
+			t.Fatalf("checksum is %s, expected %s", result.Checksum, expected)
+		}
+
+		opts.WG.Wait()
+
+		if len(resp.Checksums) != 0 {
+			t.Fatalf("expected no checksum on the response after upload, got %v", resp.Checksums)
+		}
+	})
+
+	t.Run("AsyncUploadFails", func(t *testing.T) {
+		opts := types.Opts{
+			WG:           &sync.WaitGroup{},
+			CRIUCallback: &criu_client.NotifyCallbackMulti{},
+			Storage:      &failingStorage{},
+			Uploads:      upload.NewRegistry(),
+		}
+		req := &daemon.DumpReq{
+			Dir:         t.TempDir(),
+			Name:        fmt.Sprintf("dump-async-fails-%d", os.Getpid()),
+			Compression: "lz4",
+			Async:       true,
+		}
+		resp := &daemon.DumpResp{}
+
+		// The dump itself succeeds, as the upload happens after it has returned
+		_, err := DumpFilesystem(dumpImages(t))(ctx, opts, resp, req)
+		if err != nil {
+			t.Fatalf("dump failed: %v", err)
+		}
+		if !slices.Equal(resp.Pending, resp.Paths) {
+			t.Fatalf("expected the path to be pending, got %v", resp.Pending)
+		}
+
+		result, err := opts.Uploads.Wait(ctx, resp.Paths[0])
+		if err != nil {
+			t.Fatalf("failed to wait for upload: %v", err)
+		}
+		if result.Err == nil {
+			t.Fatal("expected the upload to fail")
+		}
+		if result.Checksum != "" {
+			t.Fatalf("expected no checksum for a failed upload, got %s", result.Checksum)
+		}
+
+		opts.WG.Wait()
+		os.RemoveAll(filepath.Join(os.TempDir(), req.Name))
+	})
+
+	t.Run("AsyncUntracked", func(t *testing.T) {
+		opts := types.Opts{
+			WG:           &sync.WaitGroup{},
+			CRIUCallback: &criu_client.NotifyCallbackMulti{},
+			Storage:      &remoteStorage{},
+		}
+		req := &daemon.DumpReq{
+			Dir:         t.TempDir(),
+			Name:        fmt.Sprintf("dump-async-untracked-%d", os.Getpid()),
+			Compression: "lz4",
+			Async:       true,
+		}
+		resp := &daemon.DumpResp{}
+
+		_, err := DumpFilesystem(dumpImages(t))(ctx, opts, resp, req)
+		if err != nil {
+			t.Fatalf("dump failed: %v", err)
+		}
 
 		opts.WG.Wait()
 
 		if _, err := os.Stat(resp.Paths[0]); err != nil {
 			t.Fatalf("expected dump to be uploaded: %v", err)
-		}
-		if len(resp.Checksums) != 0 {
-			t.Fatalf("expected no checksum after upload, got %v", resp.Checksums)
 		}
 	})
 }
