@@ -96,7 +96,7 @@ func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		pid := req.GetDetails().GetSlurm().GetPID()
 
-		recognized, err := RecognizeExternalNamespaces(pid)
+		recognized, err := RecognizeExternalNamespaces(pid, req.GetDetails().GetSlurm().GetJobID())
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "failed to recognize external namespaces: %v", err)
 		}
@@ -143,8 +143,9 @@ func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
 							dir, name, ns.Holder, ns.Path)
 					}
 				}
+				// Not by where it's held, as a pin may only be visible from the mount namespace it was made in
 				log.Debug().Msgf("running CRIU inside external %s namespace", name)
-				opts.CRIU.SetMountNamespace(ns.Path)
+				opts.CRIU.SetMountNamespace(nsPathOf(ns.Type, pid))
 
 			default:
 				log.Warn().Msgf("%s, skipping external %s namespace handling", reason, name)
