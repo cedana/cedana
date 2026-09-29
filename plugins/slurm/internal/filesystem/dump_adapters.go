@@ -46,12 +46,17 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 				log.Debug().Str("mountpoint", m.Mountpoint).Str("fstype", m.FSType).Msg("not dumping private mount that is not a tmpfs")
 				continue
 			}
+			if m.OnHost {
+				// Not the job's alone (e.g. the host's /dev/shm bind-mounted elsewhere), and will be there still
+				log.Debug().Str("mountpoint", m.Mountpoint).Msg("not dumping private mount of a tmpfs that the host has mounted as well")
+				continue
+			}
 
-			used, err := usedBytes(pathInJob(pid, m.Mountpoint))
+			size, err := contentSize(pathInJob(pid, m.Mountpoint))
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get size of private mount %s: %v", m.Mountpoint, err)
 			}
-			total += used
+			total += size
 
 			mounts = append(mounts, privateMount{
 				Mountpoint: m.Mountpoint,
@@ -64,7 +69,8 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		if max := maxPrivateMountsSize(); total > max {
+		max := maxPrivateMountsSize()
+		if total > max {
 			return nil, status.Errorf(codes.FailedPrecondition,
 				"private mounts of the job hold %d bytes, more than the %d allowed in a dump (set %s to change)", total, max, PRIVATE_MOUNTS_MAX_SIZE_ENV)
 		}
@@ -82,11 +88,14 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 		// Callbacks run in reverse order of registration, so this is before any compression/upload of the dump.
 		opts.CRIUCallback.Include(&criu_client.NotifyCallback{
 			PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) error {
+				left := max // the job was still running when checked above
 				for _, m := range mounts {
 					log.Debug().Str("mountpoint", m.Mountpoint).Str("archive", m.Archive).Msg("dumping private mount")
-					if err := archiveToDump(dumpFs, m.Archive, pathInJob(pid, m.Mountpoint)); err != nil {
+					written, err := archiveToDump(dumpFs, m.Archive, pathInJob(pid, m.Mountpoint), left)
+					if err != nil {
 						return fmt.Errorf("failed to dump private mount %s: %w", m.Mountpoint, err)
 					}
+					left -= written
 				}
 				return nil
 			},
@@ -96,10 +105,10 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 	}
 }
 
-func archiveToDump(dumpFs afero.Fs, name, dir string) (err error) {
+func archiveToDump(dumpFs afero.Fs, name, dir string, max uint64) (written uint64, err error) {
 	file, err := dumpFs.Create(name)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer func() {
 		if cerr := file.Close(); err == nil {
@@ -107,5 +116,5 @@ func archiveToDump(dumpFs afero.Fs, name, dir string) (err error) {
 		}
 	}()
 
-	return archiveDir(dir, file)
+	return archiveDir(dir, file, max)
 }

@@ -4,6 +4,7 @@ package filesystem
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -23,7 +23,8 @@ const (
 	PRIVATE_MOUNTS_PREFIX = "private_mount"
 
 	// A tmpfs is memory, so it's bound to be small next to the job's own. This is only
-	// to not quietly make a huge dump out of one that isn't.
+	// to not quietly make a huge dump out of one that isn't, going by the size of the files
+	// in it as that's what ends up in the dump. A sparse file takes up next to nothing of the tmpfs.
 	PRIVATE_MOUNTS_MAX_SIZE     = 1 << 30
 	PRIVATE_MOUNTS_MAX_SIZE_ENV = "CEDANA_SLURM_PRIVATE_MOUNTS_MAX_SIZE"
 )
@@ -37,14 +38,6 @@ type privateMount struct {
 // pathInJob is path as seen from the mount namespace of pid
 func pathInJob(pid uint32, path string) string {
 	return filepath.Join(fmt.Sprintf("/proc/%d/root", pid), path)
-}
-
-func usedBytes(path string) (uint64, error) {
-	var st unix.Statfs_t
-	if err := unix.Statfs(path, &st); err != nil {
-		return 0, err
-	}
-	return (st.Blocks - st.Bfree) * uint64(st.Bsize), nil
 }
 
 func maxPrivateMountsSize() uint64 {
@@ -72,7 +65,8 @@ func savePrivateMounts(fs afero.Fs, mounts []privateMount) error {
 func loadPrivateMounts(fs afero.Fs) ([]privateMount, error) {
 	file, err := fs.Open(PRIVATE_MOUNTS_FILE)
 	if err != nil {
-		if exists, _ := afero.Exists(fs, PRIVATE_MOUNTS_FILE); !exists {
+		// Anything else (e.g. a failing streamer) is not the same as there being none
+		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, err
