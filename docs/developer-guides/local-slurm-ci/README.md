@@ -72,22 +72,26 @@ cd ../cedana-slurm
 make all
 sudo cp build/*/cedana-slurm /usr/local/bin/
 sudo cp build/*/*.so /usr/local/lib/
+cd -    # back to the cedana repo
 ```
 
 That covers `cedana-slurm`, `spank_cedana.so`, `task_cedana.so`,
 `cli_filter_cedana.so`, and `job_submit_cedana.so`.
 
 If you would rather use prebuilt artifacts instead of building, drop them in
-`../artifacts` (with `cedana/cedana`, `criu/criu`, and `slurm/build/*`) and the
-`make test-slurm` step copies them into the container for you.
+`../artifacts` and the `make test-slurm` step copies them into the container for
+you. It looks for `cedana/cedana`, `criu/criu`, `slurm/build/cedana-slurm`,
+`slurm/build/*.so`, and `plugin-slurm/libcedana-slurm.so`.
 
 ## Run
+
+From the `cedana` repo root:
 
 ```
 export CEDANA_URL=<propagator-url>
 export CEDANA_AUTH_TOKEN=<token>
 
-make test-slurm
+make test-slurm PARALLELISM=1
 ```
 
 To run a subset, use bats tags. The suites are tagged `slurm`, plus `gpu`,
@@ -110,7 +114,7 @@ container so the setup script inside sees them.
 | Option | Default | What it does |
 |--------|---------|--------------|
 | `TAGS` | (all) | bats tag filter, e.g. `slurm,!gpu` |
-| `GPU` | `0` | `1` uses the `:cuda` image with `--gpus=all` and enables the GPU tag |
+| `GPU` | `0` | `1` uses the `:cuda` image with `--gpus=all`; GPU tests run instead of self-skipping |
 | `PARALLELISM` | `8` | bats `--jobs`. Set `PARALLELISM=1` for SLURM; the cluster is shared state and parallel jobs interfere |
 | `RETRIES` | `0` | retries per test |
 | `DEBUG` | `0` | `1` keeps more logging and leaves debug output around |
@@ -118,6 +122,7 @@ container so the setup script inside sees them.
 | `COMPUTE_NODES` | `1` | number of compute node containers |
 | `LOGIN_NODES` | `1` | number of login node containers |
 | `NFS_ROOT_SQUASH` | `1` | `0` exports the shared dirs with `no_root_squash` |
+| `PREEMPT` | `0` | `1` configures preemptible partitions; required or the preemption tests self-skip |
 
 The default `PARALLELISM` is 8, which is wrong for SLURM since the whole suite
 shares one cluster. Always pass `PARALLELISM=1` here:
@@ -126,10 +131,17 @@ shares one cluster. Always pass `PARALLELISM=1` here:
 make test-slurm PARALLELISM=1
 ```
 
-`GPU=1` selects the CUDA image and turns on the `gpu` tag, but note the GPU
-sample tests in `test/slurm/gpu.bats` are currently skipped (GPU checkpoints
-aren't registered by the propagator yet), so a `GPU=1` run mainly exercises the
-CUDA build of the non-GPU paths.
+Two things to know about GPU coverage. The sample tests in
+`test/slurm/gpu.bats` are skipped unconditionally right now (GPU checkpoints
+aren't registered by the propagator yet). The remaining GPU checkpoint/restore
+coverage is the GPU preemption test in `preemption.bats`, and like all the
+preemption tests it needs `PREEMPT=1` as well, so it only runs with both set:
+
+```
+make test-slurm GPU=1 PREEMPT=1 PARALLELISM=1 TAGS='gpu'
+```
+
+Without `PREEMPT=1` the preemption tests self-skip regardless of `GPU`.
 
 ## Prebaked images vs building from source
 
@@ -201,9 +213,9 @@ numbered compute and login nodes (adjust if you ran with more), the network, and
 the outer test container:
 
 ```
-docker rm -f $(docker ps -aq --filter 'name=^slurm-')
-docker network rm slurm-net
-docker rm -f cedana-test
+docker ps -aq --filter 'name=^slurm-(controller|compute-[0-9]+|login-[0-9]+)$' | xargs -r docker rm -f
+docker network rm slurm-net 2>/dev/null || true
+docker rm -f cedana-test cedana-test-slurm 2>/dev/null || true
 ```
 
 ## Troubleshooting
