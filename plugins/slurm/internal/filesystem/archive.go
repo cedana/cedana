@@ -20,23 +20,16 @@ import (
 
 const xattrPrefix = "SCHILY.xattr."
 
-// archiveDir writes the contents of dir (but not dir itself) as a tar, with ownership, modes,
-// times and xattrs. Does not descend into other filesystems mounted below dir.
-// Anything that is not a regular file, directory or symlink is skipped.
-func archiveDir(dir string, w io.Writer) error {
+// walkMount walks dir, itself included, without descending into other filesystems mounted below it
+func walkMount(dir string, fn func(path string, info fs.FileInfo, st *syscall.Stat_t) error) error {
 	var rootStat unix.Stat_t
 	if err := unix.Stat(dir, &rootStat); err != nil {
 		return fmt.Errorf("failed to stat %s: %w", dir, err)
 	}
 
-	tw := tar.NewWriter(w)
-
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
-		}
-		if path == dir {
-			return nil
 		}
 
 		info, err := d.Info()
@@ -58,10 +51,48 @@ func archiveDir(dir string, w io.Writer) error {
 			return nil
 		}
 
+		return fn(path, info, st)
+	})
+}
+
+// contentSize is how much of file contents archiveDir would write for dir. It's the size files
+// appear to have, which for a sparse file can be far more than what it takes up.
+func contentSize(dir string) (uint64, error) {
+	var size uint64
+	seen := map[uint64]bool{} // inodes with more than one name
+
+	err := walkMount(dir, func(path string, info fs.FileInfo, st *syscall.Stat_t) error {
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		if st.Nlink > 1 {
+			if seen[st.Ino] {
+				return nil
+			}
+			seen[st.Ino] = true
+		}
+		size += uint64(info.Size())
+		return nil
+	})
+
+	return size, err
+}
+
+// archiveDir writes dir as a tar, with ownership, modes, times and xattrs. Does not descend into
+// other filesystems mounted below dir. Files with more than one name (hardlinks) stay that way.
+// Anything that is not a regular file, directory, symlink or FIFO is skipped: a socket comes
+// with the process bound to it, and a device can't be made in a tmpfs that is nodev.
+//
+// Fails before writing more than max bytes of file contents. Returns how many were written.
+func archiveDir(dir string, w io.Writer, max uint64) (written uint64, err error) {
+	tw := tar.NewWriter(w)
+	links := map[uint64]string{} // inode -> first name archived, for those with more than one
+
+	err = walkMount(dir, func(path string, info fs.FileInfo, st *syscall.Stat_t) error {
 		mode := info.Mode()
 		link := ""
 		switch {
-		case mode.IsRegular(), mode.IsDir():
+		case mode.IsRegular(), mode.IsDir(), mode&fs.ModeNamedPipe != 0:
 		case mode&fs.ModeSymlink != 0:
 			if link, err = os.Readlink(path); err != nil {
 				return err
@@ -76,14 +107,24 @@ func archiveDir(dir string, w io.Writer) error {
 			return err
 		}
 		header.Format = tar.FormatPAX
-		header.Name, err = filepath.Rel(dir, path)
+		header.Name, err = filepath.Rel(dir, path) // dir itself is '.', for what it is owned by and its mode
 		if err != nil {
 			return err
 		}
 		header.Uid, header.Gid = int(st.Uid), int(st.Gid)
 		header.Uname, header.Gname = "", "" // names mean nothing on another node, IDs are what CRIU restores with
 
-		if mode&fs.ModeSymlink == 0 {
+		if mode.IsRegular() && st.Nlink > 1 {
+			if first, ok := links[st.Ino]; ok {
+				header.Typeflag = tar.TypeLink
+				header.Linkname = first
+				header.Size = 0
+				return tw.WriteHeader(header)
+			}
+			links[st.Ino] = header.Name
+		}
+
+		if mode.IsRegular() || mode.IsDir() {
 			xattrs, err := readXattrs(path)
 			if err != nil {
 				return fmt.Errorf("failed to read xattrs of %s: %w", path, err)
@@ -96,11 +137,15 @@ func archiveDir(dir string, w io.Writer) error {
 			}
 		}
 
+		if !mode.IsRegular() {
+			return tw.WriteHeader(header)
+		}
+
+		if size := uint64(header.Size); size > max-written {
+			return fmt.Errorf("%s brings the contents to more than the %d bytes allowed", path, max)
+		}
 		if err := tw.WriteHeader(header); err != nil {
 			return err
-		}
-		if !mode.IsRegular() {
-			return nil
 		}
 
 		file, err := os.Open(path)
@@ -110,26 +155,52 @@ func archiveDir(dir string, w io.Writer) error {
 		defer file.Close()
 
 		// The job is frozen, but be exact about the size promised in the header regardless
-		if _, err := io.CopyN(tw, file, header.Size); err != nil {
+		n, err := io.CopyN(tw, file, header.Size)
+		written += uint64(n)
+		if err != nil {
 			return fmt.Errorf("failed to archive %s: %w", path, err)
 		}
 		return nil
 	})
 	if err != nil {
-		return err
+		return written, err
 	}
 
-	return tw.Close()
+	return written, tw.Close()
 }
 
 // extractDir unpacks a tar made by archiveDir into dir, which must exist.
-// Nothing can be written outside dir, whatever the archive or existing symlinks in dir say.
+// Nothing can be written outside dir, whatever the archive or existing symlinks in dir say,
+// nor into another filesystem mounted below it.
 func extractDir(r io.Reader, dir string) error {
 	root, err := os.OpenRoot(dir)
 	if err != nil {
 		return err
 	}
 	defer root.Close()
+
+	device, err := deviceOf(root, ".")
+	if err != nil {
+		return err
+	}
+
+	// archiveDir leaves out what is mounted below, so there's nothing of it in the archive. If
+	// the archive has something to put there, it's not the same mount (e.g. shared with the host).
+	inside := map[string]bool{".": true}
+	checkInside := func(name string) error {
+		if inside[name] {
+			return nil
+		}
+		dev, err := deviceOf(root, name)
+		if err != nil {
+			return err
+		}
+		if dev != device {
+			return fmt.Errorf("%s is on another filesystem mounted inside", name)
+		}
+		inside[name] = true
+		return nil
+	}
 
 	type dirTimes struct {
 		name  string
@@ -148,16 +219,29 @@ func extractDir(r io.Reader, dir string) error {
 			return err
 		}
 
-		name := filepath.Clean(header.Name)
-		if name == "." || name == ".." || filepath.IsAbs(name) || strings.HasPrefix(name, "../") {
+		name, ok := cleanName(header.Name)
+		if !ok || (name == "." && header.Typeflag != tar.TypeDir) {
 			return fmt.Errorf("invalid path %q in archive", header.Name)
 		}
 		mode := header.FileInfo().Mode()
 
+		if name != "." {
+			if err := checkInside(filepath.Dir(name)); err != nil {
+				return err
+			}
+		}
+
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := root.Mkdir(name, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
-				return err
+			if name != "." {
+				err := root.Mkdir(name, 0o700)
+				if errors.Is(err, fs.ErrExist) {
+					// Could be a symlink to elsewhere, or where something else is mounted
+					err = checkInside(name)
+				}
+				if err != nil {
+					return err
+				}
 			}
 			dirs = append(dirs, dirTimes{name, header.AccessTime, header.ModTime})
 
@@ -177,6 +261,27 @@ func extractDir(r io.Reader, dir string) error {
 			if err != nil {
 				return fmt.Errorf("failed to extract %s: %w", name, err)
 			}
+
+		case tar.TypeFifo:
+			if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			if err := mkfifo(root, name); err != nil {
+				return fmt.Errorf("failed to make FIFO %s: %w", name, err)
+			}
+
+		case tar.TypeLink:
+			target, ok := cleanName(header.Linkname)
+			if !ok || target == "." {
+				return fmt.Errorf("invalid link %q to %q in archive", header.Name, header.Linkname)
+			}
+			if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				return err
+			}
+			if err := root.Link(target, name); err != nil {
+				return err
+			}
+			continue // everything else is that of the file linked to
 
 		case tar.TypeSymlink:
 			if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
@@ -202,10 +307,12 @@ func extractDir(r io.Reader, dir string) error {
 		if err := root.Chmod(name, mode); err != nil {
 			return err
 		}
-		if err := writeXattrs(root, name, header.PAXRecords); err != nil {
-			return fmt.Errorf("failed to write xattrs of %s: %w", name, err)
+		if header.Typeflag != tar.TypeFifo { // has to be opened for it, which a FIFO waits on
+			if err := writeXattrs(root, name, header.PAXRecords); err != nil {
+				return fmt.Errorf("failed to write xattrs of %s: %w", name, err)
+			}
 		}
-		if header.Typeflag == tar.TypeReg {
+		if header.Typeflag != tar.TypeDir {
 			if err := root.Chtimes(name, header.AccessTime, header.ModTime); err != nil {
 				return err
 			}
@@ -219,6 +326,43 @@ func extractDir(r io.Reader, dir string) error {
 	}
 
 	return nil
+}
+
+// cleanName returns the path of an archive entry, if it's one that stays inside
+func cleanName(name string) (string, bool) {
+	name = filepath.Clean(name)
+	if name == "" || name == ".." || filepath.IsAbs(name) || strings.HasPrefix(name, "../") {
+		return "", false
+	}
+	return name, true
+}
+
+// deviceOf is for directories only, and a symlink to one is not
+func deviceOf(root *os.Root, name string) (uint64, error) {
+	info, err := root.Lstat(name)
+	if err != nil {
+		return 0, err
+	}
+	if !info.IsDir() {
+		return 0, fmt.Errorf("%s is not a directory", name)
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, fmt.Errorf("no stat for %s", name)
+	}
+	return uint64(st.Dev), nil
+}
+
+// mkfifo is what os.Root has no way of doing. With only the last component of name
+// left to resolve from its directory, there's no way outside here either.
+func mkfifo(root *os.Root, name string) error {
+	parent, err := root.Open(filepath.Dir(name))
+	if err != nil {
+		return err
+	}
+	defer parent.Close()
+
+	return unix.Mknodat(int(parent.Fd()), filepath.Base(name), unix.S_IFIFO|0o600, 0)
 }
 
 func readXattrs(path string) (map[string]string, error) {
