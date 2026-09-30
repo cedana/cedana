@@ -1,6 +1,12 @@
 package job
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/spf13/afero"
+)
 
 const testScope = "/system.slice/slurmstepd.scope"
 
@@ -115,5 +121,60 @@ func TestPickJobPID(t *testing.T) {
 				t.Fatalf("pickJobPID(%v, %d) = %d; want %d", tt.pids, tt.self, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIsJobScript(t *testing.T) {
+	for path, want := range map[string]bool{
+		"/tmp/cedana-script-11.sh":                       true,
+		"/tmp/cedana-script-11.sh.bak":                   false,
+		"/tmp/cedana-script.log":                         false,
+		"/tmp/cedana-script-11.sh/other":                 false,
+		"/tmp/cedana-11.pid":                             false,
+		"/data/cedana-samples/slurm/cpu/counting.sbatch": false,
+		"/usr/bin/bash":                                  false,
+	} {
+		if got := isJobScript(path); got != want {
+			t.Errorf("isJobScript(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+func TestInRootOf(t *testing.T) {
+	if got := inRootOf(0, "/tmp/cedana-script-11.sh"); got != "/tmp/cedana-script-11.sh" {
+		t.Errorf("without a process: %q", got)
+	}
+	if got := inRootOf(42, "/tmp/cedana-script-11.sh"); got != "/proc/42/root/tmp/cedana-script-11.sh" {
+		t.Errorf("through a process: %q", got)
+	}
+}
+
+func TestScriptAttrsRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cedana-script-11.sh")
+	if err := os.WriteFile(path, []byte("#!/bin/bash\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644|os.ModeSticky); err != nil { // not subject to the umask
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dumpFs := afero.NewMemMapFs()
+	if err := saveScriptAttrs(dumpFs, info); err != nil {
+		t.Fatal(err)
+	}
+	attrs := loadScriptAttrs(dumpFs)
+	if os.FileMode(attrs.Mode) != 0o644|os.ModeSticky {
+		t.Errorf("expected mode 0644 with the sticky bit, got %v", os.FileMode(attrs.Mode))
+	}
+	if attrs.Uid != uint32(os.Getuid()) || attrs.Gid != uint32(os.Getgid()) {
+		t.Errorf("expected owner %d:%d, got %d:%d", os.Getuid(), os.Getgid(), attrs.Uid, attrs.Gid)
+	}
+
+	if attrs := loadScriptAttrs(afero.NewMemMapFs()); attrs.Mode != 0o700 {
+		t.Errorf("expected the default mode 0700 without attributes, got %o", attrs.Mode)
 	}
 }
