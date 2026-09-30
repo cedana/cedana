@@ -74,15 +74,24 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	args := []string{"swrk", strconv.Itoa(3 + len(extraFiles))}
 	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
 	if c.mntNs != "" {
-		// nsenter does not fork when only entering a mount namespace, so
-		// the PID, Pdeathsig and inherited fds all carry over to CRIU.
-		nsenter, err := exec.LookPath("nsenter")
+		// Nothing to enter if we're in it already (e.g. started from inside the job), which
+		// also asks for no privilege we may not have.
+		inside, err := inMountNamespace(c.mntNs)
 		if err != nil {
 			clnNet.Close()
-			return fmt.Errorf("nsenter is required to run CRIU inside mount namespace %s: %w", c.mntNs, err)
+			return fmt.Errorf("failed to compare mount namespace %s with ours: %w", c.mntNs, err)
 		}
-		args = append([]string{"--mount=" + c.mntNs, "--", c.swrkPath}, args...)
-		cmd = exec.CommandContext(ctx, nsenter, args...)
+		if !inside {
+			// nsenter does not fork when only entering a mount namespace, so
+			// the PID, Pdeathsig and inherited fds all carry over to CRIU.
+			nsenter, err := exec.LookPath("nsenter")
+			if err != nil {
+				clnNet.Close()
+				return fmt.Errorf("nsenter is required to run CRIU inside mount namespace %s: %w", c.mntNs, err)
+			}
+			args = append([]string{"--mount=" + c.mntNs, "--", c.swrkPath}, args...)
+			cmd = exec.CommandContext(ctx, nsenter, args...)
+		}
 	}
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
@@ -558,4 +567,16 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// inMountNamespace tells whether we are in the mount namespace at path (e.g. /proc/<pid>/ns/mnt)
+func inMountNamespace(path string) (bool, error) {
+	var ours, theirs syscall.Stat_t
+	if err := syscall.Stat("/proc/self/ns/mnt", &ours); err != nil {
+		return false, err
+	}
+	if err := syscall.Stat(path, &theirs); err != nil {
+		return false, err
+	}
+	return ours.Dev == theirs.Dev && ours.Ino == theirs.Ino, nil
 }
