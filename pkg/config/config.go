@@ -69,6 +69,8 @@ const (
 	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
 
 	DEFAULT_AWS_CREDENTIALS_MODE = "static"
+
+	DEFAULT_CSX_SOCK_ADDR = "/run/csx.sock"
 )
 
 // The default global config. This will get overwritten
@@ -129,6 +131,9 @@ var Global Config = Config{
 	},
 	AWS: AWS{
 		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,
+	},
+	CSX: CSX{
+		SockAddr: DEFAULT_CSX_SOCK_ADDR,
 	},
 }
 
@@ -229,7 +234,7 @@ func Load(args ...Args) (err error) {
 		}
 	}
 
-	err = viper.UnmarshalExact(&Global)
+	err = viper.Unmarshal(&Global)
 	if err != nil {
 		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
 	}
@@ -290,7 +295,7 @@ func Init(args ...Args) error {
 		}
 	}
 
-	err = viper.UnmarshalExact(&Global)
+	err = viper.Unmarshal(&Global)
 	if err != nil {
 		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
 	}
