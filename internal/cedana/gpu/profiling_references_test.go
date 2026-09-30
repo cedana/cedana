@@ -6,12 +6,15 @@ import (
 	gpu_proto "buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 )
 
-func TestGPUReferenceHistoryWaitsForStableSamples(t *testing.T) {
+func TestGPUReferenceHistoryUsesBestSampleDuringWarmup(t *testing.T) {
 	history := gpuReferenceHistory{samples: make(map[string][]gpuReferenceSample)}
-	for _, duration := range []int64{120, 100, 130, 90} {
+	for index, duration := range []int64{120, 100, 130, 90} {
 		reference := history.observe("dump|gpu_memory", duration, 100)
-		if reference.durationNs != 0 {
-			t.Fatalf("reference before warmup = %d", reference.durationNs)
+		if want := []int64{120, 100, 100, 90}[index]; reference.durationNs != want {
+			t.Fatalf("warmup reference = %d, want %d", reference.durationNs, want)
+		}
+		if reference.source != "best so far" || reference.samples != index+1 {
+			t.Fatalf("warmup provenance = %#v", reference)
 		}
 	}
 
@@ -43,8 +46,21 @@ func TestGPUReferenceHistoryDoesNotMixCompatibilityKeys(t *testing.T) {
 	}
 
 	reference := history.observe("dump|workers=2|phase=gpu_memory|bytes=26", 100, 100)
-	if reference.durationNs != 0 || reference.samples != 1 {
+	if reference.durationNs != 100 || reference.source != "best so far" || reference.samples != 1 {
 		t.Fatalf("incompatible reference = %#v", reference)
+	}
+}
+
+func TestGPUPhaseReferencePrefersModeledGPUCopy(t *testing.T) {
+	phase := &gpu_proto.WorkerPhaseProfile{
+		DurationNs:          100,
+		Bytes:               100,
+		ReferenceDurationNs: 25,
+	}
+
+	reference := gpuPhaseReference("dump", &gpu_proto.WorkerProfile{}, 0, "gpu_memory", phase)
+	if reference.durationNs != 25 || reference.source != "modeled" {
+		t.Fatalf("gpu memory reference = %#v", reference)
 	}
 }
 

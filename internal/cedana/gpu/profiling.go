@@ -144,17 +144,20 @@ func (history *gpuReferenceHistory) observe(key string, durationNs int64, bytes 
 	}
 	history.samples[key] = samples
 	if len(samples) < gpuReferenceMinSamples {
-		return gpuReference{samples: len(samples), key: key}
+		return gpuReferenceFromQuantile(samples, bytes, key, "best so far", 0)
 	}
+	return gpuReferenceFromQuantile(samples, bytes, key, "learned", (len(samples)-1)/4)
+}
 
+func gpuReferenceFromQuantile(samples []gpuReferenceSample, bytes uint64, key, source string, index int) gpuReference {
 	ordered := append([]gpuReferenceSample(nil), samples...)
 	if bytes == 0 {
 		sort.Slice(ordered, func(i, j int) bool {
 			return ordered[i].durationNs < ordered[j].durationNs
 		})
 		return gpuReference{
-			durationNs: ordered[(len(ordered)-1)/4].durationNs,
-			source:     "learned",
+			durationNs: ordered[index].durationNs,
+			source:     source,
 			samples:    len(samples),
 			key:        key,
 		}
@@ -165,10 +168,10 @@ func (history *gpuReferenceHistory) observe(key string, durationNs int64, bytes 
 		right := float64(ordered[j].durationNs) / float64(ordered[j].bytes)
 		return left < right
 	})
-	reference := ordered[(len(ordered)-1)/4]
+	reference := ordered[index]
 	return gpuReference{
 		durationNs: int64(math.Ceil(float64(bytes) * float64(reference.durationNs) / float64(reference.bytes))),
-		source:     "learned",
+		source:     source,
 		samples:    len(samples),
 		key:        key,
 	}
@@ -243,19 +246,15 @@ func gpuPhaseReference(profileKey string, worker *gpu_proto.WorkerProfile, worke
 	}
 	profileKey = fmt.Sprintf("%s|worker=%d", profileKey, workerKey)
 	key := fmt.Sprintf("%s|phase=%s|bytes=%d", profileKey, phaseName, gpuReferenceBucket(phase.GetBytes()))
-	learned := learnedGPUReferences.observe(key, phase.GetDurationNs(), phase.GetBytes())
-	if learned.durationNs > 0 {
-		return learned
-	}
 
 	if phaseName == "gpu_memory" && phase.GetReferenceDurationNs() > 0 {
 		return gpuReference{
 			durationNs: phase.GetReferenceDurationNs(),
-			source:     "gpu capability model",
+			source:     "modeled",
 			key:        key,
 		}
 	}
-	return learned
+	return learnedGPUReferences.observe(key, phase.GetDurationNs(), phase.GetBytes())
 }
 
 func gpuPhaseRows(workers []*gpu_proto.WorkerProfile, profileKey, phaseName, displayName string) []gpuWorkerTimingRow {

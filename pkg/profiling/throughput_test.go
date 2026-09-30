@@ -65,6 +65,65 @@ func TestSetReferenceRecordsProvenance(t *testing.T) {
 	}
 }
 
+func TestApplyLearnedReferencesUsesBestThenLowerQuartile(t *testing.T) {
+	previous := learnedReferences
+	learnedReferences = learnedReferenceHistory{samples: make(map[string][]int64)}
+	t.Cleanup(func() { learnedReferences = previous })
+
+	for index, duration := range []int64{120, 100, 130, 90, 110} {
+		data := &Data{Components: []*Data{
+			{
+				Name:     "validation.ValidateDumpRequest",
+				Duration: duration,
+			},
+		}}
+		ApplyLearnedReferences(data, "dump")
+		reference := data.Components[0]
+		want := []int64{120, 100, 100, 90, 100}[index]
+		if reference.ReferenceDuration != want {
+			t.Fatalf("reference after %d samples = %d, want %d", index+1, reference.ReferenceDuration, want)
+		}
+		if index < learnedReferenceMinSamples-1 && reference.ReferenceSource != "best so far" {
+			t.Fatalf("warmup source = %q", reference.ReferenceSource)
+		}
+	}
+}
+
+func TestApplyLearnedReferencesPreservesModeledReferences(t *testing.T) {
+	data := &Data{Components: []*Data{
+		{
+			Name:              "gpu memory",
+			Duration:          int64(50 * time.Millisecond),
+			ReferenceDuration: int64(10 * time.Millisecond),
+			ReferenceSource:   "modeled",
+		},
+	}}
+
+	ApplyLearnedReferences(data, "dump")
+	reference := data.Components[0]
+	if reference.ReferenceDuration != int64(10*time.Millisecond) || reference.ReferenceSource != "modeled" {
+		t.Fatalf("modeled reference = %#v", reference)
+	}
+}
+
+func TestApplyLearnedReferencesNormalizesPIDAndWorkerTags(t *testing.T) {
+	previous := learnedReferences
+	learnedReferences = learnedReferenceHistory{samples: make(map[string][]int64)}
+	t.Cleanup(func() { learnedReferences = previous })
+
+	for _, name := range []string{
+		"w1 restoreMemory (pid=123, fastest)",
+		"w1 restoreMemory (pid=456, slowest)",
+	} {
+		data := &Data{Components: []*Data{{Name: name, Duration: int64(time.Millisecond)}}}
+		ApplyLearnedReferences(data, "restore")
+	}
+
+	if len(learnedReferences.samples) != 1 {
+		t.Fatalf("reference keys = %#v", learnedReferences.samples)
+	}
+}
+
 func TestReferenceProvenanceRoundTripsJSON(t *testing.T) {
 	encoded, err := EncodeJSON(&Data{
 		ReferenceDuration: int64(25 * time.Millisecond),
