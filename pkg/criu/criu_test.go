@@ -1,6 +1,7 @@
 package criu
 
 import (
+	"context"
 	"errors"
 	"net"
 	"os"
@@ -102,5 +103,24 @@ func TestInMountNamespace(t *testing.T) {
 	}
 	if _, err := inMountNamespace("/proc/self/ns/no-such-namespace"); err == nil {
 		t.Error("expected an error for a path that isn't there")
+	}
+}
+
+func TestSwrkFailureCarriesItsOutput(t *testing.T) {
+	// Far more than a pipe holds first, which must not stop it from exiting
+	fake := filepath.Join(t.TempDir(), "criu")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nhead -c 300000 /dev/zero | tr '\\0' x >&2\necho\necho 'no can do' >&2\nexit 3\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := MakeCriu()
+	c.SetCriuPath(fake)
+	_, err := c.GetCriuVersion(context.Background())
+	if err == nil {
+		t.Fatal("expected the version request to fail")
+	}
+	for _, want := range []string{"exit status 3", "no can do"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected the error to carry %q, got: %v", want, err)
+		}
 	}
 }
