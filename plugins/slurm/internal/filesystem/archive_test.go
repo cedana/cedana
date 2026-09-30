@@ -41,10 +41,21 @@ func TestArchiveExtractDir(t *testing.T) {
 	must(os.Symlink("/etc/passwd", filepath.Join(src, "abs")))
 	must(os.Link(filepath.Join(src, "a/b/data"), filepath.Join(src, "hardlink")))
 	must(unix.Mkfifo(filepath.Join(src, "fifo"), 0o620))
+	// An xattr, and a capability if we may set one. Neither survives a chown of the file.
+	if err := unix.Setxattr(filepath.Join(src, "sticky"), "user.test", []byte("value"), 0); err != nil && !errors.Is(err, unix.ENOTSUP) {
+		t.Fatal(err)
+	}
+	capability := []byte{1, 0, 0, 2, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0} // NET_BIND_SERVICE, effective
+	if err := unix.Setxattr(filepath.Join(src, "a/b/data"), "security.capability", capability, 0); err != nil && !errors.Is(err, unix.EPERM) {
+		t.Fatal(err)
+	}
 	must(os.Chtimes(filepath.Join(src, "a/b/data"), mtime, mtime))
 	must(os.Chtimes(filepath.Join(src, "a"), mtime, mtime))
 	must(os.Chmod(src, 0o770|os.ModeSetgid|os.ModeSticky))
 	must(os.Chtimes(src, mtime, mtime))
+	// Nothing can be created in it once it has this mode
+	must(os.Chmod(filepath.Join(src, "a/b"), 0o500))
+	t.Cleanup(func() { os.Chmod(filepath.Join(src, "a/b"), 0o750) })
 
 	var buf bytes.Buffer
 	written, err := archiveDir(src, &buf, noLimit)
@@ -57,6 +68,7 @@ func TestArchiveExtractDir(t *testing.T) {
 	}
 
 	dst := t.TempDir()
+	t.Cleanup(func() { os.Chmod(filepath.Join(dst, "a/b"), 0o750) })
 	must(os.WriteFile(filepath.Join(dst, "empty"), []byte("stale"), 0o666)) // to be replaced
 	must(extractDir(bytes.NewReader(buf.Bytes()), dst))
 
@@ -69,6 +81,7 @@ func TestArchiveExtractDir(t *testing.T) {
 	for path, mode := range map[string]os.FileMode{
 		".":        os.ModeDir | 0o770 | os.ModeSetgid | os.ModeSticky,
 		"a":        os.ModeDir | 0o750,
+		"a/b":      os.ModeDir | 0o500,
 		"a/b/data": 0o640,
 		"empty":    0o600,
 		"sticky":   0o644 | os.ModeSetgid,
@@ -90,6 +103,21 @@ func TestArchiveExtractDir(t *testing.T) {
 		must(err)
 		if !info.ModTime().Equal(mtime) {
 			t.Errorf("%s: expected mtime %v, got %v", path, mtime, info.ModTime())
+		}
+	}
+
+	for path, attr := range map[string]string{"sticky": "user.test", "a/b/data": "security.capability"} {
+		want := make([]byte, 64)
+		n, err := unix.Getxattr(filepath.Join(src, path), attr, want)
+		if err != nil {
+			continue // couldn't be set here
+		}
+		got := make([]byte, 64)
+		m, err := unix.Getxattr(filepath.Join(dst, path), attr, got)
+		if err != nil {
+			t.Errorf("%s: expected xattr %s, got %v", path, attr, err)
+		} else if !bytes.Equal(want[:n], got[:m]) {
+			t.Errorf("%s: expected xattr %s %q, got %q", path, attr, want[:n], got[:m])
 		}
 	}
 
@@ -302,3 +330,49 @@ func TestSaveLoadPrivateMounts(t *testing.T) {
 type failingFs struct{ afero.Fs }
 
 func (failingFs) Open(string) (afero.File, error) { return nil, errors.New("connection reset") }
+
+func TestExtractLeavesWhatItMayNotSet(t *testing.T) {
+	// The root of the filesystem is nobody's to chown or chmod but root's, as the root of a
+	// job's mount is the launcher's. Everything is a no-op or left alone, never an error.
+	root, err := os.OpenRoot("/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	info, err := root.Lstat(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := info.Sys().(*syscall.Stat_t)
+	if err := setOwner(root, ".", int(st.Uid), int(st.Gid)); err != nil {
+		t.Errorf("the owner it has already: %v", err)
+	}
+	if err := setMode(root, ".", info.Mode()); err != nil {
+		t.Errorf("the mode it has already: %v", err)
+	}
+	if os.Getuid() != 0 {
+		if err := setOwner(root, ".", os.Getuid(), os.Getgid()); err != nil {
+			t.Errorf("an owner we may not set: %v", err)
+		}
+		if err := setMode(root, ".", info.Mode()^0o001); err != nil {
+			t.Errorf("a mode we may not set: %v", err)
+		}
+		if err := setTimes(root, ".", time.Unix(0, 0), time.Unix(0, 0)); err != nil {
+			t.Errorf("times we may not set: %v", err)
+		}
+
+		// Anything inside the mount has to be as it was, though
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "file"), nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		inside, err := os.OpenRoot(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer inside.Close()
+		if err := setOwner(inside, "file", 0, 0); err == nil {
+			t.Error("expected giving a file to root to fail")
+		}
+	}
+}
