@@ -202,12 +202,15 @@ func extractDir(r io.Reader, dir string) error {
 		return nil
 	}
 
-	type dirTimes struct {
+	type dirMeta struct {
 		name  string
+		mode  os.FileMode
 		atime time.Time
 		mtime time.Time
 	}
-	var dirs []dirTimes // applied last, as creating files inside changes them
+	// Applied last, deepest first: the mode may not let us create anything inside,
+	// and creating files inside changes the times
+	var dirs []dirMeta
 
 	tr := tar.NewReader(r)
 	for {
@@ -243,7 +246,7 @@ func extractDir(r io.Reader, dir string) error {
 					return err
 				}
 			}
-			dirs = append(dirs, dirTimes{name, header.AccessTime, header.ModTime})
+			dirs = append(dirs, dirMeta{name, mode, header.AccessTime, header.ModTime})
 
 		case tar.TypeReg:
 			// Never write through whatever is already there by this name
@@ -290,7 +293,7 @@ func extractDir(r io.Reader, dir string) error {
 			if err := root.Symlink(header.Linkname, name); err != nil {
 				return err
 			}
-			if err := root.Lchown(name, header.Uid, header.Gid); err != nil {
+			if err := setOwner(root, name, header.Uid, header.Gid); err != nil {
 				return err
 			}
 			continue
@@ -300,11 +303,8 @@ func extractDir(r io.Reader, dir string) error {
 			continue
 		}
 
-		// chown clears setuid/setgid, so mode goes after
-		if err := root.Lchown(name, header.Uid, header.Gid); err != nil {
-			return err
-		}
-		if err := root.Chmod(name, mode); err != nil {
+		// chown clears setuid/setgid and capabilities, so mode and xattrs go after
+		if err := setOwner(root, name, header.Uid, header.Gid); err != nil {
 			return err
 		}
 		if header.Typeflag != tar.TypeFifo { // has to be opened for it, which a FIFO waits on
@@ -312,15 +312,23 @@ func extractDir(r io.Reader, dir string) error {
 				return fmt.Errorf("failed to write xattrs of %s: %w", name, err)
 			}
 		}
-		if header.Typeflag != tar.TypeDir {
-			if err := root.Chtimes(name, header.AccessTime, header.ModTime); err != nil {
-				return err
-			}
+		if header.Typeflag == tar.TypeDir {
+			continue
+		}
+		if err := setMode(root, name, mode); err != nil {
+			return err
+		}
+		if err := setTimes(root, name, header.AccessTime, header.ModTime); err != nil {
+			return err
 		}
 	}
 
 	for i := len(dirs) - 1; i >= 0; i-- {
-		if err := root.Chtimes(dirs[i].name, dirs[i].atime, dirs[i].mtime); err != nil {
+		d := dirs[i]
+		if err := setMode(root, d.name, d.mode); err != nil {
+			return err
+		}
+		if err := setTimes(root, d.name, d.atime, d.mtime); err != nil {
 			return err
 		}
 	}
@@ -423,9 +431,65 @@ func writeXattrs(root *os.Root, name string, records map[string]string) error {
 			}
 		}
 		if err := unix.Fsetxattr(int(file.Fd()), xattr, []byte(value), 0); err != nil {
+			if notAllowed(err, name, "xattr "+xattr) {
+				continue
+			}
 			return fmt.Errorf("%s: %w", xattr, err)
 		}
 	}
 
+	return nil
+}
+
+// Restoring as the job's user, rather than as root, the root of the mount is the launcher's,
+// made and owned by it, and not ours to change. That one is left as it is, with a warning.
+// Everything inside was archived from the job and has to come back as it was, so not being
+// allowed to make it so fails the restore, as any other error.
+
+// notAllowed tells whether err is us not being allowed to set what we may leave, and says so
+func notAllowed(err error, name, what string) bool {
+	if name != "." || !errors.Is(err, fs.ErrPermission) {
+		return false
+	}
+	log.Warn().Err(err).Str("path", name).Msgf("not allowed to set the %s of the mount's root, leaving it as it is", what)
+	return true
+}
+
+// setOwner gives name to uid:gid, unless it is theirs already
+func setOwner(root *os.Root, name string, uid, gid int) error {
+	info, err := root.Lstat(name)
+	if err != nil {
+		return err
+	}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok && int(st.Uid) == uid && int(st.Gid) == gid {
+		return nil
+	}
+	if err := root.Lchown(name, uid, gid); err != nil && !notAllowed(err, name, "owner") {
+		return err
+	}
+	return nil
+}
+
+// setMode sets the permission and special bits of name, unless they are those already
+func setMode(root *os.Root, name string, mode os.FileMode) error {
+	const bits = fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky
+	info, err := root.Lstat(name)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&bits == mode&bits {
+		return nil
+	}
+	if err := root.Chmod(name, mode); err != nil && !notAllowed(err, name, "mode") {
+		return err
+	}
+	return nil
+}
+
+// setTimes sets the times of name
+func setTimes(root *os.Root, name string, atime, mtime time.Time) error {
+	if err := root.Chtimes(name, atime, mtime); err != nil && !notAllowed(err, name, "times") {
+		return err
+	}
 	return nil
 }
