@@ -23,7 +23,7 @@ type Data struct {
 	Duration int64 `json:"duration,omitempty"`
 	IO       int64 `json:"io,omitempty"`
 
-	MinDuration int64 `json:"min_duration,omitempty"`
+	ReferenceDuration int64 `json:"reference_duration,omitempty"`
 
 	Parallel    bool `json:"parallel,omitempty"`
 	Redundant   bool `json:"redundant,omitempty"`
@@ -75,7 +75,7 @@ func Clean(data *Data) {
 
 		Clean(component)
 
-		if component.Duration == 0 && component.IO == 0 && component.MinDuration == 0 && component.Name == "" {
+		if component.Duration == 0 && component.IO == 0 && component.ReferenceDuration == 0 && component.Name == "" {
 			newComponents = append(newComponents, component.Components...)
 		} else {
 			newComponents = append(newComponents, component)
@@ -93,7 +93,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
-	tableWriter.AppendHeader(table.Row{"DURATION", "MIN DURATION", "CATEGORY", "IO", "COMPONENT"})
+	tableWriter.AppendHeader(table.Row{"DURATION", "REFERENCE DURATION", "CATEGORY", "IO", "COMPONENT"})
 
 	categoryDuration := make(map[string]time.Duration)
 	categoryIO := make(map[string]int64)
@@ -115,9 +115,9 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 
 		duration := time.Duration(p.Duration)
 		durationStr := DurationStr(duration, precision)
-		minDurationStr := ""
-		if p.MinDuration > 0 {
-			minDurationStr = style.DisabledColors.Sprint(DurationStr(time.Duration(p.MinDuration), precision))
+		referenceDurationStr := ""
+		if p.ReferenceDuration > 0 {
+			referenceDurationStr = style.DisabledColors.Sprint(DurationStr(time.Duration(p.ReferenceDuration), precision))
 		}
 		io := p.IO
 		ioStr := utils.SizeStr(io)
@@ -153,7 +153,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 
 		tableWriter.AppendRow([]any{
 			durationStr,
-			minDurationStr,
+			referenceDurationStr,
 			category,
 			ioStr,
 			style.DisabledColors.Sprint(name),

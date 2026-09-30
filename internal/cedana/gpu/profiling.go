@@ -275,7 +275,7 @@ func addGPUWorkerTimingRowToProfiling(ctx context.Context, row gpuWorkerTimingRo
 	)
 	profiling.AddIO(functionCtx, int64(row.bytes))
 	if row.referenceNs > 0 {
-		profiling.SetMinDuration(functionCtx, gpuProfileDuration(row.referenceNs))
+		profiling.SetReferenceDuration(functionCtx, gpuProfileDuration(row.referenceNs))
 	}
 	profiling.MarkIORedundant(functionCtx)
 }

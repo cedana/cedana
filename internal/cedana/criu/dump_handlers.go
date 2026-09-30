@@ -75,7 +75,6 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 		return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)
 	}
 
-	profiling.AddStorageTransfer(ctx, utils.SizeFromPath(criuOpts.GetImagesDir()))
 	utils.ChownAll(criuOpts.GetImagesDir(), int(uids[0]), int(gids[0]))
 
 	log.Info().Msg("CRIU dump complete")

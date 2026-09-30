@@ -3,8 +3,8 @@ module github.com/cedana/cedana
 go 1.25.0
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-fb63b2d02c26.1
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-00000000000000-fb63b2d02c26.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-50d85dfdffc1.1
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-00000000000000-c1d51c7e047c.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1
 	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-c1d77f2e67cf.1
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-c1d77f2e67cf.2
