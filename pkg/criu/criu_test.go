@@ -90,3 +90,17 @@ func TestSendAndRecvReportsOversizedRequest(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestInMountNamespace(t *testing.T) {
+	inside, err := inMountNamespace("/proc/self/ns/mnt")
+	if err != nil || !inside {
+		t.Errorf("expected to be in our own mount namespace, got %v, %v", inside, err)
+	}
+	inside, err = inMountNamespace("/proc/self/ns/pid") // another namespace file, so another inode
+	if err != nil || inside {
+		t.Errorf("expected another namespace not to count as ours, got %v, %v", inside, err)
+	}
+	if _, err := inMountNamespace("/proc/self/ns/no-such-namespace"); err == nil {
+		t.Error("expected an error for a path that isn't there")
+	}
+}
