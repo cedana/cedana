@@ -63,8 +63,7 @@ type Fs struct {
 // For WRITE_ONLY mode, compression may be specified.
 // Returns a wait function that *must* be called to tell the streamer to shutdown,
 // and wait for it to finish streaming and exit gracefully. The wait function returns
-// any IO errors that occurred during the streaming process. For WRITE_ONLY mode, it
-// also returns the checksum of each shard as written to storage, indexed by shard.
+// any IO errors that occurred during the streaming process.
 func NewStreamingFs(
 	ctx context.Context,
 	streamerBinary string,
@@ -74,7 +73,7 @@ func NewStreamingFs(
 	streams int32,
 	mode Mode,
 	compressions ...string,
-) (fs *Fs, wait func() ([]string, error), err error) {
+) (fs *Fs, wait func() error, err error) {
 	_, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs, "startup")
 	defer end()
 
@@ -107,7 +106,6 @@ func NewStreamingFs(
 	io := &sync.WaitGroup{}
 	io.Add(int(streams))
 	ioErr := make(chan error, streams)
-	var sums []*cedana_io.ChecksumWriter
 	paths, err := imgPaths(ctx, storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
@@ -155,10 +153,6 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
-			// Checksum what storage receives, i.e. the shard after compression
-			sum := cedana_io.NewChecksumWriter(file)
-			sums = append(sums, sum)
-			file = sum
 			go func() {
 				defer io.Done()
 				defer func() {
@@ -283,7 +277,7 @@ func NewStreamingFs(
 	fs.conn = conn.(*net.UnixConn)
 	log.Debug().Msg("streamer connected")
 
-	wait = func() ([]string, error) {
+	wait = func() error {
 		// Stop the listener, and wait for all IO to finish
 		// NOTE: The order of below operations is important.
 		fs.stopListener()
@@ -296,14 +290,7 @@ func NewStreamingFs(
 		for e := range ioErr {
 			err = errors.Join(err, e)
 		}
-		if err != nil {
-			return nil, err
-		}
-		var checksums []string
-		for _, sum := range sums {
-			checksums = append(checksums, sum.Sum())
-		}
-		return checksums, nil
+		return err
 	}
 
 	return fs, wait, nil

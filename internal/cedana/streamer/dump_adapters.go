@@ -122,7 +122,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				storagePath = path
 			}
 
-			var waitForIO func() ([]string, error)
+			var waitForIO func() error
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
 				ctx,
 				imgStreamer.BinaryPaths()[0],
@@ -135,26 +135,6 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
-			}
-
-			// Sets the checksum of the dump, which is that of a manifest of its shards as written.
-			// When async, the shards are first written locally and then uploaded as is, so the checksum
-			// is already known before the upload.
-			setChecksum := func(shardChecksums []string) (checksum string) {
-				manifest := &cedana_io.Manifest{}
-				for i, checksum := range shardChecksums {
-					manifest.Add(fmt.Sprintf(IMG_FILE_FORMATTER, i)+ext, checksum)
-				}
-				checksum = manifest.Sum()
-				if checksum == "" {
-					return
-				}
-				log.Debug().Str("path", path).Strs("shards", shardChecksums).Str("checksum", checksum).Msg("checksummed dump")
-				if resp.Checksums == nil {
-					resp.Checksums = map[string]string{}
-				}
-				resp.Checksums[path] = checksum
-				return
 			}
 
 			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
@@ -221,12 +201,10 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				}
 
 				defer func() {
-					shardChecksums, waitErr := waitForIO()
-					err = errors.Join(err, waitErr)
+					err = errors.Join(err, waitForIO())
 					if err != nil {
 						return
 					}
-					checksum := setChecksum(shardChecksums)
 
 					// Use a detached context for async upload since the parent request
 					// context will be canceled after the dump completes.
@@ -239,10 +217,10 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						log.Info().Msg("async dump upload started")
 						if uploadErr := upload(uploadCtx); uploadErr != nil {
 							log.Error().Err(uploadErr).Msg("async upload failed")
-							finish("", uploadErr)
+							finish(uploadErr)
 						} else {
 							log.Info().Msg("async dump upload completed")
-							finish(checksum, nil)
+							finish(nil)
 						}
 					})
 				}()
@@ -250,12 +228,8 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				// Sync upload, wait for IO completion in PostDumpFunc
 				defer func() {
 					_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
-					shardChecksums, waitErr := waitForIO()
-					err = errors.Join(err, waitErr)
+					err = errors.Join(err, waitForIO())
 					end()
-					if err == nil {
-						setChecksum(shardChecksums)
-					}
 				}()
 			}
 

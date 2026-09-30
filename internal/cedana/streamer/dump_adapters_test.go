@@ -2,8 +2,6 @@ package streamer
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -43,20 +41,15 @@ func (s *remoteStorage) Create(ctx context.Context, path string) (io.WriteCloser
 	return s.Storage.Create(ctx, path)
 }
 
-// Checksum of a streamed dump, recomputed from its shards as stored
-func checksumOfShards(t *testing.T, path string, streams int32, ext string) string {
-	var manifest string
+// Every shard of a streamed dump, as stored
+func shardsOf(t *testing.T, path string, streams int32, ext string) {
+	t.Helper()
 	for i := range streams {
 		shard := fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext
-		data, err := os.ReadFile(filepath.Join(path, shard))
-		if err != nil {
-			t.Fatalf("failed to read shard %s: %v", shard, err)
+		if _, err := os.Stat(filepath.Join(path, shard)); err != nil {
+			t.Fatalf("shard %s was not written: %v", shard, err)
 		}
-		sum := sha256.Sum256(data)
-		manifest += shard + " sha256:" + hex.EncodeToString(sum[:]) + "\n"
 	}
-	sum := sha256.Sum256([]byte(manifest))
-	return "sha256:" + hex.EncodeToString(sum[:])
 }
 
 // Plugin manager that reports the plugins required for streaming as installed
@@ -80,7 +73,7 @@ func (m *streamingPlugins) Get(name string) *plugins.Plugin {
 	}
 }
 
-func TestDumpFilesystemChecksum(t *testing.T) {
+func TestDumpFilesystem(t *testing.T) {
 	streamerBinary := "/usr/local/bin/cedana-image-streamer"
 	if _, err := os.Stat(streamerBinary); os.IsNotExist(err) {
 		t.Skipf("streamer binary not found at %s, skipping integration test", streamerBinary)
@@ -131,24 +124,12 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 			if len(resp.Paths) != 1 {
 				t.Fatalf("expected 1 path, got %v", resp.Paths)
 			}
-			if len(resp.Checksums) != 1 {
-				t.Fatalf("expected 1 checksum, got %v", resp.Checksums)
-			}
 
 			ext, err := cedana_io.ExtForCompression(compression)
 			if err != nil {
 				t.Fatal(err)
 			}
-
-			for path, checksum := range resp.Checksums {
-				if !slices.Contains(resp.Paths, path) {
-					t.Fatalf("checksum is for %s, which is not in paths %v", path, resp.Paths)
-				}
-
-				if expected := checksumOfShards(t, path, streams, ext); checksum != expected {
-					t.Fatalf("checksum is %s, expected %s", checksum, expected)
-				}
-			}
+			shardsOf(t, resp.Paths[0], streams, ext)
 		})
 	}
 
@@ -182,12 +163,6 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 		}
 		path := resp.Paths[0]
 
-		// The shards are written before they are uploaded, so the checksum is already known
-		checksum := resp.Checksums[path]
-		if checksum == "" {
-			t.Fatalf("expected a checksum, got %v", resp.Checksums)
-		}
-
 		result, err := opts.Uploads.Wait(ctx, path)
 		if err != nil {
 			t.Fatalf("failed to wait for upload: %v", err)
@@ -195,12 +170,7 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 		if result.Err != nil {
 			t.Fatalf("upload failed: %v", result.Err)
 		}
-		if result.Checksum != checksum {
-			t.Fatalf("upload has checksum %s, response has %s", result.Checksum, checksum)
-		}
-		if expected := checksumOfShards(t, path, streams, ".lz4"); checksum != expected {
-			t.Fatalf("checksum is %s, expected %s", checksum, expected)
-		}
+		shardsOf(t, path, streams, ".lz4")
 
 		opts.WG.Wait()
 	})
@@ -235,9 +205,6 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 		}
 		if result.Err == nil {
 			t.Fatal("expected the upload to fail")
-		}
-		if result.Checksum != "" {
-			t.Fatalf("expected no checksum for a failed upload, got %s", result.Checksum)
 		}
 
 		opts.WG.Wait()

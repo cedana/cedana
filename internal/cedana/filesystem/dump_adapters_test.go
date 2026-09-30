@@ -2,8 +2,6 @@ package filesystem
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -58,16 +56,7 @@ func dumpImages(t *testing.T) types.Dump {
 	}
 }
 
-func checksumOfFile(t *testing.T, path string) string {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read %s: %v", path, err)
-	}
-	sum := sha256.Sum256(data)
-	return "sha256:" + hex.EncodeToString(sum[:])
-}
-
-func TestDumpFilesystemChecksum(t *testing.T) {
+func TestDumpFilesystem(t *testing.T) {
 	ctx := context.Background()
 
 	for _, compression := range []string{"tar", "gzip", "lz4", "zlib"} {
@@ -94,16 +83,8 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 				if len(resp.Paths) != 1 {
 					t.Fatalf("expected 1 path, got %v", resp.Paths)
 				}
-				if len(resp.Checksums) != 1 {
-					t.Fatalf("expected 1 checksum, got %v", resp.Checksums)
-				}
-				for path, checksum := range resp.Checksums {
-					if !slices.Contains(resp.Paths, path) {
-						t.Fatalf("checksum is for %s, which is not in paths %v", path, resp.Paths)
-					}
-					if expected := checksumOfFile(t, path); checksum != expected {
-						t.Fatalf("checksum is %s, expected %s", checksum, expected)
-					}
+				if _, err := os.Stat(resp.Paths[0]); err != nil {
+					t.Fatalf("tarball was not written: %v", err)
 				}
 			})
 		}
@@ -129,9 +110,6 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 
 		if len(resp.Paths) != 1 {
 			t.Fatalf("expected 1 path, got %v", resp.Paths)
-		}
-		if len(resp.Checksums) != 0 {
-			t.Fatalf("expected no checksum, got %v", resp.Checksums)
 		}
 	})
 
@@ -159,9 +137,6 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 		if len(resp.Paths) != 1 {
 			t.Fatalf("expected 1 path, got %v", resp.Paths)
 		}
-		if len(resp.Checksums) != 0 {
-			t.Fatalf("expected no checksum, got %v", resp.Checksums)
-		}
 		if !slices.Equal(resp.Pending, resp.Paths) {
 			t.Fatalf("expected the path to be pending, got %v", resp.Pending)
 		}
@@ -173,15 +148,11 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 		if result.Err != nil {
 			t.Fatalf("upload failed: %v", result.Err)
 		}
-		if expected := checksumOfFile(t, resp.Paths[0]); result.Checksum != expected {
-			t.Fatalf("checksum is %s, expected %s", result.Checksum, expected)
+		if _, err := os.Stat(resp.Paths[0]); err != nil {
+			t.Fatalf("tarball was not written: %v", err)
 		}
 
 		opts.WG.Wait()
-
-		if len(resp.Checksums) != 0 {
-			t.Fatalf("expected no checksum on the response after upload, got %v", resp.Checksums)
-		}
 	})
 
 	t.Run("AsyncUploadFails", func(t *testing.T) {
@@ -214,9 +185,6 @@ func TestDumpFilesystemChecksum(t *testing.T) {
 		}
 		if result.Err == nil {
 			t.Fatal("expected the upload to fail")
-		}
-		if result.Checksum != "" {
-			t.Fatalf("expected no checksum for a failed upload, got %s", result.Checksum)
 		}
 
 		opts.WG.Wait()

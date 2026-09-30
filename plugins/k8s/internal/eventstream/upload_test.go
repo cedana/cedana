@@ -88,7 +88,7 @@ func TestReportUpload(t *testing.T) {
 	const path = "s3://checkpoints/394f8cdf-881e-4cd8-8c6c-c22a187863f9.tar.lz4"
 
 	t.Run("Succeeded", func(t *testing.T) {
-		es, propagator := newUploadEventStream(t, &daemon.WaitUploadResp{Checksum: "sha256:abc123"})
+		es, propagator := newUploadEventStream(t, &daemon.WaitUploadResp{})
 
 		es.reportUpload(ctx, "pod", "action", checkpointId, path, &daemon.ProcessState{}, 0, spec)
 
@@ -99,8 +99,8 @@ func TestReportUpload(t *testing.T) {
 		if request["restore_path"] != path {
 			t.Fatalf("expected restore path %s, got %v", path, request["restore_path"])
 		}
-		if request["checksum"] != "sha256:abc123" {
-			t.Fatalf("expected the checksum of the upload, got %v", request["checksum"])
+		if _, ok := request["checksum"]; ok {
+			t.Fatalf("the helper has no checksum to send, got %v", request["checksum"])
 		}
 	})
 

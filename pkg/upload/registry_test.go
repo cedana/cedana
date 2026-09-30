@@ -29,13 +29,13 @@ func TestRegistry(t *testing.T) {
 		wg.Go(wait)
 
 		time.Sleep(10 * time.Millisecond)
-		finish("sha256:abc", nil)
+		finish(nil)
 		wg.Wait()
 
 		wait() // after the upload has ended
 
 		for range 3 {
-			if result := <-results; result.Checksum != "sha256:abc" || result.Err != nil {
+			if result := <-results; result.Err != nil {
 				t.Fatalf("unexpected result %+v", result)
 			}
 		}
@@ -44,7 +44,7 @@ func TestRegistry(t *testing.T) {
 	t.Run("Failure", func(t *testing.T) {
 		r := NewRegistry()
 		failure := errors.New("upload failed")
-		r.Start("path")("sha256:abc", failure)
+		r.Start("path")(failure)
 
 		result, err := r.Wait(ctx, "path")
 		if err != nil {
@@ -52,9 +52,6 @@ func TestRegistry(t *testing.T) {
 		}
 		if !errors.Is(result.Err, failure) {
 			t.Fatalf("expected the upload's error, got %v", result.Err)
-		}
-		if result.Checksum != "" {
-			t.Fatalf("expected no checksum for a failed upload, got %s", result.Checksum)
 		}
 	})
 
@@ -79,7 +76,7 @@ func TestRegistry(t *testing.T) {
 	t.Run("Expires", func(t *testing.T) {
 		r := NewRegistry()
 		r.retention = 10 * time.Millisecond
-		r.Start("finished")("sha256:abc", nil)
+		r.Start("finished")(nil)
 		r.Start("running")
 
 		time.Sleep(20 * time.Millisecond)
@@ -96,33 +93,33 @@ func TestRegistry(t *testing.T) {
 
 	t.Run("Restarted", func(t *testing.T) {
 		r := NewRegistry()
-		r.Start("path")("sha256:old", nil)
-		r.Start("path")("sha256:new", nil)
+		r.Start("path")(errors.New("old"))
+		r.Start("path")(nil)
 
 		result, err := r.Wait(ctx, "path")
 		if err != nil {
 			t.Fatalf("wait failed: %v", err)
 		}
-		if result.Checksum != "sha256:new" {
-			t.Fatalf("expected the latest upload's checksum, got %s", result.Checksum)
+		if result.Err != nil {
+			t.Fatalf("expected the latest upload's result, got %v", result.Err)
 		}
 	})
 
 	t.Run("FinishOnce", func(t *testing.T) {
 		r := NewRegistry()
 		finish := r.Start("path")
-		finish("sha256:first", nil)
-		finish("sha256:second", nil)
+		finish(errors.New("first"))
+		finish(nil)
 
 		result, _ := r.Wait(ctx, "path")
-		if result.Checksum != "sha256:first" {
-			t.Fatalf("expected the first result to be kept, got %s", result.Checksum)
+		if result.Err == nil || result.Err.Error() != "first" {
+			t.Fatalf("expected the first result to be kept, got %v", result.Err)
 		}
 	})
 
 	t.Run("Nil", func(t *testing.T) {
 		var r *Registry
-		r.Start("path")("sha256:abc", nil)
+		r.Start("path")(nil)
 		if _, err := r.Wait(ctx, "path"); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("expected ErrNotFound, got %v", err)
 		}

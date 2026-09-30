@@ -351,7 +351,6 @@ type checkpointInfo struct {
 	CheckpointName string        `json:"checkpoint_name"`
 	Status         string        `json:"status"`
 	Path           string        `json:"path"`
-	Checksum       string        `json:"checksum,omitempty"`
 	UploadPending  bool          `json:"upload_pending,omitempty"`
 	GPU            bool          `json:"gpu"`
 	Platform       string        `json:"platform"`
@@ -533,7 +532,6 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					nil,
 					"",
-					"",
 					false,
 					nil,
 					i,
@@ -552,12 +550,11 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			go func() {
 				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
-				var path, checksum string
+				var path string
 				var pending bool
 				var state *daemon.ProcessState
 				if err == nil {
 					path = dumpResp.Paths[0]
-					checksum = dumpResp.Checksums[path]
 					pending = slices.Contains(dumpResp.Pending, path)
 					state = dumpResp.State
 				}
@@ -568,7 +565,6 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					profiling,
 					path,
-					checksum,
 					pending,
 					state,
 					i,
@@ -606,7 +602,6 @@ func (es *EventStream) publishCheckpoint(
 	checkpointId string,
 	profilingData *profiling.Data,
 	path string,
-	checksum string,
 	uploadPending bool,
 	state *daemon.ProcessState,
 	containerOrder int,
@@ -646,7 +641,6 @@ func (es *EventStream) publishCheckpoint(
 		ci.GPU = state.GetGPUEnabled()
 		ci.Platform = state.GetHost().GetPlatform()
 		ci.Path = path
-		ci.Checksum = checksum
 		ci.UploadPending = uploadPending
 	}
 
@@ -686,14 +680,14 @@ func (es *EventStream) publishCheckpoint(
 	if dumpErr != nil {
 		log.Error().Err(dumpErr).Msg("checkpoint published with error")
 	} else {
-		log.Info().Str("path", path).Str("checksum", ci.Checksum).Bool("GPU", ci.GPU).Msg("checkpoint published")
+		log.Info().Str("path", path).Bool("GPU", ci.GPU).Msg("checkpoint published")
 	}
 	return nil
 }
 
 // Waits for the background upload of a checkpoint to end, and reports the outcome.
-// On success the checkpoint is marked as uploaded, along with its checksum. On failure
-// the checkpoint is reported again, this time as failed.
+// On success the checkpoint is marked as uploaded. On failure the checkpoint is
+// reported again, this time as failed.
 func (es *EventStream) reportUpload(
 	ctx context.Context,
 	podId string,
@@ -719,7 +713,6 @@ func (es *EventStream) reportUpload(
 			checkpointId,
 			nil,
 			path,
-			"",
 			false,
 			state,
 			containerOrder,
@@ -734,16 +727,13 @@ func (es *EventStream) reportUpload(
 
 	info := models.NewCheckpointSuccessInfo()
 	info.SetRestorePath(&path)
-	if checksum := resp.GetChecksum(); checksum != "" {
-		info.SetChecksum(&checksum)
-	}
 	_, err = es.propagator.V1().Checkpoints().Uploaded().ById(checkpointId).Post(ctx, info, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to mark checkpoint as uploaded")
 		return
 	}
 
-	log.Info().Str("checksum", resp.GetChecksum()).Msg("checkpoint uploaded")
+	log.Info().Msg("checkpoint uploaded")
 }
 
 func (es *EventStream) getImageSecret() (*imageSecret, error) {

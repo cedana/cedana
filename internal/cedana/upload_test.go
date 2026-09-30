@@ -16,25 +16,25 @@ func TestWaitUpload(t *testing.T) {
 	server := &Server{Cedana: Cedana{uploads: upload.NewRegistry()}}
 
 	t.Run("Succeeded", func(t *testing.T) {
-		server.uploads.Start("s3://bucket/succeeded.tar")("sha256:abc", nil)
+		server.uploads.Start("s3://bucket/succeeded.tar")(nil)
 
 		resp, err := server.WaitUpload(ctx, &daemon.WaitUploadReq{Path: "s3://bucket/succeeded.tar"})
 		if err != nil {
 			t.Fatalf("wait failed: %v", err)
 		}
-		if resp.GetChecksum() != "sha256:abc" || resp.GetError() != "" {
+		if resp.GetError() != "" {
 			t.Fatalf("unexpected response %v", resp)
 		}
 	})
 
 	t.Run("Failed", func(t *testing.T) {
-		server.uploads.Start("s3://bucket/failed.tar")("", errors.New("connection reset"))
+		server.uploads.Start("s3://bucket/failed.tar")(errors.New("connection reset"))
 
 		resp, err := server.WaitUpload(ctx, &daemon.WaitUploadReq{Path: "s3://bucket/failed.tar"})
 		if err != nil {
 			t.Fatalf("a failed upload must not fail the call: %v", err)
 		}
-		if resp.GetChecksum() != "" || resp.GetError() != "connection reset" {
+		if resp.GetError() != "connection reset" {
 			t.Fatalf("unexpected response %v", resp)
 		}
 	})

@@ -16,8 +16,7 @@ const RETENTION = 1 * time.Hour
 var ErrNotFound = errors.New("no upload found for path")
 
 type Result struct {
-	Checksum string // of the path as stored, empty if the upload failed
-	Err      error
+	Err error // why the upload failed; nil if it succeeded
 }
 
 type upload struct {
@@ -42,9 +41,9 @@ func NewRegistry() *Registry {
 // Start records that an upload to path is in progress. The returned function
 // must be called once, when the upload has ended.
 // An upload to the same path that was started earlier is replaced.
-func (r *Registry) Start(path string) (finish func(checksum string, err error)) {
+func (r *Registry) Start(path string) (finish func(err error)) {
 	if r == nil {
-		return func(string, error) {}
+		return func(error) {}
 	}
 
 	u := &upload{done: make(chan struct{})}
@@ -55,13 +54,10 @@ func (r *Registry) Start(path string) (finish func(checksum string, err error)) 
 	r.mu.Unlock()
 
 	var once sync.Once
-	return func(checksum string, err error) {
+	return func(err error) {
 		once.Do(func() {
-			if err != nil {
-				checksum = ""
-			}
 			r.mu.Lock()
-			u.result = Result{Checksum: checksum, Err: err}
+			u.result = Result{Err: err}
 			u.finished = time.Now()
 			r.mu.Unlock()
 			close(u.done)
