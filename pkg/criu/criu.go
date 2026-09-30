@@ -27,6 +27,15 @@ type Criu struct {
 	swrkSk   *net.UnixConn
 	swrkPath string
 	mntNs    string
+
+	// What swrk had to say, when the caller gave it no stderr of its own: the pipe, and the
+	// tail of it once the pipe is done with
+	swrkStderr *os.File
+	swrkSaid   chan string
+	// Whether swrk was started through nsenter
+	entered bool
+	// How swrk ended, for an operation that failed
+	swrkExit string
 }
 
 // MakeCriu returns the Criu object required for most operations
@@ -73,6 +82,7 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 
 	args := []string{"swrk", strconv.Itoa(3 + len(extraFiles))}
 	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
+	c.entered = false
 	if c.mntNs != "" {
 		// Nothing to enter if we're in it already (e.g. started from inside the job), which
 		// also asks for no privilege we may not have.
@@ -91,11 +101,26 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 			}
 			args = append([]string{"--mount=" + c.mntNs, "--", c.swrkPath}, args...)
 			cmd = exec.CommandContext(ctx, nsenter, args...)
+			c.entered = true
 		}
 	}
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+
+	// Keep what swrk says for the error if it fails, when nobody else is listening. A pipe of
+	// our own, as a writer would have exec copying in a goroutine that outlives Process.Wait.
+	c.swrkStderr = nil
+	var stderrW *os.File
+	if stderr == nil {
+		var err error
+		c.swrkStderr, stderrW, err = os.Pipe()
+		if err != nil {
+			clnNet.Close()
+			return err
+		}
+		cmd.Stderr = stderrW
+	}
 	cmd.ExtraFiles = append(extraFiles, srv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
@@ -107,14 +132,28 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	runtime.LockOSThread()
 
 	err = cmd.Start()
+	if stderrW != nil {
+		stderrW.Close() // the child has its copy
+	}
 	if err != nil {
 		runtime.UnlockOSThread()
 		clnNet.Close()
+		if c.swrkStderr != nil {
+			c.swrkStderr.Close()
+			c.swrkStderr = nil
+		}
 		return err
 	}
 
 	c.swrkCmd = cmd
 	c.swrkSk = clnNet.(*net.UnixConn)
+
+	// Read as it comes, or swrk blocks on a full pipe before it can answer
+	if c.swrkStderr != nil {
+		r := c.swrkStderr
+		c.swrkSaid = make(chan string, 1)
+		go func() { c.swrkSaid <- tailOf(r) }()
+	}
 
 	return nil
 }
@@ -129,11 +168,29 @@ func (c *Criu) Cleanup() error {
 		c.swrkSk = nil
 		// XXX: We don't use s.swrkCmd.Wait() because it can hang forever
 		// since the stdin, stdout, and stderr copy might not be over.
-		if _, err := c.swrkCmd.Process.Wait(); err != nil {
+		state, err := c.swrkCmd.Process.Wait()
+		if err != nil {
 			// ECHILD means the process was already reaped (e.g. by the
 			// embedding process's signal handler or the Go runtime).
 			if !errors.Is(err, syscall.ECHILD) {
 				errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			}
+		} else {
+			c.swrkExit = state.String()
+		}
+		if c.swrkStderr != nil {
+			// Something swrk left behind may still hold the pipe open; not for long
+			var said string
+			select {
+			case said = <-c.swrkSaid:
+			case <-time.After(time.Second):
+				c.swrkStderr.Close() // ends the read
+				said = <-c.swrkSaid
+			}
+			c.swrkStderr.Close()
+			c.swrkStderr = nil
+			if said != "" {
+				c.swrkExit += ", stderr: " + said
 			}
 		}
 		c.swrkCmd = nil
@@ -305,6 +362,9 @@ func (c *Criu) doSwrkWithResp(
 		err := c.Cleanup()
 		if err != nil {
 			retErr = errors.Join(retErr, err)
+		}
+		if retErr != nil && c.swrkExit != "" {
+			retErr = fmt.Errorf("%w (criu swrk%s: %s)", retErr, c.howRun(), c.swrkExit)
 		}
 	}()
 
@@ -579,4 +639,38 @@ func inMountNamespace(path string) (bool, error) {
 		return false, err
 	}
 	return ours.Dev == theirs.Dev && ours.Ino == theirs.Ino, nil
+}
+
+// howRun says how swrk was started, for an error
+func (c *Criu) howRun() string {
+	switch {
+	case c.mntNs == "":
+		return ""
+	case c.entered:
+		return " entered into mount namespace " + c.mntNs
+	default:
+		return " inside mount namespace " + c.mntNs + " already"
+	}
+}
+
+// tailOf reads r to its end and returns the last of it
+func tailOf(r io.Reader) string {
+	const keep = 16 << 10
+	var tail []byte
+	buf := make([]byte, 4096)
+	for {
+		n, err := r.Read(buf)
+		tail = append(tail, buf[:n]...)
+		if len(tail) > keep {
+			tail = tail[len(tail)-keep:]
+		}
+		if err != nil {
+			break
+		}
+	}
+	text := strings.TrimSpace(string(tail))
+	if len(text) > 2048 {
+		text = "..." + text[len(text)-2048:]
+	}
+	return text
 }
