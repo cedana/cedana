@@ -18,7 +18,7 @@ YUM_PACKAGES=(
 
 APT_PACKAGES=(
     wget git make psmisc
-    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev iptables libnftables1 # CRIU
+    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev iptables libnftables1 liblz4-dev # CRIU
     sysvinit-utils
 )
 
