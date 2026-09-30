@@ -4,10 +4,10 @@ buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-20260909161930-d7
 buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-20260909161930-d73a667e1b80.1/go.mod h1:znSpHYvR3Agq2j6C/gIG5YgxIrWx/pk9HJ38yOp0E8Q=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1 h1:CezzVGtRhWTwz0N6CighuSh7VTeT/IJtNNa+KwOgWp0=
 buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1/go.mod h1:kV15BFc7NMSZ8iS0sr37eQoVFeeX616LLi5HCr9zDMI=
-buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-0bae3d30342f.1 h1:x9bTbk/+MUBS9x17273IkKIcBlvsJeAZVpZNt1VPPpc=
-buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-0bae3d30342f.1/go.mod h1:KfKZtqBSNXa0voQROjty4XtERk387rxsyPHwbCeBFYQ=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-0bae3d30342f.2 h1:+AFWXQ+6O/DfaEOYgh5/3Z+iem9K26exzIx4OHJiGy8=
-buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-0bae3d30342f.2/go.mod h1:MR82S/Hp+JrJ6pGU68PTj2U8M13OVIQukyPGDGhtsKI=
+buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-0cfe2ba4b7e0.1 h1:zx2rOe8/jqvYEUh19wG6R9JTjkUSbEZuXPY/5l2PVRM=
+buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-0cfe2ba4b7e0.1/go.mod h1:z+LUpI5EE4RTpkxY1+ccQfuXCx7sae1EkLvtg5vL23I=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-0cfe2ba4b7e0.2 h1:lJuyi9cCycptqJUcxI/wjrRUuLO/GABzCSmUJyke0+g=
+buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-0cfe2ba4b7e0.2/go.mod h1:vaQJ9hoO/kKcBS2MTfAtzL+i/R/JHQexzyeCM7ecPn0=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-dfcf9ee62e1c.2 h1:cH35SeX6UmZthyXD5RDEe07fmjgGQYTT2i8Yt3L1s00=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-dfcf9ee62e1c.2/go.mod h1:o98Koki525dQuXUFPp8RwuyZ18vJ1gdJ7nAKaUtcXPM=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
