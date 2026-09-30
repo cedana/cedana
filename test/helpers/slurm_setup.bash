@@ -655,6 +655,16 @@ slurm_conf_overlay_apply() {
 
     _slurm_cancel_all_jobs || return 1
 
+    # Record the files before installing any, so a reset removes whatever part
+    # of them got installed if this fails partway. Added to what is recorded
+    # already, which a reset has not removed yet.
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        sh -c 'out="$1"; shift; { cat "$out" 2>/dev/null; for n; do echo "$n"; done; } | sort -u > "$out.new" && mv "$out.new" "$out"' \
+        _ "$SLURM_CONF_OVERLAY_FILES" "${names[@]}" || {
+        error_log "Failed to record overlay files in $SLURM_CONF_OVERLAY_FILES"
+        return 1
+    }
+
     printf '%s\n' "$fragment" |
         docker exec -i "$SLURM_CONTROLLER_CONTAINER" sh -c 'cat > "$1"' _ "$SLURM_CONF_OVERLAY" || {
         error_log "Failed to write $SLURM_CONF_OVERLAY"
@@ -667,12 +677,6 @@ slurm_conf_overlay_apply() {
             return 1
         }
     done
-    docker exec "$SLURM_CONTROLLER_CONTAINER" \
-        sh -c 'out="$1"; shift; for n; do echo "$n"; done > "$out"' \
-        _ "$SLURM_CONF_OVERLAY_FILES" "${names[@]}" || {
-        error_log "Failed to record overlay files in $SLURM_CONF_OVERLAY_FILES"
-        return 1
-    }
 
     _slurm_conf_include_overlay || return 1
     _sync_slurm_conf "${names[@]}" || return 1
