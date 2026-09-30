@@ -69,7 +69,7 @@ _persist_container_log_file() {
 
     if docker exec "$container" test -f "$src" 2>/dev/null; then
         docker cp "$container:$src" "$dst_dir/$base" 2>/dev/null ||
-            docker exec "$container" sh -c "cat '$src'" >"$dst_dir/$base" 2>&1 || true
+            docker exec "$container" cat "$src" >"$dst_dir/$base" 2>&1 || true
     fi
 }
 
@@ -78,6 +78,9 @@ _persist_container_log_file() {
 # ~/.cedana/logs (pkg/logging.LogFile). In unprivileged mode that is where the
 # monitor, and the dump or restore it runs, leave everything they log. Homes
 # come from the same passwd entries cedana looks them up in.
+#
+# The users can name these files anything, so the paths are NUL-separated and
+# must only ever be passed as arguments, never put into shell code.
 _slurm_user_log_files() {
     local container="$1"
 
@@ -85,10 +88,16 @@ _slurm_user_log_files() {
         getent passwd | awk -F: "\$3 >= 1000 && \$3 < 65534 { print \$6 }" | sort -u |
             while read -r home; do
                 for f in "$home"/.cedana/logs/*.log; do
-                    [ -f "$f" ] && echo "$f"
+                    [ -f "$f" ] && printf "%s\0" "$f"
                 done
             done
     ' 2>/dev/null || true
+}
+
+# Print the cedana-slurm logs in /var/log and the users' logs, NUL-separated.
+_slurm_cedana_log_files() {
+    printf '%s\0' /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log
+    _slurm_user_log_files "$1"
 }
 
 _capture_runtime_slurm_logs() {
@@ -154,7 +163,7 @@ _capture_runtime_slurm_logs() {
         # By user, since each user has its own cedana-slurm.log. Not under a
         # .cedana directory, which the artifact upload skips as hidden.
         local user_log
-        while IFS= read -r user_log; do
+        while IFS= read -r -d "" user_log; do
             [ -n "$user_log" ] || continue
             _persist_container_log_file "$c" "$user_log" \
                 "$cdir/user-logs/$(basename "${user_log%/.cedana/logs/*}")"
@@ -265,7 +274,7 @@ _dump_job_failure_info() {
             echo "(no monitor log)"
 
         local user_log
-        while IFS= read -r user_log; do
+        while IFS= read -r -d "" user_log; do
             [ -n "$user_log" ] || continue
             echo "--- $c $user_log (last 120 lines) ---"
             docker exec "$c" tail -120 "$user_log" 2>/dev/null || echo "(unreadable)"
@@ -456,16 +465,24 @@ test_slurm_job() {
                     }
             fi
 
-            local _host _cedana_logs=""
+            local _host
+            local -a _cedana_logs=()
             _host="$(_get_batch_host "$job_id")"
             if [ -n "$_host" ]; then
-                _cedana_logs="/var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log $(_slurm_user_log_files "$_host" | tr '\n' ' ')"
+                mapfile -d '' -t _cedana_logs < <(_slurm_cedana_log_files "$_host")
                 info_log "[DEBUG] SPANK monitor check on $_host for job $job_id:"
                 docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm monitor'" 2>/dev/null || info_log "[DEBUG] No monitor process found"
                 info_log "[DEBUG] slurmd PATH:"
                 docker exec "$_host" bash -c "cat /proc/\$(pgrep -x slurmd | head -1)/environ 2>/dev/null | tr '\0' '\n' | grep ^PATH" 2>/dev/null || info_log "[DEBUG] Could not read slurmd environ"
                 info_log "[DEBUG] SPANK log entries:"
-                docker exec "$_host" bash -c "for f in $_cedana_logs; do [ -f \"\$f\" ] || continue; echo \"--- \$f ---\"; grep -i 'spank\|monitor\|checkpoint request\|checkpoint consumer\|failed to get event stream\|failed to setup checkpoint request consumer\|failed to connect to rabbitmq\|checkpoint failed for job ID\|publishing checkpoint info' \"\$f\" | tail -15; done" 2>/dev/null || info_log "[DEBUG] No SPANK/monitor entries in logs"
+                # The log paths go in as arguments: users name their own logs
+                docker exec "$_host" bash -c '
+                    for f in "$@"; do
+                        [ -f "$f" ] || continue
+                        echo "--- $f ---"
+                        grep -i "spank\|monitor\|checkpoint request\|checkpoint consumer\|failed to get event stream\|failed to setup checkpoint request consumer\|failed to connect to rabbitmq\|checkpoint failed for job ID\|publishing checkpoint info" "$f" | tail -15
+                    done
+                ' _ "${_cedana_logs[@]}" 2>/dev/null || info_log "[DEBUG] No SPANK/monitor entries in logs"
             fi
 
             info_log "Checkpointing SLURM job $job_id via propagator..."
@@ -495,8 +512,16 @@ test_slurm_job() {
                 }
                 info_log "[DEBUG] cedana-slurm log excerpts scoped to job $job_id:"
                 # Again, as a user's log only exists once something has logged there as them
-                _cedana_logs="/var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log $(_slurm_user_log_files "$_host" | tr '\n' ' ')"
-                docker exec "$_host" bash -c "for f in $_cedana_logs; do [ -f \"\$f\" ] || continue; echo \"--- \$f (job/action scoped) ---\"; grep -E 'jobid=${job_id}\\b|job_id=${job_id}\\b|action_id=${action_id}' \"\$f\" | tail -120 || echo '(no scoped matches)'; done" 2>/dev/null || true
+                mapfile -d '' -t _cedana_logs < <(_slurm_cedana_log_files "$_host")
+                docker exec "$_host" bash -c '
+                    pattern="$1"
+                    shift
+                    for f in "$@"; do
+                        [ -f "$f" ] || continue
+                        echo "--- $f (job/action scoped) ---"
+                        grep -E "$pattern" "$f" | tail -120 || echo "(no scoped matches)"
+                    done
+                ' _ "jobid=${job_id}\\b|job_id=${job_id}\\b|action_id=${action_id}" "${_cedana_logs[@]}" 2>/dev/null || true
 
                 if [ "$monitor_alive" = false ]; then
                     _capture_runtime_slurm_logs "monitor-died-after-checkpoint" "$job_id" "$_host" "$sample_dir" "$relevant_job_ids_csv"
