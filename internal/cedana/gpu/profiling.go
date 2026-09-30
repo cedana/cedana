@@ -3,7 +3,10 @@ package gpu
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	gpu_proto "buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
@@ -36,9 +39,10 @@ type gpuDurationStats struct {
 type gpuWorkerTimingRow struct {
 	worker         *gpu_proto.WorkerProfile
 	workerPosition int
+	phase          *gpu_proto.WorkerPhaseProfile
 	name           string
 	durationNs     int64
-	referenceNs    int64
+	reference      gpuReference
 	bytes          uint64
 }
 
@@ -46,6 +50,30 @@ type gpuProfileInterval struct {
 	startNs int64
 	endNs   int64
 }
+
+const (
+	gpuReferenceMinSamples = 5
+	gpuReferenceMaxSamples = 8
+)
+
+type gpuReference struct {
+	durationNs int64
+	source     string
+	samples    int
+	key        string
+}
+
+type gpuReferenceSample struct {
+	durationNs int64
+	bytes      uint64
+}
+
+type gpuReferenceHistory struct {
+	mu      sync.Mutex
+	samples map[string][]gpuReferenceSample
+}
+
+var learnedGPUReferences = gpuReferenceHistory{samples: make(map[string][]gpuReferenceSample)}
 
 func addGPUFunctionProfileToProfiling(ctx context.Context, duration time.Duration, f ...any) context.Context {
 	functionCtx := profiling.AddTimingParallelComponent(ctx, duration, f...)
@@ -55,6 +83,95 @@ func addGPUFunctionProfileToProfiling(ctx context.Context, duration time.Duratio
 
 func gpuProfileDuration(durationNs int64) time.Duration {
 	return time.Duration(durationNs) * time.Nanosecond
+}
+
+func gpuReferenceBucket(bytes uint64) int {
+	if bytes == 0 {
+		return -1
+	}
+
+	bucket := 0
+	for bytes > 1 {
+		bytes = (bytes + 1) >> 1
+		bucket++
+	}
+	return bucket
+}
+
+func gpuProfileOperation(profile *gpu_proto.GpuProfile) string {
+	for _, function := range profile.GetFunctions() {
+		switch function.GetName() {
+		case "dumpShareableHandleMetadata", "dumpContextlessCalls", "dumpVirtualCudaMemory",
+			"dumpCudaMemory", "dumpCudaCalls", "dumpHostGpuMemory":
+			return "dump"
+		case "restoreShareableHandles", "replayContextlessCalls", "restoreVirtualMemory",
+			"restoreMemory", "restoreCalls", "readHostMemory":
+			return "restore"
+		}
+	}
+	return "unknown"
+}
+
+func gpuWorkerShape(worker *gpu_proto.WorkerProfile) string {
+	parts := make([]string, 0, len(worker.GetPhases()))
+	for _, phase := range worker.GetPhases() {
+		parts = append(parts, fmt.Sprintf("%s:%d", phase.GetName(), gpuReferenceBucket(phase.GetBytes())))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ",")
+}
+
+func gpuProfileWorkloadKey(profile *gpu_proto.GpuProfile, operation string) string {
+	shapes := make([]string, 0, len(profile.GetWorkers()))
+	for _, worker := range profile.GetWorkers() {
+		shapes = append(shapes, gpuWorkerShape(worker))
+	}
+	sort.Strings(shapes)
+	return fmt.Sprintf("%s|workers=%d|%s", operation, len(shapes), strings.Join(shapes, ";"))
+}
+
+func (history *gpuReferenceHistory) observe(key string, durationNs int64, bytes uint64) gpuReference {
+	if key == "" || durationNs <= 0 {
+		return gpuReference{key: key}
+	}
+
+	history.mu.Lock()
+	defer history.mu.Unlock()
+
+	samples := append(history.samples[key], gpuReferenceSample{durationNs: durationNs, bytes: bytes})
+	if len(samples) > gpuReferenceMaxSamples {
+		samples = samples[len(samples)-gpuReferenceMaxSamples:]
+	}
+	history.samples[key] = samples
+	if len(samples) < gpuReferenceMinSamples {
+		return gpuReference{samples: len(samples), key: key}
+	}
+
+	ordered := append([]gpuReferenceSample(nil), samples...)
+	if bytes == 0 {
+		sort.Slice(ordered, func(i, j int) bool {
+			return ordered[i].durationNs < ordered[j].durationNs
+		})
+		return gpuReference{
+			durationNs: ordered[(len(ordered)-1)/4].durationNs,
+			source:     "learned",
+			samples:    len(samples),
+			key:        key,
+		}
+	}
+
+	sort.Slice(ordered, func(i, j int) bool {
+		left := float64(ordered[i].durationNs) / float64(ordered[i].bytes)
+		right := float64(ordered[j].durationNs) / float64(ordered[j].bytes)
+		return left < right
+	})
+	reference := ordered[(len(ordered)-1)/4]
+	return gpuReference{
+		durationNs: int64(math.Ceil(float64(bytes) * float64(reference.durationNs) / float64(reference.bytes))),
+		source:     "learned",
+		samples:    len(samples),
+		key:        key,
+	}
 }
 
 func gpuSortedWorkers(profile *gpu_proto.GpuProfile) []*gpu_proto.WorkerProfile {
@@ -119,7 +236,29 @@ func gpuWorkerPhase(worker *gpu_proto.WorkerProfile, phaseName string) *gpu_prot
 	return nil
 }
 
-func gpuPhaseRows(workers []*gpu_proto.WorkerProfile, phaseName, displayName string) []gpuWorkerTimingRow {
+func gpuPhaseReference(profileKey string, worker *gpu_proto.WorkerProfile, workerPosition int, phaseName string, phase *gpu_proto.WorkerPhaseProfile) gpuReference {
+	workerKey := worker.GetWorkerIndex()
+	if workerKey < 0 {
+		workerKey = int32(workerPosition)
+	}
+	profileKey = fmt.Sprintf("%s|worker=%d", profileKey, workerKey)
+	key := fmt.Sprintf("%s|phase=%s|bytes=%d", profileKey, phaseName, gpuReferenceBucket(phase.GetBytes()))
+	learned := learnedGPUReferences.observe(key, phase.GetDurationNs(), phase.GetBytes())
+	if learned.durationNs > 0 {
+		return learned
+	}
+
+	if phaseName == "gpu_memory" && phase.GetReferenceDurationNs() > 0 {
+		return gpuReference{
+			durationNs: phase.GetReferenceDurationNs(),
+			source:     "gpu capability model",
+			key:        key,
+		}
+	}
+	return learned
+}
+
+func gpuPhaseRows(workers []*gpu_proto.WorkerProfile, profileKey, phaseName, displayName string) []gpuWorkerTimingRow {
 	var rows []gpuWorkerTimingRow
 	for i, worker := range workers {
 		phase := gpuWorkerPhase(worker, phaseName)
@@ -134,9 +273,10 @@ func gpuPhaseRows(workers []*gpu_proto.WorkerProfile, phaseName, displayName str
 		rows = append(rows, gpuWorkerTimingRow{
 			worker:         worker,
 			workerPosition: i,
+			phase:          phase,
 			name:           displayName,
 			durationNs:     durationNs,
-			referenceNs:    phase.GetReferenceDurationNs(),
+			reference:      gpuPhaseReference(profileKey, worker, i, phaseName, phase),
 			bytes:          bytes,
 		})
 	}
@@ -237,6 +377,100 @@ func gpuOtherRows(workers []*gpu_proto.WorkerProfile) []gpuWorkerTimingRow {
 	return rows
 }
 
+func gpuReferenceIntervals(row gpuWorkerTimingRow) ([]gpuProfileInterval, bool) {
+	if row.phase == nil || row.phase.GetIntervalsTruncated() || row.reference.durationNs <= 0 {
+		return nil, false
+	}
+
+	var actualIntervals []gpuProfileInterval
+	for _, interval := range row.phase.GetIntervals() {
+		if interval.GetEndNs() > interval.GetStartNs() {
+			actualIntervals = append(actualIntervals, gpuProfileInterval{
+				startNs: interval.GetStartNs(),
+				endNs:   interval.GetEndNs(),
+			})
+		}
+	}
+	actualDurationNs := gpuMergedIntervalDurationNs(actualIntervals)
+	if actualDurationNs <= 0 {
+		return nil, false
+	}
+
+	scale := float64(row.reference.durationNs) / float64(actualDurationNs)
+	referenceIntervals := make([]gpuProfileInterval, 0, len(actualIntervals))
+	for _, interval := range actualIntervals {
+		durationNs := int64(math.Ceil(float64(interval.endNs-interval.startNs) * scale))
+		referenceIntervals = append(referenceIntervals, gpuProfileInterval{
+			startNs: interval.startNs,
+			endNs:   interval.startNs + durationNs,
+		})
+	}
+	return referenceIntervals, true
+}
+
+func gpuAggregateReference(rows []gpuWorkerTimingRow, key string) gpuReference {
+	byWorker := make(map[*gpu_proto.WorkerProfile][]gpuWorkerTimingRow)
+	for _, row := range rows {
+		byWorker[row.worker] = append(byWorker[row.worker], row)
+	}
+	if len(byWorker) == 0 {
+		return gpuReference{}
+	}
+
+	var aggregateNs int64
+	for _, workerRows := range byWorker {
+		var referenceIntervals []gpuProfileInterval
+		for _, row := range workerRows {
+			intervals, ok := gpuReferenceIntervals(row)
+			if !ok {
+				return gpuReference{}
+			}
+			referenceIntervals = append(referenceIntervals, intervals...)
+		}
+		workerReferenceNs := gpuMergedIntervalDurationNs(referenceIntervals)
+		if workerReferenceNs <= 0 {
+			return gpuReference{}
+		}
+		aggregateNs = max(aggregateNs, workerReferenceNs)
+	}
+
+	return gpuReference{
+		durationNs: aggregateNs,
+		source:     "gpu worker aggregate",
+		key:        key,
+	}
+}
+
+func addGPUAggregateReferenceToProfiling(ctx context.Context, rows []gpuWorkerTimingRow, key string) {
+	reference := gpuAggregateReference(rows, key)
+	if reference.durationNs <= 0 {
+		return
+	}
+
+	var actualIntervals []gpuProfileInterval
+	for _, row := range rows {
+		for _, interval := range row.phase.GetIntervals() {
+			if interval.GetEndNs() > interval.GetStartNs() {
+				actualIntervals = append(actualIntervals, gpuProfileInterval{
+					startNs: interval.GetStartNs(),
+					endNs:   interval.GetEndNs(),
+				})
+			}
+		}
+	}
+	actualNs := gpuMergedIntervalDurationNs(actualIntervals)
+	if actualNs <= 0 {
+		return
+	}
+
+	functionCtx := addGPUFunctionProfileToProfiling(ctx, gpuProfileDuration(actualNs), "GPU worker phases")
+	profiling.SetReference(functionCtx, profiling.Reference{
+		Duration: gpuProfileDuration(reference.durationNs),
+		Source:   reference.source,
+		Key:      reference.key,
+	})
+}
+
 func gpuWorkerDurationStats(rows []gpuWorkerTimingRow) gpuDurationStats {
 	var stats gpuDurationStats
 	for _, row := range rows {
@@ -274,8 +508,13 @@ func addGPUWorkerTimingRowToProfiling(ctx context.Context, row gpuWorkerTimingRo
 		gpuWorkerProfileTags(row, stats)...,
 	)
 	profiling.AddIO(functionCtx, int64(row.bytes))
-	if row.referenceNs > 0 {
-		profiling.SetReferenceDuration(functionCtx, gpuProfileDuration(row.referenceNs))
+	if row.reference.durationNs > 0 {
+		profiling.SetReference(functionCtx, profiling.Reference{
+			Duration: gpuProfileDuration(row.reference.durationNs),
+			Source:   row.reference.source,
+			Samples:  row.reference.samples,
+			Key:      row.reference.key,
+		})
 	}
 	profiling.MarkIORedundant(functionCtx)
 }
@@ -294,6 +533,9 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 
 	workers := gpuSortedWorkers(profile)
 	displayNames := gpuPhaseDisplayNames(profile)
+	workloadKey := gpuProfileWorkloadKey(profile, gpuProfileOperation(profile))
+	rowsByPhase := make([][]gpuWorkerTimingRow, 0)
+	var namedRows []gpuWorkerTimingRow
 
 	for _, phaseName := range gpuProfilePhaseOrder(profile, workers) {
 		displayName := displayNames[phaseName]
@@ -301,7 +543,14 @@ func addGPUProfileToProfiling(ctx context.Context, profile *gpu_proto.GpuProfile
 			displayName = phaseName
 		}
 
-		addGPUWorkerTimingRowsToProfiling(ctx, gpuPhaseRows(workers, phaseName, displayName))
+		rows := gpuPhaseRows(workers, workloadKey, phaseName, displayName)
+		rowsByPhase = append(rowsByPhase, rows)
+		namedRows = append(namedRows, rows...)
+	}
+
+	addGPUAggregateReferenceToProfiling(ctx, namedRows, workloadKey)
+	for _, rows := range rowsByPhase {
+		addGPUWorkerTimingRowsToProfiling(ctx, rows)
 	}
 
 	addGPUWorkerTimingRowsToProfiling(ctx, gpuOtherRows(workers))

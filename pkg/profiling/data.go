@@ -23,7 +23,10 @@ type Data struct {
 	Duration int64 `json:"duration,omitempty"`
 	IO       int64 `json:"io,omitempty"`
 
-	ReferenceDuration int64 `json:"reference_duration,omitempty"`
+	ReferenceDuration int64  `json:"reference_duration,omitempty"`
+	ReferenceSource   string `json:"reference_source,omitempty"`
+	ReferenceSamples  int    `json:"reference_samples,omitempty"`
+	ReferenceKey      string `json:"reference_key,omitempty"`
 
 	Parallel    bool `json:"parallel,omitempty"`
 	Redundant   bool `json:"redundant,omitempty"`
@@ -115,10 +118,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 
 		duration := time.Duration(p.Duration)
 		durationStr := DurationStr(duration, precision)
-		referenceDurationStr := ""
-		if p.ReferenceDuration > 0 {
-			referenceDurationStr = style.DisabledColors.Sprint(DurationStr(time.Duration(p.ReferenceDuration), precision))
-		}
+		referenceDurationStr := referenceDurationString(p, precision)
 		io := p.IO
 		ioStr := utils.SizeStr(io)
 		if p.Parallel || p.Redundant {
@@ -218,6 +218,20 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	}
 
 	fmt.Println()
+}
+
+func referenceDurationString(data *Data, precision string) string {
+	if data.ReferenceDuration <= 0 {
+		return ""
+	}
+
+	reference := DurationStr(time.Duration(data.ReferenceDuration), precision)
+	if data.Duration < data.ReferenceDuration*3/2 {
+		return style.DisabledColors.Sprint(reference)
+	}
+
+	ratio := float64(data.Duration) / float64(data.ReferenceDuration)
+	return style.WarningColors.Sprint(fmt.Sprintf("%s (%.1fx)", reference, ratio))
 }
 
 func EncodeJSON(data *Data) (string, error) {
