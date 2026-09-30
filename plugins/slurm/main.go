@@ -41,6 +41,7 @@ var (
 		validation.ValidateDumpRequest,
 		job.SetPIDForDump,
 		job.GetSlurmJobForDump,
+		job.DumpSlurmScript,
 
 		// TODO: this needs to be smarter (and not always modify CRIU opts)
 		// Otherwise it causes `operation failed (msg:Error (compel/src/lib/infect.c:262): Unseizable non-zombie 2443832 found`
@@ -59,6 +60,7 @@ var (
 		defaults.FillMissingRestoreDefaults,
 		validation.ValidateRestoreRequest,
 		job.GetSlurmJobForRestore,
+		job.RestoreSlurmScript,
 		cgroup.ApplyCgroupsOnRestore,
 
 		// Mirrors how external namespaces were handled on dump
