@@ -54,7 +54,7 @@ jobs:
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
-      criu_version: criu-dev
+      criu_version: feature/ced-2231-investigate-criu-memory-compression-pr-v2
       gpu_version: main
       streamer_version: main
       helm_chart_version: main
