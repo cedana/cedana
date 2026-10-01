@@ -37,6 +37,8 @@ type (
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
 		// SLURM settings
 		Slurm Slurm `json:"slurm" key:"slurm" yaml:"slurm" mapstructure:"slurm"`
+		// K8s settings
+		K8s K8s `json:"k8s" key:"k8s" yaml:"k8s" mapstructure:"k8s"`
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
@@ -57,6 +59,12 @@ type (
 		DBPort int `json:"db_port" key:"db_port" yaml:"db_port" mapstructure:"db_port"`
 		// DBName is the name of the slurmdbd database to connect to
 		DBName string `json:"db_name" key:"db_name" yaml:"db_name" mapstructure:"db_name"`
+	}
+
+	K8s struct {
+		// FallbackColdStart sets whether the containerd runtime shim should fall back to a normal (cold) start
+		// of the container if the cedana restore fails for some reason.
+		FallbackColdStart bool `json:"fallback_cold_start" key:"fallback_cold_start" yaml:"fallback_cold_start" mapstructure:"fallback_cold_start"`
 	}
 
 	Connection struct {
