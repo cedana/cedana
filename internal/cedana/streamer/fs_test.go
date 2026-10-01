@@ -217,13 +217,18 @@ func TestGlob(t *testing.T) {
 	}
 }
 
-// Storage whose writers fail when closed, as a remote shard does when its last flush fails
+// Storage whose writers fail on every write and again when closed, so that a shard
+// has two outcomes to report: the write's error and the close's
 type closeFailingStorage struct {
 	filesystem.Storage
 }
 
 type closeFailingWriter struct {
 	io.WriteCloser
+}
+
+func (w closeFailingWriter) Write(p []byte) (int, error) {
+	return 0, errors.New("write failed")
 }
 
 func (w closeFailingWriter) Close() error {
@@ -239,8 +244,9 @@ func (s *closeFailingStorage) Create(ctx context.Context, path string) (io.Write
 	return closeFailingWriter{file}, nil
 }
 
-// Every shard reports two outcomes, of its write and of its close. The wait must
-// return the close errors of every shard, and must return at all.
+// Every shard has two outcomes, of its write and of its close. The wait must
+// return both for every shard, and must return at all: a worker that blocks on
+// its second result never signals that it is done.
 func TestStreamingFsReturnsEveryShardCloseError(t *testing.T) {
 	streamerBinary := "/usr/local/bin/cedana-image-streamer"
 	if _, err := os.Stat(streamerBinary); os.IsNotExist(err) {
@@ -286,8 +292,11 @@ func TestStreamingFsReturnsEveryShardCloseError(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected the close errors of the shards")
 		}
-		if got := strings.Count(err.Error(), "flush failed"); got != int(streams) {
-			t.Fatalf("expected the close error of each of %d shards, got %d in %v", streams, got, err)
+		// A write error is reported by the write and again by the compression writer's close
+		for _, outcome := range []string{"write failed", "flush failed"} {
+			if got := strings.Count(err.Error(), outcome); got < int(streams) {
+				t.Fatalf("expected %q from each of %d shards, got %d in %v", outcome, streams, got, err)
+			}
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("the wait did not return: a shard's second error blocked its worker")
