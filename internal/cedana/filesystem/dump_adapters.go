@@ -193,6 +193,8 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				}
 			}
 		} else {
+			// Record checkpoint image bytes, not physical disk I/O.
+			defer func() { profiling.AddIO(ctx, utils.SizeFromPath(imagesDirectory)) }()
 			// If imagesDirectory was provided by a plugin
 			// dump path to be req.Dir + req.Name
 			if strings.Contains(req.Dir, "://") {

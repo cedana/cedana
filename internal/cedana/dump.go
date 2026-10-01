@@ -35,7 +35,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
 
-		pluginDumpStorage(), // detects and plugs in the storage to use
+		pluginDumpStorage,    // detects and plugs in the storage to use
 		pluginDumpMiddleware, // middleware from plugins
 
 		// By now we should have the PID
@@ -87,7 +87,7 @@ func (s *Cedana) Dump(req *daemon.DumpReq) (*daemon.DumpResp, error) {
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
 
-		pluginDumpStorage(), // detects and plugs in the storage to use
+		pluginDumpStorage,    // detects and plugs in the storage to use
 		pluginDumpMiddleware, // middleware from plugins
 
 		// By now we should have the PID
@@ -163,44 +163,42 @@ func pluginDumpMiddleware(next types.Dump) types.Dump {
 // Detects and plugs in the storage to use from the specified path,
 // If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
-func pluginDumpStorage() types.Adapter[types.Dump] {
-	return func(next types.Dump) types.Dump {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
-			dir := req.GetDir()
+func pluginDumpStorage(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		dir := req.GetDir()
 
-			var storage io.Storage = &filesystem.Storage{}
+		var storage io.Storage = &filesystem.Storage{}
 
-			if strings.Contains(dir, "://") {
-				pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
-				err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
-					if newPluginStorage == nil {
-						return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
-					}
-					storage, err = newPluginStorage(ctx)
-					return err
-				}, pluginName)
-				if err != nil {
-					return nil, status.Error(codes.Unavailable, err.Error())
+		if strings.Contains(dir, "://") {
+			pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
+			err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
+				if newPluginStorage == nil {
+					return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
 				}
+				storage, err = newPluginStorage(ctx)
+				return err
+			}, pluginName)
+			if err != nil {
+				return nil, status.Error(codes.Unavailable, err.Error())
 			}
-
-			opts.Storage = storage
-			streams := req.Streams
-			if streams == 0 {
-				streams = config.Global.Checkpoint.Streams
-			}
-
-			if streams == 1 {
-				return nil, status.Error(codes.InvalidArgument, "A minimum of 2 streams are required for streaming. Specify 0 to disable streaming.")
-			}
-
-			filesystem := filesystem.DumpFilesystem
-			if streams > 1 {
-				filesystem = streamer.DumpFilesystem(streams)
-			}
-
-			return next.With(filesystem)(ctx, opts, resp, req)
 		}
+
+		opts.Storage = storage
+		streams := req.Streams
+		if streams == 0 {
+			streams = config.Global.Checkpoint.Streams
+		}
+
+		if streams == 1 {
+			return nil, status.Error(codes.InvalidArgument, "A minimum of 2 streams are required for streaming. Specify 0 to disable streaming.")
+		}
+
+		filesystem := filesystem.DumpFilesystem
+		if streams > 1 {
+			filesystem = streamer.DumpFilesystem(streams)
+		}
+
+		return next.With(filesystem)(ctx, opts, resp, req)
 	}
 }
 

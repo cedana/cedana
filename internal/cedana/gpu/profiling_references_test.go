@@ -1,9 +1,13 @@
 package gpu
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	gpu_proto "buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
+	"github.com/cedana/cedana/pkg/keys"
+	"github.com/cedana/cedana/pkg/profiling"
 )
 
 func TestGPUReferenceHistoryUsesBestSampleDuringWarmup(t *testing.T) {
@@ -64,53 +68,63 @@ func TestGPUPhaseReferencePrefersModeledGPUCopy(t *testing.T) {
 	}
 }
 
-func TestGPUAggregateReferencePreservesParallelPhases(t *testing.T) {
-	worker := &gpu_proto.WorkerProfile{}
-	rows := []gpuWorkerTimingRow{
-		{
-			worker: worker,
-			phase: &gpu_proto.WorkerPhaseProfile{
-				Intervals: []*gpu_proto.WorkerPhaseInterval{{StartNs: 0, EndNs: 100}},
-			},
-			reference: gpuReference{durationNs: 50},
-		},
-		{
-			worker: worker,
-			phase: &gpu_proto.WorkerPhaseProfile{
-				Intervals: []*gpu_proto.WorkerPhaseInterval{{StartNs: 0, EndNs: 100}},
-			},
-			reference: gpuReference{durationNs: 50},
-		},
-	}
-
-	reference := gpuAggregateReference(rows, "dump")
-	if reference.durationNs != 50 {
-		t.Fatalf("parallel aggregate = %d, want 50", reference.durationNs)
+func TestGPUAggregateLearnsMeasuredIntervals(t *testing.T) {
+	previousSamples, previousKeys := learnedGPUReferences.samples, learnedGPUReferences.keys
+	learnedGPUReferences.samples, learnedGPUReferences.keys = make(map[string][]gpuReferenceSample), nil
+	t.Cleanup(func() { learnedGPUReferences.samples, learnedGPUReferences.keys = previousSamples, previousKeys })
+	for _, test := range []struct {
+		name        string
+		secondStart int64
+		want        int64
+	}{
+		{"serial", 100, 200}, {"parallel", 0, 100},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			data := &profiling.Data{}
+			ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
+			rows := []gpuWorkerTimingRow{
+				{durationNs: 100, phase: &gpu_proto.WorkerPhaseProfile{Intervals: []*gpu_proto.WorkerPhaseInterval{{StartNs: 0, EndNs: 100}}}, reference: gpuReference{durationNs: 200}},
+				{durationNs: 100, phase: &gpu_proto.WorkerPhaseProfile{Intervals: []*gpu_proto.WorkerPhaseInterval{{StartNs: test.secondStart, EndNs: test.secondStart + 100}}}, reference: gpuReference{durationNs: 200}},
+			}
+			addGPUAggregateReferenceToProfiling(ctx, rows, test.name)
+			if len(data.Components) != 1 {
+				t.Fatalf("aggregate rows = %d", len(data.Components))
+			}
+			row := data.Components[0]
+			if row.Duration != test.want || row.ReferenceDuration != test.want || row.ReferenceSamples != 1 {
+				t.Fatalf("aggregate = %#v, want measured duration %d", row, test.want)
+			}
+			rows[1].phase.Intervals[0].EndNs += 100
+			addGPUAggregateReferenceToProfiling(ctx, rows, test.name)
+			if row := data.Components[1]; row.ReferenceDuration != test.want || row.ReferenceSamples != 2 {
+				t.Fatalf("aggregate did not reuse measured history: %#v", row)
+			}
+			rows[0].phase.IntervalsTruncated = true
+			addGPUAggregateReferenceToProfiling(ctx, rows, test.name)
+			if len(data.Components) != 2 {
+				t.Fatal("truncated intervals produced an aggregate")
+			}
+		})
 	}
 }
 
-func TestGPUAggregateReferenceUsesSlowestWorker(t *testing.T) {
-	first := &gpu_proto.WorkerProfile{}
-	second := &gpu_proto.WorkerProfile{}
-	rows := []gpuWorkerTimingRow{
-		{
-			worker: first,
-			phase: &gpu_proto.WorkerPhaseProfile{
-				Intervals: []*gpu_proto.WorkerPhaseInterval{{StartNs: 0, EndNs: 100}},
-			},
-			reference: gpuReference{durationNs: 50},
-		},
-		{
-			worker: second,
-			phase: &gpu_proto.WorkerPhaseProfile{
-				Intervals: []*gpu_proto.WorkerPhaseInterval{{StartNs: 0, EndNs: 100}},
-			},
-			reference: gpuReference{durationNs: 80},
-		},
+func TestGPUReferenceHistoryBoundsKeys(t *testing.T) {
+	history := gpuReferenceHistory{samples: make(map[string][]gpuReferenceSample)}
+	for i := 0; i < gpuReferenceMaxKeys; i++ {
+		history.observe(fmt.Sprint(i), 100, 100)
 	}
-
-	reference := gpuAggregateReference(rows, "dump")
-	if reference.durationNs != 80 {
-		t.Fatalf("worker aggregate = %d, want 80", reference.durationNs)
+	history.observe("0", 90, 100)
+	if len(history.keys) != gpuReferenceMaxKeys {
+		t.Fatal("updating a key changed retention")
+	}
+	history.observe("new", 100, 100)
+	if len(history.samples) != gpuReferenceMaxKeys {
+		t.Fatal("history exceeded key limit")
+	}
+	if _, exists := history.samples["0"]; exists {
+		t.Fatal("oldest key was not evicted")
+	}
+	if reference := history.observe("0", 200, 100); reference.durationNs != 200 || reference.samples != 1 {
+		t.Fatal("evicted history was reused")
 	}
 }

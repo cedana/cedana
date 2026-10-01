@@ -33,7 +33,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
 
-		pluginRestoreStorage(), // detects and plugs in the storage to use
+		pluginRestoreStorage, // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
@@ -89,7 +89,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		validation.ValidateRestoreRequest,
 		process.WritePIDFileForRestore,
 
-		pluginRestoreStorage(), // detects and plugs in the storage to use
+		pluginRestoreStorage, // detects and plugs in the storage to use
 
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
@@ -158,44 +158,42 @@ func pluginRestoreMiddleware(next types.Restore) types.Restore {
 // Detects and plugs in the storage to use from the specified path,
 // If path is prepended with "plugin://", it will use the plugin storage if
 // an available plugin is found and supports the storage feature.
-func pluginRestoreStorage() types.Adapter[types.Restore] {
-	return func(next types.Restore) types.Restore {
-		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
-			dir := req.GetPath()
+func pluginRestoreStorage(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		dir := req.GetPath()
 
-			var storage io.Storage = &filesystem.Storage{}
+		var storage io.Storage = &filesystem.Storage{}
 
-			if strings.Contains(dir, "://") {
-				pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
-				err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
-					if newPluginStorage == nil {
-						return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
-					}
-					storage, err = newPluginStorage(ctx)
-					return err
-				}, pluginName)
-				if err != nil {
-					return nil, status.Error(codes.Unavailable, err.Error())
+		if strings.Contains(dir, "://") {
+			pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
+			err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
+				if newPluginStorage == nil {
+					return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)
 				}
-			}
-
-			opts.Storage = storage
-			streams, err := streamer.IsStreamable(ctx, storage, dir)
+				storage, err = newPluginStorage(ctx)
+				return err
+			}, pluginName)
 			if err != nil {
-				return nil, status.Error(codes.Internal, fmt.Sprintf("failed to detect restore filesystem to use: %v", err))
+				return nil, status.Error(codes.Unavailable, err.Error())
 			}
-
-			if streams == 1 {
-				return nil, status.Error(codes.Internal, "A minimum of 2 streams is required by streaming.")
-			}
-
-			filesystem := filesystem.RestoreFilesystem
-			if streams > 1 {
-				filesystem = streamer.RestoreFilesystem(streams)
-			}
-
-			return next.With(filesystem)(ctx, opts, resp, req)
 		}
+
+		opts.Storage = storage
+		streams, err := streamer.IsStreamable(ctx, storage, dir)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to detect restore filesystem to use: %v", err))
+		}
+
+		if streams == 1 {
+			return nil, status.Error(codes.Internal, "A minimum of 2 streams is required by streaming.")
+		}
+
+		filesystem := filesystem.RestoreFilesystem
+		if streams > 1 {
+			filesystem = streamer.RestoreFilesystem(streams)
+		}
+
+		return next.With(filesystem)(ctx, opts, resp, req)
 	}
 }
 

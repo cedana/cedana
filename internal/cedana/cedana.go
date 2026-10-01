@@ -17,8 +17,8 @@ import (
 
 // Cedana implements all the capabilities that can be run without a server.
 type Cedana struct {
-	plugins                   plugins.Manager
-	gpus                      gpu.Manager
+	plugins plugins.Manager
+	gpus    gpu.Manager
 
 	wg       *sync.WaitGroup
 	lifetime context.Context
@@ -48,11 +48,11 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	}
 
 	return &Cedana{
-		plugins:                   pluginManager,
-		gpus:                      gpuManager,
-		wg:                        wg,
-		lifetime:                  ctx,
-		cancel:                    cancel,
+		plugins:  pluginManager,
+		gpus:     gpuManager,
+		wg:       wg,
+		lifetime: ctx,
+		cancel:   cancel,
 	}, nil
 }
 

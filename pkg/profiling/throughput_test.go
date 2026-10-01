@@ -3,23 +3,13 @@ package profiling
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/cedana/cedana/pkg/keys"
 )
-
-func TestSetReferenceDuration(t *testing.T) {
-	data := &Data{}
-	ctx := context.WithValue(context.Background(), keys.PROFILING_CONTEXT_KEY, data)
-
-	SetReferenceDuration(ctx, 25*time.Millisecond)
-
-	if data.ReferenceDuration != int64(25*time.Millisecond) {
-		t.Fatalf("reference duration = %s", time.Duration(data.ReferenceDuration))
-	}
-}
 
 func TestReferenceProvenanceRoundTripsGob(t *testing.T) {
 	var encoded bytes.Buffer
@@ -66,9 +56,9 @@ func TestSetReferenceRecordsProvenance(t *testing.T) {
 }
 
 func TestApplyLearnedReferencesUsesBestThenLowerQuartile(t *testing.T) {
-	previous := learnedReferences
-	learnedReferences = learnedReferenceHistory{samples: make(map[string][]int64)}
-	t.Cleanup(func() { learnedReferences = previous })
+	previousSamples, previousKeys := learnedReferences.samples, learnedReferences.keys
+	learnedReferences.samples, learnedReferences.keys = make(map[string][]int64), nil
+	t.Cleanup(func() { learnedReferences.samples, learnedReferences.keys = previousSamples, previousKeys })
 
 	for index, duration := range []int64{120, 100, 130, 90, 110} {
 		data := &Data{Components: []*Data{
@@ -107,9 +97,9 @@ func TestApplyLearnedReferencesPreservesModeledReferences(t *testing.T) {
 }
 
 func TestApplyLearnedReferencesNormalizesPIDAndWorkerTags(t *testing.T) {
-	previous := learnedReferences
-	learnedReferences = learnedReferenceHistory{samples: make(map[string][]int64)}
-	t.Cleanup(func() { learnedReferences = previous })
+	previousSamples, previousKeys := learnedReferences.samples, learnedReferences.keys
+	learnedReferences.samples, learnedReferences.keys = make(map[string][]int64), nil
+	t.Cleanup(func() { learnedReferences.samples, learnedReferences.keys = previousSamples, previousKeys })
 
 	for _, name := range []string{
 		"w1 restoreMemory (pid=123, fastest)",
@@ -145,9 +135,9 @@ func TestReferenceProvenanceRoundTripsJSON(t *testing.T) {
 }
 
 func TestLearnedReferencesSeparateProfileShapes(t *testing.T) {
-	previous := learnedReferences
-	learnedReferences = learnedReferenceHistory{samples: make(map[string][]int64)}
-	t.Cleanup(func() { learnedReferences = previous })
+	previousSamples, previousKeys := learnedReferences.samples, learnedReferences.keys
+	learnedReferences.samples, learnedReferences.keys = make(map[string][]int64), nil
+	t.Cleanup(func() { learnedReferences.samples, learnedReferences.keys = previousSamples, previousKeys })
 
 	profile := func(duration, io int64, extraWorker bool) *Data {
 		data := &Data{Components: []*Data{
@@ -191,5 +181,26 @@ func TestLearnedReferenceProfileKeyIgnoresOrderAndTiming(t *testing.T) {
 	}}
 	if learnedReferenceProfileKey(first) != learnedReferenceProfileKey(second) {
 		t.Fatal("row ordering, timing, or dynamic tags changed the profile key")
+	}
+}
+
+func TestLearnedReferenceHistoryBoundsKeys(t *testing.T) {
+	history := learnedReferenceHistory{samples: make(map[string][]int64)}
+	for i := 0; i < learnedReferenceMaxKeys; i++ {
+		history.observe(fmt.Sprint(i), 100)
+	}
+	history.observe("0", 90)
+	if len(history.keys) != learnedReferenceMaxKeys {
+		t.Fatal("updating a key changed retention")
+	}
+	history.observe("new", 100)
+	if len(history.samples) != learnedReferenceMaxKeys {
+		t.Fatal("history exceeded key limit")
+	}
+	if _, exists := history.samples["0"]; exists {
+		t.Fatal("oldest key was not evicted")
+	}
+	if duration, count := history.observe("0", 200); duration != 200 || count != 1 {
+		t.Fatal("evicted history was reused")
 	}
 }

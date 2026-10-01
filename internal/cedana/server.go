@@ -96,6 +96,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create job manager: %w", err)
 	}
+
 	server = &Server{
 		Cedana: Cedana{
 			gpus:     gpuManager,

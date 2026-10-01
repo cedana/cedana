@@ -54,6 +54,7 @@ type gpuProfileInterval struct {
 const (
 	gpuReferenceMinSamples = 5
 	gpuReferenceMaxSamples = 8
+	gpuReferenceMaxKeys    = 1024
 )
 
 type gpuReference struct {
@@ -71,6 +72,7 @@ type gpuReferenceSample struct {
 type gpuReferenceHistory struct {
 	mu      sync.Mutex
 	samples map[string][]gpuReferenceSample
+	keys    []string
 }
 
 var learnedGPUReferences = gpuReferenceHistory{samples: make(map[string][]gpuReferenceSample)}
@@ -137,6 +139,14 @@ func (history *gpuReferenceHistory) observe(key string, durationNs int64, bytes 
 
 	history.mu.Lock()
 	defer history.mu.Unlock()
+
+	if _, exists := history.samples[key]; !exists {
+		if len(history.keys) == gpuReferenceMaxKeys {
+			delete(history.samples, history.keys[0])
+			history.keys = history.keys[1:]
+		}
+		history.keys = append(history.keys, key)
+	}
 
 	samples := append(history.samples[key], gpuReferenceSample{durationNs: durationNs, bytes: bytes})
 	if len(samples) > gpuReferenceMaxSamples {
@@ -376,78 +386,12 @@ func gpuOtherRows(workers []*gpu_proto.WorkerProfile) []gpuWorkerTimingRow {
 	return rows
 }
 
-func gpuReferenceIntervals(row gpuWorkerTimingRow) ([]gpuProfileInterval, bool) {
-	if row.phase == nil || row.phase.GetIntervalsTruncated() || row.reference.durationNs <= 0 {
-		return nil, false
-	}
-
-	var actualIntervals []gpuProfileInterval
-	for _, interval := range row.phase.GetIntervals() {
-		if interval.GetEndNs() > interval.GetStartNs() {
-			actualIntervals = append(actualIntervals, gpuProfileInterval{
-				startNs: interval.GetStartNs(),
-				endNs:   interval.GetEndNs(),
-			})
-		}
-	}
-	actualDurationNs := gpuMergedIntervalDurationNs(actualIntervals)
-	if actualDurationNs <= 0 {
-		return nil, false
-	}
-
-	scale := float64(row.reference.durationNs) / float64(actualDurationNs)
-	referenceIntervals := make([]gpuProfileInterval, 0, len(actualIntervals))
-	for _, interval := range actualIntervals {
-		durationNs := int64(math.Ceil(float64(interval.endNs-interval.startNs) * scale))
-		referenceIntervals = append(referenceIntervals, gpuProfileInterval{
-			startNs: interval.startNs,
-			endNs:   interval.startNs + durationNs,
-		})
-	}
-	return referenceIntervals, true
-}
-
-func gpuAggregateReference(rows []gpuWorkerTimingRow, key string) gpuReference {
-	byWorker := make(map[*gpu_proto.WorkerProfile][]gpuWorkerTimingRow)
-	for _, row := range rows {
-		byWorker[row.worker] = append(byWorker[row.worker], row)
-	}
-	if len(byWorker) == 0 {
-		return gpuReference{}
-	}
-
-	var aggregateNs int64
-	for _, workerRows := range byWorker {
-		var referenceIntervals []gpuProfileInterval
-		for _, row := range workerRows {
-			intervals, ok := gpuReferenceIntervals(row)
-			if !ok {
-				return gpuReference{}
-			}
-			referenceIntervals = append(referenceIntervals, intervals...)
-		}
-		workerReferenceNs := gpuMergedIntervalDurationNs(referenceIntervals)
-		if workerReferenceNs <= 0 {
-			return gpuReference{}
-		}
-		aggregateNs = max(aggregateNs, workerReferenceNs)
-	}
-
-	return gpuReference{
-		durationNs: aggregateNs,
-		source:     "gpu worker aggregate",
-		key:        key,
-	}
-}
-
 func addGPUAggregateReferenceToProfiling(ctx context.Context, rows []gpuWorkerTimingRow, key string) {
-	reference := gpuAggregateReference(rows, key)
-	if reference.durationNs <= 0 {
-		return
-	}
-
 	var actualIntervals []gpuProfileInterval
 	for _, row := range rows {
+		if row.phase.GetIntervalsTruncated() || (row.durationNs > 0 && len(row.phase.GetIntervals()) == 0) {
+			return
+		}
 		for _, interval := range row.phase.GetIntervals() {
 			if interval.GetEndNs() > interval.GetStartNs() {
 				actualIntervals = append(actualIntervals, gpuProfileInterval{
@@ -462,10 +406,12 @@ func addGPUAggregateReferenceToProfiling(ctx context.Context, rows []gpuWorkerTi
 		return
 	}
 
+	reference := learnedGPUReferences.observe(key+"|aggregate", actualNs, 0)
 	functionCtx := addGPUFunctionProfileToProfiling(ctx, gpuProfileDuration(actualNs), "GPU worker phases")
 	profiling.SetReference(functionCtx, profiling.Reference{
 		Duration: gpuProfileDuration(reference.durationNs),
 		Source:   reference.source,
+		Samples:  reference.samples,
 		Key:      reference.key,
 	})
 }

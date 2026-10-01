@@ -24,11 +24,13 @@ type Reference struct {
 const (
 	learnedReferenceMinSamples = 5
 	learnedReferenceMaxSamples = 8
+	learnedReferenceMaxKeys    = 1024
 )
 
 type learnedReferenceHistory struct {
 	mu      sync.Mutex
 	samples map[string][]int64
+	keys    []string
 }
 
 var learnedReferences = learnedReferenceHistory{samples: make(map[string][]int64)}
@@ -37,18 +39,6 @@ var (
 	referencePIDPattern       = regexp.MustCompile(`\b(pid|SlowestPID)=\d+`)
 	referenceWorkerTagPattern = regexp.MustCompile(`, (fastest|slowest)`)
 )
-
-func (data *Data) AddIO(n int64) {
-	if data != nil {
-		data.IO += n
-	}
-}
-
-// SetReferenceDuration records a controller-derived phase reference. A zero duration leaves the
-// profile unchanged.
-func SetReferenceDuration(ctx context.Context, duration time.Duration) {
-	SetReference(ctx, Reference{Duration: duration})
-}
 
 func SetReference(ctx context.Context, reference Reference) {
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
@@ -107,6 +97,14 @@ func learnedReferenceProfileKey(data *Data) string {
 func (history *learnedReferenceHistory) observe(key string, duration int64) (int64, int) {
 	history.mu.Lock()
 	defer history.mu.Unlock()
+
+	if _, exists := history.samples[key]; !exists {
+		if len(history.keys) == learnedReferenceMaxKeys {
+			delete(history.samples, history.keys[0])
+			history.keys = history.keys[1:]
+		}
+		history.keys = append(history.keys, key)
+	}
 
 	samples := append(history.samples[key], duration)
 	if len(samples) > learnedReferenceMaxSamples {
