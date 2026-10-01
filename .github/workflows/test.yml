@@ -140,7 +140,6 @@ jobs:
           - install-service
           - reset-service
           - configure-shm
-          - configure-io-uring
         arch:
           - amd64
           - arm64

@@ -85,7 +85,6 @@ var setupCmd = &cobra.Command{
 			slurmscripts.Install,
 			slurmscripts.InstallPlugins,
 			scripts.ConfigureShm,
-			scripts.ConfigureIoUring,
 			scripts.InstallService,
 		)
 		if err != nil {
