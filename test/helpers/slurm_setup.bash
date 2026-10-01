@@ -158,8 +158,10 @@ _svc_restart() {
 
 # Copy the controller's SLURM config to the other nodes. /etc/slurm is local
 # to each node (not NFS), so every edit made on the controller has to be pushed
-# out. Login nodes only get slurm.conf, minus the cli_filter plugin, and the
-# overlay it includes. Any extra file names given are pushed to compute nodes,
+# out. Login nodes only get slurm.conf and the overlay it includes; the
+# cli_filter plugin it names reaches them through the shared plugin dir, and
+# gives each job the UUID its monitor is found by. Any extra file names given
+# are pushed to compute nodes,
 # and must exist on the controller. Fails if any copy fails, since a node left
 # on the old config would still come up ready.
 _sync_slurm_conf() {
@@ -206,10 +208,6 @@ _sync_slurm_conf() {
             }
         done
         rm -f "$tmpfile"
-    done
-
-    for c in "${login_containers[@]}"; do
-        docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' /etc/slurm/slurm.conf 2>/dev/null || true
     done
 }
 
