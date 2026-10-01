@@ -119,7 +119,7 @@ _check_workload_in_job_namespace() {
 }
 
 # bats test_tags=dump,restore,samples
-@test "Namespace: Dump/Restore a job in a private /tmp (job_container/tmpfs)" {
+@test "Namespace: Dump/Restore a job in a private mount namespace (job_container/tmpfs)" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/counting.sbatch"
 
     SLURM_JOB_CHECK=_check_workload_in_job_namespace \
@@ -129,7 +129,7 @@ _check_workload_in_job_namespace() {
 # GPU checkpoint/restore leans on /tmp (the controller's socket) and /dev/shm
 # (the memory it shares with the job), both of which the job has to itself here.
 # bats test_tags=dump,restore,samples,gpu
-@test "Namespace: Dump/Restore a GPU job in a private /tmp (job_container/tmpfs)" {
+@test "Namespace: Dump/Restore a GPU job in a private mount namespace (job_container/tmpfs)" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-vector-add.sbatch"
 
     SLURM_JOB_CHECK=_check_workload_in_job_namespace \
