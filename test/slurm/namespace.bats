@@ -32,43 +32,50 @@ NAMESPACE_BASE_PATH=/var/tmp/slurm-ns
 # rather than the job's environment so the restored job gets it too.
 NAMESPACE_GPU_SHM_SIZE=$((2 * 1024 * 1024 * 1024))
 
-# Set cedana's gpu.shm_size on the compute nodes, keeping what it was.
-_set_gpu_shm_size() {
-    local size="$1" c current
-    for c in $(_slurm_compute_containers); do
-        current="$(docker exec "$c" jq -r '.gpu.shm_size // empty' /etc/cedana/config.json 2>/dev/null)"
-        echo "$current" >"$BATS_FILE_TMPDIR/gpu-shm-size.$c"
+# The GPU controller logs under gpu.log_dir, /tmp by default, which the plugin
+# makes private to the job and removes with it: a failed restore leaves no
+# controller log to read. /var/tmp is neither, and the failure capture collects
+# the controller's directories from there.
+NAMESPACE_GPU_LOG_DIR=/var/tmp
 
-        docker exec -e CEDANA_GPU_SHM_SIZE="$size" "$c" \
+# Set a gpu.* setting of cedana's on the compute nodes, keeping what it was.
+# $1 is the key, $2 the CEDANA_GPU_* variable that sets it, $3 the value.
+_set_gpu_setting() {
+    local key="$1" var="$2" value="$3" c current
+    for c in $(_slurm_compute_containers); do
+        current="$(docker exec "$c" jq -r ".gpu.$key // empty" /etc/cedana/config.json 2>/dev/null)"
+        echo "$current" >"$BATS_FILE_TMPDIR/gpu-$key.$c"
+
+        docker exec -e "$var=$value" "$c" \
             /usr/local/bin/cedana --merge-config version >/dev/null 2>&1 || {
-            error_log "Failed to set gpu.shm_size on $c"
+            error_log "Failed to set gpu.$key on $c"
             return 1
         }
-        current="$(docker exec "$c" jq -r '.gpu.shm_size // empty' /etc/cedana/config.json 2>/dev/null)"
-        if [ "$current" != "$size" ]; then
-            error_log "gpu.shm_size on $c is '${current}', not $size"
+        current="$(docker exec "$c" jq -r ".gpu.$key // empty" /etc/cedana/config.json 2>/dev/null)"
+        if [ "$current" != "$value" ]; then
+            error_log "gpu.$key on $c is '${current}', not $value"
             return 1
         fi
-        info_log "gpu.shm_size on $c set to $size"
+        info_log "gpu.$key on $c set to $value"
     done
 }
 
-# Put back the gpu.shm_size _set_gpu_shm_size found.
-_restore_gpu_shm_size() {
-    local c saved
+# Put back the gpu.* setting _set_gpu_setting found. Same arguments, minus the value.
+_restore_gpu_setting() {
+    local key="$1" var="$2" c saved
     for c in $(_slurm_compute_containers); do
-        [ -f "$BATS_FILE_TMPDIR/gpu-shm-size.$c" ] || continue
-        saved="$(cat "$BATS_FILE_TMPDIR/gpu-shm-size.$c")"
+        [ -f "$BATS_FILE_TMPDIR/gpu-$key.$c" ] || continue
+        saved="$(cat "$BATS_FILE_TMPDIR/gpu-$key.$c")"
         if [ -n "$saved" ]; then
-            docker exec -e CEDANA_GPU_SHM_SIZE="$saved" "$c" \
+            docker exec -e "$var=$saved" "$c" \
                 /usr/local/bin/cedana --merge-config version >/dev/null 2>&1
         else
             # Rewritten in place, so the file keeps its owner and mode
-            docker exec "$c" sh -c '
+            docker exec -e key="$key" "$c" sh -c '
                 f=/etc/cedana/config.json
-                jq "del(.gpu.shm_size)" "$f" >"$f.new" && cat "$f.new" >"$f" && rm -f "$f.new"
+                jq "del(.gpu.$key)" "$f" >"$f.new" && cat "$f.new" >"$f" && rm -f "$f.new"
             '
-        fi || error_log "Failed to restore gpu.shm_size on $c"
+        fi || error_log "Failed to restore gpu.$key on $c"
     done
 }
 
@@ -103,12 +110,14 @@ EOF
     fi
 
     if [ "${GPU:-0}" = "1" ]; then
-        _set_gpu_shm_size "$NAMESPACE_GPU_SHM_SIZE" || return 1
+        _set_gpu_setting shm_size CEDANA_GPU_SHM_SIZE "$NAMESPACE_GPU_SHM_SIZE" || return 1
+        _set_gpu_setting log_dir CEDANA_GPU_LOG_DIR "$NAMESPACE_GPU_LOG_DIR" || return 1
     fi
 }
 
 teardown_file() {
-    _restore_gpu_shm_size
+    _restore_gpu_setting log_dir CEDANA_GPU_LOG_DIR
+    _restore_gpu_setting shm_size CEDANA_GPU_SHM_SIZE
     slurm_conf_overlay_reset
 }
 

@@ -171,6 +171,14 @@ _capture_runtime_slurm_logs() {
 
         if [ "${GPU:-0}" = "1" ]; then
             docker exec "$c" sh -c 'echo "=== nvidia-smi -L ==="; nvidia-smi -L 2>&1 || true; echo "=== /dev/nvidia* ==="; ls -la /dev/nvidia* 2>&1 || true; echo "=== /etc/slurm/gres.conf ==="; cat /etc/slurm/gres.conf 2>&1 || true; echo "=== /etc/slurm/slurm.conf (GPU lines) ==="; grep -E "^(NodeName|GresTypes|DebugFlags)" /etc/slurm/slurm.conf 2>&1 || true; echo "=== slurmd -C ==="; /usr/sbin/slurmd -C 2>&1 || true; echo "=== slurmd -G ==="; /usr/sbin/slurmd -G 2>&1 || true' >"$cdir/gpu-diagnostics.txt" 2>&1 || true
+
+            # The GPU controller's logs, one directory per controller under
+            # gpu.log_dir: /tmp by default, or wherever a test moved it.
+            mkdir -p "$cdir/gpu-logs"
+            docker exec "$c" sh -c '
+                cd / && dirs="$(ls -d tmp/cedana-gpu.* var/tmp/cedana-gpu.* 2>/dev/null)"
+                [ -n "$dirs" ] && tar -cf - $dirs 2>/dev/null
+            ' | tar -xf - -C "$cdir/gpu-logs" 2>/dev/null || true
         fi
 
         docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
