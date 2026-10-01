@@ -1,0 +1,11 @@
+{
+  "instructions": "Cedana changes often span several repositories (cedana, cedana-containerd-runtime, cedana-propagator, cedana-propagator-sdk, cedana-ui, cedana-helm-charts, cedana-controller), and PR descriptions list the other halves under \"Accompanying PRs\". Before reporting that something is missing, unused, inconsistent or unhandled across components, open and read those PRs: config read by another component, API fields consumed by the UI, Helm values read by the daemon and SDK changes usually live there. Only report a cross-repo gap when none of the accompanying PRs covers it, and name the PR you checked.\n\nTreat decisions stated in the PR description, the commit messages or the linked Linear ticket (defaults, naming, scope, what is deliberately left out) as intentional. Do not object to them, and do not re-raise a point after the author has answered it or after the thread was resolved.\n\nDo not ask for narrow tests of individual config keys, constants, wiring or plumbing. Suggest a test only when a code path with real behaviour is untested and you can state the concrete failing input and the wrong outcome.\n\nReport only findings you have verified by reading the full code path in this repository, including the callees. If you cannot confirm the failure scenario, say nothing. Each finding must name the concrete input or state and the wrong result; no hypotheticals.\n\nStay on the lines in the diff. Do not comment on pre-existing code, formatting or style the diff did not touch, and do not comment on generated or vendored files.\n\nPrefer a few high-confidence findings to many speculative ones.\n\nplugins/ holds git submodules (runc, crun, ...) that are reviewed in their own repositories; a submodule pointer bump is not code to review here. pkg/ is consumed by the plugins, the containerd shim (cedana-containerd-runtime) and cedana-slurm, so a new pkg/config field with no reader in this repo is normally read there.",
+  "commentTypes": [
+    "logic",
+    "syntax"
+  ],
+  "ignorePatterns": "greptile.json\ngo.sum",
+  "excludeAuthors": [
+    "dependabot[bot]"
+  ]
+}
