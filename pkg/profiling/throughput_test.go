@@ -143,3 +143,53 @@ func TestReferenceProvenanceRoundTripsJSON(t *testing.T) {
 		t.Fatalf("decoded reference provenance = %#v", decoded)
 	}
 }
+
+func TestLearnedReferencesSeparateProfileShapes(t *testing.T) {
+	previous := learnedReferences
+	learnedReferences = learnedReferenceHistory{samples: make(map[string][]int64)}
+	t.Cleanup(func() { learnedReferences = previous })
+
+	profile := func(duration, io int64, extraWorker bool) *Data {
+		data := &Data{Components: []*Data{
+			{Name: "criu.Dump", Duration: duration},
+			{Name: "w1 dumpMemory (pid=123)", Duration: 10, IO: io, ReferenceDuration: 5, ReferenceSource: "modeled"},
+		}}
+		if extraWorker {
+			data.Components = append(data.Components, &Data{Name: "w2 dumpMemory (pid=456)", Duration: 10, IO: io})
+		}
+		return data
+	}
+
+	small := profile(100, 64<<20, false)
+	ApplyLearnedReferences(small, "dump")
+	similar := profile(200, 65<<20, false)
+	ApplyLearnedReferences(similar, "dump")
+	if row := similar.Components[0]; row.ReferenceDuration != 100 || row.ReferenceSamples != 2 {
+		t.Fatalf("similar profile did not reuse history: %#v", row)
+	}
+	for _, data := range []*Data{profile(300, 4<<30, false), profile(400, 64<<20, true)} {
+		ApplyLearnedReferences(data, "dump")
+		if row := data.Components[0]; row.ReferenceDuration != row.Duration || row.ReferenceSamples != 1 {
+			t.Fatalf("different profile reused history: %#v", row)
+		}
+	}
+	otherOperation := profile(500, 64<<20, false)
+	ApplyLearnedReferences(otherOperation, "restore")
+	if otherOperation.Components[0].ReferenceSamples != 1 {
+		t.Fatal("restore reused dump history")
+	}
+}
+
+func TestLearnedReferenceProfileKeyIgnoresOrderAndTiming(t *testing.T) {
+	first := &Data{Components: []*Data{
+		{Name: "criu.Dump", Duration: 100},
+		{Name: "w1 dumpMemory (pid=123, fastest)", IO: 64 << 20},
+	}}
+	second := &Data{Components: []*Data{
+		{Name: "w1 dumpMemory (pid=456, slowest)", IO: 65 << 20, ReferenceDuration: 50},
+		{Name: "criu.Dump", Duration: 200},
+	}}
+	if learnedReferenceProfileKey(first) != learnedReferenceProfileKey(second) {
+		t.Fatal("row ordering, timing, or dynamic tags changed the profile key")
+	}
+}

@@ -2,9 +2,12 @@ package profiling
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"math/bits"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -65,12 +68,13 @@ func ApplyLearnedReferences(data *Data, operation string) {
 		return
 	}
 
+	profileKey := learnedReferenceProfileKey(data)
 	for _, component := range data.Components {
 		if component == nil || component.Name == "" || component.Duration <= 0 || component.ReferenceDuration > 0 {
 			continue
 		}
 
-		key := fmt.Sprintf("%s|%s|io=%d", operation, normalizeReferenceName(component.Name), component.IO)
+		key := fmt.Sprintf("%s|profile=%s|%s|io=%d", operation, profileKey, normalizeReferenceName(component.Name), component.IO)
 		duration, samples := learnedReferences.observe(key, component.Duration)
 		component.ReferenceDuration = duration
 		component.ReferenceSamples = samples
@@ -81,6 +85,23 @@ func ApplyLearnedReferences(data *Data, operation string) {
 			component.ReferenceSource = "learned"
 		}
 	}
+}
+
+// Include every row, including modeled rows, so zero-I/O steps learn within a similar workload.
+func learnedReferenceProfileKey(data *Data) string {
+	rows := make([]string, 0, len(data.Components))
+	for _, component := range data.Components {
+		if component == nil || component.Name == "" {
+			continue
+		}
+		bucket := 0
+		if component.IO > 0 {
+			bucket = bits.Len64(uint64(component.IO))
+		}
+		rows = append(rows, fmt.Sprintf("%s|io=%d", normalizeReferenceName(component.Name), bucket))
+	}
+	sort.Strings(rows)
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(rows, "\n"))))
 }
 
 func (history *learnedReferenceHistory) observe(key string, duration int64) (int64, int) {
