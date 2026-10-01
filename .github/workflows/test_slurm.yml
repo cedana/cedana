@@ -912,13 +912,15 @@ jobs:
 
       - name: Generate report (namespace)
         if: ${{ !cancelled() && steps.register.outcome == 'success' }}
+        env:
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
           npx junit-to-ctrf "/tmp/report-namespace.xml" -t bats -o /tmp/report-namespace.json -e \
             appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
+            buildName="$BRANCH_NAME" buildNumber="${{ github.run_number }}" \
             buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
             repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
+            commit="${{ github.sha }}" branchName="$BRANCH_NAME" \
             osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
             testEnvironment="cedana/cedana-test" reportName="Slurm Namespace (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
 
