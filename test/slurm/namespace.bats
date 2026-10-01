@@ -24,6 +24,54 @@ load ../helpers/slurm_propagator
 # Where the plugin keeps each job's namespace, on the compute node.
 NAMESPACE_BASE_PATH=/var/tmp/slurm-ns
 
+# cedana's GPU controller makes an 8 GiB shared memory segment by default
+# (gpu.shm_size), but the plugin gives each job a fresh /dev/shm of the
+# kernel's default size, half the node's RAM, which on the CI runners is less.
+# The job then fails to start with "Shared Memory Creation Error: No space
+# left on device". Use a size its /dev/shm can hold. Set in cedana's config
+# rather than the job's environment so the restored job gets it too.
+NAMESPACE_GPU_SHM_SIZE=$((2 * 1024 * 1024 * 1024))
+
+# Set cedana's gpu.shm_size on the compute nodes, keeping what it was.
+_set_gpu_shm_size() {
+    local size="$1" c current
+    for c in $(_slurm_compute_containers); do
+        current="$(docker exec "$c" jq -r '.gpu.shm_size // empty' /etc/cedana/config.json 2>/dev/null)"
+        echo "$current" >"$BATS_FILE_TMPDIR/gpu-shm-size.$c"
+
+        docker exec -e CEDANA_GPU_SHM_SIZE="$size" "$c" \
+            /usr/local/bin/cedana --merge-config version >/dev/null 2>&1 || {
+            error_log "Failed to set gpu.shm_size on $c"
+            return 1
+        }
+        current="$(docker exec "$c" jq -r '.gpu.shm_size // empty' /etc/cedana/config.json 2>/dev/null)"
+        if [ "$current" != "$size" ]; then
+            error_log "gpu.shm_size on $c is '${current}', not $size"
+            return 1
+        fi
+        info_log "gpu.shm_size on $c set to $size"
+    done
+}
+
+# Put back the gpu.shm_size _set_gpu_shm_size found.
+_restore_gpu_shm_size() {
+    local c saved
+    for c in $(_slurm_compute_containers); do
+        [ -f "$BATS_FILE_TMPDIR/gpu-shm-size.$c" ] || continue
+        saved="$(cat "$BATS_FILE_TMPDIR/gpu-shm-size.$c")"
+        if [ -n "$saved" ]; then
+            docker exec -e CEDANA_GPU_SHM_SIZE="$saved" "$c" \
+                /usr/local/bin/cedana --merge-config version >/dev/null 2>&1
+        else
+            # Rewritten in place, so the file keeps its owner and mode
+            docker exec "$c" sh -c '
+                f=/etc/cedana/config.json
+                jq "del(.gpu.shm_size)" "$f" >"$f.new" && cat "$f.new" >"$f" && rm -f "$f.new"
+            '
+        fi || error_log "Failed to restore gpu.shm_size on $c"
+    done
+}
+
 setup_file() {
     # The plugin reads job_container.conf from /etc/slurm. Without a BasePath
     # it disables itself on the node, logging that only at debug level.
@@ -53,9 +101,14 @@ EOF
         error_log "PrologFlags does not include Contain (got '${prolog_flags}')"
         return 1
     fi
+
+    if [ "${GPU:-0}" = "1" ]; then
+        _set_gpu_shm_size "$NAMESPACE_GPU_SHM_SIZE" || return 1
+    fi
 }
 
 teardown_file() {
+    _restore_gpu_shm_size
     slurm_conf_overlay_reset
 }
 
