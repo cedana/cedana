@@ -67,3 +67,7 @@ This is to allow catching bugs that may arise due to the daemon's state being pe
 Each test command is also configured to run parallel-y, configured by the `PARALLELISM` variable passed to the test command. E.g. `make test-regression PARALLELISM=4` will run at most 4 tests in parallel at a time.
 
 For mode 1, parallelism offers no benefits apart from fast execution time, as each test is completely isolated. However, for mode 2, parallelism may shed light on bugs in the daemon when it's handling multiple requests concurrently.
+
+### SLURM e2e tests
+
+The SLURM suite (`make test-slurm`) is separate from the modes above: it runs BATS once against a throwaway SLURM cluster stood up in Docker, not twice, and it does not use the daemon/DB mode split. It also needs some extra setup (sibling checkouts, a propagator token, and optionally a prebaked node image), so it has its own guide: [local-slurm-ci](./local-slurm-ci/README.md).
