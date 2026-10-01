@@ -30,6 +30,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -271,6 +272,15 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid:                     true,  // Create a new session and process group for the controller
 		GidMappingsEnableSetgroups: false, // Avoid permission issues when running as non-root user
+	}
+
+	// Unprivileged, we hold CAP_SYS_PTRACE through file capabilities, which don't pass on
+	// to a child. The controller needs it to look at the process it's attached to through
+	// /proc/<pid> whatever that process's dumpable flag, which a process CRIU is restoring
+	// has off until the end. Raised as ambient, it survives the exec of a binary without
+	// capabilities of its own.
+	if os.Geteuid() != 0 && hasPermittedCap(unix.CAP_SYS_PTRACE) {
+		cmd.SysProcAttr.AmbientCaps = []uintptr{unix.CAP_SYS_PTRACE}
 	}
 
 	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stderr
