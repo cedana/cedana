@@ -55,3 +55,7 @@ Each of the below fields can also be set through an environment variable with th
 ## [CSX](https://github.com/cedana/cedana/blob/e9dd65ade9c32a0a1ebef4f731aa653a1abcd4b4/pkg/config/types.go#L164-L167)
 
 {% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/e9dd65ade9c32a0a1ebef4f731aa653a1abcd4b4/pkg/config/types.go#L164-L167" %}
+
+## [K8s](https://github.com/cedana/cedana/blob/da28c80c56426ad74d66fa78df7caa7a9f065a07/pkg/config/types.go#L64-L68)
+
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/da28c80c56426ad74d66fa78df7caa7a9f065a07/pkg/config/types.go#L64-L68" %}
