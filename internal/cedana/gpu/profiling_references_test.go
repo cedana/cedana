@@ -68,6 +68,23 @@ func TestGPUPhaseReferencePrefersModeledGPUCopy(t *testing.T) {
 	}
 }
 
+func TestGPUProfileOperationRecognizesVerification(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		operation string
+	}{
+		{"dumpMemVerify", "dump"},
+		{"restoreMemVerify", "restore"},
+	} {
+		profile := &gpu_proto.GpuProfile{
+			Functions: []*gpu_proto.GpuFunctionProfile{{Name: test.name}},
+		}
+		if got := gpuProfileOperation(profile); got != test.operation {
+			t.Fatalf("operation for %s = %s, want %s", test.name, got, test.operation)
+		}
+	}
+}
+
 func TestGPUAggregateLearnsMeasuredIntervals(t *testing.T) {
 	previousSamples, previousKeys := learnedGPUReferences.samples, learnedGPUReferences.keys
 	learnedGPUReferences.samples, learnedGPUReferences.keys = make(map[string][]gpuReferenceSample), nil

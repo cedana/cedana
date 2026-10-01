@@ -104,10 +104,10 @@ func gpuProfileOperation(profile *gpu_proto.GpuProfile) string {
 	for _, function := range profile.GetFunctions() {
 		switch function.GetName() {
 		case "dumpShareableHandleMetadata", "dumpContextlessCalls", "dumpVirtualCudaMemory",
-			"dumpCudaMemory", "dumpCudaCalls", "dumpHostGpuMemory":
+			"dumpCudaMemory", "dumpCudaCalls", "dumpHostGpuMemory", "dumpMemVerify":
 			return "dump"
 		case "restoreShareableHandles", "replayContextlessCalls", "restoreVirtualMemory",
-			"restoreMemory", "restoreCalls", "readHostMemory":
+			"restoreMemory", "restoreCalls", "readHostMemory", "restoreMemVerify":
 			return "restore"
 		}
 	}
