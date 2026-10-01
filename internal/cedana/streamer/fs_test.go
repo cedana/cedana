@@ -2,8 +2,12 @@ package streamer
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -210,5 +214,82 @@ func TestGlob(t *testing.T) {
 		} else {
 			t.Logf("%s: content verified", filename)
 		}
+	}
+}
+
+// Storage whose writers fail when closed, as a remote shard does when its last flush fails
+type closeFailingStorage struct {
+	filesystem.Storage
+}
+
+type closeFailingWriter struct {
+	io.WriteCloser
+}
+
+func (w closeFailingWriter) Close() error {
+	w.WriteCloser.Close()
+	return errors.New("flush failed")
+}
+
+func (s *closeFailingStorage) Create(ctx context.Context, path string) (io.WriteCloser, error) {
+	file, err := s.Storage.Create(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return closeFailingWriter{file}, nil
+}
+
+// Every shard reports two outcomes, of its write and of its close. The wait must
+// return the close errors of every shard, and must return at all.
+func TestStreamingFsReturnsEveryShardCloseError(t *testing.T) {
+	streamerBinary := "/usr/local/bin/cedana-image-streamer"
+	if _, err := os.Stat(streamerBinary); os.IsNotExist(err) {
+		t.Skipf("streamer binary not found at %s, skipping integration test", streamerBinary)
+	}
+
+	tmpDir := t.TempDir()
+	captureDir := filepath.Join(tmpDir, "capture")
+	shardDir := filepath.Join(tmpDir, "shards")
+	for _, dir := range []string{captureDir, shardDir} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	streams := int32(2)
+	dumpFs, waitDump, err := NewStreamingFs(
+		context.Background(),
+		streamerBinary,
+		captureDir,
+		&closeFailingStorage{},
+		shardDir,
+		streams,
+		WRITE_ONLY,
+		"lz4",
+	)
+	if err != nil {
+		t.Fatalf("failed to create streaming fs: %v", err)
+	}
+	for i := range 4 {
+		file, err := dumpFs.Create(fmt.Sprintf("pages-%d.img", i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		file.Write([]byte("pages"))
+		file.Close()
+	}
+
+	done := make(chan error, 1)
+	go func() { done <- waitDump() }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected the close errors of the shards")
+		}
+		if got := strings.Count(err.Error(), "flush failed"); got != int(streams) {
+			t.Fatalf("expected the close error of each of %d shards, got %d in %v", streams, got, err)
+		}
+	case <-time.After(30 * time.Second):
+		t.Fatal("the wait did not return: a shard's second error blocked its worker")
 	}
 }

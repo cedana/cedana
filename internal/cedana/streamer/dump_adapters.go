@@ -187,11 +187,13 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						uploadErr = errors.Join(uploadErr, e)
 					}
 
-					// Do not leave behind a checkpoint that is only partly uploaded
+					// Do not leave behind a checkpoint that is only partly uploaded. A storage
+					// that cannot delete leaves the shards, and the checkpoint is never marked
+					// ready, so nothing restores from it; the shards are reported for cleanup.
 					if uploadErr != nil {
 						for i := range streams {
 							if err := storage.Delete(ctx, remoteShard(i)); err != nil {
-								log.Debug().Err(err).Str("path", remoteShard(i)).Msg("could not remove remote shard after failed upload")
+								log.Warn().Err(err).Str("path", remoteShard(i)).Msg("could not remove remote shard after failed upload; it is left behind")
 							}
 						}
 					}

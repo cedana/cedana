@@ -82,13 +82,20 @@ func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, erro
 	return NewFile(ctx, s.client, bucket, key), nil
 }
 
-func (s *Storage) Delete(_ context.Context, path string) error {
-	_, _, err := s.sanitizePath(path)
+func (s *Storage) Delete(ctx context.Context, path string) error {
+	bucket, key, err := s.sanitizePath(path)
 	if err != nil {
 		return err
 	}
 
-	return fmt.Errorf("this operation is currently not supported for s3 storage")
+	_, err = s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+		Bucket: &bucket,
+		Key:    &key,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete object %s/%s: %w", bucket, key, err)
+	}
+	return nil
 }
 
 func (s *Storage) IsDir(_ context.Context, path string) (bool, error) {
