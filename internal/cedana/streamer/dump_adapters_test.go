@@ -192,6 +192,16 @@ func TestDumpFilesystem(t *testing.T) {
 		}
 		resp := &daemon.DumpResp{}
 
+		// An earlier checkpoint at the same path: the shard this upload fails to
+		// create is the earlier checkpoint's, and the cleanup must not touch it
+		earlier := filepath.Join(req.Dir, req.Name, fmt.Sprintf(IMG_FILE_FORMATTER, 1)+".lz4")
+		if err := os.MkdirAll(filepath.Dir(earlier), filesystem.DUMP_DIR_PERMS); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(earlier, []byte("earlier checkpoint"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
 		// The dump itself succeeds, as the upload happens after it has returned
 		_, err := DumpFilesystem(streams)(dumpImages)(ctx, opts, resp, req)
 		if err != nil {
@@ -209,13 +219,17 @@ func TestDumpFilesystem(t *testing.T) {
 
 		opts.WG.Wait()
 
-		// The shards that did get uploaded must not be left behind
+		// The shards this upload wrote must not be left behind; the one it did not
+		// create belongs to the earlier checkpoint and stays
 		shards, err := filepath.Glob(filepath.Join(path, "img-*"))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(shards) != 0 {
-			t.Fatalf("expected no remote shards after a failed upload, got %v", shards)
+		if len(shards) != 1 || shards[0] != earlier {
+			t.Fatalf("expected only the earlier checkpoint's shard %s after a failed upload, got %v", earlier, shards)
+		}
+		if content, _ := os.ReadFile(earlier); string(content) != "earlier checkpoint" {
+			t.Fatalf("the earlier checkpoint's shard was changed: %q", content)
 		}
 	})
 }

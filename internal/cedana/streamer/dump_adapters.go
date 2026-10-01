@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -148,6 +149,9 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				upload := func(ctx context.Context) error {
 					var wg sync.WaitGroup
 					errCh := make(chan error, streams)
+					// The shards this upload created, and so may remove: an earlier
+					// checkpoint at the same path keeps the shards this upload did not touch
+					created := make([]atomic.Bool, streams)
 
 					for i := range streams {
 						wg.Add(1)
@@ -169,6 +173,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 								errCh <- fmt.Errorf("failed to create remote shard %d: %w", i, err)
 								return
 							}
+							created[i].Store(true)
 
 							// A remote shard is only complete once it has been closed
 							_, err = io.Copy(dst, src)
@@ -192,6 +197,9 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					// ready, so nothing restores from it; the shards are reported for cleanup.
 					if uploadErr != nil {
 						for i := range streams {
+							if !created[i].Load() {
+								continue
+							}
 							if err := storage.Delete(ctx, remoteShard(i)); err != nil {
 								log.Warn().Err(err).Str("path", remoteShard(i)).Msg("could not remove remote shard after failed upload; it is left behind")
 							}
