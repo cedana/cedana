@@ -54,8 +54,9 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 
 		if !storage.IsRemote() && isDir {
 			imagesDirectory = path
-			// Record checkpoint image bytes, not physical disk I/O.
-			profiling.AddIO(ctx, utils.SizeFromPath(imagesDirectory))
+			// Add profiling data manually as no IO can be measured
+			size := utils.SizeFromPath(imagesDirectory)
+			profiling.AddIO(ctx, size)
 		} else {
 			// Create a temporary directory for the restore
 			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().UnixNano()))

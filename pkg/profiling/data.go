@@ -22,11 +22,12 @@ type Data struct {
 
 	Duration int64 `json:"duration,omitempty"`
 	IO       int64 `json:"io,omitempty"`
+	// add more othogonal fields here as needed
 
 	ReferenceDuration int64  `json:"reference_duration,omitempty"`
 	ReferenceSource   string `json:"reference_source,omitempty"`
 	ReferenceSamples  int    `json:"reference_samples,omitempty"`
-	ReferenceKey      string `json:"reference_key,omitempty"`
+	referenceBytes    uint64
 
 	Parallel    bool `json:"parallel,omitempty"`
 	Redundant   bool `json:"redundant,omitempty"`
@@ -78,7 +79,7 @@ func Clean(data *Data) {
 
 		Clean(component)
 
-		if component.Duration == 0 && component.IO == 0 && component.ReferenceDuration == 0 && component.Name == "" {
+		if component.Duration == 0 && component.IO == 0 && component.Name == "" {
 			newComponents = append(newComponents, component.Components...)
 		} else {
 			newComponents = append(newComponents, component)
@@ -102,6 +103,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	categoryIO := make(map[string]int64)
 	categoryIORedundant := make(map[string]bool)
 	precision := config.Global.Profiling.Precision
+	hasHistory := false
 
 	for _, p := range data.Components {
 		if p.Duration == 0 && p.IO == 0 {
@@ -119,6 +121,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		duration := time.Duration(p.Duration)
 		durationStr := DurationStr(duration, precision)
 		referenceDurationStr := referenceDurationString(p, precision)
+		hasHistory = hasHistory || p.ReferenceSamples > 0
 		io := p.IO
 		ioStr := utils.SizeStr(io)
 		if p.Parallel || p.Redundant {
@@ -177,6 +180,9 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 
 	if config.Global.Profiling.Detailed {
 		tableWriter.Render()
+		if hasHistory {
+			fmt.Println("~ references use prior similar timings; unmarked references model GPU copy/current I/O.")
+		}
 	}
 
 	if len(categoryDuration) > 1 {
@@ -226,12 +232,10 @@ func referenceDurationString(data *Data, precision string) string {
 	}
 
 	reference := DurationStr(time.Duration(data.ReferenceDuration), precision)
-	if data.Duration < data.ReferenceDuration*3/2 {
-		return style.DisabledColors.Sprint(reference)
+	if data.ReferenceSamples > 0 {
+		reference = "~" + reference
 	}
-
-	ratio := float64(data.Duration) / float64(data.ReferenceDuration)
-	return style.WarningColors.Sprint(fmt.Sprintf("%s (%.1fx)", reference, ratio))
+	return style.DisabledColors.Sprint(reference)
 }
 
 func EncodeJSON(data *Data) (string, error) {

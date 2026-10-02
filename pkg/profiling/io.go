@@ -364,7 +364,7 @@ func IOParallelCategory[T any](ctx context.Context, w T, category string, f ...a
 
 	end := func(n *int) {
 		// Don't count parallel durations towards the category total
-		childComponent.Duration = time.Since(beginning).Nanoseconds()
+		childComponent.Duration += time.Since(beginning).Nanoseconds()
 		childComponent.IO += int64(*n)
 		span.End()
 	}

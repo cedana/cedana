@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"math/bits"
 	"regexp"
 	"sort"
@@ -14,13 +15,6 @@ import (
 	"github.com/cedana/cedana/pkg/keys"
 )
 
-type Reference struct {
-	Duration time.Duration
-	Source   string
-	Samples  int
-	Key      string
-}
-
 const (
 	learnedReferenceMinSamples = 5
 	learnedReferenceMaxSamples = 8
@@ -29,46 +23,66 @@ const (
 
 type learnedReferenceHistory struct {
 	mu      sync.Mutex
-	samples map[string][]int64
+	samples map[string][]referenceSample
 	keys    []string
 }
 
-var learnedReferences = learnedReferenceHistory{samples: make(map[string][]int64)}
+type referenceSample struct {
+	duration int64
+	bytes    uint64
+}
+
+var learnedReferences = learnedReferenceHistory{samples: make(map[string][]referenceSample)}
 
 var (
 	referencePIDPattern       = regexp.MustCompile(`\b(pid|SlowestPID)=\d+`)
 	referenceWorkerTagPattern = regexp.MustCompile(`, (fastest|slowest)`)
 )
 
-func SetReference(ctx context.Context, reference Reference) {
+// Bytes are kept locally so an unmodeled GPU phase can learn a size-adjusted reference.
+func SetModeledReference(ctx context.Context, duration time.Duration, bytes uint64) {
 	data, ok := ctx.Value(keys.PROFILING_CONTEXT_KEY).(*Data)
-	if !ok || data == nil || reference.Duration <= 0 {
+	if !ok || data == nil {
 		return
 	}
-	data.ReferenceDuration = int64(reference.Duration)
-	data.ReferenceSource = reference.Source
-	data.ReferenceSamples = reference.Samples
-	data.ReferenceKey = reference.Key
+	data.referenceBytes = bytes
+	if duration <= 0 {
+		return
+	}
+	data.ReferenceDuration = int64(duration)
+	data.ReferenceSource = "modeled"
 }
 
-// ApplyLearnedReferences fills reference durations for successful dump and restore rows that
-// do not already have a modeled or GPU-specific reference.
+// Fill unmodeled rows from prior successful dump/restore timings.
 func ApplyLearnedReferences(data *Data, operation string) {
 	if data == nil || (operation != "dump" && operation != "restore") {
 		return
 	}
 
 	profileKey := learnedReferenceProfileKey(data)
+	occurrences := make(map[string]int)
 	for _, component := range data.Components {
-		if component == nil || component.Name == "" || component.Duration <= 0 || component.ReferenceDuration > 0 {
+		if component == nil || component.Name == "" {
+			continue
+		}
+		name := normalizeReferenceName(component.Name)
+		occurrence := occurrences[name]
+		occurrences[name]++
+		if component.Duration <= 0 || component.ReferenceDuration > 0 {
 			continue
 		}
 
-		key := fmt.Sprintf("%s|profile=%s|%s|io=%d", operation, profileKey, normalizeReferenceName(component.Name), component.IO)
-		duration, samples := learnedReferences.observe(key, component.Duration)
+		ioKey := component.IO
+		if component.referenceBytes > 0 {
+			ioKey = int64(bits.Len64(component.referenceBytes - 1))
+		}
+		key := fmt.Sprintf("%s|%s|%s|occurrence=%d|io=%d", operation, profileKey, name, occurrence, ioKey)
+		duration, samples := learnedReferences.observe(key, component.Duration, component.referenceBytes)
 		component.ReferenceDuration = duration
 		component.ReferenceSamples = samples
-		component.ReferenceKey = key
+		if samples == 0 {
+			continue
+		}
 		if samples < learnedReferenceMinSamples {
 			component.ReferenceSource = "best so far"
 		} else {
@@ -88,13 +102,16 @@ func learnedReferenceProfileKey(data *Data) string {
 		if component.IO > 0 {
 			bucket = bits.Len64(uint64(component.IO))
 		}
+		if component.referenceBytes > 0 {
+			bucket = bits.Len64(component.referenceBytes - 1)
+		}
 		rows = append(rows, fmt.Sprintf("%s|io=%d", normalizeReferenceName(component.Name), bucket))
 	}
 	sort.Strings(rows)
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(rows, "\n"))))
 }
 
-func (history *learnedReferenceHistory) observe(key string, duration int64) (int64, int) {
+func (history *learnedReferenceHistory) observe(key string, duration int64, bytes uint64) (int64, int) {
 	history.mu.Lock()
 	defer history.mu.Unlock()
 
@@ -106,18 +123,30 @@ func (history *learnedReferenceHistory) observe(key string, duration int64) (int
 		history.keys = append(history.keys, key)
 	}
 
-	samples := append(history.samples[key], duration)
+	samples := history.samples[key]
+	ordered := append([]referenceSample(nil), samples...)
+	for i := range ordered {
+		if bytes > 0 {
+			ordered[i].duration = int64(math.Ceil(float64(bytes) * float64(ordered[i].duration) / float64(ordered[i].bytes)))
+		}
+	}
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].duration < ordered[j].duration })
+	var reference int64
+	if len(ordered) > 0 {
+		index := 0
+		if len(ordered) >= learnedReferenceMinSamples {
+			index = (len(ordered) - 1) / 4
+		}
+		reference = ordered[index].duration
+	}
+
+	samples = append(samples, referenceSample{duration: duration, bytes: bytes})
 	if len(samples) > learnedReferenceMaxSamples {
 		samples = samples[len(samples)-learnedReferenceMaxSamples:]
 	}
 	history.samples[key] = samples
 
-	ordered := append([]int64(nil), samples...)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i] < ordered[j] })
-	if len(ordered) < learnedReferenceMinSamples {
-		return ordered[0], len(samples)
-	}
-	return ordered[(len(ordered)-1)/4], len(samples)
+	return reference, len(ordered)
 }
 
 func normalizeReferenceName(name string) string {
