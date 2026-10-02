@@ -24,6 +24,7 @@ import (
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
+	cedanastorage "github.com/cedana/cedana/plugins/storage-cedana/propagator"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
@@ -39,6 +40,7 @@ type EventStream struct {
 	checkpoints        *rabbitmq.Publisher
 	checkpointRequests *rabbitmq.Consumer
 	deleteRequests     *rabbitmq.Consumer
+	filesRequests      *rabbitmq.Consumer
 	containerdAddress  string
 	lifecycleMu        sync.RWMutex
 	closeOnce          sync.Once
@@ -191,12 +193,14 @@ func (es *EventStream) Close() error {
 		es.lifecycleMu.Lock()
 		consumer := es.checkpointRequests
 		deleteConsumer := es.deleteRequests
+		filesConsumer := es.filesRequests
 		publisher := es.checkpoints
 		conn := es.Conn
 		es.checkpointRequests = nil
 		es.checkpoints = nil
 		es.Conn = nil
 		es.deleteRequests = nil
+		es.filesRequests = nil
 		es.lifecycleMu.Unlock()
 
 		if consumer != nil {
@@ -207,6 +211,9 @@ func (es *EventStream) Close() error {
 		}
 		if deleteConsumer != nil {
 			deleteConsumer.Close()
+		}
+		if filesConsumer != nil {
+			filesConsumer.Close()
 		}
 		if conn != nil {
 			if err := conn.Close(); err != nil {
@@ -307,12 +314,180 @@ func (es *EventStream) DeleteHandler(ctx context.Context) rabbitmq.Handler {
 	}
 }
 
+// StartFilesConsumer serves checkpoint file requests (list the files in a
+// checkpoint, upload one of them) coming from the propagator. The queue is shared
+// by all helpers on this cluster so each request is handled exactly once, by a
+// helper that can reach the checkpoint. Replies go to the request's reply queue.
+func (es *EventStream) StartFilesConsumer(ctx context.Context) error {
+	es.lifecycleMu.RLock()
+	conn := es.Conn
+	es.lifecycleMu.RUnlock()
+	if conn == nil {
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+
+	// NOTE: The propagator declares this queue with the same (default) options
+	queueName := "checkpoint_files-" + config.Global.Connection.ClusterID
+	log.Debug().Msgf("creating %v queue for processing checkpoint file requests", queueName)
+	consumer, err := rabbitmq.NewConsumer(
+		conn,
+		queueName,
+		rabbitmq.WithConsumerOptionsConcurrency(1),
+		rabbitmq.WithConsumerOptionsQOSPrefetch(1),
+		rabbitmq.WithConsumerOptionsConsumerName("cedana_files_helper"),
+	)
+	if err != nil {
+		return err
+	}
+
+	es.lifecycleMu.Lock()
+	if es.Conn == nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("rabbitmq connection is closed")
+	}
+	if es.filesRequests != nil {
+		es.lifecycleMu.Unlock()
+		consumer.Close()
+		return fmt.Errorf("files consumer is already running")
+	}
+	es.filesRequests = consumer
+	es.lifecycleMu.Unlock()
+
+	defer func() {
+		es.lifecycleMu.Lock()
+		if es.filesRequests == consumer {
+			es.filesRequests = nil
+		}
+		es.lifecycleMu.Unlock()
+	}()
+
+	if err := consumer.Run(es.filesHandler(ctx)); err != nil {
+		consumer.Close()
+		return err
+	}
+	return nil
+}
+
+func (es *EventStream) filesHandler(ctx context.Context) rabbitmq.Handler {
+	return func(msg rabbitmq.Delivery) rabbitmq.Action {
+		var req filesReq
+		if err := json.Unmarshal(msg.Body, &req); err != nil {
+			log.Error().Err(err).Msg("failed to unmarshal checkpoint files request")
+			return rabbitmq.Ack
+		}
+		log := log.With().Str("type", req.Type).Str("path", req.CheckpointPath).Str("entry", req.Entry).Logger()
+
+		resp := es.handleFilesRequest(ctx, &req)
+		if resp.Error != "" {
+			log.Error().Str("error", resp.Error).Msg("checkpoint files request failed")
+		} else {
+			log.Debug().Msg("processed checkpoint files request")
+		}
+
+		if msg.ReplyTo == "" {
+			log.Warn().Msg("checkpoint files request has no reply queue")
+			return rabbitmq.Ack
+		}
+		if err := es.reply(ctx, msg, resp); err != nil {
+			log.Error().Err(err).Msg("failed to reply to checkpoint files request")
+		}
+		return rabbitmq.Ack
+	}
+}
+
+func (es *EventStream) handleFilesRequest(ctx context.Context, req *filesReq) (resp filesResp) {
+	if req.CheckpointPath == "" {
+		resp.Error = "request has empty checkpoint path"
+		return
+	}
+
+	switch req.Type {
+	case "list":
+		listResp, err := es.cedana.ListPath(ctx, &daemon.ListPathReq{Path: req.CheckpointPath})
+		if err != nil {
+			resp.Error = err.Error()
+			return
+		}
+		resp.Entries = make([]fileEntry, 0, len(listResp.Entries))
+		for _, entry := range listResp.Entries {
+			resp.Entries = append(resp.Entries, fileEntry{
+				Name:    entry.Name,
+				Size:    entry.Size,
+				ModTime: entry.ModTime,
+				IsDir:   entry.IsDir,
+			})
+		}
+
+	case "download":
+		if req.UploadURL == "" {
+			resp.Error = "download request has no upload url"
+			return
+		}
+		reader, err := es.cedana.ReadPath(ctx, &daemon.ReadPathReq{Path: req.CheckpointPath, Entry: req.Entry})
+		if err != nil {
+			resp.Error = err.Error()
+			return
+		}
+		defer reader.Close()
+
+		upload := cedanastorage.NewUploadableFile(ctx, req.UploadURL)
+		_, err = io.Copy(upload, reader)
+		if err = errors.Join(err, upload.Close()); err != nil {
+			resp.Error = fmt.Sprintf("failed to upload %s: %v", req.Entry, err)
+		}
+
+	default:
+		resp.Error = fmt.Sprintf("unknown request type %q", req.Type)
+	}
+	return
+}
+
+func (es *EventStream) reply(ctx context.Context, msg rabbitmq.Delivery, resp filesResp) error {
+	es.lifecycleMu.RLock()
+	publisher := es.checkpoints
+	es.lifecycleMu.RUnlock()
+	if publisher == nil {
+		return fmt.Errorf("checkpoints publisher is not initialized")
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		return err
+	}
+	return publisher.PublishWithContext(
+		ctx,
+		data,
+		[]string{msg.ReplyTo},
+		rabbitmq.WithPublishOptionsContentType("application/json"),
+		rabbitmq.WithPublishOptionsCorrelationID(msg.CorrelationId),
+	)
+}
+
 /////////////
 // Helpers //
 /////////////
 
 type deleteReq struct {
 	CheckpointPath string `json:"checkpoint_path"`
+}
+
+type filesReq struct {
+	Type           string `json:"type"` // "list" or "download"
+	CheckpointPath string `json:"checkpoint_path"`
+	Entry          string `json:"entry,omitempty"`      // download only
+	UploadURL      string `json:"upload_url,omitempty"` // download only
+}
+
+type fileEntry struct {
+	Name    string `json:"name"`
+	Size    int64  `json:"size"`
+	ModTime int64  `json:"mod_time"`
+	IsDir   bool   `json:"is_dir"`
+}
+
+type filesResp struct {
+	Entries []fileEntry `json:"entries,omitempty"`
+	Error   string      `json:"error,omitempty"`
 }
 
 type checkpointReq struct {

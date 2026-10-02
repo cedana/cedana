@@ -206,13 +206,20 @@ func startHelper(ctx context.Context) error {
 			log.Error().Err(err).Msg("failed to setup checkpoint publisher")
 			return
 		}
-		consumerErr := make(chan error, 2)
+		consumerErr := make(chan error, 3)
 		go func() {
 			consumerErr <- stream.StartCheckpointsConsumer(ctx)
 		}()
 		go func() {
 			consumerErr <- stream.StartDeleteConsumer(ctx)
 		}()
+		if config.Global.Connection.ClusterID != "" {
+			go func() {
+				consumerErr <- stream.StartFilesConsumer(ctx)
+			}()
+		} else {
+			log.Warn().Msg("cluster id not configured, checkpoint file requests will not be served")
+		}
 
 		if err := <-consumerErr; err != nil {
 			log.Error().Err(err).Msg("rabbitmq consumers stopped")
