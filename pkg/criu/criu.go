@@ -26,6 +26,16 @@ type Criu struct {
 	swrkCmd  *exec.Cmd
 	swrkSk   *net.UnixConn
 	swrkPath string
+	mntNs    string
+
+	// What swrk had to say, when the caller gave it no stderr of its own: the pipe, and the
+	// tail of it once the pipe is done with
+	swrkStderr *os.File
+	swrkSaid   chan string
+	// Whether swrk was started through nsenter
+	entered bool
+	// How swrk ended, for an operation that failed
+	swrkExit string
 }
 
 // MakeCriu returns the Criu object required for most operations
@@ -39,6 +49,19 @@ func MakeCriu() *Criu {
 // if it is in a non standard location
 func (c *Criu) SetCriuPath(path string) {
 	c.swrkPath = path
+}
+
+// SetMountNamespace makes CRIU run inside the mount namespace at path (e.g. /proc/<pid>/ns/mnt).
+// CRIU only dumps/restores a mount namespace if it differs from its own, so this is how a mount
+// namespace that is external to the process tree (created by its launcher) is left alone.
+// Requires nsenter, since a multithreaded process can't setns into a mount namespace itself.
+func (c *Criu) SetMountNamespace(path string) {
+	c.mntNs = path
+}
+
+// MountNamespace returns the mount namespace CRIU is set to run inside, if any
+func (c *Criu) MountNamespace() string {
+	return c.mntNs
 }
 
 // Prepare sets up everything for the RPC communication to CRIU
@@ -59,9 +82,45 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 
 	args := []string{"swrk", strconv.Itoa(3 + len(extraFiles))}
 	cmd := exec.CommandContext(ctx, c.swrkPath, args...)
+	c.entered = false
+	if c.mntNs != "" {
+		// Nothing to enter if we're in it already (e.g. started from inside the job), which
+		// also asks for no privilege we may not have.
+		inside, err := inMountNamespace(c.mntNs)
+		if err != nil {
+			clnNet.Close()
+			return fmt.Errorf("failed to compare mount namespace %s with ours: %w", c.mntNs, err)
+		}
+		if !inside {
+			// nsenter does not fork when only entering a mount namespace, so
+			// the PID, Pdeathsig and inherited fds all carry over to CRIU.
+			nsenter, err := exec.LookPath("nsenter")
+			if err != nil {
+				clnNet.Close()
+				return fmt.Errorf("nsenter is required to run CRIU inside mount namespace %s: %w", c.mntNs, err)
+			}
+			args = append([]string{"--mount=" + c.mntNs, "--", c.swrkPath}, args...)
+			cmd = exec.CommandContext(ctx, nsenter, args...)
+			c.entered = true
+		}
+	}
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+
+	// Keep what swrk says for the error if it fails, when nobody else is listening. A pipe of
+	// our own, as a writer would have exec copying in a goroutine that outlives Process.Wait.
+	c.swrkStderr = nil
+	var stderrW *os.File
+	if stderr == nil {
+		var err error
+		c.swrkStderr, stderrW, err = os.Pipe()
+		if err != nil {
+			clnNet.Close()
+			return err
+		}
+		cmd.Stderr = stderrW
+	}
 	cmd.ExtraFiles = append(extraFiles, srv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
@@ -73,14 +132,28 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	runtime.LockOSThread()
 
 	err = cmd.Start()
+	if stderrW != nil {
+		stderrW.Close() // the child has its copy
+	}
 	if err != nil {
 		runtime.UnlockOSThread()
 		clnNet.Close()
+		if c.swrkStderr != nil {
+			c.swrkStderr.Close()
+			c.swrkStderr = nil
+		}
 		return err
 	}
 
 	c.swrkCmd = cmd
 	c.swrkSk = clnNet.(*net.UnixConn)
+
+	// Read as it comes, or swrk blocks on a full pipe before it can answer
+	if c.swrkStderr != nil {
+		r := c.swrkStderr
+		c.swrkSaid = make(chan string, 1)
+		go func() { c.swrkSaid <- tailOf(r) }()
+	}
 
 	return nil
 }
@@ -95,11 +168,29 @@ func (c *Criu) Cleanup() error {
 		c.swrkSk = nil
 		// XXX: We don't use s.swrkCmd.Wait() because it can hang forever
 		// since the stdin, stdout, and stderr copy might not be over.
-		if _, err := c.swrkCmd.Process.Wait(); err != nil {
+		state, err := c.swrkCmd.Process.Wait()
+		if err != nil {
 			// ECHILD means the process was already reaped (e.g. by the
 			// embedding process's signal handler or the Go runtime).
 			if !errors.Is(err, syscall.ECHILD) {
 				errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			}
+		} else {
+			c.swrkExit = state.String()
+		}
+		if c.swrkStderr != nil {
+			// Something swrk left behind may still hold the pipe open; not for long
+			var said string
+			select {
+			case said = <-c.swrkSaid:
+			case <-time.After(time.Second):
+				c.swrkStderr.Close() // ends the read
+				said = <-c.swrkSaid
+			}
+			c.swrkStderr.Close()
+			c.swrkStderr = nil
+			if said != "" {
+				c.swrkExit += ", stderr: " + said
 			}
 		}
 		c.swrkCmd = nil
@@ -113,11 +204,13 @@ func (c *Criu) Cleanup() error {
 // rejects a seqpacket message larger than sk_sndbuf-32, ~208 KiB by default). CRIU
 // appends config-file externals to the RPC ones; keys its parser can't represent
 // (it strips at '#', splits on whitespace) stay inline. Returns the file to remove.
-func externalsToConfig(opts *criu.CriuOpts) (string, error) {
+//
+// CRIU opens the file by path, so dir must be visible to it. Empty dir means the default temp dir.
+func externalsToConfig(opts *criu.CriuOpts, dir string) (string, error) {
 	if len(opts.External) == 0 {
 		return "", nil
 	}
-	f, err := os.CreateTemp("", "cedana-criu-external-*.conf")
+	f, err := os.CreateTemp(dir, "cedana-criu-external-*.conf")
 	if err != nil {
 		return "", err
 	}
@@ -270,6 +363,9 @@ func (c *Criu) doSwrkWithResp(
 		if err != nil {
 			retErr = errors.Join(retErr, err)
 		}
+		if retErr != nil && c.swrkExit != "" {
+			retErr = fmt.Errorf("%w (criu swrk%s: %s)", retErr, c.howRun(), c.swrkExit)
+		}
 	}()
 
 	if nfy != nil {
@@ -305,7 +401,13 @@ func (c *Criu) doSwrkWithResp(
 
 	if opts != nil {
 		opts.External = dedupe(opts.External)
-		cfgPath, err := externalsToConfig(opts)
+		// Inside another mount namespace the temp dir may well be private to it (e.g. /tmp),
+		// whereas the images dir is known to be reachable.
+		cfgDir := ""
+		if c.mntNs != "" {
+			cfgDir = opts.GetImagesDir()
+		}
+		cfgPath, err := externalsToConfig(opts, cfgDir)
 		if cfgPath != "" {
 			defer os.Remove(cfgPath)
 		}
@@ -525,4 +627,50 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// inMountNamespace tells whether we are in the mount namespace at path (e.g. /proc/<pid>/ns/mnt)
+func inMountNamespace(path string) (bool, error) {
+	var ours, theirs syscall.Stat_t
+	if err := syscall.Stat("/proc/self/ns/mnt", &ours); err != nil {
+		return false, err
+	}
+	if err := syscall.Stat(path, &theirs); err != nil {
+		return false, err
+	}
+	return ours.Dev == theirs.Dev && ours.Ino == theirs.Ino, nil
+}
+
+// howRun says how swrk was started, for an error
+func (c *Criu) howRun() string {
+	switch {
+	case c.mntNs == "":
+		return ""
+	case c.entered:
+		return " entered into mount namespace " + c.mntNs
+	default:
+		return " inside mount namespace " + c.mntNs + " already"
+	}
+}
+
+// tailOf reads r to its end and returns the last of it
+func tailOf(r io.Reader) string {
+	const keep = 16 << 10
+	var tail []byte
+	buf := make([]byte, 4096)
+	for {
+		n, err := r.Read(buf)
+		tail = append(tail, buf[:n]...)
+		if len(tail) > keep {
+			tail = tail[len(tail)-keep:]
+		}
+		if err != nil {
+			break
+		}
+	}
+	text := strings.TrimSpace(string(tail))
+	if len(text) > 2048 {
+		text = "..." + text[len(text)-2048:]
+	}
+	return text
 }

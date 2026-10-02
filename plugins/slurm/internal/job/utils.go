@@ -1,14 +1,19 @@
 package job
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -58,6 +63,30 @@ func getJobCgroupPathV2(jid uint32) (string, error) {
 	}
 
 	return "", status.Errorf(codes.NotFound, "cgroup v2 path for slurm job %d not found", jid)
+}
+
+// pickJobPID picks a process of the job out of those in its cgroup. Ourselves if we're one
+// of them, otherwise the one with the lowest PID still around.
+func pickJobPID(pids []int, self uint32, exists func(pid uint32) bool) uint32 {
+	var picked uint32
+	for _, p := range pids {
+		if p <= 0 {
+			continue
+		}
+		pid := uint32(p)
+		if pid == self {
+			return self
+		}
+		if (picked == 0 || pid < picked) && exists(pid) {
+			picked = pid
+		}
+	}
+	return picked
+}
+
+func processExists(pid uint32) bool {
+	_, err := os.Stat(fmt.Sprintf("/proc/%d", pid))
+	return err == nil
 }
 
 func selfInJobCgroup(pid, jid uint32) bool {
@@ -193,4 +222,55 @@ func getJobCgroupPathV1(jid uint32) (string, error) {
 	}
 
 	return "", status.Errorf(codes.NotFound, "cgroup path for slurm job %d does not exist after %d attempts", jid, cgroupRetryAttempts)
+}
+
+// jobScriptName is what cedana-slurm's wrapper names the script, cedana-script-<jobid>.sh
+var jobScriptName = regexp.MustCompile(`^` + regexp.QuoteMeta(SLURM_SCRIPT_PREFIX) + `-[0-9]+\.sh$`)
+
+// isJobScript tells the script the job was launched with by its name
+func isJobScript(path string) bool {
+	return jobScriptName.MatchString(filepath.Base(path))
+}
+
+// inRootOf is path as seen from the mount namespace of pid, the same file to us whatever
+// our own. As is when there is no process to go through.
+func inRootOf(pid uint32, path string) string {
+	if pid == 0 {
+		return path
+	}
+	return filepath.Join(fmt.Sprintf("/proc/%d/root", pid), path)
+}
+
+// scriptAttrs is what the job script has to be put back with
+type scriptAttrs struct {
+	Mode uint32 `json:"mode"` // Go's bits: permissions, setuid, setgid and sticky
+	Uid  uint32 `json:"uid"`
+	Gid  uint32 `json:"gid"`
+}
+
+func saveScriptAttrs(dumpFs afero.Fs, info fs.FileInfo) error {
+	attrs := scriptAttrs{Mode: uint32(info.Mode() & (fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky))}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		attrs.Uid, attrs.Gid = st.Uid, st.Gid
+	}
+	data, err := json.Marshal(attrs)
+	if err != nil {
+		return err
+	}
+	return afero.WriteFile(dumpFs, SLURM_SCRIPT_ATTRS_FILE, data, 0o644)
+}
+
+// loadScriptAttrs falls back to what the script used to be restored with, for a dump without them
+func loadScriptAttrs(dumpFs afero.Fs) scriptAttrs {
+	attrs := scriptAttrs{Mode: 0o700}
+	data, err := afero.ReadFile(dumpFs, SLURM_SCRIPT_ATTRS_FILE)
+	if err != nil {
+		log.Warn().Err(err).Msg("no attributes of the slurm script in the dump, using the defaults")
+		return attrs
+	}
+	if err := json.Unmarshal(data, &attrs); err != nil {
+		log.Warn().Err(err).Msg("unreadable attributes of the slurm script in the dump, using the defaults")
+		return scriptAttrs{Mode: 0o700}
+	}
+	return attrs
 }

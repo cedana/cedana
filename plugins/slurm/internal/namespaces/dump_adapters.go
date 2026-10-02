@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 func IgnoreNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[types.Dump] {
@@ -71,24 +72,99 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 					return next(ctx, opts, resp, req)
 				}
 
-				// CRIU expects the information about an external namespace
-				// like this: --external <TYPE>[<inode>]:<key>
-				// This <key> is always 'extRoot<TYPE>NS'.
-
 				var ns unix.Stat_t
 				if err := unix.Stat(nsPath, &ns); err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to stat %s: %v", nsPath, err)
 				}
-				external := fmt.Sprintf("%s[%d]:%s", configs.NsName(t), ns.Ino, CriuNsToKey(t))
 
-				if req.Criu == nil {
-					req.Criu = &criu_proto.CriuOpts{}
-				}
-
-				req.Criu.External = append(req.Criu.External, external)
+				addExternalNamespace(req, t, uint64(ns.Ino))
 			}
 
 			return next(ctx, opts, resp, req)
 		}
+	}
+}
+
+// Detects the namespaces of the job that are external (created by whatever launched it,
+// see RecognizeExternalNamespaces) and handles only those. Unlike AddExternalNamespacesForDump,
+// this does not touch CRIU opts when the job is simply running in the host's namespaces.
+//
+//	net, pid -> left out of the dump using --external
+//	mnt      -> CRIU is run inside it, as it has no notion of an external mount namespace
+//
+// What was done is recorded in the dump, for InheritRecognizedNamespacesForRestore.
+func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		pid := req.GetDetails().GetSlurm().GetPID()
+
+		recognized, err := RecognizeExternalNamespaces(pid, req.GetDetails().GetSlurm().GetJobID())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to recognize external namespaces: %v", err)
+		}
+		if len(recognized) == 0 {
+			log.Debug().Uint32("PID", pid).Msg("no external namespaces recognized")
+			return next(ctx, opts, resp, req)
+		}
+
+		version, err := opts.CRIU.GetCriuVersion(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
+		}
+
+		var handled []ExternalNamespace
+
+		for _, ns := range recognized {
+			name := configs.NsName(ns.Type)
+
+			handling, reason := handlingFor(ns.Type, version)
+
+			// Inside a mount namespace that comes with a PID namespace, /proc is that of the
+			// PID namespace. CRIU would be looking for itself and the job in the wrong place.
+			if handling == HandlingEnter && !inHostNamespace(configs.NEWPID, pid) {
+				handling, reason = "", "job is not in the host's pid namespace"
+			}
+
+			log := log.With().Str("holder", string(ns.Holder)).Str("path", ns.Path).Uint64("inode", ns.Inode).Logger()
+
+			switch handling {
+			case HandlingExternal:
+				log.Debug().Msgf("adding external %s namespace", name)
+				addExternalNamespace(req, ns.Type, ns.Inode)
+
+			case HandlingEnter:
+				// CRIU gets to the images through the fd it's given, but opens some files by path, and
+				// so will plugins. The dump dir may not be there for the job (e.g. in /tmp, of which it has its own).
+				if dir := req.GetCriu().GetImagesDir(); dir != "" {
+					reachable, err := reachableFromNamespace(pid, dir)
+					if err != nil {
+						return nil, status.Errorf(codes.Internal, "failed to check dump dir: %v", err)
+					}
+					if reachable != dir {
+						log.Debug().Str("dir", dir).Str("through", reachable).Msgf("dump dir is not the same inside the job's %s namespace, going through our root", name)
+						req.Criu.ImagesDir = proto.String(reachable)
+					}
+				}
+				// Not by where it's held, as a pin may only be visible from the mount namespace it was made in
+				log.Debug().Msgf("running CRIU inside external %s namespace", name)
+				opts.CRIU.SetMountNamespace(nsPathOf(ns.Type, pid))
+
+			default:
+				log.Warn().Msgf("%s, skipping external %s namespace handling", reason, name)
+				continue
+			}
+
+			handled = append(handled, ExternalNamespace{Type: ns.Type, Handling: handling, Holder: ns.Holder})
+		}
+
+		if len(handled) > 0 {
+			if opts.DumpFs == nil {
+				return nil, status.Error(codes.FailedPrecondition, "dump filesystem is nil, cannot save external namespaces")
+			}
+			if err := saveExternalNamespaces(opts.DumpFs, handled); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to save external namespaces to dump: %v", err)
+			}
+		}
+
+		return next(ctx, opts, resp, req)
 	}
 }
