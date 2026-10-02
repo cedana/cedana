@@ -27,8 +27,8 @@ func (s *Server) DeletePath(ctx context.Context, req *daemon.DeletePathReq) (*da
 		return nil, status.Errorf(codes.InvalidArgument, "Path must be provided")
 	}
 	if !strings.Contains(checkpointPath, "://") {
-		if cleaned := filepath.Clean(checkpointPath); !filepath.IsAbs(cleaned) || cleaned == "/" {
-			return nil, status.Errorf(codes.InvalidArgument, "Path must be an absolute path to a checkpoint")
+		if err := checkLocalCheckpoint(checkpointPath); err != nil {
+			return nil, err
 		}
 	}
 	storage, err := storageForPath(ctx, checkpointPath)
@@ -41,6 +41,33 @@ func (s *Server) DeletePath(ctx context.Context, req *daemon.DeletePathReq) (*da
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	return &daemon.DeletePathResp{}, nil
+}
+
+// checkLocalCheckpoint verifies that a local path is a checkpoint the daemon may
+// delete: an absolute path to a checkpoint tarball, or to a dump directory (one
+// holding CRIU images, or image streamer shards). Anything else is refused, so a
+// request cannot remove arbitrary files as root.
+func checkLocalCheckpoint(path string) error {
+	cleaned := filepath.Clean(path)
+	if !filepath.IsAbs(cleaned) || cleaned == "/" {
+		return status.Errorf(codes.InvalidArgument, "Path must be an absolute path to a checkpoint")
+	}
+	info, err := os.Stat(cleaned)
+	if err != nil {
+		return status.Errorf(codes.NotFound, "failed to stat %s: %v", path, err)
+	}
+	if !info.IsDir() {
+		if _, ok := cedana_io.TarCompressionFromPath(cleaned); !ok {
+			return status.Errorf(codes.InvalidArgument, "%s is not a checkpoint tarball", path)
+		}
+		return nil
+	}
+	for _, marker := range []string{"inventory.img", "img-0"} {
+		if _, err := os.Stat(filepath.Join(cleaned, marker)); err == nil {
+			return nil
+		}
+	}
+	return status.Errorf(codes.InvalidArgument, "%s is not a checkpoint directory", path)
 }
 
 // ListPath lists the entries of a path. For a checkpoint tarball these are the

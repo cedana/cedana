@@ -408,12 +408,18 @@ func (es *EventStream) handleFilesRequest(ctx context.Context, req *filesReq) (r
 		defer reader.Close()
 
 		upload := cedanastorage.NewUploadableFile(ctx, req.UploadURL)
-		n, err := io.Copy(upload, reader)
-		if err == nil && n == 0 {
-			_, err = upload.Write(nil) // the upload only starts on the first write, and an empty file needs one too
+		n, copyErr := io.Copy(upload, reader)
+		if copyErr == nil && n == 0 {
+			_, copyErr = upload.Write(nil) // the upload only starts on the first write, and an empty file needs one too
 		}
-		if err = errors.Join(err, upload.Close()); err != nil {
-			resp.Error = fmt.Sprintf("failed to upload %s: %v", req.Entry, err)
+		closeErr := upload.Close()
+		switch {
+		case closeErr != nil:
+			// A failed PUT also breaks the copy, so this is the error that matters
+			resp.Error = fmt.Sprintf("failed to upload %s: %v", req.Entry, closeErr)
+		case copyErr != nil:
+			// The daemon reports a bad path or entry while streaming, not when opening
+			resp.Error = status.Convert(copyErr).Message()
 		}
 
 	case "delete":

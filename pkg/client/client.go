@@ -395,7 +395,7 @@ func (r *pathReader) Read(p []byte) (int, error) {
 			return 0, io.EOF
 		}
 		if err != nil {
-			return 0, utils.GRPCErrorColored(err)
+			return 0, err // the daemon's gRPC status, as for ReadPath itself
 		}
 		r.buf = resp.GetData()
 	}
