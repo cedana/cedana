@@ -209,9 +209,13 @@ func startHelper(ctx context.Context) error {
 		go func() {
 			consumerErr <- stream.StartCheckpointsConsumer(ctx)
 		}()
-		go func() {
-			consumerErr <- stream.StartDeleteConsumer(ctx)
-		}()
+		if config.Global.Connection.ClusterID != "" {
+			go func() {
+				consumerErr <- stream.StartFilesConsumer(ctx)
+			}()
+		} else {
+			log.Warn().Msg("cluster id not configured, checkpoint file and delete requests will not be served")
+		}
 
 		if err := <-consumerErr; err != nil {
 			log.Error().Err(err).Msg("rabbitmq consumers stopped")
