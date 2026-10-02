@@ -38,31 +38,22 @@ func RestorePrivateMounts(next types.Restore) types.Restore {
 				"dump has private mounts, but no process of slurm job %d was found to restore them through", req.GetDetails().GetSlurm().GetJobID())
 		}
 
-		private, err := namespaces.RecognizePrivateMounts(pid)
+		private, err := namespaces.SlurmMounts(pid, req.GetDetails().GetSlurm().GetJobID())
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to recognize private mounts: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to recognize the job's private mounts: %v", err)
 		}
 		destinations := map[string]namespaces.PrivateMount{}
 		for _, m := range private {
 			destinations[m.Mountpoint] = m
 		}
 
-		// Check all before touching any. If the job being restored into does not have the mount
-		// to itself, this node is set up differently and we'd be writing the job's files into
-		// what is shared with the host (e.g. its /var/tmp).
+		// Check all before touching any. If SLURM did not give the job being restored into a
+		// directory of its own there, this node is set up differently and we'd be writing the
+		// job's files into what is shared with the host.
 		for _, m := range mounts {
-			destination, ok := destinations[m.Mountpoint]
-			if !ok {
+			if _, ok := destinations[m.Mountpoint]; !ok {
 				return nil, status.Errorf(codes.FailedPrecondition,
-					"dump has the contents of a private %s on %s, but the job being restored into does not have a private mount there", m.FSType, m.Mountpoint)
-			}
-			if destination.FSType != m.FSType {
-				return nil, status.Errorf(codes.FailedPrecondition,
-					"dump has the contents of a private %s on %s, but the job being restored into has a %s there", m.FSType, m.Mountpoint, destination.FSType)
-			}
-			if destination.OnHost {
-				return nil, status.Errorf(codes.FailedPrecondition,
-					"dump has the contents of a private %s on %s, but what the job being restored into has there is mounted on the host as well", m.FSType, m.Mountpoint)
+					"dump has the contents of the job's private %s, but SLURM gave the job being restored into no directory of its own there", m.Mountpoint)
 			}
 		}
 

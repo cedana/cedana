@@ -44,12 +44,6 @@ func walkMount(dir string, fn func(path string, info fs.FileInfo, st *syscall.St
 		if !ok {
 			return fmt.Errorf("no stat for %s", path)
 		}
-		if isOurs(dir, path) {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
 		if uint64(st.Dev) != uint64(rootStat.Dev) {
 			log.Warn().Str("path", path).Msg("not archiving another filesystem mounted inside")
 			if d.IsDir() {
@@ -499,15 +493,4 @@ func setTimes(root *os.Root, name string, atime, mtime time.Time) error {
 		return err
 	}
 	return nil
-}
-
-// What the GPU controller keeps in the job's /dev/shm: its shared memory, the size of
-// gpu.shm_size, and what goes with it. Named like the files in internal/cedana/gpu.
-const gpuControllerPrefix = "cedana-gpu."
-
-// isOurs tells an entry at the root of the mount that is cedana's own rather than the job's.
-// The GPU controller's shared memory is dumped and restored with the GPU, not as a file,
-// and would take up most of what a dump allows.
-func isOurs(dir, path string) bool {
-	return filepath.Dir(path) == dir && strings.HasPrefix(filepath.Base(path), gpuControllerPrefix)
 }

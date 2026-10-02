@@ -16,7 +16,6 @@ import (
 )
 
 const (
-	TMPFS = "tmpfs"
 
 	// Lists the private mounts whose contents are in the dump, each as a '<prefix>-<n>.tar'
 	PRIVATE_MOUNTS_FILE   = "private_mounts.json"
