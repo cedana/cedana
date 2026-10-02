@@ -14,8 +14,5 @@ var InstallDeps string
 //go:embed configure-shm.sh
 var ConfigureShm string
 
-//go:embed configure-io-uring.sh
-var ConfigureIoUring string
-
 //go:embed utils.sh
 var Utils string
