@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -19,6 +20,7 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
+	"github.com/cedana/cedana-propagator-sdk/go/models"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
@@ -349,6 +351,7 @@ type checkpointInfo struct {
 	CheckpointName string        `json:"checkpoint_name"`
 	Status         string        `json:"status"`
 	Path           string        `json:"path"`
+	UploadPending  bool          `json:"upload_pending,omitempty"`
 	GPU            bool          `json:"gpu"`
 	Platform       string        `json:"platform"`
 	ProfilingInfo  profilingInfo `json:"profiling_info"`
@@ -529,6 +532,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					nil,
 					"",
+					false,
 					nil,
 					i,
 					specMap[i],
@@ -547,9 +551,11 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
 				var path string
+				var pending bool
 				var state *daemon.ProcessState
 				if err == nil {
 					path = dumpResp.Paths[0]
+					pending = slices.Contains(dumpResp.Pending, path)
 					state = dumpResp.State
 				}
 				es.publishCheckpoint(
@@ -559,11 +565,27 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					profiling,
 					path,
+					pending,
 					state,
 					i,
 					specMap[i],
 					err,
 				)
+
+				// The upload continues after the dump has returned, so its outcome
+				// is reported once it is known. Does not hold up the unfreeze.
+				if pending {
+					go es.reportUpload(
+						log.WithContext(ctx),
+						req.PodName,
+						req.ActionId,
+						checkpointIdMap[i],
+						path,
+						state,
+						i,
+						specMap[i],
+					)
+				}
 			}()
 		}
 
@@ -580,6 +602,7 @@ func (es *EventStream) publishCheckpoint(
 	checkpointId string,
 	profilingData *profiling.Data,
 	path string,
+	uploadPending bool,
 	state *daemon.ProcessState,
 	containerOrder int,
 	containerSpec *specs.Spec,
@@ -618,6 +641,7 @@ func (es *EventStream) publishCheckpoint(
 		ci.GPU = state.GetGPUEnabled()
 		ci.Platform = state.GetHost().GetPlatform()
 		ci.Path = path
+		ci.UploadPending = uploadPending
 	}
 
 	if profilingData != nil {
@@ -659,6 +683,57 @@ func (es *EventStream) publishCheckpoint(
 		log.Info().Str("path", path).Bool("GPU", ci.GPU).Msg("checkpoint published")
 	}
 	return nil
+}
+
+// Waits for the background upload of a checkpoint to end, and reports the outcome.
+// On success the checkpoint is marked as uploaded. On failure the checkpoint is
+// reported again, this time as failed.
+func (es *EventStream) reportUpload(
+	ctx context.Context,
+	podId string,
+	actionId string,
+	checkpointId string,
+	path string,
+	state *daemon.ProcessState,
+	containerOrder int,
+	containerSpec *specs.Spec,
+) {
+	log := log.Ctx(ctx).With().Str("checkpoint_id", checkpointId).Str("path", path).Logger()
+
+	resp, err := es.cedana.WaitUpload(ctx, &daemon.WaitUploadReq{Path: path})
+	if err == nil && resp.GetError() != "" {
+		err = errors.New(resp.GetError())
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("checkpoint upload failed")
+		err = es.publishCheckpoint(
+			ctx,
+			podId,
+			actionId,
+			checkpointId,
+			nil,
+			path,
+			false,
+			state,
+			containerOrder,
+			containerSpec,
+			fmt.Errorf("upload failed: %w", err),
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to report checkpoint upload failure")
+		}
+		return
+	}
+
+	info := models.NewCheckpointSuccessInfo()
+	info.SetRestorePath(&path)
+	_, err = es.propagator.V1().Checkpoints().Uploaded().ById(checkpointId).Post(ctx, info, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to mark checkpoint as uploaded")
+		return
+	}
+
+	log.Info().Msg("checkpoint uploaded")
 }
 
 func (es *EventStream) getImageSecret() (*imageSecret, error) {

@@ -2,6 +2,7 @@ package io
 
 import (
 	"archive/tar"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,10 +28,14 @@ func Tar(src string, dst io.Writer, compression string, isFuse bool) (err error)
 	if err != nil {
 		return err
 	}
-	defer writer.Close()
+	defer func() {
+		err = errors.Join(err, writer.Close())
+	}()
 
 	tarWriter := tar.NewWriter(writer)
-	defer tarWriter.Close()
+	defer func() {
+		err = errors.Join(err, tarWriter.Close())
+	}()
 
 	err = filepath.Walk(src, func(file string, fi os.FileInfo, err error) error {
 		if err != nil {
@@ -132,7 +137,9 @@ func WriteTo(src *os.File, dst io.Writer, compression string) (n int64, err erro
 	if err != nil {
 		return 0, err
 	}
-	defer writer.Close()
+	defer func() {
+		err = errors.Join(err, writer.Close())
+	}()
 
 	return src.WriteTo(writer)
 }

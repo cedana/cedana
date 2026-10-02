@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/xeonx/timeago"
@@ -373,6 +374,7 @@ var listJobCheckpointCmd = &cobra.Command{
 			"Time",
 			"Size",
 			"Path",
+			"Checksum",
 		})
 
 		checkpoints := resp.GetCheckpoints()
@@ -387,6 +389,7 @@ var listJobCheckpointCmd = &cobra.Command{
 				timestamp.Format(time.DateTime),
 				utils.SizeStr(checkpoint.GetSize()),
 				checkpoint.GetPath(),
+				shortChecksum(checkpoint.GetChecksum()),
 			}
 			tableWriter.AppendRow(row)
 		}
@@ -438,3 +441,21 @@ var (
 		},
 	}
 )
+
+// shortChecksum cuts "<algorithm>:<hex>" to the algorithm and the first 12 hex digits,
+// as the UI does. The storage records the checksum once it has persisted the checkpoint,
+// so a checkpoint may have none.
+func shortChecksum(checksum string) string {
+	if checksum == "" {
+		return "-"
+	}
+	prefix := ""
+	if i := strings.Index(checksum, ":"); i >= 0 {
+		prefix = checksum[:i+1]
+	}
+	digest := checksum[len(prefix):]
+	if len(digest) > 12 {
+		return prefix + digest[:12] + "…"
+	}
+	return checksum
+}

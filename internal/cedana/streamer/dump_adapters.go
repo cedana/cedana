@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -106,6 +107,11 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 
 			path := req.Dir + string(os.PathSeparator) + req.Name // do not use filepath.Join as it removes a slash
 
+			ext, err := cedana_io.ExtForCompression(compression)
+			if err != nil {
+				return nil, err
+			}
+
 			var streamStorage cedana_io.Storage
 			var storagePath string
 
@@ -136,11 +142,16 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
 			// This is why the logic here is not the same as that in `filesystem/dump_adapters.go`
 			if async {
-				ext, _ := cedana_io.ExtForCompression(compression)
+				remoteShard := func(i int32) string {
+					return path + string(os.PathSeparator) + fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext // do not use filepath.Join as it removes a slash
+				}
 
 				upload := func(ctx context.Context) error {
 					var wg sync.WaitGroup
 					errCh := make(chan error, streams)
+					// The shards this upload created, and so may remove: an earlier
+					// checkpoint at the same path keeps the shards this upload did not touch
+					created := make([]atomic.Bool, streams)
 
 					for i := range streams {
 						wg.Add(1)
@@ -148,7 +159,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							defer wg.Done()
 
 							localPath := filepath.Join(imagesDirectory, fmt.Sprintf(IMG_FILE_FORMATTER, i)+ext)
-							remotePath := path + string(os.PathSeparator) + fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext // do not use filepath.Join as it removes a slash
+							remotePath := remoteShard(i)
 
 							src, err := streamStorage.Open(ctx, localPath)
 							if err != nil {
@@ -162,9 +173,12 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 								errCh <- fmt.Errorf("failed to create remote shard %d: %w", i, err)
 								return
 							}
-							defer dst.Close()
+							created[i].Store(true)
 
-							if _, err := io.Copy(dst, src); err != nil {
+							// A remote shard is only complete once it has been closed
+							_, err = io.Copy(dst, src)
+							err = errors.Join(err, dst.Close())
+							if err != nil {
 								errCh <- fmt.Errorf("failed to upload shard %d: %w", i, err)
 							}
 						}(i)
@@ -176,6 +190,20 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					var uploadErr error
 					for e := range errCh {
 						uploadErr = errors.Join(uploadErr, e)
+					}
+
+					// Do not leave behind a checkpoint that is only partly uploaded. A storage
+					// that cannot delete leaves the shards, and the checkpoint is never marked
+					// ready, so nothing restores from it; the shards are reported for cleanup.
+					if uploadErr != nil {
+						for i := range streams {
+							if !created[i].Load() {
+								continue
+							}
+							if err := storage.Delete(ctx, remoteShard(i)); err != nil {
+								log.Warn().Err(err).Str("path", remoteShard(i)).Msg("could not remove remote shard after failed upload; it is left behind")
+							}
+						}
 					}
 
 					os.RemoveAll(imagesDirectory)
@@ -192,10 +220,17 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					// context will be canceled after the dump completes.
 					uploadCtx := context.WithoutCancel(ctx)
 
+					finish := opts.Uploads.Start(path)
+					resp.Pending = append(resp.Pending, path)
+
 					opts.WG.Go(func() {
 						log.Info().Msg("async dump upload started")
 						if uploadErr := upload(uploadCtx); uploadErr != nil {
 							log.Error().Err(uploadErr).Msg("async upload failed")
+							finish(uploadErr)
+						} else {
+							log.Info().Msg("async dump upload completed")
+							finish(nil)
 						}
 					})
 				}()
