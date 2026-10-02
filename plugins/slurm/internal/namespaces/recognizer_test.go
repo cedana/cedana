@@ -189,7 +189,7 @@ const (
 `
 )
 
-func TestPrivateMounts(t *testing.T) {
+func TestSlurmMounts(t *testing.T) {
 	parse := func(mountinfo string) []mount {
 		mounts, err := parseMountinfo(strings.NewReader(mountinfo))
 		if err != nil {
@@ -197,31 +197,46 @@ func TestPrivateMounts(t *testing.T) {
 		}
 		return mounts
 	}
-	host := parse(testHostMountinfo)
 
 	tests := []struct {
 		name     string
 		job      []mount
+		jobID    uint32
 		expected []PrivateMount
 	}{
-		{"HostNamespace", host, nil},
-		{"Tmpfs", parse(testJobMountinfo), []PrivateMount{{Mountpoint: "/var/tmp", FSType: "tmpfs"}}},
-		{"OvermountAndBind", parse(testSlurmJobMountinfo), []PrivateMount{
-			{Mountpoint: "/dev/shm", FSType: "tmpfs"},
-			{Mountpoint: "/tmp", FSType: "ext4", OnHost: true},
+		{"HostNamespace", parse(testHostMountinfo), 1234, nil},
+		{"TmpfsOfALauncher", parse(testJobMountinfo), 1234, nil},
+		{"SlurmTmp", parse(testSlurmJobMountinfo), 1234, []PrivateMount{
+			// Not its /dev/shm, a tmpfs of the kernel's; not the pin of the namespace
+			{Mountpoint: "/tmp", FSType: "ext4", Root: "/var/spool/slurmd/ns/1234/.1234/_tmp"},
 		}},
-		{"SharedWithHost", parse(testSharedJobMountinfo), []PrivateMount{
-			{Mountpoint: "/var/tmp", FSType: "tmpfs", OnHost: true},
-			{Mountpoint: "/scratch", FSType: "tmpfs", OnHost: true},
-		}},
+		{"AnotherJob", parse(testSlurmJobMountinfo), 123, nil},
+		{"SharedWithHost", parse(testSharedJobMountinfo), 1234, nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := privateMounts(tt.job, host); !reflect.DeepEqual(got, tt.expected) {
+			if got := slurmMounts(tt.job, tt.jobID); !reflect.DeepEqual(got, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, got)
 			}
 		})
+	}
+}
+
+func TestOfJob(t *testing.T) {
+	for path, want := range map[string]bool{
+		"/var/spool/slurmd/ns/1234/.1234/_tmp":     true,
+		"/var/spool/slurmd/ns/1234/.1234/_dev_shm": true,
+		"/var/spool/slurmd/ns/1234/.1234":          false, // the directory itself, not one in it
+		"/var/spool/slurmd/ns/1234/.ns":            false, // the pin
+		"/var/spool/slurmd/ns/12345/.12345/_tmp":   false,
+		"/var/spool/slurmd/ns/1234/_tmp":           false,
+		"/":                                        false,
+		"/export/1234/.1234/x":                     true,
+	} {
+		if got := ofJob(path, "1234"); got != want {
+			t.Errorf("ofJob(%q) = %v, want %v", path, got, want)
+		}
 	}
 }
 

@@ -18,39 +18,30 @@ import (
 )
 
 // When CRIU runs inside the job's external mount namespace (see namespaces.AddRecognizedExternalNamespacesForDump),
-// it dumps files by path and knows nothing of the mounts. A tmpfs that exists only in that
-// namespace (e.g. a PAM module giving each session its own /var/tmp) will be a new, empty one
-// in the job restored into. So its contents go into the dump.
+// it dumps files by path and knows nothing of the mounts. The directories SLURM's namespace
+// plugin gives the job (e.g. its /tmp) are made for it and removed with it, and the job
+// restored into gets new, empty ones. So their contents go into the dump.
 //
-// Does nothing otherwise. If CRIU is dumping the mount namespace, it dumps the tmpfs too.
+// Does nothing otherwise. If CRIU is dumping the mount namespace, it dumps them too.
 func DumpPrivateMounts(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		if opts.CRIU.MountNamespace() == "" {
 			return next(ctx, opts, resp, req)
 		}
 
-		pid := req.GetDetails().GetSlurm().GetPID()
+		details := req.GetDetails().GetSlurm()
+		pid := details.GetPID()
 
-		private, err := namespaces.RecognizePrivateMounts(pid)
+		private, err := namespaces.SlurmMounts(pid, details.GetJobID())
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to recognize private mounts: %v", err)
+			return nil, status.Errorf(codes.Internal, "failed to recognize the job's private mounts: %v", err)
 		}
 
 		var mounts []privateMount
 		var total uint64
 
 		for _, m := range private {
-			if m.FSType != TMPFS {
-				// Backed by something that outlives the namespace. Where it is on
-				// the node restored on, is for whatever mounts it there to decide.
-				log.Debug().Str("mountpoint", m.Mountpoint).Str("fstype", m.FSType).Msg("not dumping private mount that is not a tmpfs")
-				continue
-			}
-			if m.OnHost {
-				// Not the job's alone (e.g. the host's /dev/shm bind-mounted elsewhere), and will be there still
-				log.Debug().Str("mountpoint", m.Mountpoint).Msg("not dumping private mount of a tmpfs that the host has mounted as well")
-				continue
-			}
+			log.Debug().Str("mountpoint", m.Mountpoint).Str("root", m.Root).Msg("private mount of the job")
 
 			size, err := contentSize(pathInJob(pid, m.Mountpoint))
 			if err != nil {

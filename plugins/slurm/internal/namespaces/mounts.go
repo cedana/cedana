@@ -1,10 +1,13 @@
 package namespaces
 
-// Recognizes the mounts that exist only in the job's mount namespace.
+// Recognizes the directories SLURM's namespace plugin gives the job.
 //
-// Running CRIU inside an external mount namespace takes care of the mount tree,
-// but not of what is in it: a tmpfs mounted by the launcher (e.g. a PAM module giving
-// each session its own /var/tmp) lives and dies with the namespace.
+// job_container/tmpfs (namespace/tmpfs from 26.05) makes each directory it is
+// configured with (Dirs, /tmp by default) under <basepath>/<jobid>/.<jobid>/ and
+// bind-mounts it into the job's mount namespace. Made for the job and removed
+// with it, so a job restored gets new, empty ones: what was in them goes into the
+// dump. Its /dev/shm is a tmpfs of the kernel's, whose contents are the shared
+// memory of the processes that map them, which CRIU dumps with the processes.
 
 import (
 	"bufio"
@@ -23,68 +26,49 @@ type mount struct {
 	FSType     string
 }
 
-// PrivateMount is a mount of the job that the host does not have
+// PrivateMount is a directory of the job's own, mounted into its namespace by SLURM
 type PrivateMount struct {
 	Mountpoint string
 	FSType     string
-
-	// The host has the filesystem mounted as well, be it elsewhere or another part of it
-	// (e.g. its /dev/shm bind-mounted on the job's /var/tmp). What's in it is not the job's alone.
-	OnHost bool
+	// Where it is on the node: <basepath>/<jobid>/.<jobid>/<dir>
+	Root string
 }
 
-// RecognizePrivateMounts returns the mounts of pid that differ from what the host has
-// mounted at the same place. Returns nothing if pid is in the host's mount namespace.
-//
-// NOTE: Mount IDs can't be used for this. A new mount namespace is a copy of the
-// parent's where every mount is given a new ID, so by ID all of them look private.
-func RecognizePrivateMounts(pid uint32) ([]PrivateMount, error) {
+// SlurmMounts returns the mounts of pid that SLURM's namespace plugin made for the job,
+// in the order they are mounted.
+func SlurmMounts(pid uint32, jobID uint32) ([]PrivateMount, error) {
 	jobPath := fmt.Sprintf("/proc/%d/mountinfo", pid)
 	job, err := readMountinfo(jobPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", jobPath, err)
 	}
-
-	host, err := readMountinfo("/proc/1/mountinfo")
-	if err != nil {
-		host, err = readMountinfo("/proc/self/mountinfo")
-		if err != nil {
-			return nil, fmt.Errorf("failed to read host mountinfo: %w", err)
-		}
-	}
-
-	return privateMounts(job, host), nil
+	return slurmMounts(job, jobID), nil
 }
 
-// privateMounts compares what is visible at each mountpoint, i.e. the topmost mount.
-// It's the same mount if it's the same part (root) of the same filesystem instance (device).
-func privateMounts(job, host []mount) []PrivateMount {
-	hostTop := map[string]mount{}
-	hostDevices := map[string]bool{}
-	for _, m := range host {
-		hostTop[m.Mountpoint] = m
-		hostDevices[m.Device] = true
-	}
+// slurmMounts picks the mounts whose root is in the plugin's directory for the job, by the
+// <jobid>/.<jobid> in its path. The pin of the namespace (<basepath>/<jobid>/.ns) is not one.
+func slurmMounts(job []mount, jobID uint32) []PrivateMount {
+	id := strconv.FormatUint(uint64(jobID), 10)
 
-	jobTop := map[string]mount{}
-	var order []string
+	var mounts []PrivateMount
 	for _, m := range job {
-		if _, ok := jobTop[m.Mountpoint]; !ok {
-			order = append(order, m.Mountpoint)
-		}
-		jobTop[m.Mountpoint] = m
-	}
-
-	var private []PrivateMount
-	for _, mountpoint := range order {
-		m := jobTop[mountpoint]
-		if h, ok := hostTop[mountpoint]; ok && h.Device == m.Device && h.Root == m.Root {
+		if !ofJob(m.Root, id) {
 			continue
 		}
-		private = append(private, PrivateMount{Mountpoint: m.Mountpoint, FSType: m.FSType, OnHost: hostDevices[m.Device]})
+		mounts = append(mounts, PrivateMount{Mountpoint: m.Mountpoint, FSType: m.FSType, Root: m.Root})
 	}
+	return mounts
+}
 
-	return private
+// ofJob tells a path with <id>/.<id> in it, followed by something
+func ofJob(path, id string) bool {
+	components := strings.Split(path, "/")
+	for i := 0; i+2 < len(components); i++ {
+		if components[i] == id && components[i+1] == "."+id && components[i+2] != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func readMountinfo(path string) ([]mount, error) {

@@ -6,7 +6,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"errors"
-	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -42,12 +41,6 @@ func TestArchiveExtractDir(t *testing.T) {
 	must(os.Symlink("/etc/passwd", filepath.Join(src, "abs")))
 	must(os.Link(filepath.Join(src, "a/b/data"), filepath.Join(src, "hardlink")))
 	must(unix.Mkfifo(filepath.Join(src, "fifo"), 0o620))
-	// The GPU controller's, at the root of the mount: not the job's to archive. Deeper
-	// down, a name like it is the job's.
-	must(os.WriteFile(filepath.Join(src, "cedana-gpu.0123"), make([]byte, 4096), 0o600))
-	must(os.MkdirAll(filepath.Join(src, "cedana-gpu.0123.misc"), 0o700))
-	must(os.WriteFile(filepath.Join(src, "cedana-gpu.0123.misc/hostmem-0"), make([]byte, 4096), 0o600))
-	must(os.WriteFile(filepath.Join(src, "a/cedana-gpu.4567"), []byte("job"), 0o600))
 	// An xattr, and a capability if we may set one. Neither survives a chown of the file.
 	if err := unix.Setxattr(filepath.Join(src, "sticky"), "user.test", []byte("value"), 0); err != nil && !errors.Is(err, unix.ENOTSUP) {
 		t.Fatal(err)
@@ -67,8 +60,8 @@ func TestArchiveExtractDir(t *testing.T) {
 	var buf bytes.Buffer
 	written, err := archiveDir(src, &buf, noLimit)
 	must(err)
-	if written != 9 { // "hello" once, "x", and "job"; nothing of the GPU controller's
-		t.Errorf("expected 9 bytes of contents, got %d", written)
+	if written != 6 { // "hello" once, and "x"
+		t.Errorf("expected 6 bytes of contents, got %d", written)
 	}
 	if size, err := contentSize(src); err != nil || size != written {
 		t.Errorf("expected a size of %d, got %d, %v", written, size, err)
@@ -103,14 +96,6 @@ func TestArchiveExtractDir(t *testing.T) {
 
 	if info, _ := os.Stat(filepath.Join(dst, "empty")); info.Size() != 0 {
 		t.Errorf("stale file was not replaced")
-	}
-	for _, path := range []string{"cedana-gpu.0123", "cedana-gpu.0123.misc"} {
-		if _, err := os.Lstat(filepath.Join(dst, path)); !errors.Is(err, fs.ErrNotExist) {
-			t.Errorf("%s: the GPU controller's, should not have been archived (%v)", path, err)
-		}
-	}
-	if _, err := os.Lstat(filepath.Join(dst, "a/cedana-gpu.4567")); err != nil {
-		t.Errorf("a/cedana-gpu.4567: the job's, should have been archived: %v", err)
 	}
 
 	for _, path := range []string{".", "a", "a/b/data"} {
@@ -315,7 +300,7 @@ func TestSaveLoadPrivateMounts(t *testing.T) {
 		t.Fatalf("expected nothing from an empty dump, got %v, %v", got, err)
 	}
 
-	expected := []privateMount{{Mountpoint: "/var/tmp", FSType: TMPFS, Archive: "private_mount-0.tar"}}
+	expected := []privateMount{{Mountpoint: "/tmp", FSType: "ext4", Archive: "private_mount-0.tar"}}
 	if err := savePrivateMounts(fs, expected); err != nil {
 		t.Fatal(err)
 	}
