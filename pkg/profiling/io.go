@@ -39,6 +39,9 @@ func (sw *readWriteCloser) Read(p []byte) (n int, err error) {
 }
 
 func (sw *readWriteCloser) Close() error {
+	n := 0
+	sw.start()
+	defer sw.end(&n)
 	return sw.w.Close()
 }
 
@@ -54,6 +57,9 @@ func (prc *readCloser) Read(p []byte) (n int, err error) {
 }
 
 func (prc *readCloser) Close() error {
+	n := 0
+	prc.start()
+	defer prc.end(&n)
 	return prc.rc.Close()
 }
 
@@ -69,6 +75,9 @@ func (pwc *writeCloser) Write(p []byte) (n int, err error) {
 }
 
 func (pwc *writeCloser) Close() error {
+	n := 0
+	pwc.start()
+	defer pwc.end(&n)
 	return pwc.wc.Close()
 }
 
@@ -355,7 +364,7 @@ func IOParallelCategory[T any](ctx context.Context, w T, category string, f ...a
 
 	end := func(n *int) {
 		// Don't count parallel durations towards the category total
-		childComponent.Duration = time.Since(beginning).Nanoseconds()
+		childComponent.Duration += time.Since(beginning).Nanoseconds()
 		childComponent.IO += int64(*n)
 		span.End()
 	}

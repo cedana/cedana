@@ -24,6 +24,11 @@ type Data struct {
 	IO       int64 `json:"io,omitempty"`
 	// add more othogonal fields here as needed
 
+	ReferenceDuration int64  `json:"reference_duration,omitempty"`
+	ReferenceSource   string `json:"reference_source,omitempty"`
+	ReferenceSamples  int    `json:"reference_samples,omitempty"`
+	referenceBytes    uint64
+
 	Parallel    bool `json:"parallel,omitempty"`
 	Redundant   bool `json:"redundant,omitempty"`
 	IORedundant bool `json:"io_redundant,omitempty"`
@@ -92,11 +97,13 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	tableWriter := table.NewWriter()
 	tableWriter.SetStyle(style.TableStyle)
 	tableWriter.SetOutputMirror(os.Stdout)
+	tableWriter.AppendHeader(table.Row{"DURATION", "REFERENCE DURATION", "CATEGORY", "IO", "COMPONENT"})
 
 	categoryDuration := make(map[string]time.Duration)
 	categoryIO := make(map[string]int64)
 	categoryIORedundant := make(map[string]bool)
 	precision := config.Global.Profiling.Precision
+	hasHistory := false
 
 	for _, p := range data.Components {
 		if p.Duration == 0 && p.IO == 0 {
@@ -113,6 +120,8 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 
 		duration := time.Duration(p.Duration)
 		durationStr := DurationStr(duration, precision)
+		referenceDurationStr := referenceDurationString(p, precision)
+		hasHistory = hasHistory || p.ReferenceSamples > 0
 		io := p.IO
 		ioStr := utils.SizeStr(io)
 		if p.Parallel || p.Redundant {
@@ -147,6 +156,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 
 		tableWriter.AppendRow([]any{
 			durationStr,
+			referenceDurationStr,
 			category,
 			ioStr,
 			style.DisabledColors.Sprint(name),
@@ -156,18 +166,23 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	tableWriter.AppendFooter([]any{
 		DurationStr(totalDuration, precision),
 		"",
+		"",
 		utils.SizeStr(totalIO),
 		fmt.Sprintf("%s (total)", data.Name),
 	})
 	tableWriter.SetColumnConfigs([]table.ColumnConfig{
 		{Number: 1, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
-		{Number: 2, Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
-		{Number: 3, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
-		{Number: 4, Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
+		{Number: 2, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
+		{Number: 3, Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
+		{Number: 4, Align: text.AlignRight, AlignHeader: text.AlignRight, AlignFooter: text.AlignRight},
+		{Number: 5, Align: text.AlignLeft, AlignHeader: text.AlignLeft, AlignFooter: text.AlignLeft},
 	})
 
 	if config.Global.Profiling.Detailed {
 		tableWriter.Render()
+		if hasHistory {
+			fmt.Println("~ = prior runs")
+		}
 	}
 
 	if len(categoryDuration) > 1 {
@@ -177,6 +192,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 		tableWriter = table.NewWriter()
 		tableWriter.SetStyle(style.TableStyle)
 		tableWriter.SetOutputMirror(os.Stdout)
+		tableWriter.AppendHeader(table.Row{"DURATION", "PERCENT", "IO", "CATEGORY"})
 
 		for category, duration := range categoryDuration {
 			percentage := (float64(duration) / float64(totalDuration)) * 100
@@ -208,6 +224,18 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	}
 
 	fmt.Println()
+}
+
+func referenceDurationString(data *Data, precision string) string {
+	if data.ReferenceDuration <= 0 {
+		return ""
+	}
+
+	reference := DurationStr(time.Duration(data.ReferenceDuration), precision)
+	if data.ReferenceSamples > 0 {
+		reference = "~" + reference
+	}
+	return style.DisabledColors.Sprint(reference)
 }
 
 func EncodeJSON(data *Data) (string, error) {

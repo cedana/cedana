@@ -38,6 +38,7 @@ type gpuWorkerTimingRow struct {
 	workerPosition int
 	name           string
 	durationNs     int64
+	referenceNs    int64
 	bytes          uint64
 }
 
@@ -135,6 +136,7 @@ func gpuPhaseRows(workers []*gpu_proto.WorkerProfile, phaseName, displayName str
 			workerPosition: i,
 			name:           displayName,
 			durationNs:     durationNs,
+			referenceNs:    phase.GetReferenceDurationNs(),
 			bytes:          bytes,
 		})
 	}
@@ -272,6 +274,7 @@ func addGPUWorkerTimingRowToProfiling(ctx context.Context, row gpuWorkerTimingRo
 		gpuWorkerProfileTags(row, stats)...,
 	)
 	profiling.AddIO(functionCtx, int64(row.bytes))
+	profiling.SetModeledReference(functionCtx, gpuProfileDuration(row.referenceNs), row.bytes)
 	profiling.MarkIORedundant(functionCtx)
 }
 
