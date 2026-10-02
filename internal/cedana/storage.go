@@ -62,10 +62,12 @@ func checkLocalCheckpoint(path string) error {
 		}
 		return nil
 	}
-	for _, marker := range []string{"inventory.img", "img-0"} {
-		if _, err := os.Stat(filepath.Join(cleaned, marker)); err == nil {
-			return nil
-		}
+	if _, err := os.Stat(filepath.Join(cleaned, "inventory.img")); err == nil {
+		return nil
+	}
+	// Streamer shards carry the compression extension (img-0, img-0.lz4, ...)
+	if shards, _ := filepath.Glob(filepath.Join(cleaned, "img-0*")); len(shards) > 0 {
+		return nil
 	}
 	return status.Errorf(codes.InvalidArgument, "%s is not a checkpoint directory", path)
 }
