@@ -47,8 +47,6 @@ const (
 
 	DEFAULT_METRICS = false
 
-	DEFAULT_BLOCK_IO_URING = true
-
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
 	DEFAULT_GPU_POOL_SIZE         = 0
@@ -86,7 +84,6 @@ var Global Config = Config{
 	LogLevel:         DEFAULT_LOG_LEVEL,
 	LogLevelNoServer: DEFAULT_LOG_LEVEL_NO_SERVER,
 	Metrics:          DEFAULT_METRICS,
-	BlockIoUring:     DEFAULT_BLOCK_IO_URING,
 	Checkpoint: Checkpoint{
 		Dir:               DEFAULT_CHECKPOINT_DIR,
 		Compression:       DEFAULT_CHECKPOINT_COMPRESSION,

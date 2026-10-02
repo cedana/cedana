@@ -18,9 +18,6 @@ type (
 		LogLevelNoServer string `json:"log_level_no_server" key:"log_level_no_server" yaml:"log_level_no_server" mapstructure:"log_level_no_server"`
 		// Metrics is whether to enable metrics collection and observability
 		Metrics bool `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics" env_aliases:"CEDANA_METRICS_ENABLED"`
-		// BlockIoUring blocks io_uring syscalls in runc/crun containers run by cedana, through their seccomp profile,
-		// as cedana cannot checkpoint/restore io_uring. Applications fall back to standard I/O. Enabled by default.
-		BlockIoUring bool `json:"block_io_uring" key:"block_io_uring" yaml:"block_io_uring" mapstructure:"block_io_uring"`
 
 		// Connection settings
 		Connection Connection `json:"connection" key:"connection" yaml:"connection" mapstructure:"connection"`
