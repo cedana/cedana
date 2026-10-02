@@ -177,7 +177,7 @@ var dumpCmd = &cobra.Command{
 				return utils.GRPCErrorColored(err)
 			}
 
-			data = cedana.Finalize()
+			data = cedana.Finalize("dump")
 		} else {
 			client, ok := ctx.Value(keys.CLIENT_CONTEXT_KEY).(*client.Client)
 			if !ok {

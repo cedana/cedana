@@ -181,7 +181,7 @@ func Print(data *Data, categoryColors ...map[string]text.Colors) {
 	if config.Global.Profiling.Detailed {
 		tableWriter.Render()
 		if hasHistory {
-			fmt.Println("~ references use prior similar timings; unmarked references model GPU copy/current I/O.")
+			fmt.Println("~ = prior runs")
 		}
 	}
 

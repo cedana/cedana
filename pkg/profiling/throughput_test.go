@@ -76,6 +76,26 @@ func TestReferencesSeparateRepeatedRows(t *testing.T) {
 	}
 }
 
+func TestStorageReferencesShareSizeBuckets(t *testing.T) {
+	resetReferenceHistory(t)
+	profile := func(size, duration int64) *Data {
+		return &Data{Components: []*Data{
+			{Name: "storage:shard", IO: size, Duration: duration},
+		}}
+	}
+	ApplyLearnedReferences(profile(10<<20, 100), "dump")
+	similar := profile((10<<20)+128, 200)
+	ApplyLearnedReferences(similar, "dump")
+	if row := similar.Components[0]; row.ReferenceDuration != 100 || row.ReferenceSamples != 1 {
+		t.Fatalf("similar transfer lost history: %#v", row)
+	}
+	larger := profile(32<<20, 300)
+	ApplyLearnedReferences(larger, "dump")
+	if larger.Components[0].ReferenceSamples != 0 {
+		t.Fatal("different size bucket reused history")
+	}
+}
+
 func TestReferencesPreserveModelAndNormalizeTags(t *testing.T) {
 	resetReferenceHistory(t)
 	for index, name := range []string{"w1 restoreMemory (pid=123, fastest)", "w1 restoreMemory (pid=456, slowest)"} {

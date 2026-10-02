@@ -56,7 +56,8 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	}, nil
 }
 
-func (c *Cedana) Finalize() *profiling.Data {
+// Pass the operation only after success to update its reference history.
+func (c *Cedana) Finalize(operation ...string) *profiling.Data {
 	c.cancel()
 	data, ok := c.lifetime.Value(keys.PROFILING_CONTEXT_KEY).(*profiling.Data)
 	if ok {
@@ -64,6 +65,9 @@ func (c *Cedana) Finalize() *profiling.Data {
 		profiling.Flatten(data)
 	}
 	c.wg.Wait()
+	if len(operation) > 0 {
+		profiling.ApplyLearnedReferences(data, operation[0])
+	}
 
 	return data
 }

@@ -72,11 +72,7 @@ func ApplyLearnedReferences(data *Data, operation string) {
 			continue
 		}
 
-		ioKey := component.IO
-		if component.referenceBytes > 0 {
-			ioKey = int64(bits.Len64(component.referenceBytes - 1))
-		}
-		key := fmt.Sprintf("%s|%s|%s|occurrence=%d|io=%d", operation, profileKey, name, occurrence, ioKey)
+		key := fmt.Sprintf("%s|%s|%s|occurrence=%d|io=%d", operation, profileKey, name, occurrence, referenceSizeBucket(component))
 		duration, samples := learnedReferences.observe(key, component.Duration, component.referenceBytes)
 		component.ReferenceDuration = duration
 		component.ReferenceSamples = samples
@@ -98,17 +94,20 @@ func learnedReferenceProfileKey(data *Data) string {
 		if component == nil || component.Name == "" {
 			continue
 		}
-		bucket := 0
-		if component.IO > 0 {
-			bucket = bits.Len64(uint64(component.IO))
-		}
-		if component.referenceBytes > 0 {
-			bucket = bits.Len64(component.referenceBytes - 1)
-		}
-		rows = append(rows, fmt.Sprintf("%s|io=%d", normalizeReferenceName(component.Name), bucket))
+		rows = append(rows, fmt.Sprintf("%s|io=%d", normalizeReferenceName(component.Name), referenceSizeBucket(component)))
 	}
 	sort.Strings(rows)
 	return fmt.Sprintf("%x", sha256.Sum256([]byte(strings.Join(rows, "\n"))))
+}
+
+func referenceSizeBucket(data *Data) int {
+	if data.referenceBytes > 0 {
+		return bits.Len64(data.referenceBytes - 1)
+	}
+	if data.IO > 0 {
+		return bits.Len64(uint64(data.IO))
+	}
+	return 0
 }
 
 func (history *learnedReferenceHistory) observe(key string, duration int64, bytes uint64) (int64, int) {
