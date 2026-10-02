@@ -356,27 +356,28 @@ func (c *Client) DeleteCheckpoint(ctx context.Context, args *daemon.DeleteCheckp
 	return resp, utils.GRPCErrorColored(err)
 }
 
+// DeletePath deletes a checkpoint. Errors are gRPC statuses as for ListPath.
 func (c *Client) DeletePath(ctx context.Context, args *daemon.DeletePathReq, opts ...grpc.CallOption) (*daemon.DeletePathResp, error) {
 	opts = addDefaultOptions(opts)
-	resp, err := c.daemonClient.DeletePath(ctx, args, opts...)
-	return resp, utils.GRPCErrorColored(err)
+	return c.daemonClient.DeletePath(ctx, args, opts...)
 }
 
+// ListPath lists the entries of a path. The error is the daemon's gRPC status, not
+// colored for a terminal, since the callers relay its message to the propagator.
 func (c *Client) ListPath(ctx context.Context, args *daemon.ListPathReq, opts ...grpc.CallOption) (*daemon.ListPathResp, error) {
 	opts = addDefaultOptions(opts)
-	resp, err := c.daemonClient.ListPath(ctx, args, opts...)
-	return resp, utils.GRPCErrorColored(err)
+	return c.daemonClient.ListPath(ctx, args, opts...)
 }
 
 // ReadPath streams the contents of a path (or an entry inside it) from the daemon.
-// Closing the returned reader cancels the stream.
+// Closing the returned reader cancels the stream. Errors are gRPC statuses as for ListPath.
 func (c *Client) ReadPath(ctx context.Context, args *daemon.ReadPathReq, opts ...grpc.CallOption) (io.ReadCloser, error) {
 	opts = addDefaultOptions(opts)
 	ctx, cancel := context.WithCancel(ctx)
 	stream, err := c.daemonClient.ReadPath(ctx, args, opts...)
 	if err != nil {
 		cancel()
-		return nil, utils.GRPCErrorColored(err)
+		return nil, err
 	}
 	return &pathReader{stream: stream, cancel: cancel}, nil
 }

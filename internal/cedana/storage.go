@@ -19,13 +19,17 @@ import (
 
 const READ_PATH_CHUNK_SIZE = 1 << 20 // 1 MiB
 
+// DeletePath deletes a checkpoint (an archive, or a directory with its contents)
+// from a storage plugin or the local filesystem.
 func (s *Server) DeletePath(ctx context.Context, req *daemon.DeletePathReq) (*daemon.DeletePathResp, error) {
 	checkpointPath := req.GetPath()
 	if checkpointPath == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "Path must be provided")
 	}
 	if !strings.Contains(checkpointPath, "://") {
-		return nil, status.Errorf(codes.InvalidArgument, "Path does not correspond to any storage plugin")
+		if cleaned := filepath.Clean(checkpointPath); !filepath.IsAbs(cleaned) || cleaned == "/" {
+			return nil, status.Errorf(codes.InvalidArgument, "Path must be an absolute path to a checkpoint")
+		}
 	}
 	storage, err := storageForPath(ctx, checkpointPath)
 	if err != nil {

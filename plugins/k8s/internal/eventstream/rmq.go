@@ -29,6 +29,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -40,7 +41,6 @@ type EventStream struct {
 	node               string // this node's name, routes requests for local checkpoints
 	checkpoints        *rabbitmq.Publisher
 	checkpointRequests *rabbitmq.Consumer
-	deleteRequests     *rabbitmq.Consumer
 	filesRequests      []*rabbitmq.Consumer
 	containerdAddress  string
 	lifecycleMu        sync.RWMutex
@@ -202,14 +202,12 @@ func (es *EventStream) Close() error {
 	es.closeOnce.Do(func() {
 		es.lifecycleMu.Lock()
 		consumer := es.checkpointRequests
-		deleteConsumer := es.deleteRequests
 		filesConsumers := es.filesRequests
 		publisher := es.checkpoints
 		conn := es.Conn
 		es.checkpointRequests = nil
 		es.checkpoints = nil
 		es.Conn = nil
-		es.deleteRequests = nil
 		es.filesRequests = nil
 		es.lifecycleMu.Unlock()
 
@@ -218,9 +216,6 @@ func (es *EventStream) Close() error {
 		}
 		if publisher != nil {
 			publisher.Close()
-		}
-		if deleteConsumer != nil {
-			deleteConsumer.Close()
 		}
 		for _, filesConsumer := range filesConsumers {
 			filesConsumer.Close()
@@ -235,98 +230,9 @@ func (es *EventStream) Close() error {
 	return es.closeErr
 }
 
-func (es *EventStream) StartDeleteConsumer(ctx context.Context) error {
-	es.lifecycleMu.RLock()
-	conn := es.Conn
-	es.lifecycleMu.RUnlock()
-	if conn == nil {
-		return fmt.Errorf("rabbitmq connection is closed")
-	}
-
-	queueName := "daemon_delete_request-" + rand.Text()
-	log.Debug().Msgf("creating %v queue for processing checkpoint delete requests", queueName)
-	consumer, err := rabbitmq.NewConsumer(
-		conn,
-		queueName,
-		rabbitmq.WithConsumerOptionsExchangeName("daemon_delete_request"),
-		rabbitmq.WithConsumerOptionsConcurrency(1),
-		rabbitmq.WithConsumerOptionsExchangeDeclare,
-		rabbitmq.WithConsumerOptionsExchangeKind("fanout"),
-		rabbitmq.WithConsumerOptionsConsumerName("cedana_delete_helper"),
-		rabbitmq.WithConsumerOptionsRoutingKey(""),
-		rabbitmq.WithConsumerOptionsQueueExclusive,
-		rabbitmq.WithConsumerOptionsQueueAutoDelete,
-		rabbitmq.WithConsumerOptionsQueueArgs(rabbitmq.Table{
-			"x-expires": queryExpiryMs,
-		}),
-		rabbitmq.WithConsumerOptionsBinding(rabbitmq.Binding{
-			RoutingKey:     "",
-			BindingOptions: rabbitmq.BindingOptions{},
-		}),
-	)
-	if err != nil {
-		return err
-	}
-
-	es.lifecycleMu.Lock()
-	if es.Conn == nil {
-		es.lifecycleMu.Unlock()
-		consumer.Close()
-		return fmt.Errorf("rabbitmq connection is closed")
-	}
-	if es.deleteRequests != nil {
-		es.lifecycleMu.Unlock()
-		consumer.Close()
-		return fmt.Errorf("checkpoints consumer is already running")
-	}
-	es.deleteRequests = consumer
-	es.lifecycleMu.Unlock()
-
-	defer func() {
-		es.lifecycleMu.Lock()
-		if es.deleteRequests == consumer {
-			es.deleteRequests = nil
-		}
-		es.lifecycleMu.Unlock()
-	}()
-
-	if err := consumer.Run(es.DeleteHandler(ctx)); err != nil {
-		consumer.Close()
-		return err
-	}
-	return nil
-}
-
-func (es *EventStream) DeleteHandler(ctx context.Context) rabbitmq.Handler {
-	return func(msg rabbitmq.Delivery) rabbitmq.Action {
-		var deleteReq deleteReq
-		if err := json.Unmarshal(msg.Body, &deleteReq); err != nil {
-			log.Error().Err(err).Msg("failed to unmarshal message")
-			return rabbitmq.Ack
-		}
-
-		if deleteReq.CheckpointPath == "" {
-			log.Error().Msg("request has empty checkpoint path")
-			return rabbitmq.Ack
-		}
-
-		daemonReq := &daemon.DeletePathReq{
-			Path: deleteReq.CheckpointPath,
-		}
-
-		_, err := es.cedana.DeletePath(ctx, daemonReq)
-		if err != nil {
-			log.Error().Err(err).Msg("could not delete checkpoint")
-			return rabbitmq.NackDiscard
-		}
-		log.Debug().Any("path", deleteReq.CheckpointPath).Msg("processed request from delete queue")
-		return rabbitmq.Ack
-	}
-}
-
 // StartFilesConsumer serves checkpoint file requests (locate a checkpoint, list
-// the files in it, upload one of them) coming from the propagator. Every request
-// is handled exactly once, by a helper that can reach the checkpoint:
+// the files in it, upload one of them, delete it) coming from the propagator.
+// Every request is handled exactly once, by a helper that can reach the checkpoint:
 //
 //   - Remote checkpoints (`scheme://`) are readable from any node, so their
 //     requests come through a work queue shared by all helpers on the cluster.
@@ -476,7 +382,7 @@ func (es *EventStream) handleFilesRequest(ctx context.Context, req *filesReq) (r
 	case "list":
 		listResp, err := es.cedana.ListPath(ctx, &daemon.ListPathReq{Path: req.CheckpointPath})
 		if err != nil {
-			resp.Error = err.Error()
+			resp.Error = status.Convert(err).Message()
 			return resp, true
 		}
 		resp.Entries = make([]fileEntry, 0, len(listResp.Entries))
@@ -496,7 +402,7 @@ func (es *EventStream) handleFilesRequest(ctx context.Context, req *filesReq) (r
 		}
 		reader, err := es.cedana.ReadPath(ctx, &daemon.ReadPathReq{Path: req.CheckpointPath, Entry: req.Entry})
 		if err != nil {
-			resp.Error = err.Error()
+			resp.Error = status.Convert(err).Message()
 			return resp, true
 		}
 		defer reader.Close()
@@ -508,6 +414,11 @@ func (es *EventStream) handleFilesRequest(ctx context.Context, req *filesReq) (r
 		}
 		if err = errors.Join(err, upload.Close()); err != nil {
 			resp.Error = fmt.Sprintf("failed to upload %s: %v", req.Entry, err)
+		}
+
+	case "delete":
+		if _, err := es.cedana.DeletePath(ctx, &daemon.DeletePathReq{Path: req.CheckpointPath}); err != nil {
+			resp.Error = status.Convert(err).Message()
 		}
 
 	default:
@@ -540,12 +451,8 @@ func (es *EventStream) reply(ctx context.Context, msg rabbitmq.Delivery, resp fi
 // Helpers //
 /////////////
 
-type deleteReq struct {
-	CheckpointPath string `json:"checkpoint_path"`
-}
-
 type filesReq struct {
-	Type           string `json:"type"` // "locate", "list" or "download"
+	Type           string `json:"type"` // "locate", "list", "download" or "delete"
 	CheckpointPath string `json:"checkpoint_path"`
 	Entry          string `json:"entry,omitempty"`      // download only
 	UploadURL      string `json:"upload_url,omitempty"` // download only
