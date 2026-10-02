@@ -495,14 +495,20 @@ delete_pods_or_force() {
     kubectl delete pod -n "$namespace" "${select[@]}" --wait=false --ignore-not-found 2>/dev/null || true
     kubectl wait --for=delete pod -n "$namespace" "${select[@]}" --timeout="${timeout}s" 2>/dev/null || true
 
-    local stuck
+    # kubectl get has no --all flag; listing without -l already returns every pod.
+    local list=()
     if [ -n "$selector" ]; then
-        stuck=$(kubectl get pod -n "$namespace" -l "$selector" -o name 2>/dev/null)
-    else
-        stuck=$(kubectl get pod -n "$namespace" -o name 2>/dev/null)
+        list=(-l "$selector")
     fi
-    if [ -z "$stuck" ]; then
-        return 0
+
+    # A failed listing must not pass for an empty one: fall through and force delete.
+    local stuck
+    if stuck=$(kubectl get pod -n "$namespace" "${list[@]}" -o name 2>/dev/null); then
+        if [ -z "$stuck" ]; then
+            return 0
+        fi
+    else
+        error_log "Failed to list pods in namespace $namespace, force deleting anyway"
     fi
 
     local pod
