@@ -65,9 +65,16 @@ func checkLocalCheckpoint(path string) error {
 	if _, err := os.Stat(filepath.Join(cleaned, "inventory.img")); err == nil {
 		return nil
 	}
-	// Streamer shards carry the compression extension (img-0, img-0.lz4, ...)
-	if shards, _ := filepath.Glob(filepath.Join(cleaned, "img-0*")); len(shards) > 0 {
-		return nil
+	// Streamer shards carry the compression extension (img-0, img-0.lz4, ...).
+	// Checked by literal name, as the directory itself may contain glob characters.
+	for compression := range cedana_io.SUPPORTED_COMPRESSIONS {
+		ext, err := cedana_io.ExtForCompression(compression)
+		if err != nil {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(cleaned, "img-0"+ext)); err == nil {
+			return nil
+		}
 	}
 	return status.Errorf(codes.InvalidArgument, "%s is not a checkpoint directory", path)
 }

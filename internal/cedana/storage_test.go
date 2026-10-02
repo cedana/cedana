@@ -26,6 +26,7 @@ func TestCheckLocalCheckpoint(t *testing.T) {
 	write("criu/inventory.img")
 	write("streamed/img-0")
 	write("streamed-lz4/img-0.lz4")
+	write("ckpt[1]/img-0.gz")
 	write("other/file")
 
 	cases := []struct {
@@ -37,6 +38,7 @@ func TestCheckLocalCheckpoint(t *testing.T) {
 		{"criu dump dir", filepath.Join(root, "criu"), codes.OK},
 		{"streamed dump dir", filepath.Join(root, "streamed"), codes.OK},
 		{"compressed streamed dump dir", filepath.Join(root, "streamed-lz4"), codes.OK},
+		{"dump dir with glob characters in its name", filepath.Join(root, "ckpt[1]"), codes.OK},
 		{"plain file", plain, codes.InvalidArgument},
 		{"unrelated dir", filepath.Join(root, "other"), codes.InvalidArgument},
 		{"root", "/", codes.InvalidArgument},
