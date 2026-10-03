@@ -50,6 +50,11 @@ on:
         description: "Post test summary"
         required: false
         default: false
+      propagator:
+        type: boolean
+        description: "Deploy the propagator from the propagator-digests-* artifacts into the cluster, instead of using CEDANA_URL"
+        required: false
+        default: false
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -83,6 +88,7 @@ env:
 jobs:
   propagator-connectivity:
     name: Propagator Connectivity (${{ inputs.platform }})
+    if: ${{ !inputs.propagator }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -109,6 +115,7 @@ jobs:
       ) }}
     timeout-minutes: 240
     needs: propagator-connectivity
+    if: ${{ !cancelled() && needs.propagator-connectivity.result != 'failure' }}
     strategy:
       fail-fast: ${{ inputs.platform != 'K3s' }} # save minutes on cloud providers
       matrix:
@@ -227,6 +234,20 @@ jobs:
           name: controller-image-name
           path: /tmp/controller-image-name
 
+      - name: Download propagator digest
+        if: inputs.propagator
+        uses: actions/download-artifact@v4
+        with:
+          name: propagator-digests-${{ matrix.arch }}
+          path: /tmp/propagator-digests
+
+      - name: Download propagator image name
+        if: inputs.propagator
+        uses: actions/download-artifact@v4
+        with:
+          name: propagator-image-name
+          path: /tmp/propagator-image-name
+
       - name: Download binary
         uses: actions/download-artifact@v4
         with:
@@ -311,7 +332,15 @@ jobs:
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
           NB_CLUSTER_NAME: ${{ env.NB_CLUSTER_NAME }}-${{ matrix.arch }}
+          DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
+          PROPAGATOR_BUCKET_NAME: ${{ vars.PROPAGATOR_BUCKET_NAME }}
+          PROPAGATOR_PLUGINS_BUCKET: ${{ vars.PROPAGATOR_PLUGINS_BUCKET }}
         run: |
+          if [ -d /tmp/propagator-digests ]; then
+            PROPAGATOR_DIGEST=sha256:$(ls /tmp/propagator-digests | head -n 1)
+            PROPAGATOR_REPO=$(cat /tmp/propagator-image-name/name.txt | head -n 1)
+          fi
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
           CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
@@ -372,6 +401,8 @@ jobs:
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \
             HELPER_DIGEST=$HELPER_DIGEST \
+            PROPAGATOR_REPO=$PROPAGATOR_REPO \
+            PROPAGATOR_DIGEST=$PROPAGATOR_DIGEST \
             HELM_CHART=$HELM_CHART
 
       - name: Setup node
@@ -408,6 +439,15 @@ jobs:
           name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
           path: |
             /tmp/report*.json
+
+      - name: Upload propagator logs
+        if: always() && inputs.propagator
+        uses: actions/upload-artifact@v4
+        with:
+          name: propagator-logs-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
+          path: |
+            /tmp/propagator*.log
+          if-no-files-found: ignore
 
   post-summary:
     name: Post Summary
