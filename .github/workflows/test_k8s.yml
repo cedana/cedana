@@ -6,6 +6,7 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  actions: read # to list the jobs of the run when posting the summary
 
 on:
   workflow_call:
@@ -374,23 +375,9 @@ jobs:
             HELPER_DIGEST=$HELPER_DIGEST \
             HELM_CHART=$HELM_CHART
 
-      - name: Setup node
+      - name: Label report # with the job name, so the summary can link to it
         if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate report
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report.xml" -t bats -o /tmp/report.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }})" |' {} +
 
       - name: Set sanitized storage
         if: always()
@@ -402,58 +389,26 @@ jobs:
 
       - name: Upload report
         if: always()
-        id: upload-report
         uses: actions/upload-artifact@v4
         with:
           name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
-          path: |
-            /tmp/report*.json
+          path: /tmp/report*.xml
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: k8s
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - ${{ inputs.platform }}
-        arch:
-          - amd64
-          - arm64
-        exclude: # XXX: Until github actions supports concurrency with matrix
-          - platform: EKS
-            arch: amd64
-          - platform: GKE
-            arch: arm64
-          - platform: Nebius
-            arch: arm64
-          - platform: EKS-Karpenter
-            arch: arm64
     steps:
-      - name: Download report
-        id: download-report
+      - name: Download reports
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}*
+          pattern: test-report-*-k8s-${{ inputs.platform }}-*
           path: report
 
-      - name: Post report
-        uses: ctrf-io/github-test-reporter@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Post summary
+        uses: cedana/cedana-test-summary@feat/initial # TODO: pin to v1 once released
         with:
-          report-path: report/**/*.json
-          github-report: true
-          failed-folded-report: true
-          summary: true
-          pull-request: true
-          title: ${{ matrix.platform }} (${{ matrix.arch }})
-          update-comment: true
-          overwrite-comment: true
-          comment-tag: test-report-k8s-${{ matrix.arch }}-${{ matrix.platform }}
-          group-by: "suite"
-          always-group-by: true
-          upload-artifact: true
-          artifact-name: ctrf-report-k8s-${{ matrix.arch }}-${{ matrix.platform }}
+          reports: report/**/*.xml
+          title: Kubernetes (${{ inputs.platform }})
+          jobs-filter: '(^|/ )(Kubernetes|Propagator Connectivity) \(${{ inputs.platform }}[,)]'
