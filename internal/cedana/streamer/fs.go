@@ -12,14 +12,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
-	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
@@ -179,7 +177,6 @@ func NewStreamingFs(
 	args := []string{"--images-dir", imagesDir}
 	var extraFiles []*os.File
 	var lastMsg string
-	memoryLimit := strconv.FormatUint(config.Global.Checkpoint.StreamMemoryLimit, 10)
 
 	switch mode {
 	case READ_ONLY:
