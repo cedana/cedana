@@ -528,9 +528,6 @@ jobs:
             Kubernetes=^Kubernetes
             SLURM=^Slurm
             Others
-          matrix-split: |
-            CPU
-            CUDA=\b(CUDA|GPU)\b
           # XXX: Testing only, revert to the commented line below before merging
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_TEST_ONLY }}
           # slack-webhook-url: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || inputs.post_summary_slack != '' && secrets.SLACK_WEBHOOK_URL_TESTS || '' }}
