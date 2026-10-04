@@ -1,7 +1,7 @@
 name: Test
 
 permissions:
-  contents: write # to publish the test matrix image to the test-summary-assets branch
+  contents: read
   packages: read
   id-token: write
   pull-requests: write
@@ -509,6 +509,10 @@ jobs:
     if: always()
     needs: [unit, script, basic, plugin, streamer, gpu, k3s, eks, eks-karpenter, gke, nebius, slurm]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # to publish the test matrix image to the test-summary-assets branch
+      pull-requests: write
+      actions: read
     steps:
       - uses: runs-on/action@v1
 
