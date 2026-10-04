@@ -186,7 +186,7 @@ jobs:
           path: report
 
       - name: Post summary
-        uses: cedana/cedana-test-summary@feat/initial # TODO: pin to v1 once released
+        uses: cedana/cedana-test-summary@v1
         with:
           reports: report/**/*.xml
           title: Streamer

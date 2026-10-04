@@ -519,7 +519,7 @@ jobs:
           path: report
 
       - name: Post summary
-        uses: cedana/cedana-test-summary@feat/initial # TODO: pin to v1 once released
+        uses: cedana/cedana-test-summary@v1
         with:
           reports: report/**/*.xml
           jobs-filter: '^Test / ' # jobs of this workflow, as named by the callers (pr.yml, nightly.yml, ...)
@@ -527,11 +527,8 @@ jobs:
           matrix-sections: |
             Kubernetes=^Kubernetes
             SLURM=^Slurm
-            Others
+            Other
           matrix-split: |
             CPU
             CUDA=\b(CUDA|GPU)\b
-          # XXX: Testing only, revert to the commented line below before merging
-          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_TEST_ONLY }}
-          # slack-webhook-url: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || inputs.post_summary_slack != '' && secrets.SLACK_WEBHOOK_URL_TESTS || '' }}
-          anthropic-api-key: ${{ inputs.post_summary_slack != '' && secrets.ANTHROPIC_API_KEY || '' }}
+          slack-webhook-url: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_TESTS_NIGHTLY || inputs.post_summary_slack != '' && secrets.SLACK_WEBHOOK_URL_TESTS || '' }}
