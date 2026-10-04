@@ -6,6 +6,7 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  actions: read # to list the jobs of the run when posting the summary
 
 on:
   workflow_call:
@@ -208,96 +209,38 @@ jobs:
           bats --filter-tags cuda-samples -r test/regression \
             --output /tmp/cuda-samples --report-formatter junit
 
-      - name: Setup node
-        if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate report (isolated)
+      - name: Label reports # with the job name, so the summary can link to it
         if: always()
         run: |
-          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
-
-      - name: Generate report (persistent)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
-
-      - name: Generate report (cuda-samples)
-        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
-        run: |
-          npx junit-to-ctrf "/tmp/cuda-samples/report.xml" -t bats -o /tmp/report-cuda-samples.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA samples (intercepted, ${{ matrix.cuda_version }})"
+          find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})" |' {} +
+          if [ -d /tmp/cuda-samples ]; then
+            find /tmp/cuda-samples -name 'report.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA samples (intercepted, ${{ matrix.cuda_version }})" |' {} +
+          fi
 
       - name: Upload report
         if: always()
-        id: upload-report
         uses: actions/upload-artifact@v4
         with:
           name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
           path: |
-            /tmp/report*.json
+            /tmp/report*.xml
+            /tmp/cuda-samples/report.xml
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: cuda
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        cuda_version:
-          # - 12-2
-          # - 12-4
-          - 12-8
-          - 13-2
-        arch:
-          - amd64
-          - arm64
     steps:
-      - name: Download report
-        id: download-report
+      - name: Download reports
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-*
+          pattern: test-report-*-cuda-*
           path: report
 
-      - name: Post report
-        uses: ctrf-io/github-test-reporter@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Post summary
+        uses: cedana/cedana-test-summary@v1
         with:
-          report-path: report/**/*.json
-          github-report: true
-          failed-folded-report: true
-          summary: true
-          pull-request: true
-          title: CUDA ${{ matrix.cuda_version }}, ${{ matrix.arch }}
-          update-comment: true
-          overwrite-comment: true
-          comment-tag: test-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
-          group-by: "suite"
-          always-group-by: true
-          upload-artifact: true
-          artifact-name: ctrf-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
+          reports: report/**/*.xml
+          title: CUDA
+          jobs-filter: '(^|/ )CUDA \('
