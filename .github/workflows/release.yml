@@ -48,8 +48,8 @@ jobs:
     secrets: inherit
     with:
       criu_version: criu-dev
-      gpu_version: main
-      streamer_version: main
+      gpu_version: experiment/streamer-memfd
+      streamer_version: experiment/streamer-memfds
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
