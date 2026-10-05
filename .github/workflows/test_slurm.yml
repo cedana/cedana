@@ -858,20 +858,6 @@ jobs:
         if: always()
         run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }})" |' {} +
 
-      - name: Generate report (namespace)
-        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
-        env:
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
-        run: |
-          npx junit-to-ctrf "/tmp/report-namespace.xml" -t bats -o /tmp/report-namespace.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="$BRANCH_NAME" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="$BRANCH_NAME" \
-            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm Namespace (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
-
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
