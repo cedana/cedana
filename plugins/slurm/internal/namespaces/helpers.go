@@ -6,14 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/opencontainers/runc/libcontainer/configs"
 	"github.com/spf13/afero"
-	"golang.org/x/sys/unix"
 )
 
 // Records how the external namespaces were handled on dump, so that restore mirrors it exactly
@@ -24,7 +22,9 @@ type Handling string
 const (
 	// Namespace is left out of the dump using --external, and inherited on restore using --inherit-fd
 	HandlingExternal Handling = "external"
-	// CRIU runs inside the namespace, for both dump and restore, so it's unaware of it
+	// Recorded by earlier dumps for a mount namespace CRIU was run inside of. A job in a mount
+	// namespace of its own is dumped and restored from inside it now, so there is nothing to
+	// do about one on restore. Still read, for those dumps.
 	HandlingEnter Handling = "enter"
 )
 
@@ -104,10 +104,13 @@ func addExternalNamespace(req *daemon.DumpReq, t configs.NamespaceType, inode ui
 	req.Criu.External = append(req.Criu.External, external)
 }
 
-// handlingFor decides what can be done about an external namespace of this type, if anything
+// handlingFor decides what can be done about an external namespace of this type, if anything.
+// Nothing for a mount namespace: CRIU has no notion of an external one, and we don't enter one
+// (that takes CAP_SYS_ADMIN, which the job's user doesn't have). A job in a mount namespace of
+// its own is dumped from inside it, see AddRecognizedExternalNamespacesForDump.
 func handlingFor(t configs.NamespaceType, version int) (handling Handling, reason string) {
 	if t == configs.NEWNS {
-		return HandlingEnter, ""
+		return "", "a mount namespace is dumped from inside it"
 	}
 	if ok, reason := criuSupportsExternal(t, version); !ok {
 		return "", reason
@@ -128,33 +131,17 @@ func inHostNamespace(t configs.NamespaceType, pid uint32) bool {
 	return ino == hostIno
 }
 
-// visibleInNamespace checks that path is the very same file for us as for pid in its mount namespace
-func visibleInNamespace(pid uint32, path string) (bool, error) {
-	var ours, theirs unix.Stat_t
-	if err := unix.Stat(path, &ours); err != nil {
-		return false, fmt.Errorf("failed to stat %s: %w", path, err)
-	}
-	if err := unix.Stat(fmt.Sprintf("/proc/%d/root%s", pid, path), &theirs); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, fmt.Errorf("failed to stat %s as seen by %d: %w", path, pid, err)
-	}
-	return ours.Dev == theirs.Dev && ours.Ino == theirs.Ino, nil
-}
-
-// reachableFromNamespace returns path if it's visible to pid in its mount namespace, and the
-// way to it through our root otherwise (/proc/<our pid>/root/<path>). That one is the same file
-// to us and to anything in our PID namespace, whatever its mount namespace.
-func reachableFromNamespace(pid uint32, path string) (string, error) {
-	visible, err := visibleInNamespace(pid, path)
+// inNamespaceOf tells whether we are in the namespace of this type that pid is in
+func inNamespaceOf(t configs.NamespaceType, pid uint32) (bool, error) {
+	ours, err := nsInode(nsPathOf(t, uint32(os.Getpid())))
 	if err != nil {
-		return "", err
+		return false, err
 	}
-	if visible {
-		return path, nil
+	theirs, err := nsInode(nsPathOf(t, pid))
+	if err != nil {
+		return false, err
 	}
-	return filepath.Join(fmt.Sprintf("/proc/%d/root", os.Getpid()), path), nil
+	return ours == theirs, nil
 }
 
 func saveExternalNamespaces(fs afero.Fs, namespaces []ExternalNamespace) error {

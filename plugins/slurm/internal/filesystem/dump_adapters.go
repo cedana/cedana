@@ -17,18 +17,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// When CRIU runs inside the job's external mount namespace (see namespaces.AddRecognizedExternalNamespacesForDump),
-// it dumps files by path and knows nothing of the mounts. The directories SLURM's namespace
-// plugin gives the job (e.g. its /tmp) are made for it and removed with it, and the job
-// restored into gets new, empty ones. So their contents go into the dump.
+// A job in a mount namespace of its own is dumped from inside it (see
+// namespaces.AddRecognizedExternalNamespacesForDump), so CRIU dumps files by path and knows
+// nothing of the mounts. The directories SLURM's namespace plugin gives the job (e.g. its /tmp)
+// are made for it and removed with it, and the job restored into gets new, empty ones. So
+// their contents go into the dump.
 //
-// Does nothing otherwise. If CRIU is dumping the mount namespace, it dumps them too.
+// Does nothing for a job without such directories.
 func DumpPrivateMounts(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
-		if opts.CRIU.MountNamespace() == "" {
-			return next(ctx, opts, resp, req)
-		}
-
 		details := req.GetDetails().GetSlurm()
 		pid := details.GetPID()
 

@@ -136,7 +136,6 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 		}
 
 		// Never our own for lack of one, as we (e.g. the daemon) may well be outside of the job
-		self := uint32(os.Getpid())
 		pid := req.GetDetails().GetSlurm().GetPID()
 		if pid == 0 {
 			return nil, status.Errorf(codes.FailedPrecondition,
@@ -156,43 +155,17 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 			nsPath := nsPathOf(t, pid)
 
 			if ns.Handling == HandlingEnter {
-				if t != configs.NEWNS {
-					return nil, status.Errorf(codes.FailedPrecondition, "dump has an entered %s namespace: only possible for mnt", name)
+				// An earlier dump, taken with CRIU run inside the job's mount namespace. The
+				// restore runs inside the new job's, so there is nothing to do, as long as we are.
+				if inside, err := inNamespaceOf(t, pid); err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to compare the job's %s namespace with ours: %v", name, err)
+				} else if !inside {
+					return nil, status.Errorf(codes.FailedPrecondition,
+						"dump was taken inside the job's %s namespace, and the job being restored into has one of its own that we are not in: it has to be restored from inside it", name)
 				}
 				if inHostNamespace(t, pid) {
 					log.Warn().Msgf("job was dumped from its own %s namespace but is being restored into the host's, is this node set up differently?", name)
 				}
-
-				ours, err := nsInode(nsPathOf(t, self))
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to stat own %s namespace: %v", name, err)
-				}
-				theirs, err := nsInode(nsPath)
-				if err != nil {
-					return nil, status.Errorf(codes.Internal, "failed to stat %s: %v", nsPath, err)
-				}
-				if ours == theirs {
-					continue // already inside
-				}
-
-				if !inHostNamespace(configs.NEWPID, pid) {
-					return nil, status.Errorf(codes.FailedPrecondition,
-						"dump needs CRIU to run inside the job's %s namespace, which is not possible as the job is not in the host's pid namespace", name)
-				}
-				// Same as on dump, the dump dir may not be there for the job
-				if dir := req.GetCriu().GetImagesDir(); dir != "" {
-					reachable, err := reachableFromNamespace(pid, dir)
-					if err != nil {
-						return nil, status.Errorf(codes.Internal, "failed to check dump dir: %v", err)
-					}
-					if reachable != dir {
-						log.Debug().Str("dir", dir).Str("through", reachable).Msgf("dump dir is not the same inside the job's %s namespace, going through our root", name)
-						req.Criu.ImagesDir = proto.String(reachable)
-					}
-				}
-
-				log.Debug().Str("path", nsPath).Msgf("running CRIU inside the job's %s namespace", name)
-				opts.CRIU.SetMountNamespace(nsPath)
 				continue
 			}
 

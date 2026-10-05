@@ -12,7 +12,6 @@ import (
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 func IgnoreNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapter[types.Dump] {
@@ -90,7 +89,9 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 // this does not touch CRIU opts when the job is simply running in the host's namespaces.
 //
 //	net, pid -> left out of the dump using --external
-//	mnt      -> CRIU is run inside it, as it has no notion of an external mount namespace
+//	mnt      -> nothing: CRIU has no notion of an external mount namespace, so the job is
+//	            dumped from inside it, where cedana-slurm starts the monitor. The dump is
+//	            refused from anywhere else.
 //
 // What was done is recorded in the dump, for InheritRecognizedNamespacesForRestore.
 func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
@@ -116,37 +117,31 @@ func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
 		for _, ns := range recognized {
 			name := configs.NsName(ns.Type)
 
-			handling, reason := handlingFor(ns.Type, version)
+			log := log.With().Str("holder", string(ns.Holder)).Str("path", ns.Path).Uint64("inode", ns.Inode).Logger()
 
-			// Inside a mount namespace that comes with a PID namespace, /proc is that of the
-			// PID namespace. CRIU would be looking for itself and the job in the wrong place.
-			if handling == HandlingEnter && !inHostNamespace(configs.NEWPID, pid) {
-				handling, reason = "", "job is not in the host's pid namespace"
+			if ns.Type == configs.NEWNS {
+				// Nothing to tell CRIU, and nothing to enter: a mount namespace of the job's own
+				// is dumped from inside it, with CRIU in it too. From anywhere else CRIU would
+				// dump the mount namespace, which the restore, inside the new job's, can't put back.
+				inside, err := inNamespaceOf(configs.NEWNS, pid)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to compare the job's %s namespace with ours: %v", name, err)
+				}
+				if !inside {
+					return nil, status.Errorf(codes.FailedPrecondition,
+						"slurm job %d is in a %s namespace of its own (%s, held by %s) that we are not in: it has to be dumped from inside it",
+						req.GetDetails().GetSlurm().GetJobID(), name, ns.Path, ns.Holder)
+				}
+				log.Debug().Msgf("inside the job's external %s namespace, nothing to do", name)
+				continue
 			}
 
-			log := log.With().Str("holder", string(ns.Holder)).Str("path", ns.Path).Uint64("inode", ns.Inode).Logger()
+			handling, reason := handlingFor(ns.Type, version)
 
 			switch handling {
 			case HandlingExternal:
 				log.Debug().Msgf("adding external %s namespace", name)
 				addExternalNamespace(req, ns.Type, ns.Inode)
-
-			case HandlingEnter:
-				// CRIU gets to the images through the fd it's given, but opens some files by path, and
-				// so will plugins. The dump dir may not be there for the job (e.g. in /tmp, of which it has its own).
-				if dir := req.GetCriu().GetImagesDir(); dir != "" {
-					reachable, err := reachableFromNamespace(pid, dir)
-					if err != nil {
-						return nil, status.Errorf(codes.Internal, "failed to check dump dir: %v", err)
-					}
-					if reachable != dir {
-						log.Debug().Str("dir", dir).Str("through", reachable).Msgf("dump dir is not the same inside the job's %s namespace, going through our root", name)
-						req.Criu.ImagesDir = proto.String(reachable)
-					}
-				}
-				// Not by where it's held, as a pin may only be visible from the mount namespace it was made in
-				log.Debug().Msgf("running CRIU inside external %s namespace", name)
-				opts.CRIU.SetMountNamespace(nsPathOf(ns.Type, pid))
 
 			default:
 				log.Warn().Msgf("%s, skipping external %s namespace handling", reason, name)
