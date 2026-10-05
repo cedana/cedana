@@ -48,12 +48,20 @@ slurm_submission_container() {
     fi
 }
 
+# Runs a command on the submission host as the submit user. A leading -i passes
+# stdin through to it.
 slurm_submit_exec() {
-    if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
-        docker exec -u "$SLURM_SUBMIT_USER" "$(slurm_submission_container)" "$@"
-    else
-        docker exec "$(slurm_submission_container)" "$@"
+    local opts=()
+
+    if [ "${1:-}" = "-i" ]; then
+        opts+=(-i)
+        shift
     fi
+    if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
+        opts+=(-u "$SLURM_SUBMIT_USER")
+    fi
+
+    docker exec "${opts[@]}" "$(slurm_submission_container)" "$@"
 }
 
 _wait_for_port() {
