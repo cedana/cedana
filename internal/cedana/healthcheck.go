@@ -73,6 +73,19 @@ func (s *Cedana) pluginChecklist() types.Checklist {
 		})
 	}
 
+	// Add checks for CRIU device plugins if installed
+	for _, name := range []string{"criu/nvidia-dev", "criu/infiniband"} {
+		if s.plugins.IsInstalled(name) {
+			checklist = append(checklist, types.Checks{
+				Name: name,
+				List: []types.Check{
+					checkPluginVersion(s.plugins, name),
+					criu.CheckPluginLibraries(s.plugins, name),
+				},
+			})
+		}
+	}
+
 	// Add a GPU health check if plugin is installed
 	if s.plugins.IsInstalled("gpu") {
 		checklist = append(checklist, s.gpus.Checks())
