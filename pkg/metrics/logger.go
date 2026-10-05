@@ -69,6 +69,9 @@ type signozWriter struct {
 	mu sync.Mutex
 }
 
+// The writer installed by initLogger, if any. Used by UpdateResource.
+var logWriter *signozWriter
+
 func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource) error {
 	if Credentials == nil {
 		return fmt.Errorf("credentials not found")
@@ -106,6 +109,7 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 		}
 	})
 
+	logWriter = sw
 	logging.Add(sw)
 
 	log.Debug().Str("endpoint", Credentials.Endpoint).Msg("logging initialized")
@@ -148,20 +152,36 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 		}
 	}
 
+	sw.mu.Lock()
 	logEntry := signozLogEntry{
 		Timestamp:      tsNano,
 		SeverityText:   severityText,
 		SeverityNumber: severityNumber,
 		Body:           body,
 		Attributes:     attributes,
-		Resources:      sw.resource,
+		Resources:      sw.resource, // never mutated in place, see updateResource
 	}
-
-	sw.mu.Lock()
 	sw.logBuffer = append(sw.logBuffer, logEntry)
 	sw.mu.Unlock()
 
 	return len(p), nil
+}
+
+// updateResource adds or replaces resource attributes for all subsequent log
+// entries. The resource map is replaced rather than mutated, since buffered
+// entries still reference the old one while a batch is being marshalled.
+func (sw *signozWriter) updateResource(attrs map[string]string) {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+
+	merged := make(map[string]string, len(sw.resource)+len(attrs))
+	for k, v := range sw.resource {
+		merged[k] = v
+	}
+	for k, v := range attrs {
+		merged[k] = v
+	}
+	sw.resource = merged
 }
 
 func (sw *signozWriter) flushBuffer() {

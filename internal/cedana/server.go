@@ -60,8 +60,13 @@ type ServeOpts struct {
 func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error) {
 	wg := &sync.WaitGroup{}
 
+	pluginManager := plugins.NewLocalManager()
+
 	if config.Global.Metrics {
-		metrics.Init(ctx, wg, "cedana", version.Version)
+		// Installed plugin versions are attached as resource attributes so that
+		// every log line carries them alongside service.version.
+		metrics.Init(ctx, wg, "cedana", version.Version,
+			metrics.ResourceAttributes(plugins.InstalledVersionAttributes(pluginManager))...)
 	}
 
 	host, err := utils.GetHost(ctx)
@@ -83,8 +88,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to put host info: %w", err)
 	}
-
-	pluginManager := plugins.NewLocalManager()
 
 	gpuPoolSize := config.Global.GPU.PoolSize
 	gpuManager, err := gpu.NewPoolManager(ctx, wg, gpuPoolSize, pluginManager)
@@ -206,6 +209,10 @@ func (s *Server) Stop() {
 
 func (s *Server) ReloadPlugins(ctx context.Context, req *daemon.Empty) (*daemon.Empty, error) {
 	plugins.Load()
+
+	if config.Global.Metrics {
+		metrics.UpdateResource(metrics.ResourceAttributes(plugins.InstalledVersionAttributes(s.plugins))...)
+	}
 
 	return &daemon.Empty{}, nil
 }
