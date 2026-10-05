@@ -153,10 +153,12 @@ func archiveDir(dir string, w io.Writer, max uint64) (written uint64, err error)
 		if err != nil {
 			return err
 		}
-		defer file.Close()
 
-		// The job is frozen, but be exact about the size promised in the header regardless
+		// The job is frozen, but be exact about the size promised in the header regardless.
+		// Closed right after: this runs for every file of the mount, and the descriptors of
+		// files archived must not pile up until the archive is done.
 		n, err := io.CopyN(tw, file, header.Size)
+		file.Close()
 		written += uint64(n)
 		if err != nil {
 			return fmt.Errorf("failed to archive %s: %w", path, err)
