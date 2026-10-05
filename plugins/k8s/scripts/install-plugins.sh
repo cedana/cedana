@@ -36,9 +36,6 @@ else
     PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE gpu"
 fi
 
-# CRIU device plugins ship with the CRIU release and are inert on nodes without the
-# device. Installed everywhere by default: a checkpoint that references /dev/nvidia*
-# or /dev/infiniband/* fds can only be restored on nodes that have the matching plugin.
 if [ "$CEDANA_PLUGINS_CRIU_NVIDIA_DEV" = "true" ]; then
     echo "CRIU nvidia-dev plugin enabled, adding to install list"
     PLUGINS="$PLUGINS criu/nvidia-dev@$CEDANA_PLUGINS_CRIU_VERSION"
