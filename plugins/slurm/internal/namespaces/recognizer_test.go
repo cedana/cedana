@@ -280,7 +280,7 @@ func TestHandlingFor(t *testing.T) {
 		{configs.NEWNET, 31100, HandlingExternal},
 		{configs.NEWPID, 31500, HandlingExternal},
 		{configs.NEWPID, 31100, ""},
-		{configs.NEWNS, 30000, ""}, // dumped from inside it, whatever CRIU's version
+		{configs.NEWNS, 30000, HandlingInside}, // nothing to do with CRIU's version
 		{configs.NEWUSER, 40000, ""},
 		{configs.NEWIPC, 40000, ""},
 	}
@@ -317,7 +317,7 @@ func TestSaveLoadExternalNamespaces(t *testing.T) {
 
 	expected := []ExternalNamespace{
 		{Type: configs.NEWPID, Handling: HandlingExternal, Holder: HolderPin},
-		{Type: configs.NEWNS, Handling: HandlingEnter, Holder: HolderProcess},
+		{Type: configs.NEWNS, Handling: HandlingInside, Holder: HolderProcess},
 	}
 	if err := saveExternalNamespaces(fs, expected); err != nil {
 		t.Fatal(err)
@@ -343,7 +343,10 @@ func TestLoadExternalNamespacesFormats(t *testing.T) {
 			{Type: configs.NEWPID, Handling: HandlingExternal},
 			{Type: configs.NEWNET, Handling: HandlingExternal},
 		}, false},
-		{"Objects", `[{"type":"mnt","handling":"enter","holder":"process"}]`, []ExternalNamespace{
+		{"Objects", `[{"type":"mnt","handling":"inside","holder":"pin"}]`, []ExternalNamespace{
+			{Type: configs.NEWNS, Handling: HandlingInside, Holder: HolderPin},
+		}, false},
+		{"EarlierDump", `[{"type":"mnt","handling":"enter","holder":"process"}]`, []ExternalNamespace{
 			{Type: configs.NEWNS, Handling: HandlingEnter, Holder: HolderProcess},
 		}, false},
 		{"UnknownType", `["bogus"]`, nil, true},

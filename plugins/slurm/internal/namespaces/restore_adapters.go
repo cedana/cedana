@@ -154,9 +154,14 @@ func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
 			name := configs.NsName(t)
 			nsPath := nsPathOf(t, pid)
 
-			if ns.Handling == HandlingEnter {
-				// An earlier dump, taken with CRIU run inside the job's mount namespace. The
-				// restore runs inside the new job's, so there is nothing to do, as long as we are.
+			if ns.Handling == HandlingInside || ns.Handling == HandlingEnter {
+				// Dumped from inside the job's mount namespace (or with CRIU put inside it, by
+				// an earlier dump), so the images have no mount namespace, and the restore has
+				// to be from inside the new job's: from anywhere else CRIU would restore into
+				// ours. There is nothing to tell it, only this to hold ourselves to.
+				if t != configs.NEWNS {
+					return nil, status.Errorf(codes.FailedPrecondition, "dump has a %s namespace recorded as %s: only possible for mnt", name, ns.Handling)
+				}
 				if inside, err := inNamespaceOf(t, pid); err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to compare the job's %s namespace with ours: %v", name, err)
 				} else if !inside {

@@ -89,9 +89,10 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 // this does not touch CRIU opts when the job is simply running in the host's namespaces.
 //
 //	net, pid -> left out of the dump using --external
-//	mnt      -> nothing: CRIU has no notion of an external mount namespace, so the job is
-//	            dumped from inside it, where cedana-slurm starts the monitor. The dump is
-//	            refused from anywhere else.
+//	mnt      -> nothing to tell CRIU, which has no notion of an external mount namespace: the
+//	            job is dumped from inside it, where cedana-slurm starts the monitor, and the
+//	            dump is refused from anywhere else. Recorded as "inside", for the restore to
+//	            hold itself to the same.
 //
 // What was done is recorded in the dump, for InheritRecognizedNamespacesForRestore.
 func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
@@ -119,11 +120,18 @@ func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
 
 			log := log.With().Str("holder", string(ns.Holder)).Str("path", ns.Path).Uint64("inode", ns.Inode).Logger()
 
-			if ns.Type == configs.NEWNS {
+			handling, reason := handlingFor(ns.Type, version)
+
+			switch handling {
+			case HandlingExternal:
+				log.Debug().Msgf("adding external %s namespace", name)
+				addExternalNamespace(req, ns.Type, ns.Inode)
+
+			case HandlingInside:
 				// Nothing to tell CRIU, and nothing to enter: a mount namespace of the job's own
 				// is dumped from inside it, with CRIU in it too. From anywhere else CRIU would
 				// dump the mount namespace, which the restore, inside the new job's, can't put back.
-				inside, err := inNamespaceOf(configs.NEWNS, pid)
+				inside, err := inNamespaceOf(ns.Type, pid)
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to compare the job's %s namespace with ours: %v", name, err)
 				}
@@ -132,16 +140,7 @@ func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
 						"slurm job %d is in a %s namespace of its own (%s, held by %s) that we are not in: it has to be dumped from inside it",
 						req.GetDetails().GetSlurm().GetJobID(), name, ns.Path, ns.Holder)
 				}
-				log.Debug().Msgf("inside the job's external %s namespace, nothing to do", name)
-				continue
-			}
-
-			handling, reason := handlingFor(ns.Type, version)
-
-			switch handling {
-			case HandlingExternal:
-				log.Debug().Msgf("adding external %s namespace", name)
-				addExternalNamespace(req, ns.Type, ns.Inode)
+				log.Debug().Msgf("inside the job's external %s namespace, nothing to tell CRIU", name)
 
 			default:
 				log.Warn().Msgf("%s, skipping external %s namespace handling", reason, name)

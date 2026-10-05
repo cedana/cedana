@@ -22,9 +22,12 @@ type Handling string
 const (
 	// Namespace is left out of the dump using --external, and inherited on restore using --inherit-fd
 	HandlingExternal Handling = "external"
-	// Recorded by earlier dumps for a mount namespace CRIU was run inside of. A job in a mount
-	// namespace of its own is dumped and restored from inside it now, so there is nothing to
-	// do about one on restore. Still read, for those dumps.
+	// The job has the namespace to itself, and was dumped from inside it, so the dump has no
+	// trace of it. The restore has to run from inside the new job's as well, or CRIU would
+	// restore into ours. Only for mnt: CRIU has no notion of an external mount namespace.
+	HandlingInside Handling = "inside"
+	// Recorded by earlier dumps for a mount namespace CRIU was put inside of. The same thing
+	// to a restore as HandlingInside. Still read, for those dumps.
 	HandlingEnter Handling = "enter"
 )
 
@@ -105,12 +108,12 @@ func addExternalNamespace(req *daemon.DumpReq, t configs.NamespaceType, inode ui
 }
 
 // handlingFor decides what can be done about an external namespace of this type, if anything.
-// Nothing for a mount namespace: CRIU has no notion of an external one, and we don't enter one
-// (that takes CAP_SYS_ADMIN, which the job's user doesn't have). A job in a mount namespace of
-// its own is dumped from inside it, see AddRecognizedExternalNamespacesForDump.
+// A mount namespace can't be told to CRIU, which has no notion of an external one, nor entered
+// (that takes CAP_SYS_ADMIN, which the job's user doesn't have): a job in one of its own is
+// dumped from inside it, see AddRecognizedExternalNamespacesForDump.
 func handlingFor(t configs.NamespaceType, version int) (handling Handling, reason string) {
 	if t == configs.NEWNS {
-		return "", "a mount namespace is dumped from inside it"
+		return HandlingInside, ""
 	}
 	if ok, reason := criuSupportsExternal(t, version); !ok {
 		return "", reason
@@ -201,7 +204,7 @@ func loadExternalNamespaces(fs afero.Fs) ([]ExternalNamespace, error) {
 			return nil, fmt.Errorf("unknown namespace type %q", entry.Type)
 		}
 		switch entry.Handling {
-		case HandlingExternal, HandlingEnter:
+		case HandlingExternal, HandlingInside, HandlingEnter:
 		default:
 			return nil, fmt.Errorf("unknown handling %q for %s namespace", entry.Handling, entry.Type)
 		}
