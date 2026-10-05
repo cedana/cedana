@@ -28,7 +28,9 @@ func (s *Storage) Create(_ context.Context, path string) (io.WriteCloser, error)
 }
 
 func (s *Storage) Delete(_ context.Context, path string) error {
-	err := os.Remove(path)
+	// A checkpoint may be a directory (uncompressed dump), and is already gone
+	// if the path does not exist
+	err := os.RemoveAll(path)
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}

@@ -6,6 +6,7 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  actions: read # to list the jobs of the run when posting the summary
 
 on:
   workflow_call:
@@ -161,79 +162,32 @@ jobs:
             fi
           fi
 
-      - name: Setup node
+      - name: Label report # with the job name, so the summary can link to it
         if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate report (isolated)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="streamer (${{ matrix.compute }}, ${{ matrix.arch }})"
-
-      - name: Generate report (persistent)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="streamer (${{ matrix.compute }}, ${{ matrix.arch }})"
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Streamer (${{ matrix.compute }}, ${{ matrix.arch }})" |' {} +
 
       - name: Upload report
         if: always()
-        id: upload-report
         uses: actions/upload-artifact@v4
         with:
           name: test-report-${{ matrix.arch }}-streamer-${{ matrix.compute }}
-          path: |
-            /tmp/report*.json
+          path: /tmp/report*.xml
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: streamer
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - amd64
-          - arm64
     steps:
-      - name: Download report
-        id: download-report
+      - name: Download reports
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-streamer-*
+          pattern: test-report-*-streamer-*
           path: report
 
-      - name: Post report
-        uses: ctrf-io/github-test-reporter@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Post summary
+        uses: cedana/cedana-test-summary@v1
         with:
-          report-path: report/**/*.json
-          github-report: true
-          failed-folded-report: true
-          summary: true
-          pull-request: true
-          title: ${{ matrix.arch }}
-          update-comment: true
-          overwrite-comment: true
-          comment-tag: test-report-streamer-${{ matrix.arch }}
-          group-by: "suite"
-          always-group-by: true
-          upload-artifact: true
-          artifact-name: ctrf-report-streamer-${{ matrix.arch }}
+          reports: report/**/*.xml
+          title: Streamer
+          jobs-filter: '(^|/ )Streamer \('
