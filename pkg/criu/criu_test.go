@@ -35,16 +35,12 @@ func TestExternalsToConfig(t *testing.T) {
 		ConfigFile: proto.String(prev.Name()),
 		External:   []string{"mnt[/a]:/a", "mnt[/has space]:/x", "file[1:2]", "mnt[/has#hash]:/y"},
 	}
-	dir := t.TempDir()
-	path, err := externalsToConfig(opts, dir)
+	path, err := externalsToConfig(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { os.Remove(path) })
 
-	if filepath.Dir(path) != dir {
-		t.Fatalf("config %q not created in %q", path, dir)
-	}
 	if opts.GetConfigFile() != path {
 		t.Fatalf("ConfigFile not updated: %q", opts.GetConfigFile())
 	}
@@ -59,7 +55,7 @@ func TestExternalsToConfig(t *testing.T) {
 
 func TestExternalsToConfigNoExternals(t *testing.T) {
 	opts := &criu.CriuOpts{ConfigFile: proto.String("/keep/me")}
-	path, err := externalsToConfig(opts, "")
+	path, err := externalsToConfig(opts)
 	if err != nil || path != "" || opts.GetConfigFile() != "/keep/me" {
 		t.Fatalf("path=%q cfg=%q err=%v", path, opts.GetConfigFile(), err)
 	}
@@ -89,20 +85,6 @@ func TestSendAndRecvReportsOversizedRequest(t *testing.T) {
 	_, _, _, _, err = c.sendAndRecv(make([]byte, sndbuf)) // > sk_sndbuf-32
 	if !errors.Is(err, syscall.EMSGSIZE) || !strings.Contains(err.Error(), "exceeds the socket send buffer") {
 		t.Fatalf("got %v", err)
-	}
-}
-
-func TestInMountNamespace(t *testing.T) {
-	inside, err := inMountNamespace("/proc/self/ns/mnt")
-	if err != nil || !inside {
-		t.Errorf("expected to be in our own mount namespace, got %v, %v", inside, err)
-	}
-	inside, err = inMountNamespace("/proc/self/ns/pid") // another namespace file, so another inode
-	if err != nil || inside {
-		t.Errorf("expected another namespace not to count as ours, got %v, %v", inside, err)
-	}
-	if _, err := inMountNamespace("/proc/self/ns/no-such-namespace"); err == nil {
-		t.Error("expected an error for a path that isn't there")
 	}
 }
 
