@@ -461,9 +461,11 @@ func (fs *Fs) waitForStreamerReady(name string) error {
 			return fmt.Errorf("failed to unmarshal response: %w", err)
 		}
 		if !resp.HasStatus() {
+			// Older streamers only report existence; the file is ready to be read.
 			if !resp.Exists {
 				return fmt.Errorf("file does not exist: %s", name)
 			}
+			break
 		} else {
 			status := resp.GetStatus()
 			if status == img_streamer.FileStatus_DOES_NOT_EXIST {
