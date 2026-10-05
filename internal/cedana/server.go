@@ -210,9 +210,5 @@ func (s *Server) Stop() {
 func (s *Server) ReloadPlugins(ctx context.Context, req *daemon.Empty) (*daemon.Empty, error) {
 	plugins.Load()
 
-	if config.Global.Metrics {
-		metrics.UpdateResource(metrics.ResourceAttributes(plugins.InstalledVersionAttributes(s.plugins))...)
-	}
-
 	return &daemon.Empty{}, nil
 }

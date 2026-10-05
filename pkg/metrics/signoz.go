@@ -89,27 +89,13 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 }
 
 // ResourceAttributes converts a map of attribute key to value into OpenTelemetry
-// resource attributes, suitable for passing to Init or UpdateResource.
+// resource attributes, suitable for passing to Init.
 func ResourceAttributes(m map[string]string) []attribute.KeyValue {
 	attrs := make([]attribute.KeyValue, 0, len(m))
 	for k, v := range m {
 		attrs = append(attrs, attribute.String(k, v))
 	}
 	return attrs
-}
-
-// UpdateResource adds or replaces resource attributes on all logs emitted from
-// now on. Traces and metrics keep the resource they were initialized with, as
-// the OpenTelemetry SDK does not allow changing it after the fact.
-func UpdateResource(attrs ...attribute.KeyValue) {
-	if logWriter == nil {
-		return
-	}
-	m := make(map[string]string, len(attrs))
-	for _, attr := range attrs {
-		m[string(attr.Key)] = attr.Value.AsString()
-	}
-	logWriter.updateResource(m)
 }
 
 // getCreds fetches OpenTelemetry credentials from the Cedana endpoint
