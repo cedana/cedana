@@ -10,13 +10,14 @@
 # PROPAGATOR_TAG.
 #
 # The propagator runs with TEST_MODE, so it accepts a single per-run token instead
-# of PropelAuth. After deploy_propagator:
-#   CEDANA_URL          - propagator URL reachable from the test runner (port-forward)
-#   CEDANA_CLUSTER_URL  - propagator URL reachable from inside the cluster (ClusterIP)
-#   CEDANA_AUTH_TOKEN   - the per-run token
+# of PropelAuth. deploy_propagator overrides CEDANA_URL and CEDANA_AUTH_TOKEN to point
+# at it, so everything downstream (helm chart, daemon, test helpers) just uses those.
 #
-# ClusterIPs are used instead of service DNS because the cedana daemon runs on the
-# host, where cluster DNS does not resolve.
+# CEDANA_URL is the propagator's ClusterIP (not service DNS, because the cedana daemon
+# runs on the host where cluster DNS does not resolve). On K3s the cluster runs inside
+# the test container, so that is directly reachable. On other providers the runner is
+# outside the cluster network, so the ClusterIP is aliased on loopback and port-forwarded,
+# making the same URL work from the runner too.
 #
 # Environment variables:
 #   PROPAGATOR_REPO                 - Propagator image repository
@@ -35,6 +36,7 @@ PROPAGATOR_PORT=1324
 PROPAGATOR_LOG_FILE="${PROPAGATOR_LOG_FILE:-/tmp/propagator.log}"
 PROPAGATOR_PORT_FORWARD_LOG="/tmp/propagator-port-forward.log"
 export PROPAGATOR_PORT_FORWARD_PID=""
+export PROPAGATOR_IP=""
 
 propagator_enabled() {
     [ -n "${PROPAGATOR_REPO:-}" ] && { [ -n "${PROPAGATOR_DIGEST:-}" ] || [ -n "${PROPAGATOR_TAG:-}" ]; }
@@ -270,33 +272,32 @@ EOF
         return 1
     }
 
-    local local_port
-    local_port=$(random_free_port)
+    PROPAGATOR_IP=$(cluster_ip cedana-propagator)
 
-    # Restart the port-forward if it drops (e.g. on propagator restart). fd 3 is closed
-    # so bats does not wait on this background process.
-    (
-        while true; do
-            kubectl port-forward -n "$ns" svc/cedana-propagator "$local_port:$PROPAGATOR_PORT" || true
-            sleep 1
-        done
-    ) >"$PROPAGATOR_PORT_FORWARD_LOG" 2>&1 3>&- &
-    PROPAGATOR_PORT_FORWARD_PID=$!
+    if [ "$PROVIDER" != "k3s" ]; then
+        ip addr add "$PROPAGATOR_IP/32" dev lo 2>/dev/null || true
+        # Restart the port-forward if it drops (e.g. on propagator restart). fd 3 is closed
+        # so bats does not wait on this background process.
+        (
+            while true; do
+                kubectl port-forward --address "$PROPAGATOR_IP" -n "$ns" svc/cedana-propagator "$PROPAGATOR_PORT:$PROPAGATOR_PORT" || true
+                sleep 1
+            done
+        ) >"$PROPAGATOR_PORT_FORWARD_LOG" 2>&1 3>&- &
+        PROPAGATOR_PORT_FORWARD_PID=$!
+    fi
 
-    export CEDANA_URL="http://127.0.0.1:$local_port/v1"
-    export CEDANA_CLUSTER_URL="http://$(cluster_ip cedana-propagator):$PROPAGATOR_PORT/v1"
+    export CEDANA_URL="http://$PROPAGATOR_IP:$PROPAGATOR_PORT/v1"
     export CEDANA_AUTH_TOKEN="$token"
-    PROPAGATOR_BASE_URL="$CEDANA_URL"
-    PROPAGATOR_AUTH_TOKEN="$CEDANA_AUTH_TOKEN"
 
     wait_for_cmd 120 "curl -sf -o /dev/null -H 'Authorization: Bearer $token' $CEDANA_URL/user" || {
         error_log "Propagator is not reachable at $CEDANA_URL"
-        error cat "$PROPAGATOR_PORT_FORWARD_LOG"
+        [ -f "$PROPAGATOR_PORT_FORWARD_LOG" ] && error cat "$PROPAGATOR_PORT_FORWARD_LOG"
         error kubectl logs -n "$ns" deployment/cedana-propagator --tail=1000
         return 1
     }
 
-    info_log "Propagator $image deployed (runner: $CEDANA_URL, cluster: $CEDANA_CLUSTER_URL)"
+    info_log "Propagator $image deployed at $CEDANA_URL"
 }
 
 teardown_propagator() {
@@ -304,6 +305,7 @@ teardown_propagator() {
         pkill -P "$PROPAGATOR_PORT_FORWARD_PID" 2>/dev/null || true
         kill "$PROPAGATOR_PORT_FORWARD_PID" 2>/dev/null || true
         PROPAGATOR_PORT_FORWARD_PID=""
+        ip addr del "$PROPAGATOR_IP/32" dev lo 2>/dev/null || true
     fi
 
     if kubectl get namespace "$PROPAGATOR_NAMESPACE" &>/dev/null; then
