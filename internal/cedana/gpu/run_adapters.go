@@ -12,8 +12,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -69,9 +71,36 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			log.Info().Uint32("PID", resp.PID).Msg("GPU support enabled for process")
 
+			if opts.Serverless && req.GPUID == "" {
+				code = detachOnExit(opts, gpus, resp.PID, code)
+			}
+
 			return code, nil
 		}
 	}
+}
+
+// detachOnExit detaches the process's GPU controller when it exits, before its exit code is
+// delivered. Serverless runs and restores have no job manager to do this (see job.Manage).
+func detachOnExit(opts types.Opts, gpus Manager, pid uint32, code func() <-chan int) func() <-chan int {
+	exitCode := make(chan int, 1)
+	exited := code()
+	log.Warn().Uint32("PID", pid).Msg("CED-2388: will detach GPU controller on exit") // TODO(CED-2388): remove temporary debug log
+	opts.WG.Go(func() {
+		defer close(exitCode)
+		c, ok := <-exited
+		log.Warn().Uint32("PID", pid).Int("code", c).Bool("ok", ok).Msg("CED-2388: process exited, detaching GPU controller") // TODO(CED-2388): remove temporary debug log
+		start := time.Now()                                                                                                   // TODO(CED-2388): remove temporary debug log
+		if err := gpus.Detach(context.WithoutCancel(opts.Lifetime), pid); err != nil {
+			log.Warn().Err(err).Uint32("PID", pid).Msg("failed to detach GPU controller on exit") // TODO(CED-2388): back to Debug
+		} else {
+			log.Warn().Uint32("PID", pid).Dur("took", time.Since(start)).Msg("CED-2388: detached GPU controller") // TODO(CED-2388): remove temporary debug log
+		}
+		if ok {
+			exitCode <- c
+		}
+	})
+	return channel.Broadcaster(exitCode)
 }
 
 ///////////////////////////////////////
