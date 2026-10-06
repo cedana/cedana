@@ -182,6 +182,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 						}
 						file, openErr := opts.DumpFs.Open(filename)
 						if openErr != nil {
+							log.Warn().Err(openErr).Str("file", filename).Msg("failed to open hostmem metadata file")
 							continue
 						}
 
@@ -189,6 +190,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 						_, readErr := file.Read(sizeBuffer)
 						file.Close()
 						if readErr != nil && readErr.Error() != "EOF" {
+							log.Warn().Err(readErr).Str("file", filename).Msg("failed to read hostmem metadata file")
 							continue
 						}
 

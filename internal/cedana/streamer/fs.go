@@ -215,7 +215,7 @@ func NewStreamingFs(
 			if lastMsg == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			log.Trace().Msg(lastMsg)
+			log.Debug().Msg(lastMsg)
 		}
 	})
 
