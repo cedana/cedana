@@ -16,11 +16,14 @@ func TestWaitUpload(t *testing.T) {
 	server := &Server{Cedana: Cedana{uploads: upload.NewRegistry()}}
 
 	t.Run("Succeeded", func(t *testing.T) {
-		server.uploads.Start("s3://bucket/succeeded.tar")(nil)
+		server.uploads.Start("s3://bucket/succeeded.tar")("crc32c:0000abcd", nil)
 
 		resp, err := server.WaitUpload(ctx, &daemon.WaitUploadReq{Path: "s3://bucket/succeeded.tar"})
 		if err != nil {
 			t.Fatalf("wait failed: %v", err)
+		}
+		if resp.GetChecksum() != "crc32c:0000abcd" {
+			t.Fatalf("expected the checksum of the upload, got %q", resp.GetChecksum())
 		}
 		if resp.GetError() != "" {
 			t.Fatalf("unexpected response %v", resp)
@@ -28,7 +31,7 @@ func TestWaitUpload(t *testing.T) {
 	})
 
 	t.Run("Failed", func(t *testing.T) {
-		server.uploads.Start("s3://bucket/failed.tar")(errors.New("connection reset"))
+		server.uploads.Start("s3://bucket/failed.tar")("", errors.New("connection reset"))
 
 		resp, err := server.WaitUpload(ctx, &daemon.WaitUploadReq{Path: "s3://bucket/failed.tar"})
 		if err != nil {

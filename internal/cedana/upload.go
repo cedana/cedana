@@ -25,7 +25,7 @@ func (s *Server) WaitUpload(ctx context.Context, req *daemon.WaitUploadReq) (*da
 		return nil, status.FromContextError(err).Err()
 	}
 
-	resp := &daemon.WaitUploadResp{}
+	resp := &daemon.WaitUploadResp{Checksum: result.Checksum}
 	if result.Err != nil {
 		resp.Error = result.Err.Error()
 	}

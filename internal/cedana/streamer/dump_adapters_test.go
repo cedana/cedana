@@ -13,6 +13,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/filesystem"
+	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
@@ -39,6 +40,26 @@ func (s *remoteStorage) Create(ctx context.Context, path string) (io.WriteCloser
 		return nil, err
 	}
 	return s.Storage.Create(ctx, path)
+}
+
+// The checksum of a streamed dump as stored: that of the manifest of its shards
+func manifestOf(t *testing.T, path string, streams int32, ext string) string {
+	t.Helper()
+	entries := make([]cedana_io.ManifestEntry, 0, streams)
+	for i := range streams {
+		name := fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext
+		file, err := os.Open(filepath.Join(path, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sum, err := cedana_io.ChecksumOf(file)
+		file.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		entries = append(entries, cedana_io.ManifestEntry{Name: name, Checksum: sum})
+	}
+	return cedana_io.ManifestChecksum(entries)
 }
 
 // Every shard of a streamed dump, as stored
@@ -74,6 +95,7 @@ func (m *streamingPlugins) Get(name string) *plugins.Plugin {
 }
 
 func TestDumpFilesystem(t *testing.T) {
+	config.Global.Checkpoint.Checksum = true
 	streamerBinary := "/usr/local/bin/cedana-image-streamer"
 	if _, err := os.Stat(streamerBinary); os.IsNotExist(err) {
 		t.Skipf("streamer binary not found at %s, skipping integration test", streamerBinary)
@@ -107,6 +129,7 @@ func TestDumpFilesystem(t *testing.T) {
 				CRIUCallback: &criu_client.NotifyCallbackMulti{},
 				Storage:      &filesystem.Storage{},
 				Plugins:      &streamingPlugins{streamerBinary: streamerBinary},
+				Uploads:      upload.NewRegistry(),
 			}
 			req := &daemon.DumpReq{
 				Dir:         t.TempDir(),
@@ -130,6 +153,19 @@ func TestDumpFilesystem(t *testing.T) {
 				t.Fatal(err)
 			}
 			shardsOf(t, resp.Paths[0], streams, ext)
+
+			// The checksum of the shards as written is held for the caller as an
+			// upload's outcome would be, so the path is pending
+			if !slices.Equal(resp.Pending, resp.Paths) {
+				t.Fatalf("expected the path to be pending for its checksum, got %v", resp.Pending)
+			}
+			result, err := opts.Uploads.Wait(ctx, resp.Paths[0])
+			if err != nil || result.Err != nil {
+				t.Fatalf("Wait = %+v, %v", result, err)
+			}
+			if want := manifestOf(t, resp.Paths[0], streams, ext); result.Checksum != want {
+				t.Fatalf("checksum = %s, want the manifest of the shards %s", result.Checksum, want)
+			}
 		})
 	}
 
@@ -171,6 +207,9 @@ func TestDumpFilesystem(t *testing.T) {
 			t.Fatalf("upload failed: %v", result.Err)
 		}
 		shardsOf(t, path, streams, ".lz4")
+		if want := manifestOf(t, path, streams, ".lz4"); result.Checksum != want {
+			t.Fatalf("checksum = %s, want the manifest of the uploaded shards %s", result.Checksum, want)
+		}
 
 		opts.WG.Wait()
 	})

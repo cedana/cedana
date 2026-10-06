@@ -16,7 +16,8 @@ const RETENTION = 1 * time.Hour
 var ErrNotFound = errors.New("no upload found for path")
 
 type Result struct {
-	Err error // why the upload failed; nil if it succeeded
+	Checksum string // of the path as stored, "crc32c:<hex>"; empty if the upload failed or nothing was computed
+	Err      error  // why the upload failed; nil if it succeeded
 }
 
 type upload struct {
@@ -39,11 +40,12 @@ func NewRegistry() *Registry {
 }
 
 // Start records that an upload to path is in progress. The returned function
-// must be called once, when the upload has ended.
+// must be called once, when the upload has ended, with the checksum of the path
+// as stored, if one was computed, and the error, if it failed.
 // An upload to the same path that was started earlier is replaced.
-func (r *Registry) Start(path string) (finish func(err error)) {
+func (r *Registry) Start(path string) (finish func(checksum string, err error)) {
 	if r == nil {
-		return func(error) {}
+		return func(string, error) {}
 	}
 
 	u := &upload{done: make(chan struct{})}
@@ -54,15 +56,28 @@ func (r *Registry) Start(path string) (finish func(err error)) {
 	r.mu.Unlock()
 
 	var once sync.Once
-	return func(err error) {
+	return func(checksum string, err error) {
 		once.Do(func() {
+			if err != nil {
+				checksum = ""
+			}
 			r.mu.Lock()
-			u.result = Result{Err: err}
+			u.result = Result{Checksum: checksum, Err: err}
 			u.finished = time.Now()
 			r.mu.Unlock()
 			close(u.done)
 		})
 	}
+}
+
+// Record keeps the result of a path whose checksum is already known when the dump
+// returns, such as a streamed checkpoint written locally, so that a caller learns it
+// the same way as the outcome of an upload: Wait returns at once.
+func (r *Registry) Record(path string, checksum string) {
+	if r == nil {
+		return
+	}
+	r.Start(path)(checksum, nil)
 }
 
 // Wait blocks until the upload to path has ended, and returns its result.

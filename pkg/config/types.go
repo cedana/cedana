@@ -92,6 +92,9 @@ type (
 		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
 		// checkpoint request to return early.
 		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
+		// Checksum records an integrity checksum of each checkpoint as stored, computed
+		// as it is uploaded or streamed, or read back by the k8s helper for a local one.
+		Checksum bool `json:"checksum" key:"checksum" yaml:"checksum" mapstructure:"checksum"`
 	}
 
 	DB struct {
