@@ -32,6 +32,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -900,14 +901,35 @@ func (es *EventStream) reportUpload(
 		}
 		checksum = resp.GetChecksum()
 	} else {
-		// A failed read leaves the checkpoint without a checksum; it is stored all the same
 		es.readBackMu.Lock()
 		sum, err := ckpt_checksum.Path(ctx, es.cedana, path)
 		es.readBackMu.Unlock()
-		if err != nil {
-			log.Warn().Err(err).Msg("could not compute the checkpoint's checksum; it is reported without one")
-		} else {
+		switch {
+		case err == nil:
 			checksum = sum
+		case status.Code(err) == codes.NotFound:
+			// The checkpoint is not where the daemon said: nothing can restore from it
+			log.Error().Err(err).Msg("checkpoint not found at its path")
+			err = es.publishCheckpoint(
+				ctx,
+				podId,
+				actionId,
+				checkpointId,
+				nil,
+				path,
+				false,
+				state,
+				containerOrder,
+				containerSpec,
+				fmt.Errorf("checkpoint not found at %s: %w", path, err),
+			)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to report the missing checkpoint")
+			}
+			return
+		default:
+			// Any other failed read leaves the checkpoint without a checksum; it is stored all the same
+			log.Warn().Err(err).Msg("could not compute the checkpoint's checksum; it is reported without one")
 		}
 	}
 
