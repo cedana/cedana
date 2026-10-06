@@ -26,6 +26,11 @@ on:
         description: "Run large tests"
         required: false
         default: false
+      propagator:
+        type: boolean
+        description: "Deploy the propagator from the propagator-digests-* artifacts into the test clusters, instead of using CEDANA_URL"
+        required: false
+        default: false
       kubernetes:
         type: boolean
         description: "Run kubernetes tests"
@@ -416,6 +421,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: K3s
+      propagator: ${{ inputs.propagator }}
       large: false # K3s is only for small tests
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
@@ -432,6 +438,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: EKS
+      propagator: ${{ inputs.propagator }}
       runner: ${{ inputs.runner }}
       large: ${{ inputs.large }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
@@ -448,6 +455,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: EKS-Karpenter
+      propagator: ${{ inputs.propagator }}
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
@@ -464,6 +472,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: GKE
+      propagator: ${{ inputs.propagator }}
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
@@ -480,6 +489,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: Nebius
+      propagator: ${{ inputs.propagator }}
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner

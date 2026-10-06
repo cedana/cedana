@@ -29,7 +29,6 @@
 #   PROPAGATOR_LOG_LEVEL            - RUST_LOG for the propagator (default: info)
 #   DOCKER_USERNAME, DOCKER_TOKEN   - If set, used as the image pull secret
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION - S3 access (plugins, metrics)
-#   GCLOUD_SERVICE_ACCOUNT_KEY      - If set, GCS access (checkpoint files)
 
 export PROPAGATOR_NAMESPACE="${PROPAGATOR_NAMESPACE:-cedana-propagator}"
 PROPAGATOR_PORT=1324
@@ -90,23 +89,6 @@ deploy_propagator() {
         --from-literal=RABBITMQ_URI="amqp://cedana:$mq_password@rabbitmq:5672" \
         --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
         --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" >/dev/null
-
-    local gcp_env="" gcp_mount="" gcp_volume=""
-    if [ -n "${GCLOUD_SERVICE_ACCOUNT_KEY:-}" ]; then
-        kubectl create secret generic propagator-gcp -n "$ns" \
-            --from-literal=key.json="$GCLOUD_SERVICE_ACCOUNT_KEY" >/dev/null
-        gcp_env='
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /var/secrets/gcp/key.json'
-        gcp_mount='
-            - name: gcp
-              mountPath: /var/secrets/gcp
-              readOnly: true'
-        gcp_volume='
-        - name: gcp
-          secret:
-            secretName: propagator-gcp'
-    fi
 
     kubectl apply -n "$ns" -f - >/dev/null <<EOF
 apiVersion: apps/v1
@@ -253,16 +235,16 @@ spec:
             - { name: CLICKHOUSE_URL, value: "http://clickhouse:8123" }
             - { name: CLICKHOUSE_DATABASE, value: cedana }
             - { name: CLICKHOUSE_USER, value: default }
-            - { name: CLICKHOUSE_PASSWORD, value: "" }$gcp_env
+            - { name: CLICKHOUSE_PASSWORD, value: "" }
           ports: [{ containerPort: $PROPAGATOR_PORT }]
           readinessProbe:
             tcpSocket: { port: $PROPAGATOR_PORT }
             periodSeconds: 5
           volumeMounts:
-            - { name: duckdb, mountPath: /duckdb }$gcp_mount
+            - { name: duckdb, mountPath: /duckdb }
       volumes:
         - name: duckdb
-          emptyDir: {}$gcp_volume
+          emptyDir: {}
 EOF
 
     kubectl rollout status deployment/cedana-propagator -n "$ns" --timeout=5m || {
@@ -275,7 +257,11 @@ EOF
     PROPAGATOR_IP=$(cluster_ip cedana-propagator)
 
     if [ "$PROVIDER" != "k3s" ]; then
-        ip addr add "$PROPAGATOR_IP/32" dev lo 2>/dev/null || true
+        # Needs CAP_NET_ADMIN; outside the test container the suite runs as a regular user
+        ip addr add "$PROPAGATOR_IP/32" dev lo 2>/dev/null || sudo -n ip addr add "$PROPAGATOR_IP/32" dev lo || {
+            error_log "Failed to alias $PROPAGATOR_IP on loopback (needs root or passwordless sudo)"
+            return 1
+        }
         # Restart the port-forward if it drops (e.g. on propagator restart). fd 3 is closed
         # so bats does not wait on this background process.
         (
@@ -305,7 +291,7 @@ teardown_propagator() {
         pkill -P "$PROPAGATOR_PORT_FORWARD_PID" 2>/dev/null || true
         kill "$PROPAGATOR_PORT_FORWARD_PID" 2>/dev/null || true
         PROPAGATOR_PORT_FORWARD_PID=""
-        ip addr del "$PROPAGATOR_IP/32" dev lo 2>/dev/null || true
+        ip addr del "$PROPAGATOR_IP/32" dev lo 2>/dev/null || sudo -n ip addr del "$PROPAGATOR_IP/32" dev lo 2>/dev/null || true
     fi
 
     if kubectl get namespace "$PROPAGATOR_NAMESPACE" &>/dev/null; then

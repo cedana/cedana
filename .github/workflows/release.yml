@@ -79,6 +79,7 @@ jobs:
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
+      propagator: true
 
   bench:
     name: Bench

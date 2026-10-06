@@ -30,7 +30,7 @@ on:
         type: boolean
         description: "Deploy the propagator from the propagator-digests-* artifacts into the cluster, instead of using CEDANA_URL"
         required: false
-        default: true
+        default: false
       large:
         type: boolean
         description: "Run large tests"
