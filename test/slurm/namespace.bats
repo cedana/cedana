@@ -24,6 +24,11 @@ load ../helpers/slurm_propagator
 # Where the plugin keeps each job's namespace, on the compute node.
 NAMESPACE_BASE_PATH=/var/tmp/slurm-ns
 
+# The CPU job creates this file in its private /tmp and holds it open on this fd
+# for its whole life, so the file has to come back with the restored job.
+NAMESPACE_TMP_FILE=/tmp/namespace-marker
+NAMESPACE_TMP_FD=3
+
 # cedana's GPU controller makes an 8 GiB shared memory segment by default
 # (gpu.shm_size), but the plugin gives each job a fresh /dev/shm of the
 # kernel's default size, half the node's RAM, which on the CI runners is less.
@@ -80,6 +85,23 @@ _restore_gpu_setting() {
 }
 
 setup_file() {
+    # Runs from the cedana-samples root (see slurm_submit_script). The job's own
+    # shell opens the file, so it is created inside the job's namespace and
+    # owned by the submit user, and counting.sh logs a timestamp to it every
+    # second.
+    cat >"$BATS_FILE_TMPDIR/namespace-tmp.sbatch" <<EOF
+#!/bin/bash
+#SBATCH --job-name=namespace-tmp
+#SBATCH --output=namespace-tmp-%j.out
+#SBATCH --error=namespace-tmp-%j.err
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=100M
+#SBATCH --export=CEDANA_ENABLE=1
+
+exec ${NAMESPACE_TMP_FD}>${NAMESPACE_TMP_FILE}
+bash cpu_smr/counting.sh >&${NAMESPACE_TMP_FD}
+EOF
+
     # The plugin reads job_container.conf from /etc/slurm. Without a BasePath
     # it disables itself on the node, logging that only at debug level.
     cat >"$BATS_FILE_TMPDIR/job_container.conf" <<EOF
@@ -121,7 +143,7 @@ teardown_file() {
     slurm_conf_overlay_reset
 }
 
-# Print the PID cedana monitors -- and so checkpoints or has restored -- for a
+# Print the PID cedana monitors (and so checkpoints, or has restored) for a
 # job, from the `cedana-slurm monitor <pid> <job_id>` process on its node. The
 # monitor starts a few seconds after the job does, so wait for it.
 _monitored_pid() {
@@ -138,13 +160,13 @@ _monitored_pid() {
     [ -n "$pid" ] && echo "$pid"
 }
 
-# SLURM_JOB_CHECK for test_slurm_job: the workload cedana monitors must be in
-# the private mount namespace SLURM created for the job. The plugin keeps each
-# job's namespace alive by bind-mounting it at <BasePath>/<job_id>/.ns, so that
-# file is SLURM's own record of it.
-_check_workload_in_job_namespace() {
+# Find the job's node and the PID cedana monitors there, then run each given
+# check as `<check> <phase> <job_id> <host> <pid>`, stopping at the first that
+# fails.
+_run_job_checks() {
     local phase="$1" job_id="$2"
-    local host pid holder holder_ns workload_ns node_ns
+    shift 2
+    local host pid check
 
     host="$(_get_batch_host "$job_id")"
     [ -n "$host" ] || {
@@ -156,6 +178,18 @@ _check_workload_in_job_namespace() {
         error_log "[$phase] no cedana-slurm monitor for job $job_id on $host"
         return 1
     }
+
+    for check in "$@"; do
+        "$check" "$phase" "$job_id" "$host" "$pid" || return 1
+    done
+}
+
+# The workload must be in the private mount namespace SLURM created for the
+# job. The plugin keeps each job's namespace alive by bind-mounting it at
+# <BasePath>/<job_id>/.ns, so that file is SLURM's own record of it.
+_check_in_job_namespace() {
+    local phase="$1" job_id="$2" host="$3" pid="$4"
+    local holder holder_ns workload_ns node_ns
 
     holder="${NAMESPACE_BASE_PATH}/${job_id}/.ns"
     holder_ns="$(docker exec "$host" stat -L -c 'mnt:[%i]' "$holder" 2>/dev/null)" || {
@@ -180,12 +214,52 @@ _check_workload_in_job_namespace() {
     fi
 }
 
+# The file the job opened in its private /tmp must still be open, still owned
+# by the job's user, and still hold everything written to it before the dump.
+# It is read through the job's fd, which reaches it whatever namespace it is in.
+_check_tmp_file_kept() {
+    local phase="$1" job_id="$2" host="$3" pid="$4"
+    local fd="/proc/${pid}/fd/${NAMESPACE_TMP_FD}"
+    local saved="$BATS_TEST_TMPDIR/namespace-tmp"
+    local owner
+
+    docker exec "$host" cat "$fd" >"$saved.$phase" 2>/dev/null || {
+        error_log "[$phase] job $job_id does not have $NAMESPACE_TMP_FILE open on fd $NAMESPACE_TMP_FD"
+        return 1
+    }
+
+    owner="$(docker exec "$host" stat -L -c '%U' "$fd" 2>/dev/null)"
+    if [ "$owner" != "${SLURM_SUBMIT_USER:-root}" ]; then
+        error_log "[$phase] $NAMESPACE_TMP_FILE is owned by '${owner}', not ${SLURM_SUBMIT_USER:-root}"
+        return 1
+    fi
+
+    info_log "[$phase] job $job_id: $NAMESPACE_TMP_FILE has $(wc -l <"$saved.$phase" | tr -d ' ') lines"
+
+    # The job kept writing after the pre-dump check, so what was there then
+    # is the start of what is there now.
+    if [ "$phase" = "post-restore" ] &&
+        ! head -c "$(wc -c <"$saved.pre-dump")" "$saved.$phase" | cmp -s - "$saved.pre-dump"; then
+        error_log "[$phase] $NAMESPACE_TMP_FILE lost what the job wrote before the dump"
+        return 1
+    fi
+}
+
+# SLURM_JOB_CHECKs for test_slurm_job
+_check_cpu_job() {
+    _run_job_checks "$1" "$2" _check_in_job_namespace _check_tmp_file_kept
+}
+
+_check_gpu_job() {
+    _run_job_checks "$1" "$2" _check_in_job_namespace
+}
+
+# The job runs from the script setup_file writes rather than a cedana-samples
+# one, so it can open a file in its private /tmp.
 # bats test_tags=dump,restore,samples
 @test "Namespace: Dump/Restore a job in a private mount namespace (job_container/tmpfs)" {
-    local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/counting.sbatch"
-
-    SLURM_JOB_CHECK=_check_workload_in_job_namespace \
-        test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15
+    SLURM_JOB_SUBMIT=slurm_submit_script SLURM_JOB_CHECK=_check_cpu_job \
+        test_slurm_job SUBMIT_DUMP_RESTORE "$BATS_FILE_TMPDIR/namespace-tmp.sbatch" 15
 }
 
 # GPU checkpoint/restore leans on /tmp (the controller's socket) and /dev/shm
@@ -194,6 +268,6 @@ _check_workload_in_job_namespace() {
 @test "Namespace: Dump/Restore a GPU job in a private mount namespace (job_container/tmpfs)" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-vector-add.sbatch"
 
-    SLURM_JOB_CHECK=_check_workload_in_job_namespace \
+    SLURM_JOB_CHECK=_check_gpu_job \
         test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
 }

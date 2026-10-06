@@ -7,31 +7,65 @@
 # Source setup helpers (shared vars + functions)
 source "$(dirname "${BASH_SOURCE[0]}")/slurm_setup.bash"
 
-slurm_submit_job() {
-    local sbatch_file="$1"
-    local rel_path container_dir container_file
+# Where slurm_submit_script submits from, on the submission host. Every node has
+# its own clone of cedana-samples here.
+SLURM_SCRIPT_WORKDIR=/data/cedana-samples
+
+# Runs sbatch from <workdir> on the submission host and prints the job ID.
+# Submits <file> (a path there) if given, otherwise the script on stdin.
+_slurm_sbatch() {
+    local workdir="$1"
+    local file="${2:-}"
     local cedana_enable="${CEDANA_ENABLE:-1}"
     local cedana_bin="${CEDANA_BIN:-/usr/local/bin/cedana}"
+    local exec_opts=() output job_id
 
-    rel_path="${sbatch_file#*/slurm/}"
-    container_dir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
-    container_file="$(basename "$rel_path")"
-    local submission_host
-    submission_host="$(slurm_submission_container)"
-    info_log "Submitting from $submission_host: cd $container_dir && sbatch $container_file"
+    [ -n "$file" ] || exec_opts+=(-i)
 
-    local output
-    if ! output=$(slurm_submit_exec bash -c \
-        "cd '$container_dir' && sbatch --parsable --overcommit \
-         --export=ALL,CEDANA_ENABLE=${cedana_enable},CEDANA_BIN=${cedana_bin} \
-         --cpus-per-task=1 --mem=0 '$container_file'" 2>&1); then
+    if ! output=$(slurm_submit_exec "${exec_opts[@]}" bash -c 'cd "$1" && shift && exec sbatch "$@"' _ \
+        "$workdir" --parsable --overcommit \
+        --export=ALL,CEDANA_ENABLE="${cedana_enable}",CEDANA_BIN="${cedana_bin}" \
+        --cpus-per-task=1 --mem=0 ${file:+"$file"} 2>&1); then
         error_log "sbatch failed: $output"
         return 1
     fi
 
-    local job_id
     job_id=$(echo "$output" | tail -1 | cut -d';' -f1 | tr -d '[:space:]')
+    echo "$job_id"
+}
+
+# Submits a cedana-samples sbatch file, from its directory in the nodes' clone.
+slurm_submit_job() {
+    local sbatch_file="$1"
+    local container_dir container_file job_id
+
+    container_dir="$(_slurm_sample_container_dir "$sbatch_file")"
+    container_file="$(basename "$sbatch_file")"
+    info_log "Submitting from $(slurm_submission_container): cd $container_dir && sbatch $container_file"
+
+    job_id="$(_slurm_sbatch "$container_dir" "$container_file")" || return 1
     info_log "Submitted $container_file -> job $job_id"
+    echo "$job_id"
+}
+
+# Submits a batch script that lives on the runner rather than in cedana-samples,
+# so a test controls exactly what its job does. The script goes to sbatch on
+# stdin from SLURM_SCRIPT_WORKDIR, so it can still run the samples' workloads by
+# relative path (e.g. cpu_smr/counting.sh), and its output lands where the
+# failure diagnostics look.
+slurm_submit_script() {
+    local script_file="$1"
+    local job_id
+
+    [ -f "$script_file" ] || {
+        error_log "sbatch script not found: $script_file"
+        return 1
+    }
+
+    info_log "Submitting $script_file from $(slurm_submission_container): cd $SLURM_SCRIPT_WORKDIR && sbatch <script>"
+
+    job_id="$(_slurm_sbatch "$SLURM_SCRIPT_WORKDIR" <"$script_file")" || return 1
+    info_log "Submitted $(basename "$script_file") -> job $job_id"
     echo "$job_id"
 }
 
@@ -410,17 +444,25 @@ cancel_slurm_job() {
 # job: it is called as `<fn> pre-dump <job_id>` just before each dump and as
 # `<fn> post-restore <job_id>` once a restored job is running. A non-zero
 # return fails the sequence.
+#
+# Set SLURM_JOB_SUBMIT=slurm_submit_script to submit a script from the runner
+# instead of a cedana-samples file.
 test_slurm_job() {
     local action_sequence="$1"
     local sbatch_file="$2"
     local dump_wait_time="${3:-10}"
     local dump_timeout="${4:-120}"
+    local submit_fn="${SLURM_JOB_SUBMIT:-slurm_submit_job}"
     local sample_dir=""
     local relevant_job_ids_csv=""
     local tracked_job_ids=()
 
     IFS='_' read -ra actions <<<"$action_sequence"
-    sample_dir="$(_slurm_sample_container_dir "$sbatch_file")"
+    if [ "$submit_fn" = "slurm_submit_script" ]; then
+        sample_dir="$SLURM_SCRIPT_WORKDIR"
+    else
+        sample_dir="$(_slurm_sample_container_dir "$sbatch_file")"
+    fi
 
     info_log "Starting SLURM action sequence: $action_sequence (file=$sbatch_file, dump_wait=${dump_wait_time}s, dump_timeout=${dump_timeout}s)"
 
@@ -435,7 +477,7 @@ test_slurm_job() {
             }
 
             info_log "Submitting job from $sbatch_file..."
-            job_id=$(slurm_submit_job "$sbatch_file") ||
+            job_id=$("$submit_fn" "$sbatch_file") ||
                 {
                     error="Failed to submit job"
                     break
@@ -659,6 +701,10 @@ test_slurm_job() {
 
     if [ -n "$error" ]; then
         error_log "$error"
+        if [ "$submit_fn" = "slurm_submit_script" ]; then
+            info_log "Submitted script ($sbatch_file):"
+            cat "$sbatch_file" >&"${OUTPUT_FD}" || true
+        fi
         slurm_exec squeue 2>/dev/null || true
         slurm_exec sinfo 2>/dev/null || true
         _dump_job_failure_info "${job_id:-}" "$sample_dir" "$relevant_job_ids_csv"
