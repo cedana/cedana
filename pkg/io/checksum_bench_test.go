@@ -137,3 +137,81 @@ func benchTar(b *testing.B, compression string, hash bool) {
 
 func BenchmarkTarLZ4(b *testing.B)             { benchTar(b, "lz4", false) }
 func BenchmarkTarLZ4WithChecksum(b *testing.B) { benchTar(b, "lz4", true) }
+
+// Benchmarks on a file of any size, for sizes a test cannot generate each time:
+// CEDANA_BENCH_FILE names the file, which should compress about like a checkpoint.
+// Skipped when it is not set. One iteration each; run with -count for more.
+func benchFile(b *testing.B) string {
+	path := os.Getenv("CEDANA_BENCH_FILE")
+	if path == "" {
+		b.Skip("CEDANA_BENCH_FILE not set")
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(info.Size())
+	return path
+}
+
+func BenchmarkFileCRC32C(b *testing.B) {
+	path := benchFile(b)
+	for b.Loop() {
+		f, err := os.Open(path)
+		if err != nil {
+			b.Fatal(err)
+		}
+		if _, err := ChecksumOf(f); err != nil {
+			b.Fatal(err)
+		}
+		f.Close()
+	}
+}
+
+func benchFileWriteTo(b *testing.B, compression string, hash bool) {
+	path := benchFile(b)
+	for b.Loop() {
+		src, err := os.Open(path)
+		if err != nil {
+			b.Fatal(err)
+		}
+		var dst io.Writer = io.Discard
+		var hasher *ChecksumWriter
+		if hash {
+			hasher = NewChecksumWriter(io.Discard)
+			dst = hasher
+		}
+		if _, err := WriteTo(src, dst, compression); err != nil {
+			b.Fatal(err)
+		}
+		src.Close()
+		if hasher != nil {
+			_ = hasher.Sum()
+		}
+	}
+}
+
+func BenchmarkFileWriteToLZ4(b *testing.B)             { benchFileWriteTo(b, "lz4", false) }
+func BenchmarkFileWriteToLZ4WithChecksum(b *testing.B) { benchFileWriteTo(b, "lz4", true) }
+
+// The compress of a bundled checkpoint whose directory holds the file
+func benchFileTar(b *testing.B, compression string, hash bool) {
+	path := benchFile(b)
+	for b.Loop() {
+		var dst io.Writer = io.Discard
+		var hasher *ChecksumWriter
+		if hash {
+			hasher = NewChecksumWriter(io.Discard)
+			dst = hasher
+		}
+		if err := Tar(filepath.Dir(path), dst, compression, false); err != nil {
+			b.Fatal(err)
+		}
+		if hasher != nil {
+			_ = hasher.Sum()
+		}
+	}
+}
+
+func BenchmarkFileTarLZ4(b *testing.B)             { benchFileTar(b, "lz4", false) }
+func BenchmarkFileTarLZ4WithChecksum(b *testing.B) { benchFileTar(b, "lz4", true) }
