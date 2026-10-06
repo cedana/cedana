@@ -28,8 +28,9 @@ import (
 // Daemon that answers WaitUpload with a fixed response and serves fixed files
 type uploadDaemon struct {
 	daemongrpc.UnimplementedDaemonServer
-	resp  *daemon.WaitUploadResp
-	files map[string]string // by path, the bytes ReadPath streams; absent paths fail
+	resp    *daemon.WaitUploadResp
+	files   map[string]string // by path, the bytes ReadPath streams; absent paths are NotFound
+	readErr error             // if set, what every ReadPath fails with
 }
 
 func (d *uploadDaemon) WaitUpload(_ context.Context, req *daemon.WaitUploadReq) (*daemon.WaitUploadResp, error) {
@@ -37,6 +38,9 @@ func (d *uploadDaemon) WaitUpload(_ context.Context, req *daemon.WaitUploadReq) 
 }
 
 func (d *uploadDaemon) ReadPath(req *daemon.ReadPathReq, stream daemongrpc.Daemon_ReadPathServer) error {
+	if d.readErr != nil {
+		return d.readErr
+	}
 	content, ok := d.files[req.GetPath()]
 	if !ok {
 		return status.Errorf(codes.NotFound, "no such path %s", req.GetPath())
@@ -160,8 +164,11 @@ func TestReportUpload(t *testing.T) {
 	})
 
 	t.Run("ReadBackFails", func(t *testing.T) {
-		const local = "/tmp/checkpoints/gone.tar.lz4"
-		es, propagator := newEventStreamWithDaemon(t, &uploadDaemon{})
+		const local = "/tmp/checkpoints/394f8cdf-881e-4cd8-8c6c-c22a187863f9.tar.lz4"
+		es, propagator := newEventStreamWithDaemon(t, &uploadDaemon{
+			files:   map[string]string{local: "x"},
+			readErr: status.Error(codes.Unavailable, "daemon restarting"),
+		})
 
 		es.reportUpload(ctx, "pod", "action", checkpointId, local, false, &daemon.ProcessState{}, 0, spec)
 
@@ -172,6 +179,18 @@ func TestReportUpload(t *testing.T) {
 		}
 		if _, ok := request["checksum"]; ok {
 			t.Fatalf("a failed read must report no checksum, got %v", request["checksum"])
+		}
+	})
+
+	t.Run("CheckpointGone", func(t *testing.T) {
+		const local = "/tmp/checkpoints/gone.tar.lz4"
+		es, propagator := newEventStreamWithDaemon(t, &uploadDaemon{})
+
+		es.reportUpload(ctx, "pod", "action", checkpointId, local, false, &daemon.ProcessState{}, 0, spec)
+
+		// Nothing can restore from a checkpoint that is not at its path: it is not marked as uploaded
+		if _, ok := propagator.requests["POST /v1/checkpoints/uploaded/"+checkpointId]; ok {
+			t.Fatalf("a checkpoint that is not at its path must not be marked as uploaded, got %v", propagator.requests)
 		}
 	})
 }
