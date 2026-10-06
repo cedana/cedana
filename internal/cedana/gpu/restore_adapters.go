@@ -96,6 +96,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 		var toClose []*os.File
 		var logDir string
+		hostmemMetadataUsed := make(map[string]bool)
 		var isContainer bool
 		shmFileRegex := regexp.MustCompile(CONTROLLER_SHM_FILE_PATTERN)
 
@@ -175,6 +176,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				matches, err := afero.Glob(opts.DumpFs, "gpu-hostmem-metadata-*")
 				if err == nil {
 					for _, filename := range matches {
+						if _, ok := hostmemMetadataUsed[filename]; ok {
+							log.Debug().Str("filename", filename).Msg("has already been used")
+							continue
+						}
 						file, openErr := opts.DumpFs.Open(filename)
 						if openErr != nil {
 							continue
@@ -188,6 +193,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 						}
 
 						size = binary.LittleEndian.Uint64(sizeBuffer[0:8])
+						hostmemMetadataUsed[filename] = true
 						log.Debug().Str("file", filename).Uint64("size", size).Msg("found matching hostmem checkpoint file")
 						break
 					}
