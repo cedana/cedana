@@ -33,6 +33,7 @@ spec:
     command: ["/bin/sh", "-c"]
     args:
       - |
+        trap 'exit 0' TERM INT
         i=0
         while true; do echo "COUNT \$i"; i=\$((i+1)); sleep 1; done
     env:
@@ -83,7 +84,7 @@ setup() {
 }
 
 teardown() {
-    kubectl delete pod -n "$NAMESPACE" -l cedana-e2e-test="$TEST_ID" --wait=false 2>/dev/null || true
+    delete_pods_or_force "$NAMESPACE" 60 "cedana-e2e-test=$TEST_ID"
 }
 
 # bats test_tags=restore,declarative
@@ -98,7 +99,7 @@ teardown() {
     action_id=$(checkpoint_pod_by_name "$name" "$NAMESPACE")
     wait_for_checkpoint "$action_id"
 
-    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true --timeout=120s
     kubectl apply -f "$spec"
 
     assert_restored "$name"
@@ -115,7 +116,7 @@ teardown() {
     action_id=$(checkpoint_pod_by_name "$source" "$NAMESPACE")
     wait_for_checkpoint "$action_id"
 
-    kubectl delete pod "$source" -n "$NAMESPACE" --wait=true
+    kubectl delete pod "$source" -n "$NAMESPACE" --wait=true --timeout=120s
     kubectl apply -f "$(labelled_pod_spec "$replica" "$label")"
 
     assert_restored "$replica"

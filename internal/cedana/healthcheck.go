@@ -3,6 +3,7 @@ package cedana
 import (
 	"context"
 	"slices"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/criu"
@@ -62,15 +63,25 @@ func (s *Cedana) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 func (s *Cedana) pluginChecklist() types.Checklist {
 	checklist := []types.Checks{}
 
-	// Add a criu/cuda health check if plugin is installed
-	if s.plugins.IsInstalled("criu/cuda") {
-		checklist = append(checklist, types.Checks{
-			Name: "criu/cuda",
+	// Add a health check for every installed criu/* plugin
+	for _, p := range plugins.Registry {
+		if !strings.HasPrefix(p.Name, "criu/") || !s.plugins.IsInstalled(p.Name) {
+			continue
+		}
+		checks := types.Checks{
+			Name: p.Name,
 			List: []types.Check{
+				checkPluginVersion(s.plugins, p.Name),
+				criu.CheckPluginLibraries(s.plugins, p.Name),
+			},
+		}
+		if p.Name == "criu/cuda" {
+			checks.List = append(checks.List,
 				criu.CheckCriuForCuda(s.plugins),
 				criu.CheckCudaDriverVersion(),
-			},
-		})
+			)
+		}
+		checklist = append(checklist, checks)
 	}
 
 	// Add a GPU health check if plugin is installed
