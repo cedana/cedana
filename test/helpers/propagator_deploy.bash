@@ -84,26 +84,30 @@ deploy_propagator() {
         --from-literal=CEDANA_AUTH_TOKEN="$token" \
         --from-literal=POSTGRES_PASSWORD="$db_password" \
         --from-literal=RABBITMQ_PASSWORD="$mq_password" \
-        --from-literal=POSTGRES_DB_URI="postgresql://cedana:$db_password@postgres:5432/cedana" \
-        --from-literal=DATABASE_URL="postgresql://cedana:$db_password@postgres:5432/cedana" \
-        --from-literal=RABBITMQ_URI="amqp://cedana:$mq_password@rabbitmq:5672" \
+        --from-literal=POSTGRES_DB_URI="postgresql://cedana:$db_password@cedana-postgres:5432/cedana" \
+        --from-literal=DATABASE_URL="postgresql://cedana:$db_password@cedana-postgres:5432/cedana" \
+        --from-literal=RABBITMQ_URI="amqp://cedana:$mq_password@cedana-rabbitmq:5672" \
         --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
         --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" >/dev/null
+
+    if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+        warn_log "AWS credentials not set: the propagator cannot serve plugins from S3, so the helper will fail to install them unless CEDANA_PLUGINS_BUILDS=local"
+    fi
 
     kubectl apply -n "$ns" -f - >/dev/null <<EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: postgres
+  name: cedana-postgres
 spec:
   selector:
-    matchLabels: { app: postgres }
+    matchLabels: { app: cedana-postgres }
   template:
     metadata:
-      labels: { app: postgres }
+      labels: { app: cedana-postgres }
     spec:
       containers:
-        - name: postgres
+        - name: cedana-postgres
           image: postgres:17
           env:
             - { name: POSTGRES_USER, value: cedana }
@@ -118,24 +122,24 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: postgres
+  name: cedana-postgres
 spec:
-  selector: { app: postgres }
+  selector: { app: cedana-postgres }
   ports: [{ port: 5432 }]
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: rabbitmq
+  name: cedana-rabbitmq
 spec:
   selector:
-    matchLabels: { app: rabbitmq }
+    matchLabels: { app: cedana-rabbitmq }
   template:
     metadata:
-      labels: { app: rabbitmq }
+      labels: { app: cedana-rabbitmq }
     spec:
       containers:
-        - name: rabbitmq
+        - name: cedana-rabbitmq
           image: rabbitmq:3-management
           env:
             - { name: RABBITMQ_DEFAULT_USER, value: cedana }
@@ -150,24 +154,24 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: rabbitmq
+  name: cedana-rabbitmq
 spec:
-  selector: { app: rabbitmq }
+  selector: { app: cedana-rabbitmq }
   ports: [{ port: 5672 }]
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: clickhouse
+  name: cedana-clickhouse
 spec:
   selector:
-    matchLabels: { app: clickhouse }
+    matchLabels: { app: cedana-clickhouse }
   template:
     metadata:
-      labels: { app: clickhouse }
+      labels: { app: cedana-clickhouse }
     spec:
       containers:
-        - name: clickhouse
+        - name: cedana-clickhouse
           image: clickhouse/clickhouse-server:24.8
           env:
             - { name: CLICKHOUSE_DB, value: cedana }
@@ -180,9 +184,9 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: clickhouse
+  name: cedana-clickhouse
 spec:
-  selector: { app: clickhouse }
+  selector: { app: cedana-clickhouse }
   ports: [{ port: 8123 }]
 ---
 apiVersion: v1
@@ -195,7 +199,7 @@ spec:
 EOF
 
     local dep
-    for dep in postgres rabbitmq clickhouse; do
+    for dep in cedana-postgres cedana-rabbitmq cedana-clickhouse; do
         kubectl rollout status deployment/"$dep" -n "$ns" --timeout=5m || {
             error_log "Propagator dependency $dep failed to become ready"
             error kubectl describe pods -n "$ns" -l app="$dep"
@@ -205,7 +209,7 @@ EOF
 
     # Handed out to daemons via service discovery, so must be reachable from the host
     local mq_discovery_uri
-    mq_discovery_uri="amqp://cedana:$mq_password@$(cluster_ip rabbitmq):5672"
+    mq_discovery_uri="amqp://cedana:$mq_password@$(cluster_ip cedana-rabbitmq):5672"
 
     kubectl apply -n "$ns" -f - >/dev/null <<EOF
 apiVersion: apps/v1
@@ -232,7 +236,7 @@ spec:
             - { name: PLUGINS_BUCKET, value: "${PROPAGATOR_PLUGINS_BUCKET:-cedana-bin}" }
             - { name: AWS_REGION, value: "${AWS_REGION:-us-east-1}" }
             - { name: RABBITMQ_DISCOVERY_URI, value: "$mq_discovery_uri" }
-            - { name: CLICKHOUSE_URL, value: "http://clickhouse:8123" }
+            - { name: CLICKHOUSE_URL, value: "http://cedana-clickhouse:8123" }
             - { name: CLICKHOUSE_DATABASE, value: cedana }
             - { name: CLICKHOUSE_USER, value: default }
             - { name: CLICKHOUSE_PASSWORD, value: "" }

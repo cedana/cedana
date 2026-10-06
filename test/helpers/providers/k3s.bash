@@ -202,7 +202,15 @@ preload_images() {
         return 0
     fi
 
-    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import "$tar"
+    # docker's containerd image store saves a multi-platform index, which ctr 2.x
+    # refuses to unpack unless told which platform to use. --local makes it honor
+    # --platform instead of deferring to the transfer service's (empty) config.
+    local platform
+    case "$(uname -m)" in
+        aarch64|arm64) platform=linux/arm64 ;;
+        *) platform=linux/amd64 ;;
+    esac
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import --local --platform "$platform" "$tar"
     rm -f "$tar"
 
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"
