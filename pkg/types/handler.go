@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/criu"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/cedana/cedana/pkg/upload"
 	"github.com/spf13/afero"
 )
 
@@ -26,6 +27,7 @@ type (
 		Lifetime     context.Context
 		Storage      cedana_io.Storage // Direct R/W access to underlying storage of the dump (use DumpFs instead)
 		DumpFs       afero.Fs          // Full filesystem to use for any dump/restore operations
+		Uploads      *upload.Registry  // Uploads that continue in the background after a dump has returned
 		FdStore      *sync.Map
 		Serverless   bool // Whether the operation is being performed in serverless mode
 

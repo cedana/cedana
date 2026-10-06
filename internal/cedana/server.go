@@ -23,6 +23,7 @@ import (
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/pkg/upload"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/cedana/cedana/pkg/version"
 	"github.com/mdlayher/vsock"
@@ -106,6 +107,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 		Cedana: Cedana{
 			gpus:     gpuManager,
 			plugins:  pluginManager,
+			uploads:  upload.NewRegistry(),
 			wg:       wg,
 			lifetime: ctx,
 		},

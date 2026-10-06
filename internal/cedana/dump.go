@@ -62,6 +62,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
 		WG:       s.wg,
+		Uploads:  s.uploads,
 	}
 	resp := &daemon.DumpResp{}
 
@@ -110,6 +111,7 @@ func (s *Cedana) Dump(req *daemon.DumpReq) (*daemon.DumpResp, error) {
 		Lifetime:   s.lifetime,
 		Plugins:    s.plugins,
 		WG:         s.wg,
+		Uploads:    s.uploads,
 		Serverless: true,
 	}
 	resp := &daemon.DumpResp{}

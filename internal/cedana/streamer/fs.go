@@ -128,8 +128,11 @@ func NewStreamingFs(
 			}
 			go func() {
 				defer io.Done()
+				// One send per shard: the channel holds one result per shard, and it is
+				// drained only after every shard is done
+				var err error
 				defer func() {
-					ioErr <- file.Close()
+					ioErr <- errors.Join(err, file.Close())
 				}()
 
 				file = profiling.IOParallelCategory(
@@ -140,11 +143,8 @@ func NewStreamingFs(
 					fmt.Sprintf("shard-%d", i),
 					compression,
 				)
-				_, err := cedana_io.ReadFrom(file, writeFds[i], compression)
+				_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
 				writeFds[i].Close()
-				if err != nil {
-					ioErr <- err
-				}
 			}()
 		case WRITE_ONLY:
 			defer writeFds[i].Close()
@@ -159,8 +159,10 @@ func NewStreamingFs(
 			}
 			go func() {
 				defer io.Done()
+				// One send per shard, as above
+				var err error
 				defer func() {
-					ioErr <- file.Close()
+					ioErr <- errors.Join(err, file.Close())
 				}()
 
 				file = profiling.IOParallelCategory(
@@ -171,11 +173,8 @@ func NewStreamingFs(
 					fmt.Sprintf("shard-%d", i),
 					compression,
 				)
-				_, err := cedana_io.WriteTo(readFds[i], file, compression)
+				_, err = cedana_io.WriteTo(readFds[i], file, compression)
 				readFds[i].Close()
-				if err != nil {
-					ioErr <- err
-				}
 			}()
 		}
 	}

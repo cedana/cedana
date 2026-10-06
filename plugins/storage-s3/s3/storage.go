@@ -82,13 +82,42 @@ func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, erro
 	return NewFile(ctx, s.client, bucket, key), nil
 }
 
-func (s *Storage) Delete(_ context.Context, path string) error {
-	_, _, err := s.sanitizePath(path)
+// Delete removes the object at path and, since a streamed checkpoint is a
+// "directory" of shard objects under its path, every object under path/.
+func (s *Storage) Delete(ctx context.Context, path string) error {
+	bucket, key, err := s.sanitizePath(path)
 	if err != nil {
 		return err
 	}
 
-	return fmt.Errorf("this operation is currently not supported for s3 storage")
+	keys := []string{key}
+	prefix := strings.TrimSuffix(key, "/") + "/"
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: &bucket,
+		Prefix: &prefix,
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list objects under %s/%s: %w", bucket, prefix, err)
+		}
+		for _, obj := range page.Contents {
+			if obj.Key != nil {
+				keys = append(keys, *obj.Key)
+			}
+		}
+	}
+
+	for _, key := range keys {
+		_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: &bucket,
+			Key:    &key,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to delete object %s/%s: %w", bucket, key, err)
+		}
+	}
+	return nil
 }
 
 func (s *Storage) IsDir(_ context.Context, path string) (bool, error) {

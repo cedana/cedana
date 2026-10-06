@@ -153,6 +153,10 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			// will continue running regardless of the success of the dump/compress/upload. If leave-running is not set,
 			// then we need to ensure that the dump is compressed/uploaded in the post-dump hook so that it
 			// can be resumed on failure.
+			//
+			// When async, the response is returned before the compress/upload is complete, so the
+			// path is marked as pending on the response and the outcome is available from the
+			// upload's result once it has ended.
 
 			if async {
 				defer func() {
@@ -169,12 +173,17 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					// context will be canceled after the dump completes.
 					compressCtx := context.WithoutCancel(ctx)
 
+					finish := opts.Uploads.Start(path)
+					resp.Pending = append(resp.Pending, path)
+
 					opts.WG.Go(func() {
 						log.Info().Msg("async dump compress/upload started")
 						if compressErr := compress(compressCtx); compressErr != nil {
 							log.Error().Err(compressErr).Msg("async compress/upload failed")
+							finish(compressErr)
 						} else {
 							log.Info().Msg("async dump compress/upload completed")
+							finish(nil)
 						}
 					})
 				}()
@@ -185,7 +194,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					}()
 				} else {
 					callback := &criu_client.NotifyCallback{
-						PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) (err error) {
+						PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) error {
 							return compress(ctx)
 						},
 					}
