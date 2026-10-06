@@ -26,6 +26,11 @@ on:
         description: "Platform to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter)"
         required: false
         default: K3s
+      propagator:
+        type: boolean
+        description: "Deploy the propagator from the propagator-digests-* artifacts into the cluster, instead of using CEDANA_URL"
+        required: false
+        default: true
       large:
         type: boolean
         description: "Run large tests"
@@ -49,11 +54,6 @@ on:
       post_summary:
         type: boolean
         description: "Post test summary"
-        required: false
-        default: false
-      propagator:
-        type: boolean
-        description: "Deploy the propagator from the propagator-digests-* artifacts into the cluster, instead of using CEDANA_URL"
         required: false
         default: false
 
