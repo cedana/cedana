@@ -13,7 +13,9 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/upload"
 	"google.golang.org/protobuf/proto"
@@ -57,6 +59,7 @@ func dumpImages(t *testing.T) types.Dump {
 }
 
 func TestDumpFilesystem(t *testing.T) {
+	config.Global.Checkpoint.Checksum = true
 	ctx := context.Background()
 
 	for _, compression := range []string{"tar", "gzip", "lz4", "zlib"} {
@@ -150,6 +153,19 @@ func TestDumpFilesystem(t *testing.T) {
 		}
 		if _, err := os.Stat(resp.Paths[0]); err != nil {
 			t.Fatalf("tarball was not written: %v", err)
+		}
+		// The checksum is of the tarball as stored
+		file, err := os.Open(resp.Paths[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := cedana_io.ChecksumOf(file)
+		file.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Checksum != want {
+			t.Fatalf("checksum = %s, want %s", result.Checksum, want)
 		}
 
 		opts.WG.Wait()

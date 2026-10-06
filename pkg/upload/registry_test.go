@@ -29,7 +29,7 @@ func TestRegistry(t *testing.T) {
 		wg.Go(wait)
 
 		time.Sleep(10 * time.Millisecond)
-		finish(nil)
+		finish("", nil)
 		wg.Wait()
 
 		wait() // after the upload has ended
@@ -44,7 +44,7 @@ func TestRegistry(t *testing.T) {
 	t.Run("Failure", func(t *testing.T) {
 		r := NewRegistry()
 		failure := errors.New("upload failed")
-		r.Start("path")(failure)
+		r.Start("path")("", failure)
 
 		result, err := r.Wait(ctx, "path")
 		if err != nil {
@@ -76,7 +76,7 @@ func TestRegistry(t *testing.T) {
 	t.Run("Expires", func(t *testing.T) {
 		r := NewRegistry()
 		r.retention = 10 * time.Millisecond
-		r.Start("finished")(nil)
+		r.Start("finished")("", nil)
 		r.Start("running")
 
 		time.Sleep(20 * time.Millisecond)
@@ -93,8 +93,8 @@ func TestRegistry(t *testing.T) {
 
 	t.Run("Restarted", func(t *testing.T) {
 		r := NewRegistry()
-		r.Start("path")(errors.New("old"))
-		r.Start("path")(nil)
+		r.Start("path")("", errors.New("old"))
+		r.Start("path")("", nil)
 
 		result, err := r.Wait(ctx, "path")
 		if err != nil {
@@ -108,8 +108,8 @@ func TestRegistry(t *testing.T) {
 	t.Run("FinishOnce", func(t *testing.T) {
 		r := NewRegistry()
 		finish := r.Start("path")
-		finish(errors.New("first"))
-		finish(nil)
+		finish("", errors.New("first"))
+		finish("", nil)
 
 		result, _ := r.Wait(ctx, "path")
 		if result.Err == nil || result.Err.Error() != "first" {
@@ -119,9 +119,41 @@ func TestRegistry(t *testing.T) {
 
 	t.Run("Nil", func(t *testing.T) {
 		var r *Registry
-		r.Start("path")(nil)
+		r.Start("path")("", nil)
 		if _, err := r.Wait(ctx, "path"); !errors.Is(err, ErrNotFound) {
 			t.Fatalf("expected ErrNotFound, got %v", err)
 		}
 	})
+}
+
+func TestFinishKeepsTheChecksumOfASuccess(t *testing.T) {
+	r := NewRegistry()
+	finish := r.Start("/ckpt/a.tar.lz4")
+	finish("crc32c:deadbeef", nil)
+	result, err := r.Wait(context.Background(), "/ckpt/a.tar.lz4")
+	if err != nil || result.Err != nil {
+		t.Fatalf("Wait = %+v, %v", result, err)
+	}
+	if result.Checksum != "crc32c:deadbeef" {
+		t.Fatalf("checksum = %q", result.Checksum)
+	}
+
+	// A failed upload has no checksum, whatever was passed
+	finish = r.Start("/ckpt/b.tar.lz4")
+	finish("crc32c:deadbeef", errors.New("upload failed"))
+	result, _ = r.Wait(context.Background(), "/ckpt/b.tar.lz4")
+	if result.Err == nil || result.Checksum != "" {
+		t.Fatalf("a failed upload must carry no checksum: %+v", result)
+	}
+}
+
+func TestRecordIsReadyAtOnce(t *testing.T) {
+	r := NewRegistry()
+	r.Record("/ckpt/streamed", "crc32c:0000abcd")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	result, err := r.Wait(ctx, "/ckpt/streamed")
+	if err != nil || result.Err != nil || result.Checksum != "crc32c:0000abcd" {
+		t.Fatalf("Wait = %+v, %v", result, err)
+	}
 }

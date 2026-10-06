@@ -33,6 +33,7 @@ const (
 	DEFAULT_CHECKPOINT_DIR                    = "/tmp"
 	DEFAULT_CHECKPOINT_STREAMS                = 0
 	DEFAULT_CHECKPOINT_ASYNC                  = false
+	DEFAULT_CHECKPOINT_CHECKSUM               = true
 	DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB = 4000
 
 	DEFAULT_DB_REMOTE = false
@@ -89,6 +90,7 @@ var Global Config = Config{
 		Compression:       DEFAULT_CHECKPOINT_COMPRESSION,
 		Streams:           DEFAULT_CHECKPOINT_STREAMS,
 		Async:             DEFAULT_CHECKPOINT_ASYNC,
+		Checksum:          DEFAULT_CHECKPOINT_CHECKSUM,
 		StreamMemoryLimit: DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB,
 	},
 	DB: DB{

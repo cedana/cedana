@@ -57,6 +57,13 @@ type Fs struct {
 	dir       string
 	globCache map[string][]string // Cache glob results since streamer state is consumed
 	globMutex sync.Mutex
+	checksums []string // checksum of each shard as stored, once the wait function has returned
+}
+
+// Checksums returns the checksum of each shard of a WRITE_ONLY streaming fs, in
+// shard order, once the wait function has returned. Empty when the checksum is off.
+func (fs *Fs) Checksums() []string {
+	return fs.checksums
 }
 
 // For READ_ONLY mode, compression is automatically determined.
@@ -106,6 +113,7 @@ func NewStreamingFs(
 	io := &sync.WaitGroup{}
 	io.Add(int(streams))
 	ioErr := make(chan error, streams)
+	checksums := make([]string, streams)
 	paths, err := imgPaths(ctx, storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
@@ -169,7 +177,17 @@ func NewStreamingFs(
 					fmt.Sprintf("shard-%d", i),
 					compression,
 				)
-				_, err = cedana_io.WriteTo(readFds[i], file, compression)
+				if mode == WRITE_ONLY && config.Global.Checkpoint.Checksum {
+					// The hash is of the bytes as stored, after the compression. CRC32C
+					// is faster than the compression, so it adds no time to the dump
+					hasher := cedana_io.NewChecksumWriter(file)
+					_, err = cedana_io.WriteTo(readFds[i], hasher, compression)
+					if err == nil {
+						checksums[i] = hasher.Sum()
+					}
+				} else {
+					_, err = cedana_io.WriteTo(readFds[i], file, compression)
+				}
 				readFds[i].Close()
 			}()
 		}
@@ -232,6 +250,7 @@ func NewStreamingFs(
 		conn:      nil,
 		dir:       imagesDir,
 		globCache: make(map[string][]string),
+		checksums: checksums,
 	}
 
 	// Clean up on exit

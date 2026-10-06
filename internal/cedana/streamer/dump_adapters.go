@@ -123,8 +123,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				storagePath = path
 			}
 
-			var waitForIO func() error
-			opts.DumpFs, waitForIO, err = NewStreamingFs(
+			streamFs, waitForIO, err := NewStreamingFs(
 				ctx,
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
@@ -136,6 +135,20 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
+			}
+			opts.DumpFs = streamFs
+
+			// The checksum of a streamed checkpoint is that of a manifest of its shards,
+			// hashed as they were written. Empty when the checksum is off.
+			manifest := func() string {
+				if !config.Global.Checkpoint.Checksum {
+					return ""
+				}
+				entries := make([]cedana_io.ManifestEntry, 0, streams)
+				for i, sum := range streamFs.Checksums() {
+					entries = append(entries, cedana_io.ManifestEntry{Name: fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext, Checksum: sum})
+				}
+				return cedana_io.ManifestChecksum(entries)
 			}
 
 			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
@@ -227,10 +240,12 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 						log.Info().Msg("async dump upload started")
 						if uploadErr := upload(uploadCtx); uploadErr != nil {
 							log.Error().Err(uploadErr).Msg("async upload failed")
-							finish(uploadErr)
+							finish("", uploadErr)
 						} else {
-							log.Info().Msg("async dump upload completed")
-							finish(nil)
+							// The shards were copied byte for byte, so their checksums as written are their checksums as uploaded
+							checksum := manifest()
+							log.Info().Str("checksum", checksum).Msg("async dump upload completed")
+							finish(checksum, nil)
 						}
 					})
 				}()
@@ -240,6 +255,15 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					_, end := profiling.StartTimingCategory(ctx, "storage", waitForIO)
 					err = errors.Join(err, waitForIO())
 					end()
+					if err != nil || opts.Uploads == nil {
+						return
+					}
+					// The checksum is known when the dump returns. It is kept where the
+					// outcome of an upload is kept, so a caller learns it the same way
+					if checksum := manifest(); checksum != "" {
+						opts.Uploads.Record(path, checksum)
+						resp.Pending = append(resp.Pending, path)
+					}
 				}()
 			}
 

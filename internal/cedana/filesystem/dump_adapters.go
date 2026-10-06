@@ -113,18 +113,21 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			}
 			path := req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
-			compress := func(ctx context.Context) (err error) {
+			// The checksum is computed only for an upload: a local tarball is read back by the
+			// k8s helper after the dump, so nothing is added to the dump for it
+			hash := async && config.Global.Checkpoint.Checksum
+			compress := func(ctx context.Context) (checksum string, err error) {
 				// detect FuseFs if dir is not remote and not provided by a plugin
 				isFuse, err := isFuseFS(req.Dir, !storage.IsRemote() && !strings.Contains(req.Dir, "://"))
 				if err != nil {
-					return fmt.Errorf("failed to determine filesystem type: %w", err)
+					return "", fmt.Errorf("failed to determine filesystem type: %w", err)
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Bool("is_fuse", isFuse).Msg("starting compression of dump")
 
 				tarball, err := storage.Create(ctx, path)
 				if err != nil {
-					return fmt.Errorf("failed to create tarball in storage: %w", err)
+					return "", fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
 				defer func() {
 					err = errors.Join(err, tarball.Close())
@@ -134,17 +137,26 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
 
-				err = io.Tar(imagesDirectory, tarball, compression, isFuse)
+				var hasher *io.ChecksumWriter
+				if hash {
+					hasher = io.NewChecksumWriter(tarball)
+					err = io.Tar(imagesDirectory, hasher, compression, isFuse)
+				} else {
+					err = io.Tar(imagesDirectory, tarball, compression, isFuse)
+				}
 				if err != nil {
 					storage.Delete(ctx, path)
 					os.RemoveAll(imagesDirectory)
-					return fmt.Errorf("failed to create tarball: %w", err)
+					return "", fmt.Errorf("failed to create tarball: %w", err)
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
 
 				os.RemoveAll(imagesDirectory)
-				return nil
+				if hasher != nil {
+					checksum = hasher.Sum()
+				}
+				return checksum, nil
 			}
 
 			resp.Paths = append(resp.Paths, path)
@@ -178,24 +190,26 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 					opts.WG.Go(func() {
 						log.Info().Msg("async dump compress/upload started")
-						if compressErr := compress(compressCtx); compressErr != nil {
+						if checksum, compressErr := compress(compressCtx); compressErr != nil {
 							log.Error().Err(compressErr).Msg("async compress/upload failed")
-							finish(compressErr)
+							finish("", compressErr)
 						} else {
-							log.Info().Msg("async dump compress/upload completed")
-							finish(nil)
+							log.Info().Str("checksum", checksum).Msg("async dump compress/upload completed")
+							finish(checksum, nil)
 						}
 					})
 				}()
 			} else {
 				if req.GetCriu().GetLeaveRunning() {
 					defer func() {
-						err = errors.Join(err, compress(ctx))
+						_, compressErr := compress(ctx)
+						err = errors.Join(err, compressErr)
 					}()
 				} else {
 					callback := &criu_client.NotifyCallback{
 						PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) error {
-							return compress(ctx)
+							_, err := compress(ctx)
+							return err
 						},
 					}
 					opts.CRIUCallback.Include(callback)
