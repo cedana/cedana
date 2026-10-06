@@ -85,6 +85,12 @@ func detachOnExit(opts types.Opts, gpus Manager, pid uint32, code func() <-chan 
 	exited := code()
 	opts.WG.Go(func() {
 		<-exited
+		// A detached job (e.g. runc --detach) delivers its exit code while the process
+		// keeps running, so its controller must stay attached.
+		if utils.PidRunning(pid) {
+			log.Warn().Uint32("PID", pid).Msg("CED-2388: process still running, not detaching GPU controller") // TODO(CED-2388): remove temporary debug log
+			return
+		}
 		log.Warn().Uint32("PID", pid).Msg("CED-2388: process exited, detaching GPU controller") // TODO(CED-2388): remove temporary debug log
 		start := time.Now()                                                                     // TODO(CED-2388): remove temporary debug log
 		// Detach waits for the controller to exit with no time limit, so stop waiting after
