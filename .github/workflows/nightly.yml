@@ -32,6 +32,7 @@ jobs:
       containerd_runtime_version: ${{ vars.NIGHTLY_CONTAINERD_RUNTIME_VERSION }}
       slurm_version: ${{ vars.NIGHTLY_SLURM_VERSION }}
       csx_version: ${{ vars.NIGHTLY_CSX_VERSION }}
+      propagator_version: ${{ vars.NIGHTLY_PROPAGATION_VERSION }}
 
   test:
     name: Test
