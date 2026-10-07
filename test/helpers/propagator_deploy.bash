@@ -165,6 +165,11 @@ spec:
       labels: { app: cedana-rabbitmq }
     spec:
       imagePullSecrets: $pull_secrets
+      # The image's entrypoint drops the server to uid 999 but exec probes run as the
+      # container user (root). A probe that fires before the server has written
+      # .erlang.cookie creates it as root and the server then crash-loops on eacces.
+      # Run everything as rabbitmq and let the server start before probing.
+      securityContext: { runAsUser: 999, runAsGroup: 999 }
       containers:
         - name: cedana-rabbitmq
           image: rabbitmq:3-alpine # management plugin is unused; AMQP only
@@ -175,6 +180,7 @@ spec:
           ports: [{ containerPort: 5672 }]
           readinessProbe:
             exec: { command: [rabbitmq-diagnostics, -q, ping] }
+            initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 10
 ---
