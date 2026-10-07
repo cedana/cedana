@@ -194,9 +194,28 @@ func benchFileWriteTo(b *testing.B, compression string, hash bool) {
 func BenchmarkFileWriteToLZ4(b *testing.B)             { benchFileWriteTo(b, "lz4", false) }
 func BenchmarkFileWriteToLZ4WithChecksum(b *testing.B) { benchFileWriteTo(b, "lz4", true) }
 
-// The compress of a bundled checkpoint whose directory holds the file
+// The compress of a bundled checkpoint whose directory holds the file. Every
+// regular file of the directory goes into the tarball, so the bytes are theirs
 func benchFileTar(b *testing.B, compression string, hash bool) {
 	path := benchFile(b)
+	var size int64
+	err := filepath.WalkDir(filepath.Dir(path), func(_ string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.Type().IsRegular() {
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			size += info.Size()
+		}
+		return nil
+	})
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.SetBytes(size)
 	for b.Loop() {
 		var dst io.Writer = io.Discard
 		var hasher *ChecksumWriter
