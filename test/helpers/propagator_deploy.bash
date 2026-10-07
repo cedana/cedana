@@ -29,6 +29,7 @@
 #   PROPAGATOR_LOG_LEVEL            - RUST_LOG for the propagator (default: info)
 #   DOCKER_USERNAME, DOCKER_TOKEN   - If set, used as the image pull secret
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION - S3 access (plugins, metrics)
+#   AWS_SESSION_TOKEN               - Passed along if set (temporary/SSO credentials)
 
 export PROPAGATOR_NAMESPACE="${PROPAGATOR_NAMESPACE:-cedana-propagator}"
 PROPAGATOR_PORT=1324
@@ -88,7 +89,8 @@ deploy_propagator() {
         --from-literal=DATABASE_URL="postgresql://cedana:$db_password@cedana-postgres:5432/cedana" \
         --from-literal=RABBITMQ_URI="amqp://cedana:$mq_password@cedana-rabbitmq:5672" \
         --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
-        --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" >/dev/null
+        --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
+        ${AWS_SESSION_TOKEN:+--from-literal=AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"} >/dev/null
 
     if [ -z "${AWS_ACCESS_KEY_ID:-}" ] || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
         warn_log "AWS credentials not set: the propagator cannot serve plugins from S3, so the helper will fail to install them unless CEDANA_PLUGINS_BUILDS=local"
