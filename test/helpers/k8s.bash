@@ -781,6 +781,17 @@ test_pod_spec() {
                 debug_log "Restore starting for $name..."
 
                 validate_pod "$name" "$pod_timeout"
+                # Ready alone does not mean the restored process runs: require the trigger again
+                if [ -n "$dump_trigger" ]; then
+                    wait_for_log_trigger "$name" "$dump_trigger" "$trigger_timeout" "$namespace" || {
+                        error="Restored pod $name never printed '$dump_trigger'"
+                        break
+                    }
+                    if kubectl logs "$name" -n "$namespace" 2>/dev/null | grep -q '^FAIL'; then
+                        error="Restored pod $name reported a failure: $(kubectl logs "$name" -n "$namespace" | grep -m1 '^FAIL')"
+                        break
+                    fi
+                fi
                 debug_log "Restored pod $name successfully"
                 original_name="$name"
                 deployed=true
