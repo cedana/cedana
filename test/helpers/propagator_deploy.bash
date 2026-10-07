@@ -69,11 +69,13 @@ propagator_diagnostics() {
         # Current and previous container logs of every pod, so a crash-looping
         # dependency explains itself too
         local pod
+        # bats runs this under errexit: a pod without a previous container must not
+        # abort the loop before the other pods are dumped
         for pod in $(kubectl get pods -n "$ns" -o name 2>/dev/null); do
             echo "===== logs $pod"
-            kubectl logs -n "$ns" "$pod" --all-containers --tail=300
+            kubectl logs -n "$ns" "$pod" --all-containers --tail=300 || true
             echo "===== previous logs $pod"
-            kubectl logs -n "$ns" "$pod" --all-containers --previous --tail=300 2>&1 | grep -v 'previous terminated container .* not found'
+            kubectl logs -n "$ns" "$pod" --all-containers --previous --tail=300 2>/dev/null || true
         done
     } >"$out" 2>&1
     error cat "$out"
