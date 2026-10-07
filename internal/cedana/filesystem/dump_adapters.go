@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -32,6 +33,11 @@ const DUMP_DIR_PERMS = 0o755
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
+//
+// directoryChecksums serialises the reads of checkpoint directories for their
+// checksums: one at a time on a node, so two do not compete for the same disk
+var directoryChecksums sync.Mutex
+
 func DumpFilesystem(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
@@ -70,7 +76,9 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			}
 		}
 
-		async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
+		// The asynchronous mode applies to every storage: the compress of a local tarball
+		// runs after the dump has returned, so its hash runs outside the freeze
+		async := req.Async || config.Global.Checkpoint.Async
 
 		// Create the directory
 		if err := os.Mkdir(imagesDirectory, DUMP_DIR_PERMS); err != nil {
@@ -113,9 +121,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			}
 			path := req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
-			// The checksum is computed only for an upload: a local tarball is read back by the
-			// k8s helper after the dump, so nothing is added to the dump for it
-			hash := async && config.Global.Checkpoint.Checksum
+			// The storage's writer knows the checksum of the tarball as stored, once closed
 			compress := func(ctx context.Context) (checksum string, err error) {
 				// detect FuseFs if dir is not remote and not provided by a plugin
 				isFuse, err := isFuseFS(req.Dir, !storage.IsRemote() && !strings.Contains(req.Dir, "://"))
@@ -129,21 +135,19 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				if err != nil {
 					return "", fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
+				created := tarball
 				defer func() {
 					err = errors.Join(err, tarball.Close())
+					if err == nil {
+						checksum = io.ChecksumOfWriter(created)
+					}
 				}()
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Tar, compression)
 
-				var hasher *io.ChecksumWriter
-				if hash {
-					hasher = io.NewChecksumWriter(tarball)
-					err = io.Tar(imagesDirectory, hasher, compression, isFuse)
-				} else {
-					err = io.Tar(imagesDirectory, tarball, compression, isFuse)
-				}
+				err = io.Tar(imagesDirectory, tarball, compression, isFuse)
 				if err != nil {
 					storage.Delete(ctx, path)
 					os.RemoveAll(imagesDirectory)
@@ -153,9 +157,6 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
 
 				os.RemoveAll(imagesDirectory)
-				if hasher != nil {
-					checksum = hasher.Sum()
-				}
 				return checksum, nil
 			}
 
@@ -202,8 +203,14 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			} else {
 				if req.GetCriu().GetLeaveRunning() {
 					defer func() {
-						_, compressErr := compress(ctx)
+						checksum, compressErr := compress(ctx)
 						err = errors.Join(err, compressErr)
+						// A synchronous dump's checksum is known when it returns; it is kept where
+						// an upload's outcome is kept, so a caller learns it the same way
+						if err == nil && checksum != "" && opts.Uploads != nil {
+							opts.Uploads.Record(path, checksum)
+							resp.Pending = append(resp.Pending, path)
+						}
 					}()
 				} else {
 					callback := &criu_client.NotifyCallback{
@@ -225,10 +232,37 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 			// If imagesDirectory was provided by a plugin
 			// dump path to be req.Dir + req.Name
+			var dirPath string
 			if strings.Contains(req.Dir, "://") {
-				resp.Paths = append(resp.Paths, req.Dir+req.Name)
+				dirPath = req.Dir + req.Name
 			} else {
-				resp.Paths = append(resp.Paths, imagesDirectory)
+				dirPath = imagesDirectory
+			}
+			resp.Paths = append(resp.Paths, dirPath)
+
+			// CRIU writes the files itself, so no writer saw the bytes: the storage reads
+			// the directory for its checksum after the dump has returned, one at a time
+			// on this node, and the caller learns it the way it learns an upload's outcome
+			if pc, ok := storage.(io.PathChecksummer); ok && config.Global.Checkpoint.Checksum && opts.Uploads != nil {
+				finish := opts.Uploads.Start(dirPath)
+				resp.Pending = append(resp.Pending, dirPath)
+				checksumCtx := context.WithoutCancel(ctx)
+				// The read starts once the dump has returned, when the files are complete
+				defer func() {
+					if err != nil {
+						finish("", err)
+						return
+					}
+					opts.WG.Go(func() {
+						directoryChecksums.Lock()
+						defer directoryChecksums.Unlock()
+						sum, err := pc.ChecksumPath(checksumCtx, dirPath)
+						if err != nil {
+							log.Error().Err(err).Str("path", dirPath).Msg("could not checksum the checkpoint directory")
+						}
+						finish(sum, err)
+					})
+				}()
 			}
 		}
 
