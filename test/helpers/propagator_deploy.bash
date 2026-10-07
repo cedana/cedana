@@ -124,7 +124,7 @@ spec:
       imagePullSecrets: $pull_secrets
       containers:
         - name: cedana-postgres
-          image: postgres:17
+          image: postgres:17-alpine
           env:
             - { name: POSTGRES_USER, value: cedana }
             - { name: POSTGRES_DB, value: cedana }
@@ -157,7 +157,7 @@ spec:
       imagePullSecrets: $pull_secrets
       containers:
         - name: cedana-rabbitmq
-          image: rabbitmq:3-management
+          image: rabbitmq:3-alpine # management plugin is unused; AMQP only
           env:
             - { name: RABBITMQ_DEFAULT_USER, value: cedana }
             - name: RABBITMQ_DEFAULT_PASS
@@ -190,7 +190,7 @@ spec:
       imagePullSecrets: $pull_secrets
       containers:
         - name: cedana-clickhouse
-          image: clickhouse/clickhouse-server:24.8
+          image: clickhouse/clickhouse-server:24.8-alpine
           env:
             - { name: CLICKHOUSE_DB, value: cedana }
             - { name: CLICKHOUSE_SKIP_USER_SETUP, value: "1" }
