@@ -157,6 +157,99 @@ _svc_restart() {
 }
 
 ##############################
+# Host Provisioning
+##############################
+
+_cedana_binaries_staged() {
+    [ -x /usr/local/bin/cedana ] &&
+        [ -x /usr/local/bin/criu ] &&
+        [ -x /usr/local/bin/cedana-slurm ] &&
+        compgen -G '/usr/local/lib/libcedana-runc.so' >/dev/null 2>&1
+}
+
+# Put the cedana/criu/cedana-slurm binaries and plugins into /usr/local on the
+# box running bats. A local `make test-slurm` has already staged the host build
+# in via the Makefile, so this is a no-op there; in CI it installs the
+# downloaded artifacts, the same set the former "Pre-install plugins" /
+# "Install slurm binaries" steps produced, preserving the pinned versions.
+_stage_cedana_binaries() {
+    if _cedana_binaries_staged; then
+        debug_log "cedana binaries already staged in /usr/local"
+        return 0
+    fi
+
+    local stage_dir="${CEDANA_SLURM_STAGE_DIR:-${GITHUB_WORKSPACE:-$PWD}}"
+    if [ ! -x "${stage_dir}/cedana" ]; then
+        error_log "cedana binaries not in /usr/local and no downloaded artifacts found in ${stage_dir}"
+        return 1
+    fi
+
+    info_log "Staging cedana binaries from ${stage_dir} into /usr/local..."
+    (
+        set -euo pipefail
+        cd "$stage_dir"
+        chmod +x ./cedana* ./criu 2>/dev/null || true
+        install -m 0755 ./cedana /usr/local/bin/cedana
+        export PATH="/usr/local/bin:$PATH"
+        cedana plugin install criu
+        cedana plugin install runc storage/cedana storage/s3
+        if [ "${GPU:-0}" = "1" ]; then
+            cedana plugin install gpu
+        fi
+        cedana plugin install slurm
+        cd "${stage_dir}/slurm-bin/build"
+        chmod +x ./cedana-slurm 2>/dev/null || true
+        cedana plugin install slurm/wlm
+    ) >&"${OUTPUT_FD:-2}" 2>&1 || {
+        error_log "Failed to stage cedana binaries from ${stage_dir}"
+        return 1
+    }
+}
+
+# docker-deploy.sh and the cluster setup shell out to ansible and the docker
+# CLI; install them if the image does not already carry them.
+_ensure_slurm_host_tools() {
+    if ! command -v ansible-playbook >/dev/null 2>&1 ||
+        ! command -v docker >/dev/null 2>&1; then
+        info_log "Installing ansible + docker CLI..."
+        apt-get update -qq
+        DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            docker.io ansible python3-docker >&"${OUTPUT_FD:-2}" 2>&1 || {
+            error_log "Failed to install ansible/docker CLI"
+            return 1
+        }
+    fi
+    ansible-galaxy collection install community.docker >&"${OUTPUT_FD:-2}" 2>&1 || true
+}
+
+# Use a prebaked node image when one is published for this SLURM version, so the
+# cluster does not compile SLURM from source. SLURM_BASE_IMAGE set explicitly
+# wins; otherwise derive it from SLURM_TAG and pull.
+_resolve_slurm_base_image() {
+    if [ -n "${SLURM_BASE_IMAGE:-}" ]; then
+        info_log "Using node image ${SLURM_BASE_IMAGE}"
+        return 0
+    fi
+    local tag="${SLURM_TAG:-}"
+    [ -z "$tag" ] && return 0
+    local image="cedana/cedana-slurm-node:${tag}"
+    if docker pull "$image" >/dev/null 2>&1; then
+        export SLURM_BASE_IMAGE="$image"
+        info_log "Using prebaked node image $image"
+    else
+        info_log "Prebaked node image $image unavailable; building SLURM from source"
+    fi
+}
+
+provision_slurm_host() {
+    [ -n "${SLURM_HOST_PROVISIONED:-}" ] && return 0
+    _stage_cedana_binaries || return 1
+    _ensure_slurm_host_tools || return 1
+    _resolve_slurm_base_image
+    export SLURM_HOST_PROVISIONED=1
+}
+
+##############################
 # Cluster Setup
 ##############################
 

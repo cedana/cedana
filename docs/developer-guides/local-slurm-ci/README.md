@@ -14,15 +14,18 @@ bats suites under `test/slurm/`.
 
 `make test-slurm` from the repo root does two things. First it creates a
 `cedana-test` container (the same image CI uses), mounts your working tree and
-the Docker socket into it, and copies your locally built plugins in. Then it runs
-`make test-slurm` again *inside* that container, which is where bats actually
-runs.
+the Docker socket into it, and stages your locally built binaries in (from your
+host `/usr/local` and from `../cedana-slurm/build`). Then it runs `make
+test-slurm` again *inside* that container, which is where bats actually runs.
 
-Inside the container, `test/slurm/setup_suite.bash` brings the cluster up before
-any test runs. It calls `cedana-slurm/ansible/docker-deploy.sh` (over the mounted
-Docker socket) to start the node containers and run the Ansible playbook against
-them, installs Cedana onto the nodes, registers the cluster with the propagator,
-and stages the sample jobs. Everything is torn down when the suite finishes.
+Inside the container, `test/slurm/setup_suite.bash` does the rest before any
+test runs: it installs the Cedana daemon plugins, makes sure ansible and the
+Docker CLI are present, pulls a prebaked node image if one applies, then calls
+`cedana-slurm/ansible/docker-deploy.sh` (over the mounted Docker socket) to start
+the node containers and run the Ansible playbook against them, installs Cedana
+onto the nodes, registers the cluster with the propagator, and stages the sample
+jobs. Everything is torn down when the suite finishes. There is no separate setup
+step to run; the same `setup_suite` path runs locally and in CI.
 
 Because the node containers are started through the host Docker socket, they end
 up as siblings of the test container, not nested inside it. That is why the test
@@ -49,8 +52,9 @@ container needs `--privileged` and the socket mount.
 ## Build the binaries first
 
 The test container is populated from your host's `/usr/local/bin` and
-`/usr/local/lib` (anything matching `*cedana*`, plus `criu`), so everything the
-cluster needs has to be installed there before you run.
+`/usr/local/lib` (anything matching `*cedana*`, plus `criu`) and from the
+`../cedana-slurm/build` output, so everything the cluster needs has to be built
+on the host before you run.
 
 In this repo, build and install cedana and its plugins, then install CRIU
 (`make all` does not pull CRIU, it comes as a downloaded plugin):
@@ -65,13 +69,12 @@ plugins (including `libcedana-slurm.so`) to `/usr/local/lib`. `cedana plugin
 install criu` puts `criu` in `/usr/local/bin`.
 
 In `../cedana-slurm`, build the SPANK/task plugins and the `cedana-slurm` binary.
-The build lands under `build/<version>/`, not `/usr/local`, so copy it in:
+The build lands under `build/<version>/`; `make test-slurm` stages it into the
+container for you (from the mounted `../cedana-slurm`), so no copy is needed:
 
 ```
 cd ../cedana-slurm
 make all
-sudo cp build/*/cedana-slurm /usr/local/bin/
-sudo cp build/*/*.so /usr/local/lib/
 cd -    # back to the cedana repo
 ```
 

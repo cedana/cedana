@@ -149,67 +149,17 @@ jobs:
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
 
-      - name: Pre-install plugins
-        run: |
-          chmod +x ./cedana*
-          chmod +x ./criu
-          echo "$PWD" >> $GITHUB_PATH
-          mkdir -p /tmp/cedana-preflight-bin
-          cp ./cedana /tmp/cedana-preflight-bin/cedana
-          cp ./criu /tmp/cedana-preflight-bin/criu
-          sudo cp ./cedana /usr/local/bin/cedana
-          sudo -E cedana plugin install criu
-          sudo -E cedana plugin install \
-            runc \
-            storage/cedana
-
-      - name: Install slurm binaries
-        run: |
-          test -f ./libcedana-slurm.so
-          sudo -E cedana plugin install slurm
-          cd slurm-bin/build
-          chmod +x ./cedana-slurm
-          sudo -E cedana plugin install slurm/wlm
-
-      - name: Install ansible and Docker CLI
-        run: |
-          apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            docker.io ansible python3-docker
-          ansible-galaxy collection install community.docker 2>/dev/null || true
-
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: inputs.debug
         with:
           limit-access-to-actor: true
 
-      - name: Setup SLURM cluster
-        shell: bash
-        env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
-          CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
-          CRIU_BIN: /tmp/cedana-preflight-bin/criu
-          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
-          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: "0"
-          LOGIN_NODES: "1"
+      - name: Resolve SLURM version
         run: |
-          source test/helpers/utils.bash
-          source test/helpers/slurm_setup.bash
-
           SLURM_TAG="${{ fromJSON(inputs.slurm_versions)[0] }}"
-          export SLURM_VERSION="$(echo "$SLURM_TAG" | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
-          NODE_IMAGE="cedana/cedana-slurm-node:${SLURM_TAG}"
-          if docker pull "$NODE_IMAGE" >/dev/null 2>&1; then
-            export SLURM_BASE_IMAGE="$NODE_IMAGE"
-            echo "Using prebaked node image $NODE_IMAGE"
-          else
-            echo "Prebaked node image $NODE_IMAGE unavailable; building SLURM from source"
-          fi
-
-          setup_slurm_cluster
-          install_cedana_in_slurm
+          echo "SLURM_TAG=$SLURM_TAG" >> "$GITHUB_ENV"
+          echo "SLURM_VERSION=$(echo "$SLURM_TAG" | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')" >> "$GITHUB_ENV"
 
       - name: Run ANSIBLE tests
         env:
@@ -217,9 +167,15 @@ jobs:
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          CEDANA_SLURM_STAGE_DIR: ${{ github.workspace }}
+          SLURM_KEEP_CLUSTER: "1"
+          LOGIN_NODES: "1"
           GPU: "0"
-          # Set so setup_suite skips its own cluster setup
-          SLURM_CLUSTER_ID: ansible-test
+          # The ansible smoke job stands up only the cluster + plugins: no
+          # accounting, no propagator registration, and a fixed cluster id.
+          SLURM_SETUP_ACCOUNTING: "0"
+          SLURM_SETUP_REGISTER: "0"
+          SLURM_CLUSTER_ID_DEFAULT: ansible-test
         run: |
           set +e
           make test-slurm \
@@ -415,33 +371,6 @@ jobs:
       - name: Mark git dir as safe
         run: git config --global --add safe.directory "$(pwd)"
 
-      - name: Pre-install plugins
-        env:
-          GPU: ${{ matrix.compute == 'CUDA' && 'true' || 'false' }}
-        run: |
-          chmod +x ./cedana*
-          chmod +x ./criu
-          echo "$PWD" >> $GITHUB_PATH
-          mkdir -p /tmp/cedana-preflight-bin
-          cp ./cedana /tmp/cedana-preflight-bin/cedana
-          cp ./criu /tmp/cedana-preflight-bin/criu
-          sudo cp ./cedana /usr/local/bin/cedana
-          sudo -E cedana plugin install criu
-          sudo -E cedana plugin install \
-            runc \
-            storage/cedana \
-            storage/s3
-          if [ "$GPU" = "true" ]; then
-            sudo -E cedana plugin install gpu
-          fi
-
-      - name: Install slurm binaries
-        run: |
-          chmod +x slurm-bin/build/cedana-slurm
-          sudo -E cedana plugin install slurm
-          cd slurm-bin/build
-          sudo -E cedana plugin install slurm/wlm
-
       - name: Capture preflight binary metadata
         shell: bash
         run: |
@@ -472,13 +401,16 @@ jobs:
               tr '\n' ' ' < ./slurm-bin/slurm-artifact-origin.txt | sed 's/ $//' | sed 's/^/slurm_artifact_origin=/'
             fi
 
+            # Hash the downloaded artifacts; /usr/local is populated later,
+            # inside the test's setup_suite.
             for f in \
-              /usr/local/bin/cedana \
-              /usr/local/bin/cedana-slurm \
-              /usr/local/lib/libcedana-storage-cedana.so \
-              /usr/local/lib/libcedana-storage-s3.so \
-              /usr/local/lib/libcedana-runc.so \
-              /usr/local/lib/libcedana-slurm.so
+              ./cedana \
+              ./criu \
+              ./slurm-bin/build/cedana-slurm \
+              ./libcedana-storage-cedana.so \
+              ./libcedana-storage-s3.so \
+              ./libcedana-runc.so \
+              ./libcedana-slurm.so
             do
               [ -f "$f" ] || continue
               echo "=== $f ==="
@@ -490,99 +422,32 @@ jobs:
             done
           } >>"$PRE_FILE" 2>&1
 
-      - name: Install ansible and Docker CLI
-        run: |
-          apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            docker.io ansible python3-docker
-          ansible-galaxy collection install community.docker 2>/dev/null || true
-
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
         if: inputs.debug
         with:
           limit-access-to-actor: true
 
-      - name: Setup SLURM cluster
-        shell: bash
+      - name: Resolve SLURM version
+        run: |
+          # slurm-25-11-5-1 -> 25.11.5, the version the ansible role builds from source.
+          echo "SLURM_VERSION=$(echo '${{ matrix.slurm }}' | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')" >> "$GITHUB_ENV"
+
+      - name: Run SLURM tests
+        id: samples
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
-          CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
-          CRIU_BIN: /tmp/cedana-preflight-bin/criu
+          CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
+          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
+          CEDANA_SLURM_STAGE_DIR: ${{ github.workspace }}
+          SLURM_TAG: ${{ matrix.slurm }}
+          SLURM_KEEP_CLUSTER: "1"
           LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
           PREEMPT: "1"
-        run: |
-          source test/helpers/utils.bash
-          source test/helpers/slurm_setup.bash
-
-          # slurm-25-11-5-1 -> 25.11.5, the version the ansible role builds from source.
-          export SLURM_VERSION="$(echo '${{ matrix.slurm }}' | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
-
-          NODE_IMAGE="cedana/cedana-slurm-node:${{ matrix.slurm }}"
-          if docker pull "$NODE_IMAGE" >/dev/null 2>&1; then
-            export SLURM_BASE_IMAGE="$NODE_IMAGE"
-            echo "Using prebaked node image $NODE_IMAGE"
-          else
-            echo "Prebaked node image $NODE_IMAGE unavailable; building SLURM from source"
-          fi
-
-          setup_slurm_cluster
-          setup_slurm_accounting
-          install_cedana_in_slurm
-
-      - name: Setup SLURM samples
-        shell: bash
-        env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
-          CEDANA_BIN: /usr/local/bin/cedana
-          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
-          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
-        run: |
-          source test/helpers/utils.bash
-          source test/helpers/slurm_setup.bash
-          setup_slurm_samples
-
-      - name: Register SLURM cluster and start daemon
-        id: register
-        shell: bash
-        env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
-          CEDANA_BIN: /usr/local/bin/cedana
-          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
-          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
-          GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
-        run: |
-          source test/helpers/utils.bash
-          source test/helpers/slurm_setup.bash
-          source test/helpers/slurm_propagator.bash
-
-          CLUSTER_NAME="test-slurm-$(date +%s%N)"
-          SLURM_CLUSTER_ID=$(register_slurm_cluster "$CLUSTER_NAME")
-          echo "SLURM_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
-          echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
-          echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
-
-          if [ "${{ matrix.unprivileged }}" = "1" ]; then
-            setup_slurm_unprivileged_user
-            start_cedana_slurm_daemon
-            restart_cedana_slurm_daemon_unprivileged
-          else
-            start_cedana_slurm_daemon
-          fi
-          validate_slurm_propagator
-
-      - name: Run SLURM tests
-        env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
-          CEDANA_BIN: /usr/local/bin/cedana
-          CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
-          SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
-          CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
+          SLURM_UNPRIVILEGED: ${{ matrix.unprivileged == '1' && '1' || '0' }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           LARGE: ${{ inputs.large && '1' || '0' }}
           PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
@@ -630,7 +495,7 @@ jobs:
           exit "$test_exit_code"
 
       - name: Run SLURM preemption tests
-        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
+        if: ${{ !cancelled() && env.SLURM_CLUSTER_ID != '' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -681,7 +546,7 @@ jobs:
           exit "$test_exit_code"
 
       - name: Run SLURM unprivileged tests
-        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' }}
+        if: ${{ !cancelled() && env.SLURM_CLUSTER_ID != '' && matrix.unprivileged == '1' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -836,7 +701,7 @@ jobs:
             testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
 
       - name: Generate report (preemption)
-        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
+        if: ${{ !cancelled() && env.SLURM_CLUSTER_ID != '' }}
         run: |
           npx junit-to-ctrf "/tmp/report-preemption.xml" -t bats -o /tmp/report-preemption.json -e \
             appName="cedana" appVersion="$(git describe --tags --always)" \
@@ -848,7 +713,7 @@ jobs:
             testEnvironment="cedana/cedana-test" reportName="Slurm Preemption (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
 
       - name: Generate report (unprivileged)
-        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' }}
+        if: ${{ !cancelled() && env.SLURM_CLUSTER_ID != '' && matrix.unprivileged == '1' }}
         run: |
           npx junit-to-ctrf "/tmp/report-unprivileged.xml" -t bats -o /tmp/report-unprivileged.json -e \
             appName="cedana" appVersion="$(git describe --tags --always)" \

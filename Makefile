@@ -415,6 +415,8 @@ CEDANA_SLURM_DIR?=$(shell if [ -d ../cedana-slurm ]; then cd ../cedana-slurm && 
 SLURM_ARTIFACTS_DIR?=$(shell if [ -d ../artifacts ]; then cd ../artifacts && pwd; fi)
 DOCKER_TEST_CREATE_SLURM_OPTS=$(if $(CEDANA_SLURM_DIR),-v $(CEDANA_SLURM_DIR):/cedana-slurm,) $(if $(SLURM_ARTIFACTS_DIR),-v $(SLURM_ARTIFACTS_DIR):/artifacts:ro,) \
 				$(if $(SLURM_BASE_IMAGE),-e SLURM_BASE_IMAGE=$(SLURM_BASE_IMAGE),) \
+				$(if $(SLURM_TAG),-e SLURM_TAG=$(SLURM_TAG),) \
+				$(if $(SLURM_VERSION),-e SLURM_VERSION=$(SLURM_VERSION),) \
 				$(if $(COMPUTE_NODES),-e COMPUTE_NODES=$(COMPUTE_NODES),) \
 				$(if $(LOGIN_NODES),-e LOGIN_NODES=$(LOGIN_NODES),) \
 				$(if $(NFS_ROOT_SQUASH),-e NFS_ROOT_SQUASH=$(NFS_ROOT_SQUASH),) \
@@ -428,8 +430,13 @@ SLURM_ARTIFACTS_INSTALL=docker exec $(DOCKER_TEST_CONTAINER_NAME) bash -c '\
 		cp -f /artifacts/slurm/build/cedana-slurm /usr/local/bin/ 2>/dev/null; \
 		cp -f /artifacts/plugin-slurm/libcedana-slurm.so /usr/local/lib/ 2>/dev/null; \
 		cp -f /artifacts/slurm/build/*.so /usr/local/lib/ 2>/dev/null; \
-		chmod +x /usr/local/bin/cedana /usr/local/bin/criu /usr/local/bin/cedana-slurm 2>/dev/null; \
-	fi'
+	fi; \
+	if [ -d /cedana-slurm/build ]; then \
+		cp -f /cedana-slurm/build/*/cedana-slurm /usr/local/bin/ 2>/dev/null; \
+		cp -f /cedana-slurm/build/*/*.so /usr/local/lib/ 2>/dev/null; \
+	fi; \
+	chmod +x /usr/local/bin/cedana /usr/local/bin/criu /usr/local/bin/cedana-slurm 2>/dev/null; \
+	true'
 
 DOCKER_TEST_CREATE_SLURM=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_CREATE_SLURM_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
