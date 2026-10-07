@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
-	"strings"
 	"sync"
 	"testing"
 
@@ -21,31 +20,20 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	cedana_io "github.com/cedana/cedana/pkg/io"
 )
 
 // Daemon that answers WaitUpload with a fixed response and serves fixed files
 type uploadDaemon struct {
 	daemongrpc.UnimplementedDaemonServer
-	resp    *daemon.WaitUploadResp
-	files   map[string]string // by path, the bytes ReadPath streams; absent paths are NotFound
-	readErr error             // if set, what every ReadPath fails with
+	resp     *daemon.WaitUploadResp
+	notFound bool // answer WaitUpload with NotFound, as a daemon that lost its record does
 }
 
 func (d *uploadDaemon) WaitUpload(_ context.Context, req *daemon.WaitUploadReq) (*daemon.WaitUploadResp, error) {
+	if d.notFound {
+		return nil, status.Errorf(codes.NotFound, "no upload found for path %s", req.GetPath())
+	}
 	return d.resp, nil
-}
-
-func (d *uploadDaemon) ReadPath(req *daemon.ReadPathReq, stream daemongrpc.Daemon_ReadPathServer) error {
-	if d.readErr != nil {
-		return d.readErr
-	}
-	content, ok := d.files[req.GetPath()]
-	if !ok {
-		return status.Errorf(codes.NotFound, "no such path %s", req.GetPath())
-	}
-	return stream.Send(&daemon.ReadPathResp{Data: []byte(content)})
 }
 
 // Propagator that records what it is asked to mark as uploaded
@@ -112,7 +100,7 @@ func TestReportUpload(t *testing.T) {
 	t.Run("Succeeded", func(t *testing.T) {
 		es, propagator := newUploadEventStream(t, &daemon.WaitUploadResp{})
 
-		es.reportUpload(ctx, "pod", "action", checkpointId, path, true, &daemon.ProcessState{}, 0, spec)
+		es.reportUpload(ctx, "pod", "action", checkpointId, path, &daemon.ProcessState{}, 0, spec)
 
 		request, ok := propagator.requests["POST /v1/checkpoints/uploaded/"+checkpointId]
 		if !ok {
@@ -129,7 +117,7 @@ func TestReportUpload(t *testing.T) {
 	t.Run("Failed", func(t *testing.T) {
 		es, propagator := newUploadEventStream(t, &daemon.WaitUploadResp{Error: "connection reset"})
 
-		es.reportUpload(ctx, "pod", "action", checkpointId, path, true, &daemon.ProcessState{}, 0, spec)
+		es.reportUpload(ctx, "pod", "action", checkpointId, path, &daemon.ProcessState{}, 0, spec)
 
 		if len(propagator.requests) != 0 {
 			t.Fatalf("a failed upload must not be marked as uploaded, got requests %v", propagator.requests)
@@ -139,7 +127,7 @@ func TestReportUpload(t *testing.T) {
 	t.Run("SucceededWithChecksum", func(t *testing.T) {
 		es, propagator := newUploadEventStream(t, &daemon.WaitUploadResp{Checksum: "crc32c:0000abcd"})
 
-		es.reportUpload(ctx, "pod", "action", checkpointId, path, true, &daemon.ProcessState{}, 0, spec)
+		es.reportUpload(ctx, "pod", "action", checkpointId, path, &daemon.ProcessState{}, 0, spec)
 
 		request := propagator.requests["POST /v1/checkpoints/uploaded/"+checkpointId]
 		if request["checksum"] != "crc32c:0000abcd" {
@@ -147,50 +135,14 @@ func TestReportUpload(t *testing.T) {
 		}
 	})
 
-	t.Run("ReadBack", func(t *testing.T) {
-		const local = "/tmp/checkpoints/394f8cdf-881e-4cd8-8c6c-c22a187863f9.tar.lz4"
-		es, propagator := newEventStreamWithDaemon(t, &uploadDaemon{files: map[string]string{local: "compressed tarball bytes"}})
+	t.Run("DaemonLostTheRecord", func(t *testing.T) {
+		es, propagator := newEventStreamWithDaemon(t, &uploadDaemon{notFound: true})
 
-		es.reportUpload(ctx, "pod", "action", checkpointId, local, false, &daemon.ProcessState{}, 0, spec)
+		es.reportUpload(ctx, "pod", "action", checkpointId, path, &daemon.ProcessState{}, 0, spec)
 
-		want, _ := cedana_io.ChecksumOf(strings.NewReader("compressed tarball bytes"))
-		request, ok := propagator.requests["POST /v1/checkpoints/uploaded/"+checkpointId]
-		if !ok {
-			t.Fatalf("checkpoint was not marked as uploaded, got requests %v", propagator.requests)
-		}
-		if request["restore_path"] != local || request["checksum"] != want {
-			t.Fatalf("expected path %s and checksum %s, got %v", local, want, request)
-		}
-	})
-
-	t.Run("ReadBackFails", func(t *testing.T) {
-		const local = "/tmp/checkpoints/394f8cdf-881e-4cd8-8c6c-c22a187863f9.tar.lz4"
-		es, propagator := newEventStreamWithDaemon(t, &uploadDaemon{
-			files:   map[string]string{local: "x"},
-			readErr: status.Error(codes.Unavailable, "daemon restarting"),
-		})
-
-		es.reportUpload(ctx, "pod", "action", checkpointId, local, false, &daemon.ProcessState{}, 0, spec)
-
-		// The checkpoint is stored; only the checksum is missing
-		request, ok := propagator.requests["POST /v1/checkpoints/uploaded/"+checkpointId]
-		if !ok {
-			t.Fatalf("a checkpoint whose read failed must still be marked as uploaded, got %v", propagator.requests)
-		}
-		if _, ok := request["checksum"]; ok {
-			t.Fatalf("a failed read must report no checksum, got %v", request["checksum"])
-		}
-	})
-
-	t.Run("CheckpointGone", func(t *testing.T) {
-		const local = "/tmp/checkpoints/gone.tar.lz4"
-		es, propagator := newEventStreamWithDaemon(t, &uploadDaemon{})
-
-		es.reportUpload(ctx, "pod", "action", checkpointId, local, false, &daemon.ProcessState{}, 0, spec)
-
-		// Nothing can restore from a checkpoint that is not at its path: it is not marked as uploaded
+		// A daemon that restarted knows nothing of the path: the checkpoint cannot be vouched for
 		if _, ok := propagator.requests["POST /v1/checkpoints/uploaded/"+checkpointId]; ok {
-			t.Fatalf("a checkpoint that is not at its path must not be marked as uploaded, got %v", propagator.requests)
+			t.Fatalf("a checkpoint the daemon lost must not be marked as uploaded, got %v", propagator.requests)
 		}
 	})
 }

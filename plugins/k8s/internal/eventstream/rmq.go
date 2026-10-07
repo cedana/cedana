@@ -25,14 +25,12 @@ import (
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
-	ckpt_checksum "github.com/cedana/cedana/plugins/k8s/internal/checksum"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	cedanastorage "github.com/cedana/cedana/plugins/storage-cedana/propagator"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -48,7 +46,6 @@ type EventStream struct {
 	filesRequests      []*rabbitmq.Consumer
 	containerdAddress  string
 	lifecycleMu        sync.RWMutex
-	readBackMu         sync.Mutex // one local checkpoint is read back for its checksum at a time
 	closeOnce          sync.Once
 	closeErr           error
 	*rabbitmq.Conn
@@ -639,6 +636,9 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				Name: checkpointIdMap[i],
 				Type: "containerd",
 				Criu: defaultDumpOpts,
+				// The compress, the upload and the checksum run after the dump has returned,
+				// so the containers are unfrozen as soon as CRIU has finished
+				Async: true,
 				Details: &daemon.Details{
 					Containerd: container,
 				},
@@ -716,14 +716,13 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
 				var path string
-				var pending, readBack bool
+				var pending bool
 				var state *daemon.ProcessState
 				if err == nil {
 					path = dumpResp.Paths[0]
-					// The daemon holds the outcome and checksum of an upload or a streamed dump
+					// The daemon finishes the checkpoint after the dump has returned, and holds
+					// its outcome and checksum: the compress, the upload, or a directory's read
 					pending = slices.Contains(dumpResp.Pending, path)
-					// A local checkpoint is read back for its checksum after the dump
-					readBack = config.Global.Checkpoint.Checksum && !pending
 					state = dumpResp.State
 				}
 				es.publishCheckpoint(
@@ -733,23 +732,21 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					profiling,
 					path,
-					pending || readBack,
+					pending,
 					state,
 					i,
 					specMap[i],
 					err,
 				)
 
-				// The upload or the read back continues after the dump has returned, so
-				// its outcome is reported once it is known. Does not hold up the unfreeze.
-				if pending || readBack {
+				// The outcome is reported once it is known. Does not hold up the unfreeze.
+				if pending {
 					go es.reportUpload(
 						log.WithContext(ctx),
 						req.PodName,
 						req.ActionId,
 						checkpointIdMap[i],
 						path,
-						pending,
 						state,
 						i,
 						specMap[i],
@@ -855,9 +852,8 @@ func (es *EventStream) publishCheckpoint(
 }
 
 // Waits for the background upload of a checkpoint to end, and reports the outcome.
-// reportUpload makes a checkpoint ready once its checksum is known: from the daemon,
-// which holds it for an upload or a streamed dump (pending), or by reading a local
-// checkpoint back through the daemon, one at a time on this node.
+// reportUpload makes a checkpoint ready once the daemon has finished it and knows
+// its checksum: after the compress, the upload, or the read of a directory.
 // On success the checkpoint is marked as uploaded. On failure the checkpoint is
 // reported again, this time as failed.
 func (es *EventStream) reportUpload(
@@ -866,72 +862,39 @@ func (es *EventStream) reportUpload(
 	actionId string,
 	checkpointId string,
 	path string,
-	pending bool,
 	state *daemon.ProcessState,
 	containerOrder int,
 	containerSpec *specs.Spec,
 ) {
 	log := log.Ctx(ctx).With().Str("checkpoint_id", checkpointId).Str("path", path).Logger()
 
-	var checksum string
-	if pending {
-		resp, err := es.cedana.WaitUpload(ctx, &daemon.WaitUploadReq{Path: path})
-		if err == nil && resp.GetError() != "" {
-			err = errors.New(resp.GetError())
-		}
-		if err != nil {
-			log.Error().Err(err).Msg("checkpoint upload failed")
-			err = es.publishCheckpoint(
-				ctx,
-				podId,
-				actionId,
-				checkpointId,
-				nil,
-				path,
-				false,
-				state,
-				containerOrder,
-				containerSpec,
-				fmt.Errorf("upload failed: %w", err),
-			)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to report checkpoint upload failure")
-			}
-			return
-		}
-		checksum = resp.GetChecksum()
-	} else {
-		es.readBackMu.Lock()
-		sum, err := ckpt_checksum.Path(ctx, es.cedana, path)
-		es.readBackMu.Unlock()
-		switch {
-		case err == nil:
-			checksum = sum
-		case status.Code(err) == codes.NotFound:
-			// The checkpoint is not where the daemon said: nothing can restore from it
-			log.Error().Err(err).Msg("checkpoint not found at its path")
-			err = es.publishCheckpoint(
-				ctx,
-				podId,
-				actionId,
-				checkpointId,
-				nil,
-				path,
-				false,
-				state,
-				containerOrder,
-				containerSpec,
-				fmt.Errorf("checkpoint not found at %s: %w", path, err),
-			)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to report the missing checkpoint")
-			}
-			return
-		default:
-			// Any other failed read leaves the checkpoint without a checksum; it is stored all the same
-			log.Warn().Err(err).Msg("could not compute the checkpoint's checksum; it is reported without one")
-		}
+	// An error, or a daemon that no longer knows the path (NotFound: it restarted and
+	// lost its record), means the checkpoint cannot be restored from
+	resp, err := es.cedana.WaitUpload(ctx, &daemon.WaitUploadReq{Path: path})
+	if err == nil && resp.GetError() != "" {
+		err = errors.New(resp.GetError())
 	}
+	if err != nil {
+		log.Error().Err(err).Msg("checkpoint failed after the dump")
+		err = es.publishCheckpoint(
+			ctx,
+			podId,
+			actionId,
+			checkpointId,
+			nil,
+			path,
+			false,
+			state,
+			containerOrder,
+			containerSpec,
+			fmt.Errorf("checkpoint failed after the dump: %w", err),
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to report the failed checkpoint")
+		}
+		return
+	}
+	checksum := resp.GetChecksum()
 
 	info := models.NewCheckpointSuccessInfo()
 	info.SetRestorePath(&path)
@@ -939,7 +902,7 @@ func (es *EventStream) reportUpload(
 		// The SDK model predates the field; it is sent as additional data
 		info.SetAdditionalData(map[string]any{"checksum": checksum})
 	}
-	_, err := es.propagator.V1().Checkpoints().Uploaded().ById(checkpointId).Post(ctx, info, nil)
+	_, err = es.propagator.V1().Checkpoints().Uploaded().ById(checkpointId).Post(ctx, info, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to mark checkpoint as uploaded")
 		return
