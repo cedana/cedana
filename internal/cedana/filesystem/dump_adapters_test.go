@@ -236,6 +236,40 @@ func TestDumpFilesystem(t *testing.T) {
 
 // A local tarball is compressed after the dump has returned, and its checksum, from
 // the storage's writer, is held for the caller as an upload's outcome would be
+// A synchronous local dump, with or without leave-running, holds its tarball's
+// checksum the same way, known when the dump returns
+func TestLocalSyncDumpHoldsTheTarballsChecksum(t *testing.T) {
+	config.Global.Checkpoint.Checksum = true
+	ctx := context.Background()
+	for _, leaveRunning := range []bool{false, true} {
+		opts := types.Opts{
+			WG:           &sync.WaitGroup{},
+			CRIUCallback: &criu_client.NotifyCallbackMulti{},
+			Storage:      &Storage{},
+			Uploads:      upload.NewRegistry(),
+		}
+		req := &daemon.DumpReq{
+			Dir:         t.TempDir(),
+			Name:        "dump-local-sync",
+			Compression: "lz4",
+			Criu:        &criu_proto.CriuOpts{LeaveRunning: proto.Bool(leaveRunning)},
+		}
+		resp := &daemon.DumpResp{}
+		_, err := DumpFilesystem(dumpImages(t))(ctx, opts, resp, req)
+		if err != nil {
+			t.Fatalf("dump failed: %v", err)
+		}
+		// Without leave-running the compress runs in the post-dump callback, which the fake dump invokes
+		if !slices.Equal(resp.Pending, resp.Paths) {
+			t.Fatalf("leaveRunning=%v: expected the path to be pending for its checksum, got %v", leaveRunning, resp.Pending)
+		}
+		result, err := opts.Uploads.Wait(ctx, resp.Paths[0])
+		if err != nil || result.Err != nil || result.Checksum == "" {
+			t.Fatalf("leaveRunning=%v: Wait = %+v, %v", leaveRunning, result, err)
+		}
+	}
+}
+
 func TestLocalAsyncDumpHoldsTheTarballsChecksum(t *testing.T) {
 	config.Global.Checkpoint.Checksum = true
 	ctx := context.Background()
