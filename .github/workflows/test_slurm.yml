@@ -6,6 +6,7 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  actions: read # to list the jobs of the run when posting the summary
 
 on:
   workflow_call:
@@ -234,31 +235,16 @@ jobs:
             done
           done
 
-      - name: Setup node
+      - name: Label report # with the job name, so the summary can link to it
         if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate report
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report.xml" -t bats -o /tmp/report.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm (Ansible, amd64)"
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Slurm (Ansible)" |' {} +
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report-amd64-slurm-ansible
-          path: |
-            /tmp/report*.json
+          path: /tmp/report*.xml
 
       - name: Upload SLURM debug logs
         if: always()
@@ -682,56 +668,16 @@ jobs:
             done <"$cdir/slurm-output-files.txt"
           done
 
-      - name: Setup node
+      - name: Label reports # with the job name, so the summary can link to it
         if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate report (samples)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-samples.xml" -t bats -o /tmp/report-samples.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
-
-      - name: Generate report (preemption)
-        if: ${{ !cancelled() && env.SLURM_CLUSTER_ID != '' }}
-        run: |
-          npx junit-to-ctrf "/tmp/report-preemption.xml" -t bats -o /tmp/report-preemption.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm Preemption (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
-
-      - name: Generate report (unprivileged)
-        if: ${{ !cancelled() && env.SLURM_CLUSTER_ID != '' && matrix.unprivileged == '1' }}
-        run: |
-          npx junit-to-ctrf "/tmp/report-unprivileged.xml" -t bats -o /tmp/report-unprivileged.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (amd64)" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="Slurm Unprivileged (${{ matrix.compute }}, amd64, ${{ matrix.slurm }}, unpriv-${{ matrix.unprivileged }}, ${{ matrix.nfs }})"
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }})" |' {} +
 
       - name: Upload report
         if: always()
-        id: upload-report
         uses: actions/upload-artifact@v4
         with:
           name: test-report-amd64-slurm-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}
-          path: |
-            /tmp/report*.json
+          path: /tmp/report*.xml
 
       - name: Upload SLURM debug logs
         if: always()
@@ -745,36 +691,18 @@ jobs:
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
-    needs: [slurm]
+    needs: [slurm-ansible, slurm]
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - amd64
     steps:
-      - name: Download report
-        id: download-report
+      - name: Download reports
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-slurm*
+          pattern: test-report-*-slurm-*
           path: report
 
-      - name: Post report
-        uses: ctrf-io/github-test-reporter@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Post summary
+        uses: cedana/cedana-test-summary@v1
         with:
-          report-path: report/**/*.json
-          github-report: true
-          failed-folded-report: true
-          summary: true
-          pull-request: true
-          title: Slurm (${{ matrix.arch }})
-          update-comment: true
-          overwrite-comment: true
-          comment-tag: test-report-slurm-${{ matrix.arch }}
-          group-by: "suite"
-          always-group-by: true
-          upload-artifact: true
-          artifact-name: ctrf-report-slurm-${{ matrix.arch }}
+          reports: report/**/*.xml
+          title: Slurm
+          jobs-filter: '(^|/ )Slurm \('

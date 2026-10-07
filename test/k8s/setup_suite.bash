@@ -127,8 +127,10 @@ teardown_suite() {
         pkill -P "$TAIL_PID" 2>/dev/null || true
     fi
 
-    # Clean up test namespace
-    delete_namespace "$NAMESPACE" --force
+    # Clean up test namespace. Force delete any pod still Terminating first and
+    # bound the namespace delete, so a stuck pod cannot hang the suite forever.
+    delete_pods_or_force "$NAMESPACE" 120
+    delete_namespace "$NAMESPACE" --force --timeout=120s
 
     # Clean up any leftover PVs from tests
     kubectl delete pv --all --wait=false 2>/dev/null || true
