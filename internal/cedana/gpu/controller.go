@@ -21,6 +21,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/caps"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/logging"
@@ -279,7 +280,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	// /proc/<pid> whatever that process's dumpable flag, which a process CRIU is restoring
 	// has off until the end. Raised as ambient, it survives the exec of a binary without
 	// capabilities of its own.
-	if os.Geteuid() != 0 && hasPermittedCap(unix.CAP_SYS_PTRACE) {
+	if os.Geteuid() != 0 && caps.HasPermitted(unix.CAP_SYS_PTRACE) {
 		cmd.SysProcAttr.AmbientCaps = []uintptr{unix.CAP_SYS_PTRACE}
 	}
 
