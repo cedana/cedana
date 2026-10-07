@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/features"
@@ -70,44 +69,9 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			log.Info().Uint32("PID", resp.PID).Msg("GPU support enabled for process")
 
-			if opts.Serverless && req.GPUID == "" {
-				detachOnExit(opts, gpus, resp.PID, code)
-			}
-
 			return code, nil
 		}
 	}
-}
-
-// detachOnExit detaches the process's GPU controller when it exits. Serverless runs and
-// restores have no job manager to do this (see job.Manage).
-func detachOnExit(opts types.Opts, gpus Manager, pid uint32, code func() <-chan int) {
-	exited := code()
-	opts.WG.Go(func() {
-		<-exited
-		// A detached job (e.g. runc --detach) delivers its exit code while the process
-		// keeps running, so its controller must stay attached.
-		if utils.PidRunning(pid) {
-			log.Warn().Uint32("PID", pid).Msg("CED-2388: process still running, not detaching GPU controller") // TODO(CED-2388): remove temporary debug log
-			return
-		}
-		log.Warn().Uint32("PID", pid).Msg("CED-2388: process exited, detaching GPU controller") // TODO(CED-2388): remove temporary debug log
-		start := time.Now()                                                                     // TODO(CED-2388): remove temporary debug log
-		// Detach waits for the controller to exit with no time limit, so stop waiting after
-		// TERMINATE_TIMEOUT rather than keep the command from exiting.
-		detached := make(chan error, 1)
-		go func() { detached <- gpus.Detach(context.WithoutCancel(opts.Lifetime), pid) }()
-		select {
-		case err := <-detached:
-			if err != nil {
-				log.Warn().Err(err).Uint32("PID", pid).Msg("failed to detach GPU controller on exit") // TODO(CED-2388): back to Debug
-			} else {
-				log.Warn().Uint32("PID", pid).Dur("took", time.Since(start)).Msg("CED-2388: detached GPU controller") // TODO(CED-2388): remove temporary debug log
-			}
-		case <-time.After(TERMINATE_TIMEOUT):
-			log.Warn().Uint32("PID", pid).Msg("timed out detaching GPU controller on exit")
-		}
-	})
 }
 
 ///////////////////////////////////////

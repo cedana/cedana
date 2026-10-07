@@ -78,10 +78,6 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			log.Info().Uint32("PID", resp.PID).Str("controller", id).Msg("GPU support restored for process")
 
-			if opts.Serverless && req.GPUID == "" {
-				detachOnExit(opts, gpus, resp.PID, code)
-			}
-
 			return code, nil
 		}
 	}
