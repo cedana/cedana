@@ -215,7 +215,12 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				} else {
 					callback := &criu_client.NotifyCallback{
 						PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) error {
-							_, err := compress(ctx)
+							checksum, err := compress(ctx)
+							if err == nil && checksum != "" && opts.Uploads != nil {
+								// As for a leave-running dump: the checksum is known when the dump returns
+								opts.Uploads.Record(path, checksum)
+								resp.Pending = append(resp.Pending, path)
+							}
 							return err
 						},
 					}
