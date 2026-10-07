@@ -24,6 +24,8 @@ buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-6d41a042
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-6d41a0428141.2/go.mod h1:o98Koki525dQuXUFPp8RwuyZ18vJ1gdJ7nAKaUtcXPM=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-dfcf9ee62e1c.2 h1:cH35SeX6UmZthyXD5RDEe07fmjgGQYTT2i8Yt3L1s00=
 buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-dfcf9ee62e1c.2/go.mod h1:o98Koki525dQuXUFPp8RwuyZ18vJ1gdJ7nAKaUtcXPM=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-20261002213622-34363e2fe25f.2 h1:YWPJO5CsjUsLewM5DrYFEbvHN31a7r5KkA67fKxlZLo=
+buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-20261002213622-34363e2fe25f.2/go.mod h1:o98Koki525dQuXUFPp8RwuyZ18vJ1gdJ7nAKaUtcXPM=
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 h1:bvDV9vkmnHYOMsOr4WLk+Vo07yKIzd94sVoIqshQ4bU=
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24/go.mod h1:8o94RPi1/7XTJvwPpRSzSUedZrtlirdB3r9Z20bi2f8=
