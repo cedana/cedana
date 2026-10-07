@@ -61,7 +61,8 @@ type Fs struct {
 }
 
 // Checksums returns the checksum of each shard of a WRITE_ONLY streaming fs, in
-// shard order, once the wait function has returned. Empty when the checksum is off.
+// shard order, once the wait function has returned, as the storage's writers
+// reported them. Empty when the storage computes none or the checksum is off.
 func (fs *Fs) Checksums() []string {
 	return fs.checksums
 }
@@ -161,12 +162,18 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
+			// The storage's writer knows the checksum of the shard as stored, once closed
+			shard := file
 			go func() {
 				defer io.Done()
 				// One send per shard, as above
 				var err error
 				defer func() {
-					ioErr <- errors.Join(err, file.Close())
+					err = errors.Join(err, file.Close())
+					if err == nil {
+						checksums[i] = cedana_io.ChecksumOfWriter(shard)
+					}
+					ioErr <- err
 				}()
 
 				file = profiling.IOParallelCategory(
@@ -177,17 +184,7 @@ func NewStreamingFs(
 					fmt.Sprintf("shard-%d", i),
 					compression,
 				)
-				if mode == WRITE_ONLY && config.Global.Checkpoint.Checksum {
-					// The hash is of the bytes as stored, after the compression. CRC32C
-					// is faster than the compression, so it adds no time to the dump
-					hasher := cedana_io.NewChecksumWriter(file)
-					_, err = cedana_io.WriteTo(readFds[i], hasher, compression)
-					if err == nil {
-						checksums[i] = hasher.Sum()
-					}
-				} else {
-					_, err = cedana_io.WriteTo(readFds[i], file, compression)
-				}
+				_, err = cedana_io.WriteTo(readFds[i], file, compression)
 				readFds[i].Close()
 			}()
 		}

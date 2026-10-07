@@ -139,17 +139,18 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 			opts.DumpFs = streamFs
 
 			// The checksum of a streamed checkpoint is that of a manifest of its shards,
-			// hashed as they were written. Empty when the checksum is off.
-			manifest := func() string {
-				if !config.Global.Checkpoint.Checksum {
-					return ""
-				}
+			// as the storage's writers reported them. Empty when a shard has none.
+			manifestOf := func(sums []string) string {
 				entries := make([]cedana_io.ManifestEntry, 0, streams)
-				for i, sum := range streamFs.Checksums() {
+				for i, sum := range sums {
+					if sum == "" {
+						return ""
+					}
 					entries = append(entries, cedana_io.ManifestEntry{Name: fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext, Checksum: sum})
 				}
 				return cedana_io.ManifestChecksum(entries)
 			}
+			manifest := func() string { return manifestOf(streamFs.Checksums()) }
 
 			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
 			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
@@ -159,6 +160,8 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					return path + string(os.PathSeparator) + fmt.Sprintf(IMG_FILE_FORMATTER, i) + ext // do not use filepath.Join as it removes a slash
 				}
 
+				// The store's checksum of each uploaded shard object, from the storage's writers
+				uploaded := make([]string, streams)
 				upload := func(ctx context.Context) error {
 					var wg sync.WaitGroup
 					errCh := make(chan error, streams)
@@ -193,7 +196,10 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							err = errors.Join(err, dst.Close())
 							if err != nil {
 								errCh <- fmt.Errorf("failed to upload shard %d: %w", i, err)
+								return
 							}
+							// The store's checksum of the shard object, if the storage knows it
+							uploaded[i] = cedana_io.ChecksumOfWriter(dst)
 						}(i)
 					}
 
@@ -242,8 +248,18 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							log.Error().Err(uploadErr).Msg("async upload failed")
 							finish("", uploadErr)
 						} else {
-							// The shards were copied byte for byte, so their checksums as written are their checksums as uploaded
-							checksum := manifest()
+							// The store's checksums of the shard objects; the local ones must agree,
+							// since the shards were copied byte for byte
+							checksum := manifestOf(uploaded)
+							local := manifest()
+							if local != "" && checksum != "" && local != checksum {
+								log.Error().Str("local", local).Str("uploaded", checksum).Msg("the uploaded shards do not match the shards written")
+								finish("", fmt.Errorf("uploaded shards do not match the shards written: %s, uploaded %s", local, checksum))
+								return
+							}
+							if checksum == "" {
+								checksum = local
+							}
 							log.Info().Str("checksum", checksum).Msg("async dump upload completed")
 							finish(checksum, nil)
 						}

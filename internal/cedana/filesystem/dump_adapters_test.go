@@ -233,3 +233,74 @@ func TestDumpFilesystem(t *testing.T) {
 		}
 	})
 }
+
+// A local tarball is compressed after the dump has returned, and its checksum, from
+// the storage's writer, is held for the caller as an upload's outcome would be
+func TestLocalAsyncDumpHoldsTheTarballsChecksum(t *testing.T) {
+	config.Global.Checkpoint.Checksum = true
+	ctx := context.Background()
+	opts := types.Opts{
+		WG:           &sync.WaitGroup{},
+		CRIUCallback: &criu_client.NotifyCallbackMulti{},
+		Storage:      &Storage{},
+		Uploads:      upload.NewRegistry(),
+	}
+	req := &daemon.DumpReq{Dir: t.TempDir(), Name: "dump-local-async", Compression: "lz4", Async: true}
+	resp := &daemon.DumpResp{}
+
+	_, err := DumpFilesystem(dumpImages(t))(ctx, opts, resp, req)
+	if err != nil {
+		t.Fatalf("dump failed: %v", err)
+	}
+	if !slices.Equal(resp.Pending, resp.Paths) {
+		t.Fatalf("expected the local path to be pending for its compress, got %v", resp.Pending)
+	}
+	result, err := opts.Uploads.Wait(ctx, resp.Paths[0])
+	if err != nil || result.Err != nil {
+		t.Fatalf("Wait = %+v, %v", result, err)
+	}
+	file, err := os.Open(resp.Paths[0])
+	if err != nil {
+		t.Fatalf("tarball was not written: %v", err)
+	}
+	want, _ := cedana_io.ChecksumOf(file)
+	file.Close()
+	if result.Checksum != want {
+		t.Fatalf("checksum = %s, want %s", result.Checksum, want)
+	}
+	opts.WG.Wait()
+}
+
+// An uncompressed directory is read by the storage after the dump has returned
+func TestDirectoryDumpHoldsTheManifestChecksum(t *testing.T) {
+	config.Global.Checkpoint.Checksum = true
+	ctx := context.Background()
+	opts := types.Opts{
+		WG:           &sync.WaitGroup{},
+		CRIUCallback: &criu_client.NotifyCallbackMulti{},
+		Storage:      &Storage{},
+		Uploads:      upload.NewRegistry(),
+	}
+	req := &daemon.DumpReq{Dir: t.TempDir(), Name: "dump-dir", Compression: "none"}
+	resp := &daemon.DumpResp{}
+
+	_, err := DumpFilesystem(dumpImages(t))(ctx, opts, resp, req)
+	if err != nil {
+		t.Fatalf("dump failed: %v", err)
+	}
+	if !slices.Equal(resp.Pending, resp.Paths) {
+		t.Fatalf("expected the directory to be pending for its read, got %v", resp.Pending)
+	}
+	result, err := opts.Uploads.Wait(ctx, resp.Paths[0])
+	if err != nil || result.Err != nil {
+		t.Fatalf("Wait = %+v, %v", result, err)
+	}
+	want, err := (&Storage{}).ChecksumPath(ctx, resp.Paths[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want == "" || result.Checksum != want {
+		t.Fatalf("checksum = %q, want the manifest %q", result.Checksum, want)
+	}
+	opts.WG.Wait()
+}
