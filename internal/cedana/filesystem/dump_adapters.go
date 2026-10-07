@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -264,6 +265,12 @@ func DumpFilesystem(next types.Dump) types.Dump {
 						sum, err := pc.ChecksumPath(checksumCtx, dirPath)
 						if err != nil {
 							log.Error().Err(err).Str("path", dirPath).Msg("could not checksum the checkpoint directory")
+							// The checkpoint is stored all the same, so a read that fails leaves it
+							// without a checksum rather than failed; unless the directory is not
+							// there, which says the checkpoint is not stored where it was said to be
+							if !errors.Is(err, fs.ErrNotExist) {
+								err = nil
+							}
 						}
 						finish(sum, err)
 					})

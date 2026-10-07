@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -306,6 +307,58 @@ func TestLocalAsyncDumpHoldsTheTarballsChecksum(t *testing.T) {
 }
 
 // An uncompressed directory is read by the storage after the dump has returned
+// Local storage whose directory read fails as told
+type unreadableStorage struct {
+	Storage
+	err error
+}
+
+func (s *unreadableStorage) ChecksumPath(ctx context.Context, path string) (string, error) {
+	return "", s.err
+}
+
+// A directory read that fails leaves the stored checkpoint without a checksum,
+// not failed; a directory that is not there is a failed checkpoint
+func TestDirectoryReadErrorLeavesTheCheckpointWithoutAChecksum(t *testing.T) {
+	config.Global.Checkpoint.Checksum = true
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name   string
+		err    error
+		failed bool
+	}{
+		{"ReadError", errors.New("read error"), false},
+		{"NotThere", fmt.Errorf("failed to stat: %w", fs.ErrNotExist), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts := types.Opts{
+				WG:           &sync.WaitGroup{},
+				CRIUCallback: &criu_client.NotifyCallbackMulti{},
+				Storage:      &unreadableStorage{err: tc.err},
+				Uploads:      upload.NewRegistry(),
+			}
+			req := &daemon.DumpReq{Dir: t.TempDir(), Name: "dump-dir", Compression: "none"}
+			resp := &daemon.DumpResp{}
+
+			_, err := DumpFilesystem(dumpImages(t))(ctx, opts, resp, req)
+			if err != nil {
+				t.Fatalf("dump failed: %v", err)
+			}
+			result, err := opts.Uploads.Wait(ctx, resp.Paths[0])
+			if err != nil {
+				t.Fatalf("Wait: %v", err)
+			}
+			if result.Checksum != "" {
+				t.Fatalf("checksum = %q, want none", result.Checksum)
+			}
+			if (result.Err != nil) != tc.failed {
+				t.Fatalf("Err = %v, want failed=%t", result.Err, tc.failed)
+			}
+			opts.WG.Wait()
+		})
+	}
+}
+
 func TestDirectoryDumpHoldsTheManifestChecksum(t *testing.T) {
 	config.Global.Checkpoint.Checksum = true
 	ctx := context.Background()
