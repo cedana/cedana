@@ -432,8 +432,16 @@ SLURM_ARTIFACTS_INSTALL=docker exec $(DOCKER_TEST_CONTAINER_NAME) bash -c '\
 		cp -f /artifacts/slurm/build/*.so /usr/local/lib/ 2>/dev/null; \
 	fi; \
 	if [ -d /cedana-slurm/build ]; then \
-		cp -f /cedana-slurm/build/*/cedana-slurm /usr/local/bin/ 2>/dev/null; \
-		cp -f /cedana-slurm/build/*/*.so /usr/local/lib/ 2>/dev/null; \
+		bd=""; \
+		if [ -n "$$SLURM_VERSION" ] && [ -d "/cedana-slurm/build/$$SLURM_VERSION" ]; then \
+			bd="/cedana-slurm/build/$$SLURM_VERSION/"; \
+		else \
+			bd=$$(ls -dt /cedana-slurm/build/*/ 2>/dev/null | head -1); \
+		fi; \
+		if [ -n "$$bd" ]; then \
+			cp -f "$$bd"cedana-slurm /usr/local/bin/ 2>/dev/null; \
+			cp -f "$$bd"*.so /usr/local/lib/ 2>/dev/null; \
+		fi; \
 	fi; \
 	chmod +x /usr/local/bin/cedana /usr/local/bin/criu /usr/local/bin/cedana-slurm 2>/dev/null; \
 	true'

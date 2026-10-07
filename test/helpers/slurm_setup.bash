@@ -179,7 +179,7 @@ _stage_cedana_binaries() {
     fi
 
     local stage_dir="${CEDANA_SLURM_STAGE_DIR:-${GITHUB_WORKSPACE:-$PWD}}"
-    if [ ! -x "${stage_dir}/cedana" ]; then
+    if [ ! -f "${stage_dir}/cedana" ]; then
         error_log "cedana binaries not in /usr/local and no downloaded artifacts found in ${stage_dir}"
         return 1
     fi

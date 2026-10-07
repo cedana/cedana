@@ -88,17 +88,6 @@ setup_suite() {
     export CLUSTER_NAME SLURM_CLUSTER_ID
     info_log "SLURM Cluster registered with ID: $SLURM_CLUSTER_ID"
 
-    # Hand the cluster to later steps in the same CI job: they inherit these as
-    # a reuse run and skip provisioning.
-    if [ -n "${GITHUB_ENV:-}" ]; then
-        {
-            echo "SLURM_CLUSTER_ID=$SLURM_CLUSTER_ID"
-            echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID"
-            echo "CLUSTER_NAME=$CLUSTER_NAME"
-            echo "SLURM_CLUSTER_ID_PROVIDED=1"
-        } >>"$GITHUB_ENV"
-    fi
-
     if [ "${SLURM_UNPRIVILEGED:-0}" = "1" ]; then
         setup_slurm_unprivileged_user
         start_cedana_slurm_daemon
@@ -107,6 +96,18 @@ setup_suite() {
         start_cedana_slurm_daemon
     fi
     validate_slurm_propagator || return 1
+
+    # Hand the cluster to later steps in the same CI job only once it is fully
+    # up: they inherit these as a reuse run and skip provisioning, so a cluster
+    # that failed to start must not be marked reusable.
+    if [ -n "${GITHUB_ENV:-}" ]; then
+        {
+            echo "SLURM_CLUSTER_ID=$SLURM_CLUSTER_ID"
+            echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID"
+            echo "CLUSTER_NAME=$CLUSTER_NAME"
+            echo "SLURM_CLUSTER_ID_PROVIDED=1"
+        } >>"$GITHUB_ENV"
+    fi
 
     debug_log "SLURM test suite setup complete"
 }
