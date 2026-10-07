@@ -42,8 +42,8 @@ func (c *File) Read(p []byte) (int, error) {
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			resp.Body.Close()
-			return 0, fmt.Errorf("failed to download: %s", resp.Status)
+			defer resp.Body.Close()
+			return 0, responseError("download", resp)
 		}
 		c.reader = resp.Body
 	}
@@ -101,7 +101,17 @@ func (c *File) upload() error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("upload failed with status: %s", resp.Status)
+		return responseError("upload", resp)
 	}
 	return nil
+}
+
+// responseError includes the start of the response body: for S3 that is the XML
+// error with the <Code> that explains a 403 (AccessDenied, SignatureDoesNotMatch, ...).
+func responseError(what string, resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+	if len(body) == 0 {
+		return fmt.Errorf("%s failed with status: %s", what, resp.Status)
+	}
+	return fmt.Errorf("%s failed with status: %s: %s", what, resp.Status, string(body))
 }
