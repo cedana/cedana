@@ -19,12 +19,14 @@ func (s *Storage) Open(_ context.Context, path string) (io.ReadCloser, error) {
 	return file, nil
 }
 
+// Create returns a writer that knows the checksum of what was written through it
+// (cedana_io.Checksummer) when the checksum is on
 func (s *Storage) Create(_ context.Context, path string) (io.WriteCloser, error) {
 	file, err := os.Create(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create file: %w", err)
 	}
-	return file, nil
+	return newWriter(file), nil
 }
 
 func (s *Storage) Delete(_ context.Context, path string) error {
