@@ -66,7 +66,15 @@ propagator_diagnostics() {
         kubectl get pods -n "$ns" -o wide
         kubectl get events -n "$ns" --sort-by=.lastTimestamp
         kubectl describe pods -n "$ns"
-        kubectl logs -n "$ns" deployment/cedana-propagator --tail=1000
+        # Current and previous container logs of every pod, so a crash-looping
+        # dependency explains itself too
+        local pod
+        for pod in $(kubectl get pods -n "$ns" -o name 2>/dev/null); do
+            echo "===== logs $pod"
+            kubectl logs -n "$ns" "$pod" --all-containers --tail=300
+            echo "===== previous logs $pod"
+            kubectl logs -n "$ns" "$pod" --all-containers --previous --tail=300 2>&1 | grep -v 'previous terminated container .* not found'
+        done
     } >"$out" 2>&1
     error cat "$out"
 }
