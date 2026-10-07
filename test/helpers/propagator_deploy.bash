@@ -58,6 +58,19 @@ cluster_ip() {
     kubectl get svc "$1" -n "$PROPAGATOR_NAMESPACE" -o jsonpath='{.spec.clusterIP}'
 }
 
+# Also written next to PROPAGATOR_LOG_FILE so CI's propagator-logs artifact has it even
+# when the suite dies in setup_suite (bats' junit formatter drops that output).
+propagator_diagnostics() {
+    local ns="$PROPAGATOR_NAMESPACE" out="${PROPAGATOR_LOG_FILE%.log}-deploy.log"
+    {
+        kubectl get pods -n "$ns" -o wide
+        kubectl get events -n "$ns" --sort-by=.lastTimestamp
+        kubectl describe pods -n "$ns"
+        kubectl logs -n "$ns" deployment/cedana-propagator --tail=1000
+    } >"$out" 2>&1
+    error cat "$out"
+}
+
 deploy_propagator() {
     local ns="$PROPAGATOR_NAMESPACE"
     local image
@@ -108,6 +121,7 @@ spec:
     metadata:
       labels: { app: cedana-postgres }
     spec:
+      imagePullSecrets: $pull_secrets
       containers:
         - name: cedana-postgres
           image: postgres:17
@@ -140,6 +154,7 @@ spec:
     metadata:
       labels: { app: cedana-rabbitmq }
     spec:
+      imagePullSecrets: $pull_secrets
       containers:
         - name: cedana-rabbitmq
           image: rabbitmq:3-management
@@ -172,6 +187,7 @@ spec:
     metadata:
       labels: { app: cedana-clickhouse }
     spec:
+      imagePullSecrets: $pull_secrets
       containers:
         - name: cedana-clickhouse
           image: clickhouse/clickhouse-server:24.8
@@ -200,11 +216,12 @@ spec:
   ports: [{ port: $PROPAGATOR_PORT }]
 EOF
 
+    # The first wait also covers all three image pulls on small CI runners
     local dep
     for dep in cedana-postgres cedana-rabbitmq cedana-clickhouse; do
-        kubectl rollout status deployment/"$dep" -n "$ns" --timeout=5m || {
+        kubectl rollout status deployment/"$dep" -n "$ns" --timeout=10m || {
             error_log "Propagator dependency $dep failed to become ready"
-            error kubectl describe pods -n "$ns" -l app="$dep"
+            propagator_diagnostics
             return 1
         }
     done
@@ -255,8 +272,7 @@ EOF
 
     kubectl rollout status deployment/cedana-propagator -n "$ns" --timeout=5m || {
         error_log "Propagator failed to become ready"
-        error kubectl describe pods -n "$ns" -l app=cedana-propagator
-        error kubectl logs -n "$ns" deployment/cedana-propagator --tail=1000
+        propagator_diagnostics
         return 1
     }
 
@@ -285,7 +301,7 @@ EOF
     wait_for_cmd 120 "curl -sf -o /dev/null -H 'Authorization: Bearer $token' $CEDANA_URL/user" || {
         error_log "Propagator is not reachable at $CEDANA_URL"
         [ -f "$PROPAGATOR_PORT_FORWARD_LOG" ] && error cat "$PROPAGATOR_PORT_FORWARD_LOG"
-        error kubectl logs -n "$ns" deployment/cedana-propagator --tail=1000
+        propagator_diagnostics
         return 1
     }
 
