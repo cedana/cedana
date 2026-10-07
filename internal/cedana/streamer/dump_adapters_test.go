@@ -42,6 +42,28 @@ func (s *remoteStorage) Create(ctx context.Context, path string) (io.WriteCloser
 	return s.Storage.Create(ctx, path)
 }
 
+// Remote storage whose writers report a checksum other than that of the bytes
+// written, as a store that holds other bytes than those sent would
+type miscountingStorage struct {
+	remoteStorage
+}
+
+func (s *miscountingStorage) Create(ctx context.Context, path string) (io.WriteCloser, error) {
+	w, err := s.remoteStorage.Create(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return &wrongChecksum{w}, nil
+}
+
+type wrongChecksum struct {
+	io.WriteCloser
+}
+
+func (w *wrongChecksum) Checksum() string {
+	return "crc32c:00000000"
+}
+
 // The checksum of a streamed dump as stored: that of the manifest of its shards
 func manifestOf(t *testing.T, path string, streams int32, ext string) string {
 	t.Helper()
@@ -209,6 +231,54 @@ func TestDumpFilesystem(t *testing.T) {
 		shardsOf(t, path, streams, ".lz4")
 		if want := manifestOf(t, path, streams, ".lz4"); result.Checksum != want {
 			t.Fatalf("checksum = %s, want the manifest of the uploaded shards %s", result.Checksum, want)
+		}
+
+		opts.WG.Wait()
+	})
+
+	// Open question 27: the uploaded shards' values are recorded as the store's
+	// writers report them; a difference from the shards written is logged, not
+	// a failure
+	t.Run("AsyncUploadedValuesDiffer", func(t *testing.T) {
+		opts := types.Opts{
+			WG:           &sync.WaitGroup{},
+			CRIUCallback: &criu_client.NotifyCallbackMulti{},
+			Storage:      &miscountingStorage{},
+			Plugins:      &streamingPlugins{streamerBinary: streamerBinary},
+			Uploads:      upload.NewRegistry(),
+		}
+		req := &daemon.DumpReq{
+			Dir:         t.TempDir(),
+			Name:        fmt.Sprintf("dump-async-differs-%d", os.Getpid()),
+			Compression: "lz4",
+			Streams:     streams,
+			Async:       true,
+		}
+		resp := &daemon.DumpResp{}
+
+		_, err := DumpFilesystem(streams)(dumpImages)(ctx, opts, resp, req)
+		if err != nil {
+			t.Fatalf("dump failed: %v", err)
+		}
+		path := resp.Paths[0]
+
+		result, err := opts.Uploads.Wait(ctx, path)
+		if err != nil {
+			t.Fatalf("failed to wait for upload: %v", err)
+		}
+		if result.Err != nil {
+			t.Fatalf("the upload must stand, got: %v", result.Err)
+		}
+		shardsOf(t, path, streams, ".lz4")
+		entries := make([]cedana_io.ManifestEntry, 0, streams)
+		for i := range streams {
+			entries = append(entries, cedana_io.ManifestEntry{Name: fmt.Sprintf(IMG_FILE_FORMATTER, i) + ".lz4", Checksum: "crc32c:00000000"})
+		}
+		if want := cedana_io.ManifestChecksum(entries); result.Checksum != want {
+			t.Fatalf("checksum = %s, want the manifest of the values the store's writers reported %s", result.Checksum, want)
+		}
+		if local := manifestOf(t, path, streams, ".lz4"); result.Checksum == local {
+			t.Fatalf("the checksum must be the uploaded values, not the shards written")
 		}
 
 		opts.WG.Wait()

@@ -29,7 +29,8 @@ type File struct {
 	done   chan error
 
 	// The checksum of the object as stored, "crc32c:<hex>", known after Close:
-	// the store's whole-object value when it gave one, else the writer's own
+	// the writer's own value over the bytes sent. The store's whole-object
+	// value, when it gave one, is compared with it and a difference logged
 	hasher   *cedana_io.ChecksumWriter
 	stored   string // the store's value, from the completed upload
 	checksum string
@@ -66,7 +67,7 @@ func (c *File) Write(p []byte) (int, error) {
 
 		c.writer = pw
 		if cedana_config.Global.Checkpoint.Checksum {
-			// The writer's own value: the check of the store's, and the fallback
+			// The writer's own value over the bytes sent, which is the checksum
 			c.hasher = cedana_io.NewChecksumWriter(pw)
 			c.writer = c.hasher
 		}
@@ -86,10 +87,11 @@ func (c *File) Write(p []byte) (int, error) {
 				Body:   pr,
 			}
 			if c.hasher != nil {
-				// The store computes the CRC32C of the object as it receives it. The uploader
-				// of this SDK version cannot ask for the whole-object type on a multipart
-				// upload, so a large object comes back with a composite value, which is not
-				// the checksum of the bytes and is not used; the writer's value stands in
+				// The store computes the CRC32C of the object as it receives it, which is
+				// read back beside the writer's value. The uploader of this SDK version
+				// cannot ask for the whole-object type on a multipart upload, so a large
+				// object comes back with a composite value, which is not the checksum of
+				// the bytes and is not compared
 				input.ChecksumAlgorithm = types.ChecksumAlgorithmCrc32c
 			}
 			out, err := uploader.Upload(c.ctx, input)
@@ -134,17 +136,12 @@ func (c *File) Close() error {
 		err = errors.Join(err, <-c.done)
 	}
 	if err == nil && c.hasher != nil {
-		sent := c.hasher.Sum()
-		switch {
-		case c.stored == "":
-			// The store computed none, or a composite: the writer's value stands in
-			c.checksum = sent
-		case c.stored != sent:
-			// The store holds other bytes than those sent
-			err = fmt.Errorf("checksum of %s/%s as stored (%s) differs from the bytes sent (%s)", c.bucket, c.key, c.stored, sent)
-			log.Error().Err(err).Msg("upload corrupted")
-		default:
-			c.checksum = c.stored
+		c.checksum = c.hasher.Sum()
+		if c.stored != "" && c.stored != c.checksum {
+			// The store holds other bytes than those sent. The value of the bytes sent
+			// is recorded all the same; the check that fails the upload comes later
+			log.Warn().Str("bucket", c.bucket).Str("key", c.key).Str("stored", c.stored).Str("sent", c.checksum).
+				Msg("checksum of the object as stored differs from the bytes sent")
 		}
 	}
 	c.client = nil
