@@ -107,6 +107,7 @@ deploy_propagator() {
     fi
 
     kubectl create secret generic propagator-env -n "$ns" \
+        --from-literal=CEDANA_AUTH_TOKEN="$token" \
         --from-literal=POSTGRES_PASSWORD="$db_password" \
         --from-literal=RABBITMQ_PASSWORD="$mq_password" \
         --from-literal=POSTGRES_DB_URI="postgresql://cedana:$db_password@cedana-postgres:5432/cedana" \
@@ -272,6 +273,7 @@ spec:
             - { name: RUST_LOG, value: "${PROPAGATOR_LOG_LEVEL:-info}" }
             - { name: BUCKET_NAME, value: "${PROPAGATOR_BUCKET_NAME:-cedana-checkpoints-storage}" }
             - { name: PLUGINS_BUCKET, value: "${PROPAGATOR_PLUGINS_BUCKET:-cedana-bin}" }
+            - { name: AWS_REGION, value: "${AWS_REGION:-us-east-1}" }
             - { name: RABBITMQ_DISCOVERY_URI, value: "$mq_discovery_uri" }
             - { name: CLICKHOUSE_URL, value: "http://cedana-clickhouse:8123" }
             - { name: CLICKHOUSE_DATABASE, value: cedana }
