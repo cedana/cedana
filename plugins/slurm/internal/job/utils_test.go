@@ -1,6 +1,12 @@
 package job
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/spf13/afero"
+)
 
 const testScope = "/system.slice/slurmstepd.scope"
 
@@ -90,5 +96,85 @@ func TestParseSlurmstepdJobID(t *testing.T) {
 				t.Fatalf("parseSlurmstepdJobID(%q) = %d, %v; want %d, %v", tt.cmdline, got, ok, tt.want, tt.wantOK)
 			}
 		})
+	}
+}
+
+func TestPickJobPID(t *testing.T) {
+	all := func(uint32) bool { return true }
+	tests := []struct {
+		name   string
+		pids   []int
+		self   uint32
+		exists func(uint32) bool
+		want   uint32
+	}{
+		{"no processes", nil, 100, all, 0},
+		{"ourselves when in the job", []int{40, 100, 30}, 100, all, 100},
+		{"lowest when outside the job", []int{40, 30, 50}, 100, all, 30},
+		{"skips the ones gone", []int{40, 30, 50}, 100, func(pid uint32) bool { return pid != 30 }, 40},
+		{"all gone", []int{40, 30}, 100, func(uint32) bool { return false }, 0},
+		{"invalid", []int{0, -1}, 100, all, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := pickJobPID(tt.pids, tt.self, tt.exists); got != tt.want {
+				t.Fatalf("pickJobPID(%v, %d) = %d; want %d", tt.pids, tt.self, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsJobScript(t *testing.T) {
+	for path, want := range map[string]bool{
+		"/tmp/cedana-script-11.sh":                       true,
+		"/tmp/cedana-script-11.sh.bak":                   false,
+		"/tmp/cedana-script.log":                         false,
+		"/tmp/cedana-script-11.sh/other":                 false,
+		"/tmp/cedana-11.pid":                             false,
+		"/data/cedana-samples/slurm/cpu/counting.sbatch": false,
+		"/usr/bin/bash":                                  false,
+	} {
+		if got := isJobScript(path); got != want {
+			t.Errorf("isJobScript(%q) = %v, want %v", path, got, want)
+		}
+	}
+}
+
+func TestInRootOf(t *testing.T) {
+	if got := inRootOf(0, "/tmp/cedana-script-11.sh"); got != "/tmp/cedana-script-11.sh" {
+		t.Errorf("without a process: %q", got)
+	}
+	if got := inRootOf(42, "/tmp/cedana-script-11.sh"); got != "/proc/42/root/tmp/cedana-script-11.sh" {
+		t.Errorf("through a process: %q", got)
+	}
+}
+
+func TestScriptAttrsRoundTrip(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "cedana-script-11.sh")
+	if err := os.WriteFile(path, []byte("#!/bin/bash\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(path, 0o644|os.ModeSticky); err != nil { // not subject to the umask
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dumpFs := afero.NewMemMapFs()
+	if err := saveScriptAttrs(dumpFs, info); err != nil {
+		t.Fatal(err)
+	}
+	attrs := loadScriptAttrs(dumpFs)
+	if os.FileMode(attrs.Mode) != 0o644|os.ModeSticky {
+		t.Errorf("expected mode 0644 with the sticky bit, got %v", os.FileMode(attrs.Mode))
+	}
+	if attrs.Uid != uint32(os.Getuid()) || attrs.Gid != uint32(os.Getgid()) {
+		t.Errorf("expected owner %d:%d, got %d:%d", os.Getuid(), os.Getgid(), attrs.Uid, attrs.Gid)
+	}
+
+	if attrs := loadScriptAttrs(afero.NewMemMapFs()); attrs.Mode != 0o700 {
+		t.Errorf("expected the default mode 0700 without attributes, got %o", attrs.Mode)
 	}
 }
