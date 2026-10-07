@@ -266,7 +266,6 @@ jobs:
           - containerd
           - storage/cedana
           - storage/s3
-          - storage/gcs
           - storage/csx
         arch:
           - amd64
@@ -536,7 +535,7 @@ jobs:
         uses: cedana/cedana-test-summary@v1
         with:
           reports: report/**/*.xml
-          jobs-filter: '^Test / ' # jobs of this workflow, as named by the callers (pr.yml, nightly.yml, ...)
+          jobs-filter: "^Test / " # jobs of this workflow, as named by the callers (pr.yml, nightly.yml, ...)
           image-branch: test-summary-assets
           matrix-sections: |
             Kubernetes=^Kubernetes
