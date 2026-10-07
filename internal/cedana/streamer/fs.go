@@ -459,7 +459,7 @@ func (fs *Fs) checkFileExists(name string) error {
 		return fmt.Errorf("failed to unmarshal response: %w", err)
 	}
 	if !resp.Exists {
-		return fmt.Errorf("file does not exist: %s", name)
+		return os.ErrNotExist
 	}
 	return nil
 }
