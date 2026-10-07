@@ -377,7 +377,7 @@ func (fs *Fs) glob(pattern string) ([]string, error) {
 	}
 	fs.globMutex.Unlock()
 
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: pattern}
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: pattern, Protocol: img_streamer.ImgStreamerFileProtocol_SEND_PIPE_END}
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal glob request: %w", err)
@@ -439,28 +439,28 @@ func (m Mode) String() string {
 }
 
 func (fs *Fs) checkFileExists(name string) error {
-  resp := &img_streamer.ImgStreamerReplyEntry{}
-  var sizeBuf [4]byte
-  _, err := fs.conn.Read(sizeBuf[:])
-  if err != nil {
-    return fmt.Errorf("failed to read size from file response: %w", err)
-  }
-  size := binary.LittleEndian.Uint32(sizeBuf[:])
-  data := make([]byte, size)
-  n, err := fs.conn.Read(data)
-  if err != nil {
-    return fmt.Errorf("failed to read data from file response: %w", err)
-  }
-  if n != int(size) {
-    return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
-  }
-  err = proto.Unmarshal(data, resp)
-  if err != nil {
-    return fmt.Errorf("failed to unmarshal response: %w", err)
-  }
-  if !resp.Exists {
-      return fmt.Errorf("file does not exist: %s", name)
-  }
+	resp := &img_streamer.ImgStreamerReplyEntry{}
+	var sizeBuf [4]byte
+	_, err := fs.conn.Read(sizeBuf[:])
+	if err != nil {
+		return fmt.Errorf("failed to read size from file response: %w", err)
+	}
+	size := binary.LittleEndian.Uint32(sizeBuf[:])
+	data := make([]byte, size)
+	n, err := fs.conn.Read(data)
+	if err != nil {
+		return fmt.Errorf("failed to read data from file response: %w", err)
+	}
+	if n != int(size) {
+		return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
+	}
+	err = proto.Unmarshal(data, resp)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if !resp.Exists {
+		return fmt.Errorf("file does not exist: %s", name)
+	}
 	return nil
 }
 
@@ -493,7 +493,7 @@ func (fs *Fs) openFd(name string) (int, error) {
 	}()
 
 	// Send file request to streamer
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: name}
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: name, Protocol: img_streamer.ImgStreamerFileProtocol_SEND_PIPE_END}
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return 0, fmt.Errorf("failed to marshal request: %w", err)
@@ -535,7 +535,7 @@ func (fs *Fs) openFd(name string) (int, error) {
 // Tells the streamer to stop listening for new connections
 func (fs *Fs) stopListener() error {
 	// Send file request to streamer
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: STOP_LISTENER_MSG}
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: STOP_LISTENER_MSG, Protocol: img_streamer.ImgStreamerFileProtocol_SEND_PIPE_END}
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
