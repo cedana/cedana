@@ -30,7 +30,10 @@ setup_cluster() {
     download_k3s
     install_containerd_plugins
     configure_containerd_runtime
-    start_containerd
+    # The shim inherits containerd's environment, and env beats the host config file the
+    # helper writes (/etc/cedana). Keep the suite's CEDANA_URL/CEDANA_AUTH_TOKEN out of it so
+    # the shim follows the helper's config, which is what points at an in-cluster propagator.
+    (unset CEDANA_URL CEDANA_AUTH_TOKEN; start_containerd)
 
     if [ -n "$CONTROLLER_DIGEST" ]; then
         preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
