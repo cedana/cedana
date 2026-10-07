@@ -30,6 +30,8 @@
 #   DOCKER_USERNAME, DOCKER_TOKEN   - If set, used as the image pull secret
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_REGION - S3 access (plugins, metrics)
 #   AWS_SESSION_TOKEN               - Passed along if set (temporary/SSO credentials)
+#   OTEL_EXPORTER_OTLP_ENDPOINT     - If set, the propagator will configure this as the OTLP endpoint for OpenTelemetry
+#   OTEL_EXPORTER_OTLP_HEADERS      - If set, the propagator will configure this as the OTLP headers for OpenTelemetry
 
 export PROPAGATOR_NAMESPACE="${PROPAGATOR_NAMESPACE:-cedana-propagator}"
 PROPAGATOR_PORT=1324
@@ -105,12 +107,13 @@ deploy_propagator() {
     fi
 
     kubectl create secret generic propagator-env -n "$ns" \
-        --from-literal=CEDANA_AUTH_TOKEN="$token" \
         --from-literal=POSTGRES_PASSWORD="$db_password" \
         --from-literal=RABBITMQ_PASSWORD="$mq_password" \
         --from-literal=POSTGRES_DB_URI="postgresql://cedana:$db_password@cedana-postgres:5432/cedana" \
         --from-literal=DATABASE_URL="postgresql://cedana:$db_password@cedana-postgres:5432/cedana" \
         --from-literal=RABBITMQ_URI="amqp://cedana:$mq_password@cedana-rabbitmq:5672" \
+        --from-literal=OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-}" \
+        --from-literal=OTEL_EXPORTER_OTLP_HEADERS="${OTEL_EXPORTER_OTLP_HEADERS:-}" \
         --from-literal=AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}" \
         --from-literal=AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}" \
         ${AWS_SESSION_TOKEN:+--from-literal=AWS_SESSION_TOKEN="$AWS_SESSION_TOKEN"} >/dev/null
@@ -269,7 +272,6 @@ spec:
             - { name: RUST_LOG, value: "${PROPAGATOR_LOG_LEVEL:-info}" }
             - { name: BUCKET_NAME, value: "${PROPAGATOR_BUCKET_NAME:-cedana-checkpoints-storage}" }
             - { name: PLUGINS_BUCKET, value: "${PROPAGATOR_PLUGINS_BUCKET:-cedana-bin}" }
-            - { name: AWS_REGION, value: "${AWS_REGION:-us-east-1}" }
             - { name: RABBITMQ_DISCOVERY_URI, value: "$mq_discovery_uri" }
             - { name: CLICKHOUSE_URL, value: "http://cedana-clickhouse:8123" }
             - { name: CLICKHOUSE_DATABASE, value: cedana }
