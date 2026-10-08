@@ -32,8 +32,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # A tagged commit is a release: the release workflow runs instead of this one.
+  check_release:
+    name: Check release
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.tags.outputs.release }}
+    steps:
+      - name: Check if commit is tagged
+        id: tags
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git ls-remote --tags "https://x-access-token:$GH_TOKEN@github.com/$GITHUB_REPOSITORY" | grep -q "^$GITHUB_SHA"; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build
+    needs: check_release
+    if: needs.check_release.outputs.release != 'true'
     uses: ./.github/workflows/build.yml
     secrets: inherit
     with:
@@ -45,6 +64,8 @@ jobs:
 
   download:
     name: Download
+    needs: check_release
+    if: needs.check_release.outputs.release != 'true'
     uses: ./.github/workflows/download.yml
     secrets: inherit
     with:
