@@ -9,6 +9,8 @@ load ../../helpers/daemon
 load_lib support
 load_lib assert
 
+export CEDANA_CHECKPOINT_COMPRESSION=gzip
+
 setup_file() {
     setup_file_daemon
 }
@@ -20,6 +22,7 @@ setup() {
 
 teardown() {
     timeout --kill-after=5s 15s cedana job kill "$jid" >/dev/null 2>&1 || true
+    rm -rf -- "$BATS_TEST_TMPDIR/checkpoint"
     teardown_daemon
 }
 
@@ -65,6 +68,61 @@ check_collective() {
 
 @test "NCCL single-GPU all-to-all (native and intercepted)" {
     check_collective alltoall_perf
+}
+
+wait_for_collective() {
+    local log_file=$1 offset=${2:-0}
+    for _ in {1..30}; do
+        # These collectives emit 13 columns, with out-of-place/in-place error
+        # counts in columns 9 and 13. Ignore headers and unfinished rows.
+        if [ -f "$log_file" ] && tail -c "+$((offset + 1))" "$log_file" | awk '
+            NF == 13 && $1 == 1048576 && $3 == "float" {
+                seen = 1
+                if ($9 != "0" || $13 != "0") bad = 1
+            }
+            END { exit !(seen && !bad) }
+        '; then
+            return 0
+        fi
+        sleep 1
+    done
+    fail "NCCL did not produce fresh zero-error collective results"
+}
+
+check_restore() {
+    local binary="/opt/nccl-tests/$1" log_file old_log offset
+    cedana run process --gpu-enabled --jid "$jid" -- "$binary" \
+        -g 1 -b 1M -e 1M -n 100 -c 1 -N 0 -T 30
+    log_file=$(logfile_for_jid "$jid")
+    wait_for_collective "$log_file"
+
+    mkdir -p "$BATS_TEST_TMPDIR/checkpoint"
+    run timeout --kill-after=5s 90s cedana dump job "$jid" \
+        --dir "$BATS_TEST_TMPDIR/checkpoint"
+    assert_success
+    old_log=$log_file
+    offset=$(stat -c %s "$log_file")
+
+    run timeout --kill-after=5s 90s cedana restore job "$jid"
+    assert_success
+    log_file=$(logfile_for_jid "$jid")
+    [ "$log_file" = "$old_log" ] || offset=0
+    wait_for_collective "$log_file" "$offset"
+}
+
+# bats test_tags=restore
+@test "NCCL single-GPU all-reduce checkpoint/restore" {
+    check_restore all_reduce_perf
+}
+
+# bats test_tags=restore
+@test "NCCL single-GPU all-gather checkpoint/restore" {
+    check_restore all_gather_perf
+}
+
+# bats test_tags=restore
+@test "NCCL single-GPU reduce-scatter checkpoint/restore" {
+    check_restore reduce_scatter_perf
 }
 
 # bats test_tags=multi
