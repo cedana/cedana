@@ -57,24 +57,25 @@ jobs:
       csx_version: main
       propagator_version: main
 
-  publish:
-    name: Publish
+  # Publish to the alpha channel first so that tests (e.g. EKS/GKE) can download
+  # this build from the propagator. The actual release publish happens after
+  # tests pass.
+  prepublish:
+    name: Pre-publish
     uses: ./.github/workflows/publish.yml
     needs: build
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      github: true
       propagator: true
-      propagator_repo: cedana
+      propagator_repo: cedana-alpha
       dockerhub: true
-      dockerhub_latest: true
-      post_summary: true
+      post_summary: false
 
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: [publish, download]
+    needs: [prepublish, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
@@ -84,7 +85,7 @@ jobs:
   bench:
     name: Bench
     uses: ./.github/workflows/bench.yml
-    needs: [publish, download]
+    needs: [prepublish, download]
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
@@ -95,3 +96,17 @@ jobs:
       comparison_runtime: true
       push_results: true
       results_dataset: cedana
+
+  publish:
+    name: Publish
+    uses: ./.github/workflows/publish.yml
+    needs: [test, bench]
+    secrets: inherit
+    with:
+      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
+      github: true
+      propagator: true
+      propagator_repo: cedana
+      dockerhub: true
+      dockerhub_latest: true
+      post_summary: true
