@@ -26,11 +26,6 @@ on:
         description: "JSON list of platforms to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter). Cloud platforms share a cluster, so their jobs are serialized with a concurrency group."
         required: false
         default: '["K3s"]'
-      platform:
-        type: string
-        description: "Deprecated: a single platform, use platforms instead"
-        required: false
-        default: ""
       propagator:
         type: boolean
         description: "Deploy the propagator from the propagator-digests-* artifacts into the cluster, instead of using CEDANA_URL"
@@ -134,7 +129,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJSON(inputs.platform != '' && format('["{0}"]', inputs.platform) || inputs.platforms) }}
+        platform: ${{ fromJSON(inputs.platforms) }}
         compute:
           - CPU
           - CUDA
