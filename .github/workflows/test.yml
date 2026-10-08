@@ -26,6 +26,11 @@ on:
         description: "Run large tests"
         required: false
         default: false
+      propagator:
+        type: boolean
+        description: "Deploy the propagator from the propagator-digests-* artifacts into the test clusters, instead of using CEDANA_URL"
+        required: false
+        default: false
       kubernetes:
         type: boolean
         description: "Run kubernetes tests"
@@ -261,7 +266,6 @@ jobs:
           - containerd
           - storage/cedana
           - storage/s3
-          - storage/gcs
           - storage/csx
         arch:
           - amd64
@@ -416,6 +420,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: K3s
+      propagator: ${{ inputs.propagator }}
       large: false # K3s is only for small tests
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
@@ -432,6 +437,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: EKS
+      propagator: ${{ inputs.propagator }}
       runner: ${{ inputs.runner }}
       large: ${{ inputs.large }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
@@ -448,6 +454,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: EKS-Karpenter
+      propagator: ${{ inputs.propagator }}
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
@@ -464,6 +471,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: GKE
+      propagator: ${{ inputs.propagator }}
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
@@ -480,6 +488,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       platform: Nebius
+      propagator: ${{ inputs.propagator }}
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner }} # No need for GPU runner
@@ -526,7 +535,7 @@ jobs:
         uses: cedana/cedana-test-summary@v1
         with:
           reports: report/**/*.xml
-          jobs-filter: '^Test / ' # jobs of this workflow, as named by the callers (pr.yml, nightly.yml, ...)
+          jobs-filter: "^Test / " # jobs of this workflow, as named by the callers (pr.yml, nightly.yml, ...)
           image-branch: test-summary-assets
           matrix-sections: |
             Kubernetes=^Kubernetes

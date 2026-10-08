@@ -3,28 +3,9 @@
 #####################################
 ### Cedana Propagator API Helpers ###
 #####################################
-
-# Default propagator service configuration
-# Normalize the URL to ensure it includes protocol and has the correct format
-normalize_url() {
-    local url="$1"
-    # Remove trailing slashes
-    url="${url%/}"
-
-    # Add https:// if no protocol specified
-    if [[ ! "$url" =~ ^https?:// ]]; then
-        url="https://$url"
-    fi
-
-    echo "$url"
-}
-
-PROPAGATOR_BASE_URL=""
-if [ -n "${CEDANA_URL:-}" ]; then
-    PROPAGATOR_BASE_URL=$(normalize_url "$CEDANA_URL")
-fi
-
-PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
+#
+# All functions talk to the propagator at CEDANA_URL (full base URL, no trailing
+# slash) using CEDANA_AUTH_TOKEN. The caller is responsible for setting both.
 
 # Checkpoint a pod via propagator API
 # @param $1: Pod ID (UID)
@@ -51,9 +32,9 @@ checkpoint_pod() {
     }')
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/checkpoint/pod" \
+    response=$(curl -s -X POST "${CEDANA_URL}/checkpoint/pod" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -d "$payload" \
         -w "%{http_code}")
 
@@ -85,9 +66,9 @@ checkpoint_pod_by_name() {
         '{"pod_name": $name, "namespace": $namespace}')
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/checkpoint/pod" \
+    response=$(curl -s -X POST "${CEDANA_URL}/checkpoint/pod" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -d "$payload" \
         -w "%{http_code}")
 
@@ -144,9 +125,9 @@ restore_pod() {
     fi
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/restore/pod" \
+    response=$(curl -s -X POST "${CEDANA_URL}/restore/pod" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -d "$payload" \
         -w "%{http_code}" 2>&1)
 
@@ -183,8 +164,8 @@ poll_action_status() {
 
     for i in $(seq 1 $timeout); do
         local response
-        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/checkpoint/status/${action_id}" \
-                -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        response=$(curl -s -X GET "${CEDANA_URL}/checkpoint/status/${action_id}" \
+                -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -w "%{http_code}")
 
         local http_code="${response: -3}"
@@ -219,8 +200,8 @@ poll_action_status() {
             debug_log "Warning: Dedicated status endpoint not found, trying general actions endpoint..."
             # Fallback to general actions endpoint
             local actions_response
-            actions_response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/actions" \
-                    -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            actions_response=$(curl -s -X GET "${CEDANA_URL}/actions" \
+                    -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
                 -w "%{http_code}")
 
             local actions_http_code="${actions_response: -3}"
@@ -282,8 +263,8 @@ get_checkpoint_id_from_action() {
     debug_log "Getting checkpoint ID for action '$action_id'..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/actions" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X GET "${CEDANA_URL}/actions" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -320,8 +301,8 @@ cleanup_checkpoint() {
     debug_log "Deprecating checkpoint '$checkpoint_id'..."
 
     local response
-    response=$(curl -s -X PATCH "${PROPAGATOR_BASE_URL}/checkpoints/deprecate/${checkpoint_id}" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X PATCH "${CEDANA_URL}/checkpoints/deprecate/${checkpoint_id}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -355,8 +336,8 @@ validate_propagator_connectivity() {
     debug_log "Validating propagator service connectivity..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/user" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X GET "${CEDANA_URL}/user" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -395,14 +376,14 @@ get_checkpoints() {
 
     debug_log "Retrieving checkpoints from propagator..."
 
-    local url="${PROPAGATOR_BASE_URL}/checkpoints"
+    local url="${CEDANA_URL}/checkpoints"
     if [ -n "$cluster_id" ]; then
         url="${url}?cluster_id=${cluster_id}"
     fi
 
     local response
     response=$(curl -s -X GET "$url" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -461,8 +442,8 @@ get_latest_pod_action_id() {
     debug_log "Getting latest action ID for pod '$pod_id'..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/actions/from_pod/${pod_id}" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X GET "${CEDANA_URL}/actions/from_pod/${pod_id}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -492,8 +473,8 @@ register_cluster() {
     debug_log "Registering a new cluster with name '$name'..."
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/cluster" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X POST "${CEDANA_URL}/cluster" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{ "cluster_name": "'"${name}"'" }' \
         -w "%{http_code}")
@@ -521,8 +502,8 @@ deregister_cluster() {
     debug_log "Deregistering a new cluster with ID '$id'..."
 
     local response
-    response=$(curl -s -X DELETE "${PROPAGATOR_BASE_URL}/cluster/${id}" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X DELETE "${CEDANA_URL}/cluster/${id}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
