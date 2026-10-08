@@ -2,6 +2,11 @@
 
 FROM cedana/cedana-samples:cuda12.8-torch2.7 AS cedana-samples
 
+FROM nvidia/cuda:13.0.2-devel-ubuntu24.04 AS module-jit
+COPY test/workloads/module-jit.cpp /build/module-jit.cpp
+RUN g++ -std=c++17 -I/usr/local/cuda/include /build/module-jit.cpp \
+    -L/usr/local/cuda/lib64/stubs -lcuda -o /build/module-jit
+
 FROM nvidia/cuda:12.8.0-base-ubuntu24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
@@ -211,6 +216,7 @@ EOT
 
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples
+COPY --from=module-jit /build/module-jit /usr/local/libexec/cedana-tests/module-jit
 
 VOLUME ["/src"]
 WORKDIR /src
