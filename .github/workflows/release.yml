@@ -27,27 +27,12 @@ on:
         required: false
         default: false
 
+# Shared with push.yml: a release cancels any in-progress push.
 concurrency:
-  group: ${{ github.repository }}-release-${{ github.ref }}
+  group: ${{ github.repository }}-release
   cancel-in-progress: true
 
 jobs:
-  # The release workflow trumps the push workflow: cancel any push run for this
-  # commit so that only the release runs.
-  cancel_push:
-    name: Cancel push
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - name: Cancel push runs for this commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow push.yml --commit "$GITHUB_SHA" \
-            --json databaseId,status --jq '.[] | select(.status != "completed") | .databaseId' |
-            xargs -r -n1 gh run cancel --repo "$GITHUB_REPOSITORY"
-
   build:
     name: Build
     uses: ./.github/workflows/build.yml
