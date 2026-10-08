@@ -406,12 +406,7 @@ jobs:
       runner: ${{ inputs.runner_gpu }}
       post_summary: false # Will post consolidated summary instead
 
-  # XXX: Below kubernetes tests are split into separate workflows, instead of using matrix,
-  # because of Github Actions issue of using concurrency group together with matrix jobs
-  # within the same workflow file.
-  # https://github.com/orgs/community/discussions/26774
-
-  k3s:
+  k8s:
     name: Kubernetes
     uses: ./.github/workflows/test_k8s.yml
     if: ${{ inputs.kubernetes }}
@@ -419,79 +414,11 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      platform: K3s
+      platforms: ${{ inputs.large && '["K3s", "EKS", "EKS-Karpenter", "GKE", "Nebius"]' || '["K3s", "EKS", "EKS-Karpenter", "GKE"]' }} # Nebius only runs large tests
       propagator: ${{ inputs.propagator }}
-      large: false # K3s is only for small tests
+      large: ${{ inputs.large }} # K3s is only for small tests, regardless
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
-      parallelism: ${{ inputs.parallelism }}
-      post_summary: false # Will post consolidated summary instead
-
-  eks:
-    name: Kubernetes
-    uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes }}
-    secrets: inherit
-    concurrency: test-k8s-eks # Since the cluster is reused
-    with:
-      ref: ${{ inputs.ref }}
-      debug: ${{ inputs.debug }}
-      platform: EKS
-      propagator: ${{ inputs.propagator }}
-      runner: ${{ inputs.runner }}
-      large: ${{ inputs.large }}
-      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
-      parallelism: ${{ inputs.parallelism }}
-      post_summary: false # Will post consolidated summary instead
-
-  eks-karpenter:
-    name: Kubernetes
-    uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes }}
-    secrets: inherit
-    concurrency: test-k8s-karpenter # Since the cluster is reused
-    with:
-      ref: ${{ inputs.ref }}
-      debug: ${{ inputs.debug }}
-      platform: EKS-Karpenter
-      propagator: ${{ inputs.propagator }}
-      large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
-      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
-      parallelism: ${{ inputs.parallelism }}
-      post_summary: false # Will post consolidated summary instead
-
-  gke:
-    name: Kubernetes
-    uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes }}
-    secrets: inherit
-    concurrency: test-k8s-gke # Since the cluster is reused
-    with:
-      ref: ${{ inputs.ref }}
-      debug: ${{ inputs.debug }}
-      platform: GKE
-      propagator: ${{ inputs.propagator }}
-      large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
-      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
-      parallelism: ${{ inputs.parallelism }}
-      post_summary: false # Will post consolidated summary instead
-
-  nebius:
-    name: Kubernetes
-    uses: ./.github/workflows/test_k8s.yml
-    if: ${{ inputs.kubernetes && inputs.large }} # Only run Nebius when large=true
-    secrets: inherit
-    concurrency: test-k8s-nebius # Since the cluster is reused
-    with:
-      ref: ${{ inputs.ref }}
-      debug: ${{ inputs.debug }}
-      platform: Nebius
-      propagator: ${{ inputs.propagator }}
-      large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
-      runner_gpu: ${{ inputs.runner }} # No need for GPU runner
       parallelism: ${{ inputs.parallelism }}
       post_summary: false # Will post consolidated summary instead
 
@@ -516,7 +443,7 @@ jobs:
   post-summary:
     name: Post Summary
     if: always()
-    needs: [unit, script, basic, plugin, streamer, gpu, k3s, eks, eks-karpenter, gke, nebius, slurm]
+    needs: [unit, script, basic, plugin, streamer, gpu, k8s, slurm]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
