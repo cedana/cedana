@@ -583,7 +583,7 @@ jobs:
 
       # Restarts SLURM with a different config, so it runs last and on its own.
       - name: Run SLURM namespace tests
-        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
+        if: ${{ !cancelled() && env.SLURM_CLUSTER_ID != '' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
