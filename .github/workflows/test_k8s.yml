@@ -460,7 +460,7 @@ jobs:
           title: Kubernetes
           jobs-filter: '(^|/ )(Kubernetes \(|Propagator Connectivity)'
           image-branch: test-summary-assets
-          image-repository: cedana/cedana # public, so the image renders when called from private repos
+          image-repository: cedana/summaries # public, so the image renders when called from private repos
           image-token: ${{ secrets.GIT_CI_PAT }}
           matrix-sections: |
             K3s=^Kubernetes \(K3s,
