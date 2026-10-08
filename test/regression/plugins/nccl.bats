@@ -23,7 +23,13 @@ setup() {
 teardown() {
     timeout --kill-after=5s 15s cedana job kill "$jid" >/dev/null 2>&1 || true
     rm -rf -- "$BATS_TEST_TMPDIR/checkpoint"
-    teardown_daemon
+    if env_exists PERSIST_DAEMON; then
+        # Stop this test's log tail immediately; the shared daemon stays alive
+        # until teardown_file, which can be more than WAIT_TIMEOUT away.
+        kill "$TAIL_PID"
+    else
+        teardown_daemon
+    fi
 }
 
 teardown_file() {
