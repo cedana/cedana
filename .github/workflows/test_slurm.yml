@@ -886,6 +886,18 @@ jobs:
           pattern: test-report-*-slurm-*
           path: report
 
+      - name: Matrix rows # one per SLURM version, the swept version first, then the Ansible suite
+        id: rows
+        env:
+          SLURM_VERSIONS: ${{ inputs.slurm_versions }}
+        run: |
+          {
+            echo 'split<<EOF'
+            jq -r '.[] | "\(. | sub("^slurm-"; "") | sub("-[0-9]+$"; "") | gsub("-"; "."))=, \(.),"' <<<"$SLURM_VERSIONS"
+            echo 'Ansible'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Post summary
         uses: cedana/cedana-test-summary@v1
         with:
@@ -895,6 +907,7 @@ jobs:
           image-branch: test-summary-assets
           image-repository: cedana/cedana # public, so the image renders when called from private repos
           image-token: ${{ secrets.GIT_CI_PAT }}
-          matrix-split: |
+          matrix-sections: |
             CPU
-            CUDA=\b(CUDA|GPU)\b
+            CUDA=\(CUDA,
+          matrix-split: ${{ steps.rows.outputs.split }}
