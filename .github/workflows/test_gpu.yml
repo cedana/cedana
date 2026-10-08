@@ -187,15 +187,15 @@ jobs:
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression TAGS=gpu,streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression TAGS=gpu,streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,!streamer PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression TAGS=gpu,!streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,!streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression TAGS=gpu,!streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
 
@@ -204,27 +204,20 @@ jobs:
         # runner for backward-compat (12.8 binaries under a newer driver).
         # Missing samples auto-skip, so the same curated list is safe on both.
         if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
-        run: |
-          mkdir -p /tmp/cuda-samples
-          bats --filter-tags cuda-samples -r test/regression \
-            --output /tmp/cuda-samples --report-formatter junit
+        env:
+          PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
+        run: make test-regression TAGS=cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-cuda-samples
 
       - name: Label reports # with the job name, so the summary can link to it
         if: always()
-        run: |
-          find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})" |' {} +
-          if [ -d /tmp/cuda-samples ]; then
-            find /tmp/cuda-samples -name 'report.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA samples (intercepted, ${{ matrix.cuda_version }})" |' {} +
-          fi
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})" |' {} +
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
-          path: |
-            /tmp/report*.xml
-            /tmp/cuda-samples/report.xml
+          path: /tmp/report*.xml
 
   post-summary:
     name: Post Summary
@@ -247,3 +240,5 @@ jobs:
           image-branch: test-summary-assets
           image-repository: cedana/summaries # public, so the image renders when called from private repos
           image-token: ${{ secrets.GIT_CI_PAT }}
+          matrix-sections: | # one per CUDA version found in the suite names
+            $1=\b(\d+-\d+)\b
