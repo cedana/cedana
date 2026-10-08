@@ -90,38 +90,40 @@ wait_for_collective() {
 }
 
 check_restore() {
-    local binary="/opt/nccl-tests/$1" log_file old_log offset
+    local binary="/opt/nccl-tests/$1" log_file old_log offset cycle
     cedana run process --gpu-enabled --jid "$jid" -- "$binary" \
         -g 1 -b 1M -e 1M -n 100 -c 1 -N 0 -T 30
     log_file=$(logfile_for_jid "$jid")
     wait_for_collective "$log_file"
 
-    mkdir -p "$BATS_TEST_TMPDIR/checkpoint"
-    run timeout --kill-after=5s 90s cedana dump job "$jid" \
-        --dir "$BATS_TEST_TMPDIR/checkpoint"
-    assert_success
-    old_log=$log_file
-    offset=$(stat -c %s "$log_file")
+    for cycle in 1 2; do
+        mkdir -p "$BATS_TEST_TMPDIR/checkpoint/$cycle"
+        run timeout --kill-after=5s 90s cedana dump job "$jid" \
+            --dir "$BATS_TEST_TMPDIR/checkpoint/$cycle"
+        assert_success
+        old_log=$log_file
+        offset=$(stat -c %s "$log_file")
 
-    run timeout --kill-after=5s 90s cedana restore job "$jid"
-    assert_success
-    log_file=$(logfile_for_jid "$jid")
-    [ "$log_file" = "$old_log" ] || offset=0
-    wait_for_collective "$log_file" "$offset"
+        run timeout --kill-after=5s 90s cedana restore job "$jid"
+        assert_success
+        log_file=$(logfile_for_jid "$jid")
+        [ "$log_file" = "$old_log" ] || offset=0
+        wait_for_collective "$log_file" "$offset"
+    done
 }
 
-# bats test_tags=restore
-@test "NCCL single-GPU all-reduce checkpoint/restore" {
+# bats test_tags=restore,crcr
+@test "NCCL single-GPU all-reduce repeated checkpoint/restore" {
     check_restore all_reduce_perf
 }
 
-# bats test_tags=restore
-@test "NCCL single-GPU all-gather checkpoint/restore" {
+# bats test_tags=restore,crcr
+@test "NCCL single-GPU all-gather repeated checkpoint/restore" {
     check_restore all_gather_perf
 }
 
-# bats test_tags=restore
-@test "NCCL single-GPU reduce-scatter checkpoint/restore" {
+# bats test_tags=restore,crcr
+@test "NCCL single-GPU reduce-scatter repeated checkpoint/restore" {
     check_restore reduce_scatter_perf
 }
 
