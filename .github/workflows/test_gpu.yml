@@ -244,3 +244,6 @@ jobs:
           reports: report/**/*.xml
           title: CUDA
           jobs-filter: '(^|/ )CUDA \('
+          image-branch: test-summary-assets
+          image-repository: cedana/cedana # public, so the image renders when called from private repos
+          image-token: ${{ secrets.GIT_CI_PAT }}

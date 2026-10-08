@@ -519,7 +519,6 @@ jobs:
     needs: [unit, script, basic, plugin, streamer, gpu, k3s, eks, eks-karpenter, gke, nebius, slurm]
     runs-on: ubuntu-latest
     permissions:
-      contents: write # to publish the test matrix image to the test-summary-assets branch
       pull-requests: write
       actions: read
     steps:
@@ -537,6 +536,8 @@ jobs:
           reports: report/**/*.xml
           jobs-filter: "^Test / " # jobs of this workflow, as named by the callers (pr.yml, nightly.yml, ...)
           image-branch: test-summary-assets
+          image-repository: cedana/cedana # public, so the image renders when called from private repos
+          image-token: ${{ secrets.GIT_CI_PAT }}
           matrix-sections: |
             Kubernetes=^Kubernetes
             SLURM=^Slurm

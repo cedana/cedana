@@ -455,3 +455,9 @@ jobs:
           reports: report/**/*.xml
           title: Kubernetes (${{ inputs.platform }})
           jobs-filter: '(^|/ )(Kubernetes|Propagator Connectivity) \(${{ inputs.platform }}[,)]'
+          image-branch: test-summary-assets
+          image-repository: cedana/cedana # public, so the image renders when called from private repos
+          image-token: ${{ secrets.GIT_CI_PAT }}
+          matrix-split: |
+            CPU
+            CUDA=\b(CUDA|GPU)\b
