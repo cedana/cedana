@@ -132,12 +132,12 @@ func NewStreamingFs(
 					ioCtx, end := profiling.StartTimingParallelCategory(
 						ctx,
 						"storage",
-						cedana_io.SpliceFrom,
+						cedana_io.SpliceFile,
 						fmt.Sprintf("shard-%d", i),
 						compression,
 					)
 					var n int64
-					n, err = cedana_io.SpliceFrom(raw, writeFds[i])
+					n, err = cedana_io.SpliceFile(raw, writeFds[i])
 					profiling.AddIO(ioCtx, n)
 					end()
 				} else {
