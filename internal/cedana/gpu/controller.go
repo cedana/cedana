@@ -287,6 +287,8 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
+		// Restores attach twice: at CRIU's setup-namespaces hook and post-restore (see CRIUCallback)
+		"CEDANA_GPU_ATTACH_STAGED=1",
 	)
 
 	cmd.Env = append(cmd.Env, env...)
@@ -566,23 +568,38 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return nil
 	}
 
-	// Update GPU controller with the restore PID (which can be a new PID)
-	// In case, there are no namespaces to restore CRIU will call this hook
+	// Update GPU controller with the restore PID (which can be a new PID). The controller is
+	// attached twice (CEDANA_GPU_ATTACH_STAGED): once as soon as the restored root task and its
+	// namespaces exist, so the controller's workers can enter them and restore device state
+	// while CRIU is still restoring the process tree, and once more at post-restore, which
+	// lets the workers touch the application itself.
 	var restoredPid *int32
-	callback.SkipNamespacesFunc = func(ctx context.Context, pid int32) error {
+	attach := func(ctx context.Context, pid int32) error {
 		controller := p.Get(id)
 		restoredPid = &pid
 
 		return controller.Attach(ctx, uint32(pid))
 	}
 
-	// Will only be called if there are namespaces to restore
-	callback.PostRestoreFunc = func(ctx context.Context, pid int32) error {
-		controller := p.Get(id)
-		restoredPid = &pid
-
-		return controller.Attach(ctx, uint32(pid))
+	// setup-namespaces fires once the root task has created its namespaces, but they are
+	// populated (mounts restored and pivoted, IPC objects recreated) only by
+	// post-setup-namespaces, which carries no pid: attach there with the pid from here.
+	var nsPid int32
+	callback.SetupNamespacesFunc = func(ctx context.Context, pid int32) error {
+		nsPid = pid
+		return nil
 	}
+	callback.PostSetupNamespacesFunc = func(ctx context.Context) error {
+		if nsPid == 0 {
+			return nil
+		}
+		return attach(ctx, nsPid)
+	}
+
+	// In case there are no namespaces to restore CRIU calls this hook instead
+	callback.SkipNamespacesFunc = attach
+
+	callback.PostRestoreFunc = attach
 
 	var restoreProfileOnce sync.Once
 	callback.PreResumeFunc = func(ctx context.Context) error {
