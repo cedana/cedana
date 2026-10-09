@@ -1,10 +1,26 @@
 # syntax=docker/dockerfile:1.6
 
+FROM nvidia/cuda:12.8.0-devel-ubuntu24.04 AS nccl-tests
+ARG NCCL_VERSION=2.25.1-1+cuda12.8
+# nccl-tests v2.18.3, pinned independently of the NCCL library version.
+ARG NCCL_TESTS_COMMIT=f727aa2a540fef911de9d7bfd8852bc5d2c69815
+RUN <<EOT
+set -eux
+apt-get update
+apt-get install -y --no-install-recommends git ca-certificates libnccl-dev=${NCCL_VERSION} libnccl2=${NCCL_VERSION}
+git init /opt/nccl-tests
+cd /opt/nccl-tests
+git fetch --depth 1 https://github.com/NVIDIA/nccl-tests.git ${NCCL_TESTS_COMMIT}
+git checkout --detach FETCH_HEAD
+make -j4 CUDA_HOME=/usr/local/cuda NCCL_HOME=/usr
+EOT
+
 FROM cedana/cedana-samples:cuda12.8-torch2.7 AS cedana-samples
 
 FROM nvidia/cuda:12.8.0-base-ubuntu24.04
 LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 
+ARG NCCL_VERSION=2.25.1-1+cuda12.8
 ARG GO_VERSION=1.25.1
 ARG KUBECTL_VERSION=1.33.0
 ARG K9S_VERSION=latest
@@ -67,6 +83,7 @@ RUN <<EOT
 set -eux
 apt-get update
 apt-get install -y --no-install-recommends cuda-nvrtc-12-8
+apt-get install -y --no-install-recommends libnccl2=${NCCL_VERSION}
 EOT
 
 # install bats
@@ -218,6 +235,7 @@ EOT
 
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples
+COPY --from=nccl-tests /opt/nccl-tests/build/*_perf /opt/nccl-tests/
 
 VOLUME ["/src"]
 WORKDIR /src
