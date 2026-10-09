@@ -72,6 +72,7 @@ const (
 	DEFAULT_K8S_FALLBACK_COLD_START = true
 
 	DEFAULT_AWS_CREDENTIALS_MODE = "static"
+	DEFAULT_GCS_CREDENTIALS_MODE = "ambient"
 
 	DEFAULT_CSX_SOCK_ADDR = "/run/csx.sock"
 )
@@ -138,6 +139,9 @@ var Global Config = Config{
 	},
 	AWS: AWS{
 		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,
+	},
+	GCS: GCS{
+		CredentialsMode: DEFAULT_GCS_CREDENTIALS_MODE,
 	},
 	CSX: CSX{
 		SockAddr: DEFAULT_CSX_SOCK_ADDR,
