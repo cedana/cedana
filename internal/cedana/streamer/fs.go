@@ -126,15 +126,31 @@ func NewStreamingFs(
 					ioErr <- file.Close()
 				}()
 
-				file = profiling.IOParallelCategory(
-					ctx,
-					file,
-					"storage",
-					cedana_io.ReadFrom,
-					fmt.Sprintf("shard-%d", i),
-					compression,
-				)
-				_, err := cedana_io.ReadFrom(file, writeFds[i], compression)
+				var err error
+				if raw, ok := file.(*os.File); ok && compression == "none" {
+					// Uncompressed local file: zero-copy splice straight into the pipe
+					ioCtx, end := profiling.StartTimingParallelCategory(
+						ctx,
+						"storage",
+						cedana_io.SpliceFrom,
+						fmt.Sprintf("shard-%d", i),
+						compression,
+					)
+					var n int64
+					n, err = cedana_io.SpliceFrom(raw, writeFds[i])
+					profiling.AddIO(ioCtx, n)
+					end()
+				} else {
+					file = profiling.IOParallelCategory(
+						ctx,
+						file,
+						"storage",
+						cedana_io.ReadFrom,
+						fmt.Sprintf("shard-%d", i),
+						compression,
+					)
+					_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
+				}
 				writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
