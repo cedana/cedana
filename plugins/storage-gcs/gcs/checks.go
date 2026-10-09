@@ -2,9 +2,11 @@ package gcs
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"cloud.google.com/go/auth"
 	"cloud.google.com/go/auth/credentials"
 	"cloud.google.com/go/storage"
 	"github.com/cedana/cedana/pkg/config"
@@ -28,15 +30,11 @@ func CheckConfig() types.Check {
 		}
 
 		credentialsComponent := &daemon.HealthCheckComponent{Name: "GCS Credentials", Data: "available"}
-		_, err := ClientOptions(settings)
-		if err == nil && settings.CredentialsMode == CredentialsModeAmbient {
-			detectCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		creds, err := loadCredentials(settings)
+		if err == nil {
+			tokenCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			creds, detectErr := credentials.DetectDefault(&credentials.DetectOptions{Scopes: []string{storage.ScopeFullControl}})
-			if detectErr == nil {
-				_, detectErr = creds.Token(detectCtx)
-			}
-			err = detectErr
+			_, err = creds.Token(tokenCtx)
 		}
 		if err != nil {
 			credentialsComponent.Data = "unavailable"
@@ -45,4 +43,23 @@ func CheckConfig() types.Check {
 		components = append(components, credentialsComponent)
 		return components
 	}
+}
+
+// loadCredentials loads the credentials of the selected mode, as the client would:
+// the default chain for ambient, the key for serviceAccount. A malformed or missing
+// key fails here, before any request.
+func loadCredentials(settings config.GCS) (*auth.Credentials, error) {
+	if _, err := ClientOptions(settings); err != nil {
+		return nil, err
+	}
+	opts := &credentials.DetectOptions{Scopes: []string{storage.ScopeFullControl}}
+	if settings.CredentialsMode == CredentialsModeServiceAccount {
+		key := strings.TrimSpace(settings.ServiceAccountKey)
+		if strings.HasPrefix(key, "{") {
+			opts.CredentialsJSON = []byte(key)
+		} else {
+			opts.CredentialsFile = key
+		}
+	}
+	return credentials.DetectDefault(opts)
 }
