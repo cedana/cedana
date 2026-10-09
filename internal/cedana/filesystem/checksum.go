@@ -44,6 +44,12 @@ func (s *Storage) ChecksumPath(_ context.Context, path string) (string, error) {
 	if !config.Global.Checkpoint.Checksum {
 		return "", nil
 	}
+	return checksumOfPath(path)
+}
+
+// checksumOfPath computes the checksum of a local tarball or directory whatever the
+// dump-side setting, for a restore that verifies it.
+func checksumOfPath(path string) (string, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return "", fmt.Errorf("failed to stat %s: %w", path, err)
