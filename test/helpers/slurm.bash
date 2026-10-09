@@ -7,31 +7,65 @@
 # Source setup helpers (shared vars + functions)
 source "$(dirname "${BASH_SOURCE[0]}")/slurm_setup.bash"
 
-slurm_submit_job() {
-    local sbatch_file="$1"
-    local rel_path container_dir container_file
+# Where slurm_submit_script submits from, on the submission host. Every node has
+# its own clone of cedana-samples here.
+SLURM_SCRIPT_WORKDIR=/data/cedana-samples
+
+# Runs sbatch from <workdir> on the submission host and prints the job ID.
+# Submits <file> (a path there) if given, otherwise the script on stdin.
+_slurm_sbatch() {
+    local workdir="$1"
+    local file="${2:-}"
     local cedana_enable="${CEDANA_ENABLE:-1}"
     local cedana_bin="${CEDANA_BIN:-/usr/local/bin/cedana}"
+    local exec_opts=() output job_id
 
-    rel_path="${sbatch_file#*/slurm/}"
-    container_dir="/data/cedana-samples/slurm/$(dirname "$rel_path")"
-    container_file="$(basename "$rel_path")"
-    local submission_host
-    submission_host="$(slurm_submission_container)"
-    info_log "Submitting from $submission_host: cd $container_dir && sbatch $container_file"
+    [ -n "$file" ] || exec_opts+=(-i)
 
-    local output
-    if ! output=$(slurm_submit_exec bash -c \
-        "cd '$container_dir' && sbatch --parsable --overcommit \
-         --export=ALL,CEDANA_ENABLE=${cedana_enable},CEDANA_BIN=${cedana_bin} \
-         --cpus-per-task=1 --mem=0 '$container_file'" 2>&1); then
+    if ! output=$(slurm_submit_exec "${exec_opts[@]}" bash -c 'cd "$1" && shift && exec sbatch "$@"' _ \
+        "$workdir" --parsable --overcommit \
+        --export=ALL,CEDANA_ENABLE="${cedana_enable}",CEDANA_BIN="${cedana_bin}" \
+        --cpus-per-task=1 --mem=0 ${file:+"$file"} 2>&1); then
         error_log "sbatch failed: $output"
         return 1
     fi
 
-    local job_id
     job_id=$(echo "$output" | tail -1 | cut -d';' -f1 | tr -d '[:space:]')
+    echo "$job_id"
+}
+
+# Submits a cedana-samples sbatch file, from its directory in the nodes' clone.
+slurm_submit_job() {
+    local sbatch_file="$1"
+    local container_dir container_file job_id
+
+    container_dir="$(_slurm_sample_container_dir "$sbatch_file")"
+    container_file="$(basename "$sbatch_file")"
+    info_log "Submitting from $(slurm_submission_container): cd $container_dir && sbatch $container_file"
+
+    job_id="$(_slurm_sbatch "$container_dir" "$container_file")" || return 1
     info_log "Submitted $container_file -> job $job_id"
+    echo "$job_id"
+}
+
+# Submits a batch script that lives on the runner rather than in cedana-samples,
+# so a test controls exactly what its job does. The script goes to sbatch on
+# stdin from SLURM_SCRIPT_WORKDIR, so it can still run the samples' workloads by
+# relative path (e.g. cpu_smr/counting.sh), and its output lands where the
+# failure diagnostics look.
+slurm_submit_script() {
+    local script_file="$1"
+    local job_id
+
+    [ -f "$script_file" ] || {
+        error_log "sbatch script not found: $script_file"
+        return 1
+    }
+
+    info_log "Submitting $script_file from $(slurm_submission_container): cd $SLURM_SCRIPT_WORKDIR && sbatch <script>"
+
+    job_id="$(_slurm_sbatch "$SLURM_SCRIPT_WORKDIR" <"$script_file")" || return 1
+    info_log "Submitted $(basename "$script_file") -> job $job_id"
     echo "$job_id"
 }
 
@@ -69,8 +103,35 @@ _persist_container_log_file() {
 
     if docker exec "$container" test -f "$src" 2>/dev/null; then
         docker cp "$container:$src" "$dst_dir/$base" 2>/dev/null ||
-            docker exec "$container" sh -c "cat '$src'" >"$dst_dir/$base" 2>&1 || true
+            docker exec "$container" cat "$src" >"$dst_dir/$base" 2>&1 || true
     fi
+}
+
+# Print the cedana logs in the home directories of the node's regular users.
+# cedana logs to /var/log only as root; as any other user it logs to
+# ~/.cedana/logs (pkg/logging.LogFile). In unprivileged mode that is where the
+# monitor, and the dump or restore it runs, leave everything they log. Homes
+# come from the same passwd entries cedana looks them up in.
+#
+# The users can name these files anything, so the paths are NUL-separated and
+# must only ever be passed as arguments, never put into shell code.
+_slurm_user_log_files() {
+    local container="$1"
+
+    docker exec "$container" sh -c '
+        getent passwd | awk -F: "\$3 >= 1000 && \$3 < 65534 { print \$6 }" | sort -u |
+            while read -r home; do
+                for f in "$home"/.cedana/logs/*.log; do
+                    [ -f "$f" ] && printf "%s\0" "$f"
+                done
+            done
+    ' 2>/dev/null || true
+}
+
+# Print the cedana-slurm logs in /var/log and the users' logs, NUL-separated.
+_slurm_cedana_log_files() {
+    printf '%s\0' /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log
+    _slurm_user_log_files "$1"
 }
 
 _capture_runtime_slurm_logs() {
@@ -133,8 +194,25 @@ _capture_runtime_slurm_logs() {
         _persist_container_log_file "$c" /etc/slurm/gres.conf "$cdir"
         _persist_container_log_file "$c" /var/log/munge/munged.log "$cdir"
 
+        # By user, since each user has its own cedana-slurm.log. Not under a
+        # .cedana directory, which the artifact upload skips as hidden.
+        local user_log
+        while IFS= read -r -d "" user_log; do
+            [ -n "$user_log" ] || continue
+            _persist_container_log_file "$c" "$user_log" \
+                "$cdir/user-logs/$(basename "${user_log%/.cedana/logs/*}")"
+        done < <(_slurm_user_log_files "$c")
+
         if [ "${GPU:-0}" = "1" ]; then
             docker exec "$c" sh -c 'echo "=== nvidia-smi -L ==="; nvidia-smi -L 2>&1 || true; echo "=== /dev/nvidia* ==="; ls -la /dev/nvidia* 2>&1 || true; echo "=== /etc/slurm/gres.conf ==="; cat /etc/slurm/gres.conf 2>&1 || true; echo "=== /etc/slurm/slurm.conf (GPU lines) ==="; grep -E "^(NodeName|GresTypes|DebugFlags)" /etc/slurm/slurm.conf 2>&1 || true; echo "=== slurmd -C ==="; /usr/sbin/slurmd -C 2>&1 || true; echo "=== slurmd -G ==="; /usr/sbin/slurmd -G 2>&1 || true' >"$cdir/gpu-diagnostics.txt" 2>&1 || true
+
+            # The GPU controller's logs, one directory per controller under
+            # gpu.log_dir: /tmp by default, or wherever a test moved it.
+            mkdir -p "$cdir/gpu-logs"
+            docker exec "$c" sh -c '
+                cd / && dirs="$(ls -d tmp/cedana-gpu.* var/tmp/cedana-gpu.* 2>/dev/null)"
+                [ -n "$dirs" ] && tar -cf - $dirs 2>/dev/null
+            ' | tar -xf - -C "$cdir/gpu-logs" 2>/dev/null || true
         fi
 
         docker exec "$c" sh -c 'squeue || true; sinfo || true; sacct -n -a -P || true' >"$cdir/slurm-snapshots.txt" 2>&1 || true
@@ -236,6 +314,13 @@ _dump_job_failure_info() {
         echo "--- $c cedana-slurm monitor log (last 120 lines) ---"
         docker exec "$c" tail -120 /var/log/cedana-slurm-monitor.log 2>/dev/null ||
             echo "(no monitor log)"
+
+        local user_log
+        while IFS= read -r -d "" user_log; do
+            [ -n "$user_log" ] || continue
+            echo "--- $c $user_log (last 120 lines) ---"
+            docker exec "$c" tail -120 "$user_log" 2>/dev/null || echo "(unreadable)"
+        done < <(_slurm_user_log_files "$c")
     done
 
     echo "=== cedana-slurm log on controller (last 50 lines) ==="
@@ -353,17 +438,31 @@ cancel_slurm_job() {
 # C/R Test Orchestrator
 ##############################
 
+# Runs an action sequence (e.g. SUBMIT_DUMP_RESTORE) against a sample job.
+#
+# Set SLURM_JOB_CHECK to the name of a function to run extra checks on the
+# job: it is called as `<fn> pre-dump <job_id>` just before each dump and as
+# `<fn> post-restore <job_id>` once a restored job is running. A non-zero
+# return fails the sequence.
+#
+# Set SLURM_JOB_SUBMIT=slurm_submit_script to submit a script from the runner
+# instead of a cedana-samples file.
 test_slurm_job() {
     local action_sequence="$1"
     local sbatch_file="$2"
     local dump_wait_time="${3:-10}"
     local dump_timeout="${4:-120}"
+    local submit_fn="${SLURM_JOB_SUBMIT:-slurm_submit_job}"
     local sample_dir=""
     local relevant_job_ids_csv=""
     local tracked_job_ids=()
 
     IFS='_' read -ra actions <<<"$action_sequence"
-    sample_dir="$(_slurm_sample_container_dir "$sbatch_file")"
+    if [ "$submit_fn" = "slurm_submit_script" ]; then
+        sample_dir="$SLURM_SCRIPT_WORKDIR"
+    else
+        sample_dir="$(_slurm_sample_container_dir "$sbatch_file")"
+    fi
 
     info_log "Starting SLURM action sequence: $action_sequence (file=$sbatch_file, dump_wait=${dump_wait_time}s, dump_timeout=${dump_timeout}s)"
 
@@ -378,7 +477,7 @@ test_slurm_job() {
             }
 
             info_log "Submitting job from $sbatch_file..."
-            job_id=$(slurm_submit_job "$sbatch_file") ||
+            job_id=$("$submit_fn" "$sbatch_file") ||
                 {
                     error="Failed to submit job"
                     break
@@ -408,15 +507,32 @@ test_slurm_job() {
                 break
             }
 
+            if [ -n "${SLURM_JOB_CHECK:-}" ]; then
+                "$SLURM_JOB_CHECK" pre-dump "$job_id" ||
+                    {
+                        error="Pre-dump check failed for job $job_id"
+                        break
+                    }
+            fi
+
             local _host
+            local -a _cedana_logs=()
             _host="$(_get_batch_host "$job_id")"
             if [ -n "$_host" ]; then
+                mapfile -d '' -t _cedana_logs < <(_slurm_cedana_log_files "$_host")
                 info_log "[DEBUG] SPANK monitor check on $_host for job $job_id:"
                 docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm monitor'" 2>/dev/null || info_log "[DEBUG] No monitor process found"
                 info_log "[DEBUG] slurmd PATH:"
                 docker exec "$_host" bash -c "cat /proc/\$(pgrep -x slurmd | head -1)/environ 2>/dev/null | tr '\0' '\n' | grep ^PATH" 2>/dev/null || info_log "[DEBUG] Could not read slurmd environ"
                 info_log "[DEBUG] SPANK log entries:"
-                docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f ---\"; grep -i 'spank\|monitor\|checkpoint request\|checkpoint consumer\|failed to get event stream\|failed to setup checkpoint request consumer\|failed to connect to rabbitmq\|checkpoint failed for job ID\|publishing checkpoint info' \"\$f\" | tail -15; done" 2>/dev/null || info_log "[DEBUG] No SPANK/monitor entries in logs"
+                # The log paths go in as arguments: users name their own logs
+                docker exec "$_host" bash -c '
+                    for f in "$@"; do
+                        [ -f "$f" ] || continue
+                        echo "--- $f ---"
+                        grep -i "spank\|monitor\|checkpoint request\|checkpoint consumer\|failed to get event stream\|failed to setup checkpoint request consumer\|failed to connect to rabbitmq\|checkpoint failed for job ID\|publishing checkpoint info" "$f" | tail -15
+                    done
+                ' _ "${_cedana_logs[@]}" 2>/dev/null || info_log "[DEBUG] No SPANK/monitor entries in logs"
             fi
 
             info_log "Checkpointing SLURM job $job_id via propagator..."
@@ -445,7 +561,17 @@ test_slurm_job() {
                     info_log "[DEBUG] Monitor DIED after checkpoint request"
                 }
                 info_log "[DEBUG] cedana-slurm log excerpts scoped to job $job_id:"
-                docker exec "$_host" bash -c "for f in /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log; do [ -f \"\$f\" ] || continue; echo \"--- \$f (job/action scoped) ---\"; grep -E 'jobid=${job_id}\\b|job_id=${job_id}\\b|action_id=${action_id}' \"\$f\" | tail -120 || echo '(no scoped matches)'; done" 2>/dev/null || true
+                # Again, as a user's log only exists once something has logged there as them
+                mapfile -d '' -t _cedana_logs < <(_slurm_cedana_log_files "$_host")
+                docker exec "$_host" bash -c '
+                    pattern="$1"
+                    shift
+                    for f in "$@"; do
+                        [ -f "$f" ] || continue
+                        echo "--- $f (job/action scoped) ---"
+                        grep -E "$pattern" "$f" | tail -120 || echo "(no scoped matches)"
+                    done
+                ' _ "jobid=${job_id}\\b|job_id=${job_id}\\b|action_id=${action_id}" "${_cedana_logs[@]}" 2>/dev/null || true
 
                 if [ "$monitor_alive" = false ]; then
                     _capture_runtime_slurm_logs "monitor-died-after-checkpoint" "$job_id" "$_host" "$sample_dir" "$relevant_job_ids_csv"
@@ -552,6 +678,14 @@ test_slurm_job() {
                 }
 
             info_log "Restored job $job_id is running"
+
+            if [ -n "${SLURM_JOB_CHECK:-}" ]; then
+                "$SLURM_JOB_CHECK" post-restore "$job_id" ||
+                    {
+                        error="Post-restore check failed for job $job_id"
+                        break
+                    }
+            fi
             submitted=true
             ;;
 
@@ -567,6 +701,10 @@ test_slurm_job() {
 
     if [ -n "$error" ]; then
         error_log "$error"
+        if [ "$submit_fn" = "slurm_submit_script" ]; then
+            info_log "Submitted script ($sbatch_file):"
+            cat "$sbatch_file" >&"${OUTPUT_FD}" || true
+        fi
         slurm_exec squeue 2>/dev/null || true
         slurm_exec sinfo 2>/dev/null || true
         _dump_job_failure_info "${job_id:-}" "$sample_dir" "$relevant_job_ids_csv"
