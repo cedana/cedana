@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
-# Run separately from the gpu suite so NCCL uses the GPU serially.
-# bats file_tags=nccl
+# Exclude nccl from the general gpu suite; its dedicated step runs serially.
+# bats file_tags=gpu,nccl
 
 load ../../helpers/utils
 load ../../helpers/daemon

@@ -187,15 +187,15 @@ jobs:
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression TAGS=gpu,streamer,!cuda-samples,!nccl PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression TAGS=gpu,streamer,!large,!cuda-samples,!nccl PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,!streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression TAGS=gpu,!streamer,!cuda-samples,!nccl PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,!streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression TAGS=gpu,!streamer,!large,!cuda-samples,!nccl PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
 
