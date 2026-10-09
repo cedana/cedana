@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -50,6 +51,9 @@ func LoadJSONFromFile(path string, data any, fs ...afero.Fs) error {
 		file, err = os.Open(path)
 	}
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 		return fmt.Errorf("error opening file: %v", err)
 	}
 	defer file.Close()

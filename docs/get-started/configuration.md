@@ -16,9 +16,9 @@ Each of the below fields can also be set through an environment variable with th
 
 {% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L108-L117" %}
 
-## [Checkpoint](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L69-L85)
+## [Checkpoint](https://github.com/cedana/cedana/blob/4f8a42987c9d581ae0b6911eb9522e51d7b8f419/pkg/config/types.go#L79-L93)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L69-L85" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/4f8a42987c9d581ae0b6911eb9522e51d7b8f419/pkg/config/types.go#L79-L93" %}
 
 ## [Client](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L103-L106)
 
