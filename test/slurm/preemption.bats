@@ -66,16 +66,23 @@ stage_preemption_script() {
 
     stage_preemption_script
 
-    run docker exec \
+    # Runs the preemption script on the compute node and streams its output
+    # (stdout and stderr) as it goes. bats only shows a test's output once the
+    # test ends, except for fd 3, which goes straight to the terminal, so tee
+    # each line to fd 3 ("# "-prefixed, as TAP expects) to follow it live in
+    # CI. tee also passes the output through to stdout, which bats captures
+    # for the test's report. The test passes or fails on the script's exit
+    # status, the first command of the pipe.
+    docker exec \
         -e LOW_PARTITION=debug \
         -e HIGH_PARTITION=high \
         -e PREEMPTOR_CPUS="$NODE_CPUS" \
         "${EXEC_ENV[@]}" \
         "${EXEC_USER[@]}" \
         "${EXEC_WORKDIR[@]}" \
-        "$COMPUTE" /tmp/test-preemption.sh
-    echo "$output"
-    [ "$status" -eq 0 ]
+        "$COMPUTE" /tmp/test-preemption.sh 2>&1 |
+        tee >(sed -u 's/^/# /' >&3)
+    [ "${PIPESTATUS[0]}" -eq 0 ]
 }
 
 # bats test_tags=dump,restore,gpu
@@ -88,14 +95,14 @@ stage_preemption_script() {
     docker exec "$COMPUTE" test -x "$SLURM_GPU_WORKLOAD" ||
         skip "GPU workload not found at $SLURM_GPU_WORKLOAD (samples not set up?)"
 
-    run docker exec \
+    docker exec \
         -e LOW_PARTITION=debug \
         -e HIGH_PARTITION=high \
         -e PREEMPTOR_CPUS="$NODE_CPUS" \
         "${EXEC_ENV[@]}" \
         "${EXEC_USER[@]}" \
         "${EXEC_WORKDIR[@]}" \
-        "$COMPUTE" /tmp/test-preemption.sh --gpu "$SLURM_GPU_WORKLOAD"
-    echo "$output"
-    [ "$status" -eq 0 ]
+        "$COMPUTE" /tmp/test-preemption.sh --gpu "$SLURM_GPU_WORKLOAD" 2>&1 |
+        tee >(sed -u 's/^/# /' >&3)
+    [ "${PIPESTATUS[0]}" -eq 0 ]
 }
