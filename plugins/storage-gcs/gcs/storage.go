@@ -14,7 +14,11 @@ import (
 	"google.golang.org/api/iterator"
 )
 
-const PATH_PREFIX = "gs://"
+// The prefix of a GCS path. gcs:// is accepted too, as the propagator accepts both.
+const (
+	PATH_PREFIX       = "gs://"
+	PATH_PREFIX_ALIAS = "gcs://"
+)
 
 // GCS storage
 type Storage struct {
@@ -170,11 +174,15 @@ func (s *Storage) ReadPath(ctx context.Context, path string) (string, func() err
 /////////////
 
 func (s *Storage) sanitizePath(path string) (bucket string, key string, err error) {
-	if !strings.HasPrefix(path, PATH_PREFIX) {
+	switch {
+	case strings.HasPrefix(path, PATH_PREFIX):
+		path = strings.TrimPrefix(path, PATH_PREFIX)
+	case strings.HasPrefix(path, PATH_PREFIX_ALIAS):
+		path = strings.TrimPrefix(path, PATH_PREFIX_ALIAS)
+	default:
 		return "", "", fmt.Errorf("path must start with %s", PATH_PREFIX)
 	}
 
-	path = strings.TrimPrefix(path, PATH_PREFIX)
 	path = strings.TrimPrefix(path, "/")
 
 	if path == "" {
