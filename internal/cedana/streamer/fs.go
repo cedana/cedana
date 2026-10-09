@@ -57,6 +57,14 @@ type Fs struct {
 	dir       string
 	globCache map[string][]string // Cache glob results since streamer state is consumed
 	globMutex sync.Mutex
+	checksums []string // checksum of each shard as stored, once the wait function has returned
+}
+
+// Checksums returns the checksum of each shard of a WRITE_ONLY streaming fs, in
+// shard order, once the wait function has returned, as the storage's writers
+// reported them. Empty when the storage computes none or the checksum is off.
+func (fs *Fs) Checksums() []string {
+	return fs.checksums
 }
 
 // For READ_ONLY mode, compression is automatically determined.
@@ -106,6 +114,7 @@ func NewStreamingFs(
 	io := &sync.WaitGroup{}
 	io.Add(int(streams))
 	ioErr := make(chan error, streams)
+	checksums := make([]string, streams)
 	paths, err := imgPaths(ctx, storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
@@ -124,8 +133,11 @@ func NewStreamingFs(
 			}
 			go func() {
 				defer io.Done()
+				// One send per shard: the channel holds one result per shard, and it is
+				// drained only after every shard is done
+				var err error
 				defer func() {
-					ioErr <- file.Close()
+					ioErr <- errors.Join(err, file.Close())
 				}()
 
 				file = profiling.IOParallelCategory(
@@ -136,11 +148,8 @@ func NewStreamingFs(
 					fmt.Sprintf("shard-%d", i),
 					compression,
 				)
-				_, err := cedana_io.ReadFrom(file, writeFds[i], compression)
+				_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
 				writeFds[i].Close()
-				if err != nil {
-					ioErr <- err
-				}
 			}()
 		case WRITE_ONLY:
 			defer writeFds[i].Close()
@@ -153,10 +162,18 @@ func NewStreamingFs(
 			if err != nil {
 				return nil, nil, err
 			}
+			// The storage's writer knows the checksum of the shard as stored, once closed
+			shard := file
 			go func() {
 				defer io.Done()
+				// One send per shard, as above
+				var err error
 				defer func() {
-					ioErr <- file.Close()
+					err = errors.Join(err, file.Close())
+					if err == nil {
+						checksums[i] = cedana_io.ChecksumOfWriter(shard)
+					}
+					ioErr <- err
 				}()
 
 				file = profiling.IOParallelCategory(
@@ -167,11 +184,8 @@ func NewStreamingFs(
 					fmt.Sprintf("shard-%d", i),
 					compression,
 				)
-				_, err := cedana_io.WriteTo(readFds[i], file, compression)
+				_, err = cedana_io.WriteTo(readFds[i], file, compression)
 				readFds[i].Close()
-				if err != nil {
-					ioErr <- err
-				}
 			}()
 		}
 	}
@@ -233,6 +247,7 @@ func NewStreamingFs(
 		conn:      nil,
 		dir:       imagesDir,
 		globCache: make(map[string][]string),
+		checksums: checksums,
 	}
 
 	// Clean up on exit
