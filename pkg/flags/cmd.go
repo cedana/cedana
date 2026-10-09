@@ -19,6 +19,7 @@ var (
 	PathFlag        = Flag{Full: "path", Short: "p"}
 	PidFileFlag     = Flag{Full: "pid-file"}
 	ResultFileFlag  = Flag{Full: "result-file"}
+	ChecksumFlag    = Flag{Full: "checksum"}
 	NoServerFlag    = Flag{Full: "no-server"}
 	StreamsFlag     = Flag{Full: "streams"}
 	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}
