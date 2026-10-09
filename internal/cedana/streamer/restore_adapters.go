@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -23,9 +22,9 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// How long the pre-resume check waits for the last shard to be read to its end.
+// How long the post-restore check waits for the last shard to be read to its end.
 // CRIU has read every image by then; only the end of a shard can be in flight.
-var SHARDS_READ_TIMEOUT = 30 * time.Second
+var SHARDS_READ_TIMEOUT = 10 * time.Second
 
 func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
@@ -35,8 +34,10 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 
 			// The checksum of a streamed checkpoint is the manifest of its shards. The
 			// shards feed CRIU as they are read, so the manifest is complete only when
-			// CRIU has read every image: it is compared before the restored process
-			// resumes, and a strict mismatch kills the process before it runs.
+			// CRIU has read every image: it is compared at CRIU's post-restore
+			// notification, when the tasks are restored and not yet running. A strict
+			// mismatch kills them there and fails the restore, so the process never runs
+			// and the runtime keeps no state of the container.
 			check := verify.For(req)
 			var store string
 			if check != nil {
@@ -123,7 +124,7 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 			}
 			streamFs := opts.DumpFs.(*Fs)
 
-			// Verified once: at pre-resume when every shard has been read by then,
+			// Verified once: at post-restore when every shard has been read by then,
 			// otherwise after the restore
 			var verifyOnce sync.Once
 			var verifyErr error
@@ -140,27 +141,23 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				})
 				return verifyErr
 			}
-			var restoredPid atomic.Int32
 			if check != nil {
+				// go-criu dispatches post-restore, not pre-resume; the tasks are restored
+				// and stopped at both
 				opts.CRIUCallback.Include(&criu_client.NotifyCallback{
 					Name: "checksum",
 					PostRestoreFunc: func(ctx context.Context, pid int32) error {
-						restoredPid.Store(pid)
-						return nil
-					},
-					PreResumeFunc: func(ctx context.Context) error {
 						select {
 						case <-streamFs.ShardsRead():
 						case <-time.After(SHARDS_READ_TIMEOUT):
-							log.Warn().Msg("shards still being read at pre-resume, the checksum is verified after the restore")
+							log.Warn().Msg("shards still being read at post-restore, the checksum is verified after the restore")
 							return nil
 						}
+						log.Debug().Int32("pid", pid).Msg("verifying the streamed checkpoint before the restored tasks run")
 						err := verifyNow()
-						if err != nil {
-							// CRIU does not kill the restored tasks when this hook fails
-							if pid := restoredPid.Load(); pid > 0 {
-								syscall.Kill(int(pid), syscall.SIGKILL)
-							}
+						if err != nil && pid > 0 {
+							// The tasks have not run; they must not
+							syscall.Kill(int(pid), syscall.SIGKILL)
 						}
 						return err
 					},
@@ -172,7 +169,13 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				err = errors.Join(err, waitForIO())
 				end()
 
-				// The restore went through without a pre-resume check: verify now, and
+				// A failed verification is the restore's error, not CRIU's report of it
+				if verifyErr != nil {
+					err = verifyErr
+					return
+				}
+
+				// The restore went through without a post-restore check: verify now, and
 				// in strict mode stop the restored process on a mismatch
 				if check != nil && err == nil && !verified {
 					if verr := verifyNow(); verr != nil {

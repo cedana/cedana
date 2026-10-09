@@ -75,7 +75,7 @@ func standIn(t *testing.T) *exec.Cmd {
 type restoreRun struct {
 	ran          bool
 	read         int
-	atPreResume  daemon.ChecksumResult // the result as it stood when the pre-resume hook returned
+	atPreResume  daemon.ChecksumResult // the result as it stood when CRIU's hooks before resume had returned
 	preResumeErr error
 }
 
@@ -104,10 +104,10 @@ func restoreStreamed(t *testing.T, storage cedana_io.Storage, path, expected str
 			file.Close()
 			run.read++
 		}
-		if err := opts.CRIUCallback.PostRestore(ctx, int32(pid)); err != nil {
-			return nil, err
+		run.preResumeErr = opts.CRIUCallback.PostRestore(ctx, int32(pid))
+		if run.preResumeErr == nil {
+			run.preResumeErr = opts.CRIUCallback.PreResume(ctx)
 		}
-		run.preResumeErr = opts.CRIUCallback.PreResume(ctx)
 		run.atPreResume = resp.ChecksumResult
 		return nil, run.preResumeErr
 	}
@@ -162,8 +162,8 @@ func TestStreamedRestoreVerifiesBeforeTheProcessResumes(t *testing.T) {
 		setVerifyMode(t, config.CHECKSUM_VERIFY_STRICT)
 		process := standIn(t)
 		resp, run, err := restoreStreamed(t, &filesystem.Storage{}, path, "crc32c:00000000", streams, process.Process.Pid)
-		if status.Code(err) != codes.FailedPrecondition && run.preResumeErr == nil {
-			t.Fatalf("err = %v, pre-resume err = %v; want the restore to fail", err, run.preResumeErr)
+		if status.Code(err) != codes.FailedPrecondition || run.preResumeErr == nil {
+			t.Fatalf("err = %v, hook err = %v; want the restore to fail with FailedPrecondition from CRIU's hook", err, run.preResumeErr)
 		}
 		if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MISMATCH || resp.ChecksumReason != daemon.ChecksumReason_REASON_STORED {
 			t.Fatalf("result = %v %v, want MISMATCH STORED", resp.ChecksumResult, resp.ChecksumReason)
