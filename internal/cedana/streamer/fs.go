@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,6 +59,61 @@ type Fs struct {
 	globCache map[string][]string // Cache glob results since streamer state is consumed
 	globMutex sync.Mutex
 	checksums []string // checksum of each shard as stored, once the wait function has returned
+
+	// READ_ONLY: the shards' paths, and a channel closed once every shard has been read
+	paths      []string
+	shardsRead chan struct{}
+}
+
+type shardChecksumsKey struct{}
+
+// WithShardChecksums makes a READ_ONLY streaming fs hash each shard as it reads it
+func WithShardChecksums(ctx context.Context) context.Context {
+	return context.WithValue(ctx, shardChecksumsKey{}, true)
+}
+
+// ShardsRead is closed once every shard of a READ_ONLY streaming fs has been read to
+// its end, or has failed
+func (fs *Fs) ShardsRead() <-chan struct{} {
+	return fs.shardsRead
+}
+
+// Manifest returns the checksum of a READ_ONLY streaming fs's shards as read, the
+// manifest of their checksums in shard order, once ShardsRead is closed. Empty when
+// the shards were not hashed or one of them failed.
+func (fs *Fs) Manifest() string {
+	return shardManifest(fs.paths, fs.checksums)
+}
+
+// shardManifest names each shard by its stored name and orders them by shard number,
+// as the dump does. Empty if any checksum is missing.
+func shardManifest(paths []string, checksums []string) string {
+	if len(paths) == 0 || len(paths) != len(checksums) {
+		return ""
+	}
+	entries := make([]cedana_io.ManifestEntry, len(paths))
+	for i, path := range paths {
+		if checksums[i] == "" {
+			return ""
+		}
+		entries[i] = cedana_io.ManifestEntry{Name: filepath.Base(path), Checksum: checksums[i]}
+	}
+	sort.SliceStable(entries, func(a, b int) bool { return shardNumber(entries[a].Name) < shardNumber(entries[b].Name) })
+	return cedana_io.ManifestChecksum(entries)
+}
+
+// shardNumber is N of a shard named img-N<ext>
+func shardNumber(name string) int {
+	digits := strings.TrimPrefix(name, "img-")
+	end := 0
+	for end < len(digits) && digits[end] >= '0' && digits[end] <= '9' {
+		end++
+	}
+	n, err := strconv.Atoi(digits[:end])
+	if err != nil {
+		return -1
+	}
+	return n
 }
 
 // Checksums returns the checksum of each shard of a WRITE_ONLY streaming fs, in
@@ -119,6 +175,7 @@ func NewStreamingFs(
 	if err != nil {
 		return nil, nil, err
 	}
+	hashShards := mode == READ_ONLY && ctx.Value(shardChecksumsKey{}) != nil
 	for i := range streams {
 		switch mode {
 		case READ_ONLY:
@@ -140,6 +197,13 @@ func NewStreamingFs(
 					ioErr <- errors.Join(err, file.Close())
 				}()
 
+				// The checksum of the shard as read, to the end of the stored object
+				var hashed *cedana_io.ChecksumReader
+				if hashShards {
+					hashed = cedana_io.NewChecksumReader(file)
+					file = hashed
+				}
+
 				file = profiling.IOParallelCategory(
 					ctx,
 					file,
@@ -149,6 +213,11 @@ func NewStreamingFs(
 					compression,
 				)
 				_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
+				if err == nil && hashed != nil {
+					if err = hashed.Drain(); err == nil {
+						checksums[i] = hashed.Sum()
+					}
+				}
 				writeFds[i].Close()
 			}()
 		case WRITE_ONLY:
@@ -243,12 +312,18 @@ func NewStreamingFs(
 	}
 
 	fs = &Fs{
-		mode:      mode,
-		conn:      nil,
-		dir:       imagesDir,
-		globCache: make(map[string][]string),
-		checksums: checksums,
+		mode:       mode,
+		conn:       nil,
+		dir:        imagesDir,
+		globCache:  make(map[string][]string),
+		checksums:  checksums,
+		paths:      paths,
+		shardsRead: make(chan struct{}),
 	}
+	go func() {
+		io.Wait()
+		close(fs.shardsRead)
+	}()
 
 	// Clean up on exit
 	wg.Go(func() {

@@ -77,23 +77,6 @@ func StoreValue(ctx context.Context, storage cedana_io.Storage, path string) str
 	return value
 }
 
-// StoreManifest returns the manifest of the store's own values of a streamed
-// checkpoint's shards, named as they are stored, or "" if any shard has none.
-func StoreManifest(ctx context.Context, storage cedana_io.Storage, names []string, paths []string) string {
-	if len(paths) == 0 || len(names) != len(paths) {
-		return ""
-	}
-	entries := make([]cedana_io.ManifestEntry, 0, len(paths))
-	for i, path := range paths {
-		value := StoreValue(ctx, storage, path)
-		if value == "" {
-			return ""
-		}
-		entries = append(entries, cedana_io.ManifestEntry{Name: names[i], Checksum: value})
-	}
-	return cedana_io.ManifestChecksum(entries)
-}
-
 // StoreDiffers reports whether the store's own value is known and differs from the
 // expected one: the stored bytes are not the bytes recorded, before any are read.
 func (c *Check) StoreDiffers(store string) bool {
