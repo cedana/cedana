@@ -30,6 +30,7 @@ type NotifyCallback struct {
 	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
 	QueryExtFilesFunc       NotifyFuncExtFiles
+	QueryGhostAllowFunc     NotifyFuncExtFiles
 
 	Name string // to give some context to this callback
 }
@@ -297,6 +298,19 @@ func (n NotifyCallback) QueryExtFiles(ctx context.Context) ([]string, error) {
 			return nil, fmt.Errorf("query-ext-files callback: %v", err)
 		}
 		return external, nil
+	}
+	return nil, nil
+}
+
+func (n NotifyCallback) QueryGhostAllow(ctx context.Context) ([]string, error) {
+	if n.QueryGhostAllowFunc != nil {
+		log.Trace().Str("name", n.Name).Msg("CRIU query-ghost-allow callback")
+		keys, err := n.QueryGhostAllowFunc(ctx)
+		if err != nil {
+			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU query-ghost-allow callback failed")
+			return nil, fmt.Errorf("query-ghost-allow callback: %v", err)
+		}
+		return keys, nil
 	}
 	return nil, nil
 }
