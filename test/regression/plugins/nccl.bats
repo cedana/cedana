@@ -77,17 +77,17 @@ check_collective() {
 }
 
 wait_for_collective() {
-    local log_file=$1 offset=${2:-0}
+    local log_file=$1
     for _ in {1..30}; do
         # These collectives emit 13 columns, with out-of-place/in-place error
         # counts in columns 9 and 13. Ignore headers and unfinished rows.
-        if [ -f "$log_file" ] && tail -c "+$((offset + 1))" "$log_file" | awk '
+        if [ -f "$log_file" ] && awk '
             NF == 13 && $1 == 1048576 && $3 == "float" {
                 seen = 1
                 if ($9 != "0" || $13 != "0") bad = 1
             }
             END { exit !(seen && !bad) }
-        '; then
+        ' "$log_file"; then
             return 0
         fi
         sleep 1
@@ -96,7 +96,7 @@ wait_for_collective() {
 }
 
 check_restore() {
-    local binary="/opt/nccl-tests/$1" log_file old_log offset cycle
+    local binary="/opt/nccl-tests/$1" log_file cycle
     cedana run process --gpu-enabled --jid "$jid" -- "$binary" \
         -g 1 -b 1M -e 1M -n 100 -c 1 -N 0 -T 30
     log_file=$(logfile_for_jid "$jid")
@@ -107,14 +107,12 @@ check_restore() {
         run timeout --kill-after=5s 90s cedana dump job "$jid" \
             --dir "$BATS_TEST_TMPDIR/checkpoint/$cycle"
         assert_success
-        old_log=$log_file
-        offset=$(stat -c %s "$log_file")
-
         run timeout --kill-after=5s 90s cedana restore job "$jid"
         assert_success
         log_file=$(logfile_for_jid "$jid")
-        [ "$log_file" = "$old_log" ] || offset=0
-        wait_for_collective "$log_file" "$offset"
+        # Restore truncates the job log, even when its path is reused.
+        # Read from the beginning so early post-restore errors are checked.
+        wait_for_collective "$log_file"
     done
 }
 
