@@ -134,10 +134,12 @@ HELM_CHART?=""
 FORMATTER?=pretty
 BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
-				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
+				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush \
+				--allow-empty-suite
 BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) \
-				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
+				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush \
+				--allow-empty-suite
 
 test: test-unit test-regression test-k8s test-slurm ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
@@ -145,7 +147,7 @@ test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/... -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], REPORT=<name>)
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Retries: $(RETRIES)" ;\
@@ -157,7 +159,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-isolated.xml ;\
+			mv /tmp/report.xml /tmp/$(or $(REPORT),report)-isolated.xml ;\
 		fi ;\
 		echo "\nUsing a persistent instance of daemon across tests...\n" ;\
 		if [ "$(TAGS)" = "" ]; then \
@@ -166,7 +168,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persistent=$$? ;\
 		fi ;\
 		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-persistent.xml ;\
+			mv /tmp/report.xml /tmp/$(or $(REPORT),report)-persistent.xml ;\
 		fi ;\
 		if [ $$status_isolated -ne 0 ]; then \
 			echo "Isolated tests failed" ;\
@@ -187,7 +189,8 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
-				DEBUG=$(DEBUG) ;\
+				DEBUG=$(DEBUG) \
+				REPORT=$(REPORT) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
@@ -199,7 +202,8 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
-				DEBUG=$(DEBUG) ;\
+				DEBUG=$(DEBUG) \
+				REPORT=$(REPORT) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
 	fi

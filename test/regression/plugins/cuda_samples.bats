@@ -1,9 +1,9 @@
 #!/usr/bin/env bats
 
 # Curated cuda-samples run natively + intercepted; fails only on regressions.
-# Tagged cuda-samples (not gpu) so the main gpu run skips it.
+# Also tagged cuda-samples so the main gpu run can exclude it (!cuda-samples).
 #
-# bats file_tags=cuda-samples
+# bats file_tags=gpu,cuda-samples
 
 load ../../helpers/utils
 load ../../helpers/daemon
@@ -37,46 +37,24 @@ teardown_file() {
     teardown_file_daemon
 }
 
-# bats test_tags=cuda-samples
-@test "[$GPU_INFO] cuda-samples (intercepted)" {
-    local bin_dir="$CUDA_SAMPLES_DIR/bin"
-    local regressions=() compared=0 skipped=0 line sample bin
-    local -a lines
+cuda_sample_intercepted() {
+    local sample="$1" bin="$CUDA_SAMPLES_DIR/bin/$1"
 
-    # Array, not `while read < file`: cedana --attach would drain the list on stdin.
-    mapfile -t lines <"$CUDA_SAMPLES_DIR/samples.txt"
+    [ -x "$bin" ] || skip "not in image"
 
-    for line in "${lines[@]}"; do
-        sample="${line%%#*}"
-        sample="${sample//[[:space:]]/}"
-        [ -z "$sample" ] && continue
+    run "$bin"
+    [ "$status" -eq 0 ] || skip "native rc=$status"
 
-        bin="$bin_dir/$sample"
-        if [ ! -x "$bin" ]; then
-            echo "skip $sample (not in image)"
-            skipped=$((skipped + 1))
-            continue
-        fi
-
-        run "$bin"
-        if [ "$status" -ne 0 ]; then
-            echo "skip $sample (native rc=$status)"
-            skipped=$((skipped + 1))
-            continue
-        fi
-
-        run cedana run process --attach -g --jid "$(unix_nano)-$sample" -- "$bin"
-        compared=$((compared + 1))
-        if [ "$status" -eq 0 ]; then
-            echo "ok $sample"
-        else
-            echo "FAIL $sample (intercepted rc=$status)"
-            echo "$output"
-            regressions+=("$sample")
-        fi
-    done
-
-    echo "compared=$compared skipped=$skipped regressions=${#regressions[@]}"
-    [ "$compared" -gt 0 ] || fail "no cuda-samples ran intercepted (check $bin_dir / native failures)"
-    [ "${#regressions[@]}" -eq 0 ] || fail "cedana-induced regressions: ${regressions[*]}"
+    run cedana run process --attach -g --jid "$(unix_nano)-$sample" -- "$bin"
+    [ "$status" -eq 0 ] || fail "cedana-induced regression (intercepted rc=$status): $output"
 }
+
+# One test per sample, registered at load time since @test can't be looped.
+# Dynamic tests don't inherit file_tags, so tag each explicitly.
+mapfile -t CUDA_SAMPLES < <(sed 's/#.*//; s/[[:space:]]//g; /^$/d' "$CUDA_SAMPLES_DIR/samples.txt" 2>/dev/null)
+if [ "${#CUDA_SAMPLES[@]}" -eq 0 ]; then
+    bats_test_function --tags gpu,cuda-samples --description "[$GPU_INFO] cuda-samples (intercepted)" -- fail "no samples listed in $CUDA_SAMPLES_DIR/samples.txt"
+fi
+for sample in "${CUDA_SAMPLES[@]}"; do
+    bats_test_function --tags gpu,cuda-samples --description "[$GPU_INFO] cuda-samples (intercepted): $sample" -- cuda_sample_intercepted "$sample"
+done

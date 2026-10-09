@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
@@ -43,6 +44,20 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 	}
 
 	log = log.With().Str("endpoint", Credentials.Endpoint).Logger()
+
+	// The OTLP exporters read OTEL_EXPORTER_OTLP_* from the environment before
+	// applying our options. We configure them from the credentials fetched above,
+	// so drop any inherited values to avoid conflicting or malformed settings.
+	for _, k := range []string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_HEADERS",
+		"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_TRACES_HEADERS",
+		"OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+		"OTEL_EXPORTER_OTLP_METRICS_HEADERS",
+	} {
+		os.Unsetenv(k)
+	}
 
 	host, err := utils.GetHost(ctx)
 	if err != nil {
