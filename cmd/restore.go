@@ -23,8 +23,10 @@ import (
 	"github.com/cedana/cedana/pkg/style"
 	"github.com/cedana/cedana/pkg/utils"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -63,6 +65,10 @@ func init() {
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.PersistentFlags().
 		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
+	restoreCmd.PersistentFlags().
+		String(flags.ChecksumFlag.Full, "", "checksum recorded at dump, \"crc32c:<hex>\", to verify the checkpoint against")
+	restoreCmd.PersistentFlags().
+		String(flags.ResultFileFlag.Full, "", "write the restore result (RestoreResp) as JSON to this file, also when the restore fails")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.OutFlag.Full,
@@ -105,6 +111,7 @@ var restoreCmd = &cobra.Command{
 		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 		gpuID, _ := cmd.Flags().GetString(flags.GpuIdFlag.Full)
+		checksum, _ := cmd.Flags().GetString(flags.ChecksumFlag.Full)
 
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
@@ -159,6 +166,7 @@ var restoreCmd = &cobra.Command{
 			Criu:            criuOpts,
 			Env:             env,
 			GPUID:           gpuID,
+			Checksum:        checksum,
 			UID:             user.Uid,
 			GID:             user.Gid,
 			Groups:          user.Groups,
@@ -205,7 +213,12 @@ var restoreCmd = &cobra.Command{
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
-			code, err := cedana.Restore(req)
+			code, resp, err := cedana.Restore(req)
+			// The result goes to the file on failure too: a failed checksum
+			// verification is in it
+			if resultErr := writeRestoreResult(cmd, resp); resultErr != nil {
+				log.Warn().Err(resultErr).Msg("failed to write the restore result")
+			}
 			if err != nil {
 				cedana.Finalize()
 				return utils.GRPCErrorColored(err)
@@ -238,6 +251,10 @@ var restoreCmd = &cobra.Command{
 				if config.Global.Profiling.Path != "" {
 					profiling.WriteJSON(config.Global.Profiling.Path, data)
 				}
+			}
+
+			if err := writeRestoreResult(cmd, resp); err != nil {
+				return err
 			}
 
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
@@ -328,4 +345,22 @@ var jobRestoreCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// writeRestoreResult writes the restore response as JSON to the --result-file path,
+// if one was given, so that a caller that runs this command (e.g. the containerd
+// shim) learns the outcome of the checksum verification
+func writeRestoreResult(cmd *cobra.Command, resp *daemon.RestoreResp) error {
+	resultFile, _ := cmd.Flags().GetString(flags.ResultFileFlag.Full)
+	if resultFile == "" || resp == nil {
+		return nil
+	}
+	data, err := protojson.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("failed to marshal restore result: %w", err)
+	}
+	if err := os.WriteFile(resultFile, data, 0o644); err != nil {
+		return fmt.Errorf("failed to write restore result to %s: %w", resultFile, err)
+	}
+	return nil
 }
