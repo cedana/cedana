@@ -34,6 +34,7 @@ const (
 	DEFAULT_CHECKPOINT_STREAMS                = 0
 	DEFAULT_CHECKPOINT_ASYNC                  = false
 	DEFAULT_CHECKPOINT_CHECKSUM               = true
+	DEFAULT_CHECKPOINT_CHECKSUM_VERIFY        = CHECKSUM_VERIFY_WARN
 	DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB = 4000
 
 	DEFAULT_DB_REMOTE = false
@@ -77,6 +78,13 @@ const (
 	DEFAULT_CSX_SOCK_ADDR = "/run/csx.sock"
 )
 
+// The values of Checkpoint.ChecksumVerify
+const (
+	CHECKSUM_VERIFY_OFF    = "off"
+	CHECKSUM_VERIFY_WARN   = "warn"
+	CHECKSUM_VERIFY_STRICT = "strict"
+)
+
 // The default global config. This will get overwritten
 // by the config file or env vars during startup, if they exist.
 var Global Config = Config{
@@ -92,6 +100,7 @@ var Global Config = Config{
 		Streams:           DEFAULT_CHECKPOINT_STREAMS,
 		Async:             DEFAULT_CHECKPOINT_ASYNC,
 		Checksum:          DEFAULT_CHECKPOINT_CHECKSUM,
+		ChecksumVerify:    DEFAULT_CHECKPOINT_CHECKSUM_VERIFY,
 		StreamMemoryLimit: DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB,
 	},
 	DB: DB{

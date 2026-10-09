@@ -92,3 +92,38 @@ func TestInitPersistsExplicitAWSCredentialsMode(t *testing.T) {
 		t.Fatalf("persisted credentials mode = %v, want ambient", got)
 	}
 }
+
+func TestChecksumVerifyDefaultsToWarnAndReadsTheEnvironment(t *testing.T) {
+	originalGlobal := Global
+	originalDir := Dir
+	t.Cleanup(func() {
+		viper.Reset()
+		Global = originalGlobal
+		Dir = originalDir
+		setDefaults()
+		bindEnvVars()
+	})
+
+	viper.Reset()
+	Global = originalGlobal
+	setDefaults()
+	bindEnvVars()
+	if err := Init(Args{ConfigDir: t.TempDir()}); err != nil {
+		t.Fatalf("init config: %v", err)
+	}
+	if Global.Checkpoint.ChecksumVerify != CHECKSUM_VERIFY_WARN {
+		t.Fatalf("default checksum_verify = %q, want %q", Global.Checkpoint.ChecksumVerify, CHECKSUM_VERIFY_WARN)
+	}
+
+	t.Setenv("CEDANA_CHECKPOINT_CHECKSUM_VERIFY", CHECKSUM_VERIFY_STRICT)
+	viper.Reset()
+	Global = originalGlobal
+	setDefaults()
+	bindEnvVars()
+	if err := Init(Args{ConfigDir: t.TempDir()}); err != nil {
+		t.Fatalf("init config: %v", err)
+	}
+	if Global.Checkpoint.ChecksumVerify != CHECKSUM_VERIFY_STRICT {
+		t.Fatalf("checksum_verify from the environment = %q, want %q", Global.Checkpoint.ChecksumVerify, CHECKSUM_VERIFY_STRICT)
+	}
+}

@@ -97,6 +97,10 @@ type (
 		// Checksum records an integrity checksum of each checkpoint as stored, computed
 		// as it is uploaded or streamed, or read back by the k8s helper for a local one.
 		Checksum bool `json:"checksum" key:"checksum" yaml:"checksum" mapstructure:"checksum"`
+		// ChecksumVerify sets what a restore does with the checksum recorded at dump: "off"
+		// computes nothing, "warn" reports a mismatch and restores, "strict" fails the
+		// restore on a mismatch before the process runs.
+		ChecksumVerify string `json:"checksum_verify" key:"checksum_verify" yaml:"checksum_verify" mapstructure:"checksum_verify"`
 	}
 
 	DB struct {
