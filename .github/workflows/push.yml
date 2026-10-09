@@ -27,10 +27,10 @@ on:
         required: false
         default: false
 
-# Shared with release.yml: a release cancels any in-progress push, while a push
-# only queues behind a release instead of cancelling it.
+# Shared with release.yml: a release of this commit cancels an in-progress push,
+# while a push never cancels a release.
 concurrency:
-  group: ${{ github.repository }}-release
+  group: ${{ github.repository }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
