@@ -434,13 +434,17 @@ func (c *Criu) doSwrkWithResp(
 		case "skip-namespaces":
 			err = nfy.SkipNamespaces(ctx, notify.GetPid())
 		case "query-ext-files":
-			var external []string
+			var external, ghostAllow []string
 			external, err = nfy.QueryExtFiles(ctx)
+			if err == nil {
+				ghostAllow, err = nfy.QueryGhostAllow(ctx)
+			}
 			if err == nil {
 				replyOpts = &criu.CriuOpts{
 					// Required field, ignored by CRIU for this reply.
 					ImagesDirFd: proto.Int32(-1),
 					External:    external,
+					GhostAllow:  ghostAllow,
 				}
 			}
 		case "orphan-pts-master":

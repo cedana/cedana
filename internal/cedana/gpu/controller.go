@@ -440,6 +440,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	// Add pre-dump hook for GPU dump. We freeze the GPU controller so we can
 	// do the GPU dump in parallel to CRIU dump.
 	var dumpErr chan error
+	var hostRegFiles []string
 	callback.PreDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		pid := uint32(opts.GetPid())
 		log := log.With().Uint32("PID", pid).Logger()
@@ -475,10 +476,21 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
+			hostRegFiles = resp.GetHostRegFiles()
 
 			log.Info().Msg("GPU dump complete")
 		}()
 		return <-dumpErr
+	}
+
+	// CRIU asks for these after pre-dump, so the GPU dump above has already reported them.
+	callback.QueryGhostAllowFunc = func(ctx context.Context) ([]string, error) {
+		if dumpErr != nil {
+			if err := <-dumpErr; err != nil {
+				return nil, err
+			}
+		}
+		return hostRegFiles, nil
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump

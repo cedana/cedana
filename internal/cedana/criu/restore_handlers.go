@@ -97,7 +97,6 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 	criuOpts.LogFile = proto.String(CRIU_RESTORE_LOG_FILE)
 	criuOpts.LogLevel = proto.Int32(config.Global.CRIU.LogLevel)
 	criuOpts.LogToStderr = proto.Bool(false)
-	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
 
 	// NOTE: We don't handle reaping if the plugin has indicated that it's a 'reaper', assuming it will
 	// handle it when and how it wants to.
