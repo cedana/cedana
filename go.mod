@@ -6,8 +6,8 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-20260909161930-d73a667e1b80.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.11-20260909161930-d73a667e1b80.1
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-3e41171f7c56.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-3e41171f7c56.2
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-320a59d7040c.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-320a59d7040c.2
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-dfcf9ee62e1c.2
 	cloud.google.com/go/auth v0.23.0
 	cloud.google.com/go/storage v1.69.0
