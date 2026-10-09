@@ -82,11 +82,12 @@ type controller struct {
 	Version     string
 
 	ErrBuf      *bytes.Buffer
-	Booking     *flock.Flock // To book the controller for use
-	Termination sync.Mutex   // To protect termination
-	Terminating atomic.Bool  // To indicate if termination has begun, to avoid multiple concurrent terminations
-	Terminated  chan int     // Closed when the controller process has exited
-	syncFails   int          // Number of consecutive sync failures
+	Booking     *flock.Flock  // To book the controller for use
+	Termination sync.Mutex    // To protect termination
+	Terminating atomic.Bool   // To indicate if termination has begun, to avoid multiple concurrent terminations
+	Terminated  chan int      // Closed when the controller process has exited
+	Attaching   chan struct{} // Closed when an attach started by this process completes or gives up
+	syncFails   int           // Number of consecutive sync failures
 	gpugrpc.ControllerClient
 	*grpc.ClientConn
 }

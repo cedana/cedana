@@ -140,6 +140,17 @@ func GID[REQ any](req *REQ) uint32 {
 	}
 }
 
+func GPUID[REQ any](req *REQ) string {
+	switch r := any(req).(type) {
+	case *daemon.RunReq:
+		return r.GPUID
+	case *daemon.RestoreReq:
+		return r.GPUID
+	default:
+		panic("unsupported type for GPUID extraction")
+	}
+}
+
 func Type[REQ any](req *REQ) string {
 	switch r := any(req).(type) {
 	case *daemon.RunReq:
