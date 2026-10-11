@@ -120,6 +120,9 @@ func (c *Check) Record(resp *daemon.RestoreResp, o Outcome) error {
 	resp.Checksum = o.Actual
 	resp.ChecksumResult = o.Result
 	resp.ChecksumReason = o.Reason
+	// The mode goes with the result, so that the propagator acts on a stored mismatch
+	// from strict mode only, whether or not the restore failed for it
+	resp.ChecksumStrict = c.Strict
 	if o.Result != daemon.ChecksumResult_CHECKSUM_MISMATCH {
 		log.Info().Str("checksum", o.Actual).Msg("checkpoint checksum verified")
 		resp.Messages = append(resp.Messages, fmt.Sprintf("Checkpoint checksum verified: %s", o.Actual))
