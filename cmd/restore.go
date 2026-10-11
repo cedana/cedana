@@ -243,6 +243,10 @@ var restoreCmd = &cobra.Command{
 			// Assuming request is now ready to be sent to the server
 			resp, data, err := client.Restore(ctx, req)
 			if err != nil {
+				// A failed restore's response holds its checksum verification
+				if resultErr := writeRestoreResult(cmd, resp); resultErr != nil {
+					log.Warn().Err(resultErr).Msg("failed to write the restore result")
+				}
 				return err
 			}
 

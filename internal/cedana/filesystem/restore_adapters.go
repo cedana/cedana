@@ -67,6 +67,10 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 			if check != nil {
 				sum, err := checksumOfPath(imagesDirectory)
 				if err != nil {
+					// Strict mode does not restore what it cannot verify
+					if check.Strict {
+						return nil, status.Errorf(codes.FailedPrecondition, "checkpoint checksum not verified: cannot read the checkpoint directory: %v", err)
+					}
 					log.Warn().Err(err).Str("path", imagesDirectory).Msg("could not read the checkpoint directory for its checksum, not verified")
 				} else if err := check.Record(resp, check.Compare(sum, "", true)); err != nil {
 					return nil, err

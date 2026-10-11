@@ -70,7 +70,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 	_, err := restore(ctx, opts, resp, req)
 	if err != nil {
 		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
-		return nil, err
+		return nil, withRestoreDetails(err, resp)
 	}
 
 	log.Info().Uint32("PID", resp.PID).Str("type", req.Type).Msg("restore successful")
@@ -255,4 +255,21 @@ func pluginRestoreHandler() types.Restore {
 
 		return handler(ctx, opts, resp, req)
 	}
+}
+
+// withRestoreDetails attaches what a failed restore learned, a checksum verification,
+// to its error, so that the client gets it as the response's details
+func withRestoreDetails(err error, resp *daemon.RestoreResp) error {
+	if resp == nil || resp.ChecksumResult == daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
+		return err
+	}
+	st, ok := status.FromError(err)
+	if !ok {
+		st = status.New(codes.Internal, err.Error())
+	}
+	withDetails, detailErr := st.WithDetails(resp)
+	if detailErr != nil {
+		return err
+	}
+	return withDetails.Err()
 }
