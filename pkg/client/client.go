@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -156,6 +157,11 @@ func (c *Client) Restore(
 
 	resp, err := c.daemonClient.Restore(ctx, args, opts...)
 	if err != nil {
+		// A failed restore's response, e.g. its checksum verification, travels in the
+		// error's details
+		if resp == nil {
+			resp = RestoreRespFromError(err)
+		}
 		return resp, nil, utils.GRPCErrorColored(err)
 	}
 
@@ -466,4 +472,19 @@ func addDefaultOptions(opts []grpc.CallOption) []grpc.CallOption {
 		opts = append(opts, grpc.WaitForReady(true))
 	}
 	return opts
+}
+
+// RestoreRespFromError returns the RestoreResp a failed Restore attached to its
+// error as details, or nil
+func RestoreRespFromError(err error) *daemon.RestoreResp {
+	st, ok := status.FromError(err)
+	if !ok {
+		return nil
+	}
+	for _, detail := range st.Details() {
+		if resp, ok := detail.(*daemon.RestoreResp); ok {
+			return resp
+		}
+	}
+	return nil
 }

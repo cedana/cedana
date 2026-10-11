@@ -23,8 +23,14 @@ import (
 )
 
 // How long the post-restore check waits for the last shard to be read to its end.
-// CRIU has read every image by then; only the end of a shard can be in flight.
-var SHARDS_READ_TIMEOUT = 10 * time.Second
+// CRIU has read every image by then; only the end of a shard can be in flight. In
+// warn mode the check moves after the restore when the wait runs out; in strict
+// mode the restored tasks must not run unverified, so the wait is long and running
+// out fails the restore.
+var (
+	SHARDS_READ_TIMEOUT        = 10 * time.Second
+	SHARDS_READ_TIMEOUT_STRICT = 5 * time.Minute
+)
 
 func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 	return func(next types.Restore) types.Restore {
@@ -147,19 +153,12 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				opts.CRIUCallback.Include(&criu_client.NotifyCallback{
 					Name: "checksum",
 					PostRestoreFunc: func(ctx context.Context, pid int32) error {
-						select {
-						case <-streamFs.ShardsRead():
-						case <-time.After(SHARDS_READ_TIMEOUT):
-							log.Warn().Msg("shards still being read at post-restore, the checksum is verified after the restore")
-							return nil
-						}
-						log.Debug().Int32("pid", pid).Msg("verifying the streamed checkpoint before the restored tasks run")
-						err := verifyNow()
-						if err != nil && pid > 0 {
-							// The tasks have not run; they must not
-							syscall.Kill(int(pid), syscall.SIGKILL)
-						}
-						return err
+						return checksumPostRestore(streamFs.ShardsRead(), check.Strict, pid, verifyNow, func(err error) {
+							verifyOnce.Do(func() {
+								verified = true
+								verifyErr = err
+							})
+						})
 					},
 				})
 			}
@@ -202,4 +201,38 @@ func storeManifest(ctx context.Context, storage cedana_io.Storage, paths []strin
 		}
 	}
 	return shardManifest(paths, values)
+}
+
+// checksumPostRestore is the check at CRIU's post-restore notification, when the tasks are
+// restored and not yet running. It waits for the last shard to be read to its end, then
+// verifies; a strict mismatch kills the tasks and fails the restore. When the wait runs
+// out, warn mode lets the tasks run and verifies after the restore, and strict mode kills
+// the tasks and fails the restore: they must not run unverified.
+func checksumPostRestore(shardsRead <-chan struct{}, strict bool, pid int32, verifyNow func() error, giveUp func(error)) error {
+	timeout := SHARDS_READ_TIMEOUT
+	if strict {
+		timeout = SHARDS_READ_TIMEOUT_STRICT
+	}
+	select {
+	case <-shardsRead:
+	case <-time.After(timeout):
+		if !strict {
+			log.Warn().Msg("shards still being read at post-restore, the checksum is verified after the restore")
+			return nil
+		}
+		err := status.Errorf(codes.FailedPrecondition,
+			"checkpoint checksum not verified: the shards were still being read %s after the restore", timeout)
+		giveUp(err)
+		if pid > 0 {
+			syscall.Kill(int(pid), syscall.SIGKILL)
+		}
+		return err
+	}
+	log.Debug().Int32("pid", pid).Msg("verifying the streamed checkpoint before the restored tasks run")
+	err := verifyNow()
+	if err != nil && pid > 0 {
+		// The tasks have not run; they must not
+		syscall.Kill(int(pid), syscall.SIGKILL)
+	}
+	return err
 }

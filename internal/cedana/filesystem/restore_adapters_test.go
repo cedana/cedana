@@ -314,3 +314,33 @@ func TestRestoreFromARemoteStore(t *testing.T) {
 		}
 	})
 }
+
+// A directory the checksum cannot be computed for: a dangling symlink in it
+func TestRestoreOfAnUnreadableDirectory(t *testing.T) {
+	dir := checkpointFiles(t)
+	sum, err := checksumOfPath(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(dir, "gone.img"), filepath.Join(dir, "link.img")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := checksumOfPath(dir); err == nil {
+		t.Fatal("the dangling link must make the read fail")
+	}
+
+	setVerify(t, config.CHECKSUM_VERIFY_STRICT)
+	resp, ran, _, err := restoreWith(t, &Storage{}, dir, sum)
+	if ran || status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("strict mode must not restore what it cannot verify: ran=%t err=%v", ran, err)
+	}
+	if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
+		t.Fatalf("result = %v, want NOT_CHECKED", resp.ChecksumResult)
+	}
+
+	setVerify(t, config.CHECKSUM_VERIFY_WARN)
+	resp, ran, _, err = restoreWith(t, &Storage{}, dir, sum)
+	if err != nil || !ran || resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
+		t.Fatalf("warn mode restores unverified: ran=%t err=%v result=%v", ran, err, resp.ChecksumResult)
+	}
+}

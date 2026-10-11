@@ -192,6 +192,51 @@ func TestStreamedRestoreVerifiesBeforeTheProcessResumes(t *testing.T) {
 	})
 }
 
+// The shards are still being read when post-restore arrives: strict mode must not let
+// the tasks run unverified; warn mode lets them run and verifies after the restore
+func TestPostRestoreCheckWithShardsStillBeingRead(t *testing.T) {
+	previous, previousStrict := SHARDS_READ_TIMEOUT, SHARDS_READ_TIMEOUT_STRICT
+	SHARDS_READ_TIMEOUT, SHARDS_READ_TIMEOUT_STRICT = 100*time.Millisecond, 100*time.Millisecond
+	t.Cleanup(func() { SHARDS_READ_TIMEOUT, SHARDS_READ_TIMEOUT_STRICT = previous, previousStrict })
+	stillReading := make(chan struct{})
+	verified := false
+	verifyNow := func() error { verified = true; return nil }
+
+	t.Run("strict fails and kills the tasks", func(t *testing.T) {
+		process := standIn(t)
+		var gaveUp error
+		err := checksumPostRestore(stillReading, true, int32(process.Process.Pid), verifyNow, func(err error) { gaveUp = err })
+		if status.Code(err) != codes.FailedPrecondition || gaveUp == nil || verified {
+			t.Fatalf("err=%v gaveUp=%v verified=%t", err, gaveUp, verified)
+		}
+		done := make(chan error, 1)
+		go func() { done <- process.Wait() }()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the restored tasks must be killed")
+		}
+	})
+	t.Run("warn lets the tasks run", func(t *testing.T) {
+		process := standIn(t)
+		var gaveUp error
+		err := checksumPostRestore(stillReading, false, int32(process.Process.Pid), verifyNow, func(err error) { gaveUp = err })
+		if err != nil || gaveUp != nil || verified {
+			t.Fatalf("err=%v gaveUp=%v verified=%t; want nothing done at post-restore", err, gaveUp, verified)
+		}
+		if process.Process.Signal(syscall.Signal(0)) != nil {
+			t.Fatal("warn mode must leave the process alone")
+		}
+	})
+	t.Run("shards read: verified at post-restore", func(t *testing.T) {
+		read := make(chan struct{})
+		close(read)
+		if err := checksumPostRestore(read, true, 0, verifyNow, func(error) {}); err != nil || !verified {
+			t.Fatalf("err=%v verified=%t", err, verified)
+		}
+	})
+}
+
 // A remote store whose own value of every shard differs from what was recorded
 type badShardStore struct {
 	remoteStorage
