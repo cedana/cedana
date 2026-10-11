@@ -251,6 +251,33 @@ EOF
     mq_discovery_uri="amqp://cedana:$mq_password@$(cluster_ip cedana-rabbitmq):5672"
 
     kubectl apply -n "$ns" -f - >/dev/null <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: cedana-propagator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cedana-propagator-observer
+rules:
+  - { apiGroups: [""], resources: [nodes, pods], verbs: [get, list, watch] }
+  - { apiGroups: [""], resources: [pods/log], verbs: [get] }
+  - { apiGroups: [""], resources: [namespaces], verbs: [get] }
+  - { apiGroups: [""], resources: [events], verbs: [get, list] }
+  - { apiGroups: [batch], resources: [jobs], verbs: [get, list, watch] }
+  - { apiGroups: [apps], resources: [deployments, replicasets, statefulsets, daemonsets], verbs: [get] }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: cedana-propagator-observer
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: cedana-propagator-observer }
+subjects:
+  - { kind: ServiceAccount, name: cedana-propagator, namespace: "$ns" }
+EOF
+
+    kubectl apply -n "$ns" -f - >/dev/null <<EOF
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -262,6 +289,7 @@ spec:
     metadata:
       labels: { app: cedana-propagator }
     spec:
+      serviceAccountName: cedana-propagator
       imagePullSecrets: $pull_secrets
       containers:
         - name: cedana-propagator
@@ -279,6 +307,9 @@ spec:
             - { name: CLICKHOUSE_DATABASE, value: cedana }
             - { name: CLICKHOUSE_USER, value: default }
             - { name: CLICKHOUSE_PASSWORD, value: "" }
+            - { name: K8S_WATCH_ENABLED, value: "true" }
+            - { name: K8S_LOCAL_CONNECTOR, value: "true" }
+            - { name: STREAM_ENABLED, value: "true" }
           ports: [{ containerPort: $PROPAGATOR_PORT }]
           readinessProbe:
             tcpSocket: { port: $PROPAGATOR_PORT }
@@ -341,4 +372,5 @@ teardown_propagator() {
             >"$PROPAGATOR_LOG_FILE" 2>&1 || true
         delete_namespace "$PROPAGATOR_NAMESPACE" --wait=false
     fi
+    kubectl delete clusterrolebinding,clusterrole cedana-propagator-observer --ignore-not-found --wait=false >/dev/null 2>&1 || true
 }
