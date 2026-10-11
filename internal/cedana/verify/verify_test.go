@@ -49,8 +49,20 @@ func TestRecordFailsOnlyAStrictMismatch(t *testing.T) {
 	if resp.Checksum != mismatch.Actual || resp.ChecksumResult != mismatch.Result || resp.ChecksumReason != mismatch.Reason {
 		t.Fatalf("the response must hold the outcome, got %v", resp)
 	}
-	if err := (&Check{Expected: "crc32c:aaaaaaaa"}).Record(&daemon.RestoreResp{}, mismatch); err != nil {
+	if !resp.ChecksumStrict {
+		t.Fatal("a strict check must say so in the response")
+	}
+	warn := &daemon.RestoreResp{}
+	if err := (&Check{Expected: "crc32c:aaaaaaaa"}).Record(warn, mismatch); err != nil {
 		t.Fatalf("warn mismatch must not fail: %v", err)
+	}
+	if warn.ChecksumStrict {
+		t.Fatal("a warn check must not say strict")
+	}
+	match := &daemon.RestoreResp{}
+	(&Check{Expected: "crc32c:aaaaaaaa", Strict: true}).Record(match, Outcome{Actual: "crc32c:aaaaaaaa", Result: daemon.ChecksumResult_CHECKSUM_MATCH})
+	if !match.ChecksumStrict {
+		t.Fatal("the mode goes with every result, a match too")
 	}
 }
 

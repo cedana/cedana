@@ -165,6 +165,9 @@ func TestRestoreOfACorruptedLocalTarball(t *testing.T) {
 		if resp.Checksum == sum || resp.Checksum == "" {
 			t.Fatalf("the response must carry the checksum read, got %q", resp.Checksum)
 		}
+		if !resp.ChecksumStrict {
+			t.Fatal("the response must say the check was strict")
+		}
 	})
 	t.Run("warn", func(t *testing.T) {
 		setVerify(t, config.CHECKSUM_VERIFY_WARN)
@@ -174,6 +177,9 @@ func TestRestoreOfACorruptedLocalTarball(t *testing.T) {
 		}
 		if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MISMATCH || resp.ChecksumReason != daemon.ChecksumReason_REASON_STORED {
 			t.Fatalf("result = %v %v, want MISMATCH STORED", resp.ChecksumResult, resp.ChecksumReason)
+		}
+		if resp.ChecksumStrict {
+			t.Fatal("warn mode must not say strict")
 		}
 	})
 	t.Run("off", func(t *testing.T) {
