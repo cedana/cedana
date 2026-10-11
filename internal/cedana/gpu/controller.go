@@ -116,12 +116,14 @@ func (p *pool) Get(id string) *controller {
 	return c.(*controller)
 }
 
-// Finds the GPU controller for the attached PID
+// Finds the GPU controller for the attached PID. A controller that has exited keeps the
+// AttachedPID it last reported until it is removed from the pool, and a restored process
+// gets its old PID back, so skip controllers that are no longer alive.
 func (p *pool) Find(attachedPID uint32) *controller {
 	var found *controller
 	p.Range(func(key, value any) bool {
 		c := value.(*controller)
-		if c.AttachedPID == attachedPID {
+		if c.AttachedPID == attachedPID && c.alive() {
 			found = c
 			return false
 		}
@@ -683,8 +685,14 @@ func (c *controller) Book() bool {
 	return true
 }
 
+// alive reports whether the controller process is running and still answering syncs.
+// The sync failures also catch a long-dead controller whose PID has since been reused.
+func (c *controller) alive() bool {
+	return c.syncFails < MAX_SYNC_FAILURES && utils.PidRunning(c.PID)
+}
+
 func (c *controller) Status() (status controllerStatus, reason string) {
-	if c.syncFails < MAX_SYNC_FAILURES && utils.PidRunning(c.PID) {
+	if c.alive() {
 		if c.AttachedPID == 0 {
 			shmSizeMatches := c.ShmSize == uint64(config.Global.GPU.ShmSize)
 			credentialsMatch := c.UID == uint32(os.Getuid()) && c.GID == uint32(os.Getgid())
