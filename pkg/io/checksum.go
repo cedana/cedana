@@ -54,6 +54,44 @@ func (c *ChecksumWriter) Checksum() string {
 	return c.Sum()
 }
 
+// ChecksumReader hashes everything read through it from the underlying reader,
+// the read-side twin of ChecksumWriter. A restore wraps the reader of a stored
+// checkpoint in it, so that the checksum is of the bytes as read.
+type ChecksumReader struct {
+	r io.Reader
+	h hash.Hash32
+}
+
+func NewChecksumReader(r io.Reader) *ChecksumReader {
+	return &ChecksumReader{r: r, h: crc32.New(castagnoli)}
+}
+
+func (c *ChecksumReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.h.Write(p[:n])
+	return n, err
+}
+
+// Close closes the underlying reader if it can be closed
+func (c *ChecksumReader) Close() error {
+	if closer, ok := c.r.(io.Closer); ok {
+		return closer.Close()
+	}
+	return nil
+}
+
+// Drain reads the underlying reader to its end, so that Sum covers all of it. A
+// consumer such as a tar or lz4 reader may stop before the end of the stream.
+func (c *ChecksumReader) Drain() error {
+	_, err := io.Copy(io.Discard, c)
+	return err
+}
+
+// Sum returns the checksum of everything read so far
+func (c *ChecksumReader) Sum() string {
+	return FormatChecksum(c.h.Sum32())
+}
+
 func FormatChecksum(sum uint32) string {
 	return fmt.Sprintf("%s:%08x", CHECKSUM_ALGORITHM, sum)
 }

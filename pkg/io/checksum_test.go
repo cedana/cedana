@@ -60,3 +60,44 @@ func TestManifestChecksum(t *testing.T) {
 		t.Fatal("the manifest must depend on the order of its entries")
 	}
 }
+
+func TestChecksumReaderHashesWhatItReads(t *testing.T) {
+	data := bytes.Repeat([]byte("checkpoint"), 5000)
+	r := NewChecksumReader(bytes.NewReader(data))
+	// Partial reads of odd sizes, as a decompressor makes them
+	buf := make([]byte, 333)
+	var read []byte
+	for {
+		n, err := r.Read(buf)
+		read = append(read, buf[:n]...)
+		if err != nil {
+			break
+		}
+	}
+	if !bytes.Equal(read, data) {
+		t.Fatal("the reader must pass the bytes through unchanged")
+	}
+	w := NewChecksumWriter(&bytes.Buffer{})
+	w.Write(data)
+	if r.Sum() != w.Sum() {
+		t.Fatalf("reader Sum = %s, writer Sum = %s for the same bytes", r.Sum(), w.Sum())
+	}
+}
+
+func TestChecksumReaderDrainCoversTheRest(t *testing.T) {
+	data := []byte("header and the trailing bytes a consumer did not read")
+	whole, _ := ChecksumOf(bytes.NewReader(data))
+	r := NewChecksumReader(bytes.NewReader(data))
+	if _, err := r.Read(make([]byte, 6)); err != nil {
+		t.Fatal(err)
+	}
+	if r.Sum() == whole {
+		t.Fatal("a partial read must not have the checksum of the whole")
+	}
+	if err := r.Drain(); err != nil {
+		t.Fatal(err)
+	}
+	if r.Sum() != whole {
+		t.Fatalf("after Drain, Sum = %s, want %s", r.Sum(), whole)
+	}
+}
