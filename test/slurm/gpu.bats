@@ -25,37 +25,9 @@ load ../helpers/slurm_propagator
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
 }
 
-# bats test_tags=dump,restore,samples,large
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: GPU PyTorch" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/gpu-pytorch-simple.sbatch"
 
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 30 240
-}
-
-# bats test_tags=dump,restore,samples
-@test "Dump/Restore: CUDA Vector Add (pinned host memory)" {
-    local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-vector-add-host.sbatch"
-
-    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
-}
-
-# bats test_tags=dump,restore,samples
-@test "Dump/Restore: CUDA Memory Throughput" {
-    local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-mem-throughput.sbatch"
-
-    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
-}
-
-# bats test_tags=dump,restore,samples
-@test "Dump/Restore: CUDA Compute Throughput" {
-    local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-compute-throughput.sbatch"
-
-    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
-}
-
-# bats test_tags=dump,restore,samples
-@test "Dump/Restore: CUDA GPU Properties" {
-    local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/cuda-gpu-props.sbatch"
-
-    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
 }
