@@ -1586,19 +1586,16 @@ restart_cedana_slurm_daemon() {
 ##############################
 
 setup_slurm_samples() {
-    # TODO: back to main once cedana-samples feat/gpu-tests merges
-    local branch="${CEDANA_SAMPLES_BRANCH:-feat/gpu-tests}"
-
-    info_log "Cloning cedana-samples ($branch) into cluster nodes..."
+    info_log "Cloning cedana-samples into cluster nodes..."
 
     local sample_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
 
     for c in "${sample_targets[@]}"; do
-        docker exec -e SAMPLES_BRANCH="$branch" "$c" bash -c '
+        docker exec "$c" bash -c '
             apt-get install -y -qq git 2>/dev/null
             rm -rf /data/cedana-samples
             mkdir -p /data
-            git clone --depth 1 -b "$SAMPLES_BRANCH" https://github.com/cedana/cedana-samples.git /data/cedana-samples
+            git clone --depth 1 -b main https://github.com/cedana/cedana-samples.git /data/cedana-samples
         ' || {
             error_log "Failed to clone cedana-samples into $c"
             return 1
