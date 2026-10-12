@@ -1609,10 +1609,11 @@ setup_slurm_samples() {
     debug_log "Initializing Python virtual environment on execution nodes..."
     for c in "${exec_targets[@]}"; do
         docker exec "$c" bash -c "
-            python3 -m venv /data/venv
+            [ -x /data/venv/bin/python ] || python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
             apt-get install -y -qq libffi-dev build-essential 2>/dev/null || true
             /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
+            chmod -R a+rX /data/venv
         "
     done
 
