@@ -64,11 +64,7 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			// We mount CheckpointDir in the namespace of the container to dump
 			// GPU state. This gets unmounted after dump is complete and is not
 			// part of the container checkpoint, so always skip mount at checkpointDir
-			if req.Criu.ImagesDir != nil {
-				req.Criu.SkipMnt = []string{*req.Criu.ImagesDir}
-			} else {
-				log.Warn().Msg("Dump Path not set")
-			}
+			req.Criu.SkipMnt = append(req.Criu.SkipMnt, req.Criu.GetImagesDir())
 
 			next = next.With(AddExternalMountsForDump)
 
