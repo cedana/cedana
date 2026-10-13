@@ -121,6 +121,14 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 		visitedStdioFds := make(map[uint64]bool)
 
+		// Only the root task's descriptors 0, 1 and 2 are the stdio of the job, and so the
+		// ones to inherit from ours (or from the log). A descendant's are often redirections
+		// to files of its own, which are restored from the images like any other file.
+		rootFiles := make(map[*daemon.File]bool, len(state.GetOpenFiles()))
+		for _, f := range state.GetOpenFiles() {
+			rootFiles[f] = true
+		}
+
 		// Set the inherited fds
 		if req.Criu == nil {
 			req.Criu = &criu_proto.CriuOpts{}
@@ -177,6 +185,9 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 
 				// Inherit stdio files that are not external
 
+				if !rootFiles[f] {
+					return true
+				}
 				if visitedStdioFds[f.Fd] { // Stdio fds should only be inherited once
 					return true
 				}

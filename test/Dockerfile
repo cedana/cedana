@@ -9,6 +9,7 @@ ARG GO_VERSION=1.25.1
 ARG KUBECTL_VERSION=1.33.0
 ARG K9S_VERSION=latest
 ARG CRUN_VERSION=1.28
+ARG BATS_VERSION=1.14.0
 
 # install packages
 RUN <<EOT
@@ -26,9 +27,14 @@ done
 EOT
 
 # install bats
+# Ubuntu's bats (1.10) crashes its junit formatter when setup_suite fails
+# ("file_count: unbound variable"), swallowing the failure output. Fixed in 1.13.
 RUN <<EOT
 set -eux
-apt-get install -y bats bats-assert bats-support bats-file
+apt-get install -y bats-assert bats-support bats-file
+curl -fsSL https://github.com/bats-core/bats-core/archive/refs/tags/v${BATS_VERSION}.tar.gz | tar -xz -C /tmp
+/tmp/bats-core-${BATS_VERSION}/install.sh /usr/local
+rm -rf /tmp/bats-core-${BATS_VERSION}
 EOT
 
 # install crun

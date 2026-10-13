@@ -21,11 +21,16 @@ on:
         description: "Run with debugging enabled"
         required: false
         default: false
-      platform:
+      platforms:
         type: string
-        description: "Platform to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter)"
+        description: "JSON list of platforms to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter). Cloud platforms share a cluster, so their jobs are serialized with a concurrency group."
         required: false
-        default: K3s
+        default: '["K3s"]'
+      propagator:
+        type: boolean
+        description: "Deploy the propagator from the propagator-digests-* artifacts into the cluster, instead of using CEDANA_URL"
+        required: false
+        default: false
       large:
         type: boolean
         description: "Run large tests"
@@ -65,6 +70,8 @@ env:
   GCLOUD_PROJECT_ID: ${{ vars.GCLOUD_PROJECT_ID }}
   GCLOUD_SERVICE_ACCOUNT_KEY: ${{ secrets.GCLOUD_SERVICE_ACCOUNT_KEY }}
   GCLOUD_REGION: ${{ vars.GCLOUD_REGION }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${{ vars.OTEL_EXPORTER_OTLP_ENDPOINT }}
+  OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
   NB_REGION: ${{ vars.NB_REGION }}
   NB_PROJECT_ID: ${{ secrets.NB_PROJECT_ID }}
   NB_PUBLIC_KEY_ID: ${{ secrets.NB_PUBLIC_KEY_ID }}
@@ -83,7 +90,8 @@ env:
 
 jobs:
   propagator-connectivity:
-    name: Propagator Connectivity (${{ inputs.platform }})
+    name: Propagator Connectivity
+    if: ${{ !inputs.propagator }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -100,21 +108,28 @@ jobs:
   k8s:
     name: Kubernetes
     runs-on: ${{ format(
-      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache',
+      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache{6}',
       github.run_id,
-      matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
+      (matrix.compute == 'CUDA' && matrix.platform == 'K3s') && inputs.runner_gpu || inputs.runner,
       matrix.arch,
-      (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
+      (matrix.compute == 'CUDA' && matrix.platform == 'K3s' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',
       matrix.cr,
-      matrix.storage
+      matrix.storage,
+      (inputs.propagator && matrix.platform == 'K3s') && '/volume=80gb' || ''
       ) }}
     timeout-minutes: 240
     needs: propagator-connectivity
+    if: ${{ !cancelled() && needs.propagator-connectivity.result != 'failure' }}
+    concurrency:
+      # Cloud platforms share a cluster per arch, so their jobs run one at a time (also across runs)
+      # and wait in line instead of being cancelled. K3s jobs get a unique group each, so they still
+      # run in parallel.
+      group: ${{ matrix.platform == 'K3s' && format('test-k8s-k3s-{0}-{1}', github.run_id, strategy.job-index) || format('test-k8s-{0}-{1}', matrix.platform, matrix.arch) }}
+      queue: max
     strategy:
-      fail-fast: ${{ inputs.platform != 'K3s' }} # save minutes on cloud providers
+      fail-fast: false
       matrix:
-        platform:
-          - ${{ inputs.platform }}
+        platform: ${{ fromJSON(inputs.platforms) }}
         compute:
           - CPU
           - CUDA
@@ -181,7 +196,6 @@ jobs:
           - platform: EKS-Karpenter
             storage: storage/local
 
-      max-parallel: ${{ (inputs.platform == 'EKS' || inputs.platform == 'GKE' || inputs.platform == 'Nebius' || inputs.platform == 'EKS-Karpenter') && 1 || 9999 }}
     container:
       image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
@@ -227,6 +241,20 @@ jobs:
         with:
           name: controller-image-name
           path: /tmp/controller-image-name
+
+      - name: Download propagator digest
+        if: inputs.propagator
+        uses: actions/download-artifact@v4
+        with:
+          name: propagator-digests-${{ matrix.arch }}
+          path: /tmp/propagator-digests
+
+      - name: Download propagator image name
+        if: inputs.propagator
+        uses: actions/download-artifact@v4
+        with:
+          name: propagator-image-name
+          path: /tmp/propagator-image-name
 
       - name: Download binary
         uses: actions/download-artifact@v4
@@ -307,12 +335,20 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
-          LARGE: ${{ inputs.large && '1' || '0' }}
+          LARGE: ${{ (inputs.large && matrix.platform != 'K3s') && '1' || '0' }} # K3s is only for small tests
           PARALLELISM: ${{ (matrix.compute == 'CUDA' || env.DEBUG == '1') && 1 || inputs.parallelism }} # limit GPU tests to 1 parallelism to avoid GPU contention for now
           EKS_CLUSTER_NAME: ${{ env.EKS_CLUSTER_NAME }}-${{ matrix.arch }}
           GKE_CLUSTER_NAME: ${{ env.GKE_CLUSTER_NAME }}-${{ matrix.arch }}
           NB_CLUSTER_NAME: ${{ env.NB_CLUSTER_NAME }}-${{ matrix.arch }}
+          DOCKER_USERNAME: ${{ vars.DOCKER_USERNAME }}
+          DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
+          PROPAGATOR_BUCKET_NAME: ${{ vars.PROPAGATOR_BUCKET_NAME }}
+          PROPAGATOR_PLUGINS_BUCKET: ${{ vars.PROPAGATOR_PLUGINS_BUCKET }}
         run: |
+          if [ -d /tmp/propagator-digests ]; then
+            PROPAGATOR_DIGEST=sha256:$(ls /tmp/propagator-digests | head -n 1)
+            PROPAGATOR_REPO=$(cat /tmp/propagator-image-name/name.txt | head -n 1)
+          fi
           HELPER_DIGEST=sha256:$(ls /tmp/digests | head -n 1)
           HELPER_REPO=$(cat /tmp/image-name/name.txt | head -n 1)
           CONTROLLER_DIGEST=sha256:$(ls /tmp/controller-digests | head -n 1)
@@ -373,6 +409,8 @@ jobs:
             CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
             HELPER_REPO=$HELPER_REPO \
             HELPER_DIGEST=$HELPER_DIGEST \
+            PROPAGATOR_REPO=$PROPAGATOR_REPO \
+            PROPAGATOR_DIGEST=$PROPAGATOR_DIGEST \
             HELM_CHART=$HELM_CHART
 
       - name: Label report # with the job name, so the summary can link to it
@@ -394,6 +432,15 @@ jobs:
           name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
           path: /tmp/report*.xml
 
+      - name: Upload propagator logs
+        if: always() && inputs.propagator
+        uses: actions/upload-artifact@v4
+        with:
+          name: propagator-logs-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
+          path: |
+            /tmp/propagator*.log
+          if-no-files-found: ignore
+
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
@@ -403,12 +450,24 @@ jobs:
       - name: Download reports
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-*-k8s-${{ inputs.platform }}-*
+          pattern: test-report-*-k8s-*
           path: report
 
       - name: Post summary
         uses: cedana/cedana-test-summary@v1
         with:
           reports: report/**/*.xml
-          title: Kubernetes (${{ inputs.platform }})
-          jobs-filter: '(^|/ )(Kubernetes|Propagator Connectivity) \(${{ inputs.platform }}[,)]'
+          title: Kubernetes
+          jobs-filter: '(^|/ )(Kubernetes \(|Propagator Connectivity)'
+          image-branch: test-summary-assets
+          image-repository: cedana/summaries # public, so the image renders when called from private repos
+          image-token: ${{ secrets.GIT_CI_PAT }}
+          matrix-sections: |
+            K3s=^Kubernetes \(K3s,
+            EKS=^Kubernetes \(EKS,
+            EKS-Karpenter=^Kubernetes \(EKS-Karpenter,
+            GKE=^Kubernetes \(GKE,
+            Nebius=^Kubernetes \(Nebius,
+          matrix-split: |
+            CPU
+            CUDA=\b(CUDA|GPU)\b
