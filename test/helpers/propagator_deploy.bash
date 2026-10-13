@@ -267,6 +267,8 @@ rules:
   - { apiGroups: [""], resources: [events], verbs: [get, list] }
   - { apiGroups: [batch], resources: [jobs], verbs: [get, list, watch] }
   - { apiGroups: [apps], resources: [deployments, replicasets, statefulsets, daemonsets], verbs: [get] }
+  - { apiGroups: [""], resources: [services], verbs: [get, list, watch] }
+  - { apiGroups: [nvidia.com], resources: [dynamographdeployments], verbs: [get, list, watch] }
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
