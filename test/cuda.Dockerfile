@@ -4,8 +4,8 @@ FROM cedana/cedana-samples:cuda12.8-torch2.7 AS cedana-samples
 
 # Compile the driver-API fixture without adding a toolkit to the runtime image.
 FROM nvidia/cuda:12.8.0-devel-ubuntu24.04 AS global-pointer-tests
-COPY test/workloads/global-pointer-replay/module-global-replay.cpp /tmp/module-global-replay.cpp
-COPY test/workloads/global-pointer-replay/gpu-arena-placement.c /tmp/gpu-arena-placement.c
+COPY workloads/global-pointer-replay/module-global-replay.cpp /tmp/module-global-replay.cpp
+COPY workloads/global-pointer-replay/gpu-arena-placement.c /tmp/gpu-arena-placement.c
 RUN mkdir -p /out && nvcc -std=c++17 -O2 /tmp/module-global-replay.cpp -o /out/module-global-replay -lcuda \
     && gcc -shared -fPIC -O2 /tmp/gpu-arena-placement.c -o /out/gpu-arena-placement.so
 
