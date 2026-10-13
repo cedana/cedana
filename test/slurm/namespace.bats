@@ -144,15 +144,21 @@ teardown_file() {
 }
 
 # Print the PID cedana monitors (and so checkpoints, or has restored) for a
-# job, from the `cedana-slurm monitor <pid> <job_id>` process on its node. The
-# monitor starts a few seconds after the job does, so wait for it.
+# job. The `cedana-slurm monitor <job_id> --task-pid=<pid>` process on the
+# node names the batch step, and cedana writes the workload's PID to
+# /tmp/cedana-<job_id>.pid in the job's own namespace once it is up, read here
+# through the batch step's root. The monitor starts a few seconds after the job
+# does and the workload a little after that, so wait for both.
 _monitored_pid() {
-    local host="$1" job_id="$2" pid="" waited=0
+    local host="$1" job_id="$2" task="" pid="" waited=0
 
     while [ "$waited" -lt 30 ]; do
-        pid="$(docker exec "$host" ps -eo args= 2>/dev/null |
-            awk -v job="$job_id" '$2 == "monitor" && $4 == job { print $3; exit }')"
-        [ -n "$pid" ] && break
+        task="$(docker exec "$host" ps -eo args= 2>/dev/null |
+            awk -v job="$job_id" '$2 == "monitor" && $3 == job && sub("^--task-pid=", "", $4) { print $4; exit }')"
+        if [ -n "$task" ]; then
+            pid="$(docker exec "$host" cat "/proc/${task}/root/tmp/cedana-${job_id}.pid" 2>/dev/null | tr -d '[:space:]')"
+            [ -n "$pid" ] && break
+        fi
         sleep 1
         waited=$((waited + 1))
     done
