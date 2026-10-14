@@ -85,8 +85,9 @@ func TestInitializeDumpReleasesLockOnFailedFreeze(t *testing.T) {
 	waitGoroutines(t, before)
 }
 
-// A successful freeze keeps the lock for FinalizeDump
-func TestInitializeDumpKeepsLockOnSuccessfulFreeze(t *testing.T) {
+// A successful freeze keeps the lock for FinalizeDump. When the dump stops before the GPU
+// dump, for example on a later callback, FinalizeDump unfreezes the process and unlocks.
+func TestFinalizeDumpUnfreezesWhenGPUDumpNeverStarted(t *testing.T) {
 	client := &fakeControllerClient{}
 	p, c := newFakePool(t, client)
 	callback := p.CRIUCallback(c.ID)
@@ -101,9 +102,31 @@ func TestInitializeDumpKeepsLockOnSuccessfulFreeze(t *testing.T) {
 	if err := callback.FinalizeDumpFunc(context.Background(), dumpOpts(), errors.New("a later callback failed")); err != nil {
 		t.Fatal(err)
 	}
+	if got := client.unfreezes.Load(); got != 1 {
+		t.Fatalf("%d unfreezes, want 1", got)
+	}
 	if !c.Termination.TryLock() {
 		t.Fatal("FinalizeDump did not release the termination lock")
 	}
 	c.Termination.Unlock()
 	waitGoroutines(t, before)
+}
+
+// Without a successful freeze there is nothing to unfreeze
+func TestFinalizeDumpDoesNotUnfreezeWithoutFreeze(t *testing.T) {
+	client := &fakeControllerClient{freezeErr: errors.New("freeze failed")}
+	p, c := newFakePool(t, client)
+	callback := p.CRIUCallback(c.ID)
+
+	if err := callback.InitializeDumpFunc(context.Background(), dumpOpts()); err == nil {
+		t.Fatal("InitializeDump succeeded with a failing freeze")
+	}
+	// As NotifyCallbackMulti does for a callback that started before a later one failed
+	c.Termination.Lock()
+	if err := callback.FinalizeDumpFunc(context.Background(), dumpOpts(), errors.New("freeze failed")); err != nil {
+		t.Fatal(err)
+	}
+	if got := client.unfreezes.Load(); got != 0 {
+		t.Fatalf("%d unfreezes, want 0", got)
+	}
 }

@@ -398,13 +398,45 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 	}
 }
 
+// unfreeze resumes the GPU of a dumped process
+func unfreeze(ctx context.Context, log zerolog.Logger, controller *controller) error {
+	// NOTE: Unfreeze must complete even if parent context is cancelled, so process can resume
+	waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
+	defer cancel()
+
+	// Cancel on early external termination, and end with this call
+	go func() {
+		select {
+		case <-controller.Terminated:
+			cancel()
+		case <-waitCtx.Done():
+		}
+	}()
+
+	log.Info().Msg("GPU unfreeze starting")
+
+	_, err := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
+	if err != nil {
+		log.Error().Err(err).Msg("failed to unfreeze GPU")
+	} else {
+		log.Info().Msg("GPU unfreeze completed")
+	}
+
+	return utils.GRPCError(err)
+}
+
 func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 	log := log.With().Str("plugin", "gpu").Str("ID", id).Logger()
 
+	// Set once the freeze succeeds, so a dump that stops before the GPU dump still unfreezes
+	var frozen bool
+
 	callback.InitializeDumpFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
 		pid := uint32(opts.GetPid())
 		log := log.With().Uint32("PID", pid).Logger()
+
+		frozen = false
 
 		controller := p.Get(id)
 		if controller == nil {
@@ -437,6 +469,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			log.Error().Err(err).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
+
+		frozen = true
 
 		log.Info().Msg("GPU freeze complete")
 
@@ -503,7 +537,12 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		defer controller.Termination.Unlock()
 
 		if dumpErr == nil { // Dump was never started
-			return nil
+			if !frozen {
+				return nil
+			}
+			// The freeze succeeded, but the dump stopped before the GPU dump, for example
+			// on a later callback's InitializeDump. The process must run again.
+			return unfreeze(ctx, log, controller)
 		}
 
 		// CRIU may have failed and PostDumpFunc may have never
@@ -514,26 +553,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			return err
 		}
 
-		// NOTE: Unfreeze must complete even if parent context is cancelled, so process can resume
-		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
-		defer cancel()
-
-		// Cancel on early external termination
-		go func() {
-			<-controller.Terminated
-			cancel()
-		}()
-
-		log.Info().Msg("GPU unfreeze starting")
-
-		_, unfreezeErr := controller.Unfreeze(waitCtx, &gpu.UnfreezeReq{})
-		if unfreezeErr != nil {
-			log.Error().Err(unfreezeErr).Msg("failed to unfreeze GPU")
-		} else {
-			log.Info().Msg("GPU unfreeze completed")
-		}
-
-		return errors.Join(err, utils.GRPCError(unfreezeErr))
+		return errors.Join(err, unfreeze(ctx, log, controller))
 	}
 
 	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
