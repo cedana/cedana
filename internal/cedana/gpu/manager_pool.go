@@ -81,16 +81,13 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 }
 
 func (m *ManagerPool) Sync(ctx context.Context) error {
-	m.syncs.Add(1)
-	if !m.sync.TryLock() {
-		m.syncs.Done()
-		m.syncs.Wait() // Instead of stacking up syncs, just wait for the current one to finish
-		return nil
+	done, err := m.waitOrStartSync(ctx)
+	if err != nil || done == nil {
+		return err
 	}
-	defer m.syncs.Done()
-	defer m.sync.Unlock()
+	defer done()
 
-	err := m.controllers.Sync(ctx)
+	err = m.controllers.Sync(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to sync GPU controllers: %w", err)
 	}
