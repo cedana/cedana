@@ -40,8 +40,8 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 			req.Criu.ManageCgroups = proto.Bool(true) // For backward compatibility
 		}
 		// Only override if unset
-		if req.Criu.ShmemZeroElide == nil {
-			req.Criu.ShmemZeroElide = proto.Bool(config.Global.CRIU.ShmemZeroElide)
+		if req.Criu.ZeroElide == nil {
+			req.Criu.ZeroElide = proto.Bool(config.Global.CRIU.ZeroElide)
 		}
 
 		// Only override if unset

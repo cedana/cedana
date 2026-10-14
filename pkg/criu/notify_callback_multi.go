@@ -202,18 +202,6 @@ func (n NotifyCallbackMulti) QueryExtFiles(ctx context.Context) ([]string, error
 	return external, nil
 }
 
-func (n NotifyCallbackMulti) QueryGhostAllow(ctx context.Context) ([]string, error) {
-	var keys []string
-	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		k, err := n.callbacks[i].QueryGhostAllow(ctx)
-		if err != nil {
-			return nil, err
-		}
-		keys = append(keys, k...)
-	}
-	return keys, nil
-}
-
 func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
 		err := n.callbacks[i].OrphanPtsMaster(ctx, fd)
