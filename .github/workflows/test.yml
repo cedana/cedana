@@ -434,7 +434,7 @@ jobs:
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
       runner: ${{ inputs.runner }}
-      runner_gpu: 16cpu-1gpu
+      runner_gpu: ${{ inputs.runner_gpu }}
       # Pinned to 1 because SLURM tests share a single cluster instance.
       # Running them in parallel can cause resource collisions and flaky tests.
       parallelism: 1
