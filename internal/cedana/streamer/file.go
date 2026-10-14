@@ -6,6 +6,8 @@ import (
 	"os"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Implementation of the afero.File interface that uses streaming as the backend
@@ -107,6 +109,8 @@ func (f *File) Readdirnames(n int) ([]string, error) {
 	if f.dirNames == nil && f.fs != nil {
 		names, err := f.fs.glob("*")
 		if err != nil {
+			// NOTE: afero.Glob silently discards Readdirnames errors, so log here
+			log.Warn().Err(err).Str("plugin", "streamer").Msg("failed to list files from streamer")
 			return nil, fmt.Errorf("readdirnames: failed to list files: %w", err)
 		}
 		f.dirNames = names

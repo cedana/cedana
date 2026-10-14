@@ -12,14 +12,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
-	"github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
@@ -128,15 +126,31 @@ func NewStreamingFs(
 					ioErr <- file.Close()
 				}()
 
-				file = profiling.IOParallelCategory(
-					ctx,
-					file,
-					"storage",
-					cedana_io.ReadFrom,
-					fmt.Sprintf("shard-%d", i),
-					compression,
-				)
-				_, err := cedana_io.ReadFrom(file, writeFds[i], compression)
+				var err error
+				if raw, ok := file.(*os.File); ok && compression == "none" {
+					// Uncompressed local file: zero-copy splice straight into the pipe
+					ioCtx, end := profiling.StartTimingParallelCategory(
+						ctx,
+						"storage",
+						cedana_io.SpliceFile,
+						fmt.Sprintf("shard-%d", i),
+						compression,
+					)
+					var n int64
+					n, err = cedana_io.SpliceFile(raw, writeFds[i])
+					profiling.AddIO(ioCtx, n)
+					end()
+				} else {
+					file = profiling.IOParallelCategory(
+						ctx,
+						file,
+						"storage",
+						cedana_io.ReadFrom,
+						fmt.Sprintf("shard-%d", i),
+						compression,
+					)
+					_, err = cedana_io.ReadFrom(file, writeFds[i], compression)
+				}
 				writeFds[i].Close()
 				if err != nil {
 					ioErr <- err
@@ -179,12 +193,10 @@ func NewStreamingFs(
 	args := []string{"--images-dir", imagesDir}
 	var extraFiles []*os.File
 	var lastMsg string
-	memoryLimit := strconv.FormatUint(config.Global.Checkpoint.StreamMemoryLimit, 10)
 
 	switch mode {
 	case READ_ONLY:
-		log.Debug().Str("streamer memory limit", memoryLimit)
-		args = append(args, "--memory-limit", memoryLimit, "--shard-fds", strings.Join(shardFds, ","), "serve")
+		args = append(args, "--shard-fds", strings.Join(shardFds, ","), "serve")
 		extraFiles = readFds
 	case WRITE_ONLY:
 		args = append(args, "--shard-fds", strings.Join(shardFds, ","), "capture")
@@ -219,7 +231,7 @@ func NewStreamingFs(
 			if lastMsg == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			log.Trace().Msg(lastMsg)
+			log.Debug().Msg(lastMsg)
 		}
 	})
 
@@ -243,7 +255,7 @@ func NewStreamingFs(
 		if err != nil {
 			log.Trace().Err(err).Msg("streamer Wait()")
 		}
-		log.Debug().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
+		log.Info().Int("code", cmd.ProcessState.ExitCode()).Msg("streamer exited")
 
 		// FIXME: Remove socket files. Should be cleaned up by the streamer itself
 		matches, err := filepath.Glob(filepath.Join(imagesDir, "*.sock"))
@@ -381,7 +393,7 @@ func (fs *Fs) glob(pattern string) ([]string, error) {
 	}
 	fs.globMutex.Unlock()
 
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: pattern}
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: pattern, Protocol: img_streamer.ImgStreamerFileProtocol_SEND_PIPE_END}
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal glob request: %w", err)
@@ -442,45 +454,28 @@ func (m Mode) String() string {
 	}
 }
 
-/* retries until streamer is ready */
-func (fs *Fs) waitForStreamerReady(name string) error {
-	for {
-		resp := &img_streamer.ImgStreamerReplyEntry{}
-		var sizeBuf [4]byte
-		_, err := fs.conn.Read(sizeBuf[:])
-		if err != nil {
-			return fmt.Errorf("failed to read size from file response: %w", err)
-		}
-		size := binary.LittleEndian.Uint32(sizeBuf[:])
-		data := make([]byte, size)
-		n, err := fs.conn.Read(data)
-		if err != nil {
-			return fmt.Errorf("failed to read data from file response: %w", err)
-		}
-		if n != int(size) {
-			return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
-		}
-		err = proto.Unmarshal(data, resp)
-		if err != nil {
-			return fmt.Errorf("failed to unmarshal response: %w", err)
-		}
-		if !resp.HasStatus() {
-			if !resp.Exists {
-				return fmt.Errorf("%w: %s", os.ErrNotExist, name)
-			}
-		} else {
-			status := resp.GetStatus()
-			if status == img_streamer.FileStatus_DOES_NOT_EXIST {
-				return fmt.Errorf("%w: %s", os.ErrNotExist, name)
-			} else if status == img_streamer.FileStatus_NOT_READY {
-				time.Sleep(RETRY_INTERVAL)
-				continue
-			} else if status == img_streamer.FileStatus_READY {
-				break
-			} else {
-				return fmt.Errorf("recieved invalid file status from streamer")
-			}
-		}
+func (fs *Fs) checkFileExists(name string) error {
+	resp := &img_streamer.ImgStreamerReplyEntry{}
+	var sizeBuf [4]byte
+	_, err := fs.conn.Read(sizeBuf[:])
+	if err != nil {
+		return fmt.Errorf("failed to read size from file response: %w", err)
+	}
+	size := binary.LittleEndian.Uint32(sizeBuf[:])
+	data := make([]byte, size)
+	n, err := fs.conn.Read(data)
+	if err != nil {
+		return fmt.Errorf("failed to read data from file response: %w", err)
+	}
+	if n != int(size) {
+		return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
+	}
+	err = proto.Unmarshal(data, resp)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+	if !resp.Exists {
+		return os.ErrNotExist
 	}
 	return nil
 }
@@ -514,7 +509,7 @@ func (fs *Fs) openFd(name string) (int, error) {
 	}()
 
 	// Send file request to streamer
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: name}
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: name, Protocol: img_streamer.ImgStreamerFileProtocol_SEND_PIPE_END}
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return 0, fmt.Errorf("failed to marshal request: %w", err)
@@ -533,7 +528,7 @@ func (fs *Fs) openFd(name string) (int, error) {
 
 	// If read-only, read for msg from streamer if file exists
 	if fs.mode == READ_ONLY {
-		err = fs.waitForStreamerReady(name)
+		err = fs.checkFileExists(name)
 		if err != nil {
 			return 0, err
 		}
@@ -556,7 +551,7 @@ func (fs *Fs) openFd(name string) (int, error) {
 // Tells the streamer to stop listening for new connections
 func (fs *Fs) stopListener() error {
 	// Send file request to streamer
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: STOP_LISTENER_MSG}
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: STOP_LISTENER_MSG, Protocol: img_streamer.ImgStreamerFileProtocol_SEND_PIPE_END}
 	data, err := proto.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("failed to marshal request: %w", err)
