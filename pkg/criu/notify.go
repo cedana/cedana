@@ -25,7 +25,7 @@ type Notify interface {
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
-	QueryExtFiles(ctx context.Context) ([]string, error) // return external file keys after CRIU has seized the process tree.
+	QueryExtFiles(ctx context.Context) ([]string, error)   // return external file keys after CRIU has seized the process tree.
 	QueryGhostAllow(ctx context.Context) ([]string, error) // return "dev:ino" of deleted files exempt from the ghost limit, alongside QueryExtFiles.
 }
 
