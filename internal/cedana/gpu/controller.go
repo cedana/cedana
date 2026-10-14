@@ -418,16 +418,22 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
 		defer cancel()
 
-		// Cancel on early external termination
+		// Cancel on early external termination, and end with this call
 		go func() {
-			<-controller.Terminated
-			cancel()
+			select {
+			case <-controller.Terminated:
+				cancel()
+			case <-waitCtx.Done():
+			}
 		}()
 
 		log.Info().Msg("GPU freeze starting")
 
 		_, err := controller.Freeze(waitCtx, &gpu.FreezeReq{})
 		if err != nil {
+			// CRIU does not call FinalizeDump after a failed InitializeDump, so the lock must
+			// go here. Kept, it blocks the pool's sync in Terminate, and every later dump with it.
+			controller.Termination.Unlock()
 			log.Error().Err(err).Msg("failed to freeze GPU")
 			return fmt.Errorf("failed to freeze GPU: %v", utils.GRPCError(err))
 		}
