@@ -478,7 +478,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump complete")
 		}()
-		return <-dumpErr
+		return nil
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
@@ -500,6 +500,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			return nil
 		}
 
+		// CRIU may have failed and PostDumpFunc may have never
+		// been called so check dumpErr here as well
 		err := <-dumpErr // Ensure GPU dump has finished before unfreezing
 
 		if !opts.GetLeaveRunning() && criuErr == nil {
