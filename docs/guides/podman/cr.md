@@ -83,18 +83,70 @@ cedana restore job --attach <job_id>
 
 GPU restore requires podman's `overlay` storage driver (the default). CDI injects NVIDIA's driver library symlinks into the container's read/write layer when it's created, and they are only restored with it (see [read/write layer](#readwrite-layer-rootfs)).
 
-Containers run directly with podman also get GPU support, if they are run with the Cedana OCI runtime and have NVIDIA GPUs (i.e. `NVIDIA_VISIBLE_DEVICES` is set, as in CUDA images). These can then be checkpointed with `cedana dump podman` and restored with `cedana restore podman`, as in [basic](#basic):
+For GPU containers run directly with podman, see [Using the Cedana OCI runtime directly](#using-the-cedana-oci-runtime-directly).
 
-```sh
-sudo podman run -d --runtime /usr/local/bin/cedana-oci-runtime --name <container> <cuda-image> [command] [args...]
-```
+## Using the Cedana OCI runtime directly
 
-To avoid passing the runtime path every time, add it to podman's [`containers.conf`](https://github.com/containers/common/blob/main/docs/containers.conf.5.md) and use `--runtime cedana`:
+Instead of running containers through Cedana (`cedana run podman`), you can keep using podman as usual and just switch its OCI runtime to the Cedana OCI runtime (`cedana-oci-runtime`, from the **oci-runtime** plugin). Such containers can be checkpointed and restored, including GPU containers, and remain regular podman containers in every other way.
+
+Containers run with podman's default runtime (`crun`/`runc`) can also be checkpointed as in [basic](#basic), but **only containers run with the Cedana OCI runtime get GPU support**, as GPU interception must be set up when the container is created.
+
+### Setup
+
+Add the runtime to podman's [`containers.conf`](https://github.com/containers/common/blob/main/docs/containers.conf.5.md) (e.g. `/etc/containers/containers.conf`):
 
 ```toml
 [engine.runtimes]
 cedana = ["/usr/local/bin/cedana-oci-runtime"]
 ```
+
+Then use `--runtime cedana` with `podman run`/`podman create`. Alternatively, pass the full path every time: `--runtime /usr/local/bin/cedana-oci-runtime`. To use it for all containers, also set `runtime = "cedana"` under `[engine]`.
+
+### Run
+
+```sh
+sudo podman run -d --runtime cedana --name <container> <image> [command] [args...]
+```
+
+The container runs on the real runtime (`crun`, or `runc` if `crun` is not installed). To choose one, add `--annotation cedana.ai/runtime=runc` (see [annotations](#annotations)).
+
+### Checkpoint
+
+```sh
+cedana dump podman <container> --dir <dump-dir>
+```
+
+The container exits after the checkpoint, unless `--leave-running` is passed.
+
+### Restore
+
+Restore through Cedana, which recreates the container with podman, using the Cedana OCI runtime:
+
+```sh
+sudo podman rm <container>
+cedana restore podman --path <dump-dir>/<dump> --id <container>
+```
+
+Or restore with podman itself, by creating a container from the same image with the `cedana.ai/checkpoint-path` annotation:
+
+```sh
+sudo podman run -d --runtime cedana --annotation cedana.ai/checkpoint-path=<dump-dir>/<dump> --name <container> <image>
+```
+
+Instead of starting the image's command, the Cedana OCI runtime restores the checkpointed process and read/write layer into the new container.
+
+### GPU containers
+
+GPU support is enabled automatically for containers with NVIDIA GPUs, i.e. with `NVIDIA_VISIBLE_DEVICES` set, as in CUDA images. For other images, set it with `--env NVIDIA_VISIBLE_DEVICES=all`, or add `--annotation cedana.ai/gpu=true`. See [checkpoint/restore with GPUs](../gpu/cr.md) for GPU prerequisites.
+
+```sh
+sudo podman run -d --runtime cedana --name <container> <cuda-image> [command] [args...]
+cedana dump podman <container> --dir <dump-dir>
+sudo podman rm -f <container>
+cedana restore podman --path <dump-dir>/<dump> --id <container>
+```
+
+A checkpoint of a GPU container includes its GPU state, so a restore needs no GPU flags.
 
 ## How it works
 
@@ -102,15 +154,20 @@ Checkpointing is delegated to the plugin of the container's OCI runtime, as a ro
 
 Running and restoring however must go through podman, as podman owns the container's sandbox: its network namespace, rootfs mount, and the `conmon` process that monitors it. For this, the container is created with the Cedana OCI runtime (`cedana-oci-runtime`, from the **oci-runtime** plugin), which podman invokes in place of **crun**/**runc**. It routes the container creation to `cedana run <runtime>`, or `cedana restore <runtime>` for a restore, and passes every other command through to the real runtime. This is podman's equivalent of the Cedana containerd runtime (shim).
 
-The Cedana OCI runtime reads the following container annotations, which the podman plugin sets:
+### Annotations
 
-| Annotation                  | Description                                                  |
-| --------------------------- | ------------------------------------------------------------ |
-| `cedana.ai/runtime`         | The real runtime (`crun` or `runc`). Default: `crun` if installed |
-| `cedana.ai/checkpoint-path` | Restore from this checkpoint, instead of creating            |
-| `cedana.ai/criu-opts`       | CRIU options JSON for the restore                            |
-| `cedana.ai/gpu`             | Enable GPU interception                                      |
-| `cedana.ai/gpu-tracing`     | Enable GPU tracing                                           |
+The Cedana OCI runtime reads the following container annotations. The podman plugin sets them, and they can also be set directly with `podman run --annotation <key>=<value>`. JSON values may be base64-encoded, as some podman versions split `--annotation` values on commas.
+
+| Annotation                  | Description                                                                 |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `cedana.ai/runtime`         | The real runtime (`crun` or `runc`). Default: `crun` if installed, else `runc` |
+| `cedana.ai/checkpoint-path` | Restore from this checkpoint, instead of creating                           |
+| `cedana.ai/criu-opts`       | CRIU options JSON for the restore                                           |
+| `cedana.ai/config`          | Cedana [configuration](../../get-started/configuration.md) JSON to run Cedana with |
+| `cedana.ai/gpu`             | Enable GPU interception. Automatic if `NVIDIA_VISIBLE_DEVICES` is set        |
+| `cedana.ai/gpu-tracing`     | Enable GPU tracing                                                          |
+| `cedana.ai/gpu-id`          | GPU controller to use, if already attached                                  |
+| `cedana.ai/executable-path` | Cedana binary to use. Set by the podman plugin (disables automatic GPU interception, which the plugin handles itself) |
 
 ## Supported runtimes
 
