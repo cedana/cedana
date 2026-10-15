@@ -190,6 +190,33 @@ version = 2
 CONFIG
 EOT
 
+# Install and configure podman
+RUN <<'EOT'
+set -eux
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends podman
+mkdir -p /etc/containers
+# NOTE: overlay can't be nested in the test container's overlay root, so use
+# vfs (same reason containerd uses the native snapshotter above)
+cat > /etc/containers/storage.conf <<'CONFIG'
+[storage]
+driver = "vfs"
+runroot = "/run/containers/storage"
+graphroot = "/var/lib/containers/storage"
+CONFIG
+cat > /etc/containers/containers.conf <<'CONFIG'
+[containers]
+log_driver = "k8s-file"
+
+[engine]
+cgroup_manager = "cgroupfs"
+events_logger = "file"
+
+[engine.runtimes]
+crun = ["/usr/local/bin/crun"]
+CONFIG
+EOT
+
 # copy cedana-samples
 COPY --from=cedana-samples /app /cedana-samples
 

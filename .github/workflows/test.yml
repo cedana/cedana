@@ -264,6 +264,7 @@ jobs:
           - runc
           - crun
           - containerd
+          - podman
           - storage/cedana
           - storage/s3
           - storage/csx
@@ -310,6 +311,14 @@ jobs:
           pattern: containerd-runtime-${{ matrix.arch }}-*
           merge-multiple: true
 
+      - name: Download OCI runtime
+        if: matrix.plugin == 'podman'
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: oci-runtime-${{ matrix.arch }}
+          merge-multiple: true
+
       - name: Download CSX
         if: matrix.plugin == 'storage/csx'
         uses: actions/download-artifact@v4
@@ -333,6 +342,9 @@ jobs:
           sudo -E cedana plugin install ${{ matrix.plugin }}
           if [ "${{ matrix.plugin }}" = "containerd" ]; then
             sudo -E cedana plugin install runc crun containerd/runtime-runc
+          fi
+          if [ "${{ matrix.plugin }}" = "podman" ]; then
+            sudo -E cedana plugin install runc crun oci-runtime
           fi
           if [ "${{ matrix.plugin }}" = "storage/csx" ]; then
             sudo -E cedana plugin install csx
