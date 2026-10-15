@@ -66,6 +66,16 @@ teardown_file() {
     assert_equal $status $code
 }
 
+# bats test_tags=serverless
+@test "run container (without daemon) is unsupported" {
+    jid=$(unix_nano)
+    image="docker.io/library/alpine:latest"
+
+    run cedana run --no-server podman --jid "$jid" -- "$image" echo hello
+    assert_failure
+    assert_output --partial "does not support serverless run"
+}
+
 # bats test_tags=attach
 @test "run container with attach (stdin)" {
     jid=$(unix_nano)
