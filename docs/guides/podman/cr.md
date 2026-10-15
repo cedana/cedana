@@ -66,8 +66,10 @@ Just like for processes, as explained in [checkpoint/restore with GPUs](../gpu/c
 1. Run a new managed podman container with GPU support:
 
 ```sh
-cedana run podman --attach --gpu-enabled --jid <job_id> <image> [command] [args...]
+cedana run podman --attach --gpu-enabled --gpus <gpus> --jid <job_id> <image> [command] [args...]
 ```
+
+`--gpus` adds the given GPUs to the container (e.g. `--gpus 0,1`), as `podman run --device nvidia.com/gpu=<N>` would.
 
 2. Checkpoint:
 
@@ -80,6 +82,8 @@ cedana dump job <job_id>
 ```sh
 cedana restore job --attach <job_id>
 ```
+
+The restored container gets the same GPUs as the job was run with.
 
 GPU restore requires podman's `overlay` storage driver (the default). CDI injects NVIDIA's driver library symlinks into the container's read/write layer when it's created, and they are only restored with it (see [read/write layer](#readwrite-layer-rootfs)).
 
@@ -140,13 +144,13 @@ Instead of starting the image's command, the Cedana OCI runtime restores the che
 GPU support is enabled automatically for containers with NVIDIA GPUs, i.e. with `NVIDIA_VISIBLE_DEVICES` set, as in CUDA images. For other images, set it with `--env NVIDIA_VISIBLE_DEVICES=all`, or add `--annotation cedana.ai/gpu=true`. See [checkpoint/restore with GPUs](../gpu/cr.md) for GPU prerequisites.
 
 ```sh
-sudo podman run -d --runtime cedana --name <container> <cuda-image> [command] [args...]
+sudo podman run -d --runtime cedana --device nvidia.com/gpu=<N> --name <container> <cuda-image> [command] [args...]
 cedana dump podman <container> --dir <dump-dir>
-sudo podman rm -f <container>
-cedana restore podman --path <dump-dir>/<dump> --id <container>
+sudo podman rm <container>
+cedana restore podman --path <dump-dir>/<dump> --id <container> --gpus <N>
 ```
 
-A checkpoint of a GPU container includes its GPU state, so a restore needs no GPU flags.
+A checkpoint does not record the container's GPUs, so a container run with GPUs must be restored with them again: with `--gpus` for `cedana restore podman`, or `--device nvidia.com/gpu=<N>` when [restoring with podman itself](#restore). The checkpointed GPU state is restored onto the given GPUs.
 
 ## How it works
 
