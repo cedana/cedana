@@ -8,11 +8,11 @@ Real benefits of streaming are realized only when checkpointing and restoring to
 
 ## Prerequisites
 
-1. Create an account with Cedana, to get access to the streamer plugin. See [authentication](../../get-started/authentication.md).
-2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
+1. Create an account with Cedana, to get access to the streamer plugin. See [authentication](../get-started/authentication.md).
+2. Set the Cedana URL & authentication token in the [configuration](../get-started/configuration.md).
 3. Install the streamer plugin with `sudo cedana plugin install streamer`.
-4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
-5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
+4. Ensure the daemon is running, see [installation](../get-started/installation.md).
+5. Do a health check to ensure the plugin is ready, see [health checks](../get-started/health.md).
 
 ## Checkpoint
 
@@ -41,15 +41,15 @@ cedana restore process --path <path-to-dump>
 
 ## Compression
 
-All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../cr.md#compression) for more information.
+All compression algorithms supported for basic checkpoint/restore are supported. See [compression](basics.md#compression) for more information.
 
 ## Remote storage
 
 Cedana supports streaming to/from remote storage, through storage plugins. Check out the following guides for specific remote storage:
 
-- [Amazon S3](../storage/s3.md)
-- [Google Cloud Storage](../storage/gcs.md)
-- [Cedana Storage](../storage/cedana.md)
+- [Amazon S3](storage/s3.md)
+- [Google Cloud Storage](storage/gcs.md)
+- [Cedana Storage](storage/cedana.md)
 
 {% hint style="info" %}
 The daemon simply reads/writes from the filesystem. This is also the case for streaming, with the additional requirement that the underlying filesystem must be [POSIX-compliant](https://grimoire.carcano.ch/blog/posix-compliant-filesystems/). To checkpoint/restore to/from a remote directory, you can also use a FUSE-based filesystem mount backed by your network storage. For Amazon's S3, check out [s3fs-fuse](https://github.com/s3fs-fuse/s3fs-fuse).
@@ -57,8 +57,8 @@ The daemon simply reads/writes from the filesystem. This is also the case for st
 
 ## Enable by default
 
-To enable streaming by default, set the `Checkpoint.Stream` field in the [configuration](../../get-started/configuration.md) to the desired number of parallel streams. Zero means no streaming.
+To enable streaming by default, set the `Checkpoint.Stream` field in the [configuration](../get-started/configuration.md) to the desired number of parallel streams. Zero means no streaming.
 
 {% hint style="info" %}
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+For all available CLI options, see [CLI reference](../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../references/api.md).
 {% endhint %}

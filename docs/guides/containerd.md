@@ -2,15 +2,15 @@
 
 ## Prerequisites
 
-1. Create an account with Cedana, to get access to the containerd plugin. See [authentication](../../get-started/authentication.md).
-2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
+1. Create an account with Cedana, to get access to the containerd plugin. See [authentication](../get-started/authentication.md).
+2. Set the Cedana URL & authentication token in the [configuration](../get-started/configuration.md).
 3. Install the **containerd** plugin with `sudo cedana plugin install containerd`.
 4. Install the containerd runtime plugin for the underlying OCI runtime (see [Supported runtimes](#supported-runtimes)):
    - If runtime type is `io.containerd.runc.v2`, install the **containerd runtime** plugin (shim) with `sudo cedana plugin install containerd/runtime-runc`.
    - If the runtime binary is `runc` (default), install the lower-level **runc** plugin with `sudo cedana plugin install runc`.
    - If the runtime binary is `crun`, install the lower-level **crun** plugin with `sudo cedana plugin install crun`.
-5. Ensure the daemon is running, see [installation](../../get-started/installation.md).
-6. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
+5. Ensure the daemon is running, see [installation](../get-started/installation.md).
+6. Do a health check to ensure the plugin is ready, see [health checks](../get-started/health.md).
 
 ## Basic
 
@@ -26,7 +26,7 @@ sudo ctr run docker.io/library/nginx:latest <container_id>
 cedana dump containerd <container_id> --dir <dump-dir>
 ```
 
-3. Restore is currently WIP. However, you can restore this container as a runc container, see [checkpoint/restore runc](../runc/cr.md).
+3. Restore is currently WIP. However, you can restore this container as a runc container, see [checkpoint/restore runc](runc.md).
 
 ## Managed
 
@@ -46,7 +46,7 @@ cedana dump job <job_id>
 
 ## GPU support
 
-Just like for processes, as explained in [checkpoint/restore with GPUs](../gpu/cr.md), GPU support is also available for managed containerd containers.
+Just like for processes, as explained in [checkpoint/restore with GPUs](gpu.md), GPU support is also available for managed containerd containers.
 
 1. Run a new managed containerd container with GPU support:
 
@@ -108,5 +108,5 @@ Whether the read/write layer can be captured depends on the filesystem of the co
 For unsupported snapshotters, the read/write layer is skipped gracefully — the checkpoint still succeeds, but changes made to the container's rootfs are not preserved across a restore.
 
 {% hint style="info" %}
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+For all available CLI options, see [CLI reference](../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../references/api.md).
 {% endhint %}

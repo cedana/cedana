@@ -130,8 +130,8 @@ used_gould8     process  5336  halted  yes                    [Attachable]
 
 ## Checkpoint/restore
 
-Once the daemon has started managing a job, it can be checkpointed and restored using the `cedana dump job` and `cedana restore job` subcommands. See [managed checkpoint/restore basics](./cr.md#managed-checkpoint-restore) for more information.
+Once the daemon has started managing a job, it can be checkpointed and restored using the `cedana dump job` and `cedana restore job` subcommands. See [managed checkpoint/restore basics](basics.md#managed-checkpoint-restore) for more information.
 
 ## Checkpoint/restore with GPUs
 
-GPU C/R support is also available for managed jobs. Check out the [checkpoint/restore with GPUs](./gpu/cr.md) guide for more information.
+GPU C/R support is also available for managed jobs. Check out the [checkpoint/restore with GPUs](gpu.md) guide for more information.

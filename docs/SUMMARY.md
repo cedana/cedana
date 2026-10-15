@@ -14,14 +14,14 @@
 ## Checkpoint/restore
 
 - [Managed process/container](guides/managed.md)
-- [Checkpoint/restore basics](guides/cr.md)
-- [Checkpoint/restore with GPUs](guides/gpu/cr.md)
-- [Checkpoint/restore runc](guides/runc/cr.md)
-- [Checkpoint/restore crun](guides/crun/cr.md)
-- [Checkpoint/restore containerd](guides/containerd/cr.md)
-- [Checkpoint/restore podman](guides/podman/cr.md)
-- [Checkpoint/restore streamer](guides/streamer/cr.md)
-- [Checkpoint/restore kubernetes](guides/k8s/cr.md)
+- [Checkpoint/restore basics](guides/basics.md)
+- [Checkpoint/restore with GPUs](guides/gpu.md)
+- [Checkpoint/restore runc](guides/runc.md)
+- [Checkpoint/restore crun](guides/crun.md)
+- [Checkpoint/restore containerd](guides/containerd.md)
+- [Checkpoint/restore podman](guides/podman.md)
+- [Checkpoint/restore streamer](guides/streamer.md)
+- [Checkpoint/restore kubernetes](guides/kubernetes.md)
 
 ## Storage
 
@@ -76,7 +76,7 @@
   - [cedana job kill](references/cli/cedana_job_kill.md)
   - [cedana job list](references/cli/cedana_job_list.md)
   - [cedana jobs](references/cli/cedana_jobs.md)
-  - [cedana k8s](references/cli/cedana-k8s.md)
+  - [cedana k8s](references/cli/cedana_k8s.md)
   - [cedana kill](references/cli/cedana_kill.md)
   - [cedana manage](references/cli/cedana_manage.md)
   - [cedana manage containerd](references/cli/cedana_manage_containerd.md)

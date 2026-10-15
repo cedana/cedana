@@ -114,10 +114,10 @@ Cedana supports checkpointing/restoring to/from remote storage, through storage 
 
 ## Advanced
 
-- [Checkpoint/restore with GPUs](gpu/cr.md)
-- [Checkpoint/restore runc](runc/cr.md)
-- [Checkpoint/restore crun](crun/cr.md)
-- [Checkpoint/restore containerd](containerd/cr.md)
-- [Checkpoint/restore podman](podman/cr.md)
-- [Checkpoint/restore streamer](streamer/cr.md)
-- [Checkpoint/restore kubernetes](k8s/cr.md)
+- [Checkpoint/restore with GPUs](gpu.md)
+- [Checkpoint/restore runc](runc.md)
+- [Checkpoint/restore crun](crun.md)
+- [Checkpoint/restore containerd](containerd.md)
+- [Checkpoint/restore podman](podman.md)
+- [Checkpoint/restore streamer](streamer.md)
+- [Checkpoint/restore kubernetes](kubernetes.md)

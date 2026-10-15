@@ -2,15 +2,15 @@
 
 ## Prerequisites
 
-1. Create an account with Cedana, to get access to the podman plugin. See [authentication](../../get-started/authentication.md).
-2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
+1. Create an account with Cedana, to get access to the podman plugin. See [authentication](../get-started/authentication.md).
+2. Set the Cedana URL & authentication token in the [configuration](../get-started/configuration.md).
 3. Install the **podman** plugin with `sudo cedana plugin install podman`.
 4. Install the **oci-runtime** plugin with `sudo cedana plugin install oci-runtime`. This is the OCI runtime podman uses for containers run or restored by Cedana (see [How it works](#how-it-works)).
 5. Install the lower-level plugin for podman's OCI runtime (see [Supported runtimes](#supported-runtimes)):
    - If the runtime is `crun` (default), install the **crun** plugin with `sudo cedana plugin install crun`.
    - If the runtime is `runc`, install the **runc** plugin with `sudo cedana plugin install runc`.
-6. Ensure the daemon is running, see [installation](../../get-started/installation.md).
-7. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
+6. Ensure the daemon is running, see [installation](../get-started/installation.md).
+7. Do a health check to ensure the plugin is ready, see [health checks](../get-started/health.md).
 
 Only rootful podman is supported.
 
@@ -57,11 +57,11 @@ cedana dump job <job_id>
 cedana restore job --attach <job_id>
 ```
 
-Existing (or upcoming) podman containers can also be managed with `cedana manage podman <container>`, see [managed process/container](../managed.md).
+Existing (or upcoming) podman containers can also be managed with `cedana manage podman <container>`, see [managed process/container](managed.md).
 
 ## GPU support
 
-Just like for processes, as explained in [checkpoint/restore with GPUs](../gpu/cr.md), GPU support is also available for podman containers.
+Just like for processes, as explained in [checkpoint/restore with GPUs](gpu.md), GPU support is also available for podman containers.
 
 1. Run a new managed podman container with GPU support:
 
@@ -135,7 +135,7 @@ Instead of starting the image's command, the Cedana OCI runtime restores the che
 
 ### GPU containers
 
-GPU support is enabled automatically for containers with NVIDIA GPUs, i.e. with `NVIDIA_VISIBLE_DEVICES` set, as in CUDA images. For other images, set it with `--env NVIDIA_VISIBLE_DEVICES=all`, or add `--annotation cedana.ai/gpu=true`. See [checkpoint/restore with GPUs](../gpu/cr.md) for GPU prerequisites.
+GPU support is enabled automatically for containers with NVIDIA GPUs, i.e. with `NVIDIA_VISIBLE_DEVICES` set, as in CUDA images. For other images, set it with `--env NVIDIA_VISIBLE_DEVICES=all`, or add `--annotation cedana.ai/gpu=true`. See [checkpoint/restore with GPUs](gpu.md) for GPU prerequisites.
 
 1. Run:
 
@@ -177,7 +177,7 @@ The Cedana OCI runtime reads the following container annotations. The podman plu
 | `cedana.ai/runtime`         | The real runtime (`crun` or `runc`). Default: `crun` if installed, else `runc` |
 | `cedana.ai/checkpoint-path` | Restore from this checkpoint, instead of creating                           |
 | `cedana.ai/criu-opts`       | CRIU options JSON for the restore                                           |
-| `cedana.ai/config`          | Cedana [configuration](../../get-started/configuration.md) JSON to run Cedana with |
+| `cedana.ai/config`          | Cedana [configuration](../get-started/configuration.md) JSON to run Cedana with |
 | `cedana.ai/gpu`             | Enable GPU interception. Automatic if `NVIDIA_VISIBLE_DEVICES` is set        |
 | `cedana.ai/gpu-tracing`     | Enable GPU tracing                                                          |
 | `cedana.ai/gpu-id`          | GPU controller to use, if already attached                                  |
@@ -197,5 +197,5 @@ The runtime is detected per-container. A checkpoint records the container's runt
 Checkpoints automatically include the container's read/write layer (rootfs) in the dump, if podman's storage driver is `overlay` (the default). Any changes made to the container's rootfs before checkpointing will be preserved and restored. For other storage drivers (e.g. `vfs`), the read/write layer is skipped gracefully.
 
 {% hint style="info" %}
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+For all available CLI options, see [CLI reference](../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../references/api.md).
 {% endhint %}

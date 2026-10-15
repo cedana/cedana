@@ -4,7 +4,7 @@ Adds podman support for Cedana.
 
 ## Usage
 
-See [checkpoint/restore podman](../../docs/guides/podman/cr.md).
+See [checkpoint/restore podman](../../docs/guides/podman.md).
 
 ## Dependencies
 

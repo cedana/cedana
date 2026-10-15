@@ -6,11 +6,11 @@ Containers checkpointed or restored with Cedana remain fully manageable with the
 
 ## Prerequisites
 
-1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../../get-started/authentication.md).
-2. Set the Cedana URL & authentication token in the [configuration](../../get-started/configuration.md).
+1. Create an account with Cedana, to get access to the GPU plugin. See [authentication](../get-started/authentication.md).
+2. Set the Cedana URL & authentication token in the [configuration](../get-started/configuration.md).
 3. Install the **runc** plugin with `sudo cedana plugin install runc`.
-4. Ensure the daemon is running, see [installation](../../get-started/installation.md).
-5. Do a health check to ensure the plugin is ready, see [health checks](../../get-started/health.md).
+4. Ensure the daemon is running, see [installation](../get-started/installation.md).
+5. Do a health check to ensure the plugin is ready, see [health checks](../get-started/health.md).
 
 ## Basic
 
@@ -54,7 +54,7 @@ cedana restore job --attach <job_id>
 
 ## GPU support
 
-Just like for processes, as explained in [checkpoint/restore with GPUs](../gpu/cr.md), GPU support is also available for managed runc containers.
+Just like for processes, as explained in [checkpoint/restore with GPUs](gpu.md), GPU support is also available for managed runc containers.
 
 1. Run a new managed runc container with GPU support:
 
@@ -75,5 +75,5 @@ cedana restore job --attach <job_id>
 ```
 
 {% hint style="info" %}
-For all available CLI options, see [CLI reference](../../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../../references/api.md).
+For all available CLI options, see [CLI reference](../references/cli/cedana.md). Directly interacting with daemon is also possible through gRPC, see [API reference](../references/api.md).
 {% endhint %}
