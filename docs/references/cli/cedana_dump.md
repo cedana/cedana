@@ -41,6 +41,7 @@ Dump a container/process
 * [cedana dump containerd](cedana_dump_containerd.md)	 - Dump a containerd container
 * [cedana dump crun](cedana_dump_crun.md)	 - Dump a crun container
 * [cedana dump job](cedana_dump_job.md)	 - Dump a managed process/container (job)
+* [cedana dump podman](cedana_dump_podman.md)	 - Dump a podman container
 * [cedana dump process](cedana_dump_process.md)	 - Dump a process
 * [cedana dump runc](cedana_dump_runc.md)	 - Dump a runc container
 

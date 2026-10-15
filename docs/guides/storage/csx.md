@@ -45,7 +45,7 @@ Cedana records the generated checkpoint path in the job metadata with the `csx:/
 
 ## Restore
 
-As explained in [managed checkpoint/restore](../cr.md#managed-checkpoint-restore), a managed job can be restored without specifying its checkpoint path:
+As explained in [managed checkpoint/restore](../basics.md#managed-checkpoint-restore), a managed job can be restored without specifying its checkpoint path:
 
 ```sh
 cedana restore job test
@@ -61,7 +61,7 @@ cedana restore ... --path csx://<dump-path>
 
 ## Compression
 
-All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../cr.md#compression) for more information.
+All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../basics.md#compression) for more information.
 
 ## Streaming
 

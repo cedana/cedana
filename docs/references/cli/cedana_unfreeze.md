@@ -27,6 +27,7 @@ Unfreeze a container/process
 * [cedana unfreeze containerd](cedana_unfreeze_containerd.md)	 - Unfreeze a containerd container
 * [cedana unfreeze crun](cedana_unfreeze_crun.md)	 - Unfreeze a crun container
 * [cedana unfreeze job](cedana_unfreeze_job.md)	 - Unfreeze a managed process/container (job)
+* [cedana unfreeze podman](cedana_unfreeze_podman.md)	 - Unfreeze a podman container
 * [cedana unfreeze process](cedana_unfreeze_process.md)	 - Unfreeze a process
 * [cedana unfreeze runc](cedana_unfreeze_runc.md)	 - Unfreeze a runc container
 
