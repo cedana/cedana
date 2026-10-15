@@ -31,7 +31,7 @@ Run `cedana features` (shorthand for `cedana plugin features`) to see the featur
              Manage handler          •           ✔     ✔        ✔        •     •          •             •           •        •     •    
          Custom kill signal          •           ✔     ✔        ✔        •     ✔          •             •           •        •     •    
              Custom cleanup          •           ✔     ✔        ✔        •     •          •             •           •        •     •    
-Support for serverless mode          •           ✔     ✔        ✔        •     •          •             •           •        •     ✔    
+Support for serverless mode          •           ✔     ✔        •        •     •          •             •           •        •     ✔    
                                                                                                                 
            GPU interception          •           ✔     ✔        ✔        •     •          •             •           •        •     •    
    GPU interception restore          •           ✔     ✔        ✔        •     •          •             •           •        •     •    
