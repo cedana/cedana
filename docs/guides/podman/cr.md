@@ -124,16 +124,10 @@ The container exits after the checkpoint, unless `--leave-running` is passed.
 
 ### Restore
 
-Restore through Cedana, which recreates the container with podman, using the Cedana OCI runtime:
+Create a container from the same image with the `cedana.ai/checkpoint-path` annotation:
 
 ```sh
 sudo podman rm <container>
-cedana restore podman --path <dump-dir>/<dump> --id <container>
-```
-
-Or restore with podman itself, by creating a container from the same image with the `cedana.ai/checkpoint-path` annotation:
-
-```sh
 sudo podman run -d --runtime cedana --annotation cedana.ai/checkpoint-path=<dump-dir>/<dump> --name <container> <image>
 ```
 
@@ -155,14 +149,7 @@ sudo podman run -d --runtime cedana --gpus <gpus> --name <container> <cuda-image
 cedana dump podman <container> --dir <dump-dir>
 ```
 
-3. Restore through Cedana:
-
-```sh
-sudo podman rm <container>
-cedana restore podman --path <dump-dir>/<dump> --id <container> --gpus <gpus>
-```
-
-Or with podman itself:
+3. Restore:
 
 ```sh
 sudo podman rm <container>
@@ -172,7 +159,7 @@ sudo podman run -d --runtime cedana --gpus <gpus> --annotation cedana.ai/checkpo
 A checkpoint does not record the container's GPUs, so pass `--gpus` again on restore. The checkpointed GPU state is restored onto the given GPUs.
 
 {% hint style="info" %}
-Instead of podman's `--gpus` (podman 5.0+), GPUs can also be added with CDI, e.g. `--device nvidia.com/gpu=<N>`, for both run and restore with podman.
+Instead of podman's `--gpus` (podman 5.0+), GPUs can also be added with CDI, e.g. `--device nvidia.com/gpu=<N>`, for both run and restore.
 {% endhint %}
 
 ## How it works
