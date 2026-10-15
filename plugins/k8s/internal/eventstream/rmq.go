@@ -656,20 +656,23 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 
 		wg := sync.WaitGroup{}
 		errMap := make(map[int]error)
+		errMapMu := sync.Mutex{}
 		wg.Add(len(dumpReqs))
 
 		for i, dumpReq := range dumpReqs {
 			log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
 			go func() {
 				defer wg.Done()
-				_, _, err = es.cedana.Freeze(ctx, dumpReq)
+				_, _, err := es.cedana.Freeze(ctx, dumpReq)
 				if err != nil {
+					errMapMu.Lock()
 					errMap[i] = err
+					errMapMu.Unlock()
 				}
 			}()
 
 			defer func() {
-				_, _, err = es.cedana.Unfreeze(ctx, dumpReq)
+				_, _, err := es.cedana.Unfreeze(ctx, dumpReq)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to unfreeze container")
 				}

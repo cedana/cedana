@@ -259,8 +259,9 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 
 	isHealthCheck := utils.Getenv(env, "CEDANA_GPU_HEALTH_CHECK") == "1"
 
+	var logDir string
 	if !isHealthCheck && config.Global.GPU.LogDir != "" {
-		logDir, err := EnsureLogDir(id, c.UID, c.GID)
+		logDir, err = EnsureLogDir(id, c.UID, c.GID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create GPU controller log directory: %w", err)
 		}
@@ -317,6 +318,10 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 			p.Terminate(ctx, id)
 		}
 	}()
+
+	if logDir != "" && logging.Level != zerolog.Disabled {
+		go tailLogs(logDir, id, c.Terminated)
+	}
 
 	err = cmd.Start()
 	if err != nil {
