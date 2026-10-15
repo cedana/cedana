@@ -12,6 +12,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -34,6 +35,69 @@ func (f *fakeControllerClient) Freeze(ctx context.Context, in *gpu.FreezeReq, op
 func (f *fakeControllerClient) Unfreeze(ctx context.Context, in *gpu.UnfreezeReq, opts ...grpc.CallOption) (*gpu.UnfreezeResp, error) {
 	f.unfreezes.Add(1)
 	return &gpu.UnfreezeResp{}, nil
+}
+
+// An Info that does not answer: it sends the deadline it was given, then returns only
+// when its context ends
+type silentInfoClient struct {
+	gpugrpc.ControllerClient
+	called chan infoDeadline
+}
+
+type infoDeadline struct {
+	at  time.Time
+	set bool
+}
+
+func (s *silentInfoClient) Info(ctx context.Context, in *gpu.InfoReq, opts ...grpc.CallOption) (*gpu.InfoResp, error) {
+	at, set := ctx.Deadline()
+	s.called <- infoDeadline{at, set}
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// A controller that does not answer Info must not hold controller.Sync for ever: the pool
+// sync calls it with contexts that have no deadline, and every dump waits on that sync.
+func TestControllerSyncBoundsInfo(t *testing.T) {
+	conn, err := grpc.NewClient("passthrough:///unused", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	client := &silentInfoClient{called: make(chan infoDeadline, 1)}
+	c := &controller{
+		ID:               "test-controller",
+		Address:          "unix:///nonexistent.sock",
+		Terminated:       make(chan int, 1),
+		ClientConn:       conn,
+		ControllerClient: client,
+	}
+
+	// A caller with no deadline, as the pool's background loop; it cancels only so the
+	// test does not wait the full INFO_TIMEOUT
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := make(chan error, 1)
+	start := time.Now()
+	go func() { result <- c.Sync(ctx, false) }()
+
+	var got infoDeadline
+	select {
+	case got = <-client.called:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Sync never called Info")
+	}
+	cancel()
+	if err := <-result; err == nil {
+		t.Fatal("Sync succeeded with a controller that does not answer")
+	}
+	if !got.set {
+		t.Fatal("Info got a context with no deadline")
+	}
+	if d := got.at.Sub(start); d > INFO_TIMEOUT+time.Second || d < INFO_TIMEOUT-time.Second {
+		t.Fatalf("Info deadline %v after the call, want about %v", d, INFO_TIMEOUT)
+	}
 }
 
 func newFakePool(t *testing.T, client *fakeControllerClient) (*pool, *controller) {

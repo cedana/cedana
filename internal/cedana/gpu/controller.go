@@ -759,7 +759,12 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 	if wait {
 		info, err = c.WaitForInfo(ctx, &gpu.InfoReq{})
 	} else {
-		info, err = c.Info(ctx, &gpu.InfoReq{})
+		// The caller's context can have no deadline (the pool's background loop, a dump
+		// from the CLI): a controller that does not answer must not hold the pool sync,
+		// and every dump waiting on it, for ever.
+		infoCtx, cancel := context.WithTimeout(ctx, INFO_TIMEOUT)
+		info, err = c.Info(infoCtx, &gpu.InfoReq{})
+		cancel()
 	}
 	if err != nil {
 		return err
