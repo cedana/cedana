@@ -155,6 +155,7 @@ jobs:
           - runc
           - crun
           - containerd
+          - podman
           - crio
           - kata
           - cloud-hypervisor
