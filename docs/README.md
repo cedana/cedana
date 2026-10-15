@@ -88,6 +88,7 @@ For all available CLI options, see [CLI reference](references/cli/cedana.md). Di
 - [Checkpoint/restore runc](guides/runc/cr.md)
 - [Checkpoint/restore crun](guides/crun/cr.md)
 - [Checkpoint/restore containerd](guides/containerd/cr.md)
+- [Checkpoint/restore podman](guides/podman/cr.md)
 - [Checkpoint/restore streamer](guides/streamer/cr.md)
 - [Checkpoint/restore kubernetes](guides/k8s/cr.md)
 

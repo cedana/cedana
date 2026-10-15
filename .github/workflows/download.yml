@@ -42,6 +42,11 @@ on:
         description: Version for containerd runtime binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+      oci_runtime_version:
+        type: string
+        description: Version for OCI runtime binaries (branch name, tag or "release" for latest release)
+        required: false
+        default: "none"
       helm_chart_version:
         type: string
         description: Version for Cedana Helm chart (branch name, tag or "release" for latest release)
@@ -471,6 +476,47 @@ jobs:
         with:
           name: containerd-runtime-${{ matrix.arch }}-runc
           path: ./containerd-runtime-runc/*
+
+  oci-runtime:
+    name: OCI Runtime
+    if: ${{ inputs.oci_runtime_version != 'none' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Download runtime
+        env:
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: ${{ inputs.oci_runtime_version == 'release' && 'latest' || inputs.oci_runtime_version }}
+        run: |
+          set -euo pipefail
+          BUILD="alpha"
+          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+            BUILD=""
+          fi
+          mkdir -p oci-runtime
+
+          ARCH="${{ matrix.arch }}"
+          FILE="cedana-oci-runtime"
+
+          curl -fL \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "oci-runtime/${FILE}"
+
+          test -f "oci-runtime/${FILE}"
+          test -s "oci-runtime/${FILE}"
+          echo "${VERSION}" > oci-runtime/oci-runtime-version.txt
+
+      - name: Upload runtime artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: oci-runtime-${{ matrix.arch }}
+          path: ./oci-runtime/*
 
   helm-chart:
     name: Helm Chart
