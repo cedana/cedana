@@ -20,6 +20,10 @@ type Manager interface {
 	// Detach detaches the GPU controller from a process with the given and PID.
 	Detach(ctx context.Context, pid uint32) error
 
+	// DetachByID detaches the GPU controller with the given ID, once an attach of it
+	// started by this process has completed.
+	DetachByID(ctx context.Context, id string) error
+
 	// Returns server-compatible health checks.
 	Checks() types.Checks
 
@@ -55,6 +59,10 @@ func (ManagerMissing) IsAttached(pid uint32) bool {
 }
 
 func (ManagerMissing) Detach(ctx context.Context, pid uint32) error {
+	return fmt.Errorf("GPU manager missing")
+}
+
+func (ManagerMissing) DetachByID(ctx context.Context, id string) error {
 	return fmt.Errorf("GPU manager missing")
 }
 

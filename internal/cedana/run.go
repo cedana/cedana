@@ -67,6 +67,7 @@ func (s *Cedana) Run(req *daemon.RunReq) (exitCode <-chan int, err error) {
 		validation.ValidateRunRequest,
 		process.WritePIDFile,
 		gpu.Attach(s.gpus),
+		gpu.DetachOnExit[daemon.RunReq, daemon.RunResp](s.gpus), // no job manager to detach it
 
 		pluginRunMiddleware, // middleware from plugins
 

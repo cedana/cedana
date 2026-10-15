@@ -60,7 +60,11 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 	}
 
+	controller.Attaching = make(chan struct{})
+
 	m.wg.Go(func() {
+		defer close(controller.Attaching)
+
 		ok := false
 		select {
 		case <-ctx.Done():
@@ -96,6 +100,28 @@ func (m *ManagerSimple) Detach(ctx context.Context, pid uint32) error {
 		return fmt.Errorf("GPU controller attached to PID %d is busy", pid)
 	}
 	m.controllers.Terminate(ctx, controller.ID)
+	return nil
+}
+
+func (m *ManagerSimple) DetachByID(ctx context.Context, id string) error {
+	controller := m.controllers.Get(id)
+	if controller == nil {
+		return nil // already terminated
+	}
+	if controller.Attaching != nil {
+		select {
+		case <-controller.Attaching:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		if m.controllers.Get(id) == nil {
+			return nil // the attach gave up and terminated it
+		}
+	}
+	if acquired, _ := controller.Booking.TryLock(); !acquired {
+		return fmt.Errorf("GPU controller %s is busy", id)
+	}
+	m.controllers.Terminate(ctx, id)
 	return nil
 }
 

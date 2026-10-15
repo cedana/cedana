@@ -94,6 +94,7 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		process.ReloadProcessStateForRestore,
 		network.DetectNetworkOptionsForRestore,
 		gpu.Restore(s.gpus),
+		gpu.DetachOnExit[daemon.RestoreReq, daemon.RestoreResp](s.gpus), // no job manager to detach it
 
 		pluginRestoreMiddleware, // middleware from plugins
 
