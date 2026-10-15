@@ -296,7 +296,7 @@ else
     CONTAINERD_VERSION=0
     for FILE in "$CONTAINERD_CONFIG_PATH" "$CONTAINERD_CONFD_DIR"/*.toml; do
         [ -f "$FILE" ] && [ "$FILE" != "$CONTAINERD_CONFD_DIR/999-cedana.toml" ] || continue
-        FILE_VERSION=$(sed -n 's/^version[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$FILE" | head -n 1)
+        FILE_VERSION=$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$FILE" | head -n 1)
         if [ "${FILE_VERSION:-0}" -gt "$CONTAINERD_VERSION" ]; then
             CONTAINERD_VERSION=$FILE_VERSION
         fi
@@ -365,9 +365,9 @@ else
                 # bracket (TOML allows a trailing comma before the closing one)
                 echo "Adding conf.d glob to multiline imports in $CONTAINERD_CONFIG_PATH"
                 sed -i "/^imports = \[/a \"$CONTAINERD_CONFD_DIR/*.toml\"," "$CONTAINERD_CONFIG_PATH"
-            elif grep -q '^version' "$CONTAINERD_CONFIG_PATH"; then
+            elif grep -q '^[[:space:]]*version[[:space:]]*=' "$CONTAINERD_CONFIG_PATH"; then
                 echo "Adding imports line to $CONTAINERD_CONFIG_PATH"
-                sed -i "/^version/a imports = [\"$CONTAINERD_CONFD_DIR/*.toml\"]" "$CONTAINERD_CONFIG_PATH"
+                sed -i "/^[[:space:]]*version[[:space:]]*=/a imports = [\"$CONTAINERD_CONFD_DIR/*.toml\"]" "$CONTAINERD_CONFIG_PATH"
             else
                 # No version line: top-level keys must precede all tables
                 echo "Adding imports line to $CONTAINERD_CONFIG_PATH"
