@@ -5,6 +5,7 @@ package criu
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -152,4 +153,28 @@ func parseCheckOutput(out string) (warnings, errors []string) {
 	}
 
 	return
+}
+
+// CheckPluginLibraries verifies that every library of a CRIU plugin (e.g. criu/nvidia-dev)
+// is present where CRIU auto-loads it from. CRIU does not report plugins via `criu check`.
+func CheckPluginLibraries(manager plugins.Manager, plugin string) types.Check {
+	return func(ctx context.Context) []*daemon.HealthCheckComponent {
+		component := &daemon.HealthCheckComponent{Name: "libraries"}
+
+		p := manager.Get(plugin)
+		if p == nil {
+			component.Errors = append(component.Errors, fmt.Sprintf("Unknown plugin %s", plugin))
+			return []*daemon.HealthCheckComponent{component}
+		}
+
+		paths := p.LibraryPaths()
+		component.Data = strings.Join(paths, ",")
+		for _, path := range paths {
+			if _, err := os.Stat(path); err != nil {
+				component.Errors = append(component.Errors, fmt.Sprintf("Library %s not found: %v", path, err))
+			}
+		}
+
+		return []*daemon.HealthCheckComponent{component}
+	}
 }

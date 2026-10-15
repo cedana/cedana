@@ -35,6 +35,7 @@ Run a managed process/container (create a job)
 * [cedana](cedana.md)	 - Root command for Cedana
 * [cedana run containerd](cedana_run_containerd.md)	 - Run a containerd container
 * [cedana run crun](cedana_run_crun.md)	 - run a crun container
+* [cedana run podman](cedana_run_podman.md)	 - Run a podman container
 * [cedana run process](cedana_run_process.md)	 - Run a managed process (job)
 * [cedana run runc](cedana_run_runc.md)	 - run a runc container
 

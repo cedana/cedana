@@ -18,7 +18,7 @@ Once the Cedana daemon is running, start the CSX daemon:
 sudo ./csx
 ```
 
-The CSX daemon requires root privileges because it creates `tmpfs` mounts. The **storage/csx** plugin connects to its Unix socket at `/run/csx.sock`, so the CSX daemon must remain running while checkpointing or restoring.
+The CSX daemon requires root privileges because it creates `tmpfs` mounts. The **storage/csx** plugin connects to its Unix socket, configured by `CSX.SockAddr` in the [daemon configuration](../../get-started/configuration.md), so the CSX daemon must remain running while checkpointing or restoring.
 Complete documentation for the CSX daemon is work in progress.
 
 ## Checkpoint
@@ -45,7 +45,7 @@ Cedana records the generated checkpoint path in the job metadata with the `csx:/
 
 ## Restore
 
-As explained in [managed checkpoint/restore](../cr.md#managed-checkpoint-restore), a managed job can be restored without specifying its checkpoint path:
+As explained in [managed checkpoint/restore](../basics.md#managed-checkpoint-restore), a managed job can be restored without specifying its checkpoint path:
 
 ```sh
 cedana restore job test
@@ -61,7 +61,7 @@ cedana restore ... --path csx://<dump-path>
 
 ## Compression
 
-All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../cr.md#compression) for more information.
+All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../basics.md#compression) for more information.
 
 ## Streaming
 

@@ -28,6 +28,6 @@ Manage job checkpoints (alias of `job checkpoint`)
 ### SEE ALSO
 
 * [cedana](cedana.md)	 - Root command for Cedana
-* [cedana checkpoint inspect](cedana_checkpoint_inspect.md)	 - Inspect a checkpoint
-* [cedana checkpoint list](cedana_checkpoint_list.md)	 - List all checkpoints for a job
+* [cedana checkpoint inspect](cedana_job_checkpoint_inspect.md)	 - Inspect a checkpoint
+* [cedana checkpoint list](cedana_job_checkpoint_list.md)	 - List all checkpoints for a job
 

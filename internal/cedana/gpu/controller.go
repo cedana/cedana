@@ -21,6 +21,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/caps"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/logging"
@@ -30,6 +31,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
@@ -47,8 +49,8 @@ const (
 	CONTROLLER_MISC_DIR_FORMATTER          = "/dev/shm/cedana-gpu.%s.misc"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
-	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1    // Signal to the restored process to notify it has a new PID
-	CONTROLLER_CHECK_SHM_SIZE              = 8 * utils.MEBIBYTE // Small size to run controller health check
+	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1     // Signal to the restored process to notify it has a new PID
+	CONTROLLER_CHECK_SHM_SIZE              = 32 * utils.MEBIBYTE // Small size to run controller health check
 
 	LOG_DIR_FORMATTER              = "%s/cedana-gpu.%s"
 	LOG_DIR_PATTERN                = "(.*)/cedana-gpu.(.*)"
@@ -273,6 +275,15 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		GidMappingsEnableSetgroups: false, // Avoid permission issues when running as non-root user
 	}
 
+	// Unprivileged, we hold CAP_SYS_PTRACE through file capabilities, which don't pass on
+	// to a child. The controller needs it to look at the process it's attached to through
+	// /proc/<pid> whatever that process's dumpable flag, which a process CRIU is restoring
+	// has off until the end. Raised as ambient, it survives the exec of a binary without
+	// capabilities of its own.
+	if os.Geteuid() != 0 && caps.HasPermitted(unix.CAP_SYS_PTRACE) {
+		cmd.SysProcAttr.AmbientCaps = []uintptr{unix.CAP_SYS_PTRACE}
+	}
+
 	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stderr
 		logger := log.With().Str("ID", id).Str("plugin", "gpu").Logger().Level(zerolog.DebugLevel)
 		cmd.Stderr = io.MultiWriter(logging.Writer(&logger), c.ErrBuf)
@@ -469,7 +480,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump complete")
 		}()
-		return <-dumpErr
+		return nil
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
@@ -491,6 +502,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			return nil
 		}
 
+		// CRIU may have failed and PostDumpFunc may have never
+		// been called so check dumpErr here as well
 		err := <-dumpErr // Ensure GPU dump has finished before unfreezing
 
 		if !opts.GetLeaveRunning() && criuErr == nil {

@@ -1,9 +1,11 @@
 package criu
 
 import (
+	"context"
 	"errors"
 	"net"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"syscall"
@@ -83,5 +85,24 @@ func TestSendAndRecvReportsOversizedRequest(t *testing.T) {
 	_, _, _, _, err = c.sendAndRecv(make([]byte, sndbuf)) // > sk_sndbuf-32
 	if !errors.Is(err, syscall.EMSGSIZE) || !strings.Contains(err.Error(), "exceeds the socket send buffer") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSwrkFailureCarriesItsOutput(t *testing.T) {
+	// Far more than a pipe holds first, which must not stop it from exiting
+	fake := filepath.Join(t.TempDir(), "criu")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nhead -c 300000 /dev/zero | tr '\\0' x >&2\necho\necho 'no can do' >&2\nexit 3\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := MakeCriu()
+	c.SetCriuPath(fake)
+	_, err := c.GetCriuVersion(context.Background())
+	if err == nil {
+		t.Fatal("expected the version request to fail")
+	}
+	for _, want := range []string{"exit status 3", "no can do"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected the error to carry %q, got: %v", want, err)
+		}
 	}
 }

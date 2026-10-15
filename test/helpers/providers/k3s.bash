@@ -30,7 +30,13 @@ setup_cluster() {
     download_k3s
     install_containerd_plugins
     configure_containerd_runtime
-    start_containerd
+    # The shim inherits containerd's environment, and env beats the host config file the
+    # helper writes (/etc/cedana). Keep the suite's CEDANA_URL/CEDANA_AUTH_TOKEN out of it so
+    # the shim follows the helper's config, which is what points at an in-cluster propagator.
+    (
+        unset CEDANA_URL CEDANA_AUTH_TOKEN OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_HEADERS
+        start_containerd
+    )
 
     if [ -n "$CONTROLLER_DIGEST" ]; then
         preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
@@ -42,6 +48,11 @@ setup_cluster() {
     elif [ -n "$HELPER_TAG" ]; then
         preload_images "$HELPER_REPO:$HELPER_TAG"
     fi
+    if [ -n "$PROPAGATOR_DIGEST" ]; then
+        preload_images "$PROPAGATOR_REPO@$PROPAGATOR_DIGEST"
+    elif [ -n "$PROPAGATOR_TAG" ]; then
+        preload_images "$PROPAGATOR_REPO:$PROPAGATOR_TAG"
+    fi
     if [ "${GPU:-0}" = "1" ]; then
         preload_images "cedana/cedana-test:cuda" # likely available as we are running inside it
         preload_images "cedana/cedana-samples:cuda"
@@ -50,7 +61,7 @@ setup_cluster() {
     start_cluster
 
     mkdir -p ~/.kube
-    cat $KUBECONFIG > ~/.kube/config
+    cat $KUBECONFIG >~/.kube/config
 
     if [ "${GPU:-0}" = "1" ]; then
         setup_gpu_operator
@@ -94,16 +105,16 @@ download_k3s() {
     local binary_name
 
     case "$arch" in
-        x86_64)
-            binary_name="k3s"
-            ;;
-        aarch64|arm64)
-            binary_name="k3s-arm64"
-            ;;
-        *)
-            error_log "Unsupported architecture: $arch. Only x86_64 and arm64/aarch64 are supported."
-            return 1
-            ;;
+    x86_64)
+        binary_name="k3s"
+        ;;
+    aarch64 | arm64)
+        binary_name="k3s-arm64"
+        ;;
+    *)
+        error_log "Unsupported architecture: $arch. Only x86_64 and arm64/aarch64 are supported."
+        return 1
+        ;;
     esac
 
     wget -q "https://github.com/k3s-io/k3s/releases/download/v1.34.2%2Bk3s1/$binary_name" -O /usr/local/bin/k3s
@@ -127,7 +138,7 @@ configure_containerd_runtime() {
     fi
 
     debug_log "Writing containerd config to $path"
-    cat >> "$path" <<'END_CAT'
+    cat >>"$path" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
@@ -141,7 +152,7 @@ END_CAT
 start_cluster() {
     debug_log "Starting k3s cluster..."
 
-    if ! command -v k3s &> /dev/null; then
+    if ! command -v k3s &>/dev/null; then
         error_log "k3s binary not found"
         return 1
     fi
@@ -197,7 +208,15 @@ preload_images() {
         return 0
     fi
 
-    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import "$tar"
+    # docker's containerd image store saves a multi-platform index, which ctr 2.x
+    # refuses to unpack unless told which platform to use. --local makes it honor
+    # --platform instead of deferring to the transfer service's (empty) config.
+    local platform
+    case "$(uname -m)" in
+    aarch64 | arm64) platform=linux/arm64 ;;
+    *) platform=linux/amd64 ;;
+    esac
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import --local --platform "$platform" "$tar"
     rm -f "$tar"
 
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"
@@ -208,14 +227,14 @@ preload_images() {
 setup_gpu_operator() {
     debug_log "Installing NVIDIA GPU operator..."
 
-    helm repo add nvidia https://helm.ngc.nvidia.com/nvidia \
-        && helm repo update
+    helm repo add nvidia https://helm.ngc.nvidia.com/nvidia &&
+        helm repo update
 
     mount --make-rshared /
 
     # See https://github.com/NVIDIA/gpu-operator/issues/569
     # Because we are working inside a container.
-    cat << END_CAT > /tmp/gpu-operator-values.yaml
+    cat <<END_CAT >/tmp/gpu-operator-values.yaml
 validator:
   driver:
     env:

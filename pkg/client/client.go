@@ -356,10 +356,57 @@ func (c *Client) DeleteCheckpoint(ctx context.Context, args *daemon.DeleteCheckp
 	return resp, utils.GRPCErrorColored(err)
 }
 
+// DeletePath deletes a checkpoint. Errors are gRPC statuses as for ListPath.
 func (c *Client) DeletePath(ctx context.Context, args *daemon.DeletePathReq, opts ...grpc.CallOption) (*daemon.DeletePathResp, error) {
 	opts = addDefaultOptions(opts)
-	resp, err := c.daemonClient.DeletePath(ctx, args, opts...)
-	return resp, utils.GRPCErrorColored(err)
+	return c.daemonClient.DeletePath(ctx, args, opts...)
+}
+
+// ListPath lists the entries of a path. The error is the daemon's gRPC status, not
+// colored for a terminal, since the callers relay its message to the propagator.
+func (c *Client) ListPath(ctx context.Context, args *daemon.ListPathReq, opts ...grpc.CallOption) (*daemon.ListPathResp, error) {
+	opts = addDefaultOptions(opts)
+	return c.daemonClient.ListPath(ctx, args, opts...)
+}
+
+// ReadPath streams the contents of a path (or an entry inside it) from the daemon.
+// Closing the returned reader cancels the stream. Errors are gRPC statuses as for ListPath.
+func (c *Client) ReadPath(ctx context.Context, args *daemon.ReadPathReq, opts ...grpc.CallOption) (io.ReadCloser, error) {
+	opts = addDefaultOptions(opts)
+	ctx, cancel := context.WithCancel(ctx)
+	stream, err := c.daemonClient.ReadPath(ctx, args, opts...)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	return &pathReader{stream: stream, cancel: cancel}, nil
+}
+
+type pathReader struct {
+	stream grpc.ServerStreamingClient[daemon.ReadPathResp]
+	cancel context.CancelFunc
+	buf    []byte
+}
+
+func (r *pathReader) Read(p []byte) (int, error) {
+	for len(r.buf) == 0 {
+		resp, err := r.stream.Recv()
+		if err == io.EOF {
+			return 0, io.EOF
+		}
+		if err != nil {
+			return 0, err // the daemon's gRPC status, as for ReadPath itself
+		}
+		r.buf = resp.GetData()
+	}
+	n := copy(p, r.buf)
+	r.buf = r.buf[n:]
+	return n, nil
+}
+
+func (r *pathReader) Close() error {
+	r.cancel()
+	return nil
 }
 
 func (c *Client) Query(ctx context.Context, args *daemon.QueryReq, opts ...grpc.CallOption) (*daemon.QueryResp, error) {

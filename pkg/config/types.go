@@ -37,9 +37,13 @@ type (
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
 		// SLURM settings
 		Slurm Slurm `json:"slurm" key:"slurm" yaml:"slurm" mapstructure:"slurm"`
+		// K8s settings
+		K8s K8s `json:"k8s" key:"k8s" yaml:"k8s" mapstructure:"k8s"`
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+		// CSX (Cedana Storage Express) settings
+		CSX CSX `json:"csx" key:"csx" yaml:"csx" mapstructure:"csx"`
 	}
 
 	Slurm struct {
@@ -55,6 +59,12 @@ type (
 		DBPort int `json:"db_port" key:"db_port" yaml:"db_port" mapstructure:"db_port"`
 		// DBName is the name of the slurmdbd database to connect to
 		DBName string `json:"db_name" key:"db_name" yaml:"db_name" mapstructure:"db_name"`
+	}
+
+	K8s struct {
+		// FallbackColdStart sets whether the containerd runtime shim should fall back to a normal (cold) start
+		// of the container if the cedana restore fails for some reason.
+		FallbackColdStart bool `json:"fallback_cold_start" key:"fallback_cold_start" yaml:"fallback_cold_start" mapstructure:"fallback_cold_start"`
 	}
 
 	Connection struct {
@@ -157,5 +167,10 @@ type (
 		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
 		// Endpoint is a custom AWS endpoint to use (e.g. for S3-compatible storage)
 		Endpoint string `json:"endpoint" key:"endpoint" yaml:"endpoint" mapstructure:"endpoint" env_aliases:"AWS_ENDPOINT"`
+	}
+
+	CSX struct {
+		// path to socket where the CSX daemon is running
+		SockAddr string `json:"sock_addr" key:"sock_addr" yaml:"sock_addr" mapstructure:"sock_addr"`
 	}
 )

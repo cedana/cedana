@@ -51,6 +51,11 @@ var Registry = []Plugin{
 		Libraries: []Binary{{Name: "libcedana-containerd.so"}},
 	},
 	{
+		Name:      "podman",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-podman.so"}},
+	},
+	{
 		Name:      "crio",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-crio.so"}},
@@ -113,6 +118,11 @@ var Registry = []Plugin{
 		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},
 	},
 	{
+		Name:     "oci-runtime",
+		Type:     EXTERNAL,
+		Binaries: []Binary{{Name: "cedana-oci-runtime"}},
+	},
+	{
 		Name:      "slurm",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-slurm.so"}},
@@ -132,5 +142,10 @@ var Registry = []Plugin{
 		Name:     "slurm/tests",
 		Type:     EXTERNAL,
 		Binaries: []Binary{{Name: "test-preemption.sh"}},
+	},
+	{
+		Name:     "csx",
+		Type:     EXTERNAL,
+		Binaries: []Binary{{Name: "csx"}},
 	},
 }

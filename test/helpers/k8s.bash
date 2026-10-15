@@ -475,6 +475,53 @@ delete_namespace() {
     debug_log "Namespace $namespace deleted"
 }
 
+# Deletes pods in a namespace and waits for them to go away, force deleting
+# (--grace-period=0 --force) any pod still Terminating once the timeout expires,
+# so a container the kubelet cannot kill never blocks the suite. Dumps the
+# description of each stuck pod before force deleting it.
+# @param $1: Namespace
+# @param $2: Seconds to wait for graceful deletion (default: 60)
+# @param $3: Label selector (default: all pods in the namespace)
+delete_pods_or_force() {
+    local namespace="$1"
+    local timeout="${2:-60}"
+    local selector="${3:-}"
+
+    local select=(--all)
+    if [ -n "$selector" ]; then
+        select=(-l "$selector")
+    fi
+
+    kubectl delete pod -n "$namespace" "${select[@]}" --wait=false --ignore-not-found 2>/dev/null || true
+    kubectl wait --for=delete pod -n "$namespace" "${select[@]}" --timeout="${timeout}s" 2>/dev/null || true
+
+    # kubectl get has no --all flag; listing without -l already returns every pod.
+    local list=()
+    if [ -n "$selector" ]; then
+        list=(-l "$selector")
+    fi
+
+    # A failed listing must not pass for an empty one: fall through and force delete.
+    local stuck
+    if stuck=$(kubectl get pod -n "$namespace" "${list[@]}" -o name 2>/dev/null); then
+        if [ -z "$stuck" ]; then
+            return 0
+        fi
+    else
+        error_log "Failed to list pods in namespace $namespace, force deleting anyway"
+    fi
+
+    local pod
+    for pod in $stuck; do
+        error_log "$pod in namespace $namespace still exists after ${timeout}s, force deleting"
+        error kubectl describe "$pod" -n "$namespace" || true
+    done
+    kubectl delete pod -n "$namespace" "${select[@]}" --grace-period=0 --force --ignore-not-found --timeout="${timeout}s" || {
+        error_log "Failed to force delete pods in namespace $namespace"
+        return 1
+    }
+}
+
 # Get pod UID (unique identifier) from pod name and namespace
 # @param $1: Pod name
 # @param $2: Namespace
