@@ -4,6 +4,10 @@ INSTALL_BIN_DIR=/usr/local/bin
 INSTALL_LIB_DIR=/usr/local/lib
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
+# Pin the toolchain: binaries + plugins built with Go 1.27 panic at runtime with
+# "*daemon.Job, not *daemon.Job (types from different scopes)" once several
+# plugins are loaded. A go.mod toolchain line can't do this (Go never downgrades).
+export GOTOOLCHAIN?=go1.25.11
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana

@@ -17,7 +17,7 @@ Root command for Cedana
 Instance Brokerage, Orchestration and Migration System.
 Property of Cedana, Corp.
 
-v0.9.301-9-g43a606ff
+v0.9.309-26-g7a1ea5c8
 
 ### Options
 

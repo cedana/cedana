@@ -401,6 +401,14 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 			*errs = append(*errs, err)
 			row = append(row, style.NegativeColors.Sprint(style.CrossMark))
 		} else {
+			if available { // for boolean features, also check the value (e.g. ServerlessSupport = false)
+				feature.IfAvailable(func(_ string, sym T) error {
+					if b, ok := any(sym).(bool); ok {
+						available = b
+					}
+					return nil
+				}, name)
+			}
 			row = append(row, style.BoolStr(available, style.TickMark, style.BulletMark))
 		}
 	}

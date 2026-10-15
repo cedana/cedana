@@ -27,6 +27,7 @@ Freeze a container/process
 * [cedana freeze containerd](cedana_freeze_containerd.md)	 - Freeze a containerd container
 * [cedana freeze crun](cedana_freeze_crun.md)	 - Freeze a crun container
 * [cedana freeze job](cedana_freeze_job.md)	 - Freeze a managed process/container (job)
+* [cedana freeze podman](cedana_freeze_podman.md)	 - Freeze a podman container
 * [cedana freeze process](cedana_freeze_process.md)	 - Freeze a process
 * [cedana freeze runc](cedana_freeze_runc.md)	 - Freeze a runc container
 
