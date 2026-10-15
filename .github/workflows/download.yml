@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 env:
-  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CEDANA_URL: https://yash.cedana.ai/v1 # TEMP(CED-2297): propagator branch deploy, revert to vars.CEDANA_URL before merge
 
 on:
   workflow_call:
