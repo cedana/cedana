@@ -66,6 +66,16 @@ teardown_file() {
     assert_equal $status $code
 }
 
+# bats test_tags=attach
+@test "run container with attach (stdin)" {
+    jid=$(unix_nano)
+    image="docker.io/library/alpine:latest"
+
+    run bash -c "echo hello | cedana run podman --jid $jid --attach -- $image sh -c 'read value; echo got \$value'"
+    assert_success
+    assert_output --partial "got hello"
+}
+
 # bats test_tags=manage
 @test "manage container (existing)" {
     id=$(unix_nano)

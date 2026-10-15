@@ -31,7 +31,13 @@ func Run[REQ, RESP any](ctx context.Context, opts types.Opts, resp *RESP, req *R
 	details := types.Details(req)
 	id := details.GetPodman().GetID()
 
+	// Keep stdin open only if there's input to forward, as it's otherwise /dev/null
+	interactive := opts.IO.Stdin != nil
+
 	args := append([]string{"create"}, createOpts.Flags...)
+	if interactive {
+		args = append(args, "--interactive")
+	}
 	args = append(args, createOpts.Image)
 	args = append(args, createOpts.Args...)
 
@@ -71,7 +77,18 @@ func Run[REQ, RESP any](ctx context.Context, opts types.Opts, resp *RESP, req *R
 
 	types.SetPID(resp, pid)
 
-	// Forward container output, if anyone's listening
+	// Forward container input/output, if anyone's listening. Output is read from
+	// the container logs, as attaching after start would miss early output.
+
+	if interactive {
+		attach := exec.CommandContext(opts.Lifetime, utils.PODMAN_BINARY, "attach", "--sig-proxy=false", id)
+		attach.Stdin = opts.IO.Stdin
+		if err := attach.Start(); err != nil {
+			log.Warn().Err(err).Str("id", id).Msg("failed to attach to container stdin")
+		} else {
+			opts.WG.Go(func() { attach.Wait() })
+		}
+	}
 
 	if opts.IO.Stdout != nil || opts.IO.Stderr != nil {
 		logs := exec.CommandContext(opts.Lifetime, utils.PODMAN_BINARY, "logs", "--follow", id)
@@ -84,14 +101,15 @@ func Run[REQ, RESP any](ctx context.Context, opts types.Opts, resp *RESP, req *R
 		}
 	}
 
-	// Wait for the container to exit, send exit code
+	// Wait for the container to exit, send exit code. Stops waiting when the
+	// daemon's lifetime ends, as podman (conmon) keeps the container running.
 
 	exitCode := make(chan int, 1)
 	code = channel.Broadcaster(exitCode)
 
 	opts.WG.Go(func() {
 		defer close(exitCode)
-		out, err := utils.Podman(context.WithoutCancel(opts.Lifetime), "wait", id)
+		out, err := utils.Podman(opts.Lifetime, "wait", id)
 		if err != nil {
 			log.Trace().Err(err).Uint32("PID", pid).Msg("container wait")
 			return
