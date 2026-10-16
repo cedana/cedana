@@ -63,26 +63,17 @@ setup_daemon() {
         export CEDANA_DB_PATH=/tmp/cedana-"$(basename "$SOCK")".db
         export CEDANA_ADDRESS="$SOCK"
         debug start_daemon_at "$SOCK"
+        follow_daemon_log "$SOCK" +1 # all of it, as it's this test's daemon
     else
-        log_file=$(daemon_log_file "$CEDANA_ADDRESS")
-        tail -f "$log_file" 3>&- &
-        TAIL_PID=$!
-        export TAIL_PID
+        follow_daemon_log "$CEDANA_ADDRESS" 0 # from now on, for this test
     fi
 }
 
 teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
-    else
-        # Stop tailing now, as the daemon keeps running until the end of the file. A tail
-        # (or anything waiting to kill it) left in the background holds the test's output
-        # open, so the parallel runner fails the file once it outlives it.
-        if [ -n "$TAIL_PID" ]; then
-            kill "$TAIL_PID" 2>/dev/null
-            wait "$TAIL_PID" 2>/dev/null || true
-        fi
     fi
+    unfollow_daemon_log
 }
 
 ##################
@@ -93,8 +84,28 @@ start_daemon_at() {
     local sock=$1
     id=$(basename "$sock")
     debug_log "Starting daemon at socket $sock with config $CEDANA_CONFIG_DIR/config.json"
-    cedana daemon start --init-config 3>&- | tee "$(daemon_log_file "$sock")" 3>&- &
+    # Only to its log file: the daemon (and anything it spawns) must not hold the test's or the
+    # runner's output open, or the parallel runner fails the file once they outlive it.
+    # Tests see the log through follow_daemon_log.
+    cedana daemon start --init-config >"$(daemon_log_file "$sock")" 2>&1 </dev/null 3>&- &
+    echo $! >"$(daemon_pid_file "$sock")"
     wait_for_start "$sock"
+}
+
+# Shows the daemon's log in the test's output, from the given line (+1 for all, 0 for new)
+follow_daemon_log() {
+    local sock=$1
+    local from=$2
+    tail -n "$from" -F "$(daemon_log_file "$sock")" 2>/dev/null 3>&- &
+    TAIL_PID=$!
+}
+
+unfollow_daemon_log() {
+    if [ -n "$TAIL_PID" ]; then
+        kill "$TAIL_PID" 2>/dev/null
+        wait "$TAIL_PID" 2>/dev/null || true
+        TAIL_PID=
+    fi
 }
 
 wait_for_start() {
@@ -105,7 +116,7 @@ wait_for_start() {
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
             error_log "Daemon failed to start after $WAIT_TIMEOUT seconds"
-            exit 1
+            return 1
         fi
     done
 }
@@ -121,15 +132,18 @@ stop_daemon_at() {
     wait_for_stop "$sock"
 }
 
+# Waits for the daemon process to exit, not just its socket, which goes away first
 wait_for_stop() {
     local sock=$1
+    local pid
+    pid=$(cat "$(daemon_pid_file "$sock")" 2>/dev/null)
     local i=0
-    while [ -S "$sock" ]; do
-        sleep 1
+    while [ -S "$sock" ] || { [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; }; do
+        sleep 0.2
         i=$((i + 1))
-        if [ $i -gt $WAIT_TIMEOUT ]; then
+        if [ $i -gt $((WAIT_TIMEOUT * 5)) ]; then
             error_log "Daemon failed to stop after $WAIT_TIMEOUT seconds"
-            exit 1
+            return 1
         fi
     done
 }
@@ -138,6 +152,12 @@ daemon_log_file() {
     local sock=$1
     id=$(basename "$sock")
     echo /tmp/cedana-daemon-"$id".log
+}
+
+daemon_pid_file() {
+    local sock=$1
+    id=$(basename "$sock")
+    echo /tmp/cedana-daemon-"$id".pid
 }
 
 pid_for_jid() {

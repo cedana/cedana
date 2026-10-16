@@ -16,7 +16,7 @@ wait_for_csx_start() {
         i=$((i + 1))
         if [ $i -gt $WAIT_TIMEOUT ]; then
             error_log "CSX Daemon failed to start after $WAIT_TIMEOUT seconds"
-            exit 1
+            return 1
         fi
     done
 }
@@ -25,7 +25,9 @@ start_csx_daemon_at() {
     local sock=$1
     check_cmd csx
     debug_log "Starting csx daemon at socket $sock"
-    csx | tee "$(csx_daemon_log_file "$sock")" &
+    # Only to its log file, see start_daemon_at
+    csx >"$(csx_daemon_log_file "$sock")" 2>&1 </dev/null 3>&- &
+    echo $! >"$(daemon_pid_file "$sock")" # for wait_for_stop
     wait_for_csx_start "$sock"
 }
 
@@ -79,24 +81,22 @@ teardown_file_csx_daemon() {
 }
 
 setup_csx_daemon() {
+    local from=0 # from now on, for this test
     if ! env_exists "PERSIST_DAEMON"; then
         start_csx_daemon
-    else
-        log_file=$(csx_daemon_log_file "$CSX_SOCK")
-        tail -f "$log_file" 3>&- &
-        CSX_TAIL_PID=$!
-        export CSX_TAIL_PID
+        from=+1 # all of it, as it's this test's daemon
     fi
+    tail -n "$from" -F "$(csx_daemon_log_file "$CSX_SOCK")" 2>/dev/null 3>&- &
+    CSX_TAIL_PID=$!
 }
 
 teardown_csx_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         cleanup_csx_daemon
-    else
-        # Stop tailing now, see teardown_daemon
-        if [ -n "$CSX_TAIL_PID" ]; then
-            kill "$CSX_TAIL_PID" 2>/dev/null
-            wait "$CSX_TAIL_PID" 2>/dev/null || true
-        fi
+    fi
+    if [ -n "$CSX_TAIL_PID" ]; then
+        kill "$CSX_TAIL_PID" 2>/dev/null
+        wait "$CSX_TAIL_PID" 2>/dev/null || true
+        CSX_TAIL_PID=
     fi
 }
