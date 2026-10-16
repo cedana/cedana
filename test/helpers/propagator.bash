@@ -518,6 +518,36 @@ deregister_cluster() {
     fi
 }
 
+# Switch how the propagator syncs a cluster: push, shadow or watch, optionally through a connector
+set_sync_mode() {
+    local id="$1" mode="$2" connector="${3:-}"
+    local body='{ "mode": "'"$mode"'", "force": true'
+    if [ -n "$connector" ]; then
+        body+=', "connector": "'"$connector"'"'
+    fi
+    body+=' }'
+
+    local response
+    response=$(curl -s -X PUT "${CEDANA_URL}/cluster/${id}/sync-mode" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+        -w "%{http_code}")
+
+    local http_code="${response: -3}"
+    local out="${response%???}"
+    if [ "$http_code" -eq 200 ]; then
+        echo "$out"
+        return 0
+    fi
+    error_log "Failed to set sync mode $mode for cluster $id (HTTP $http_code): $out"
+    return 1
+}
+
+sync_status() {
+    curl -s "${CEDANA_URL}/cluster/${1}/sync-status" -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}"
+}
+
 validate_action_id() {
     local id="$1"
     id="${id//\"/}" # remove quotes if present
