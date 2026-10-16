@@ -121,7 +121,8 @@ PARALLELISM?=8
 TAGS?=
 ARGS?=
 RETRIES?=0
-DAEMON_MODE?=both # isolated (a daemon per test), persistent (one across tests), or both
+# isolated (a daemon per test), persistent (one across tests), or both
+DAEMON_MODE?=both
 GPU?=0
 REPORT?=
 PROVIDER?=K3s

@@ -3,18 +3,22 @@
 # This is a helper file assumes its users are in the same directory as the Makefile
 
 csx_daemon_log_file() {
-    local sock=$1
-    id=$(basename "$sock")
-    echo /tmp/csx-daemon-"$id".log
+    echo /tmp/csx-daemon-"$(basename "$1")".log
 }
 
+# Polled often, see wait_for_start. Fails right away if the daemon exits.
 wait_for_csx_start() {
     local sock=$1
+    local pid=$2
     local i=0
     while [ ! -S "$sock" ]; do
-        sleep 1
+        if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+            error_log "CSX daemon exited before starting, see $(csx_daemon_log_file "$sock")"
+            return 1
+        fi
+        sleep 0.1
         i=$((i + 1))
-        if [ $i -gt $WAIT_TIMEOUT ]; then
+        if [ $i -gt $((WAIT_TIMEOUT * 10)) ]; then
             error_log "CSX Daemon failed to start after $WAIT_TIMEOUT seconds"
             return 1
         fi
@@ -27,8 +31,8 @@ start_csx_daemon_at() {
     debug_log "Starting csx daemon at socket $sock"
     # Only to its log file, see start_daemon_at
     csx >"$(csx_daemon_log_file "$sock")" 2>&1 </dev/null 3>&- &
-    echo $! >"$(daemon_pid_file "$sock")" # for wait_for_stop
-    wait_for_csx_start "$sock"
+    record_pid $! "$(daemon_pid_file "$sock")" # for wait_for_stop
+    wait_for_csx_start "$sock" $!
 }
 
 stop_csx_daemon() {
@@ -38,7 +42,7 @@ stop_csx_daemon() {
         return 0
     fi
     debug_log "Stopping daemon at socket $sock"
-    kill_at_sock "$sock" TERM
+    terminate_at_sock "$sock"
     wait_for_stop "$sock"
 }
 

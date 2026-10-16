@@ -538,8 +538,8 @@ teardown_file() {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
     dest="/stale-mount-$id"
-    source=$(mktemp)
-    add_bind_mount_to_bundle "$bundle" "$source" "$dest"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
 
     runc run --bundle "$bundle" "$id" &
 
@@ -563,7 +563,8 @@ teardown_file() {
 
     run runc kill "$id" KILL
     run runc delete "$id"
-    rm -f "$source"
+    run umount -l "$ROOTFS$dest" # whether anything is left is the next test's concern
+    rm -f "$bind_source" "$ROOTFS$dest"
 }
 
 # Restoring must not leave mounts on the (shared) rootfs: once the container is gone and its
@@ -574,8 +575,8 @@ teardown_file() {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
     dest="/leaked-mount-$id"
-    source=$(mktemp)
-    add_bind_mount_to_bundle "$bundle" "$source" "$dest"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
 
     runc run --bundle "$bundle" "$id" &
 
@@ -590,10 +591,11 @@ teardown_file() {
 
     run runc kill "$id" KILL
     run runc delete "$id"
-    rm -f "$source"
+    rm -f "$bind_source"
 
     run grep -F " $ROOTFS$dest " /proc/self/mountinfo
     assert_output ""
+    rm -f "$ROOTFS$dest"
 }
 
 # A restore that fails after setting up its mounts must not leave them on the (shared) rootfs
@@ -602,8 +604,8 @@ teardown_file() {
     id=$(unix_nano)
     bundle="$(create_workload_bundle "date-loop.sh")"
     dest="/leaked-mount-$id"
-    source=$(mktemp)
-    add_bind_mount_to_bundle "$bundle" "$source" "$dest"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
 
     runc run --bundle "$bundle" "$id" &
 
@@ -625,7 +627,7 @@ teardown_file() {
     assert_output ""
 
     run runc delete --force "$id"
-    rm -f "$source"
+    rm -f "$bind_source" "$ROOTFS$dest"
 }
 
 # bats test_tags=restore
