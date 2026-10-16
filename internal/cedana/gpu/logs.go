@@ -26,6 +26,8 @@ import (
 const (
 	LOG_TAIL_INTERVAL = 500 * time.Millisecond
 	GPU_SERVICE       = "cedana-gpu"
+	MAX_LOG_LINE_SIZE = 64 * 1024 // Longer lines are cut
+	MAX_LOG_FILES     = 64        // Tailed at once per controller
 )
 
 // Matches the spdlog pattern "[%Y-%m-%d %H:%M:%S.%f] [pid %P: tid %t] [%s:%!:%#] [%l] %v" of log files
@@ -49,17 +51,23 @@ type lineLogger struct {
 	level  zerolog.Level // Of the last line, for continuation lines
 }
 
-type logFile struct {
+// Puts lines together from the chunks they come in, and logs them. Lines longer than
+// MAX_LOG_LINE_SIZE are cut, so that a line without an end can't use up our memory.
+type lineSplitter struct {
 	lineLogger
+	rest     []byte // Incomplete last line
+	dropping bool   // Dropping the rest of a line that was too long
+}
+
+type logFile struct {
+	lineSplitter
 	file   *os.File
 	reader *bufio.Reader
-	rest   string // Incomplete last line
 }
 
 // Logs the controller's stderr written to it line by line
 type logWriter struct {
-	lineLogger
-	rest []byte // Incomplete last line
+	lineSplitter
 }
 
 // Returns the logger for GPU logs, which go out as their own service at their own level
@@ -73,20 +81,40 @@ func gpuLogger(id string) zerolog.Logger {
 }
 
 func newLogWriter(id string) *logWriter {
-	return &logWriter{lineLogger: lineLogger{logger: gpuLogger(id), level: zerolog.InfoLevel}}
+	return &logWriter{lineSplitter{lineLogger: lineLogger{logger: gpuLogger(id), level: zerolog.InfoLevel}}}
 }
 
 func (w *logWriter) Write(p []byte) (int, error) {
-	w.rest = append(w.rest, p...)
+	n := len(p)
 	for {
-		i := bytes.IndexByte(w.rest, '\n')
+		i := bytes.IndexByte(p, '\n')
 		if i < 0 {
-			break
+			w.feed(p, false)
+			return n, nil
 		}
-		w.log(string(w.rest[:i]))
-		w.rest = w.rest[i+1:]
+		w.feed(p[:i], true)
+		p = p[i+1:]
 	}
-	return len(p), nil
+}
+
+// Takes the next chunk of a line, without the newline if it ends the line
+func (s *lineSplitter) feed(chunk []byte, ends bool) {
+	switch {
+	case s.dropping:
+	case len(s.rest)+len(chunk) > MAX_LOG_LINE_SIZE:
+		s.rest = append(s.rest, chunk[:MAX_LOG_LINE_SIZE-len(s.rest)]...)
+		s.log(string(s.rest) + " (truncated)")
+		s.rest = s.rest[:0]
+		s.dropping = true
+	case ends:
+		s.log(string(append(s.rest, chunk...)))
+		s.rest = s.rest[:0]
+	default:
+		s.rest = append(s.rest, chunk...)
+	}
+	if ends {
+		s.dropping = false
+	}
 }
 
 // Tails all log files in dir until done is closed, then drains them one last time.
@@ -95,6 +123,7 @@ func tailLogs(dir string, id string, done <-chan int, resume bool) {
 	logger := gpuLogger(id)
 	files := map[string]*logFile{}
 	var dirFile *os.File
+	warned := false
 
 	defer func() {
 		for _, f := range files {
@@ -119,12 +148,21 @@ func tailLogs(dir string, id string, done <-chan int, resume bool) {
 		if dirFile != nil {
 			dirFile.Seek(0, io.SeekStart)
 			names, _ := dirFile.Readdirnames(-1)
+			present := make(map[string]bool, len(names))
 			for _, name := range names {
 				if filepath.Ext(name) != ".log" {
 					continue
 				}
+				present[name] = true
 				f, ok := files[name]
 				if !ok {
+					if len(files) >= MAX_LOG_FILES {
+						if !warned {
+							log.Warn().Str("ID", id).Int("max", MAX_LOG_FILES).Msg("too many GPU log files, not tailing the rest")
+							warned = true
+						}
+						continue
+					}
 					file, err := openLogFile(dirFile, name)
 					if err != nil {
 						continue
@@ -133,16 +171,23 @@ func tailLogs(dir string, id string, done <-chan int, resume bool) {
 						file.Seek(0, io.SeekEnd)
 					}
 					f = &logFile{
-						lineLogger: lineLogger{
+						lineSplitter: lineSplitter{lineLogger: lineLogger{
 							logger: logger.With().Str("component", logComponent(name)).Logger(),
 							level:  zerolog.InfoLevel,
-						},
+						}},
 						file:   file,
 						reader: bufio.NewReader(file),
 					}
 					files[name] = f
 				}
 				f.tail()
+			}
+			for name, f := range files {
+				if !present[name] { // Removed, so done once read to the end
+					f.tail()
+					f.file.Close()
+					delete(files, name)
+				}
 			}
 			resume = false // Files that show up later are new
 		}
@@ -185,16 +230,16 @@ func openLogFile(dir *os.File, name string) (*os.File, error) {
 // Logs all complete lines written since the last call
 func (f *logFile) tail() {
 	for {
-		line, err := f.reader.ReadString('\n')
-		if err == io.EOF {
-			f.rest += line // Wait for the rest of the line to be written
+		chunk, err := f.reader.ReadSlice('\n')
+		switch err {
+		case nil:
+			f.feed(chunk[:len(chunk)-1], true)
+		case bufio.ErrBufferFull:
+			f.feed(chunk, false)
+		default: // Wait for the rest of the line to be written
+			f.feed(chunk, false)
 			return
 		}
-		if err != nil {
-			return
-		}
-		f.log(strings.TrimSuffix(f.rest+line, "\n"))
-		f.rest = ""
 	}
 }
 

@@ -3,6 +3,7 @@ package gpu
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -132,7 +133,7 @@ func TestLogComponent(t *testing.T) {
 	}
 }
 
-// Runs the tailer on dir while write is called, and returns the messages it logged
+// Runs the tailer on dir while write is called, and returns the GPU log messages it logged
 func tailMessages(t *testing.T, dir string, resume bool, write func()) []string {
 	var out bytes.Buffer
 	defer func(l zerolog.Logger) { log.Logger = l }(log.Logger)
@@ -155,11 +156,13 @@ func tailMessages(t *testing.T, dir string, resume bool, write func()) []string 
 		if line == "" {
 			continue
 		}
-		var entry map[string]string
+		var entry map[string]any
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
 			t.Fatalf("bad log line %q: %v", line, err)
 		}
-		messages = append(messages, entry["message"])
+		if entry["service.name"] == GPU_SERVICE {
+			messages = append(messages, entry["message"].(string))
+		}
 	}
 	return messages
 }
@@ -207,5 +210,68 @@ func TestTailLogsResume(t *testing.T) {
 	})
 	if strings.Join(messages, ",") != "appended,new file" {
 		t.Errorf("got messages %v, want [appended new file]", messages)
+	}
+}
+
+// A line longer than MAX_LOG_LINE_SIZE is cut and the rest of it dropped, whether it comes
+// from a log file or stderr, so a line without an end can't use up our memory
+func TestLogLineSize(t *testing.T) {
+	long := strings.Repeat("x", 3*MAX_LOG_LINE_SIZE)
+	check := func(t *testing.T, messages []string) {
+		if len(messages) != 2 || len(messages[0]) > MAX_LOG_LINE_SIZE+len(" (truncated)") || messages[1] != "after" {
+			t.Errorf("got %d messages, first of length %d, want a cut line then [after]", len(messages), len(messages[0]))
+		}
+	}
+
+	t.Run("file", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "cedana-so-1.log")
+		os.WriteFile(path, []byte(long), 0o644) // Not ended yet
+		check(t, tailMessages(t, dir, false, func() {
+			file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+			file.WriteString(long + "\n[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] after\n")
+			file.Close()
+		}))
+	})
+
+	t.Run("stderr", func(t *testing.T) {
+		var out bytes.Buffer
+		defer func(l zerolog.Logger) { log.Logger = l }(log.Logger)
+		log.Logger = zerolog.New(&out).Level(zerolog.InfoLevel)
+
+		w := newLogWriter("abc")
+		w.Write([]byte(long))
+		w.Write([]byte(long + "\n[info] after\n"))
+		if len(w.rest) != 0 {
+			t.Errorf("kept %d bytes of a dropped line", len(w.rest))
+		}
+
+		var messages []string
+		for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
+			var entry map[string]string
+			json.Unmarshal([]byte(line), &entry)
+			messages = append(messages, entry["message"])
+		}
+		check(t, messages)
+	})
+}
+
+// At most MAX_LOG_FILES are tailed at once, and files that are removed are let go
+func TestLogFileLimit(t *testing.T) {
+	dir := t.TempDir()
+	line := func(i int) []byte {
+		return fmt.Appendf(nil, "[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] %d\n", i)
+	}
+	for i := range MAX_LOG_FILES + 10 {
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("cedana-so-%d.log", i)), line(i), 0o644)
+	}
+
+	messages := tailMessages(t, dir, false, func() {
+		for i := range 10 { // Make room for the ones left out
+			os.Remove(filepath.Join(dir, fmt.Sprintf("cedana-so-%d.log", i)))
+		}
+	})
+	if len(messages) != MAX_LOG_FILES+10 {
+		t.Errorf("got %d messages, want %d, one per file once there is room", len(messages), MAX_LOG_FILES+10)
 	}
 }
