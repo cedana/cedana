@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -16,7 +18,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Lines are logged with their own level and source, whatever the daemon's level, continuation
+// Lines are logged with their own level and source, whatever the daemon's level but never at
+// trace, continuation
 // lines with the level of the line they continue, and a line still being written only once it
 // is complete.
 func TestTailLogs(t *testing.T) {
@@ -32,6 +35,7 @@ func TestTailLogs(t *testing.T) {
 	}
 	defer file.Close()
 
+	file.WriteString("[2026-10-15 10:00:00.000000] [pid 1234: tid 1235] [driver.cpp:wcuInit:41] [trace] dropped\n")
 	file.WriteString("[2026-10-15 10:00:00.000001] [pid 1234: tid 1235] [driver.cpp:wcuInit:42] [debug] zeroth\n")
 	file.WriteString("[2026-10-15 10:00:00.000002] [pid 1234: tid 1235] [driver.cpp:wcuInit:43] [warning] first\n")
 	file.WriteString("continued\n")
@@ -133,9 +137,28 @@ func TestLogComponent(t *testing.T) {
 	}
 }
 
-// Runs the tailer on dir while write is called, and returns the GPU log messages it logged
-func tailMessages(t *testing.T, dir string, resume bool, write func()) []string {
-	var out bytes.Buffer
+// A buffer the tailer can log to while the test reads it
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// Runs the tailer on dir while write is called, and returns the GPU log messages it logged.
+// write is given the messages logged so far.
+func tailMessages(t *testing.T, dir string, resume bool, write func(logged []string)) []string {
+	var out syncBuffer
 	defer func(l zerolog.Logger) { log.Logger = l }(log.Logger)
 	log.Logger = zerolog.New(&out).Level(zerolog.InfoLevel)
 
@@ -146,13 +169,18 @@ func tailMessages(t *testing.T, dir string, resume bool, write func()) []string 
 		close(finished)
 	}()
 	time.Sleep(2 * LOG_TAIL_INTERVAL)
-	write()
+	write(gpuMessages(t, out.String()))
 	time.Sleep(2 * LOG_TAIL_INTERVAL)
 	close(done)
 	<-finished
 
+	return gpuMessages(t, out.String())
+}
+
+// Returns the messages of the GPU log lines in out
+func gpuMessages(t *testing.T, out string) []string {
 	var messages []string
-	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		if line == "" {
 			continue
 		}
@@ -183,14 +211,14 @@ func TestTailLogsUnsafeFiles(t *testing.T) {
 	os.Symlink(root, filepath.Join(root, "link")) // A directory link in place of the log directory
 	os.WriteFile(filepath.Join(root, "cedana-so-3.log"), []byte("[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] linked\n"), 0o644)
 
-	messages := tailMessages(t, dir, false, func() {
+	messages := tailMessages(t, dir, false, func([]string) {
 		os.WriteFile(filepath.Join(dir, "cedana-so-4.log"), []byte("[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] safe\n"), 0o644)
 	})
 	if strings.Join(messages, ",") != "safe" {
 		t.Errorf("got messages %v, want only [safe]", messages)
 	}
 
-	if messages := tailMessages(t, filepath.Join(root, "link"), false, func() {}); len(messages) != 0 {
+	if messages := tailMessages(t, filepath.Join(root, "link"), false, func([]string) {}); len(messages) != 0 {
 		t.Errorf("followed a link to the log directory, got messages %v", messages)
 	}
 }
@@ -202,12 +230,13 @@ func TestTailLogsResume(t *testing.T) {
 	path := filepath.Join(dir, "cedana-gpu-controller-1.log")
 	os.WriteFile(path, []byte("[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] old\n"), 0o644)
 
-	messages := tailMessages(t, dir, true, func() {
+	messages := tailMessages(t, dir, true, func([]string) {
 		file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 		file.WriteString("[2026-10-15 10:00:00.000002] [pid 1: tid 1] [a.cpp:f:2] [info] appended\n")
 		file.Close()
 		os.WriteFile(filepath.Join(dir, "cedana-gpu-worker-2.log"), []byte("[2026-10-15 10:00:00.000003] [pid 2: tid 2] [a.cpp:f:3] [info] new file\n"), 0o644)
 	})
+	slices.Sort(messages) // Files are read in directory order
 	if strings.Join(messages, ",") != "appended,new file" {
 		t.Errorf("got messages %v, want [appended new file]", messages)
 	}
@@ -227,7 +256,7 @@ func TestLogLineSize(t *testing.T) {
 		dir := t.TempDir()
 		path := filepath.Join(dir, "cedana-so-1.log")
 		os.WriteFile(path, []byte(long), 0o644) // Not ended yet
-		check(t, tailMessages(t, dir, false, func() {
+		check(t, tailMessages(t, dir, false, func([]string) {
 			file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
 			file.WriteString(long + "\n[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] after\n")
 			file.Close()
@@ -266,9 +295,12 @@ func TestLogFileLimit(t *testing.T) {
 		os.WriteFile(filepath.Join(dir, fmt.Sprintf("cedana-so-%d.log", i)), line(i), 0o644)
 	}
 
-	messages := tailMessages(t, dir, false, func() {
-		for i := range 10 { // Make room for the ones left out
-			os.Remove(filepath.Join(dir, fmt.Sprintf("cedana-so-%d.log", i)))
+	messages := tailMessages(t, dir, false, func(logged []string) {
+		if len(logged) != MAX_LOG_FILES {
+			t.Errorf("tailed %d files, want %d", len(logged), MAX_LOG_FILES)
+		}
+		for _, i := range logged[:10] { // Make room for the ones left out
+			os.Remove(filepath.Join(dir, fmt.Sprintf("cedana-so-%s.log", i)))
 		}
 	})
 	if len(messages) != MAX_LOG_FILES+10 {
