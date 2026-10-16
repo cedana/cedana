@@ -445,7 +445,9 @@ jobs:
       slurm_versions: ${{ inputs.slurm_versions }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
+      # At least 4cpu, for its 80GB volume: the 2cpu disk fills up pulling the ~4GB
+      # prebaked node image, which then falls back to building SLURM from source
+      runner: ${{ inputs.runner == '2cpu' && '4cpu' || inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       # Pinned to 1 because SLURM tests share a single cluster instance.
       # Running them in parallel can cause resource collisions and flaky tests.
