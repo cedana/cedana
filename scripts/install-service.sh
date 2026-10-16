@@ -34,6 +34,10 @@ Environment="AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE=${AWS_CONTAINER_AUTHORIZATIO
 EOF
 )
 fi
+CONTAINERD_ENV=""
+if [ -n "${CONTAINERD_ADDRESS:-}" ]; then
+    CONTAINERD_ENV="Environment=\"CONTAINERD_ADDRESS=${CONTAINERD_ADDRESS}\""
+fi
 cat <<EOF | tee "$SERVICE_FILE" >/dev/null
 [Unit]
 Description=Cedana Daemon
@@ -43,6 +47,7 @@ User=root
 Group=root
 Restart=no
 $POD_IDENTITY_ENV
+$CONTAINERD_ENV
 
 [Install]
 WantedBy=multi-user.target

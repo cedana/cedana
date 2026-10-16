@@ -3,7 +3,6 @@ package defaults
 import (
 	"context"
 	"os"
-	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
@@ -16,10 +15,12 @@ const (
 	DEFAULT_SNAPSHOTTER = "overlayfs"
 )
 
-var (
-	DEFAULT_ADDRESS  = utils.Getenv(os.Environ(), "CONTAINERD_ADDRESS", "/run/containerd/containerd.sock")
-	BASE_RUNTIME_DIR = filepath.Dir(DEFAULT_ADDRESS)
-)
+// The runc shim keeps its state under a fixed root, regardless of the address
+// containerd listens on (e.g. k3s uses /run/k3s/containerd/containerd.sock but its
+// containers are still under /run/containerd/runc/<namespace>)
+const BASE_RUNTIME_DIR = "/run/containerd"
+
+var DEFAULT_ADDRESS = utils.Getenv(os.Environ(), "CONTAINERD_ADDRESS", "/run/containerd/containerd.sock")
 
 func FillMissingRunDefaults(next types.Run) types.Run {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon.RunReq) (code func() <-chan int, err error) {

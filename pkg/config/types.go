@@ -126,6 +126,10 @@ type (
 		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
 		// LogLevel sets the default log level for CRIU (1 - errors, 2 - warnings, 3 - info, 4 - debug)
 		LogLevel int32 `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
+		// ZeroElide omits all-zero shared memory and ghost file pages from the dump
+		ZeroElide bool `json:"zero_elide" key:"zero_elide" yaml:"zero_elide" mapstructure:"zero_elide"`
+		// ShmemDumpThreads sets how many threads scan and write shared memory segments
+		ShmemDumpThreads int32 `json:"shmem_dump_threads" key:"shmem_dump_threads" yaml:"shmem_dump_threads" mapstructure:"shmem_dump_threads"`
 	}
 
 	GPU struct {

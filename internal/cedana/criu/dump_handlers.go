@@ -2,6 +2,7 @@ package criu
 
 import (
 	"context"
+	"math"
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -17,8 +18,7 @@ import (
 )
 
 const (
-	CRIU_DUMP_LOG_FILE  = "criu-dump.log"
-	GHOST_FILE_MAX_SIZE = 800 * utils.MEBIBYTE
+	CRIU_DUMP_LOG_FILE = "criu-dump.log"
 )
 
 // Returns a CRIU dump handler for the server
@@ -40,7 +40,7 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	criuOpts.LogFile = proto.String(CRIU_DUMP_LOG_FILE)
 	criuOpts.LogLevel = proto.Int32(config.Global.CRIU.LogLevel)
 	criuOpts.LogToStderr = proto.Bool(false)
-	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
+	criuOpts.GhostLimit = proto.Uint64(math.MaxUint64)
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 
 	// Change ownership of the dump directory

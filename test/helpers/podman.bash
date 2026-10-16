@@ -24,16 +24,30 @@ export IMAGE_CUDA="localhost/cedana-samples-cuda:test"
 # which the GPU worker needs. These hooks aren't re-run on restore, and the vfs
 # storage driver can't preserve the symlinks in the read/write layer, so bake
 # them into the image.
+#
+# NOTE: If the host driver is older than the CUDA forward compatibility libraries
+# in this test image (e.g. 12.8 samples on a 12.4 driver), use them in the image
+# too, as the NVIDIA toolkit does for the test container itself. Otherwise, GPUs
+# that JIT the samples' PTX (e.g. A10G) fail with "unsupported toolchain".
 build_image_cuda() {
-    local dir libdir
+    local dir libdir compat driver
     dir=$(mktemp -d)
     cp /cedana-samples/gpu_smr/mem-throughput-saxpy /cedana-samples/gpu_smr/mem-throughput-saxpy-loop "$dir"
     grep -oE '^\s*- [^ ]+::/usr/[^ ]+$' /etc/cdi/nvidia.yaml | sed 's/^\s*- //' | sort -u |
         awk -F'::' '{printf "mkdir -p $(dirname %s) && ln -sf %s %s\n", $2, $1, $2}' > "$dir/links.sh"
     libdir=$(dirname "$(grep -oE '::/usr/[^ ]*/libcuda\.so$' /etc/cdi/nvidia.yaml | head -1 | sed 's/^:://')")
+    mkdir -p "$dir/compat"
+    compat=$(find /usr/local/cuda/compat/ -name 'libcuda.so.*.*' 2>/dev/null | head -1 | sed 's/.*libcuda\.so\.//')
+    driver=$(grep -oE 'libcuda\.so\.[0-9]+\.[0-9.]+' /etc/cdi/nvidia.yaml | head -1 | sed 's/libcuda\.so\.//')
+    if [ -n "$compat" ] && [ -n "$driver" ] && [ "$compat" != "$driver" ] &&
+        [ "$(printf '%s\n%s\n' "$compat" "$driver" | sort -V | tail -1)" = "$compat" ]; then
+        cp -a /usr/local/cuda/compat/. "$dir/compat/"
+        libdir="/usr/local/cuda/compat:$libdir"
+    fi
     printf '%s\n' \
         'FROM docker.io/library/ubuntu:22.04' \
         'COPY mem-throughput-saxpy mem-throughput-saxpy-loop links.sh /' \
+        'COPY compat /usr/local/cuda/compat' \
         'RUN sh /links.sh' \
         "ENV LD_LIBRARY_PATH=$libdir" > "$dir/Containerfile"
     podman build --quiet --tag "$IMAGE_CUDA" "$dir"
