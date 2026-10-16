@@ -27,7 +27,7 @@ type ManagerPool struct {
 }
 
 func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize int, plugins plugins.Manager) (*ManagerPool, error) {
-	simpleManager, err := NewSimpleManager(lifetime, serverWg, plugins)
+	simpleManager, err := newSimpleManager(lifetime, serverWg, plugins, true) // GPU logs are the daemon's to ship
 	if err != nil {
 		return nil, err
 	}

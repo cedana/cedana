@@ -105,6 +105,20 @@ const (
 
 type pool struct {
 	sync.Map
+	tailLogs bool        // Ship the log files of the controllers in the pool, only the daemon does
+	synced   atomic.Bool // Done with the first sync
+}
+
+// Adds a controller to the pool, unless it's already there, and ships its log files if the
+// pool does. With resume, the controller was there before us, so its logs so far aren't ours.
+func (p *pool) add(c *controller, resume bool) (added bool) {
+	if _, loaded := p.LoadOrStore(c.ID, c); loaded {
+		return false
+	}
+	if p.tailLogs && config.Global.GPU.LogDir != "" && logging.Level != zerolog.Disabled {
+		go tailLogs(fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, c.ID), c.ID, c.Terminated, resume)
+	}
+	return true
 }
 
 // Get a specific GPU controller
@@ -216,16 +230,16 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 				c.syncFails++
 				log.Trace().Err(err).Str("ID", id).Msg("failed to sync with GPU controller")
 			}
-			if !discovered {
+			if discovered {
+				p.add(c, !p.synced.Load()) // Ones found in the first sync were likely spawned by an earlier daemon
+			} else {
 				p.Store(id, c)
-			} else if _, loaded := p.LoadOrStore(id, c); !loaded && config.Global.GPU.LogDir != "" && logging.Level != zerolog.Disabled {
-				// Spawned by an earlier daemon, so its logs so far were shipped by that daemon
-				go tailLogs(fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, id), id, c.Terminated, true)
 			}
 		})
 	}
 
 	wg.Wait()
+	p.synced.Store(true)
 
 	return nil
 }
@@ -318,17 +332,17 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		return nil, fmt.Errorf("failed to lock GPU controller booking")
 	}
 
-	p.Store(id, c)
+	if logDir != "" {
+		p.add(c, false)
+	} else {
+		p.Store(id, c)
+	}
 
 	defer func() {
 		if err != nil {
 			p.Terminate(ctx, id)
 		}
 	}()
-
-	if logDir != "" && logging.Level != zerolog.Disabled {
-		go tailLogs(logDir, id, c.Terminated, false)
-	}
 
 	err = cmd.Start()
 	if err != nil {
