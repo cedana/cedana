@@ -38,6 +38,17 @@ add_bind_mount_to_bundle() {
     mv "$bundle"/config.json.tmp "$bundle"/config.json
 }
 
+# Removes a mountpoint file from the rootfs. It's busy as long as it's a mountpoint in any
+# mount namespace, e.g. the container's, which goes away shortly after the container exits.
+remove_mountpoint() {
+    local path=$1
+    for _ in $(seq 50); do
+        rm -f "$path" 2>/dev/null && return 0
+        sleep 0.1
+    done
+    debug_log "Leaving $path, still busy"
+}
+
 # Fails if a mount whose source is gone (e.g. the GPU shm bind mount of a restore, once
 # its controller exits) was left on the shared CUDA rootfs, as it breaks every later
 # container restore ("possibly malicious path detected"). Removes it, so it doesn't.

@@ -561,10 +561,10 @@ teardown_file() {
     run grep -F " $ROOTFS$dest " /proc/self/mountinfo
     refute_output --partial "//deleted"
 
-    run runc kill "$id" KILL
-    run runc delete "$id"
+    run runc delete --force "$id"
     run umount -l "$ROOTFS$dest" # whether anything is left is the next test's concern
-    rm -f "$bind_source" "$ROOTFS$dest"
+    rm -f "$bind_source"
+    remove_mountpoint "$ROOTFS$dest"
 }
 
 # Restoring must not leave mounts on the (shared) rootfs: once the container is gone and its
@@ -589,13 +589,13 @@ teardown_file() {
 
     cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
 
-    run runc kill "$id" KILL
-    run runc delete "$id"
+    run runc delete --force "$id" # kills it, and waits for it to be gone
     rm -f "$bind_source"
 
-    run grep -F " $ROOTFS$dest " /proc/self/mountinfo
+    # Anywhere: the rootfs is also reachable through other mounts of it (e.g. CRIU's root)
+    run grep -F "$dest " /proc/self/mountinfo
     assert_output ""
-    rm -f "$ROOTFS$dest"
+    remove_mountpoint "$ROOTFS$dest"
 }
 
 # A restore that fails after setting up its mounts must not leave them on the (shared) rootfs
@@ -623,11 +623,12 @@ teardown_file() {
     run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
     assert_failure
 
-    run grep -F " $ROOTFS$dest " /proc/self/mountinfo
+    run grep -F "$dest " /proc/self/mountinfo # anywhere, see above
     assert_output ""
 
     run runc delete --force "$id"
-    rm -f "$bind_source" "$ROOTFS$dest"
+    rm -f "$bind_source"
+    remove_mountpoint "$ROOTFS$dest"
 }
 
 # bats test_tags=restore
