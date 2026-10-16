@@ -431,6 +431,7 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
           path: /tmp/report*.xml
+          overwrite: true # on a re-run, replace the earlier attempt's report so the summary never reads a stale one
 
       - name: Upload propagator logs
         if: always() && inputs.propagator

@@ -252,6 +252,7 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}
           path: /tmp/report*.xml
+          overwrite: true # on a re-run, replace the earlier attempt's report so the summary never reads a stale one
 
   plugin:
     name: Plugin
@@ -392,6 +393,7 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: /tmp/report*.xml
+          overwrite: true # on a re-run, replace the earlier attempt's report so the summary never reads a stale one
 
   streamer:
     name: Streamer

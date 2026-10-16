@@ -172,6 +172,7 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}-streamer-${{ matrix.compute }}
           path: /tmp/report*.xml
+          overwrite: true # on a re-run, replace the earlier attempt's report so the summary never reads a stale one
 
   post-summary:
     name: Post Summary
