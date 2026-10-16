@@ -6,6 +6,7 @@ package gpu
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -41,7 +43,7 @@ type logFile struct {
 
 // Tails all log files in dir until done is closed, then drains them one last time.
 func tailLogs(dir string, id string, done <-chan int) {
-	logger := log.With().Str("plugin", "gpu").Str("ID", id).Logger()
+	logger := log.With().Str("plugin", "gpu").Str("ID", id).Ctx(logging.WithCaller(context.Background())).Logger()
 	files := map[string]*logFile{}
 
 	defer func() {

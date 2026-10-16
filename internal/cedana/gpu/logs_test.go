@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -18,7 +19,7 @@ import (
 func TestTailLogs(t *testing.T) {
 	var out bytes.Buffer
 	defer func(l zerolog.Logger) { log.Logger = l }(log.Logger)
-	log.Logger = zerolog.New(&out).Level(zerolog.InfoLevel)
+	log.Logger = zerolog.New(&out).Level(zerolog.InfoLevel).Hook(logging.LineInfoHook{})
 
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cedana-so-1234.log")

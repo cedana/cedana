@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"io"
 	"os"
 	"time"
@@ -29,8 +30,16 @@ var (
 
 type LineInfoHook struct{}
 
+type hasCallerKey struct{}
+
+// WithCaller marks a context whose events already carry their own caller,
+// so LineInfoHook doesn't replace it with the daemon's.
+func WithCaller(ctx context.Context) context.Context {
+	return context.WithValue(ctx, hasCallerKey{}, true)
+}
+
 func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
-	if l >= zerolog.ErrorLevel {
+	if l >= zerolog.ErrorLevel && e.GetCtx().Value(hasCallerKey{}) == nil {
 		e.Caller(LOG_CALLER_SKIP)
 	}
 }
