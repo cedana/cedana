@@ -7,11 +7,9 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -65,11 +63,7 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	end()
 
-	logging.FromFile(
-		log.WithContext(ctx),
-		filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE),
-		zerolog.TraceLevel,
-	)
+	logFromFile(log, filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE), criuOpts.GetLogLevel())
 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)

@@ -14,8 +14,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Lines are logged with their own level and source, continuation lines with the level of
-// the line they continue, and a line still being written only once it is complete.
+// Lines are logged with their own level and source, whatever the daemon's level, continuation
+// lines with the level of the line they continue, and a line still being written only once it
+// is complete.
 func TestTailLogs(t *testing.T) {
 	var out bytes.Buffer
 	defer func(l zerolog.Logger) { log.Logger = l }(log.Logger)
@@ -29,7 +30,7 @@ func TestTailLogs(t *testing.T) {
 	}
 	defer file.Close()
 
-	file.WriteString("[2026-10-15 10:00:00.000001] [pid 1234: tid 1235] [driver.cpp:wcuInit:42] [debug] dropped\n")
+	file.WriteString("[2026-10-15 10:00:00.000001] [pid 1234: tid 1235] [driver.cpp:wcuInit:42] [debug] zeroth\n")
 	file.WriteString("[2026-10-15 10:00:00.000002] [pid 1234: tid 1235] [driver.cpp:wcuInit:43] [warning] first\n")
 	file.WriteString("continued\n")
 	file.WriteString("[2026-10-15 10:00:00.000003] [pid 1234: tid 1236] [api.cpp:operator[]:7] [error] sec")
@@ -56,6 +57,7 @@ func TestTailLogs(t *testing.T) {
 	}
 
 	want := []map[string]string{
+		{"level": "debug", "message": "zeroth", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:42"},
 		{"level": "warn", "message": "first", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:43"},
 		{"level": "warn", "message": "continued"},
 		{"level": "error", "message": "second", "PID": "1234", "TID": "1236", "caller": "api.cpp:operator[]:7"},
@@ -64,6 +66,7 @@ func TestTailLogs(t *testing.T) {
 		t.Fatalf("got %d lines, want %d: %v", len(lines), len(want), lines)
 	}
 	for i, w := range want {
+		w["service.name"] = GPU_SERVICE
 		w["plugin"] = "gpu"
 		w["ID"] = "abc"
 		w["component"] = "interceptor"

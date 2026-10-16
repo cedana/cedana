@@ -19,7 +19,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const LOG_TAIL_INTERVAL = 500 * time.Millisecond
+const (
+	LOG_TAIL_INTERVAL = 500 * time.Millisecond
+	GPU_SERVICE       = "cedana-gpu"
+)
 
 // Matches the spdlog pattern "[%Y-%m-%d %H:%M:%S.%f] [pid %P: tid %t] [%s:%!:%#] [%l] %v"
 var logLineRegex = regexp.MustCompile(`^\[[^\]]+\] \[pid (\d+): tid (\d+)\] \[(.*?)\] \[(trace|debug|info|warning|error|critical)\] (.*)$`)
@@ -43,7 +46,12 @@ type logFile struct {
 
 // Tails all log files in dir until done is closed, then drains them one last time.
 func tailLogs(dir string, id string, done <-chan int) {
-	logger := log.With().Str("plugin", "gpu").Str("ID", id).Ctx(logging.WithCaller(context.Background())).Logger()
+	logger := logging.Unfiltered(log.With().
+		Str(logging.SERVICE_FIELD, GPU_SERVICE).
+		Str("plugin", "gpu").
+		Str("ID", id).
+		Ctx(logging.WithCaller(context.Background())).
+		Logger())
 	files := map[string]*logFile{}
 
 	defer func() {

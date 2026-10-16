@@ -16,10 +16,13 @@ const (
 	ZEROLOG_TIME_FORMAT_DEFAULT = time.RFC3339Nano // zerolog's default format for With().Timestamp()
 	LOG_TIME_FORMAT             = time.TimeOnly
 	LOG_CALLER_SKIP             = 3 // stack frame depth
+
+	SERVICE_FIELD = "service.name" // Logs another service's lines as that service, e.g. cedana-gpu
 )
 
 var (
 	Level         = zerolog.Disabled
+	FilterAll     = false // Filter the logs of other programs by the log level too
 	GlobalWriter  io.Writer
 	ConsoleWriter = zerolog.ConsoleWriter{
 		Out:          os.Stdout,
@@ -42,6 +45,16 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 	if l >= zerolog.ErrorLevel && e.GetCtx().Value(hasCallerKey{}) == nil {
 		e.Caller(LOG_CALLER_SKIP)
 	}
+}
+
+// Unfiltered returns the logger without the daemon's log level, for logs of programs
+// with their own log level (CRIU, streamer, GPU). Stays filtered if logging is disabled,
+// or if FilterAll is set.
+func Unfiltered(logger zerolog.Logger) zerolog.Logger {
+	if Level == zerolog.Disabled || FilterAll {
+		return logger
+	}
+	return logger.Level(zerolog.TraceLevel)
 }
 
 func init() {

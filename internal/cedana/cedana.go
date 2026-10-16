@@ -27,6 +27,7 @@ type Cedana struct {
 
 func New(ctx context.Context, description ...any) (*Cedana, error) {
 	logging.SetLevel(config.Global.LogLevelNoServer)
+	logging.FilterAll = true // Logs share the terminal with the process output
 	wg := &sync.WaitGroup{}
 	var cancel func()
 
