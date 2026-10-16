@@ -16,7 +16,7 @@ const CRIU_SERVICE = "cedana-criu"
 var criuLogLevelRegex = regexp.MustCompile(`^(?:\(\s*[\d.]+\)\s+)?(Error|Warn)\s+\(`)
 
 // Logs every line of a CRIU log file, whatever the daemon's log level. CRIU only tags errors
-// and warnings, which keep their level. Other lines are details to us, so debug.
+// and warnings, which keep their level. Other lines are details to us, so trace.
 func logFromFile(logger zerolog.Logger, logfile string) {
 	file, err := os.Open(logfile)
 	if err != nil {
@@ -33,7 +33,7 @@ func logFromFile(logger zerolog.Logger, logfile string) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		level := zerolog.DebugLevel
+		level := zerolog.TraceLevel
 		if matches := criuLogLevelRegex.FindStringSubmatch(line); matches != nil {
 			switch matches[1] {
 			case "Error":

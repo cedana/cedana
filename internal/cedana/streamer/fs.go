@@ -225,8 +225,8 @@ func NewStreamingFs(
 				ready <- true
 			}
 			// The streamer has no log levels, it only marks the error it exits with. The rest
-			// are details to us, so debug.
-			level := zerolog.DebugLevel
+			// are details to us, so trace.
+			level := zerolog.TraceLevel
 			if strings.HasPrefix(lastMsg, ERROR_MSG_PREFIX) {
 				level = zerolog.ErrorLevel
 			}

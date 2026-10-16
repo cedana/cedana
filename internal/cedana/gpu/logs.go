@@ -262,7 +262,7 @@ func (l *lineLogger) log(line string) {
 
 	level := l.level
 	if level < zerolog.WarnLevel { // Info and lower are details to us, warnings and errors keep their level
-		level = zerolog.DebugLevel
+		level = zerolog.TraceLevel
 	}
 
 	event := l.logger.WithLevel(level)

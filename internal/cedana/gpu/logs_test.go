@@ -18,7 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Lines are logged with their source whatever the daemon's level, at debug unless they're warnings
+// Lines are logged with their source whatever the daemon's level, at trace unless they're warnings
 // or errors, continuation lines with the level of the line they continue, and a line still being
 // written only once it is complete.
 func TestTailLogs(t *testing.T) {
@@ -62,8 +62,8 @@ func TestTailLogs(t *testing.T) {
 	}
 
 	want := []map[string]string{
-		{"level": "debug", "message": "traced", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:41"},
-		{"level": "debug", "message": "zeroth", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:42"},
+		{"level": "trace", "message": "traced", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:41"},
+		{"level": "trace", "message": "zeroth", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:42"},
 		{"level": "warn", "message": "first", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:43"},
 		{"level": "warn", "message": "continued"},
 		{"level": "error", "message": "second", "PID": "1234", "TID": "1236", "caller": "api.cpp:operator[]:7"},
@@ -104,7 +104,7 @@ func TestLogWriter(t *testing.T) {
 	}
 
 	want := []map[string]string{
-		{"level": "debug", "message": "zeroth"},
+		{"level": "trace", "message": "zeroth"},
 		{"level": "warn", "message": "first"},
 		{"level": "warn", "message": "continued"},
 		{"level": "error", "message": "second", "caller": ""},
