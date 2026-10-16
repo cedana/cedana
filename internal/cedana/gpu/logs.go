@@ -24,10 +24,11 @@ import (
 )
 
 const (
-	LOG_TAIL_INTERVAL = 500 * time.Millisecond
-	GPU_SERVICE       = "cedana-gpu"
-	MAX_LOG_LINE_SIZE = 64 * 1024 // Longer lines are cut
-	MAX_LOG_FILES     = 64        // Tailed at once per controller
+	LOG_TAIL_INTERVAL  = 500 * time.Millisecond
+	GPU_SERVICE        = "cedana-gpu"
+	MAX_LOG_LINE_SIZE  = 64 * 1024 // Longer lines are cut
+	MAX_LOG_FILES      = 64        // Tailed at once per controller
+	LOG_DIR_BATCH_SIZE = 256       // Directory entries read at a time
 )
 
 // Matches the spdlog pattern "[%Y-%m-%d %H:%M:%S.%f] [pid %P: tid %t] [%s:%!:%#] [%l] %v" of log files
@@ -147,40 +148,45 @@ func tailLogs(dir string, id string, done <-chan int, resume bool) {
 		}
 		if dirFile != nil {
 			dirFile.Seek(0, io.SeekStart)
-			names, _ := dirFile.Readdirnames(-1)
-			present := make(map[string]bool, len(names))
-			for _, name := range names {
-				if filepath.Ext(name) != ".log" {
-					continue
-				}
-				present[name] = true
-				f, ok := files[name]
-				if !ok {
-					if len(files) >= MAX_LOG_FILES {
-						if !warned {
-							log.Warn().Str("ID", id).Int("max", MAX_LOG_FILES).Msg("too many GPU log files, not tailing the rest")
-							warned = true
+			present := make(map[string]bool, len(files)) // Of the files we tail
+			for {
+				names, err := dirFile.Readdirnames(LOG_DIR_BATCH_SIZE) // The workload may fill the directory
+				for _, name := range names {
+					if filepath.Ext(name) != ".log" {
+						continue
+					}
+					f, ok := files[name]
+					if !ok {
+						if len(files) >= MAX_LOG_FILES {
+							if !warned {
+								log.Warn().Str("ID", id).Int("max", MAX_LOG_FILES).Msg("too many GPU log files, not tailing the rest")
+								warned = true
+							}
+							continue
 						}
-						continue
+						file, err := openLogFile(dirFile, name)
+						if err != nil {
+							continue
+						}
+						if resume {
+							file.Seek(0, io.SeekEnd)
+						}
+						f = &logFile{
+							lineSplitter: lineSplitter{lineLogger: lineLogger{
+								logger: logger.With().Str("component", logComponent(name)).Logger(),
+								level:  zerolog.InfoLevel,
+							}},
+							file:   file,
+							reader: bufio.NewReader(file),
+						}
+						files[name] = f
 					}
-					file, err := openLogFile(dirFile, name)
-					if err != nil {
-						continue
-					}
-					if resume {
-						file.Seek(0, io.SeekEnd)
-					}
-					f = &logFile{
-						lineSplitter: lineSplitter{lineLogger: lineLogger{
-							logger: logger.With().Str("component", logComponent(name)).Logger(),
-							level:  zerolog.InfoLevel,
-						}},
-						file:   file,
-						reader: bufio.NewReader(file),
-					}
-					files[name] = f
+					present[name] = true
+					f.tail()
 				}
-				f.tail()
+				if err != nil {
+					break
+				}
 			}
 			for name, f := range files {
 				if !present[name] { // Removed, so done once read to the end
