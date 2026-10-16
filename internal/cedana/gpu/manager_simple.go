@@ -51,9 +51,14 @@ func (m *ManagerSimple) waitOrStartSync(ctx context.Context) (done func(), err e
 }
 
 func NewSimpleManager(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager) (*ManagerSimple, error) {
+	return newSimpleManager(ctx, serverWg, plugins, false)
+}
+
+// With tailLogs, ships the log files of all GPU controllers it finds or spawns
+func newSimpleManager(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager, tailLogs bool) (*ManagerSimple, error) {
 	manager := &ManagerSimple{
 		plugins:     plugins,
-		controllers: pool{},
+		controllers: pool{tailLogs: tailLogs},
 		wg:          serverWg,
 	}
 

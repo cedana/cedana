@@ -13,10 +13,8 @@ import (
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/keys"
-	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -135,11 +133,7 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	end()
 
-	logging.FromFile(
-		log.WithContext(ctx),
-		filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE),
-		zerolog.TraceLevel,
-	)
+	logFromFile(log, filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE), criuOpts.GetLogLevel())
 
 	if err != nil {
 		// NOTE: It's possible that after the restore failed, the process

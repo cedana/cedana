@@ -121,6 +121,35 @@ teardown_file() {
     run cedana job kill "$id"
 }
 
+##############
+### Freeze ###
+##############
+
+# A frozen cgroup makes runc see the container as paused and refuse to delete it,
+# even after its process is gone, so unfreeze must still thaw it (CED-2493)
+# bats test_tags=freeze
+@test "unfreeze container (process gone)" {
+    id=$(unix_nano)
+    image="docker.io/library/alpine:latest"
+    pid_file="/tmp/$(unix_nano).pid"
+
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --detach --pid-file "$pid_file" "$image" "$id" sleep infinity
+
+    wait_for_file "$pid_file"
+
+    cedana freeze containerd "$id"
+
+    kill -9 "$(cat "$pid_file")"
+
+    run cedana unfreeze containerd "$id"
+    assert_success
+
+    run ctr task delete "$id"
+    assert_success
+
+    run ctr container delete "$id"
+}
+
 ############
 ### Dump ###
 ############

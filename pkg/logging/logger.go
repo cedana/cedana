@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"context"
 	"io"
 	"os"
 	"time"
@@ -15,6 +16,8 @@ const (
 	ZEROLOG_TIME_FORMAT_DEFAULT = time.RFC3339Nano // zerolog's default format for With().Timestamp()
 	LOG_TIME_FORMAT             = time.TimeOnly
 	LOG_CALLER_SKIP             = 3 // stack frame depth
+
+	SERVICE_FIELD = "service.name" // Logs another service's lines as that service, e.g. cedana-gpu
 )
 
 var (
@@ -29,10 +32,27 @@ var (
 
 type LineInfoHook struct{}
 
+type hasCallerKey struct{}
+
+// WithCaller marks a context whose events already carry their own caller,
+// so LineInfoHook doesn't replace it with the daemon's.
+func WithCaller(ctx context.Context) context.Context {
+	return context.WithValue(ctx, hasCallerKey{}, true)
+}
+
 func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
-	if l >= zerolog.ErrorLevel {
+	if l >= zerolog.ErrorLevel && e.GetCtx().Value(hasCallerKey{}) == nil {
 		e.Caller(LOG_CALLER_SKIP)
 	}
+}
+
+// Unfiltered returns the logger without the daemon's log level, for logs of programs
+// with their own log level (CRIU, streamer, GPU). Stays off if logging is disabled.
+func Unfiltered(logger zerolog.Logger) zerolog.Logger {
+	if Level == zerolog.Disabled {
+		return logger
+	}
+	return logger.Level(zerolog.TraceLevel)
 }
 
 func init() {
