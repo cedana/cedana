@@ -83,7 +83,7 @@ setup_csx_daemon() {
         start_csx_daemon
     else
         log_file=$(csx_daemon_log_file "$CSX_SOCK")
-        tail -f "$log_file" &
+        tail -f "$log_file" 3>&- &
         CSX_TAIL_PID=$!
         export CSX_TAIL_PID
     fi
@@ -93,8 +93,10 @@ teardown_csx_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         cleanup_csx_daemon
     else
+        # Stop tailing now, see teardown_daemon
         if [ -n "$CSX_TAIL_PID" ]; then
-            wait_for_stop "$CSX_SOCK" && kill "$CSX_TAIL_PID" &
+            kill "$CSX_TAIL_PID" 2>/dev/null
+            wait "$CSX_TAIL_PID" 2>/dev/null || true
         fi
     fi
 }

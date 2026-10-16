@@ -65,7 +65,7 @@ setup_daemon() {
         debug start_daemon_at "$SOCK"
     else
         log_file=$(daemon_log_file "$CEDANA_ADDRESS")
-        tail -f "$log_file" &
+        tail -f "$log_file" 3>&- &
         TAIL_PID=$!
         export TAIL_PID
     fi
@@ -75,8 +75,12 @@ teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
     else
+        # Stop tailing now, as the daemon keeps running until the end of the file. A tail
+        # (or anything waiting to kill it) left in the background holds the test's output
+        # open, so the parallel runner fails the file once it outlives it.
         if [ -n "$TAIL_PID" ]; then
-            wait_for_stop "$SOCK" && kill "$TAIL_PID" &
+            kill "$TAIL_PID" 2>/dev/null
+            wait "$TAIL_PID" 2>/dev/null || true
         fi
     fi
 }
@@ -89,7 +93,7 @@ start_daemon_at() {
     local sock=$1
     id=$(basename "$sock")
     debug_log "Starting daemon at socket $sock with config $CEDANA_CONFIG_DIR/config.json"
-    cedana daemon start --init-config | tee "$(daemon_log_file "$sock")" &
+    cedana daemon start --init-config 3>&- | tee "$(daemon_log_file "$sock")" 3>&- &
     wait_for_start "$sock"
 }
 

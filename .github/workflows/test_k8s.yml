@@ -143,7 +143,24 @@ jobs:
         arch:
           - amd64
           - arm64
+        # Which containerd k3s runs on: the suite's own at the default socket, or k3s's bundled
+        # one at /run/k3s/containerd, as on a stock k3s install. Only applies to K3s.
+        containerd:
+          - external
+          - embedded
         exclude:
+          - platform: EKS
+            containerd: embedded
+          - platform: GKE
+            containerd: embedded
+          - platform: Nebius
+            containerd: embedded
+          - platform: EKS-Karpenter
+            containerd: embedded
+          - platform: K3s
+            containerd: embedded
+            cr: streamer
+
           # XXX: To reduce overusage of CI minutes
           - platform: K3s
             storage: storage/s3
@@ -166,6 +183,8 @@ jobs:
             cr: streamer
           - platform: EKS
             storage: storage/local
+          - platform: EKS # One variant per cloud platform, as they're serialized on a shared cluster
+            storage: storage/cedana
 
           - platform: GKE
             compute: CUDA
@@ -175,6 +194,8 @@ jobs:
             cr: default
           - platform: GKE
             storage: storage/local
+          - platform: GKE
+            storage: storage/s3
 
           - platform: Nebius
             compute: CPU
@@ -195,6 +216,8 @@ jobs:
             cr: streamer
           - platform: EKS-Karpenter
             storage: storage/local
+          - platform: EKS-Karpenter
+            storage: storage/s3
 
     container:
       image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
@@ -333,6 +356,7 @@ jobs:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}
+          K3S_CONTAINERD: ${{ matrix.containerd }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ (inputs.large && matrix.platform != 'K3s') && '1' || '0' }} # K3s is only for small tests
@@ -400,6 +424,7 @@ jobs:
           make test-k8s \
             TAGS=$TAGS \
             PROVIDER=$PROVIDER \
+            K3S_CONTAINERD=$K3S_CONTAINERD \
             GPU=$GPU \
             FORMATTER=$FORMATTER \
             DEBUG=$DEBUG \
@@ -415,7 +440,7 @@ jobs:
 
       - name: Label report # with the job name, so the summary can link to it
         if: always()
-        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }})" |' {} +
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}, ${{ matrix.containerd }})" |' {} +
 
       - name: Set sanitized storage
         if: always()
@@ -429,14 +454,14 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
+          name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.containerd }}
           path: /tmp/report*.xml
 
       - name: Upload propagator logs
         if: always() && inputs.propagator
         uses: actions/upload-artifact@v4
         with:
-          name: propagator-logs-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}
+          name: propagator-logs-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.containerd }}
           path: |
             /tmp/propagator*.log
           if-no-files-found: ignore
