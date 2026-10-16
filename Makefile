@@ -4,6 +4,10 @@ INSTALL_BIN_DIR=/usr/local/bin
 INSTALL_LIB_DIR=/usr/local/lib
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
+# Pin the toolchain: binaries + plugins built with Go 1.27 panic at runtime with
+# "*daemon.Job, not *daemon.Job (types from different scopes)" once several
+# plugins are loaded. A go.mod toolchain line can't do this (Go never downgrades).
+export GOTOOLCHAIN?=go1.25.11
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
@@ -120,6 +124,7 @@ RETRIES?=0
 GPU?=0
 REPORT?=
 PROVIDER?=K3s
+K3S_CONTAINERD?=external
 SKIP_HELM?=0
 HELPER_REPO?=
 HELPER_TAG?=""
@@ -208,7 +213,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINERD=[external|embedded], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Retries: $(RETRIES)" ;\
@@ -249,6 +254,7 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				REPORT=$(REPORT) \
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
+				K3S_CONTAINERD=$(K3S_CONTAINERD) \
 				CLUSTER_ID=$(CLUSTER_ID) \
 				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -272,6 +278,7 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				REPORT=$(REPORT) \
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
+				K3S_CONTAINERD=$(K3S_CONTAINERD) \
 				CLUSTER_ID=$(CLUSTER_ID) \
 				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
