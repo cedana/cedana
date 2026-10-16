@@ -12,7 +12,7 @@ import (
 )
 
 // Errors and warnings keep their level whatever the daemon's level, and other lines are
-// info, or debug when CRIU logs at debug. All are logged as the CRIU service.
+// trace. All are logged as the CRIU service.
 func TestLogFromFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), CRIU_DUMP_LOG_FILE)
 	err := os.WriteFile(path, []byte(
@@ -24,25 +24,22 @@ func TestLogFromFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for criuLogLevel, untagged := range map[int32]string{2: "info", 3: "info", 4: "debug"} {
-		var out bytes.Buffer
-		logFromFile(zerolog.New(&out).Level(zerolog.ErrorLevel), path, criuLogLevel)
+	var out bytes.Buffer
+	logFromFile(zerolog.New(&out).Level(zerolog.ErrorLevel), path)
 
-		var levels []string
-		for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
-			var entry map[string]string
-			if err := json.Unmarshal([]byte(line), &entry); err != nil {
-				t.Fatalf("bad log line %q: %v", line, err)
-			}
-			levels = append(levels, entry["level"])
-			if entry["service.name"] != CRIU_SERVICE {
-				t.Errorf("service.name = %q, want %q", entry["service.name"], CRIU_SERVICE)
-			}
+	var levels []string
+	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
+		var entry map[string]string
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("bad log line %q: %v", line, err)
 		}
+		levels = append(levels, entry["level"])
+		if entry["service.name"] != CRIU_SERVICE {
+			t.Errorf("service.name = %q, want %q", entry["service.name"], CRIU_SERVICE)
+		}
+	}
 
-		want := []string{"error", "warn", untagged}
-		if strings.Join(levels, ",") != strings.Join(want, ",") {
-			t.Errorf("CRIU log level %d: got levels %v, want %v", criuLogLevel, levels, want)
-		}
+	if want := "error,warn,trace"; strings.Join(levels, ",") != want {
+		t.Errorf("got levels %v, want %v", levels, want)
 	}
 }

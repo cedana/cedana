@@ -12,8 +12,6 @@ load_lib support
 load_lib assert
 load_lib file
 
-export CEDANA_LOG_LEVEL=trace
-
 setup_file() {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"

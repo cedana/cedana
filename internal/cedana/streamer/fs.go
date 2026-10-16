@@ -224,8 +224,9 @@ func NewStreamingFs(
 			if lastMsg == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			// The streamer has no log levels, it only marks the error it exits with
-			level := zerolog.InfoLevel
+			// The streamer has no log levels, it only marks the error it exits with. The rest
+			// are details to us, so trace.
+			level := zerolog.TraceLevel
 			if strings.HasPrefix(lastMsg, ERROR_MSG_PREFIX) {
 				level = zerolog.ErrorLevel
 			}

@@ -250,19 +250,26 @@ func (f *logFile) tail() {
 }
 
 func (l *lineLogger) log(line string) {
+	msg := line // A continuation of a multi-line message, unless it matches below
+	var pid, tid, caller string
 	if matches := logLineRegex.FindStringSubmatch(line); matches != nil {
 		l.level = spdlogLevels[matches[4]]
-		l.logger.WithLevel(l.level).
-			Str("PID", matches[1]).
-			Str("TID", matches[2]).
-			Str(zerolog.CallerFieldName, matches[3]).
-			Msg(matches[5])
+		pid, tid, caller, msg = matches[1], matches[2], matches[3], matches[5]
 	} else if matches := stderrLineRegex.FindStringSubmatch(line); matches != nil {
 		l.level = spdlogLevels[matches[1]]
-		l.logger.WithLevel(l.level).Msg(matches[2])
-	} else { // Continuation of a multi-line message
-		l.logger.WithLevel(l.level).Msg(line)
+		msg = matches[2]
 	}
+
+	level := l.level
+	if level < zerolog.WarnLevel { // Info and lower are details to us, warnings and errors keep their level
+		level = zerolog.TraceLevel
+	}
+
+	event := l.logger.WithLevel(level)
+	if pid != "" {
+		event = event.Str("PID", pid).Str("TID", tid).Str(zerolog.CallerFieldName, caller)
+	}
+	event.Msg(msg)
 }
 
 // Returns the component that wrote the log file, e.g. controller for cedana-gpu-controller-<pid>.log

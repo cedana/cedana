@@ -11,8 +11,6 @@ load_lib support
 load_lib assert
 load_lib file
 
-export CEDANA_LOG_LEVEL=trace
-
 setup_file() {
     setup_file_csx_daemon
     setup_file_daemon
