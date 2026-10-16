@@ -28,6 +28,16 @@ setup_rootfs_cuda() {
     debug_log "CUDA Rootfs setup complete"
 }
 
+add_bind_mount_to_bundle() {
+    local bundle="$1"
+    local source="$2"
+    local dest="$3"
+    jq --arg source "$source" --arg dest "$dest" \
+        '.mounts += [{"destination": $dest, "type": "bind", "source": $source, "options": ["bind", "rw"]}]' \
+        "$bundle"/config.json > "$bundle"/config.json.tmp
+    mv "$bundle"/config.json.tmp "$bundle"/config.json
+}
+
 # Fails if a mount whose source is gone (e.g. the GPU shm bind mount of a restore, once
 # its controller exits) was left on the shared CUDA rootfs, as it breaks every later
 # container restore ("possibly malicious path detected"). Removes it, so it doesn't.
