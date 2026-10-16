@@ -63,7 +63,7 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	end()
 
-	logFromFile(log, filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE), criuOpts.GetLogLevel())
+	logFromFile(log, filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE))
 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)

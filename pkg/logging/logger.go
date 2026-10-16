@@ -47,7 +47,7 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 }
 
 // Unfiltered returns the logger without the daemon's log level, for logs of programs
-// with their own log level (CRIU, streamer, GPU). Their logs go down to debug, never trace.
+// with their own log level (CRIU, streamer, GPU), whose details we log at debug.
 // Stays off if logging is disabled.
 func Unfiltered(logger zerolog.Logger) zerolog.Logger {
 	if Level == zerolog.Disabled {

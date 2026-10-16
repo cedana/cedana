@@ -133,7 +133,7 @@ func Restore(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req
 
 	end()
 
-	logFromFile(log, filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE), criuOpts.GetLogLevel())
+	logFromFile(log, filepath.Join(criuOpts.GetImagesDir(), CRIU_RESTORE_LOG_FILE))
 
 	if err != nil {
 		// NOTE: It's possible that after the restore failed, the process

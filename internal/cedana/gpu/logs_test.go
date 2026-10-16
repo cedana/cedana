@@ -18,10 +18,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Lines are logged with their own level and source, whatever the daemon's level but never at
-// trace, continuation
-// lines with the level of the line they continue, and a line still being written only once it
-// is complete.
+// Lines are logged with their source whatever the daemon's level, at debug unless they're warnings
+// or errors, continuation lines with the level of the line they continue, and a line still being
+// written only once it is complete.
 func TestTailLogs(t *testing.T) {
 	var out bytes.Buffer
 	defer func(l zerolog.Logger) { log.Logger = l }(log.Logger)
@@ -35,8 +34,8 @@ func TestTailLogs(t *testing.T) {
 	}
 	defer file.Close()
 
-	file.WriteString("[2026-10-15 10:00:00.000000] [pid 1234: tid 1235] [driver.cpp:wcuInit:41] [trace] dropped\n")
-	file.WriteString("[2026-10-15 10:00:00.000001] [pid 1234: tid 1235] [driver.cpp:wcuInit:42] [debug] zeroth\n")
+	file.WriteString("[2026-10-15 10:00:00.000000] [pid 1234: tid 1235] [driver.cpp:wcuInit:41] [trace] traced\n")
+	file.WriteString("[2026-10-15 10:00:00.000001] [pid 1234: tid 1235] [driver.cpp:wcuInit:42] [info] zeroth\n")
 	file.WriteString("[2026-10-15 10:00:00.000002] [pid 1234: tid 1235] [driver.cpp:wcuInit:43] [warning] first\n")
 	file.WriteString("continued\n")
 	file.WriteString("[2026-10-15 10:00:00.000003] [pid 1234: tid 1236] [api.cpp:operator[]:7] [error] sec")
@@ -63,6 +62,7 @@ func TestTailLogs(t *testing.T) {
 	}
 
 	want := []map[string]string{
+		{"level": "debug", "message": "traced", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:41"},
 		{"level": "debug", "message": "zeroth", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:42"},
 		{"level": "warn", "message": "first", "PID": "1234", "TID": "1235", "caller": "driver.cpp:wcuInit:43"},
 		{"level": "warn", "message": "continued"},
@@ -91,7 +91,7 @@ func TestLogWriter(t *testing.T) {
 	log.Logger = zerolog.New(&out).Level(zerolog.InfoLevel).Hook(logging.LineInfoHook{})
 
 	w := newLogWriter("abc")
-	w.Write([]byte("[debug] zeroth\n[warning] fir"))
+	w.Write([]byte("[info] zeroth\n[warning] fir"))
 	w.Write([]byte("st\ncontinued\n[error] second\n"))
 
 	var lines []map[string]string
