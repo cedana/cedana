@@ -226,6 +226,19 @@ jobs:
           name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
           path: /tmp/report*.xml
 
+      # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
+          path: |
+            /tmp/cedana-daemon-*.log
+            /tmp/cedana-*/**/*.log
+            /var/log/cedana*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()

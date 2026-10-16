@@ -29,6 +29,7 @@ setup() {
 
 teardown() {
     teardown_daemon
+    check_rootfs_cuda_mounts
 }
 
 teardown_file() {
