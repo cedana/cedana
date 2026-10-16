@@ -415,7 +415,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
 		controller.Termination.Lock()
 
-		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
+		waitCtx, cancel := context.WithTimeout(ctx, utils.DumpTimeout(FREEZE_TIMEOUT))
 		defer cancel()
 
 		// Cancel on early external termination
@@ -453,7 +453,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		go func() {
 			defer close(dumpErr)
 
-			waitCtx, cancel := context.WithTimeout(ctx, DUMP_TIMEOUT)
+			waitCtx, cancel := context.WithTimeout(ctx, utils.DumpTimeout(DUMP_TIMEOUT))
 			defer cancel()
 
 			// Cancel on early external termination
@@ -507,7 +507,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		}
 
 		// NOTE: Unfreeze must complete even if parent context is cancelled, so process can resume
-		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), UNFREEZE_TIMEOUT)
+		waitCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), utils.DumpTimeout(UNFREEZE_TIMEOUT))
 		defer cancel()
 
 		// Cancel on early external termination
@@ -551,7 +551,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		go func() {
 			defer close(restoreErr)
 
-			waitCtx, cancel := context.WithTimeout(ctx, RESTORE_TIMEOUT)
+			waitCtx, cancel := context.WithTimeout(ctx, utils.DumpTimeout(RESTORE_TIMEOUT))
 			defer cancel()
 
 			controller := p.Get(id)

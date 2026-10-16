@@ -100,7 +100,7 @@ func New(address, protocol string) (*Client, error) {
 ///////////////////
 
 func (c *Client) DumpVM(ctx context.Context, args *daemon.DumpVMReq, opts ...grpc.CallOption) (*daemon.DumpVMResp, *profiling.Data, error) {
-	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DUMP_TIMEOUT)
+	ctx, cancel := context.WithTimeout(ctx, utils.DumpTimeout(DEFAULT_DUMP_TIMEOUT))
 	defer cancel()
 	opts = addDefaultOptions(opts)
 
@@ -121,7 +121,7 @@ func (c *Client) DumpVM(ctx context.Context, args *daemon.DumpVMReq, opts ...grp
 }
 
 func (c *Client) Dump(ctx context.Context, args *daemon.DumpReq, opts ...grpc.CallOption) (*daemon.DumpResp, *profiling.Data, error) {
-	ctx, cancel := context.WithTimeout(ctx, DEFAULT_DUMP_TIMEOUT)
+	ctx, cancel := context.WithTimeout(ctx, utils.DumpTimeout(DEFAULT_DUMP_TIMEOUT))
 	defer cancel()
 	opts = addDefaultOptions(opts)
 
@@ -147,7 +147,7 @@ func (c *Client) Restore(
 	args *daemon.RestoreReq,
 	opts ...grpc.CallOption,
 ) (*daemon.RestoreResp, *profiling.Data, error) {
-	ctx, cancel := context.WithTimeout(ctx, DEFAULT_RESTORE_TIMEOUT)
+	ctx, cancel := context.WithTimeout(ctx, utils.DumpTimeout(DEFAULT_RESTORE_TIMEOUT))
 	defer cancel()
 	opts = addDefaultOptions(opts)
 
@@ -168,7 +168,7 @@ func (c *Client) Restore(
 }
 
 func (c *Client) Freeze(ctx context.Context, args *daemon.DumpReq, opts ...grpc.CallOption) (*daemon.DumpResp, *profiling.Data, error) {
-	ctx, cancel := context.WithTimeout(ctx, DEFAULT_FREEZE_TIMEOUT)
+	ctx, cancel := context.WithTimeout(ctx, utils.DumpTimeout(DEFAULT_FREEZE_TIMEOUT))
 	defer cancel()
 	opts = addDefaultOptions(opts)
 
@@ -190,7 +190,7 @@ func (c *Client) Freeze(ctx context.Context, args *daemon.DumpReq, opts ...grpc.
 }
 
 func (c *Client) Unfreeze(ctx context.Context, args *daemon.DumpReq, opts ...grpc.CallOption) (*daemon.DumpResp, *profiling.Data, error) {
-	ctx, cancel := context.WithTimeout(ctx, DEFAULT_UNFREEZE_TIMEOUT)
+	ctx, cancel := context.WithTimeout(ctx, utils.DumpTimeout(DEFAULT_UNFREEZE_TIMEOUT))
 	defer cancel()
 	opts = addDefaultOptions(opts)
 
