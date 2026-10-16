@@ -9,6 +9,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -88,13 +90,18 @@ func (w *logWriter) Write(p []byte) (int, error) {
 }
 
 // Tails all log files in dir until done is closed, then drains them one last time.
-func tailLogs(dir string, id string, done <-chan int) {
+// With resume, files already in dir are read from their end, as an earlier daemon logged them.
+func tailLogs(dir string, id string, done <-chan int, resume bool) {
 	logger := gpuLogger(id)
 	files := map[string]*logFile{}
+	var dirFile *os.File
 
 	defer func() {
 		for _, f := range files {
 			f.file.Close()
+		}
+		if dirFile != nil {
+			dirFile.Close()
 		}
 	}()
 
@@ -106,31 +113,73 @@ func tailLogs(dir string, id string, done <-chan int) {
 		case <-time.After(LOG_TAIL_INTERVAL):
 		}
 
-		paths, _ := filepath.Glob(filepath.Join(dir, "*.log"))
-		for _, path := range paths {
-			f, ok := files[path]
-			if !ok {
-				file, err := os.Open(path)
-				if err != nil {
+		if dirFile == nil {
+			dirFile, _ = openLogDir(dir)
+		}
+		if dirFile != nil {
+			dirFile.Seek(0, io.SeekStart)
+			names, _ := dirFile.Readdirnames(-1)
+			for _, name := range names {
+				if filepath.Ext(name) != ".log" {
 					continue
 				}
-				f = &logFile{
-					lineLogger: lineLogger{
-						logger: logger.With().Str("component", logComponent(path)).Logger(),
-						level:  zerolog.InfoLevel,
-					},
-					file:   file,
-					reader: bufio.NewReader(file),
+				f, ok := files[name]
+				if !ok {
+					file, err := openLogFile(dirFile, name)
+					if err != nil {
+						continue
+					}
+					if resume {
+						file.Seek(0, io.SeekEnd)
+					}
+					f = &logFile{
+						lineLogger: lineLogger{
+							logger: logger.With().Str("component", logComponent(name)).Logger(),
+							level:  zerolog.InfoLevel,
+						},
+						file:   file,
+						reader: bufio.NewReader(file),
+					}
+					files[name] = f
 				}
-				files[path] = f
+				f.tail()
 			}
-			f.tail()
+			resume = false // Files that show up later are new
 		}
 
 		if finished {
 			return
 		}
 	}
+}
+
+// The workload owns its log directory, so we don't follow a link put in its place
+func openLogDir(dir string) (*os.File, error) {
+	fd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	return os.NewFile(uintptr(fd), dir), nil
+}
+
+// Opens a log file in the workload's log directory, if it is a regular file and not a link
+// to e.g. a file only we can read
+func openLogFile(dir *os.File, name string) (*os.File, error) {
+	fd, err := unix.Openat(int(dir.Fd()), name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, err
+	}
+	file := os.NewFile(uintptr(fd), filepath.Join(dir.Name(), name))
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		file.Close()
+		return nil, fmt.Errorf("%s is not a regular file", file.Name())
+	}
+	return file, nil
 }
 
 // Logs all complete lines written since the last call

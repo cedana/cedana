@@ -174,8 +174,9 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 		}
 
 		c := p.Get(id)
+		discovered := c == nil
 
-		if c == nil {
+		if discovered {
 			fileInfo, err := os.Stat(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 			if err != nil {
 				continue
@@ -215,7 +216,12 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 				c.syncFails++
 				log.Trace().Err(err).Str("ID", id).Msg("failed to sync with GPU controller")
 			}
-			p.Store(id, c)
+			if !discovered {
+				p.Store(id, c)
+			} else if _, loaded := p.LoadOrStore(id, c); !loaded && config.Global.GPU.LogDir != "" && logging.Level != zerolog.Disabled {
+				// Spawned by an earlier daemon, so its logs so far were shipped by that daemon
+				go tailLogs(fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, id), id, c.Terminated, true)
+			}
 		})
 	}
 
@@ -321,7 +327,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	}()
 
 	if logDir != "" && logging.Level != zerolog.Disabled {
-		go tailLogs(logDir, id, c.Terminated)
+		go tailLogs(logDir, id, c.Terminated, false)
 	}
 
 	err = cmd.Start()

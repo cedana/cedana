@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -38,7 +39,7 @@ func TestTailLogs(t *testing.T) {
 	done := make(chan int)
 	finished := make(chan struct{})
 	go func() {
-		tailLogs(dir, "abc", done)
+		tailLogs(dir, "abc", done, false)
 		close(finished)
 	}()
 
@@ -128,5 +129,83 @@ func TestLogComponent(t *testing.T) {
 		if got := logComponent(path); got != want {
 			t.Errorf("logComponent(%q) = %q, want %q", path, got, want)
 		}
+	}
+}
+
+// Runs the tailer on dir while write is called, and returns the messages it logged
+func tailMessages(t *testing.T, dir string, resume bool, write func()) []string {
+	var out bytes.Buffer
+	defer func(l zerolog.Logger) { log.Logger = l }(log.Logger)
+	log.Logger = zerolog.New(&out).Level(zerolog.InfoLevel)
+
+	done := make(chan int)
+	finished := make(chan struct{})
+	go func() {
+		tailLogs(dir, "abc", done, resume)
+		close(finished)
+	}()
+	time.Sleep(2 * LOG_TAIL_INTERVAL)
+	write()
+	time.Sleep(2 * LOG_TAIL_INTERVAL)
+	close(done)
+	<-finished
+
+	var messages []string
+	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		var entry map[string]string
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("bad log line %q: %v", line, err)
+		}
+		messages = append(messages, entry["message"])
+	}
+	return messages
+}
+
+// The workload owns its log directory, so links and special files in it, or a link in its
+// place, must not make us log files it can't read
+func TestTailLogsUnsafeFiles(t *testing.T) {
+	root := t.TempDir()
+	secret := filepath.Join(root, "secret")
+	os.WriteFile(secret, []byte("[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] secret\n"), 0o600)
+
+	dir := filepath.Join(root, "logs")
+	os.Mkdir(dir, 0o755)
+	os.Symlink(secret, filepath.Join(dir, "cedana-so-1.log"))
+	if err := syscall.Mkfifo(filepath.Join(dir, "cedana-so-2.log"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	os.Symlink(root, filepath.Join(root, "link")) // A directory link in place of the log directory
+	os.WriteFile(filepath.Join(root, "cedana-so-3.log"), []byte("[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] linked\n"), 0o644)
+
+	messages := tailMessages(t, dir, false, func() {
+		os.WriteFile(filepath.Join(dir, "cedana-so-4.log"), []byte("[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] safe\n"), 0o644)
+	})
+	if strings.Join(messages, ",") != "safe" {
+		t.Errorf("got messages %v, want only [safe]", messages)
+	}
+
+	if messages := tailMessages(t, filepath.Join(root, "link"), false, func() {}); len(messages) != 0 {
+		t.Errorf("followed a link to the log directory, got messages %v", messages)
+	}
+}
+
+// When resuming, what files already hold was logged by an earlier daemon, but files
+// that show up later are logged in full
+func TestTailLogsResume(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cedana-gpu-controller-1.log")
+	os.WriteFile(path, []byte("[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] old\n"), 0o644)
+
+	messages := tailMessages(t, dir, true, func() {
+		file, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+		file.WriteString("[2026-10-15 10:00:00.000002] [pid 1: tid 1] [a.cpp:f:2] [info] appended\n")
+		file.Close()
+		os.WriteFile(filepath.Join(dir, "cedana-gpu-worker-2.log"), []byte("[2026-10-15 10:00:00.000003] [pid 2: tid 2] [a.cpp:f:3] [info] new file\n"), 0o644)
+	})
+	if strings.Join(messages, ",") != "appended,new file" {
+		t.Errorf("got messages %v, want [appended new file]", messages)
 	}
 }
