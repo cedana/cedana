@@ -15,6 +15,8 @@ const (
 	CRIU_LOG_INFO = 3
 )
 
+const CRIU_SERVICE = "cedana-criu"
+
 // Matches the tag CRIU puts on errors and warnings, after the timestamp if any
 var criuLogLevelRegex = regexp.MustCompile(`^(?:\(\s*[\d.]+\)\s+)?(Error|Warn)\s+\(`)
 
@@ -29,7 +31,10 @@ func logFromFile(logger zerolog.Logger, logfile string, criuLogLevel int32) {
 	defer file.Close()
 
 	// Errors and warnings name their own source location
-	logger = logging.Unfiltered(logger.With().Ctx(logging.WithCaller(context.Background())).Logger())
+	logger = logging.Unfiltered(logger.With().
+		Str(logging.SERVICE_FIELD, CRIU_SERVICE).
+		Ctx(logging.WithCaller(context.Background())).
+		Logger())
 
 	untagged := zerolog.InfoLevel
 	if criuLogLevel > CRIU_LOG_INFO {

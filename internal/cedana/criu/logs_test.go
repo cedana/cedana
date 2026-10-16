@@ -12,7 +12,7 @@ import (
 )
 
 // Errors and warnings keep their level whatever the daemon's level, and other lines are
-// info, or debug when CRIU logs at debug.
+// info, or debug when CRIU logs at debug. All are logged as the CRIU service.
 func TestLogFromFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), CRIU_DUMP_LOG_FILE)
 	err := os.WriteFile(path, []byte(
@@ -35,6 +35,9 @@ func TestLogFromFile(t *testing.T) {
 				t.Fatalf("bad log line %q: %v", line, err)
 			}
 			levels = append(levels, entry["level"])
+			if entry["service.name"] != CRIU_SERVICE {
+				t.Errorf("service.name = %q, want %q", entry["service.name"], CRIU_SERVICE)
+			}
 		}
 
 		want := []string{"error", "warn", untagged}

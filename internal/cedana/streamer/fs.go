@@ -44,6 +44,7 @@ const (
 	SERVE_SOCK         = "streamer-serve.sock"
 	INIT_PROGRESS_MSG  = "socket-init"
 	STOP_LISTENER_MSG  = "stop-listener"
+	SERVICE            = "cedana-image-streamer"
 	ERROR_MSG_PREFIX   = "cedana-image-streamer Error:"
 	IMG_FILE_PATTERN   = "^img-*"
 	IMG_FILE_FORMATTER = "img-%d"
@@ -213,7 +214,7 @@ func NewStreamingFs(
 
 	// Mark ready when we read init progress message on stderr
 	wg.Go(func() {
-		streamerLog := logging.Unfiltered(log)
+		streamerLog := logging.Unfiltered(log.With().Str(logging.SERVICE_FIELD, SERVICE).Logger())
 		scanner := bufio.NewScanner(stderrPipe)
 		for {
 			if !scanner.Scan() || ctx.Err() != nil {
