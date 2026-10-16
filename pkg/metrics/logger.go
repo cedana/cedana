@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -66,7 +67,7 @@ type signozWriter struct {
 	endpoint    string
 	accessToken string
 	resource    map[string]string
-	services    map[string]map[string]string // Resource of each other service logged through us
+	services    map[string]map[string]string // Resource of each other service logged through us, by service/plugin
 	logBuffer   []signozLogEntry
 
 	mu sync.Mutex
@@ -138,6 +139,7 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 
 	attributes := make(map[string]string)
 	resource := sw.resource
+	var service string
 
 	for k, v := range zerologEntry {
 		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName || k == zerolog.ErrorFieldName {
@@ -145,8 +147,7 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 		}
 		switch k {
 		case logging.SERVICE_FIELD:
-			service, _ := v.(string)
-			resource = sw.serviceResource(service)
+			service, _ = v.(string)
 		case zerolog.CallerFieldName:
 			attributes["code.filepath"], _ = v.(string)
 		case zerolog.ErrorStackFieldName:
@@ -154,6 +155,10 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 		default:
 			attributes[k] = fmt.Sprintf("%v", v)
 		}
+	}
+
+	if service != "" {
+		resource = sw.serviceResource(service, attributes["plugin"])
 	}
 
 	logEntry := signozLogEntry{
@@ -172,18 +177,23 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 	return len(p), nil
 }
 
-// Returns our resource as the given service, without our version as it isn't theirs
-func (sw *signozWriter) serviceResource(service string) map[string]string {
+// Returns our resource as the given service, with the installed version of the plugin
+// that ships it instead of ours
+func (sw *signozWriter) serviceResource(service string, plugin string) map[string]string {
 	sw.mu.Lock()
 	defer sw.mu.Unlock()
 
-	if resource, ok := sw.services[service]; ok {
+	key := service + "/" + plugin
+	if resource, ok := sw.services[key]; ok {
 		return resource
 	}
 	resource := maps.Clone(sw.resource)
 	resource[string(semconv.ServiceNameKey)] = service
 	delete(resource, string(semconv.ServiceVersionKey))
-	sw.services[service] = resource
+	if version, ok := sw.resource[plugins.VersionAttributeKey(strings.ToLower(plugin))]; ok && plugin != "" {
+		resource[string(semconv.ServiceVersionKey)] = version
+	}
+	sw.services[key] = resource
 
 	return resource
 }

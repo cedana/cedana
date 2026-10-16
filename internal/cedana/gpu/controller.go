@@ -286,8 +286,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	}
 
 	if config.Global.GPU.LogDir == "" { // Means we can capture logs from stderr
-		logger := log.With().Str(logging.SERVICE_FIELD, GPU_SERVICE).Str("ID", id).Str("plugin", "gpu").Logger().Level(zerolog.DebugLevel)
-		cmd.Stderr = io.MultiWriter(logging.Writer(&logger), c.ErrBuf)
+		cmd.Stderr = io.MultiWriter(newLogWriter(id), c.ErrBuf)
 	} else {
 		cmd.Stderr = c.ErrBuf
 	}

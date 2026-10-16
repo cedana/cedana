@@ -78,6 +78,46 @@ func TestTailLogs(t *testing.T) {
 	}
 }
 
+// The controller's stderr is logged the same way, in whatever chunks it is written
+func TestLogWriter(t *testing.T) {
+	var out bytes.Buffer
+	defer func(l zerolog.Logger) { log.Logger = l }(log.Logger)
+	log.Logger = zerolog.New(&out).Level(zerolog.InfoLevel).Hook(logging.LineInfoHook{})
+
+	w := newLogWriter("abc")
+	w.Write([]byte("[debug] zeroth\n[warning] fir"))
+	w.Write([]byte("st\ncontinued\n[error] second\n"))
+
+	var lines []map[string]string
+	for line := range strings.SplitSeq(strings.TrimSpace(out.String()), "\n") {
+		var entry map[string]string
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			t.Fatalf("bad log line %q: %v", line, err)
+		}
+		lines = append(lines, entry)
+	}
+
+	want := []map[string]string{
+		{"level": "debug", "message": "zeroth"},
+		{"level": "warn", "message": "first"},
+		{"level": "warn", "message": "continued"},
+		{"level": "error", "message": "second", "caller": ""},
+	}
+	if len(lines) != len(want) {
+		t.Fatalf("got %d lines, want %d: %v", len(lines), len(want), lines)
+	}
+	for i, w := range want {
+		w["service.name"] = GPU_SERVICE
+		w["plugin"] = "gpu"
+		w["ID"] = "abc"
+		for k, v := range w {
+			if lines[i][k] != v {
+				t.Errorf("line %d: %s = %q, want %q", i, k, lines[i][k], v)
+			}
+		}
+	}
+}
+
 func TestLogComponent(t *testing.T) {
 	for path, want := range map[string]string{
 		"/tmp/cedana-gpu.x/cedana-gpu-controller-12.log": "controller",
