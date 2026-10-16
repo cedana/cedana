@@ -22,7 +22,6 @@ const (
 
 var (
 	Level         = zerolog.Disabled
-	FilterAll     = false // Filter the logs of other programs by the log level too
 	GlobalWriter  io.Writer
 	ConsoleWriter = zerolog.ConsoleWriter{
 		Out:          os.Stdout,
@@ -48,10 +47,9 @@ func (h LineInfoHook) Run(e *zerolog.Event, l zerolog.Level, msg string) {
 }
 
 // Unfiltered returns the logger without the daemon's log level, for logs of programs
-// with their own log level (CRIU, streamer, GPU). Stays filtered if logging is disabled,
-// or if FilterAll is set.
+// with their own log level (CRIU, streamer, GPU). Stays off if logging is disabled.
 func Unfiltered(logger zerolog.Logger) zerolog.Logger {
-	if Level == zerolog.Disabled || FilterAll {
+	if Level == zerolog.Disabled {
 		return logger
 	}
 	return logger.Level(zerolog.TraceLevel)
