@@ -215,7 +215,11 @@ func pluginRestoreHandler() types.Restore {
 				return nil
 			}, t)
 			if opts.Serverless {
-				supported, _ := features.ServerlessSupport.IsAvailable(t)
+				supported := false
+				features.ServerlessSupport.IfAvailable(func(_ string, s bool) error {
+					supported = s
+					return nil
+				}, t)
 				if !supported {
 					return nil, fmt.Errorf("plugin '%s' does not support serverless restore", t)
 				}

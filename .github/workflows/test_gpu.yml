@@ -145,6 +145,13 @@ jobs:
         with:
           name: criu-${{ matrix.arch }}
 
+      - name: Download OCI runtime
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: oci-runtime-${{ matrix.arch }}
+          merge-multiple: true
+
       - name: Download CSX
         uses: actions/download-artifact@v4
         with:
@@ -163,7 +170,7 @@ jobs:
         run: |
           make install
           # Plugins below are used across multiple tests, so install them always
-          sudo -E cedana plugin install criu runc crun containerd containerd/runtime-runc
+          sudo -E cedana plugin install criu runc crun containerd containerd/runtime-runc podman oci-runtime
           sudo -E cedana plugin install storage/cedana storage/s3 storage/gcs storage/csx csx
           sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
           if [ "$STREAMER" = "true" ]; then
