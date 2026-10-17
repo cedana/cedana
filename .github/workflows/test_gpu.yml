@@ -63,7 +63,7 @@ jobs:
   cuda:
     name: CUDA
     runs-on: runs-on=${{github.run_id}}/runner=${{  inputs.runner }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/tag=${{ matrix.cr }}/extras=s3-cache
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.soak && 90 || 30 }} # the soak tests take ~30m more
     strategy:
       fail-fast: false
       matrix:
