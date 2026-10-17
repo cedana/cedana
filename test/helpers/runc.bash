@@ -38,15 +38,17 @@ add_bind_mount_to_bundle() {
     mv "$bundle"/config.json.tmp "$bundle"/config.json
 }
 
-# Removes a mountpoint file from the rootfs. It's busy as long as it's a mountpoint in any
-# mount namespace, e.g. the container's, which goes away shortly after the container exits.
-remove_mountpoint() {
-    local path=$1
-    for _ in $(seq 50); do
-        rm -f "$path" 2>/dev/null && return 0
-        sleep 0.1
-    done
-    debug_log "Leaving $path, still busy"
+# Gives the bundle a rootfs of its own, a copy of the shared one, and prints its path. For
+# tests that check what's mounted on the rootfs: a restore of another container on the shared
+# rootfs (in a parallel test) takes a copy of whatever is mounted on it, for as long as it runs.
+use_private_rootfs() {
+    local bundle=$1
+    local rootfs
+    rootfs=$(mktemp -d)
+    cp -a "$ROOTFS"/. "$rootfs"
+    jq --arg root "$rootfs" '.root.path = $root' "$bundle"/config.json >"$bundle"/config.json.tmp
+    mv "$bundle"/config.json.tmp "$bundle"/config.json
+    echo "$rootfs"
 }
 
 # Fails if a mount whose source is gone (e.g. the GPU shm bind mount of a restore, once
