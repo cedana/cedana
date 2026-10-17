@@ -222,7 +222,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINERD=[external|embedded], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINERD=[external|embedded], K3S_VERSION=<v1.x.y+k3sN>, CONTAINERD_VERSION=<x.y.z>, TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Retries: $(RETRIES)" ;\
@@ -264,6 +264,8 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINER
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
 				K3S_CONTAINERD=$(K3S_CONTAINERD) \
+				K3S_VERSION=$(K3S_VERSION) \
+				CONTAINERD_VERSION=$(CONTAINERD_VERSION) \
 				CLUSTER_ID=$(CLUSTER_ID) \
 				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -288,6 +290,8 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINER
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
 				K3S_CONTAINERD=$(K3S_CONTAINERD) \
+				K3S_VERSION=$(K3S_VERSION) \
+				CONTAINERD_VERSION=$(CONTAINERD_VERSION) \
 				CLUSTER_ID=$(CLUSTER_ID) \
 				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \

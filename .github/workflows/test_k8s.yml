@@ -363,6 +363,13 @@ jobs:
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}
           K3S_CONTAINERD: ${{ matrix.containerd }}
+          # Each K3s CPU job runs other versions, so together they cover what customers run.
+          # The rest run the defaults: k3s v1.34.2 (containerd 2.1.5) and the test image's containerd.
+          #   default, external:  containerd 1.7 (config v2 only)
+          #   streamer, external: containerd 2.4 (config v4)
+          #   default, embedded:  k3s v1.36 (Kubernetes 1.36, containerd 2.3)
+          K3S_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'embedded') && 'v1.36.5+k3s1' || '' }}
+          CONTAINERD_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'external') && (matrix.cr == 'streamer' && '2.4.2' || '1.7.36') || '' }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ (inputs.large && matrix.platform != 'K3s') && '1' || '0' }} # K3s is only for small tests

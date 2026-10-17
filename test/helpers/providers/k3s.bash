@@ -11,8 +11,14 @@
 #   external (default) - the suite's own containerd (see containerd.bash)
 #   embedded           - k3s's bundled containerd, as on a stock k3s install
 #
+# K3S_VERSION is the k3s release to run (each bundles its own containerd), and
+# CONTAINERD_VERSION the containerd release to run as the external one (default: the
+# test image's).
+#
 
 export K3S_CONTAINERD="${K3S_CONTAINERD:-external}"
+export K3S_VERSION="${K3S_VERSION:-v1.34.2+k3s1}"
+export CONTAINERD_VERSION="${CONTAINERD_VERSION:-}"
 export CONTAINERD_NAMESPACE="k8s.io"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 
@@ -67,6 +73,9 @@ setup_cluster() {
     check_env CONTAINERD_NAMESPACE
 
     download_k3s
+    if [ "$K3S_CONTAINERD" = "external" ] && [ -n "$CONTAINERD_VERSION" ]; then
+        download_containerd "$CONTAINERD_VERSION"
+    fi
     install_containerd_plugins
     configure_containerd_runtime
     # The shim inherits containerd's environment, and env beats the host config file the
@@ -164,10 +173,36 @@ download_k3s() {
         ;;
     esac
 
-    wget -q "https://github.com/k3s-io/k3s/releases/download/v1.34.2%2Bk3s1/$binary_name" -O /usr/local/bin/k3s
+    wget -q "https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION//+/%2B}/$binary_name" -O /usr/local/bin/k3s
     chmod +x /usr/local/bin/k3s
 
-    debug_log "Downloaded k3s binary"
+    info_log "Running $(k3s --version | head -n 1)"
+}
+
+# Installs a containerd release over the test image's (/usr/local/bin is ahead in PATH)
+download_containerd() {
+    local version="${1#v}"
+    local arch
+    case "$(uname -m)" in
+    aarch64 | arm64) arch=arm64 ;;
+    *) arch=amd64 ;;
+    esac
+
+    debug_log "Downloading containerd $version..."
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        "https://github.com/containerd/containerd/releases/download/v$version/containerd-$version-linux-$arch.tar.gz" |
+        tar -xz -C /usr/local bin/containerd bin/containerd-shim-runc-v2 bin/ctr || {
+        error_log "Failed to download containerd $version"
+        return 1
+    }
+
+    local running
+    running=$(containerd --version | awk '{print $3}')
+    if [ "${running#v}" != "$version" ]; then
+        error_log "containerd $version was installed, but $(command -v containerd) is $running"
+        return 1
+    fi
+    info_log "Running containerd $version"
 }
 
 configure_containerd_runtime() {
