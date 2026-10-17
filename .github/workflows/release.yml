@@ -98,6 +98,7 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
       propagator: true
+      cloud_kubernetes: true
 
   bench:
     name: Bench
@@ -117,7 +118,8 @@ jobs:
   publish:
     name: Publish
     uses: ./.github/workflows/publish.yml
-    needs: [test, bench]
+    # Not bench: it still runs to record the release's results, but shouldn't block or delay it
+    needs: test
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}

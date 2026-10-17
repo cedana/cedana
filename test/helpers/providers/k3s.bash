@@ -74,9 +74,6 @@ setup_cluster() {
         setup_gpu_operator
     fi
 
-    # XXX: The tar in busybox is incompatible with CRIU
-    rm -f /var/lib/rancher/k3s/data/current/bin/tar
-
     debug_log "k3s cluster is ready"
 }
 

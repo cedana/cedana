@@ -88,7 +88,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --detach --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --detach --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file"
 
@@ -110,7 +110,7 @@ teardown_file() {
 
     run cedana manage containerd "$id" --jid "$id" --pid-file "$pid_file" --upcoming &
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --detach --env NGINX_PORT="$port" "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --detach --env NGINX_PORT="$port" "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file"
 
@@ -161,7 +161,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id" &
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id" "${NGINX_CMD[@]}" &
 
     wait_for_file "$pid_file" && sleep 1
 
@@ -180,7 +180,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file" && sleep 1
 
@@ -199,7 +199,7 @@ teardown_file() {
     new_image="docker.io/library/nginx:$jid"
     port=$(random_free_port)
 
-    cedana run containerd --snapshotter "$CONTAINERD_SNAPSHOTTER" --jid "$jid" --env NGINX_PORT="$port" "$image"
+    cedana run containerd --snapshotter "$CONTAINERD_SNAPSHOTTER" --jid "$jid" --env NGINX_PORT="$port" -- "$image" "${NGINX_CMD[@]}"
 
     sleep 2
 
@@ -219,7 +219,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    cedana run containerd --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" --jid "$jid" --attach "$image" &
+    cedana run containerd --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" --jid "$jid" --attach -- "$image" "${NGINX_CMD[@]}" &
 
     wait_for_file "$pid_file" && sleep 2
 
@@ -240,7 +240,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file"
 
@@ -267,7 +267,7 @@ teardown_file() {
 
     run cedana manage containerd "$id" --jid "$jid" --pid-file "$pid_file" --upcoming &
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --detach --env NGINX_PORT="$port" "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --detach --env NGINX_PORT="$port" "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file" && sleep 2
 
@@ -290,7 +290,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id" &
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id" "${NGINX_CMD[@]}" &
 
     wait_for_file "$pid_file" && sleep 1
 
@@ -312,7 +312,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file" && sleep 1
 
@@ -333,7 +333,7 @@ teardown_file() {
     image="docker.io/library/nginx:latest"
     port=$(random_free_port)
 
-    cedana run containerd --snapshotter "$CONTAINERD_SNAPSHOTTER" --jid "$jid" --env NGINX_PORT="$port" "$image"
+    cedana run containerd --snapshotter "$CONTAINERD_SNAPSHOTTER" --jid "$jid" --env NGINX_PORT="$port" -- "$image" "${NGINX_CMD[@]}"
 
     sleep 2
 
@@ -363,7 +363,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --detach --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --detach --pid-file "$pid_file" --env NGINX_PORT="$port" "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file"
 
@@ -383,7 +383,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file" && sleep 1
 
@@ -402,7 +402,7 @@ teardown_file() {
     pid_file="/tmp/$(unix_nano).pid"
     port=$(random_free_port)
 
-    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id"
+    ctr run --snapshotter "$CONTAINERD_SNAPSHOTTER" --runc-binary crun --pid-file "$pid_file" --env NGINX_PORT="$port" --detach "$image" "$id" "${NGINX_CMD[@]}"
 
     wait_for_file "$pid_file" && sleep 1
 
