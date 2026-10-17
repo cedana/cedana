@@ -540,6 +540,7 @@ teardown_file() {
     dest="/stale-mount-$id"
     bind_source=$(mktemp)
     add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
 
     runc run --bundle "$bundle" "$id" &
 
@@ -551,20 +552,20 @@ teardown_file() {
     assert_exists "$dump_file"
 
     stale=$(mktemp)
-    mount --bind "$stale" "$ROOTFS$dest"
+    mount --bind "$stale" "$rootfs$dest"
     rm "$stale"
-    run grep -F " $ROOTFS$dest " /proc/self/mountinfo
+    run grep -F " $rootfs$dest " /proc/self/mountinfo
     assert_output --partial "//deleted" # as left in CI
 
     cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
 
-    run grep -F " $ROOTFS$dest " /proc/self/mountinfo
+    run grep -F " $rootfs$dest " /proc/self/mountinfo
     refute_output --partial "//deleted"
 
     run runc delete --force "$id"
-    run umount -l "$ROOTFS$dest" # whether anything is left is the next test's concern
+    run umount -l "$rootfs$dest" # whether anything is left is the next test's concern
     rm -f "$bind_source"
-    remove_mountpoint "$ROOTFS$dest"
+    rm -rf "$rootfs"
 }
 
 # Restoring must not leave mounts on the (shared) rootfs: once the container is gone and its
@@ -577,6 +578,7 @@ teardown_file() {
     dest="/leaked-mount-$id"
     bind_source=$(mktemp)
     add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
 
     runc run --bundle "$bundle" "$id" &
 
@@ -595,7 +597,7 @@ teardown_file() {
     # Anywhere: the rootfs is also reachable through other mounts of it (e.g. CRIU's root)
     run grep -F "$dest " /proc/self/mountinfo
     assert_output ""
-    remove_mountpoint "$ROOTFS$dest"
+    rm -rf "$rootfs"
 }
 
 # A restore that fails after setting up its mounts must not leave them on the (shared) rootfs
@@ -606,6 +608,7 @@ teardown_file() {
     dest="/leaked-mount-$id"
     bind_source=$(mktemp)
     add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
 
     runc run --bundle "$bundle" "$id" &
 
@@ -628,7 +631,7 @@ teardown_file() {
 
     run runc delete --force "$id"
     rm -f "$bind_source"
-    remove_mountpoint "$ROOTFS$dest"
+    rm -rf "$rootfs"
 }
 
 # bats test_tags=restore

@@ -473,6 +473,11 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		// Required to ensure the controller does not get terminated while dumping. Otherwise, CRIU might discover
 		// 'ghost files' as the GPU controller deletes the shared memory file on termination.
 		controller.Termination.Lock()
+		if controller.Terminating.Load() {
+			// Terminated while we waited for the lock (e.g. its job just exited): its client is gone
+			controller.Termination.Unlock()
+			return fmt.Errorf("GPU controller was terminated, is the process still running?")
+		}
 
 		waitCtx, cancel := context.WithTimeout(ctx, FREEZE_TIMEOUT)
 		defer cancel()
@@ -592,6 +597,11 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		// Required to ensure the controller does not get terminated while restoring. This is to avoid deleting
 		// the controller instance in memory, leading to segfaults.
 		controller.Termination.Lock()
+		if controller.Terminating.Load() {
+			// Terminated while we waited for the lock: its client is gone
+			controller.Termination.Unlock()
+			return fmt.Errorf("GPU controller was terminated before the restore")
+		}
 
 		return nil
 	}

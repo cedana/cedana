@@ -3,7 +3,9 @@ package gpu
 import (
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -193,4 +195,65 @@ func TestFinalizeDumpDoesNotUnfreezeWithoutFreeze(t *testing.T) {
 	if got := client.unfreezes.Load(); got != 0 {
 		t.Fatalf("%d unfreezes, want 0", got)
 	}
+}
+
+// Terminates c as Terminate does, under its termination lock, while a callback waits for it
+func terminateWhileWaiting(t *testing.T, c *controller, callback func() error) error {
+	t.Helper()
+	c.Termination.Lock()
+	result := make(chan error, 1)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				result <- fmt.Errorf("panicked: %v", r)
+			}
+		}()
+		result <- callback()
+	}()
+	time.Sleep(50 * time.Millisecond) // the callback is now waiting for the lock
+	c.Terminating.Store(true)
+	c.ClientConn = nil
+	c.ControllerClient = nil
+	c.Termination.Unlock()
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(5 * time.Second):
+		t.Fatal("callback did not return after the controller was terminated")
+		return nil
+	}
+}
+
+// A dump of a job whose GPU controller is being terminated (e.g. the job just exited) must
+// fail, not use the terminated controller (nil client, which panicked and took down the daemon)
+func TestInitializeDumpFailsOnTerminatedController(t *testing.T) {
+	p, c := newFakePool(t, &fakeControllerClient{})
+	callback := p.CRIUCallback(c.ID)
+
+	err := terminateWhileWaiting(t, c, func() error {
+		return callback.InitializeDumpFunc(context.Background(), dumpOpts())
+	})
+	if err == nil || strings.Contains(err.Error(), "panicked") {
+		t.Fatalf("got %v, want an error for the terminated controller", err)
+	}
+	if !c.Termination.TryLock() {
+		t.Fatal("the termination lock is still held")
+	}
+	c.Termination.Unlock()
+}
+
+func TestInitializeRestoreFailsOnTerminatedController(t *testing.T) {
+	p, c := newFakePool(t, &fakeControllerClient{})
+	callback := p.CRIUCallback(c.ID)
+
+	err := terminateWhileWaiting(t, c, func() error {
+		return callback.InitializeRestoreFunc(context.Background(), dumpOpts())
+	})
+	if err == nil || strings.Contains(err.Error(), "panicked") {
+		t.Fatalf("got %v, want an error for the terminated controller", err)
+	}
+	if !c.Termination.TryLock() {
+		t.Fatal("the termination lock is still held")
+	}
+	c.Termination.Unlock()
 }
