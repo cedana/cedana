@@ -90,48 +90,22 @@ require_reset_fix() {
 # A device check at startup that resets the device, then work, as GROMACS does
 # bats test_tags=run,reset
 @test "[$GPU_INFO] run GPU process using the device after cudaDeviceReset" {
-    require_sample reset_stream
     require_reset_fix
-
-    run timeout 180 cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/reset_stream
-    assert_success
-    assert_output --partial PASS
+    run_sample reset_stream
 }
 
 # The runtime's destructors run after a reset at exit
 # bats test_tags=run,reset
 @test "[$GPU_INFO] run GPU process resetting the device before it exits" {
-    require_sample reset_exit
     require_reset_fix
-
-    run timeout 180 cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/reset_exit
-    assert_success
-    assert_output --partial PASS
+    run_sample reset_exit
 }
 
 # Reset at startup, checkpointed mid-work, restored, then reset again before it exits
 # bats test_tags=restore,reset
 @test "[$GPU_INFO] restore GPU process that resets the device before and after the checkpoint" {
-    require_sample reset_exit
     require_reset_fix
-
-    local jid gate
-    jid=$(unix_nano)
-    gate="/tmp/cedana-gate-$jid"
-
-    cedana run process -g --jid "$jid" -- "$SAMPLES"/reset_exit "$gate"
-    local log
-    log=$(logfile_for_jid "$jid")
-    wait_for_cmd 60 grep -q READY "$log"
-
-    cedana dump job "$jid"
-
-    # Lets the restored process finish its work
-    touch "$gate"
-    run timeout 180 cedana restore job "$jid" --attach
-    rm -f "$gate"
-    assert_success
-    assert_output --partial PASS
+    restore_sample reset_exit
 }
 
 # A main process that isn't CUDA, which runs a short-lived CUDA probe at startup (e.g. from

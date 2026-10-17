@@ -66,7 +66,6 @@ teardown_file() {
         fi
     done
 
-    kill "$pid" 2>/dev/null || true
     if [ "$failures" -gt 0 ]; then
         error_log "$failures of $SOAK_ITERATIONS dump/restore cycles failed (first: cycle $first_failure)"
         return 1

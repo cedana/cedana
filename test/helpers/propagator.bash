@@ -288,13 +288,8 @@ poll_restore_status() {
                     debug_log "Restore $restore_id succeeded"
                     return 0
                     ;;
-                "fallback")
-                    error_log "Restore $restore_id fell back to a cold start: $(echo "$restore" | jq -r '.error_message // "no error message"')"
-                    debug_log "Restore record: $restore"
-                    return 1
-                    ;;
-                "error"|"failed")
-                    error_log "Restore $restore_id failed ($status): $(echo "$restore" | jq -r '.error_message // "no error message"')"
+                "fallback"|"error"|"failed") # fallback: a cold start instead
+                    error_log "Restore $restore_id ended as $status: $(echo "$restore" | jq -r '.error_message // "no error message"')"
                     debug_log "Restore record: $restore"
                     return 1
                     ;;

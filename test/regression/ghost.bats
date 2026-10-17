@@ -70,7 +70,4 @@ teardown_file() {
         run find "$dir" \( -name '*.cr.*' -o -name '*.cr_link*' -o -name 'link_remap*' \)
         assert_output ""
     done
-
-    kill -9 -- "-$pid" 2>/dev/null || pkill -9 -P "$pid" || true
-    kill -9 "$pid" 2>/dev/null || true
 }

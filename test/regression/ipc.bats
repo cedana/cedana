@@ -56,7 +56,4 @@ teardown_file() {
         run grep MISMATCH "$log"
         assert_failure
     done
-
-    pkill -TERM -P "$pid" || true
-    kill -TERM "$pid" 2>/dev/null || true
 }
