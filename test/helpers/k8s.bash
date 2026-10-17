@@ -383,6 +383,24 @@ verify_restored_pod() {
                 error_log "WARNING: $container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)"
         fi
 
+        local gpus
+        gpus=$(echo "$pod" | jq -r --arg c "$container" '.spec.containers[] | select(.name == $c) | .resources.limits["nvidia.com/gpu"] // empty')
+        if [ -n "$gpus" ] && [ "$gpus" != "0" ]; then
+            # The driver must work, and the libcuda the loader resolves must be the real one
+            # (customer issue CED-2220: a stale ld.so.cache resolved another, after restore)
+            local gpu_problems
+            gpu_problems=$(kubectl exec "$name" -n "$namespace" -c "$container" -- sh -c '
+                nvidia-smi -L >/dev/null 2>&1 || echo "nvidia-smi fails"
+                lib=$(ldconfig -p 2>/dev/null | awk "/libcuda\\.so\\.1 /{print \$NF; exit}")
+                if [ -z "$lib" ]; then echo "the loader cache has no libcuda.so.1"; exit; fi
+                real=$(readlink -f "$lib")
+                if [ ! -s "$real" ]; then echo "libcuda.so.1 ($lib) is missing or empty"; exit; fi
+                [ "$(head -c 4 "$real" | tail -c 3)" = "ELF" ] || echo "libcuda.so.1 ($real) is not an ELF file"
+                [ "$(wc -c <"$real")" -gt 1048576 ] || echo "libcuda.so.1 ($real) is only $(wc -c <"$real") bytes"
+            ' 2>&1)
+            [ -z "$gpu_problems" ] || errors+=("$container: GPU: $(tr '\n' ';' <<<"$gpu_problems")")
+        fi
+
         if [ "$automount" != "false" ]; then
             local token_namespace
             token_namespace=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>&1)
