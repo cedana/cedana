@@ -49,6 +49,39 @@ require_sample() {
     fi
 }
 
+# Runs a self-verifying sample under the interceptor to its end: it must print PASS
+run_sample() {
+    local sample="$1"
+    require_sample "$sample"
+
+    run timeout 180 cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES/$sample"
+    assert_success
+    assert_output --partial PASS
+}
+
+# Checkpoints a gated sample mid-run (once it's READY), restores it, then lets it finish: it
+# must print PASS, all its state having come back exact
+restore_sample() {
+    local sample="$1"
+    require_sample "$sample"
+
+    local jid gate log
+    jid=$(unix_nano)
+    gate="/tmp/cedana-gate-$jid"
+
+    cedana run process -g --jid "$jid" -- "$SAMPLES/$sample" "$gate"
+    log=$(logfile_for_jid "$jid")
+    wait_for_cmd 60 grep -q READY "$log"
+
+    cedana dump job "$jid"
+
+    touch "$gate"
+    run timeout 180 cedana restore job "$jid" --attach
+    rm -f "$gate"
+    assert_success
+    assert_output --partial PASS
+}
+
 # XXX: remove once cedana-gpu #309 (CED-2507) is in the GPU plugin; these hang until then
 require_reset_fix() {
     skip "known bug: CUDA applications that reset the device hang under the interceptor (cedana-gpu #309)"
@@ -158,30 +191,67 @@ require_reset_fix() {
 # (customer issues P-14, P-43)
 # bats test_tags=run,hostregister
 @test "[$GPU_INFO] run GPU process using registered host memory zero-copy" {
-    require_sample host_register
-
-    run timeout 180 cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/host_register
-    assert_success
-    assert_output --partial PASS
+    run_sample host_register
 }
 
 # bats test_tags=restore,hostregister
 @test "[$GPU_INFO] restore GPU process using registered host memory zero-copy" {
-    require_sample host_register
+    restore_sample host_register
+}
 
-    local jid gate log
-    jid=$(unix_nano)
-    gate="/tmp/cedana-gate-$jid"
+# Two processes sharing device memory and events over CUDA IPC (as tensor-parallel ranks and
+# NCCL do); after the restore, fresh exports must not reuse a handle from before it
+# bats test_tags=run,ipc
+@test "[$GPU_INFO] run GPU processes sharing memory over CUDA IPC" {
+    run_sample cuda_ipc
+}
 
-    cedana run process -g --jid "$jid" -- "$SAMPLES"/host_register "$gate"
-    log=$(logfile_for_jid "$jid")
-    wait_for_cmd 60 grep -q READY "$log"
+# bats test_tags=restore,ipc
+@test "[$GPU_INFO] restore GPU processes sharing memory over CUDA IPC" {
+    restore_sample cuda_ipc
+}
 
-    cedana dump job "$jid"
+# Async copies between pinned host memory and reallocated device buffers, still in flight at
+# the checkpoint (a stale device pointer replayed, cedana-gpu #288)
+# bats test_tags=run,memcpy
+@test "[$GPU_INFO] run GPU process copying async from pinned memory" {
+    run_sample memcpy_async_pinned
+}
 
-    touch "$gate"
-    run timeout 180 cedana restore job "$jid" --attach
-    rm -f "$gate"
-    assert_success
-    assert_output --partial PASS
+# bats test_tags=restore,memcpy
+@test "[$GPU_INFO] restore GPU process with async copies from pinned memory in flight" {
+    restore_sample memcpy_async_pinned
+}
+
+# __device__ and __constant__ globals, by symbol and by address (globals moved, CED-2487)
+# bats test_tags=run,globals
+@test "[$GPU_INFO] run GPU process using device globals" {
+    run_sample device_globals
+}
+
+# bats test_tags=restore,globals
+@test "[$GPU_INFO] restore GPU process using device globals" {
+    restore_sample device_globals
+}
+
+# Driver-API modules JIT-compiled from PTX, one image loaded twice (images shared, #305)
+# bats test_tags=run,modules
+@test "[$GPU_INFO] run GPU process with JIT-compiled driver API modules" {
+    run_sample jit_modules
+}
+
+# bats test_tags=restore,modules
+@test "[$GPU_INFO] restore GPU process with JIT-compiled driver API modules" {
+    restore_sample jit_modules
+}
+
+# VMM mappings (remapped, aliased) and stream-ordered allocation pools
+# bats test_tags=run,vmm
+@test "[$GPU_INFO] run GPU process using VMM and memory pools" {
+    run_sample vmm_pools
+}
+
+# bats test_tags=restore,vmm
+@test "[$GPU_INFO] restore GPU process using VMM and memory pools" {
+    restore_sample vmm_pools
 }
