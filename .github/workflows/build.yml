@@ -52,7 +52,7 @@ on:
 jobs:
   cedana:
     name: Cedana
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache # on the critical path (image, publish, every test)
+    runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}/extras=s3-cache # finishes with the plugin builds, which the image waits for too
     strategy:
       fail-fast: true
       matrix:
