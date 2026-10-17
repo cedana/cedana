@@ -195,6 +195,16 @@ cedana_runtime_config() {
   runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
 END_CAT
     else
+        # containerd 1.7 drops its built-in runc runtime once a config defines any runtime,
+        # so with none defined yet, define it too: otherwise the default runtime (runc) is
+        # missing, and the CRI plugin fails to load
+        if [ "${2:-}" = "with-runc" ]; then
+            cat <<END_CAT
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."runc"]
+  runtime_type = "io.containerd.runc.v2"
+
+END_CAT
+        fi
         cat <<END_CAT
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
   runtime_type = "io.containerd.runc.v2"
@@ -314,6 +324,15 @@ else
     echo "Detected containerd config version $CONTAINERD_VERSION"
 
     if [ "$CONTAINERD_VERSION" = "2" ]; then
+        # Whether any config defines a runtime (see cedana_runtime_config)
+        RUNC_ARG=with-runc
+        for FILE in "$CONTAINERD_CONFIG_PATH" "$CONTAINERD_CONFD_DIR"/*.toml; do
+            [ -f "$FILE" ] && [ "$FILE" != "$CONTAINERD_CONFD_DIR/999-cedana.toml" ] || continue
+            if grep -qE '^[[:space:]]*\[[^]]*containerd\.runtimes\.' "$FILE"; then
+                RUNC_ARG=""
+            fi
+        done
+
         # Version 2: conf.d imports cannot merge multiple runtime tables
         # (https://github.com/containerd/containerd/issues/5837, fixed in v3),
         # so copy the last conf.d file (lexicographically) and append the
@@ -329,7 +348,7 @@ else
             NEW_CONFIG=$(
                 cat "$LAST_CONFD_FILE"
                 echo ""
-                cedana_runtime_config 2
+                cedana_runtime_config 2 "$RUNC_ARG"
             )
             if [ "$NEW_CONFIG" != "$(cat "$TARGET_CONFIG" 2>/dev/null)" ]; then
                 echo "Writing cedana runtime config to $TARGET_CONFIG"
@@ -347,7 +366,7 @@ else
                 echo "No conf.d files found, adding cedana runtime config to $TARGET_CONFIG"
                 {
                     echo ""
-                    cedana_runtime_config 2
+                    cedana_runtime_config 2 "$RUNC_ARG"
                 } >>"$TARGET_CONFIG"
                 CONFIG_CHANGED=true
             else

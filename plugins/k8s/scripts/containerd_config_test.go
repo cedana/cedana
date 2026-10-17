@@ -88,7 +88,7 @@ imports = ["{{ROOT}}/etc/containerd/conf.d/*.toml"]
 		keepRuntimes: []string{"nvidia"},
 	},
 	{
-		// The peppypopstar node bootstrap (customer P-51): an unversioned main config with
+		// A customer node bootstrap (P-51): an unversioned main config with
 		// legacy CRI sections, importing a version 4 nvidia file and a version 3 registry file
 		name:       "unversioned main with v4 nvidia and v3 conf.d (containerd 2.3)",
 		maxVersion: 4,
@@ -181,7 +181,7 @@ func TestContainerdConfig(t *testing.T) {
 						t.Errorf("%s: cedana runtime_path is %q, want %q (runtimes: %v)", filepath.Base(bin), got, shimPath, runtimes)
 					}
 					for _, name := range f.keepRuntimes {
-						if _, ok := runtimes[name]; !ok && name != "runc" {
+						if _, ok := runtimes[name]; !ok {
 							t.Errorf("%s: runtime %q is gone (runtimes: %v)", filepath.Base(bin), name, runtimes)
 						}
 					}
