@@ -12,9 +12,8 @@ load_lib support
 load_lib assert
 load_lib file
 
-export CEDANA_LOG_LEVEL=trace
-
 setup_file() {
+    trap_gpu_signals
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -23,6 +22,7 @@ setup_file() {
 }
 
 setup() {
+    trap_gpu_signals
     setup_csx_daemon
     setup_daemon
 }
@@ -30,11 +30,13 @@ setup() {
 teardown() {
     teardown_daemon
     teardown_csx_daemon
+    check_gpu_signals
 }
 
 teardown_file() {
     teardown_file_daemon
     teardown_file_csx_daemon
+    check_gpu_signals
 }
 
 ############

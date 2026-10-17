@@ -52,7 +52,7 @@ on:
 jobs:
   cedana:
     name: Cedana
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}/extras=s3-cache # finishes with the plugin builds, which the image waits for too
     strategy:
       fail-fast: true
       matrix:
@@ -70,7 +70,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          dnf install -y git make gcc findutils
+          # Some Rocky mirrors crawl at ~150 kB/s; move on to another mirror if slower than 1 MB/s for 15s
+          dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 git make gcc findutils
 
       - uses: actions/checkout@v4
         with:
@@ -157,7 +158,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          dnf install -y git make gcc findutils
+          # Some Rocky mirrors crawl at ~150 kB/s; move on to another mirror if slower than 1 MB/s for 15s
+          dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 git make gcc findutils
 
       - uses: actions/checkout@v4
         with:

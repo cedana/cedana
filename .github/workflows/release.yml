@@ -32,22 +32,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # The release workflow trumps the push workflow: cancel any push run for this
-  # commit so that only the release runs.
-  cancel_push:
-    name: Cancel push
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - name: Cancel push runs for this commit
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow push.yml --commit "$GITHUB_SHA" \
-            --json databaseId,status --jq '.[] | select(.status != "completed") | .databaseId' |
-            xargs -r -n1 gh run cancel --repo "$GITHUB_REPOSITORY"
-
   build:
     name: Build
     uses: ./.github/workflows/build.yml
@@ -98,6 +82,7 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
       propagator: true
+      cloud_kubernetes: true
 
   bench:
     name: Bench
@@ -117,7 +102,8 @@ jobs:
   publish:
     name: Publish
     uses: ./.github/workflows/publish.yml
-    needs: [test, bench]
+    # Not bench: it still runs to record the release's results, but shouldn't block or delay it
+    needs: test
     secrets: inherit
     with:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
