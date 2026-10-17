@@ -372,9 +372,13 @@ func diffSnapshots(a, b map[string]string) string {
 // config version), by name, with their runtime_path
 func mergedRuntimes(t *testing.T, bin, config string) map[string]string {
 	t.Helper()
-	out, err := exec.Command(bin, "-c", config, "config", "dump").CombinedOutput()
+	// Only stdout is the config, containerd logs (e.g. deprecation warnings) to stderr
+	var stderr bytes.Buffer
+	cmd := exec.Command(bin, "-c", config, "config", "dump")
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("%s does not load the config: %v\n%s", filepath.Base(bin), err, out)
+		t.Fatalf("%s does not load the config: %v\n%s", filepath.Base(bin), err, stderr.String())
 	}
 	var dump map[string]any
 	if err := toml.Unmarshal(out, &dump); err != nil {

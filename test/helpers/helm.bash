@@ -38,6 +38,9 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
     helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"
     helm_cmd="$helm_cmd --set config.authToken=$CEDANA_AUTH_TOKEN"
+    if [ -n "${CEDANA_DAEMON_PORT:-}" ]; then
+        helm_cmd="$helm_cmd --set config.address=0.0.0.0:$CEDANA_DAEMON_PORT"
+    fi
     helm_cmd="$helm_cmd --set config.clusterId=$cluster_id"
     helm_cmd="$helm_cmd --set config.logLevel=$CEDANA_LOG_LEVEL"
     helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"

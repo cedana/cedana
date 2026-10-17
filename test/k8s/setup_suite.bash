@@ -102,6 +102,7 @@ setup_suite() {
         fi
 
         helm_uninstall_cedana "$CEDANA_NAMESPACE"
+        occupy_default_daemon_port
         helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
     else
         debug_log "Skipping helm install (SKIP_HELM=1)"
@@ -117,6 +118,7 @@ setup_suite() {
     fi
 
     wait_for_ready "$CEDANA_NAMESPACE" 600
+    check_daemon_port
 
     # Restart log tailing (as it can be broken on kubelet restart)
     if [ -n "$TAIL_PID" ]; then
@@ -130,7 +132,41 @@ setup_suite() {
     create_namespace "$NAMESPACE"
 }
 
+# With CEDANA_DAEMON_PORT set off the default, takes the default port on the node first, so
+# the helper must come up on the configured port alone. Only on K3s, whose node is this host.
+occupy_default_daemon_port() {
+    if [ -z "${CEDANA_DAEMON_PORT:-}" ] || [ "$CEDANA_DAEMON_PORT" = "8080" ] || [ "$PROVIDER" != "k3s" ]; then
+        return 0
+    fi
+    debug_log "Occupying port 8080, the daemon should use $CEDANA_DAEMON_PORT"
+    python3 -c 'import socket, time
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(("0.0.0.0", 8080))
+s.listen()
+time.sleep(1e9)' 3>&- &
+    PORT_HOG_PID=$!
+    export PORT_HOG_PID
+    wait_for_cmd 10 "ss -lnt | grep -q ':8080 '" || {
+        error_log "Failed to occupy port 8080"
+        return 1
+    }
+}
+
+check_daemon_port() {
+    if [ -z "${PORT_HOG_PID:-}" ]; then
+        return 0
+    fi
+    if ! ss -lnt | grep -q ":$CEDANA_DAEMON_PORT "; then
+        error_log "The daemon is not listening on the configured port $CEDANA_DAEMON_PORT: $(ss -lntp)"
+        return 1
+    fi
+}
+
 teardown_suite() {
+    if [ -n "${PORT_HOG_PID:-}" ]; then
+        kill "$PORT_HOG_PID" 2>/dev/null || true
+    fi
     # Stop log tailing
     if [ -n "$TAIL_PID" ]; then
         pkill -P "$TAIL_PID" 2>/dev/null || true

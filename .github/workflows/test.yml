@@ -87,6 +87,8 @@ jobs:
   unit:
     name: Unit
     runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache # compiles test binaries in parallel
+    env:
+      CONTAINERD_TEST_VERSIONS: 1.7.36 2.0.14 2.1.9 2.2.10 2.3.7 2.4.2
     strategy:
       fail-fast: false
       matrix:
@@ -147,9 +149,30 @@ jobs:
           key: go-unit-${{ matrix.arch }}-${{ hashFiles('**/go.sum') }}
           restore-keys: go-unit-${{ matrix.arch }}-
 
+      # The plugin installer's containerd config is checked against how each containerd
+      # minor (config versions 2, 3 and 4) loads and merges it
+      - name: Cache containerd binaries
+        id: containerd-bins
+        uses: actions/cache@v5
+        with:
+          path: /opt/containerd-bins
+          key: containerd-bins-${{ matrix.arch }}-${{ env.CONTAINERD_TEST_VERSIONS }}
+
+      - name: Download containerd binaries
+        if: steps.containerd-bins.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /opt/containerd-bins
+          for v in $CONTAINERD_TEST_VERSIONS; do
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+              "https://github.com/containerd/containerd/releases/download/v$v/containerd-$v-linux-${{ matrix.arch }}.tar.gz" |
+              tar -xzO bin/containerd >"/opt/containerd-bins/containerd-$v"
+            chmod +x "/opt/containerd-bins/containerd-$v"
+          done
+
       - name: Run unit tests
         env:
           GOFLAGS: -count=1 # always run the tests, only compilation is cached
+          CEDANA_TEST_CONTAINERD_BINS: /opt/containerd-bins
         run: make test-unit
 
   script:
