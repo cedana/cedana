@@ -86,6 +86,7 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
       propagator: true
+      upgrade: true # XXX: temporary, to try the release gate before a release depends on it
 
   bench:
     name: Bench
