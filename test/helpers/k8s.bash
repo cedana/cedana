@@ -422,6 +422,18 @@ verify_restored_pod() {
     debug_log "Restored pod $name has its DNS, hosts, hostname and service account token"
 }
 
+# The first and last count a counting workload (e.g. count-loop.sh) logged, or nothing
+# @param $1: Pod name
+# @param $2: Namespace (optional, defaults to $NAMESPACE)
+# @param $3: Container name (optional)
+first_count() {
+    kubectl logs "$1" -n "${2:-$NAMESPACE}" ${3:+-c "$3"} 2>/dev/null | grep -m1 -oE '^COUNT [0-9]+' | awk '{print $2}'
+}
+
+last_count() {
+    kubectl logs "$1" -n "${2:-$NAMESPACE}" ${3:+-c "$3"} 2>/dev/null | grep -oE '^COUNT [0-9]+' | tail -n 1 | awk '{print $2}'
+}
+
 # Tails logs of all pods in a given namespace, waiting for them to be Running first.
 tail_all_logs() {
     local namespace="$1"
@@ -804,7 +816,7 @@ test_pod_spec() {
                 fi
 
                 # At most the count the checkpoint captures
-                count_before_dump=$(kubectl logs "$name" -n "$namespace" -c "$container_name" 2>/dev/null | grep -oE '^COUNT [0-9]+' | tail -n 1 | awk '{print $2}')
+                count_before_dump=$(last_count "$name" "$namespace" "$container_name")
 
                 debug_log "Dumping pod $name..."
                 local pod_id
@@ -902,13 +914,13 @@ test_pod_spec() {
                         error="Restored pod $name logs no count"
                         break
                     }
-                    local first_count
-                    first_count=$(kubectl logs "$name" -n "$namespace" -c "$container_name" | grep -m1 -oE '^COUNT [0-9]+' | awk '{print $2}')
-                    if [ -z "$first_count" ] || [ "$first_count" -lt "$count_before_dump" ]; then
-                        error="Restored pod $name started at count $first_count, but it was at $count_before_dump before the checkpoint"
+                    local count_after_restore
+                    count_after_restore=$(first_count "$name" "$namespace" "$container_name")
+                    if [ -z "$count_after_restore" ] || [ "$count_after_restore" -lt "$count_before_dump" ]; then
+                        error="Restored pod $name started at count $count_after_restore, but it was at $count_before_dump before the checkpoint"
                         break
                     fi
-                    debug_log "Restored pod $name continued at count $first_count (was $count_before_dump)"
+                    debug_log "Restored pod $name continued at count $count_after_restore (was $count_before_dump)"
                 fi
 
                 debug_log "Restored pod $name successfully"

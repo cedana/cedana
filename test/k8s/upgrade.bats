@@ -20,20 +20,13 @@ setup_file() {
     fi
 }
 
+# Pods this test created (only those: other files' tests run in the same namespace)
+TEST_PODS=()
+
 teardown() {
     for pod in "${TEST_PODS[@]}"; do
         kubectl delete pod "$pod" -n "$NAMESPACE" --force --grace-period=0 --wait=false &>/dev/null || true
     done
-}
-
-TEST_PODS=()
-
-last_count() {
-    kubectl logs "$1" -n "$NAMESPACE" 2>/dev/null | grep -oE '^COUNT [0-9]+' | tail -n 1 | awk '{print $2}'
-}
-
-first_count() {
-    kubectl logs "$1" -n "$NAMESPACE" 2>/dev/null | grep -m1 -oE '^COUNT [0-9]+' | awk '{print $2}'
 }
 
 # Every helper pod runs the given image digest, and is Ready

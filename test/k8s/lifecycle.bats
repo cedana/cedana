@@ -49,10 +49,9 @@ EOF
     echo "$spec"
 }
 
-first_count() {
-    kubectl logs "$1" -n "$NAMESPACE" 2>/dev/null | grep -m1 -oE 'COUNT [0-9]+' | awk '{print $2}'
-}
+# NOTE: these helpers run in $(...), where set -e doesn't apply, so each step fails explicitly
 
+# Deploys the pod, and waits for it to count past CHECKPOINTED_AT. Prints the pod name.
 deploy_counter() {
     local spec="$1"
     local name
@@ -62,8 +61,6 @@ deploy_counter() {
     wait_for_log_trigger "$name" "COUNT $CHECKPOINTED_AT" 120 >&2 || return 1
     echo "$name"
 }
-
-# NOTE: these helpers run in $(...), where set -e doesn't apply, so each step fails explicitly
 
 # Checkpoints the pod, and waits for the checkpoint to finish. Prints the action ID.
 checkpoint_counter() {
