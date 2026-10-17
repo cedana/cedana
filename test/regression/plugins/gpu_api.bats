@@ -92,3 +92,84 @@ require_sample() {
     assert_success
     assert_output --partial PASS
 }
+
+# A main process that isn't CUDA, which runs a short-lived CUDA probe at startup (e.g. from
+# BASH_ENV): the probe exiting must not take the job down, and the job must still checkpoint
+# and restore (customer issue P-17)
+# bats test_tags=restore,probe
+@test "[$GPU_INFO] restore GPU job after a short-lived CUDA probe in it" {
+    require_sample gpu_props
+
+    local jid log
+    jid=$(unix_nano)
+    cedana run process -g --jid "$jid" -- sh -c "$SAMPLES/gpu_props >/dev/null && echo PROBED; while true; do echo alive; sleep 0.5; done"
+    log=$(logfile_for_jid "$jid")
+    wait_for_cmd 60 grep -q PROBED "$log"
+    sleep 2
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+
+    cedana dump job "$jid"
+    local lines
+    lines=$(wc -l <"$log")
+    cedana restore job "$jid"
+    wait_for_cmd 30 "tail -n +$((lines + 1)) $log | grep -q alive"
+
+    run cedana job kill "$jid"
+}
+
+# A CUDA process started after the restore, by a restored process that isn't CUDA itself
+# (customer issue P-34)
+# bats test_tags=restore,child
+@test "[$GPU_INFO] restore GPU job, then start a CUDA child process in it" {
+    require_sample gpu_props
+
+    local jid gate
+    jid=$(unix_nano)
+    gate="/tmp/cedana-gate-$jid"
+    cedana run process -g --jid "$jid" -- sh -c "while [ ! -f $gate ]; do sleep 0.2; done; $SAMPLES/gpu_props; s=\$?; echo CHILD_EXIT=\$s; exit \$s"
+    sleep 1
+
+    cedana dump job "$jid"
+
+    touch "$gate"
+    run cedana restore job "$jid" --attach
+    rm -f "$gate"
+    assert_success
+    assert_output --partial "Device name"
+    assert_output --partial "CHILD_EXIT=0"
+}
+
+# Pinned host memory (cudaHostRegister, from malloc and MAP_SHARED) that kernels use zero-copy
+# (customer issues P-14, P-43)
+# bats test_tags=run,hostregister
+@test "[$GPU_INFO] run GPU process using registered host memory zero-copy" {
+    require_sample host_register
+
+    run cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/host_register
+    assert_success
+    assert_output --partial PASS
+}
+
+# bats test_tags=restore,hostregister
+@test "[$GPU_INFO] restore GPU process using registered host memory zero-copy" {
+    require_sample host_register
+
+    local jid gate log
+    jid=$(unix_nano)
+    gate="/tmp/cedana-gate-$jid"
+
+    cedana run process -g --jid "$jid" -- "$SAMPLES"/host_register "$gate"
+    log=$(logfile_for_jid "$jid")
+    wait_for_cmd 60 grep -q READY "$log"
+
+    cedana dump job "$jid"
+
+    touch "$gate"
+    run cedana restore job "$jid" --attach
+    rm -f "$gate"
+    assert_success
+    assert_output --partial PASS
+}
