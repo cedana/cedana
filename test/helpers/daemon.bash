@@ -65,7 +65,7 @@ setup_daemon() {
         debug start_daemon_at "$SOCK"
         follow_daemon_log "$SOCK" +1 # all of it, as it's this test's daemon
     else
-        check_daemon_alive "$CEDANA_ADDRESS" # e.g. crashed in an earlier test
+        check_daemon_alive "$CEDANA_ADDRESS" || return 1 # e.g. crashed in an earlier test
         follow_daemon_log "$CEDANA_ADDRESS" 0 # from now on, for this test
     fi
 }
@@ -85,9 +85,22 @@ teardown_daemon() {
 check_daemon_alive() {
     local sock=$1
     if [ -z "$(recorded_pid "$(daemon_pid_file "$sock")")" ]; then
-        error_log "Daemon at $sock is no longer running, the end of its log:"
-        tail -n 50 "$(daemon_log_file "$sock")"
+        error_log "Daemon at $sock is no longer running"
+        show_daemon_crash "$(daemon_log_file "$sock")"
         return 1
+    fi
+}
+
+# Shows the crash from a daemon's log: from a Go panic or fatal error to the end (its whole
+# stack trace, whose top would otherwise be cut off), else just the end of the log
+show_daemon_crash() {
+    local log=$1
+    local line
+    line=$(grep -nE '^(panic: |fatal error: )' "$log" 2>/dev/null | head -1 | cut -d: -f1)
+    if [ -n "$line" ]; then
+        tail -n +"$line" "$log"
+    else
+        tail -n 50 "$log"
     fi
 }
 
@@ -143,8 +156,8 @@ wait_for_start() {
 
 stop_daemon_at() {
     local sock=$1
-    if [ ! -e "$sock" ] || [ ! -S "$sock" ]; then
-        debug_log "Socket $sock does not exist, skipping stop"
+    if [ ! -S "$sock" ] && [ -z "$(recorded_pid "$(daemon_pid_file "$sock")")" ]; then
+        debug_log "Daemon at $sock is not running, skipping stop"
         return 0
     fi
     debug_log "Stopping daemon at socket $sock"
@@ -163,11 +176,14 @@ terminate_at_sock() {
     fi
 }
 
-# Waits for the daemon process to exit, not just its socket, which goes away first
+# Waits for the daemon process to exit, not just its socket, which goes away first. A daemon
+# that crashed leaves its socket behind, so with its PID recorded, only the process counts.
 wait_for_stop() {
     local sock=$1
+    local pid_file
+    pid_file=$(daemon_pid_file "$sock")
     local i=0
-    while [ -S "$sock" ] || [ -n "$(recorded_pid "$(daemon_pid_file "$sock")")" ]; do
+    while if [ -s "$pid_file" ]; then [ -n "$(recorded_pid "$pid_file")" ]; else [ -S "$sock" ]; fi; do
         sleep 0.1
         i=$((i + 1))
         if [ $i -gt $((WAIT_TIMEOUT * 10)) ]; then
@@ -175,6 +191,7 @@ wait_for_stop() {
             return 1
         fi
     done
+    rm -f "$sock" # left behind if it crashed
 }
 
 daemon_log_file() {
