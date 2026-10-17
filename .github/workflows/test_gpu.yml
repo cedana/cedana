@@ -107,7 +107,7 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --ipc=host --device nvidia.com/gpu=all --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -248,7 +248,7 @@ jobs:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: cuda
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download reports
         uses: actions/download-artifact@v7

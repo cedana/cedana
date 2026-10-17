@@ -50,7 +50,7 @@ jobs:
   github:
     name: GitHub
     if: inputs.github
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -114,7 +114,7 @@ jobs:
   propagator:
     name: Cedana
     if: inputs.propagator
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -217,7 +217,7 @@ jobs:
   propagator-plugin:
     name: Plugins
     if: inputs.propagator
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -339,7 +339,7 @@ jobs:
   dockerhub:
     name: DockerHub (multi-arch)
     if: inputs.dockerhub
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download digests
         uses: actions/download-artifact@v7
@@ -397,10 +397,10 @@ jobs:
           fi
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
@@ -408,7 +408,7 @@ jobs:
       - name: Docker meta
         if: steps.check_dirs.outputs.DIGESTS_EXISTS == 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ steps.check_dirs.outputs.IMAGE_NAME }}
@@ -436,7 +436,7 @@ jobs:
       - name: Docker meta (test, latest)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
         id: meta-test-latest
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
@@ -455,7 +455,7 @@ jobs:
       - name: Docker meta (test, CUDA)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
         id: meta-test-cuda
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
@@ -473,7 +473,7 @@ jobs:
 
   post-summary:
     name: Post Summary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: ["github", "propagator", "propagator-plugin", "dockerhub"]
     strategy:
       fail-fast: false

@@ -106,7 +106,7 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -195,7 +195,7 @@ jobs:
           - amd64
           - arm64
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -238,7 +238,7 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -323,7 +323,7 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
       - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
@@ -504,12 +504,12 @@ jobs:
     name: Post Summary
     if: always()
     needs: [unit, script, basic, plugin, streamer, gpu, k8s, slurm]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: write
       actions: read
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
       - name: Download reports
         uses: actions/download-artifact@v7

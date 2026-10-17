@@ -79,7 +79,7 @@ jobs:
   # with `include`. Revert the commit that added this to sweep every version again.
   versions:
     name: Slurm Matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       compat: ${{ steps.compat.outputs.legs }}
     steps:
@@ -112,7 +112,7 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
       - uses: actions/checkout@v5
         with:
@@ -337,7 +337,7 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
       - uses: actions/checkout@v5
         with:
@@ -878,7 +878,7 @@ jobs:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: [slurm-ansible, slurm]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download reports
         uses: actions/download-artifact@v7

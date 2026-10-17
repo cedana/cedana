@@ -76,7 +76,7 @@ jobs:
   cedana:
     name: Cedana
     if: ${{ inputs.cedana_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -149,7 +149,7 @@ jobs:
   plugin:
     name: Plugin
     if: ${{ inputs.cedana_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -214,7 +214,7 @@ jobs:
   criu:
     name: CRIU
     if: ${{ inputs.criu_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -256,7 +256,7 @@ jobs:
   gpu:
     name: GPU
     if: ${{ inputs.gpu_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -302,7 +302,7 @@ jobs:
   streamer:
     name: Streamer
     if: ${{ inputs.streamer_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -345,7 +345,7 @@ jobs:
   controller:
     name: Controller
     if: ${{ inputs.controller_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -354,7 +354,7 @@ jobs:
           - arm64
     steps:
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
@@ -392,7 +392,7 @@ jobs:
   propagator:
     name: Propagator
     if: ${{ inputs.propagator_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -401,7 +401,7 @@ jobs:
           - arm64
     steps:
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
@@ -449,7 +449,7 @@ jobs:
   containerd-runtime-runc:
     name: Containerd Runtime
     if: ${{ inputs.containerd_runtime_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -492,7 +492,7 @@ jobs:
   oci-runtime:
     name: OCI Runtime
     if: ${{ inputs.oci_runtime_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -535,7 +535,7 @@ jobs:
   helm-chart:
     name: Helm Chart
     if: ${{ inputs.helm_chart_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Get tag
         id: get_tag
@@ -566,7 +566,7 @@ jobs:
   slurm-versions:
     name: Slurm Versions
     if: ${{ inputs.slurm_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       versions: ${{ steps.read.outputs.versions }}
     steps:
@@ -593,7 +593,7 @@ jobs:
     name: Slurm
     if: ${{ inputs.slurm_version != 'none' }}
     needs: slurm-versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -669,7 +669,7 @@ jobs:
   csx:
     name: CSX
     if: ${{ inputs.csx_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
