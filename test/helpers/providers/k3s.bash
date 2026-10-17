@@ -246,6 +246,12 @@ END_CAT
         cp "$config_dir/99-nvidia.toml" "$path"
     fi
 
+    # Already there when the suite runs again in the same job (e.g. the upgrade suite)
+    if grep -q 'runtimes."cedana"' "$path"; then
+        debug_log "Containerd runtime for k3s already configured in $path"
+        return 0
+    fi
+
     debug_log "Writing containerd config to $path"
     cat >>"$path" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
