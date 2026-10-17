@@ -370,6 +370,14 @@ verify_restored_pod() {
             [ "$actual" = "$hostname" ] || errors+=("$container: /etc/hostname is '$actual', want '$hostname'")
             kubectl exec "$name" -n "$namespace" -c "$container" -- cat /etc/hosts 2>&1 | grep -qw -- "$hostname" ||
                 errors+=("$container: /etc/hosts does not list '$hostname'")
+
+            # The UTS namespace's hostname (what `hostname` and gethostname() return), which CRIU
+            # restores from the checkpoint. Only warns for now (customer issue C1: restored pods
+            # report the source pod's hostname); make it an error once restores set it.
+            local uts
+            uts=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /proc/sys/kernel/hostname 2>&1 | tr -d '[:space:]')
+            [ "$uts" = "$hostname" ] ||
+                error_log "WARNING: $container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)"
         fi
 
         if [ "$automount" != "false" ]; then

@@ -97,7 +97,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Quick connectivity test
         run: |
@@ -225,11 +225,16 @@ jobs:
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && '--ipc=host --gpus all' || '' }} --cgroupns=host
+      # K3s: the container state dirs are on the runner's disk, as overlayfs (the snapshotter
+      # real nodes use) can't be on the container's overlay root
+      options: >-
+        --privileged --init --cgroupns=host
+        ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && '--ipc=host --gpus all' || '' }}
+        ${{ matrix.platform == 'K3s' && '-v /var/lib/cedana-ci/rancher:/var/lib/rancher -v /var/lib/cedana-ci/containerd:/var/lib/containerd' || '' }}
     steps:
       - uses: runs-on/action@v1
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -237,68 +242,68 @@ jobs:
           fetch-tags: true
 
       - name: Download helm chart
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: helm-chart
           path: /tmp/helm-chart
 
       - name: Download helper digest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: digests-${{ matrix.arch }}
           path: /tmp/digests
 
       - name: Download helper image name
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: image-name
           path: /tmp/image-name
 
       - name: Download controller digest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: controller-digests-${{ matrix.arch }}
           path: /tmp/controller-digests
 
       - name: Download controller image name
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: controller-image-name
           path: /tmp/controller-image-name
 
       - name: Download propagator digest
         if: inputs.propagator
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: propagator-digests-${{ matrix.arch }}
           path: /tmp/propagator-digests
 
       - name: Download propagator image name
         if: inputs.propagator
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: propagator-image-name
           path: /tmp/propagator-image-name
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
       - name: Download containerd runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: containerd-runtime-${{ matrix.arch }}-*
@@ -306,13 +311,13 @@ jobs:
 
       - name: Download GPU plugin
         if: ${{ matrix.compute == 'CUDA' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-${{ matrix.arch }}
 
       - name: Download streamer plugin
         if: ${{ matrix.cr == 'streamer' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
@@ -453,14 +458,14 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.containerd }}
           path: /tmp/report*.xml
 
       - name: Upload propagator logs
         if: always() && inputs.propagator
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: propagator-logs-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.containerd }}
           path: |
@@ -474,7 +479,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*-k8s-*
           path: report

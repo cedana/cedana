@@ -73,7 +73,7 @@ jobs:
           # Some Rocky mirrors crawl at ~150 kB/s; move on to another mirror if slower than 1 MB/s for 15s
           dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 git make gcc findutils
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -110,7 +110,7 @@ jobs:
           sed -i "s|^VERSION=\${VERSION:-\".*\"}|VERSION=\${VERSION:-\"$VERSION\"}|" scripts/install-release.sh
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cedana-${{ matrix.arch }}
           path: |
@@ -118,7 +118,7 @@ jobs:
             ./cedana-version.txt
 
       - name: Upload scripts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cedana-scripts-${{ matrix.arch }}
           path: |
@@ -161,7 +161,7 @@ jobs:
           # Some Rocky mirrors crawl at ~150 kB/s; move on to another mirror if slower than 1 MB/s for 15s
           dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 git make gcc findutils
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -201,7 +201,7 @@ jobs:
           echo $VERSION > ./plugin-version.txt
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
@@ -225,7 +225,7 @@ jobs:
     steps:
       - uses: runs-on/action@v2
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
@@ -234,12 +234,12 @@ jobs:
           token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download k8s plugin
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}-k8s
@@ -296,7 +296,7 @@ jobs:
           echo "${{ inputs.image_name }}" > /tmp/image-name/name.txt
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: digests-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -304,7 +304,7 @@ jobs:
 
       - name: Upload image name
         if: ${{ matrix.arch == 'amd64' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: image-name
           path: /tmp/image-name/*
@@ -329,7 +329,7 @@ jobs:
     steps:
       - uses: runs-on/action@v2
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
@@ -382,7 +382,7 @@ jobs:
           echo "${{ inputs.test_image_name }}" > /tmp/image-name/name.txt
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-digests-${{ matrix.tag }}-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -390,7 +390,7 @@ jobs:
 
       - name: Upload image name
         if: ${{ matrix.arch == 'amd64' && matrix.tag == 'latest' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-image-name
           path: /tmp/image-name/*

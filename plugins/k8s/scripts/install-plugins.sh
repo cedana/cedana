@@ -183,6 +183,9 @@ fi
 
 echo "Starting containerd runtime configuration..."
 
+# BEGIN CONTAINERD CONFIG: run on its own against fixture configs by containerd_config_test.go,
+# so it may only use the variables set above and must not touch anything outside the configs.
+
 # The CRI plugin config key differs between containerd config version 2 and 3
 cedana_runtime_config() {
     if [ "$1" = "3" ]; then
@@ -213,18 +216,21 @@ CONFIG_CHANGED=false
 # generated and templates are never rendered, so fall through to the regular
 # containerd flow below in that case.
 # Resolve a k3s/RKE2 data dir: --data-dir flag of the running process, then
-# config.yaml, then the default location
+# config.yaml, then the default location. RANCHER_ROOT (tests only) roots the
+# paths elsewhere and ignores running processes.
 rancher_data_dir() {
-    local name="$1" pid args dir=""
-    pid=$(pidof -s "$name" 2>/dev/null || true)
+    local name="$1" pid="" args dir=""
+    if [ -z "${RANCHER_ROOT:-}" ]; then
+        pid=$(pidof -s "$name" 2>/dev/null || true)
+    fi
     if [ -n "$pid" ]; then
         args=$(ps -o args= -p "$pid" 2>/dev/null || true)
         dir=$(echo "$args" | sed -n 's/.*--data-dir[= ]\+\([^ ]*\).*/\1/p')
     fi
-    if [ -z "$dir" ] && [ -f "/etc/rancher/$name/config.yaml" ]; then
-        dir=$(sed -n 's/^[[:space:]]*data-dir:[[:space:]]*//p' "/etc/rancher/$name/config.yaml" | head -n 1 | tr -d '"' | tr -d "'")
+    if [ -z "$dir" ] && [ -f "${RANCHER_ROOT:-}/etc/rancher/$name/config.yaml" ]; then
+        dir=$(sed -n 's/^[[:space:]]*data-dir:[[:space:]]*//p' "${RANCHER_ROOT:-}/etc/rancher/$name/config.yaml" | head -n 1 | tr -d '"' | tr -d "'")
     fi
-    echo "${dir:-/var/lib/rancher/$name}"
+    echo "${dir:-${RANCHER_ROOT:-}/var/lib/rancher/$name}"
 }
 
 RANCHER_SERVICES=""
@@ -393,6 +399,8 @@ else
 
     RESTART_STAMP_FILES="$TARGET_CONFIG $CONTAINERD_CONFIG_PATH"
 fi
+
+# END CONTAINERD CONFIG
 
 # Determine which service provides containerd on this node
 RESTART_SERVICE="containerd"

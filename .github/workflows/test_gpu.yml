@@ -108,7 +108,7 @@ jobs:
       options: --privileged --init --ipc=host --device nvidia.com/gpu=all --cgroupns=host
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -116,12 +116,12 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
@@ -129,36 +129,36 @@ jobs:
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
         if: ${{ matrix.cr == 'streamer' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-${{ matrix.arch }}
 
       - name: Download containerd runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: containerd-runtime-${{ matrix.arch }}-*
           merge-multiple: true
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
       - name: Download OCI runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: oci-runtime-${{ matrix.arch }}
           merge-multiple: true
 
       - name: Download CSX
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: csx-${{ matrix.arch }}
 
@@ -226,7 +226,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
           path: /tmp/report*.xml
@@ -234,7 +234,7 @@ jobs:
       # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
           path: |
@@ -251,7 +251,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*-cuda-*
           path: report

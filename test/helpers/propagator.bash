@@ -269,7 +269,7 @@ poll_restore_status() {
     local status="" restore=""
     for _ in $(seq 1 $((timeout_seconds / interval))); do
         local response
-        response=$(curl -s -X GET "${CEDANA_URL}/restores?restore_uuid=${restore_id}&limit=1" \
+        response=$(curl -s --max-time 10 -X GET "${CEDANA_URL}/restores?restore_uuid=${restore_id}&limit=1" \
                 -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -w "%{http_code}")
         local http_code="${response: -3}"

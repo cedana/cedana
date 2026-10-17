@@ -137,19 +137,19 @@ jobs:
       - uses: runs-on/action@v1
 
       - name: Download GPU binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-gpu
         with:
           name: gpu-amd64
 
       - name: Download Cedana binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-cedana
         with:
           name: cedana-amd64
 
       - name: Download Cedana plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-plugins
         with:
           path: .
@@ -157,7 +157,7 @@ jobs:
           merge-multiple: true
 
       - name: Download CRIU binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-criu
         with:
           name: criu-amd64
@@ -223,7 +223,7 @@ jobs:
       - name: Upload logs
         if: always()
         id: upload-logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bench-logs-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
@@ -233,7 +233,7 @@ jobs:
       - name: Upload results
         if: always()
         id: upload-results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bench-results-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
@@ -264,7 +264,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Download results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-results
         with:
           pattern: bench-results-${{ matrix.runtime }}-*

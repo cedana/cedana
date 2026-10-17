@@ -60,20 +60,20 @@ jobs:
       max-parallel: 1 # DO NOT CHANGE: required to run in order
     steps:
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-cedana
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download scripts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-scripts
         with:
           name: cedana-scripts-${{ matrix.arch }}
@@ -124,13 +124,13 @@ jobs:
 
     steps:
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download scripts
         if: matrix.arch == 'amd64'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-scripts
         with:
           name: cedana-scripts-${{ matrix.arch }}
@@ -226,7 +226,7 @@ jobs:
           - arm64
     steps:
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
@@ -342,7 +342,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/digests
@@ -350,7 +350,7 @@ jobs:
           merge-multiple: true
 
       - name: Download image name
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/image-name
@@ -358,7 +358,7 @@ jobs:
           merge-multiple: true
 
       - name: Download digests (test, latest)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/test-digests-latest
@@ -366,7 +366,7 @@ jobs:
           merge-multiple: true
 
       - name: Download digests (test, CUDA)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/test-digests-cuda
@@ -374,7 +374,7 @@ jobs:
           merge-multiple: true
 
       - name: Download image name (test)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/test-image-name
@@ -483,7 +483,7 @@ jobs:
     if: inputs.post_summary
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true

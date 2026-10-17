@@ -100,7 +100,7 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -110,19 +110,19 @@ jobs:
           token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
@@ -139,7 +139,7 @@ jobs:
 
       # Most of the job is otherwise downloading modules and compiling dependencies from scratch
       - name: Cache Go modules and build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /go/pkg/mod
@@ -168,14 +168,14 @@ jobs:
           - arm64
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
@@ -211,7 +211,7 @@ jobs:
       options: --privileged --init --cgroupns=host
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -219,12 +219,12 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
@@ -265,7 +265,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}
           path: /tmp/report*.xml
@@ -296,7 +296,7 @@ jobs:
       options: --privileged --init --cgroupns=host
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -304,25 +304,25 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
       - name: Download containerd runtime
         if: matrix.plugin == 'containerd'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: containerd-runtime-${{ matrix.arch }}-*
@@ -330,7 +330,7 @@ jobs:
 
       - name: Download OCI runtime
         if: matrix.plugin == 'podman'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: oci-runtime-${{ matrix.arch }}
@@ -338,7 +338,7 @@ jobs:
 
       - name: Download CSX
         if: matrix.plugin == 'storage/csx'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: csx-${{ matrix.arch }}
 
@@ -405,7 +405,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: /tmp/report*.xml
@@ -483,7 +483,7 @@ jobs:
       - uses: runs-on/action@v1
 
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*
           path: report

@@ -15,10 +15,31 @@
 export K3S_CONTAINERD="${K3S_CONTAINERD:-external}"
 export CONTAINERD_NAMESPACE="k8s.io"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+# overlayfs, k3s's default and what real nodes use, can't keep its state on an overlay
+# filesystem (e.g. the test container's root), so CI bind-mounts the state dirs from the
+# runner's disk. Without that, fall back to native, which keeps a full copy of every layer
+# of every image (many times their size), and gives pods no overlay rootfs.
+k3s_snapshotter() {
+    local dir=$1
+    mkdir -p "$dir"
+    if [ "$(stat -f -c %T "$dir" 2>/dev/null)" = "overlayfs" ]; then
+        echo native
+    else
+        echo overlayfs
+    fi
+}
+if [ "$K3S_CONTAINERD" = "embedded" ]; then
+    K3S_SNAPSHOTTER=$(k3s_snapshotter /var/lib/rancher)
+else
+    K3S_SNAPSHOTTER=$(k3s_snapshotter /var/lib/containerd)
+fi
+export K3S_SNAPSHOTTER
+
 START_K3S_SERVER="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
-        --snapshotter=native"
+        --snapshotter=$K3S_SNAPSHOTTER"
 
 case "$K3S_CONTAINERD" in
 external)
@@ -153,12 +174,9 @@ configure_containerd_runtime() {
     debug_log "Configuring containerd runtime for k3s..."
 
     if [ "$K3S_CONTAINERD" = "embedded" ]; then
-        if [ "${GPU:-0}" = "1" ]; then
-            # As on a stock k3s GPU node: k3s finds nvidia-container-runtime in PATH and adds
-            # the nvidia runtime (and RuntimeClass) itself. Default to it, as nvidia-ctk does
-            # for the external containerd, so the device plugin and other pods get the GPUs.
-            START_K3S_SERVER="$START_K3S_SERVER --default-runtime=nvidia"
-        fi
+        # With a GPU, as on a stock k3s GPU node, k3s finds nvidia-container-runtime in PATH
+        # and adds the nvidia runtime and RuntimeClass itself (checked in start_cluster), which
+        # the GPU operator's pods use, as with the external containerd.
         # k3s regenerates its containerd config on every start, so extend it through
         # the template (config version 3, as k3s ships containerd 2.x), whose base keeps
         # the runtimes k3s detects
@@ -178,6 +196,13 @@ END_CAT
     check_env CONTAINERD_CONFIG_PATH
 
     local path=$CONTAINERD_CONFIG_PATH
+
+    # The test image's containerd config uses native, for its overlay root
+    if [ "$K3S_SNAPSHOTTER" != "native" ]; then
+        debug_log "Switching containerd to the $K3S_SNAPSHOTTER snapshotter"
+        sed -i "s/snapshotter = \"native\"/snapshotter = \"$K3S_SNAPSHOTTER\"/" \
+            "$CONTAINERD_CONFIG_PATH" "$(dirname "$CONTAINERD_CONFIG_PATH")"/conf.d/*.toml 2>/dev/null || true
+    fi
 
     if [ "${GPU:-0}" = "1" ]; then
         local config_dir
@@ -212,7 +237,10 @@ start_cluster() {
     debug_log "Waiting for k3s cluster to start..."
 
     local timeout=300
-    wait_for_cmd "$timeout" "kubectl get nodes | grep -q ."
+    wait_for_cmd "$timeout" "kubectl get nodes | grep -q ." || {
+        error_log "Timed out waiting for the k3s node to register"
+        return 1
+    }
 
     debug_log "Waiting for k3s node to be Ready..."
     if ! kubectl wait --for=condition=Ready node --all --timeout="$timeout"s; then
@@ -274,7 +302,7 @@ preload_images() {
     aarch64 | arm64) platform=linux/arm64 ;;
     *) platform=linux/amd64 ;;
     esac
-    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import --local --platform "$platform" "$tar"
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import --local --platform "$platform" --snapshotter "$K3S_SNAPSHOTTER" "$tar"
     rm -f "$tar"
 
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"

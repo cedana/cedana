@@ -113,7 +113,7 @@ jobs:
           echo "${VERSION}" > cedana-version.txt
 
       - name: Upload cedana
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cedana-${{ matrix.arch }}
           path: ./cedana/*
@@ -132,7 +132,7 @@ jobs:
           echo "$IMAGE_NAME" > /tmp/image-name/name.txt
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: digests-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -140,7 +140,7 @@ jobs:
 
       - name: Upload image name
         if: ${{ matrix.arch == 'amd64' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: image-name
           path: /tmp/image-name/*
@@ -204,7 +204,7 @@ jobs:
           echo "${VERSION}" > plugin-version.txt
 
       - name: Upload plugin
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
@@ -248,7 +248,7 @@ jobs:
           echo "${VERSION}" > criu/criu-version.txt
 
       - name: Upload CRIU
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: criu-${{ matrix.arch }}
           path: ./criu/*
@@ -294,7 +294,7 @@ jobs:
           echo "${VERSION}" > gpu/gpu-version.txt
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gpu-${{ matrix.arch }}
           path: ./gpu/*
@@ -337,7 +337,7 @@ jobs:
           echo "${VERSION}" > streamer/streamer-version.txt
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: streamer-${{ matrix.arch }}
           path: ./streamer/*
@@ -373,7 +373,7 @@ jobs:
           echo "$IMAGE_NAME" > /tmp/image-name/name.txt
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: controller-digests-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -381,7 +381,7 @@ jobs:
 
       - name: Upload image name
         if: ${{ matrix.arch == 'amd64' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: controller-image-name
           path: /tmp/image-name/*
@@ -432,7 +432,7 @@ jobs:
           echo "$IMAGE_NAME" > /tmp/image-name/name.txt
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: propagator-digests-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -440,7 +440,7 @@ jobs:
 
       - name: Upload image name
         if: ${{ matrix.arch == 'amd64' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: propagator-image-name
           path: /tmp/image-name/*
@@ -484,7 +484,7 @@ jobs:
           echo "${VERSION}" > containerd-runtime-runc/containerd-runtime-version.txt
 
       - name: Upload runtime runc artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: containerd-runtime-${{ matrix.arch }}-runc
           path: ./containerd-runtime-runc/*
@@ -527,7 +527,7 @@ jobs:
           echo "${VERSION}" > oci-runtime/oci-runtime-version.txt
 
       - name: Upload runtime artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: oci-runtime-${{ matrix.arch }}
           path: ./oci-runtime/*
@@ -550,13 +550,13 @@ jobs:
           fi
 
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: cedana/cedana-helm-charts
           ref: ${{ steps.get_tag.outputs.tag }}
 
       - name: Upload helm chart
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: helm-chart
           path: cedana-helm
@@ -571,7 +571,7 @@ jobs:
       versions: ${{ steps.read.outputs.versions }}
     steps:
       - name: Checkout cedana-slurm
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: cedana/cedana-slurm
           ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
@@ -602,7 +602,7 @@ jobs:
         slurm: ${{ fromJSON(needs.slurm-versions.outputs.versions) }}
     steps:
       - name: Checkout cedana-slurm
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: cedana/cedana-slurm
           ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
@@ -661,7 +661,7 @@ jobs:
           echo "${VERSION_REF}" > slurm/slurm-version.txt
 
       - name: Upload slurm artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.slurm }}-${{ matrix.arch }}
           path: ./slurm/*
@@ -704,7 +704,7 @@ jobs:
           echo "${VERSION}" > csx/csx-version.txt
 
       - name: Upload CSX
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: csx-${{ matrix.arch }}
           path: ./csx/*

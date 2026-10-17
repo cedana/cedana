@@ -81,7 +81,7 @@ jobs:
       options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
       - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -89,30 +89,30 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
         if: matrix.compute == 'CUDA'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-${{ matrix.arch }}
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
@@ -168,7 +168,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-streamer-${{ matrix.compute }}
           path: /tmp/report*.xml
@@ -180,7 +180,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*-streamer-*
           path: report
