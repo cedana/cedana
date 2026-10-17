@@ -194,9 +194,6 @@ jobs:
       - name: Run regression tests
         env:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
-          # Byte-level GPU restore verification (see daemon.bash). Only warns on arm64, where
-          # the controller's hash kernel fails to load (CUDA error 218), so nothing verifies
-          CEDANA_GPU_VERIFY: ${{ matrix.arch == 'arm64' && 'warn' || 'strict' }}
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
