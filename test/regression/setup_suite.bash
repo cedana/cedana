@@ -22,8 +22,43 @@ setup_suite() {
 
     debug cedana plugin install criu@criu-dev
     start_containerd
+
+    gpu_shm_segments >"$GPU_SHM_BEFORE"
 }
 
 teardown_suite() {
     stop_containerd
+
+    check_gpu_shm_leaks
+}
+
+# GPU controllers' shared memory (/dev/shm/cedana-gpu.*), sized in GiBs. Each must be gone
+# once its controller is: by the end of the suite every daemon is stopped, so any new one
+# left is a leak, which piles up on a node until /dev/shm is full.
+GPU_SHM_BEFORE=/tmp/cedana-gpu-shm-before
+
+gpu_shm_segments() {
+    find /dev/shm -maxdepth 1 -name 'cedana-gpu.*' -printf '%f\n' 2>/dev/null | sort
+}
+
+check_gpu_shm_leaks() {
+    local leaked
+    # Controllers exit asynchronously once their daemon stops
+    for _ in $(seq 1 15); do
+        leaked=$(comm -13 "$GPU_SHM_BEFORE" <(gpu_shm_segments) 2>/dev/null)
+        [ -z "$leaked" ] && return 0
+        sleep 1
+    done
+    warn_log "GPU shared memory left behind after the suite (leaked):"
+    local segment id log
+    for segment in $leaked; do
+        warn_log "  /dev/shm/$segment ($(du -h --apparent-size "/dev/shm/$segment" 2>/dev/null | cut -f1)), held by: $(fuser "/dev/shm/$segment" 2>/dev/null || echo none)"
+        # Which daemon (so test) spawned its controller, and the controller's last words
+        id=${segment#cedana-gpu.}
+        for log in $(grep -l "ID=$id" /tmp/cedana-daemon-*.log 2>/dev/null); do
+            warn_log "    spawned by the daemon logging to $log:"
+            grep -E "ID=$id|JID=" "$log" | grep -E "ID=$id|managing job|job exited" | tail -n 8 | while IFS= read -r line; do warn_log "      $line"; done
+        done
+    done
+    return 1
 }

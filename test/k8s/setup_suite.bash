@@ -47,6 +47,11 @@ source "${BATS_TEST_DIRNAME}"/../helpers/propagator.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/propagator_deploy.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/metrics.bash
 
+# daemon.bash turns on GPU restore verification for the tests' own daemons. Here only the shim
+# (restores) would get it, through containerd's environment on K3s, and not the node's daemon
+# (dumps), so no checkpoint would have what it verifies against.
+unset CEDANA_GPU_VERIFY
+
 # Generate cluster name if not provided
 if [ -z "$CLUSTER_NAME" ]; then
     CLUSTER_NAME="test-${PROVIDER}-$(unix_nano)"
@@ -102,7 +107,12 @@ setup_suite() {
         fi
 
         helm_uninstall_cedana "$CEDANA_NAMESPACE"
-        helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
+        if [ -n "${UPGRADE_FROM_CHART:-}" ]; then
+            # The upgrade tests start from a released chart, and upgrade to this one
+            helm_install_released_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE" "$UPGRADE_FROM_CHART"
+        else
+            helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
+        fi
     else
         debug_log "Skipping helm install (SKIP_HELM=1)"
         if [ -z "$CLUSTER_ID" ]; then
@@ -131,6 +141,9 @@ setup_suite() {
 }
 
 teardown_suite() {
+    # Collect what's needed to debug a failure (uploaded by CI), before anything is torn down
+    collect_diagnostics "${K8S_DIAGNOSTICS_DIR:-/tmp/k8s-diagnostics}" || true
+
     # Stop log tailing
     if [ -n "$TAIL_PID" ]; then
         pkill -P "$TAIL_PID" 2>/dev/null || true

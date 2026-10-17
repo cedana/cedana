@@ -41,6 +41,21 @@ on:
         description: "Also run kubernetes tests on cloud platforms (EKS, EKS-Karpenter, GKE, and Nebius with large). They share a cluster per platform across all runs and repos, so runs queue behind each other."
         required: false
         default: false
+      upgrade:
+        type: boolean
+        description: "Also test upgrading from the latest released chart (on one K3s job)"
+        required: false
+        default: false
+      soak:
+        type: boolean
+        description: "Also run the soak tests (each checkpoint/restore many times, to catch 1-in-N failures)"
+        required: false
+        default: false
+      race:
+        type: boolean
+        description: "Also run the base and runc suites against a daemon built with the race detector"
+        required: false
+        default: false
       slurm:
         type: boolean
         description: "Run slurm tests"
@@ -87,6 +102,8 @@ jobs:
   unit:
     name: Unit
     runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache # compiles test binaries in parallel
+    env:
+      CONTAINERD_TEST_VERSIONS: 1.7.36 2.0.14 2.1.9 2.2.10 2.3.7 2.4.2
     strategy:
       fail-fast: false
       matrix:
@@ -99,8 +116,8 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -110,19 +127,19 @@ jobs:
           token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
@@ -139,7 +156,7 @@ jobs:
 
       # Most of the job is otherwise downloading modules and compiling dependencies from scratch
       - name: Cache Go modules and build cache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /go/pkg/mod
@@ -147,9 +164,30 @@ jobs:
           key: go-unit-${{ matrix.arch }}-${{ hashFiles('**/go.sum') }}
           restore-keys: go-unit-${{ matrix.arch }}-
 
+      # The plugin installer's containerd config is checked against how each containerd
+      # minor (config versions 2, 3 and 4) loads and merges it
+      - name: Cache containerd binaries
+        id: containerd-bins
+        uses: actions/cache@v5
+        with:
+          path: /opt/containerd-bins
+          key: containerd-bins-${{ matrix.arch }}-${{ env.CONTAINERD_TEST_VERSIONS }}
+
+      - name: Download containerd binaries
+        if: steps.containerd-bins.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /opt/containerd-bins
+          for v in $CONTAINERD_TEST_VERSIONS; do
+            curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+              "https://github.com/containerd/containerd/releases/download/v$v/containerd-$v-linux-${{ matrix.arch }}.tar.gz" |
+              tar -xzO bin/containerd >"/opt/containerd-bins/containerd-$v"
+            chmod +x "/opt/containerd-bins/containerd-$v"
+          done
+
       - name: Run unit tests
         env:
           GOFLAGS: -count=1 # always run the tests, only compilation is cached
+          CEDANA_TEST_CONTAINERD_BINS: /opt/containerd-bins
         run: make test-unit
 
   script:
@@ -167,15 +205,15 @@ jobs:
           - amd64
           - arm64
     steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
@@ -210,8 +248,8 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -219,12 +257,12 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
@@ -251,12 +289,13 @@ jobs:
       - name: Run regression tests
         env:
           LARGE: ${{ inputs.large }}
+          SOAK_TAG: ${{ !inputs.soak && ',!soak' || '' }}
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+            make test-regression TAGS=base$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           else
-            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+            make test-regression TAGS=base,!large$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
       - name: Label report # with the job name, so the summary can link to it
@@ -265,10 +304,104 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}
           path: /tmp/report*.xml
+
+  # The base and runc suites against cedana (and its runc plugin) built with the race
+  # detector, which reports data races the daemon hits in them (to /tmp/race, uploaded)
+  race:
+    name: Race
+    if: inputs.race
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64/extras=s3-cache
+    timeout-minutes: 90
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init --cgroupns=host
+    steps:
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
+
+      - name: Download CRIU
+        uses: actions/download-artifact@v7
+        with:
+          name: criu-amd64
+
+      - name: Cache Go modules and build cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: go-race-amd64-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-race-amd64-
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Build with the race detector
+        run: make cedana "$PWD/libcedana-runc.so" RACE=1 VERSION="$(git describe --tags --always)"
+
+      - name: Install
+        run: |
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+          export PATH="$PWD:$PATH"
+          make install
+          sudo -E cedana plugin install criu runc
+
+      - name: Run regression tests
+        env:
+          # Report every race (one file per process), without stopping the process. A daemon
+          # across tests (persistent), which serves many jobs at once, is where races are likeliest
+          GORACE: log_path=/tmp/race/report halt_on_error=0
+          PARALLELISM: ${{ inputs.parallelism }}
+        run: |
+          mkdir -p /tmp/race
+          status=0
+          make test-regression DAEMON_MODE=persistent TAGS=base,!large,!soak PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-race-base || status=$?
+          make test-regression DAEMON_MODE=persistent TAGS=runc,!gpu,!streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-race-runc || status=$?
+          exit $status
+
+      - name: Check for races
+        if: always()
+        run: |
+          if ls /tmp/race/report.* >/dev/null 2>&1; then
+            echo "::error title=Data races::$(grep -c '^WARNING: DATA RACE' /tmp/race/report.* | awk -F: '{s+=$2} END {print s}') data race(s) found, see the race-reports artifact"
+            grep -h -A 30 '^WARNING: DATA RACE' /tmp/race/report.* | head -n 300
+            exit 1
+          fi
+          echo "No data races found"
+
+      - name: Upload race reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: race-reports
+          path: /tmp/race/
+          if-no-files-found: ignore
+
+      - name: Label report # with the job name, so the summary can link to it
+        if: always()
+        run: find /tmp -maxdepth 1 -name 'report-race*.xml' -exec sed -i 's|<testsuites |<testsuites name="Race" |' {} +
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-report-race
+          path: /tmp/report-race*.xml
 
   plugin:
     name: Plugin
@@ -295,8 +428,8 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -304,25 +437,25 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
       - name: Download containerd runtime
         if: matrix.plugin == 'containerd'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: containerd-runtime-${{ matrix.arch }}-*
@@ -330,7 +463,7 @@ jobs:
 
       - name: Download OCI runtime
         if: matrix.plugin == 'podman'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: oci-runtime-${{ matrix.arch }}
@@ -338,7 +471,7 @@ jobs:
 
       - name: Download CSX
         if: matrix.plugin == 'storage/csx'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: csx-${{ matrix.arch }}
 
@@ -405,7 +538,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: /tmp/report*.xml
@@ -431,6 +564,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
+      soak: ${{ inputs.soak }}
       parallelism: ${{ inputs.parallelism }}
       runner: ${{ inputs.runner_gpu }}
       post_summary: false # Will post consolidated summary instead
@@ -445,6 +579,8 @@ jobs:
       debug: ${{ inputs.debug }}
       platforms: ${{ !inputs.cloud_kubernetes && '["K3s"]' || (inputs.large && '["K3s", "EKS", "EKS-Karpenter", "GKE", "Nebius"]' || '["K3s", "EKS", "EKS-Karpenter", "GKE"]') }} # Nebius only runs large tests
       propagator: ${{ inputs.propagator }}
+      upgrade: ${{ inputs.upgrade }}
+      soak: ${{ inputs.soak }}
       large: ${{ inputs.large }} # K3s is only for small tests, regardless
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
@@ -474,16 +610,16 @@ jobs:
   post-summary:
     name: Post Summary
     if: always()
-    needs: [unit, script, basic, plugin, streamer, gpu, k8s, slurm]
-    runs-on: ubuntu-latest
+    needs: [unit, script, basic, race, plugin, streamer, gpu, k8s, slurm]
+    runs-on: ubuntu-24.04
     permissions:
       pull-requests: write
       actions: read
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*
           path: report

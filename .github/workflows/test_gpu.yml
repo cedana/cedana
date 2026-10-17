@@ -11,6 +11,11 @@ permissions:
 on:
   workflow_call:
     inputs:
+      soak:
+        type: boolean
+        description: "Also run the soak tests (each checkpoint/restore many times, to catch 1-in-N failures)"
+        required: false
+        default: false
       ref:
         type: string
         description: "The branch, tag, or SHA to run on"
@@ -58,7 +63,7 @@ jobs:
   cuda:
     name: CUDA
     runs-on: runs-on=${{github.run_id}}/runner=${{  inputs.runner }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/tag=${{ matrix.cr }}/extras=s3-cache
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.soak && 90 || 30 }} # the soak tests take ~30m more
     strategy:
       fail-fast: false
       matrix:
@@ -107,8 +112,8 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --ipc=host --device nvidia.com/gpu=all --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -116,12 +121,12 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
@@ -129,36 +134,36 @@ jobs:
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
         if: ${{ matrix.cr == 'streamer' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-${{ matrix.arch }}
 
       - name: Download containerd runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: containerd-runtime-${{ matrix.arch }}-*
           merge-multiple: true
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
       - name: Download OCI runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: oci-runtime-${{ matrix.arch }}
           merge-multiple: true
 
       - name: Download CSX
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: csx-${{ matrix.arch }}
 
@@ -195,19 +200,20 @@ jobs:
         env:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
+          SOAK_TAG: ${{ !inputs.soak && ',!soak' || '' }}
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!large,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!large,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
 
@@ -226,7 +232,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
           path: /tmp/report*.xml
@@ -234,7 +240,7 @@ jobs:
       # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
           path: |
@@ -248,10 +254,10 @@ jobs:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: cuda
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*-cuda-*
           path: report

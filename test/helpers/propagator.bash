@@ -14,6 +14,8 @@
 checkpoint_pod() {
     local pod_id="$1"
     local runc_root=${2:-"/run/containerd/runc/k8s.io"}
+    local directory="${3:-}"   # overrides the configured checkpoint directory
+    local compression="${4:-}" # overrides the configured compression
 
     if [ -z "$pod_id" ] || [ -z "$runc_root" ]; then
         error_log "checkpoint_pod requires pod_id and runc_root"
@@ -26,10 +28,13 @@ checkpoint_pod() {
     payload=$(jq -n \
             --arg pod_id "$pod_id" \
             --arg runc_root "$runc_root" \
+            --arg directory "$directory" \
+            --arg compression "$compression" \
             '{
             "pod_id": $pod_id,
             "runc_root": $runc_root
-    }')
+    } + ({"directory": $directory, "compression": $compression} | with_entries(select(.value != "")) |
+        if . == {} then {} else {"overrides": .} end)')
 
     local response
     response=$(curl -s -X POST "${CEDANA_URL}/checkpoint/pod" \
@@ -246,6 +251,76 @@ poll_action_status() {
 
     error_log "Timeout waiting for $operation action '$action_id' to complete (last status: $status)"
     return 1
+}
+
+# Polls a restore until it's done, and fails unless it actually restored. A pod that becomes
+# Ready proves nothing: a restore that falls back to a cold start (status "fallback"), or that
+# never runs (e.g. the runtime takes the run path), still ends with a Ready pod.
+# @param $1: Restore action ID (same as the restore's UUID)
+# @param $2: Timeout in seconds (optional, defaults to 300)
+poll_restore_status() {
+    local restore_id="$1"
+    restore_id="${restore_id//\"/}" # remove quotes if present
+    local timeout_seconds=${2:-300}
+    local interval=5
+
+    if [ -z "$restore_id" ]; then
+        error_log "poll_restore_status requires a restore action ID"
+        return 1
+    fi
+
+    debug_log "Polling restore $restore_id..."
+
+    local status="" restore=""
+    for _ in $(seq 1 $((timeout_seconds / interval))); do
+        local response
+        response=$(curl -s --max-time 10 -X GET "${CEDANA_URL}/restores?restore_uuid=${restore_id}&limit=1" \
+                -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
+            -w "%{http_code}")
+        local http_code="${response: -3}"
+        local body="${response%???}"
+
+        if [ "$http_code" -eq 200 ]; then
+            restore=$(echo "$body" | jq -c '.[0] // empty' 2>/dev/null)
+            status=$(echo "$restore" | jq -r '.status // empty' 2>/dev/null)
+            case "$status" in
+                "success")
+                    debug_log "Restore $restore_id succeeded"
+                    return 0
+                    ;;
+                "fallback"|"error"|"failed") # fallback: a cold start instead
+                    error_log "Restore $restore_id ended as $status: $(echo "$restore" | jq -r '.error_message // "no error message"')"
+                    debug_log "Restore record: $restore"
+                    return 1
+                    ;;
+            esac
+            debug_log "Restore status: ${status:-not recorded yet}"
+        else
+            debug_log "Failed to get restore $restore_id (HTTP $http_code): $body"
+        fi
+        sleep $interval
+    done
+
+    error_log "Restore $restore_id did not finish within ${timeout_seconds}s (last status: ${status:-not recorded}), e.g. it never ran"
+    debug_log "Restore record: ${restore:-none}"
+    return 1
+}
+
+# The status of a checkpoint (e.g. initialized, processing, ready, error), or nothing
+# @param $1: Checkpoint action ID
+get_checkpoint_status() {
+    local action_id="${1//\"/}"
+    curl -s --max-time 10 -X GET "${CEDANA_URL}/checkpoint/status/${action_id}" \
+        -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | jq -r '.status // empty' 2>/dev/null
+}
+
+# The status of a restore (e.g. starting, pod_created, success, fallback, error), or nothing
+# if it isn't recorded yet
+# @param $1: Restore action ID
+get_restore_status() {
+    local restore_id="${1//\"/}"
+    curl -s --max-time 10 -X GET "${CEDANA_URL}/restores?restore_uuid=${restore_id}&limit=1" \
+        -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | jq -r '.[0].status // empty' 2>/dev/null
 }
 
 # Get checkpoint ID from action ID using the actions API

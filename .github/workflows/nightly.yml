@@ -29,7 +29,7 @@ jobs:
       streamer_version: ${{ vars.NIGHTLY_STREAMER_VERSION }}
       helm_chart_version: ${{ vars.NIGHTLY_HELM_CHART_VERSION }}
       controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
-      containerd_runtime_version: ${{ vars.NIGHTLY_CONTAINERD_RUNTIME_VERSION }}
+      containerd_runtime_version: cedana
       oci_runtime_version: ${{ vars.NIGHTLY_OCI_RUNTIME_VERSION || 'main' }}
       slurm_version: ${{ vars.NIGHTLY_SLURM_VERSION }}
       csx_version: ${{ vars.NIGHTLY_CSX_VERSION }}
@@ -47,6 +47,9 @@ jobs:
       large: true # include large tests
       propagator: true
       cloud_kubernetes: true # doesn't block anyone at night, and the only place Nebius runs (large)
+      upgrade: true
+      soak: true # each checkpoint/restore many times, for 1-in-N failures
+      race: true # base and runc suites against a race-detector build
       runner: 8cpu # use larger runner
       runner_gpu: 16cpu-1gpu # use larger runner
       parallelism: 4

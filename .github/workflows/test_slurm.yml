@@ -79,7 +79,7 @@ jobs:
   # with `include`. Revert the commit that added this to sweep every version again.
   versions:
     name: Slurm Matrix
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       compat: ${{ steps.compat.outputs.legs }}
     steps:
@@ -112,9 +112,9 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana
           ref: ${{ inputs.ref }}
@@ -122,24 +122,24 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-amd64
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-amd64*
           merge-multiple: true
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-amd64
 
       - name: Download slurm binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ${{ fromJSON(inputs.slurm_versions)[0] }}-amd64
           path: slurm-bin
@@ -285,14 +285,14 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-amd64-slurm-ansible
           path: /tmp/report*.xml
 
       - name: Upload SLURM debug logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: slurm-debug-logs-amd64-ansible
           path: |
@@ -337,9 +337,9 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host -v /var/run/docker.sock:/var/run/docker.sock
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana
           ref: ${{ inputs.ref }}
@@ -347,24 +347,24 @@ jobs:
           fetch-tags: true
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-amd64
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-amd64*
           merge-multiple: true
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-amd64
 
       - name: Download slurm binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: ${{ matrix.slurm }}-amd64
           path: slurm-bin
@@ -394,7 +394,7 @@ jobs:
 
       - name: Download GPU plugin
         if: ${{ matrix.compute == 'CUDA' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-amd64
 
@@ -860,14 +860,14 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-amd64-slurm-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}
           path: /tmp/report*.xml
 
       - name: Upload SLURM debug logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: slurm-debug-logs-amd64-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}
           path: |
@@ -878,10 +878,10 @@ jobs:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: [slurm-ansible, slurm]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*-slurm-*
           path: report

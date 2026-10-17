@@ -5,6 +5,9 @@
 export CONTAINERD_CONFIG_PATH="/etc/containerd/config.toml"
 export CONTAINERD_ADDRESS="/run/containerd/containerd.sock"
 export CONTAINERD_SNAPSHOTTER="native"
+# Where the suite's own containerd logs (its shims, e.g. cedana-shim-runc-v2, log through it),
+# kept for the CI diagnostics (see collect_diagnostics)
+export CONTAINERD_LOG="${CONTAINERD_LOG:-/tmp/containerd.log}"
 
 # Command for the nginx image that listens on $NGINX_PORT. The stock image ignores
 # NGINX_PORT (it only substitutes env into /etc/nginx/templates), so containers
@@ -35,7 +38,7 @@ start_containerd() {
     fi
 
     if cmd_exists containerd; then
-        containerd -c $CONTAINERD_CONFIG_PATH -a $CONTAINERD_ADDRESS > /dev/null &
+        containerd -c $CONTAINERD_CONFIG_PATH -a $CONTAINERD_ADDRESS >> "$CONTAINERD_LOG" 2>&1 &
     else
         error_log "Containerd is not installed. Please install it first."
         exit 1

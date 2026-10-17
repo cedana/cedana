@@ -11,14 +11,41 @@
 #   external (default) - the suite's own containerd (see containerd.bash)
 #   embedded           - k3s's bundled containerd, as on a stock k3s install
 #
+# K3S_VERSION is the k3s release to run (each bundles its own containerd), and
+# CONTAINERD_VERSION the containerd release to run as the external one (default: the
+# test image's).
+#
 
 export K3S_CONTAINERD="${K3S_CONTAINERD:-external}"
+export K3S_VERSION="${K3S_VERSION:-v1.34.2+k3s1}"
+export CONTAINERD_VERSION="${CONTAINERD_VERSION:-}"
 export CONTAINERD_NAMESPACE="k8s.io"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+
+# overlayfs, k3s's default and what real nodes use, can't keep its state on an overlay
+# filesystem (e.g. the test container's root), so CI bind-mounts the state dirs from the
+# runner's disk. Without that, fall back to native, which keeps a full copy of every layer
+# of every image (many times their size), and gives pods no overlay rootfs.
+k3s_snapshotter() {
+    local dir=$1
+    mkdir -p "$dir"
+    if [ "$(stat -f -c %T "$dir" 2>/dev/null)" = "overlayfs" ]; then
+        echo native
+    else
+        echo overlayfs
+    fi
+}
+if [ "$K3S_CONTAINERD" = "embedded" ]; then
+    K3S_SNAPSHOTTER=$(k3s_snapshotter /var/lib/rancher)
+else
+    K3S_SNAPSHOTTER=$(k3s_snapshotter /var/lib/containerd)
+fi
+export K3S_SNAPSHOTTER
+
 START_K3S_SERVER="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
-        --snapshotter=native"
+        --snapshotter=$K3S_SNAPSHOTTER"
 
 case "$K3S_CONTAINERD" in
 external)
@@ -46,6 +73,9 @@ setup_cluster() {
     check_env CONTAINERD_NAMESPACE
 
     download_k3s
+    if [ "$K3S_CONTAINERD" = "external" ] && [ -n "$CONTAINERD_VERSION" ]; then
+        download_containerd "$CONTAINERD_VERSION"
+    fi
     install_containerd_plugins
     configure_containerd_runtime
     # The shim inherits containerd's environment, and env beats the host config file the
@@ -94,7 +124,7 @@ preload_all_images() {
         preload_images "$PROPAGATOR_REPO:$PROPAGATOR_TAG"
     fi
     if [ "${GPU:-0}" = "1" ]; then
-        preload_images "cedana/cedana-test:cuda" # likely available as we are running inside it
+        preload_images "$GPU_WORKLOAD_IMAGE"
         preload_images "cedana/cedana-samples:cuda"
     fi
 }
@@ -143,22 +173,48 @@ download_k3s() {
         ;;
     esac
 
-    wget -q "https://github.com/k3s-io/k3s/releases/download/v1.34.2%2Bk3s1/$binary_name" -O /usr/local/bin/k3s
+    wget -q "https://github.com/k3s-io/k3s/releases/download/${K3S_VERSION//+/%2B}/$binary_name" -O /usr/local/bin/k3s
     chmod +x /usr/local/bin/k3s
 
-    debug_log "Downloaded k3s binary"
+    info_log "Running $(k3s --version | head -n 1)"
+}
+
+# Installs a containerd release over the test image's (/usr/local/bin is ahead in PATH)
+download_containerd() {
+    local version="${1#v}"
+    local arch
+    case "$(uname -m)" in
+    aarch64 | arm64) arch=arm64 ;;
+    *) arch=amd64 ;;
+    esac
+
+    debug_log "Downloading containerd $version..."
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        "https://github.com/containerd/containerd/releases/download/v$version/containerd-$version-linux-$arch.tar.gz" |
+        tar -xz -C /usr/local bin/containerd bin/containerd-shim-runc-v2 bin/ctr || {
+        error_log "Failed to download containerd $version"
+        return 1
+    }
+
+    local running
+    running=$(containerd --version | awk '{print $3}')
+    if [ "${running#v}" != "$version" ]; then
+        error_log "containerd $version was installed, but $(command -v containerd) is $running"
+        return 1
+    fi
+    info_log "Running containerd $version"
 }
 
 configure_containerd_runtime() {
     debug_log "Configuring containerd runtime for k3s..."
 
     if [ "$K3S_CONTAINERD" = "embedded" ]; then
-        if [ "${GPU:-0}" = "1" ]; then
-            error_log "K3S_CONTAINERD=embedded does not support GPU yet"
-            return 1
-        fi
+        # With a GPU, as on a stock k3s GPU node, k3s finds nvidia-container-runtime in PATH
+        # and adds the nvidia runtime and RuntimeClass itself (checked in start_cluster), which
+        # the GPU operator's pods use, as with the external containerd.
         # k3s regenerates its containerd config on every start, so extend it through
-        # the template (config version 3, as k3s ships containerd 2.x)
+        # the template (config version 3, as k3s ships containerd 2.x), whose base keeps
+        # the runtimes k3s detects
         debug_log "Writing containerd config template to $K3S_CONTAINERD_TEMPLATE"
         mkdir -p "$(dirname "$K3S_CONTAINERD_TEMPLATE")"
         cat >"$K3S_CONTAINERD_TEMPLATE" <<'END_CAT'
@@ -176,11 +232,24 @@ END_CAT
 
     local path=$CONTAINERD_CONFIG_PATH
 
+    # The test image's containerd config uses native, for its overlay root
+    if [ "$K3S_SNAPSHOTTER" != "native" ]; then
+        debug_log "Switching containerd to the $K3S_SNAPSHOTTER snapshotter"
+        sed -i "s/snapshotter = \"native\"/snapshotter = \"$K3S_SNAPSHOTTER\"/" \
+            "$CONTAINERD_CONFIG_PATH" "$(dirname "$CONTAINERD_CONFIG_PATH")"/conf.d/*.toml 2>/dev/null || true
+    fi
+
     if [ "${GPU:-0}" = "1" ]; then
         local config_dir
         config_dir=$(dirname "$CONTAINERD_CONFIG_PATH")/conf.d
         path="$config_dir/999-cedana.toml"
         cp "$config_dir/99-nvidia.toml" "$path"
+    fi
+
+    # Already there when the suite runs again in the same job (e.g. the upgrade suite)
+    if grep -q 'runtimes."cedana"' "$path"; then
+        debug_log "Containerd runtime for k3s already configured in $path"
+        return 0
     fi
 
     debug_log "Writing containerd config to $path"
@@ -209,12 +278,24 @@ start_cluster() {
     debug_log "Waiting for k3s cluster to start..."
 
     local timeout=300
-    wait_for_cmd "$timeout" "kubectl get nodes | grep -q ."
+    wait_for_cmd "$timeout" "kubectl get nodes | grep -q ." || {
+        error_log "Timed out waiting for the k3s node to register"
+        return 1
+    }
 
     debug_log "Waiting for k3s node to be Ready..."
     if ! kubectl wait --for=condition=Ready node --all --timeout="$timeout"s; then
         error_log "Timed out waiting for k3s node to be Ready"
         return 1
+    fi
+
+    if [ "$K3S_CONTAINERD" = "embedded" ] && [ "${GPU:-0}" = "1" ]; then
+        local config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml
+        if ! grep -q nvidia-container-runtime "$config"; then # its BinaryName, as k3s writes it
+            error_log "k3s did not set up the nvidia runtime (is nvidia-container-runtime in PATH?): $config"
+            grep -n "runtimes" "$config" >&2 || true
+            return 1
+        fi
     fi
 
     debug_log "k3s cluster has started successfully"
@@ -262,7 +343,7 @@ preload_images() {
     aarch64 | arm64) platform=linux/arm64 ;;
     *) platform=linux/amd64 ;;
     esac
-    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import --local --platform "$platform" "$tar"
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import --local --platform "$platform" --snapshotter "$K3S_SNAPSHOTTER" "$tar"
     rm -f "$tar"
 
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"

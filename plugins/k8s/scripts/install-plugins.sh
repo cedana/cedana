@@ -183,6 +183,9 @@ fi
 
 echo "Starting containerd runtime configuration..."
 
+# BEGIN CONTAINERD CONFIG: run on its own against fixture configs by containerd_config_test.go,
+# so it may only use the variables set above and must not touch anything outside the configs.
+
 # The CRI plugin config key differs between containerd config version 2 and 3
 cedana_runtime_config() {
     if [ "$1" = "3" ]; then
@@ -192,6 +195,16 @@ cedana_runtime_config() {
   runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
 END_CAT
     else
+        # containerd 1.7 drops its built-in runc runtime once a config defines any runtime,
+        # so with none defined yet, define it too: otherwise the default runtime (runc) is
+        # missing, and the CRI plugin fails to load
+        if [ "${2:-}" = "with-runc" ]; then
+            cat <<END_CAT
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."runc"]
+  runtime_type = "io.containerd.runc.v2"
+
+END_CAT
+        fi
         cat <<END_CAT
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
   runtime_type = "io.containerd.runc.v2"
@@ -213,18 +226,21 @@ CONFIG_CHANGED=false
 # generated and templates are never rendered, so fall through to the regular
 # containerd flow below in that case.
 # Resolve a k3s/RKE2 data dir: --data-dir flag of the running process, then
-# config.yaml, then the default location
+# config.yaml, then the default location. RANCHER_ROOT (tests only) roots the
+# paths elsewhere and ignores running processes.
 rancher_data_dir() {
-    local name="$1" pid args dir=""
-    pid=$(pidof -s "$name" 2>/dev/null || true)
+    local name="$1" pid="" args dir=""
+    if [ -z "${RANCHER_ROOT:-}" ]; then
+        pid=$(pidof -s "$name" 2>/dev/null || true)
+    fi
     if [ -n "$pid" ]; then
         args=$(ps -o args= -p "$pid" 2>/dev/null || true)
         dir=$(echo "$args" | sed -n 's/.*--data-dir[= ]\+\([^ ]*\).*/\1/p')
     fi
-    if [ -z "$dir" ] && [ -f "/etc/rancher/$name/config.yaml" ]; then
-        dir=$(sed -n 's/^[[:space:]]*data-dir:[[:space:]]*//p' "/etc/rancher/$name/config.yaml" | head -n 1 | tr -d '"' | tr -d "'")
+    if [ -z "$dir" ] && [ -f "${RANCHER_ROOT:-}/etc/rancher/$name/config.yaml" ]; then
+        dir=$(sed -n 's/^[[:space:]]*data-dir:[[:space:]]*//p' "${RANCHER_ROOT:-}/etc/rancher/$name/config.yaml" | head -n 1 | tr -d '"' | tr -d "'")
     fi
-    echo "${dir:-/var/lib/rancher/$name}"
+    echo "${dir:-${RANCHER_ROOT:-}/var/lib/rancher/$name}"
 }
 
 RANCHER_SERVICES=""
@@ -308,6 +324,15 @@ else
     echo "Detected containerd config version $CONTAINERD_VERSION"
 
     if [ "$CONTAINERD_VERSION" = "2" ]; then
+        # Whether any config defines a runtime (see cedana_runtime_config)
+        RUNC_ARG=with-runc
+        for FILE in "$CONTAINERD_CONFIG_PATH" "$CONTAINERD_CONFD_DIR"/*.toml; do
+            [ -f "$FILE" ] && [ "$FILE" != "$CONTAINERD_CONFD_DIR/999-cedana.toml" ] || continue
+            if grep -qE '^[[:space:]]*\[[^]]*containerd\.runtimes\.' "$FILE"; then
+                RUNC_ARG=""
+            fi
+        done
+
         # Version 2: conf.d imports cannot merge multiple runtime tables
         # (https://github.com/containerd/containerd/issues/5837, fixed in v3),
         # so copy the last conf.d file (lexicographically) and append the
@@ -323,7 +348,7 @@ else
             NEW_CONFIG=$(
                 cat "$LAST_CONFD_FILE"
                 echo ""
-                cedana_runtime_config 2
+                cedana_runtime_config 2 "$RUNC_ARG"
             )
             if [ "$NEW_CONFIG" != "$(cat "$TARGET_CONFIG" 2>/dev/null)" ]; then
                 echo "Writing cedana runtime config to $TARGET_CONFIG"
@@ -341,7 +366,7 @@ else
                 echo "No conf.d files found, adding cedana runtime config to $TARGET_CONFIG"
                 {
                     echo ""
-                    cedana_runtime_config 2
+                    cedana_runtime_config 2 "$RUNC_ARG"
                 } >>"$TARGET_CONFIG"
                 CONFIG_CHANGED=true
             else
@@ -393,6 +418,8 @@ else
 
     RESTART_STAMP_FILES="$TARGET_CONFIG $CONTAINERD_CONFIG_PATH"
 fi
+
+# END CONTAINERD CONFIG
 
 # Determine which service provides containerd on this node
 RESTART_SERVICE="containerd"

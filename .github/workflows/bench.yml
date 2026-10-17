@@ -134,22 +134,22 @@ jobs:
       run:
         working-directory: /src
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
       - name: Download GPU binaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-gpu
         with:
           name: gpu-amd64
 
       - name: Download Cedana binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-cedana
         with:
           name: cedana-amd64
 
       - name: Download Cedana plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-plugins
         with:
           path: .
@@ -157,7 +157,7 @@ jobs:
           merge-multiple: true
 
       - name: Download CRIU binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-criu
         with:
           name: criu-amd64
@@ -223,7 +223,7 @@ jobs:
       - name: Upload logs
         if: always()
         id: upload-logs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bench-logs-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
@@ -233,7 +233,7 @@ jobs:
       - name: Upload results
         if: always()
         id: upload-results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bench-results-${{ matrix.runtime }}-${{ matrix.metric }}-${{ matrix.workload }}
           path: |
@@ -243,7 +243,7 @@ jobs:
     name: Post Summary
     if: ${{ !cancelled() }}
     needs: [dry-run, run]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: cedana/cedana-bench:slim
       credentials:
@@ -264,7 +264,7 @@ jobs:
           limit-access-to-actor: true
 
       - name: Download results
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-results
         with:
           pattern: bench-results-${{ matrix.runtime }}-*
@@ -273,7 +273,7 @@ jobs:
 
       - id: auth
         name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v3
         env:
           PROJECT_ID: ${{ vars.GCLOUD_PROJECT_ID_BENCH }}
           WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCLOUD_WORKLOAD_IDENTITY_PROVIDER_BENCH }}
@@ -319,7 +319,7 @@ jobs:
       - name: Upload plots (runtime comparison)
         if: inputs.comparison_runtime
         id: upload-plots-runtime
-        uses: google-github-actions/upload-cloud-storage@v2
+        uses: google-github-actions/upload-cloud-storage@v3
         with:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
@@ -344,11 +344,10 @@ jobs:
       - name: Post summary to Slack (runtime comparison)
         if: ${{ inputs.post_summary_slack != '' && inputs.comparison_runtime }}
         id: slack-runtime
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY || secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        uses: slackapi/slack-github-action@v4
         with:
+          webhook: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY || secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          webhook-type: incoming-webhook
           payload: |
             ${{ steps.summary-runtime.outputs.slack_summary }}
 
@@ -372,7 +371,7 @@ jobs:
       - name: Upload plots (previous comparison)
         if: inputs.comparison_previous
         id: upload-plots-previous
-        uses: google-github-actions/upload-cloud-storage@v2
+        uses: google-github-actions/upload-cloud-storage@v3
         with:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
@@ -404,11 +403,10 @@ jobs:
       - name: Post summary to Slack (previous comparison)
         if: ${{ inputs.post_summary_slack != '' && inputs.comparison_previous }}
         id: slack-previous
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY || secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        uses: slackapi/slack-github-action@v4
         with:
+          webhook: ${{ inputs.post_summary_slack == 'nightly' && secrets.SLACK_WEBHOOK_URL_PERFORMANCE_NIGHTLY || secrets.SLACK_WEBHOOK_URL_PERFORMANCE }}
+          webhook-type: incoming-webhook
           payload: |
             ${{ steps.summary-previous.outputs.slack_summary }}
 
@@ -423,7 +421,7 @@ jobs:
       - name: Upload plots
         if: ${{ ! inputs.comparison_runtime && !inputs.comparison_previous }}
         id: upload-plots
-        uses: google-github-actions/upload-cloud-storage@v2
+        uses: google-github-actions/upload-cloud-storage@v3
         with:
           predefinedAcl: publicRead
           project_id: ${{ steps.auth.outputs.project_id }}
