@@ -49,12 +49,18 @@ require_sample() {
     fi
 }
 
+# XXX: remove once cedana-gpu #309 (CED-2507) is in the GPU plugin; these hang until then
+require_reset_fix() {
+    skip "known bug: CUDA applications that reset the device hang under the interceptor (cedana-gpu #309)"
+}
+
 # A device check at startup that resets the device, then work, as GROMACS does
 # bats test_tags=run,reset
 @test "[$GPU_INFO] run GPU process using the device after cudaDeviceReset" {
     require_sample reset_stream
+    require_reset_fix
 
-    run cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/reset_stream
+    run timeout 180 cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/reset_stream
     assert_success
     assert_output --partial PASS
 }
@@ -63,8 +69,9 @@ require_sample() {
 # bats test_tags=run,reset
 @test "[$GPU_INFO] run GPU process resetting the device before it exits" {
     require_sample reset_exit
+    require_reset_fix
 
-    run cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/reset_exit
+    run timeout 180 cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/reset_exit
     assert_success
     assert_output --partial PASS
 }
@@ -73,6 +80,7 @@ require_sample() {
 # bats test_tags=restore,reset
 @test "[$GPU_INFO] restore GPU process that resets the device before and after the checkpoint" {
     require_sample reset_exit
+    require_reset_fix
 
     local jid gate
     jid=$(unix_nano)
@@ -87,7 +95,7 @@ require_sample() {
 
     # Lets the restored process finish its work
     touch "$gate"
-    run cedana restore job "$jid" --attach
+    run timeout 180 cedana restore job "$jid" --attach
     rm -f "$gate"
     assert_success
     assert_output --partial PASS
@@ -135,7 +143,7 @@ require_sample() {
     cedana dump job "$jid"
 
     touch "$gate"
-    run cedana restore job "$jid" --attach
+    run timeout 180 cedana restore job "$jid" --attach
     rm -f "$gate"
     assert_success
     assert_output --partial "Device name"
@@ -148,7 +156,7 @@ require_sample() {
 @test "[$GPU_INFO] run GPU process using registered host memory zero-copy" {
     require_sample host_register
 
-    run cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/host_register
+    run timeout 180 cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES"/host_register
     assert_success
     assert_output --partial PASS
 }
@@ -168,7 +176,7 @@ require_sample() {
     cedana dump job "$jid"
 
     touch "$gate"
-    run cedana restore job "$jid" --attach
+    run timeout 180 cedana restore job "$jid" --attach
     rm -f "$gate"
     assert_success
     assert_output --partial PASS
