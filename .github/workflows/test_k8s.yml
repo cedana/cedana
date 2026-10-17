@@ -368,8 +368,6 @@ jobs:
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}
           K3S_CONTAINERD: ${{ matrix.containerd }}
-          # XXX: temporary, the slim image (multi-arch index) from a cedana-samples PR build; cedana/cedana-samples:cuda-smr once released
-          GPU_WORKLOAD_IMAGE: docker.io/cedana/cedana-samples-test:cuda12.8-smr@sha256:6e20745535a573d7d7a1572c98791ee4adb60b1d34d07150ad3a2f6e5c60cc0a
           # Each K3s CPU job runs other versions, so together they cover what customers run.
           # The rest run the defaults: k3s v1.34.2 (containerd 2.1.5) and the test image's containerd.
           #   default, external:  containerd 1.7 (config v2 only)

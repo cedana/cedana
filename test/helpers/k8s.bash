@@ -4,8 +4,9 @@
 ### Kubernetes Helpers ###
 ##########################
 
-# Image the GPU pods run, with the CUDA workloads at /cedana-samples/gpu_smr
-export GPU_WORKLOAD_IMAGE="${GPU_WORKLOAD_IMAGE:-cedana/cedana-test:cuda}"
+# Image the GPU pods run, with the CUDA workloads at /cedana-samples/gpu_smr: a slim one, as
+# customer images are (a CUDA base and the app), rather than the whole CI image
+export GPU_WORKLOAD_IMAGE="${GPU_WORKLOAD_IMAGE:-cedana/cedana-samples:cuda-smr}"
 
 install_kubectl() {
     if command -v kubectl &>/dev/null; then
