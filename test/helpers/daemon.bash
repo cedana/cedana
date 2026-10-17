@@ -65,6 +65,7 @@ setup_daemon() {
         debug start_daemon_at "$SOCK"
         follow_daemon_log "$SOCK" +1 # all of it, as it's this test's daemon
     else
+        check_daemon_alive "$CEDANA_ADDRESS" # e.g. crashed in an earlier test
         follow_daemon_log "$CEDANA_ADDRESS" 0 # from now on, for this test
     fi
 }
@@ -74,6 +75,20 @@ teardown_daemon() {
         stop_daemon_at "$SOCK"
     fi
     unfollow_daemon_log
+    if env_exists "PERSIST_DAEMON"; then
+        check_daemon_alive "$CEDANA_ADDRESS" # crashed in this test
+    fi
+}
+
+# Fails with the end of the daemon's log if it's no longer running (e.g. it panicked), as
+# otherwise later tests only see "connection refused"
+check_daemon_alive() {
+    local sock=$1
+    if [ -z "$(recorded_pid "$(daemon_pid_file "$sock")")" ]; then
+        error_log "Daemon at $sock is no longer running, the end of its log:"
+        tail -n 50 "$(daemon_log_file "$sock")"
+        return 1
+    fi
 }
 
 ##################
