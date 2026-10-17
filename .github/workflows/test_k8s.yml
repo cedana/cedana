@@ -454,44 +454,32 @@ jobs:
             TAGS="${TAGS},!large"
           fi
 
-          status=0
-          make test-k8s \
-            TAGS=$TAGS,!upgrade \
-            PROVIDER=$PROVIDER \
-            K3S_CONTAINERD=$K3S_CONTAINERD \
-            GPU=$GPU \
-            FORMATTER=$FORMATTER \
-            DEBUG=$DEBUG \
-            PARALLELISM=$PARALLELISM \
-            RETRIES=$RETRIES \
-            CONTROLLER_REPO=$CONTROLLER_REPO \
-            CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
-            HELPER_REPO=$HELPER_REPO \
-            HELPER_DIGEST=$HELPER_DIGEST \
-            PROPAGATOR_REPO=$PROPAGATOR_REPO \
-            PROPAGATOR_DIGEST=$PROPAGATOR_DIGEST \
-            HELM_CHART=$HELM_CHART || status=$?
-
-          # Starts over from the latest released chart, then upgrades to this one. Not
-          # blocking yet, until it has proven reliable.
-          if [ "$UPGRADE" = "1" ]; then
-            UPGRADE_FROM_CHART=latest K8S_DIAGNOSTICS_DIR=/tmp/k8s-diagnostics/upgrade make test-k8s \
-              TAGS=k8s,upgrade \
-              REPORT=report-upgrade \
+          run_suite() {
+            make test-k8s "$@" \
               PROVIDER=$PROVIDER \
               K3S_CONTAINERD=$K3S_CONTAINERD \
               GPU=$GPU \
               FORMATTER=$FORMATTER \
               DEBUG=$DEBUG \
-              PARALLELISM=1 \
-              RETRIES=0 \
               CONTROLLER_REPO=$CONTROLLER_REPO \
               CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
               HELPER_REPO=$HELPER_REPO \
               HELPER_DIGEST=$HELPER_DIGEST \
               PROPAGATOR_REPO=$PROPAGATOR_REPO \
               PROPAGATOR_DIGEST=$PROPAGATOR_DIGEST \
-              HELM_CHART=$HELM_CHART ||
+              HELM_CHART=$HELM_CHART
+          }
+
+          status=0
+          run_suite TAGS=$TAGS,!upgrade PARALLELISM=$PARALLELISM RETRIES=$RETRIES || status=$?
+
+          # Starts over from the latest released chart, then upgrades to this one. Not
+          # blocking yet, until it has proven reliable.
+          if [ "$UPGRADE" = "1" ]; then
+            (
+              export UPGRADE_FROM_CHART=latest K8S_DIAGNOSTICS_DIR=/tmp/k8s-diagnostics/upgrade
+              run_suite TAGS=k8s,upgrade REPORT=report-upgrade PARALLELISM=1 RETRIES=0
+            ) ||
               echo "::warning title=Upgrade test failed::Upgrading from the latest release failed (not blocking yet)"
           fi
           exit $status
