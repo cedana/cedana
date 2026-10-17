@@ -12,11 +12,12 @@ package scripts
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
+	"slices"
 	"strings"
 	"testing"
 
@@ -168,7 +169,7 @@ func TestContainerdConfig(t *testing.T) {
 
 			// Idempotent: running again (e.g. a helper restart) changes nothing
 			runContainerdConfig(t, block, root, env)
-			if again := snapshot(t, root); !equalSnapshots(after, again) {
+			if again := snapshot(t, root); !maps.Equal(after, again) {
 				t.Errorf("a second run changed the config:\n%s", diffSnapshots(after, again))
 			}
 
@@ -235,7 +236,7 @@ func TestContainerdConfigRancherTemplate(t *testing.T) {
 			runContainerdConfig(t, block, root, nil)
 			after := snapshot(t, root)
 			runContainerdConfig(t, block, root, nil)
-			if again := snapshot(t, root); !equalSnapshots(after, again) {
+			if again := snapshot(t, root); !maps.Equal(after, again) {
 				t.Errorf("a second run changed the template:\n%s", diffSnapshots(after, again))
 			}
 
@@ -336,31 +337,11 @@ func snapshot(t *testing.T, root string) map[string]string {
 	return files
 }
 
-func equalSnapshots(a, b map[string]string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for k, v := range a {
-		if b[k] != v {
-			return false
-		}
-	}
-	return true
-}
-
 func diffSnapshots(a, b map[string]string) string {
-	var keys []string
-	for k := range a {
-		keys = append(keys, k)
-	}
-	for k := range b {
-		if _, ok := a[k]; !ok {
-			keys = append(keys, k)
-		}
-	}
-	sort.Strings(keys)
+	all := maps.Clone(a)
+	maps.Copy(all, b)
 	var diff strings.Builder
-	for _, k := range keys {
+	for _, k := range slices.Sorted(maps.Keys(all)) {
 		if a[k] != b[k] {
 			fmt.Fprintf(&diff, "--- %s before:\n%s\n--- %s after:\n%s\n", k, a[k], k, b[k])
 		}
