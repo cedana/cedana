@@ -3,20 +3,24 @@
 # This is a helper file assumes its users are in the same directory as the Makefile
 
 csx_daemon_log_file() {
-    local sock=$1
-    id=$(basename "$sock")
-    echo /tmp/csx-daemon-"$id".log
+    echo /tmp/csx-daemon-"$(basename "$1")".log
 }
 
+# Polled often, see wait_for_start. Fails right away if the daemon exits.
 wait_for_csx_start() {
     local sock=$1
+    local pid=$2
     local i=0
     while [ ! -S "$sock" ]; do
-        sleep 1
+        if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+            error_log "CSX daemon exited before starting, see $(csx_daemon_log_file "$sock")"
+            return 1
+        fi
+        sleep 0.1
         i=$((i + 1))
-        if [ $i -gt $WAIT_TIMEOUT ]; then
+        if [ $i -gt $((WAIT_TIMEOUT * 10)) ]; then
             error_log "CSX Daemon failed to start after $WAIT_TIMEOUT seconds"
-            exit 1
+            return 1
         fi
     done
 }
@@ -25,8 +29,10 @@ start_csx_daemon_at() {
     local sock=$1
     check_cmd csx
     debug_log "Starting csx daemon at socket $sock"
-    csx | tee "$(csx_daemon_log_file "$sock")" &
-    wait_for_csx_start "$sock"
+    # Only to its log file, see start_daemon_at
+    csx >"$(csx_daemon_log_file "$sock")" 2>&1 </dev/null 3>&- &
+    record_pid $! "$(daemon_pid_file "$sock")" # for wait_for_stop
+    wait_for_csx_start "$sock" $!
 }
 
 stop_csx_daemon() {
@@ -36,7 +42,7 @@ stop_csx_daemon() {
         return 0
     fi
     debug_log "Stopping daemon at socket $sock"
-    kill_at_sock "$sock" TERM
+    terminate_at_sock "$sock"
     wait_for_stop "$sock"
 }
 
@@ -79,22 +85,22 @@ teardown_file_csx_daemon() {
 }
 
 setup_csx_daemon() {
+    local from=0 # from now on, for this test
     if ! env_exists "PERSIST_DAEMON"; then
         start_csx_daemon
-    else
-        log_file=$(csx_daemon_log_file "$CSX_SOCK")
-        tail -f "$log_file" &
-        CSX_TAIL_PID=$!
-        export CSX_TAIL_PID
+        from=+1 # all of it, as it's this test's daemon
     fi
+    tail -n "$from" -F "$(csx_daemon_log_file "$CSX_SOCK")" 2>/dev/null 3>&- &
+    CSX_TAIL_PID=$!
 }
 
 teardown_csx_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         cleanup_csx_daemon
-    else
-        if [ -n "$CSX_TAIL_PID" ]; then
-            wait_for_stop "$CSX_SOCK" && kill "$CSX_TAIL_PID" &
-        fi
+    fi
+    if [ -n "$CSX_TAIL_PID" ]; then
+        kill "$CSX_TAIL_PID" 2>/dev/null
+        wait "$CSX_TAIL_PID" 2>/dev/null || true
+        CSX_TAIL_PID=
     fi
 }

@@ -36,6 +36,11 @@ on:
         description: "Run kubernetes tests"
         required: false
         default: true
+      cloud_kubernetes:
+        type: boolean
+        description: "Also run kubernetes tests on cloud platforms (EKS, EKS-Karpenter, GKE, and Nebius with large). They share a cluster per platform across all runs and repos, so runs queue behind each other."
+        required: false
+        default: false
       slurm:
         type: boolean
         description: "Run slurm tests"
@@ -81,7 +86,7 @@ env:
 jobs:
   unit:
     name: Unit
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache # compiles test binaries in parallel
     strategy:
       fail-fast: false
       matrix:
@@ -132,7 +137,19 @@ jobs:
         with:
           limit-access-to-actor: true
 
+      # Most of the job is otherwise downloading modules and compiling dependencies from scratch
+      - name: Cache Go modules and build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: go-unit-${{ matrix.arch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-unit-${{ matrix.arch }}-
+
       - name: Run unit tests
+        env:
+          GOFLAGS: -count=1 # always run the tests, only compilation is cached
         run: make test-unit
 
   script:
@@ -426,7 +443,7 @@ jobs:
     with:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
-      platforms: ${{ inputs.large && '["K3s", "EKS", "EKS-Karpenter", "GKE", "Nebius"]' || '["K3s", "EKS", "EKS-Karpenter", "GKE"]' }} # Nebius only runs large tests
+      platforms: ${{ !inputs.cloud_kubernetes && '["K3s"]' || (inputs.large && '["K3s", "EKS", "EKS-Karpenter", "GKE", "Nebius"]' || '["K3s", "EKS", "EKS-Karpenter", "GKE"]') }} # Nebius only runs large tests
       propagator: ${{ inputs.propagator }}
       large: ${{ inputs.large }} # K3s is only for small tests, regardless
       runner: ${{ inputs.runner }}
@@ -445,7 +462,9 @@ jobs:
       slurm_versions: ${{ inputs.slurm_versions }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
-      runner: ${{ inputs.runner }}
+      # At least 4cpu, for its 80GB volume: the 2cpu disk fills up pulling the ~4GB
+      # prebaked node image, which then falls back to building SLURM from source
+      runner: ${{ inputs.runner == '2cpu' && '4cpu' || inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
       # Pinned to 1 because SLURM tests share a single cluster instance.
       # Running them in parallel can cause resource collisions and flaky tests.
