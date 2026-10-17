@@ -24,6 +24,7 @@ import (
 	"github.com/cedana/cedana/pkg/caps"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
@@ -618,7 +619,19 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Debug().Msg("GPU restore starting")
 
-			resp, err := controller.Restore(waitCtx, &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()})
+			req := &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()}
+
+			// A restore onto other GPUs than the checkpoint's (see keys.GPU_RESTORE_DEVICE_MINORS_CONTEXT_KEY):
+			// the controller's staged workers start before CRIU's post-restore hook creates the
+			// nodes for those GPUs in the restored /dev, so the controller creates them first.
+			if minors, ok := ctx.Value(keys.GPU_RESTORE_DEVICE_MINORS_CONTEXT_KEY).([]int); ok {
+				for _, minor := range minors {
+					req.DeviceMinors = append(req.DeviceMinors, uint32(minor))
+				}
+				log.Debug().Ints("minors", minors).Msg("restoring GPU onto allocated devices")
+			}
+
+			resp, err := controller.Restore(waitCtx, req)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to restore GPU")
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
@@ -671,8 +684,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 			addGPUProfileToProfiling(ctx, restoreProfile)
 		})
 		if err != nil {
-			// CRIU doesn't kill the process if this post-restore/post-resume hook fails, so we kill it ourselves.
-			// Because it can't run since the GPU restore failed.
+			// CRIU only logs a failed pre-resume script and resumes the tasks anyway, so we kill them
+			// ourselves: they cannot run without their GPU state. CRIU's own teardown then stalls
+			// forever on the killed, still-traced tasks; the CRIU client kills CRIU for that.
 			if restoredPid != nil {
 				syscall.Kill(int(*restoredPid), syscall.SIGKILL)
 			}
