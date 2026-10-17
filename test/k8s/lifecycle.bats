@@ -96,6 +96,7 @@ teardown() {
         kubectl delete pod "$pod" "${pod%-restored}-restored" -n "$NAMESPACE" --force --grace-period=0 --wait=false &>/dev/null || true
     done
     if [ -n "${CHECKPOINT_DIR_OVERRIDE:-}" ]; then
+        umount -l "$CHECKPOINT_DIR_OVERRIDE" &>/dev/null || true
         rm -rf "$CHECKPOINT_DIR_OVERRIDE"
     fi
 }
@@ -232,4 +233,64 @@ teardown() {
             return 1
         fi
     fi
+}
+
+# A dump that fails while the process is frozen must leave it running, and the pod
+# deletable, not frozen. Covers C5.
+# bats test_tags=dump
+@test "A dump that fails leaves the pod running and deletable" {
+    # The checkpoint directory is a tmpfs on this host, too small for the dump
+    if [ "$PROVIDER" != "k3s" ]; then
+        skip "needs to mount the checkpoint directory on a K3s node"
+    fi
+
+    CHECKPOINT_DIR_OVERRIDE="/tmp/cedana-lifecycle-$(unix_nano)"
+    mkdir -p "$CHECKPOINT_DIR_OVERRIDE"
+    mount -t tmpfs -o size=16k tmpfs "$CHECKPOINT_DIR_OVERRIDE"
+
+    local spec name
+    spec=$(counter_pod_spec)
+    name=$(deploy_counter "$spec")
+    TEST_PODS+=("$name")
+
+    # Uncompressed, so CRIU writes its images straight into the full directory while the
+    # process is frozen (compressed ones go to a temporary directory first)
+    local pod_id action_id
+    pod_id=$(get_pod_id "$name" "$NAMESPACE")
+    action_id=$(checkpoint_pod "$pod_id" "" "$CHECKPOINT_DIR_OVERRIDE" none)
+    validate_action_id "$action_id"
+
+    local status="" start=$SECONDS
+    while [ $((SECONDS - start)) -lt 120 ]; do
+        status=$(get_checkpoint_status "$action_id")
+        case "$status" in ready | error) break ;; esac
+        sleep 3
+    done
+    case "$status" in
+        error) ;;
+        ready)
+            error_log "A dump into a full directory ($CHECKPOINT_DIR_OVERRIDE, 16k tmpfs) succeeded, so it didn't fail as intended"
+            return 1
+            ;;
+        *)
+            error_log "A dump into a full directory didn't fail within 120s (status: ${status:-not recorded})"
+            return 1
+            ;;
+    esac
+
+    # Still running: the count keeps going
+    local before after
+    before=$(last_count "$name")
+    sleep 5
+    after=$(last_count "$name")
+    if [ -z "$after" ] || [ "$after" -le "${before:-0}" ]; then
+        error_log "Pod $name stopped counting after the failed dump (count ${before:-none} -> ${after:-none}): left frozen?"
+        return 1
+    fi
+
+    # And deletable in its grace period, which a frozen process wouldn't be
+    kubectl delete pod "$name" -n "$NAMESPACE" --timeout=60s || {
+        error_log "Pod $name could not be deleted after the failed dump"
+        return 1
+    }
 }

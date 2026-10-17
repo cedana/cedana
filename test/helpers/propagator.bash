@@ -14,7 +14,8 @@
 checkpoint_pod() {
     local pod_id="$1"
     local runc_root=${2:-"/run/containerd/runc/k8s.io"}
-    local directory="${3:-}" # overrides the configured checkpoint directory
+    local directory="${3:-}"   # overrides the configured checkpoint directory
+    local compression="${4:-}" # overrides the configured compression
 
     if [ -z "$pod_id" ] || [ -z "$runc_root" ]; then
         error_log "checkpoint_pod requires pod_id and runc_root"
@@ -28,10 +29,12 @@ checkpoint_pod() {
             --arg pod_id "$pod_id" \
             --arg runc_root "$runc_root" \
             --arg directory "$directory" \
+            --arg compression "$compression" \
             '{
             "pod_id": $pod_id,
             "runc_root": $runc_root
-    } + (if $directory != "" then {"overrides": {"directory": $directory}} else {} end)')
+    } + ({"directory": $directory, "compression": $compression} | with_entries(select(.value != "")) |
+        if . == {} then {} else {"overrides": .} end)')
 
     local response
     response=$(curl -s -X POST "${CEDANA_URL}/checkpoint/pod" \
@@ -306,6 +309,14 @@ poll_restore_status() {
     error_log "Restore $restore_id did not finish within ${timeout_seconds}s (last status: ${status:-not recorded}), e.g. it never ran"
     debug_log "Restore record: ${restore:-none}"
     return 1
+}
+
+# The status of a checkpoint (e.g. initialized, processing, ready, error), or nothing
+# @param $1: Checkpoint action ID
+get_checkpoint_status() {
+    local action_id="${1//\"/}"
+    curl -s --max-time 10 -X GET "${CEDANA_URL}/checkpoint/status/${action_id}" \
+        -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | jq -r '.status // empty' 2>/dev/null
 }
 
 # The status of a restore (e.g. starting, pod_created, success, fallback, error), or nothing

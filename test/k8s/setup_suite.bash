@@ -136,6 +136,9 @@ setup_suite() {
 }
 
 teardown_suite() {
+    # Collect what's needed to debug a failure (uploaded by CI), before anything is torn down
+    collect_diagnostics "${K8S_DIAGNOSTICS_DIR:-/tmp/k8s-diagnostics}" || true
+
     # Stop log tailing
     if [ -n "$TAIL_PID" ]; then
         pkill -P "$TAIL_PID" 2>/dev/null || true

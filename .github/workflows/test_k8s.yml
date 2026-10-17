@@ -97,7 +97,7 @@ jobs:
   propagator-connectivity:
     name: Propagator Connectivity
     if: ${{ !inputs.propagator }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -237,7 +237,7 @@ jobs:
         ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && '--ipc=host --gpus all' || '' }}
         ${{ matrix.platform == 'K3s' && '-v /var/lib/cedana-ci/rancher:/var/lib/rancher -v /var/lib/cedana-ci/containerd:/var/lib/containerd' || '' }}
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
       - uses: actions/checkout@v5
         with:
@@ -375,7 +375,8 @@ jobs:
           #   default, external:  containerd 1.7 (config v2 only)
           #   streamer, external: containerd 2.4 (config v4)
           #   default, embedded:  k3s v1.36 (Kubernetes 1.36, containerd 2.3)
-          K3S_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'embedded') && 'v1.36.5+k3s1' || '' }}
+          # and the K3s CUDA embedded job k3s v1.34.8 (containerd 2.2.3-k3s1), as a customer's GPU nodes.
+          K3S_VERSION: ${{ (matrix.platform == 'K3s' && matrix.containerd == 'embedded') && (matrix.compute == 'CPU' && 'v1.36.5+k3s1' || 'v1.34.8+k3s1') || '' }}
           CONTAINERD_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'external') && (matrix.cr == 'streamer' && '2.4.2' || '1.7.36') || '' }}
           # This job then also upgrades from the latest release (see upgrade.bats)
           UPGRADE: ${{ (inputs.upgrade && matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.cr == 'default' && matrix.containerd == 'external') && '1' || '0' }}
@@ -513,11 +514,20 @@ jobs:
             /tmp/propagator*.log
           if-no-files-found: ignore
 
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: k8s-diagnostics-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.containerd }}
+          path: /tmp/k8s-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
+
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: k8s
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download reports
         uses: actions/download-artifact@v7

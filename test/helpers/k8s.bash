@@ -380,7 +380,7 @@ verify_restored_pod() {
             local uts
             uts=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /proc/sys/kernel/hostname 2>&1 | tr -d '[:space:]')
             [ "$uts" = "$hostname" ] ||
-                error_log "WARNING: $container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)"
+                warn_log "$container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)"
         fi
 
         local gpus
@@ -401,7 +401,7 @@ verify_restored_pod() {
             # Only warns for now: restores may not rebuild the loader cache yet (the nvidia hook
             # that runs ldconfig is removed on restore). Make it an error once they pass.
             [ -z "$gpu_problems" ] ||
-                error_log "WARNING: $container: GPU: $(tr '\n' ';' <<<"$gpu_problems")"
+                warn_log "$container: GPU: $(tr '\n' ';' <<<"$gpu_problems")"
         fi
 
         if [ "$automount" != "false" ]; then
@@ -1208,4 +1208,97 @@ EOF
     fi
 
     echo "$spec"
+}
+
+# Collects what's needed to debug a failed run into a directory, for CI to upload: the
+# cedana daemon log, containerd logs (the shims log through containerd), the logs of all
+# pods in the Cedana namespace (incl. previous containers), pods and events of the cluster,
+# and the propagator's recent restores for this cluster (with a summary by status). Best
+# effort: every step is bounded, and it never fails. Call it before anything is torn down.
+# @param $1: Output directory (default: /tmp/k8s-diagnostics)
+# @param $2: Max bytes per log (default: 20M, as for tail -c)
+collect_diagnostics() {
+    local dir="${1:-/tmp/k8s-diagnostics}"
+    local max="${2:-20M}"
+    (
+        set +e +o pipefail
+        rm -rf "$dir" 2>/dev/null
+        mkdir -p "$dir" || exit 0
+        local kc=(kubectl --request-timeout=30s)
+        local ns="${CEDANA_NAMESPACE:-cedana-system}"
+
+        debug_log "Collecting diagnostics into $dir..."
+
+        # Cluster state
+        "${kc[@]}" get nodes -o wide > "$dir/nodes.txt" 2>&1
+        "${kc[@]}" get pods -A -o wide > "$dir/pods.txt" 2>&1
+        "${kc[@]}" get events -A --sort-by=.lastTimestamp > "$dir/events.txt" 2>&1
+        "${kc[@]}" describe pods -n "$ns" > "$dir/describe-$ns.txt" 2>&1
+
+        # Logs of all pods in the Cedana namespace, and of their previous containers if restarted
+        local pod restarts
+        mkdir -p "$dir/pods"
+        while read -r pod restarts; do
+            [ -n "$pod" ] || continue
+            timeout 120 "${kc[@]}" logs -n "$ns" "$pod" --all-containers --prefix --timestamps 2>&1 |
+                tail -c "$max" > "$dir/pods/$pod.log"
+            if [[ "$restarts" =~ [1-9] ]]; then # any container restarted
+                timeout 120 "${kc[@]}" logs -n "$ns" "$pod" --all-containers --prefix --timestamps --previous 2>&1 |
+                    tail -c "$max" > "$dir/pods/$pod.previous.log"
+            fi
+        done < <("${kc[@]}" get pods -n "$ns" \
+                -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[*].restartCount}{"\n"}{end}' 2>/dev/null)
+
+        # Node logs, through each helper pod (which mounts the node's root at /host), so it
+        # works on any platform: the daemon log (scripts/install-service.sh logs to it, also
+        # under systemd), and the daemon's and containerd's journals where there's systemd
+        local helper node
+        mkdir -p "$dir/nodes"
+        while read -r helper node; do
+            [ -n "$helper" ] || continue
+            node="${node:-$helper}"
+            timeout 120 "${kc[@]}" exec -n "$ns" "$helper" -c helper -- \
+                sh -c "tail -c $max /host/var/log/cedana-daemon.log" > "$dir/nodes/$node.cedana-daemon.log" 2>&1
+            timeout 120 "${kc[@]}" exec -n "$ns" "$helper" -c helper -- \
+                sh -c "chroot /host journalctl -u cedana -u containerd -u k3s -u k3s-agent --no-pager -o short-precise 2>/dev/null | tail -c $max" \
+                > "$dir/nodes/$node.journal.log" 2>&1
+        done < <("${kc[@]}" get pods -n "$ns" -l app.kubernetes.io/component=helper \
+                -o go-template='{{range .items}}{{.metadata.name}} {{.spec.nodeName}}{{"\n"}}{{end}}' 2>/dev/null)
+
+        # Local node logs, for K3s, whose node is this machine (and if the helper is gone)
+        mkdir -p "$dir/local"
+        local f
+        for f in /var/log/cedana*.log "${CONTAINERD_LOG:-/tmp/containerd.log}" \
+            /var/lib/rancher/k3s/agent/containerd/containerd.log; do
+            [ -f "$f" ] && tail -c "$max" "$f" > "$dir/local/$(basename "$f")"
+        done
+        if command -v journalctl &>/dev/null; then
+            timeout 60 journalctl -u cedana -u containerd -u k3s --no-pager -o short-precise 2>/dev/null |
+                tail -c "$max" > "$dir/local/journal.log"
+        fi
+
+        # Recent restores of this cluster from the propagator, with a summary by status
+        if [ -n "${CEDANA_URL:-}" ]; then
+            local query="limit=50"
+            [ -n "${CLUSTER_ID:-}" ] && query+="&cluster_id=${CLUSTER_ID//\"/}"
+            curl -s --max-time 30 "${CEDANA_URL}/restores?${query}" \
+                -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN:-}" 2>/dev/null |
+                head -c 50M > "$dir/restores.json"
+            local summary
+            summary=$(jq -r 'if type == "array" then
+                    (group_by(.status) | map("\(.[0].status // "unknown")=\(length)") | join(" ")) as $s
+                    | "\(length) restores\(if $s != "" then ": " + $s else "" end)"
+                else empty end' "$dir/restores.json" 2>/dev/null)
+            if [ -n "$summary" ]; then
+                echo "$summary" > "$dir/restores-summary.txt"
+                info_log "Propagator restores for cluster ${CLUSTER_ID:-?} (last 50): $summary"
+            else
+                info_log "Propagator restores for cluster ${CLUSTER_ID:-?}: unavailable"
+            fi
+        fi
+
+        find "$dir" -type f -empty -delete 2>/dev/null
+        info_log "Diagnostics collected in $dir"
+        exit 0
+    ) || true
 }
