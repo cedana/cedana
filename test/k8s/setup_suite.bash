@@ -103,7 +103,12 @@ setup_suite() {
 
         helm_uninstall_cedana "$CEDANA_NAMESPACE"
         occupy_default_daemon_port
-        helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
+        if [ -n "${UPGRADE_FROM_CHART:-}" ]; then
+            # The upgrade tests start from a released chart, and upgrade to this one
+            helm_install_released_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE" "$UPGRADE_FROM_CHART"
+        else
+            helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
+        fi
     else
         debug_log "Skipping helm install (SKIP_HELM=1)"
         if [ -z "$CLUSTER_ID" ]; then

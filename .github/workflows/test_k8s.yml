@@ -31,6 +31,11 @@ on:
         description: "Deploy the propagator from the propagator-digests-* artifacts into the cluster, instead of using CEDANA_URL"
         required: false
         default: false
+      upgrade:
+        type: boolean
+        description: "Also test upgrading from the latest released chart (on one K3s job)"
+        required: false
+        default: false
       large:
         type: boolean
         description: "Run large tests"
@@ -370,6 +375,8 @@ jobs:
           #   default, embedded:  k3s v1.36 (Kubernetes 1.36, containerd 2.3)
           K3S_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'embedded') && 'v1.36.5+k3s1' || '' }}
           CONTAINERD_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'external') && (matrix.cr == 'streamer' && '2.4.2' || '1.7.36') || '' }}
+          # This job then also upgrades from the latest release (see upgrade.bats)
+          UPGRADE: ${{ (inputs.upgrade && matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.cr == 'default' && matrix.containerd == 'external') && '1' || '0' }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ (inputs.large && matrix.platform != 'K3s') && '1' || '0' }} # K3s is only for small tests
@@ -434,8 +441,9 @@ jobs:
             TAGS="${TAGS},!large"
           fi
 
+          status=0
           make test-k8s \
-            TAGS=$TAGS \
+            TAGS=$TAGS,!upgrade \
             PROVIDER=$PROVIDER \
             K3S_CONTAINERD=$K3S_CONTAINERD \
             GPU=$GPU \
@@ -449,7 +457,31 @@ jobs:
             HELPER_DIGEST=$HELPER_DIGEST \
             PROPAGATOR_REPO=$PROPAGATOR_REPO \
             PROPAGATOR_DIGEST=$PROPAGATOR_DIGEST \
-            HELM_CHART=$HELM_CHART
+            HELM_CHART=$HELM_CHART || status=$?
+
+          # Starts over from the latest released chart, then upgrades to this one. Not
+          # blocking yet, until it has proven reliable.
+          if [ "$UPGRADE" = "1" ]; then
+            UPGRADE_FROM_CHART=latest make test-k8s \
+              TAGS=k8s,upgrade \
+              REPORT=report-upgrade \
+              PROVIDER=$PROVIDER \
+              K3S_CONTAINERD=$K3S_CONTAINERD \
+              GPU=$GPU \
+              FORMATTER=$FORMATTER \
+              DEBUG=$DEBUG \
+              PARALLELISM=1 \
+              RETRIES=0 \
+              CONTROLLER_REPO=$CONTROLLER_REPO \
+              CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
+              HELPER_REPO=$HELPER_REPO \
+              HELPER_DIGEST=$HELPER_DIGEST \
+              PROPAGATOR_REPO=$PROPAGATOR_REPO \
+              PROPAGATOR_DIGEST=$PROPAGATOR_DIGEST \
+              HELM_CHART=$HELM_CHART ||
+              echo "::warning title=Upgrade test failed::Upgrading from the latest release failed (not blocking yet)"
+          fi
+          exit $status
 
       - name: Label report # with the job name, so the summary can link to it
         if: always()

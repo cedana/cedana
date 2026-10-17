@@ -41,6 +41,11 @@ on:
         description: "Also run kubernetes tests on cloud platforms (EKS, EKS-Karpenter, GKE, and Nebius with large). They share a cluster per platform across all runs and repos, so runs queue behind each other."
         required: false
         default: false
+      upgrade:
+        type: boolean
+        description: "Also test upgrading from the latest released chart (on one K3s job)"
+        required: false
+        default: false
       slurm:
         type: boolean
         description: "Run slurm tests"
@@ -468,6 +473,7 @@ jobs:
       debug: ${{ inputs.debug }}
       platforms: ${{ !inputs.cloud_kubernetes && '["K3s"]' || (inputs.large && '["K3s", "EKS", "EKS-Karpenter", "GKE", "Nebius"]' || '["K3s", "EKS", "EKS-Karpenter", "GKE"]') }} # Nebius only runs large tests
       propagator: ${{ inputs.propagator }}
+      upgrade: ${{ inputs.upgrade }}
       large: ${{ inputs.large }} # K3s is only for small tests, regardless
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}

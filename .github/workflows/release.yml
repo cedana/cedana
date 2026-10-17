@@ -99,6 +99,7 @@ jobs:
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
       propagator: true
       cloud_kubernetes: true
+      upgrade: true
 
   bench:
     name: Bench

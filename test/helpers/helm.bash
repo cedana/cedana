@@ -108,6 +108,26 @@ helm_install_cedana() {
     debug_log "Helm chart installed"
 }
 
+# Installs a released chart as it was released: its own images and plugin versions (e.g.
+# the previous release, to upgrade from). "latest" is the latest release.
+helm_install_released_cedana() {
+    local cluster_id="$1"
+    local namespace="$2"
+    local version="$3"
+
+    (
+        unset CONTROLLER_REPO CONTROLLER_DIGEST CONTROLLER_TAG HELPER_REPO HELPER_DIGEST HELPER_TAG
+        unset CEDANA_PLUGINS_NATIVE_VERSION CEDANA_PLUGINS_CRIU_VERSION CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION
+        unset CEDANA_PLUGINS_GPU_VERSION CEDANA_PLUGINS_STREAMER_VERSION
+        if [ "$version" = "latest" ]; then
+            HELM_CHART=""
+        else
+            HELM_CHART="$version"
+        fi
+        helm_install_cedana "$cluster_id" "$namespace"
+    )
+}
+
 helm_is_cedana_installed() {
     local namespace="$1"
 

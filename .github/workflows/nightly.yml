@@ -47,6 +47,7 @@ jobs:
       large: true # include large tests
       propagator: true
       cloud_kubernetes: true # doesn't block anyone at night, and the only place Nebius runs (large)
+      upgrade: true
       runner: 8cpu # use larger runner
       runner_gpu: 16cpu-1gpu # use larger runner
       parallelism: 4
