@@ -219,11 +219,11 @@ teardown() {
     debug_log "Restore of the corrupted checkpoint ended as '$status' in ${took}s"
 
     # A fallback cold-starts: the pod must then run from scratch, not from corrupted state
-    if [ "$status" = "fallback" ] && [ -z "$restored" ]; then
-        error_log "Restore $restore_id fell back, but its pod never appeared"
-        return 1
-    fi
     if [ "$status" = "fallback" ]; then
+        [ -n "$restored" ] || {
+            error_log "Restore $restore_id fell back, but its pod never appeared"
+            return 1
+        }
         validate_pod "$restored" 60
         wait_for_log_trigger "$restored" "COUNT" 30
         local first
