@@ -36,6 +36,11 @@ on:
         description: "Also test upgrading from the latest released chart (on one K3s job)"
         required: false
         default: false
+      soak:
+        type: boolean
+        description: "Also run the soak tests (each checkpoint/restore many times, to catch 1-in-N failures)"
+        required: false
+        default: false
       large:
         type: boolean
         description: "Run large tests"
@@ -376,6 +381,8 @@ jobs:
           # and the K3s CUDA embedded job k3s v1.34.8 (containerd 2.2.3-k3s1), as a customer's GPU nodes.
           K3S_VERSION: ${{ (matrix.platform == 'K3s' && matrix.containerd == 'embedded') && (matrix.compute == 'CPU' && 'v1.36.5+k3s1' || 'v1.34.8+k3s1') || '' }}
           CONTAINERD_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'external') && (matrix.cr == 'streamer' && '2.4.2' || '1.7.36') || '' }}
+          # Soak tests run on K3s only: cloud clusters are shared
+          SOAK: ${{ (inputs.soak && matrix.platform == 'K3s') && '1' || '0' }}
           # This job then also upgrades from the latest release (see upgrade.bats)
           UPGRADE: ${{ (inputs.upgrade && matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.cr == 'default' && matrix.containerd == 'external') && '1' || '0' }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
@@ -420,6 +427,9 @@ jobs:
           esac
 
           TAGS="k8s"
+          if [ "$SOAK" != "1" ]; then
+            TAGS="${TAGS},!soak"
+          fi
           if [ "$GPU" = "1" ]; then
             TAGS="${TAGS},gpu"
           else

@@ -8,7 +8,9 @@ GOCMD=go
 # "*daemon.Job, not *daemon.Job (types from different scopes)" once several
 # plugins are loaded. A go.mod toolchain line can't do this (Go never downgrades).
 export GOTOOLCHAIN?=go1.25.11
-GOBUILD=CGO_ENABLED=1 $(GOCMD) build
+# RACE=1 builds with the race detector. Plugins only load into a binary built the same way,
+# so build cedana and its plugins with it together.
+GOBUILD=CGO_ENABLED=1 $(GOCMD) build$(if $(filter 1,$(RACE)), -race)
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
@@ -32,7 +34,7 @@ LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
 DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
-cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
+cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1], RACE=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building $(BINARY) with debug symbols..." ;\
@@ -92,7 +94,7 @@ PLUGIN_NAMES=$(shell ls plugins)
 PLUGIN_BINARIES=$(patsubst %,$(OUT_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 PLUGIN_INSTALL_PATHS=$(patsubst %,$(INSTALL_LIB_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 
-plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
+plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1], RACE=[0|1])
 $(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building plugin $* with debug symbols..." ;\

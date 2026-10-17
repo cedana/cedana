@@ -46,6 +46,16 @@ on:
         description: "Also test upgrading from the latest released chart (on one K3s job)"
         required: false
         default: false
+      soak:
+        type: boolean
+        description: "Also run the soak tests (each checkpoint/restore many times, to catch 1-in-N failures)"
+        required: false
+        default: false
+      race:
+        type: boolean
+        description: "Also run the base and runc suites against a daemon built with the race detector"
+        required: false
+        default: false
       slurm:
         type: boolean
         description: "Run slurm tests"
@@ -279,12 +289,13 @@ jobs:
       - name: Run regression tests
         env:
           LARGE: ${{ inputs.large }}
+          SOAK_TAG: ${{ !inputs.soak && ',!soak' || '' }}
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
           if [ "$LARGE" = "true" ]; then
-            make test-regression TAGS=base PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+            make test-regression TAGS=base$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           else
-            make test-regression TAGS=base,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+            make test-regression TAGS=base,!large$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
 
       - name: Label report # with the job name, so the summary can link to it
@@ -297,6 +308,100 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}
           path: /tmp/report*.xml
+
+  # The base and runc suites against cedana (and its runc plugin) built with the race
+  # detector, which reports data races the daemon hits in them (to /tmp/race, uploaded)
+  race:
+    name: Race
+    if: inputs.race
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64/extras=s3-cache
+    timeout-minutes: 90
+    container:
+      image: cedana/cedana-test:latest
+      credentials:
+        username: ${{ vars.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_TOKEN }}
+      options: --privileged --init --cgroupns=host
+    steps:
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: recursive
+          token: ${{ secrets.GIT_CI_PAT }}
+
+      - name: Download CRIU
+        uses: actions/download-artifact@v7
+        with:
+          name: criu-amd64
+
+      - name: Cache Go modules and build cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            /go/pkg/mod
+            /root/.cache/go-build
+          key: go-race-amd64-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-race-amd64-
+
+      - name: Mark git dir as safe
+        run: git config --global --add safe.directory "$(pwd)"
+
+      - name: Build with the race detector
+        run: make cedana "$PWD/libcedana-runc.so" RACE=1 VERSION="$(git describe --tags --always)"
+
+      - name: Install
+        run: |
+          chmod +x ./criu
+          echo "$PWD" >> $GITHUB_PATH
+          export PATH="$PWD:$PATH"
+          make install
+          sudo -E cedana plugin install criu runc
+
+      - name: Run regression tests
+        env:
+          # Report every race (one file per process), without stopping the process. A daemon
+          # across tests (persistent), which serves many jobs at once, is where races are likeliest
+          GORACE: log_path=/tmp/race/report halt_on_error=0
+          PARALLELISM: ${{ inputs.parallelism }}
+        run: |
+          mkdir -p /tmp/race
+          status=0
+          make test-regression DAEMON_MODE=persistent TAGS=base,!large,!soak PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-race-base || status=$?
+          make test-regression DAEMON_MODE=persistent TAGS=runc,!gpu,!streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-race-runc || status=$?
+          exit $status
+
+      - name: Check for races
+        if: always()
+        run: |
+          if ls /tmp/race/report.* >/dev/null 2>&1; then
+            echo "::error title=Data races::$(grep -c '^WARNING: DATA RACE' /tmp/race/report.* | awk -F: '{s+=$2} END {print s}') data race(s) found, see the race-reports artifact"
+            grep -h -A 30 '^WARNING: DATA RACE' /tmp/race/report.* | head -n 300
+            exit 1
+          fi
+          echo "No data races found"
+
+      - name: Upload race reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: race-reports
+          path: /tmp/race/
+          if-no-files-found: ignore
+
+      - name: Label report # with the job name, so the summary can link to it
+        if: always()
+        run: find /tmp -maxdepth 1 -name 'report-race*.xml' -exec sed -i 's|<testsuites |<testsuites name="Race" |' {} +
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-report-race
+          path: /tmp/report-race*.xml
 
   plugin:
     name: Plugin
@@ -459,6 +564,7 @@ jobs:
       ref: ${{ inputs.ref }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
+      soak: ${{ inputs.soak }}
       parallelism: ${{ inputs.parallelism }}
       runner: ${{ inputs.runner_gpu }}
       post_summary: false # Will post consolidated summary instead
@@ -474,6 +580,7 @@ jobs:
       platforms: ${{ !inputs.cloud_kubernetes && '["K3s"]' || (inputs.large && '["K3s", "EKS", "EKS-Karpenter", "GKE", "Nebius"]' || '["K3s", "EKS", "EKS-Karpenter", "GKE"]') }} # Nebius only runs large tests
       propagator: ${{ inputs.propagator }}
       upgrade: ${{ inputs.upgrade }}
+      soak: ${{ inputs.soak }}
       large: ${{ inputs.large }} # K3s is only for small tests, regardless
       runner: ${{ inputs.runner }}
       runner_gpu: ${{ inputs.runner_gpu }}
@@ -503,7 +610,7 @@ jobs:
   post-summary:
     name: Post Summary
     if: always()
-    needs: [unit, script, basic, plugin, streamer, gpu, k8s, slurm]
+    needs: [unit, script, basic, race, plugin, streamer, gpu, k8s, slurm]
     runs-on: ubuntu-24.04
     permissions:
       pull-requests: write

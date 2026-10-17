@@ -48,6 +48,8 @@ jobs:
       propagator: true
       cloud_kubernetes: true # doesn't block anyone at night, and the only place Nebius runs (large)
       upgrade: true
+      soak: true # each checkpoint/restore many times, for 1-in-N failures
+      race: true # base and runc suites against a race-detector build
       runner: 8cpu # use larger runner
       runner_gpu: 16cpu-1gpu # use larger runner
       parallelism: 4

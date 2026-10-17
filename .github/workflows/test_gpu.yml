@@ -11,6 +11,11 @@ permissions:
 on:
   workflow_call:
     inputs:
+      soak:
+        type: boolean
+        description: "Also run the soak tests (each checkpoint/restore many times, to catch 1-in-N failures)"
+        required: false
+        default: false
       ref:
         type: string
         description: "The branch, tag, or SHA to run on"
@@ -195,19 +200,20 @@ jobs:
         env:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
+          SOAK_TAG: ${{ !inputs.soak && ',!soak' || '' }}
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!large,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!large,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
 
