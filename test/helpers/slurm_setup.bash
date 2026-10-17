@@ -1595,7 +1595,7 @@ setup_slurm_samples() {
             apt-get install -y -qq git 2>/dev/null
             rm -rf /data/cedana-samples
             mkdir -p /data
-            git clone --depth 1 -b main https://github.com/cedana/cedana-samples.git /data/cedana-samples
+            git clone --depth 1 -b feat/slurm-gpu-tests https://github.com/cedana/cedana-samples.git /data/cedana-samples
         ' || {
             error_log "Failed to clone cedana-samples into $c"
             return 1
@@ -1609,10 +1609,11 @@ setup_slurm_samples() {
     debug_log "Initializing Python virtual environment on execution nodes..."
     for c in "${exec_targets[@]}"; do
         docker exec "$c" bash -c "
-            python3 -m venv /data/venv
+            [ -x /data/venv/bin/python ] || python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
             apt-get install -y -qq libffi-dev build-essential 2>/dev/null || true
             /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
+            chmod -R a+rX /data/venv
         "
     done
 

@@ -25,7 +25,7 @@ load ../helpers/slurm_propagator
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 20 180
 }
 
-# bats test_tags=dump,restore,samples,large
+# bats test_tags=dump,restore,samples
 @test "Dump/Restore: GPU PyTorch" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/gpu-pytorch-simple.sbatch"
 
