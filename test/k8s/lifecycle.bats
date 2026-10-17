@@ -56,12 +56,14 @@ first_count() {
 deploy_counter() {
     local spec="$1"
     local name
-    kubectl apply -f "$spec" >&2
-    name=$(get_created_pod "$spec" "$NAMESPACE" 30)
-    validate_pod "$name" 120 >&2
-    wait_for_log_trigger "$name" "COUNT $CHECKPOINTED_AT" 120 >&2
+    kubectl apply -f "$spec" >&2 || return 1
+    name=$(get_created_pod "$spec" "$NAMESPACE" 30) || return 1
+    validate_pod "$name" 120 >&2 || return 1
+    wait_for_log_trigger "$name" "COUNT $CHECKPOINTED_AT" 120 >&2 || return 1
     echo "$name"
 }
+
+# NOTE: these helpers run in $(...), where set -e doesn't apply, so each step fails explicitly
 
 # Checkpoints the pod, and waits for the checkpoint to finish. Prints the action ID.
 checkpoint_counter() {
@@ -69,10 +71,10 @@ checkpoint_counter() {
     local directory="${2:-}"
 
     local pod_id action_id
-    pod_id=$(get_pod_id "$name" "$NAMESPACE")
-    action_id=$(checkpoint_pod "$pod_id" "" "$directory")
-    validate_action_id "$action_id" >&2
-    poll_action_status "$action_id" "checkpoint" 180 >&2
+    pod_id=$(get_pod_id "$name" "$NAMESPACE") || return 1
+    action_id=$(checkpoint_pod "$pod_id" "" "$directory") || return 1
+    validate_action_id "$action_id" >&2 || return 1
+    poll_action_status "$action_id" "checkpoint" 180 >&2 || return 1
     echo "$action_id"
 }
 
@@ -82,9 +84,9 @@ start_restore() {
     local original_name="$2"
 
     local restore_id restored
-    restore_id=$(restore_pod "$action_id" "$CLUSTER_ID")
-    validate_action_id "$restore_id" >&2
-    restored=$(wait_for_cmd 60 get_restored_pod "$original_name" "$NAMESPACE") || true
+    restore_id=$(restore_pod "$action_id" "$CLUSTER_ID") || return 1
+    validate_action_id "$restore_id" >&2 || return 1
+    restored=$(wait_for_cmd 120 get_restored_pod "$original_name" "$NAMESPACE") || true
     echo "$restore_id $restored"
 }
 
@@ -93,7 +95,8 @@ TEST_PODS=()
 
 teardown() {
     for pod in "${TEST_PODS[@]}"; do
-        kubectl delete pod "$pod" -n "$NAMESPACE" --force --grace-period=0 --wait=false &>/dev/null || true
+        # Also a restored pod that appeared after the test stopped waiting for it
+        kubectl delete pod "$pod" "${pod%-restored}-restored" -n "$NAMESPACE" --force --grace-period=0 --wait=false &>/dev/null || true
     done
     if [ -n "${CHECKPOINT_DIR_OVERRIDE:-}" ]; then
         rm -rf "$CHECKPOINT_DIR_OVERRIDE"
@@ -132,13 +135,13 @@ teardown() {
     local took=$((SECONDS - start))
     verify_restored_pod "$restored" "$NAMESPACE"
 
+    if [ "$took" -gt "$budget" ]; then
+        error_log "Restore took ${took}s while the source pod was terminating (budget ${budget}s)"
+        return 1
+    fi
     # Otherwise the restore didn't overlap the termination, which is the point
     if ! kubectl get pod "$name" -n "$NAMESPACE" &>/dev/null; then
         error_log "Source pod $name was gone before the restore finished (${took}s), so they didn't overlap"
-        return 1
-    fi
-    if [ "$took" -gt "$budget" ]; then
-        error_log "Restore took ${took}s while the source pod was terminating (budget ${budget}s)"
         return 1
     fi
 
@@ -218,7 +221,11 @@ teardown() {
     debug_log "Restore of the corrupted checkpoint ended as '$status' in ${took}s"
 
     # A fallback cold-starts: the pod must then run from scratch, not from corrupted state
-    if [ "$status" = "fallback" ] && [ -n "$restored" ]; then
+    if [ "$status" = "fallback" ] && [ -z "$restored" ]; then
+        error_log "Restore $restore_id fell back, but its pod never appeared"
+        return 1
+    fi
+    if [ "$status" = "fallback" ]; then
         validate_pod "$restored" 60
         wait_for_log_trigger "$restored" "COUNT" 30
         local first

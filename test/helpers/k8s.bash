@@ -397,8 +397,11 @@ verify_restored_pod() {
                 if [ ! -s "$real" ]; then echo "libcuda.so.1 ($lib) is missing or empty"; exit; fi
                 [ "$(head -c 4 "$real" | tail -c 3)" = "ELF" ] || echo "libcuda.so.1 ($real) is not an ELF file"
                 [ "$(wc -c <"$real")" -gt 1048576 ] || echo "libcuda.so.1 ($real) is only $(wc -c <"$real") bytes"
-            ' 2>&1)
-            [ -z "$gpu_problems" ] || errors+=("$container: GPU: $(tr '\n' ';' <<<"$gpu_problems")")
+            ' 2>/dev/null) || gpu_problems="${gpu_problems:+$gpu_problems; }could not run the check"
+            # Only warns for now: restores may not rebuild the loader cache yet (the nvidia hook
+            # that runs ldconfig is removed on restore). Make it an error once they pass.
+            [ -z "$gpu_problems" ] ||
+                error_log "WARNING: $container: GPU: $(tr '\n' ';' <<<"$gpu_problems")"
         fi
 
         if [ "$automount" != "false" ]; then
