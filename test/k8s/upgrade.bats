@@ -25,7 +25,8 @@ TEST_PODS=()
 
 teardown() {
     for pod in "${TEST_PODS[@]}"; do
-        kubectl delete pod "$pod" -n "$NAMESPACE" --force --grace-period=0 --wait=false &>/dev/null || true
+        # Also a restored pod that appeared after the test stopped waiting for it
+        kubectl delete pod "$pod" "${pod%-restored}-restored" -n "$NAMESPACE" --force --grace-period=0 --wait=false &>/dev/null || true
     done
 }
 
