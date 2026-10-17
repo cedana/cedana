@@ -13,6 +13,10 @@ export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
 export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 export CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-alpha}
 export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1 * GIBIBYTE))}"
+# The GPU controller (which inherits the daemon's env) checks device memory restored byte
+# for byte against the checkpoint, and fails the restore on a mismatch, which would
+# otherwise go unnoticed unless the workload checks its own results
+export CEDANA_GPU_VERIFY="${CEDANA_GPU_VERIFY:-strict}"
 
 WAIT_TIMEOUT=60
 
