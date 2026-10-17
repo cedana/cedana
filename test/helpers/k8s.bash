@@ -330,6 +330,66 @@ validate_pod() {
     return 1
 }
 
+# Checks what the kubelet gives every container of a pod, which a restore must recreate rather
+# than take from the checkpoint: /etc/resolv.conf, /etc/hosts and /etc/hostname (bind mounts;
+# without them the pod has no DNS, or keeps the checkpoint source's hostname), and the service
+# account token. Containers whose image has no `cat` are skipped.
+verify_restored_pod() {
+    local name="$1"
+    local namespace="${2:-$NAMESPACE}"
+
+    local pod
+    pod=$(kubectl get pod "$name" -n "$namespace" -o json) || {
+        error_log "Failed to get pod $name"
+        return 1
+    }
+
+    local host_network automount hostname
+    host_network=$(echo "$pod" | jq -r '.spec.hostNetwork // false')
+    automount=$(echo "$pod" | jq -r 'if .spec.automountServiceAccountToken == false then "false" else "true" end') # not `//`, which treats false as unset
+    hostname=$(echo "$pod" | jq -r '.spec.hostname // .metadata.name')
+    hostname=${hostname:0:63} # as the kubelet truncates it
+
+    local errors=()
+    local container
+    for container in $(echo "$pod" | jq -r '.spec.containers[].name'); do
+        local resolv
+        if ! resolv=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /etc/resolv.conf 2>&1); then
+            if [[ "$resolv" == *"executable file not found"* ]]; then
+                debug_log "Skipping checks of container $container of pod $name, which has no cat"
+                continue
+            fi
+            errors+=("$container: cannot read /etc/resolv.conf: $resolv")
+            continue
+        fi
+        grep -q '^nameserver ' <<<"$resolv" || errors+=("$container: /etc/resolv.conf has no nameserver (no DNS)")
+
+        if [ "$host_network" != "true" ]; then
+            local actual
+            actual=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /etc/hostname 2>&1 | tr -d '[:space:]')
+            [ "$actual" = "$hostname" ] || errors+=("$container: /etc/hostname is '$actual', want '$hostname'")
+            kubectl exec "$name" -n "$namespace" -c "$container" -- cat /etc/hosts 2>&1 | grep -qw -- "$hostname" ||
+                errors+=("$container: /etc/hosts does not list '$hostname'")
+        fi
+
+        if [ "$automount" != "false" ]; then
+            local token_namespace
+            token_namespace=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>&1)
+            [ "$token_namespace" = "$namespace" ] || errors+=("$container: service account token missing or wrong ($token_namespace)")
+        fi
+    done
+
+    if [ ${#errors[@]} -gt 0 ]; then
+        error_log "Restored pod $name is not what the kubelet would have created:"
+        local e
+        for e in "${errors[@]}"; do
+            error_log "  $e"
+        done
+        return 1
+    fi
+    debug_log "Restored pod $name has its DNS, hosts, hostname and service account token"
+}
+
 # Tails logs of all pods in a given namespace, waiting for them to be Running first.
 tail_all_logs() {
     local namespace="$1"
@@ -776,11 +836,30 @@ test_pod_spec() {
                     break
                 }
 
-                name=$(wait_for_cmd 60 get_restored_pod "$original_name" "$namespace")
+                name=$(wait_for_cmd 60 get_restored_pod "$original_name" "$namespace") || {
+                    error="Restored pod for $original_name did not appear"
+                    name=""
+                    break
+                }
 
                 debug_log "Restore starting for $name..."
 
-                validate_pod "$name" "$pod_timeout"
+                validate_pod "$name" "$pod_timeout" || {
+                    error="Restored pod $name failed to become Ready"
+                    break
+                }
+
+                # Ready alone doesn't mean it restored: it may have cold-started instead
+                poll_restore_status "$restore_action_id" "$pod_timeout" || {
+                    error="Pod $name did not restore (restore $restore_action_id)"
+                    break
+                }
+
+                verify_restored_pod "$name" "$namespace" || {
+                    error="Restored pod $name is missing what the kubelet gives it"
+                    break
+                }
+
                 debug_log "Restored pod $name successfully"
                 original_name="$name"
                 deployed=true
