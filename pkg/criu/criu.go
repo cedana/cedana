@@ -69,6 +69,7 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	cmd.Env = criuEnv()
 
 	// Keep what swrk says for the error if it fails, when nobody else is listening. A pipe of
 	// our own, as a writer would have exec copying in a goroutine that outlives Process.Wait.
@@ -581,6 +582,22 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// criuEnv returns our environment with the system bin dirs first in PATH. CRIU runs tools like
+// tar by name, and k3s starts shims with its own bin dir (BusyBox tar) ahead of /usr/bin.
+func criuEnv() []string {
+	path := "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	if p := os.Getenv("PATH"); p != "" {
+		path += ":" + p
+	}
+	env := []string{path}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "PATH=") {
+			env = append(env, e)
+		}
+	}
+	return env
 }
 
 // tailOf reads r to its end and returns the last of it
