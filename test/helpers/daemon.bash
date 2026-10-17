@@ -13,10 +13,8 @@ export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
 export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 export CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-alpha}
 export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1 * GIBIBYTE))}"
-# The GPU controller (which inherits the daemon's env) checks device memory restored byte
-# for byte against the checkpoint, which would otherwise go unnoticed unless the workload
-# checks its own results. Only warns for now: its hash kernel doesn't load on Turing (CI's
-# T4/T4G: CUDA error 218), so nothing verifies there; make it strict once it does.
+# The GPU controller (inheriting the daemon's env) checks restored device memory byte for byte.
+# Only warns for now: its hash kernel doesn't load on CI's Turing GPUs (CUDA error 218).
 export CEDANA_GPU_VERIFY="${CEDANA_GPU_VERIFY:-warn}"
 
 WAIT_TIMEOUT=60

@@ -47,9 +47,9 @@ source "${BATS_TEST_DIRNAME}"/../helpers/propagator.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/propagator_deploy.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/metrics.bash
 
-# daemon.bash turns on strict GPU restore verification for the tests' own daemons. Here the
-# node's daemon (dumps) doesn't get it, but the shim (restores) would through containerd's
-# environment on K3s, and then refuse every checkpoint as unverified.
+# daemon.bash turns on GPU restore verification for the tests' own daemons. Here only the shim
+# (restores) would get it, through containerd's environment on K3s, and not the node's daemon
+# (dumps), so no checkpoint would have what it verifies against.
 unset CEDANA_GPU_VERIFY
 
 # Generate cluster name if not provided
