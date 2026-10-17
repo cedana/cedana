@@ -87,6 +87,8 @@ jobs:
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
       propagator: true
       upgrade: true # XXX: temporary, to try the release gate before a release depends on it
+      soak: true # XXX: temporary, to try the nightly soak tests once
+      race: true # XXX: temporary, to try the nightly race job once
 
   bench:
     name: Bench
