@@ -743,6 +743,7 @@ test_pod_spec() {
     local action_id=""
     local deployed=false
     local error=""
+    local count_before_dump="" # for workloads that log "COUNT <n>"
 
     for action in "${actions[@]}"; do
         case "$action" in
@@ -798,6 +799,9 @@ test_pod_spec() {
                 else
                     sleep "$dump_wait_time"
                 fi
+
+                # At most the count the checkpoint captures
+                count_before_dump=$(kubectl logs "$name" -n "$namespace" -c "$container_name" 2>/dev/null | grep -oE '^COUNT [0-9]+' | tail -n 1 | awk '{print $2}')
 
                 debug_log "Dumping pod $name..."
                 local pod_id
@@ -888,6 +892,21 @@ test_pod_spec() {
                     error="Restored pod $name is missing what the kubelet gives it"
                     break
                 }
+
+                # The workload continued from the checkpoint, rather than starting over
+                if [ -n "$count_before_dump" ]; then
+                    wait_for_cmd 30 "kubectl logs $name -n $namespace -c $container_name | grep -qE '^COUNT [0-9]+'" || {
+                        error="Restored pod $name logs no count"
+                        break
+                    }
+                    local first_count
+                    first_count=$(kubectl logs "$name" -n "$namespace" -c "$container_name" | grep -m1 -oE '^COUNT [0-9]+' | awk '{print $2}')
+                    if [ -z "$first_count" ] || [ "$first_count" -lt "$count_before_dump" ]; then
+                        error="Restored pod $name started at count $first_count, but it was at $count_before_dump before the checkpoint"
+                        break
+                    fi
+                    debug_log "Restored pod $name continued at count $first_count (was $count_before_dump)"
+                fi
 
                 debug_log "Restored pod $name successfully"
                 original_name="$name"
