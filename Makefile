@@ -10,7 +10,8 @@ GOCMD=go
 export GOTOOLCHAIN?=go1.25.11
 # RACE=1 builds with the race detector. Plugins only load into a binary built the same way,
 # so build cedana and its plugins with it together.
-GOBUILD=CGO_ENABLED=1 $(if $(filter 1,$(RACE)),GOFLAGS=-race )$(GOCMD) build # GOFLAGS: go build needs -C first
+# (-race through GOFLAGS, as go build takes -C only as its first flag)
+GOBUILD=CGO_ENABLED=1 $(if $(filter 1,$(RACE)),GOFLAGS=-race )$(GOCMD) build
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"

@@ -87,8 +87,8 @@ helpers_on_digest() {
 
     # It runs the cedana under test, not some other build (e.g. a stale one downloaded)
     local expected actual
-    # As build.yml stamps it (the PR branch, branch or tag); git describe for local runs
-    expected=${CEDANA_VERSION_UNDER_TEST:-$(git -C "$BATS_TEST_DIRNAME/../.." describe --tags --always)}
+    # The binary under test (built or downloaded, like the helper image), else git describe
+    expected=$( { [ -x ./cedana ] && ./cedana version; } || git -C "$BATS_TEST_DIRNAME/../.." describe --tags --always)
     actual=$(kubectl exec -n "$CEDANA_NAMESPACE" daemonset/"$HELPER_DAEMONSET" -c helper -- cedana version | tr -d '[:space:]')
     if [ "$actual" != "$expected" ]; then
         error_log "The upgraded helper runs cedana $actual, but this is $expected"

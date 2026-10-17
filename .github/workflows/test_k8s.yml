@@ -116,7 +116,7 @@ jobs:
           echo "✓ Connectivity test completed"
 
   k8s:
-    name: Kubernetes
+    name: Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}, ${{ matrix.containerd }}${{ matrix.versions && format(', {0}', matrix.versions) || '' }})
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache{6}',
       github.run_id,
@@ -229,6 +229,40 @@ jobs:
             storage: storage/local
           - platform: EKS-Karpenter
             storage: storage/s3
+
+        # The K3s jobs run different k3s and containerd versions, so together they cover what
+        # customers run (the defaults: k3s v1.34.2, and the test image's containerd). Each entry
+        # matches a K3s job above (every caller lists K3s), adding its versions to it.
+        include:
+          - platform: K3s
+            compute: CPU
+            cr: default
+            containerd: external
+            containerd_version: 1.7.36 # config version 2 only
+            versions: k3s v1.34.2, containerd 1.7.36
+          - platform: K3s
+            compute: CPU
+            cr: streamer
+            containerd: external
+            containerd_version: 2.4.2 # config version 4
+            versions: k3s v1.34.2, containerd 2.4.2
+          - platform: K3s
+            compute: CPU
+            cr: default
+            containerd: embedded
+            k3s_version: v1.36.5+k3s1 # Kubernetes 1.36
+            versions: k3s v1.36.5, containerd 2.3.4
+          - platform: K3s
+            compute: CUDA
+            cr: default
+            containerd: embedded
+            k3s_version: v1.34.8+k3s1 # a customer's GPU nodes
+            versions: k3s v1.34.8, containerd 2.2.3
+          - platform: K3s
+            compute: CUDA
+            cr: default
+            containerd: external
+            versions: k3s v1.34.2, containerd of the test image
 
     container:
       image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
@@ -373,18 +407,11 @@ jobs:
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}
           K3S_CONTAINERD: ${{ matrix.containerd }}
-          # Each K3s CPU job runs other versions, so together they cover what customers run.
-          # The rest run the defaults: k3s v1.34.2 (containerd 2.1.5) and the test image's containerd.
-          #   default, external:  containerd 1.7 (config v2 only)
-          #   streamer, external: containerd 2.4 (config v4)
-          #   default, embedded:  k3s v1.36 (Kubernetes 1.36, containerd 2.3)
-          # and the K3s CUDA embedded job k3s v1.34.8 (containerd 2.2.3-k3s1), as a customer's GPU nodes.
-          K3S_VERSION: ${{ (matrix.platform == 'K3s' && matrix.containerd == 'embedded') && (matrix.compute == 'CPU' && 'v1.36.5+k3s1' || 'v1.34.8+k3s1') || '' }}
-          CONTAINERD_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'external') && (matrix.cr == 'streamer' && '2.4.2' || '1.7.36') || '' }}
+          # From the matrix's include (empty: the defaults)
+          K3S_VERSION: ${{ matrix.k3s_version || '' }}
+          CONTAINERD_VERSION: ${{ matrix.containerd_version || '' }}
           # Soak tests run on K3s only: cloud clusters are shared
           SOAK: ${{ (inputs.soak && matrix.platform == 'K3s') && '1' || '0' }}
-          # The build's version, as build.yml stamps it, for the upgrade test to check
-          CEDANA_VERSION_UNDER_TEST: ${{ github.head_ref || github.ref_name }}
           # This job then also upgrades from the latest release (see upgrade.bats)
           UPGRADE: ${{ (inputs.upgrade && matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.cr == 'default' && matrix.containerd == 'external') && '1' || '0' }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
@@ -486,7 +513,7 @@ jobs:
 
       - name: Label report # with the job name, so the summary can link to it
         if: always()
-        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}, ${{ matrix.containerd }})" |' {} +
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}, ${{ matrix.containerd }}${{ matrix.versions && format(', {0}', matrix.versions) || '' }})" |' {} +
 
       - name: Set sanitized storage
         if: always()
