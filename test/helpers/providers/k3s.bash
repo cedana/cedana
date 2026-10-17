@@ -124,7 +124,7 @@ preload_all_images() {
         preload_images "$PROPAGATOR_REPO:$PROPAGATOR_TAG"
     fi
     if [ "${GPU:-0}" = "1" ]; then
-        preload_images "cedana/cedana-test:cuda" # likely available as we are running inside it
+        preload_images "$GPU_WORKLOAD_IMAGE"
         preload_images "cedana/cedana-samples:cuda"
     fi
 }
