@@ -154,11 +154,14 @@ configure_containerd_runtime() {
 
     if [ "$K3S_CONTAINERD" = "embedded" ]; then
         if [ "${GPU:-0}" = "1" ]; then
-            error_log "K3S_CONTAINERD=embedded does not support GPU yet"
-            return 1
+            # As on a stock k3s GPU node: k3s finds nvidia-container-runtime in PATH and adds
+            # the nvidia runtime (and RuntimeClass) itself. Default to it, as nvidia-ctk does
+            # for the external containerd, so the device plugin and other pods get the GPUs.
+            START_K3S_SERVER="$START_K3S_SERVER --default-runtime=nvidia"
         fi
         # k3s regenerates its containerd config on every start, so extend it through
-        # the template (config version 3, as k3s ships containerd 2.x)
+        # the template (config version 3, as k3s ships containerd 2.x), whose base keeps
+        # the runtimes k3s detects
         debug_log "Writing containerd config template to $K3S_CONTAINERD_TEMPLATE"
         mkdir -p "$(dirname "$K3S_CONTAINERD_TEMPLATE")"
         cat >"$K3S_CONTAINERD_TEMPLATE" <<'END_CAT'
@@ -215,6 +218,15 @@ start_cluster() {
     if ! kubectl wait --for=condition=Ready node --all --timeout="$timeout"s; then
         error_log "Timed out waiting for k3s node to be Ready"
         return 1
+    fi
+
+    if [ "$K3S_CONTAINERD" = "embedded" ] && [ "${GPU:-0}" = "1" ]; then
+        local config=/var/lib/rancher/k3s/agent/etc/containerd/config.toml
+        if ! grep -q nvidia-container-runtime "$config"; then # its BinaryName, as k3s writes it
+            error_log "k3s did not set up the nvidia runtime (is nvidia-container-runtime in PATH?): $config"
+            grep -n "runtimes" "$config" >&2 || true
+            return 1
+        fi
     fi
 
     debug_log "k3s cluster has started successfully"

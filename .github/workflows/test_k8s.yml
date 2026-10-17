@@ -172,8 +172,9 @@ jobs:
           - platform: K3s
             compute: CPU
             arch: amd64
-          - platform: K3s
-            compute: CUDA # XXX: Skip until fixed
+          - platform: K3s # GPU streamer is covered by the GPU suite's streamer jobs
+            compute: CUDA
+            cr: streamer
 
           - platform: EKS
             compute: CUDA
