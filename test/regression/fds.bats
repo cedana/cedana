@@ -21,6 +21,7 @@ setup() {
 }
 
 teardown() {
+    stop_workload "${WORKLOAD_PID:-}"
     teardown_daemon
 }
 
@@ -43,6 +44,7 @@ teardown_file() {
     dir=$(mktemp -d /tmp/cedana-fds-XXXXXX)
     "$FD_ZOO" --log "$log" --dir "$dir" --gate "$gate" &
     local pid=$!
+    WORKLOAD_PID=$pid # for teardown
     wait_for_cmd 30 grep -q '^OK' "$log"
 
     local name lines

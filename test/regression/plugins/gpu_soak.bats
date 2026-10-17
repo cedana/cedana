@@ -63,8 +63,7 @@ wrong_results() {
 
     local i failures=0 first_failure="" first_error=""
     for i in $(seq 1 "$SOAK_ITERATIONS"); do
-        local lines output
-        lines=$(wc -l <"$log")
+        local output
         if ! output=$(cedana dump job "$jid" 2>&1) || ! output=$(cedana restore job "$jid" 2>&1); then
             failures=$((failures + 1))
             first_failure=${first_failure:-$i}
@@ -73,15 +72,15 @@ wrong_results() {
             cedana ps 2>/dev/null | grep "$jid" | grep -qv halted || break
             continue
         fi
-        # Running again, computing, and computing right
-        if ! wait_for_cmd 30 "tail -n +$((lines + 1)) $log | grep -q 'Sample result'"; then
+        # Running again, computing, and computing right (a restore starts the job's log anew)
+        if ! wait_for_cmd 30 "grep -q 'Sample result' $log"; then
             failures=$((failures + 1))
             first_failure=${first_failure:-$i}
             first_error=${first_error:-"no results after the restore"}
-        elif [ -n "$(wrong_results "$log" $((lines + 1)))" ]; then
+        elif [ -n "$(wrong_results "$log" 1)" ]; then
             failures=$((failures + 1))
             first_failure=${first_failure:-$i}
-            first_error=${first_error:-"wrong results after the restore: $(wrong_results "$log" $((lines + 1)) | head -n 1)"}
+            first_error=${first_error:-"wrong results after the restore: $(wrong_results "$log" 1 | head -n 1)"}
         fi
     done
 

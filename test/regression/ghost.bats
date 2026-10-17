@@ -24,6 +24,7 @@ setup() {
 }
 
 teardown() {
+    stop_workload "${WORKLOAD_PID:-}"
     teardown_daemon
 }
 
@@ -41,6 +42,7 @@ teardown_file() {
     log="$dir/log"
     "$WORKLOADS"/ghost-busy-name.py "$dir" "$log" &
     local pid=$!
+    WORKLOAD_PID=$pid # for teardown
     wait_for_cmd 30 grep -q READY "$log"
 
     local cycle

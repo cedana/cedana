@@ -26,6 +26,7 @@ setup() {
 }
 
 teardown() {
+    stop_workload "${WORKLOAD_PID:-}"
     teardown_daemon
 }
 
@@ -40,6 +41,7 @@ teardown_file() {
     log=$(mktemp /tmp/cedana-soak-XXXXXX.log)
     "$WORKLOADS"/count-loop.sh >"$log" 2>&1 &
     local pid=$!
+    WORKLOAD_PID=$pid # for teardown
     wait_for_cmd 10 grep -q '^COUNT' "$log"
 
     local i failures=0 first_failure=""

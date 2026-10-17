@@ -19,6 +19,7 @@ setup() {
 }
 
 teardown() {
+    stop_workload "${WORKLOAD_PID:-}"
     teardown_daemon
 }
 
@@ -35,6 +36,7 @@ teardown_file() {
     log=$(mktemp /tmp/cedana-ipc-XXXXXX.log)
     "$WORKLOADS"/shm-messages.py "$log" &
     local pid=$!
+    WORKLOAD_PID=$pid # for teardown
     wait_for_cmd 30 grep -q '^SEQ' "$log"
 
     local cycle

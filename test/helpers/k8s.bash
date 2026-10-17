@@ -355,6 +355,15 @@ verify_restored_pod() {
     hostname=${hostname:0:63} # as the kubelet truncates it
 
     local errors=()
+
+    # A restored container that crashed and was restarted from scratch makes the pod Ready
+    # again, but it isn't the restored state anymore
+    local restarted
+    restarted=$(echo "$pod" | jq -r '.status.containerStatuses[]? | select(.restartCount > 0) | "\(.name) (\(.restartCount)x)"')
+    if [ -n "$restarted" ]; then
+        errors+=("restarted after the restore: $(echo "$restarted" | tr '\n' ' ')")
+    fi
+
     local container
     for container in $(echo "$pod" | jq -r '.spec.containers[].name'); do
         local resolv

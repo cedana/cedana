@@ -27,6 +27,7 @@ setup() {
 }
 
 teardown() {
+    stop_workload "${WORKLOAD_PID:-}"
     teardown_daemon
 }
 
@@ -49,6 +50,7 @@ teardown_file() {
     gate="$log.gate"
     "$HOSTMEM" --regions ghost-sparse:$(((5 << 30) + 1000)) --dir /tmp --log "$log" --gate "$gate" &
     local pid=$!
+    WORKLOAD_PID=$pid # for teardown
     wait_for_cmd 30 grep -q '^OK' "$log"
 
     local cycle

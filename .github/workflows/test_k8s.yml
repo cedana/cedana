@@ -383,6 +383,8 @@ jobs:
           CONTAINERD_VERSION: ${{ (matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.containerd == 'external') && (matrix.cr == 'streamer' && '2.4.2' || '1.7.36') || '' }}
           # Soak tests run on K3s only: cloud clusters are shared
           SOAK: ${{ (inputs.soak && matrix.platform == 'K3s') && '1' || '0' }}
+          # The build's version, as build.yml stamps it, for the upgrade test to check
+          CEDANA_VERSION_UNDER_TEST: ${{ github.head_ref || github.ref_name }}
           # This job then also upgrades from the latest release (see upgrade.bats)
           UPGRADE: ${{ (inputs.upgrade && matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.cr == 'default' && matrix.containerd == 'external') && '1' || '0' }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
@@ -473,7 +475,7 @@ jobs:
           # Starts over from the latest released chart, then upgrades to this one. Not
           # blocking yet, until it has proven reliable.
           if [ "$UPGRADE" = "1" ]; then
-            UPGRADE_FROM_CHART=latest make test-k8s \
+            UPGRADE_FROM_CHART=latest K8S_DIAGNOSTICS_DIR=/tmp/k8s-diagnostics/upgrade make test-k8s \
               TAGS=k8s,upgrade \
               REPORT=report-upgrade \
               PROVIDER=$PROVIDER \

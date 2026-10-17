@@ -68,7 +68,10 @@ helpers_on_digest() {
     poll_action_status "$action_id" "checkpoint" 180
     kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
 
-    # Upgrade to this chart, with this build's images
+    # Upgrade to this chart, with this build's images and plugins
+    if [ "${CEDANA_PLUGINS_BUILDS:-}" = "local" ]; then
+        install_local_plugins
+    fi
     helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
     kubectl rollout status daemonset/"$HELPER_DAEMONSET" -n "$CEDANA_NAMESPACE" --timeout=5m
 
@@ -84,7 +87,8 @@ helpers_on_digest() {
 
     # It runs the cedana under test, not some other build (e.g. a stale one downloaded)
     local expected actual
-    expected=$(git -C "$BATS_TEST_DIRNAME/../.." describe --tags --always)
+    # As build.yml stamps it (the PR branch, branch or tag); git describe for local runs
+    expected=${CEDANA_VERSION_UNDER_TEST:-$(git -C "$BATS_TEST_DIRNAME/../.." describe --tags --always)}
     actual=$(kubectl exec -n "$CEDANA_NAMESPACE" daemonset/"$HELPER_DAEMONSET" -c helper -- cedana version | tr -d '[:space:]')
     if [ "$actual" != "$expected" ]; then
         error_log "The upgraded helper runs cedana $actual, but this is $expected"

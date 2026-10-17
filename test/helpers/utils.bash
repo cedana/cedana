@@ -250,6 +250,16 @@ wait_for_file() {
     return 0
 }
 
+# Stops a test's workload (one it started itself, not a job of the daemon's) and its children,
+# whether the originals or restored ones (a restore keeps their pids). For teardown, so a
+# test that fails half-way doesn't leave them running.
+stop_workload() {
+    local pid="${1:-}"
+    [ -n "$pid" ] || return 0
+    pkill -KILL -P "$pid" 2>/dev/null || true
+    kill -KILL "$pid" 2>/dev/null || true
+}
+
 info_log() {
     local message="$1"
     echo -e "${BLUE}$message${NC}" >&"${OUTPUT_FD}"

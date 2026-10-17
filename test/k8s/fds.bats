@@ -18,6 +18,8 @@ load ../helpers/propagator
     script='if [ ! -x /app/cpu_smr/fd_zoo.py ]; then echo NO_SAMPLE; exec sleep infinity; fi
 exec python3 /app/cpu_smr/fd_zoo.py'
     spec=$(cmd_pod_spec "cedana/cedana-samples:cpu" "$script")
+    # A sample exits when restored state is wrong: not restarted from scratch, the pod fails
+    sed -i 's/^spec:$/spec:\n  restartPolicy: Never/' "$spec"
 
     local name
     name=$(get_created_pod "$spec" "$NAMESPACE" 30)
@@ -43,6 +45,8 @@ exec python3 /app/cpu_smr/fd_zoo.py'
     script='if [ ! -x /app/cpu_smr/hostmem/hostmem.py ]; then echo NO_SAMPLE; exec sleep infinity; fi
 exec python3 /app/cpu_smr/hostmem/hostmem.py --regions ghost-shm:32M,shm:16M,memfd:64M,ghost-file:64M --procs 3 --dir /tmp'
     spec=$(cmd_pod_spec "cedana/cedana-samples:cpu" "$script")
+    # A sample exits when restored state is wrong: not restarted from scratch, the pod fails
+    sed -i 's/^spec:$/spec:\n  restartPolicy: Never/' "$spec"
 
     local name
     name=$(get_created_pod "$spec" "$NAMESPACE" 30)
