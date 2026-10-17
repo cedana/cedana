@@ -60,6 +60,5 @@ check_gpu_shm_leaks() {
             grep -E "ID=$id|JID=" "$log" | grep -E "ID=$id|managing job|job exited" | tail -n 8 | while IFS= read -r line; do warn_log "      $line"; done
         done
     done
-    # XXX: return 1 once the leak it found (2 per GPU suite run, so far unattributed) is fixed
-    return 0
+    return 1
 }
