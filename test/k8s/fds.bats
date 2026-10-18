@@ -11,7 +11,7 @@ load ../helpers/propagator
 # Dumps and restores a pod running a cedana-samples:cpu sample (path under /app/cpu_smr, then
 # its args), which exits on any lost or corrupted state: it isn't restarted from scratch, so
 # the restored pod fails then. With PERSISTENT_MOUNTS set, the container gets it as
-# CEDANA_PERSISTENT_MOUNTS.
+# CEDANA_PERSISTENT_MOUNTS, under the cedana runtime class, which applies it on creation.
 restore_sample_pod() {
     local sample="/app/cpu_smr/$1"
     shift
@@ -20,6 +20,7 @@ restore_sample_pod() {
 exec python3 $sample $*")
     sed -i 's/^spec:$/spec:\n  restartPolicy: Never/' "$spec"
     if [ -n "${PERSISTENT_MOUNTS:-}" ]; then
+        sed -i 's/^spec:$/spec:\n  runtimeClassName: cedana/' "$spec"
         printf '    env:\n    - name: CEDANA_PERSISTENT_MOUNTS\n      value: "%s"\n' "$PERSISTENT_MOUNTS" >>"$spec"
     fi
 
@@ -41,10 +42,11 @@ exec python3 $sample $*")
 # into a new pod, with a new network namespace and IP, all of it must come back.
 # XXX: without inotify, as CRIU can't dump a watch on the container's overlayfs: it can't open
 # overlayfs file handles (no nfs_export), and its fallback scan doesn't look in the rootfs
-# ("fsnotify: Can't dump that handle").
+# ("fsnotify: Can't dump that handle"). Without udp, as CRIU doesn't dump UDP receive queues
+# (datagrams UDP may drop anyway).
 # bats test_tags=dump,restore
 @test "Restore a pod holding many kinds of fds, with state in flight" {
-    restore_sample_pod fd_zoo.py --skip inotify
+    restore_sample_pod fd_zoo.py --skip inotify,udp
 }
 
 # The shape of KV-cache offload in a pod: processes sharing unlinked /dev/shm files (the
