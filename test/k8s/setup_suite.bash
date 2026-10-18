@@ -92,6 +92,10 @@ setup_suite() {
             debug_log "Registering cluster '$CLUSTER_NAME' with propagator..."
             CLUSTER_ID=$(register_cluster "$CLUSTER_NAME")
             export CLUSTER_ID
+            if propagator_enabled; then
+                set_sync_mode "$CLUSTER_ID" watch local >/dev/null ||
+                    debug_log "Propagator does not support sync modes; staying on push"
+            fi
             info_log "======================================="
             info_log "Cluster registered with ID: $CLUSTER_ID"
             info_log "Logs for this cluster can be viewed at:"
