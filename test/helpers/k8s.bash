@@ -385,12 +385,12 @@ verify_restored_pod() {
                 errors+=("$container: /etc/hosts does not list '$hostname'")
 
             # The UTS namespace's hostname (what `hostname` and gethostname() return), which CRIU
-            # restores from the checkpoint. Only warns for now (customer issue C1: restored pods
-            # report the source pod's hostname); make it an error once restores set it.
+            # would restore from the checkpoint (customer issue C1: restored pods reported the
+            # source pod's hostname)
             local uts
             uts=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /proc/sys/kernel/hostname 2>&1 | tr -d '[:space:]')
             [ "$uts" = "$hostname" ] ||
-                report_warning "$container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)"
+                errors+=("$container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)")
         fi
 
         local gpus
@@ -442,6 +442,39 @@ first_count() {
 
 last_count() {
     kubectl logs "$1" -n "${2:-$NAMESPACE}" ${3:+-c "$3"} 2>/dev/null | grep -oE '^COUNT [0-9]+' | tail -n 1 | awk '{print $2}'
+}
+
+# Validates that a pod's container sees the hostname, /etc/hosts, /etc/resolv.conf
+# kubernetes gave its pod, and can resolve a cluster service.
+validate_pod_dns_and_hostname() {
+    local name="$1"
+    local namespace="${2:-$NAMESPACE}"
+    local out
+
+    out=$(kubectl exec "$name" -n "$namespace" -- hostname)
+    if [ "$out" != "$name" ]; then
+        error_log "Pod $name has hostname '$out'"
+        return 1
+    fi
+    out=$(kubectl exec "$name" -n "$namespace" -- cat /etc/hostname)
+    if [ "$out" != "$name" ]; then
+        error_log "Pod $name has /etc/hostname '$out'"
+        return 1
+    fi
+    if ! kubectl exec "$name" -n "$namespace" -- grep -q "$name" /etc/hosts; then
+        error_log "Pod $name /etc/hosts lacks its name:"
+        error kubectl exec "$name" -n "$namespace" -- cat /etc/hosts
+        return 1
+    fi
+    if ! kubectl exec "$name" -n "$namespace" -- grep -q '^nameserver' /etc/resolv.conf; then
+        error_log "Pod $name /etc/resolv.conf has no nameserver:"
+        error kubectl exec "$name" -n "$namespace" -- cat /etc/resolv.conf
+        return 1
+    fi
+    if ! kubectl exec "$name" -n "$namespace" -- nslookup kubernetes.default.svc.cluster.local >/dev/null; then
+        error_log "Pod $name cannot resolve kubernetes.default.svc.cluster.local"
+        return 1
+    fi
 }
 
 # Tails logs of all pods in a given namespace, waiting for them to be Running first.

@@ -48,6 +48,38 @@ load ../helpers/propagator
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec"
 }
 
+# bats test_tags=restore,dns
+@test "Restore a pod (keeps DNS and hostname)" {
+    local script
+    local spec
+    local name
+    local restored
+
+    script=$(cat "$WORKLOADS"/date-loop.sh)
+    spec=$(cmd_pod_spec "alpine:latest" "$script")
+    name=$(get_created_pod "$spec" "$NAMESPACE")
+
+    kubectl apply -f "$spec"
+    validate_pod "$name" 60
+    validate_pod_dns_and_hostname "$name"
+
+    local action_id
+    action_id=$(checkpoint_pod "$(get_pod_id "$name" "$NAMESPACE")")
+    validate_action_id "$action_id"
+    poll_action_status "$action_id" "checkpoint" 60
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+
+    restore_pod "$action_id" "$CLUSTER_ID"
+    restored=$(wait_for_cmd 60 get_restored_pod "$name")
+    validate_pod "$restored" 60
+
+    run validate_pod_dns_and_hostname "$restored"
+    echo "$output"
+    kubectl delete pod "$restored" -n "$NAMESPACE" --wait=false
+    [ "$status" -eq 0 ]
+}
+
 # bats test_tags=restore,crcr
 @test "Dump/Restore/Dump/Restore a pod" {
     local script
