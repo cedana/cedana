@@ -58,7 +58,10 @@ teardown_file() {
 
     sleep 3
 
-    cedana dump job "$jid"
+    run cedana dump job "$jid"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
 
     run cedana job kill "$jid"
     rm -rf "$dump_file"
@@ -77,7 +80,10 @@ teardown_file() {
 
     sleep 3
 
-    cedana dump job "$jid"
+    run cedana dump job "$jid"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
 
     cedana restore job "$jid"
     watch_logs "$jid"
