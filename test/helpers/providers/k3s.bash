@@ -179,32 +179,6 @@ download_k3s() {
     info_log "Running $(k3s --version | head -n 1)"
 }
 
-# Installs a containerd release over the test image's (/usr/local/bin is ahead in PATH)
-download_containerd() {
-    local version="${1#v}"
-    local arch
-    case "$(uname -m)" in
-    aarch64 | arm64) arch=arm64 ;;
-    *) arch=amd64 ;;
-    esac
-
-    debug_log "Downloading containerd $version..."
-    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
-        "https://github.com/containerd/containerd/releases/download/v$version/containerd-$version-linux-$arch.tar.gz" |
-        tar -xz -C /usr/local bin/containerd bin/containerd-shim-runc-v2 bin/ctr || {
-        error_log "Failed to download containerd $version"
-        return 1
-    }
-
-    local running
-    running=$(containerd --version | awk '{print $3}')
-    if [ "${running#v}" != "$version" ]; then
-        error_log "containerd $version was installed, but $(command -v containerd) is $running"
-        return 1
-    fi
-    info_log "Running containerd $version"
-}
-
 configure_containerd_runtime() {
     debug_log "Configuring containerd runtime for k3s..."
 

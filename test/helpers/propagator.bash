@@ -7,33 +7,30 @@
 # All functions talk to the propagator at CEDANA_URL (full base URL, no trailing
 # slash) using CEDANA_AUTH_TOKEN. The caller is responsible for setting both.
 
-# Checkpoint a pod via propagator API
+# Checkpoint a pod via propagator API (cedana finds the pod's runc root itself)
 # @param $1: Pod ID (UID)
-# @param $2: Runc root path
+# @param $2: Checkpoint directory, overriding the configured one (optional)
+# @param $3: Compression, overriding the configured one (optional)
 # Returns: Action ID for polling
 checkpoint_pod() {
     local pod_id="$1"
-    local runc_root=${2:-"/run/containerd/runc/k8s.io"}
-    local directory="${3:-}"   # overrides the configured checkpoint directory
-    local compression="${4:-}" # overrides the configured compression
+    local directory="${2:-}"
+    local compression="${3:-}"
 
-    if [ -z "$pod_id" ] || [ -z "$runc_root" ]; then
-        error_log "checkpoint_pod requires pod_id and runc_root"
+    if [ -z "$pod_id" ]; then
+        error_log "checkpoint_pod requires pod_id"
         return 1
     fi
 
-    debug_log "Checkpointing pod '$pod_id' with runc root '$runc_root'..."
+    debug_log "Checkpointing pod '$pod_id'..."
 
     local payload
     payload=$(jq -n \
             --arg pod_id "$pod_id" \
-            --arg runc_root "$runc_root" \
             --arg directory "$directory" \
             --arg compression "$compression" \
-            '{
-            "pod_id": $pod_id,
-            "runc_root": $runc_root
-    } + ({"directory": $directory, "compression": $compression} | with_entries(select(.value != "")) |
+            '{"pod_id": $pod_id} +
+        ({"directory": $directory, "compression": $compression} | with_entries(select(.value != "")) |
         if . == {} then {} else {"overrides": .} end)')
 
     local response

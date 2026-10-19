@@ -34,6 +34,11 @@ setup() {
 }
 
 teardown() {
+    # A sample that hung: timeout only stopped the attached CLI, and a persistent daemon
+    # would keep it (and its GPU controller) running into the next tests
+    if [ -n "${SAMPLE_JID:-}" ]; then
+        cedana job kill "$SAMPLE_JID" &>/dev/null || true
+    fi
     teardown_daemon
     check_gpu_signals
 }
@@ -54,7 +59,8 @@ run_sample() {
     local sample="$1"
     require_sample "$sample"
 
-    run timeout 180 cedana run process --attach -g --jid "$(unix_nano)" -- "$SAMPLES/$sample"
+    SAMPLE_JID=$(unix_nano) # for teardown
+    run timeout 180 cedana run process --attach -g --jid "$SAMPLE_JID" -- "$SAMPLES/$sample"
     assert_success
     assert_output --partial PASS
 }
@@ -67,6 +73,7 @@ restore_sample() {
 
     local jid gate log
     jid=$(unix_nano)
+    SAMPLE_JID=$jid # for teardown
     gate="/tmp/cedana-gate-$jid"
 
     cedana run process -g --jid "$jid" -- "$SAMPLES/$sample" "$gate"
@@ -119,6 +126,7 @@ require_reset_fix() {
 
     local jid log
     jid=$(unix_nano)
+    SAMPLE_JID=$jid # for teardown
     cedana run process -g --jid "$jid" -- sh -c "$SAMPLES/gpu_props >/dev/null && echo PROBED; while true; do echo alive; sleep 0.5; done"
     log=$(logfile_for_jid "$jid")
     wait_for_cmd 60 grep -q PROBED "$log"
@@ -147,6 +155,7 @@ require_reset_fix() {
 
     local jid gate
     jid=$(unix_nano)
+    SAMPLE_JID=$jid # for teardown
     gate="/tmp/cedana-gate-$jid"
     cedana run process -g --jid "$jid" -- sh -c "while [ ! -f $gate ]; do sleep 0.2; done; $SAMPLES/gpu_props; s=\$?; echo CHILD_EXIT=\$s; exit \$s"
     sleep 1

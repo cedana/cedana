@@ -69,7 +69,7 @@ checkpoint_counter() {
 
     local pod_id action_id
     pod_id=$(get_pod_id "$name" "$NAMESPACE") || return 1
-    action_id=$(checkpoint_pod "$pod_id" "" "$directory") || return 1
+    action_id=$(checkpoint_pod "$pod_id" "$directory") || return 1
     validate_action_id "$action_id" >&2 || return 1
     poll_action_status "$action_id" "checkpoint" 180 >&2 || return 1
     echo "$action_id"
@@ -208,8 +208,14 @@ teardown() {
     done
     local took=$((SECONDS - start))
 
+    # The budget counts from the restore request, including the wait for its pod
     case "$status" in
-        fallback | error | failed) ;;
+        fallback | error | failed)
+            if [ "$took" -gt "$budget" ]; then
+                error_log "Restore $restore_id of a corrupted checkpoint failed, but only after ${took}s (budget ${budget}s)"
+                return 1
+            fi
+            ;;
         *)
             error_log "Restore $restore_id of a corrupted checkpoint didn't fail within ${budget}s (status: ${status:-not recorded})"
             [ -n "$restored" ] && kubectl describe pod "$restored" -n "$NAMESPACE" >&2
@@ -261,7 +267,7 @@ teardown() {
     # process is frozen (compressed ones go to a temporary directory first)
     local pod_id action_id
     pod_id=$(get_pod_id "$name" "$NAMESPACE")
-    action_id=$(checkpoint_pod "$pod_id" "" "$CHECKPOINT_DIR_OVERRIDE" none)
+    action_id=$(checkpoint_pod "$pod_id" "$CHECKPOINT_DIR_OVERRIDE" none)
     validate_action_id "$action_id"
 
     local status="" start=$SECONDS
