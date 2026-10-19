@@ -13,28 +13,43 @@ install_helm() {
     debug_log "helm installed"
 }
 
+# Installs (or upgrades to) the chart under test, with this build's images and plugins. With a
+# released chart version ("latest" for the latest), installs that chart as it was released
+# instead: only this deployment's values, with its own images and plugins (e.g. the previous
+# release, to upgrade from).
 helm_install_cedana() {
     local cluster_id="$1"
     local namespace="$2"
+    local released="${3:-}"
 
-    debug_log "Installing helm chart... (chart: $HELM_CHART, namespace: $namespace, cluster_id: $cluster_id)"
+    local chart="$HELM_CHART"
+    if [ -n "$released" ]; then
+        chart=""
+        if [ "$released" != "latest" ]; then
+            chart="$released"
+        fi
+    fi
+
+    debug_log "Installing helm chart... (chart: ${chart:-latest}, namespace: $namespace, cluster_id: $cluster_id)"
     local helm_cmd
 
     # Use upgrade --install for idempotent installs
-    if [ -e "$HELM_CHART" ]; then
-        debug_log "Using local helm chart at $HELM_CHART"
-        helm_cmd="helm upgrade --install cedana $HELM_CHART" # local path to chart
-        if [ -f "$HELM_CHART/.values.yaml" ]; then
-            debug_log "Using additional values from $HELM_CHART/.values.yaml"
-            helm_cmd="$helm_cmd -f $HELM_CHART/.values.yaml"
+    if [ -z "$released" ] && [ -e "$chart" ]; then
+        debug_log "Using local helm chart at $chart"
+        helm_cmd="helm upgrade --install cedana $chart" # local path to chart
+        if [ -f "$chart/.values.yaml" ]; then
+            debug_log "Using additional values from $chart/.values.yaml"
+            helm_cmd="$helm_cmd -f $chart/.values.yaml"
         fi
-    elif [ -n "$HELM_CHART" ]; then
-        debug_log "Using helm chart version $HELM_CHART from OCI registry"
-        helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm --version $HELM_CHART"
+    elif [ -n "$chart" ]; then
+        debug_log "Using helm chart version $chart from OCI registry"
+        helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm --version $chart"
     else
         debug_log "Using latest helm chart from OCI registry"
         helm_cmd="helm upgrade --install cedana oci://registry-1.docker.io/cedana/cedana-helm" # latest
     fi
+
+    # This deployment's values
     helm_cmd="$helm_cmd --create-namespace -n $namespace"
     helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"
     helm_cmd="$helm_cmd --set config.authToken=$CEDANA_AUTH_TOKEN"
@@ -49,50 +64,51 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set hostConfig.containerdAddress=$CONTAINERD_ADDRESS"
     helm_cmd="$helm_cmd --set config.profiling=$CEDANA_PROFILING_ENABLED"
     helm_cmd="$helm_cmd --set config.metrics=$CEDANA_METRICS_ENABLED"
-
-    # Set overrides from environment variables
-
-    if [ -n "$CONTROLLER_REPO" ]; then
-        helm_cmd="$helm_cmd --set controllerManager.manager.image.repository=$CONTROLLER_REPO"
-    fi
-    if [ -n "$CONTROLLER_DIGEST" ]; then
-        helm_cmd="$helm_cmd --set controllerManager.manager.image.digest=$CONTROLLER_DIGEST"
-    elif [ -n "$CONTROLLER_TAG" ]; then
-        helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CONTROLLER_TAG"
-    fi
-    if [ -n "$HELPER_REPO" ]; then
-        helm_cmd="$helm_cmd --set daemonHelper.image.repository=$HELPER_REPO"
-    fi
-    if [ -n "$HELPER_DIGEST" ]; then
-        helm_cmd="$helm_cmd --set daemonHelper.image.digest=$HELPER_DIGEST"
-    elif [ -n "$HELPER_TAG" ]; then
-        helm_cmd="$helm_cmd --set daemonHelper.image.tag=$HELPER_TAG"
-    fi
-
-    if [ -n "$CEDANA_PLUGINS_BUILDS" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsBuilds=$CEDANA_PLUGINS_BUILDS"
-    fi
-    if [ -n "$CEDANA_PLUGINS_NATIVE_VERSION" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsNativeVersion=$CEDANA_PLUGINS_NATIVE_VERSION"
-    fi
-    if [ -n "$CEDANA_PLUGINS_CRIU_VERSION" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsCriuVersion=$CEDANA_PLUGINS_CRIU_VERSION"
-    fi
-    if [ -n "$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsContainerdRuntimeVersion=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION"
-    fi
-    if [ "$GPU" == "1" ]; then
-        if [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
-            helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
-        fi
-    else
+    if [ "$GPU" != "1" ]; then
         helm_cmd="$helm_cmd --set config.pluginsGpuVersion=none"
-    fi
-    if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
-        helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
     fi
     if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
+    fi
+
+    # This build's images and plugins, from environment variables. Not for a released chart,
+    # which installs its own.
+    if [ -z "$released" ]; then
+        if [ -n "$CONTROLLER_REPO" ]; then
+            helm_cmd="$helm_cmd --set controllerManager.manager.image.repository=$CONTROLLER_REPO"
+        fi
+        if [ -n "$CONTROLLER_DIGEST" ]; then
+            helm_cmd="$helm_cmd --set controllerManager.manager.image.digest=$CONTROLLER_DIGEST"
+        elif [ -n "$CONTROLLER_TAG" ]; then
+            helm_cmd="$helm_cmd --set controllerManager.manager.image.tag=$CONTROLLER_TAG"
+        fi
+        if [ -n "$HELPER_REPO" ]; then
+            helm_cmd="$helm_cmd --set daemonHelper.image.repository=$HELPER_REPO"
+        fi
+        if [ -n "$HELPER_DIGEST" ]; then
+            helm_cmd="$helm_cmd --set daemonHelper.image.digest=$HELPER_DIGEST"
+        elif [ -n "$HELPER_TAG" ]; then
+            helm_cmd="$helm_cmd --set daemonHelper.image.tag=$HELPER_TAG"
+        fi
+
+        if [ -n "$CEDANA_PLUGINS_BUILDS" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsBuilds=$CEDANA_PLUGINS_BUILDS"
+        fi
+        if [ -n "$CEDANA_PLUGINS_NATIVE_VERSION" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsNativeVersion=$CEDANA_PLUGINS_NATIVE_VERSION"
+        fi
+        if [ -n "$CEDANA_PLUGINS_CRIU_VERSION" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsCriuVersion=$CEDANA_PLUGINS_CRIU_VERSION"
+        fi
+        if [ -n "$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsContainerdRuntimeVersion=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION"
+        fi
+        if [ "$GPU" == "1" ] && [ -n "$CEDANA_PLUGINS_GPU_VERSION" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsGpuVersion=$CEDANA_PLUGINS_GPU_VERSION"
+        fi
+        if [ -n "$CEDANA_PLUGINS_STREAMER_VERSION" ]; then
+            helm_cmd="$helm_cmd --set config.pluginsStreamerVersion=$CEDANA_PLUGINS_STREAMER_VERSION"
+        fi
     fi
 
     helm_cmd="$helm_cmd --wait --timeout=7m"
@@ -103,27 +119,6 @@ helm_install_cedana() {
         return 1
     }
     debug_log "Helm chart installed"
-}
-
-# Installs a released chart as it was released: its own images and plugin versions (e.g.
-# the previous release, to upgrade from). "latest" is the latest release.
-helm_install_released_cedana() {
-    local cluster_id="$1"
-    local namespace="$2"
-    local version="$3"
-
-    (
-        unset CONTROLLER_REPO CONTROLLER_DIGEST CONTROLLER_TAG HELPER_REPO HELPER_DIGEST HELPER_TAG
-        unset CEDANA_PLUGINS_BUILDS # the chart's own (release), not the node's local ones
-        unset CEDANA_PLUGINS_NATIVE_VERSION CEDANA_PLUGINS_CRIU_VERSION CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION
-        unset CEDANA_PLUGINS_GPU_VERSION CEDANA_PLUGINS_STREAMER_VERSION
-        if [ "$version" = "latest" ]; then
-            HELM_CHART=""
-        else
-            HELM_CHART="$version"
-        fi
-        helm_install_cedana "$cluster_id" "$namespace"
-    )
 }
 
 # Installs the plugins of the build under test, from the files in the working directory, as
@@ -139,6 +134,39 @@ install_local_plugins() {
     if [ "${STREAMER:-false}" = "true" ]; then
         sudo -E cedana plugin install streamer || return 1
     fi
+}
+
+# Upgrades the installed (released) chart to the one under test, the way customers do, with a
+# checkpoint taken before it, for upgrade.bats to restore: its pod, action and last count are
+# exported as UPGRADE_POD, UPGRADE_ACTION_ID and UPGRADE_COUNT, and the chart it was taken on
+# as UPGRADE_FROM
+helm_upgrade_cedana() {
+    local cluster_id="$1"
+    local namespace="$2"
+
+    UPGRADE_FROM=$(helm list -n "$namespace" -o json | jq -r '.[] | select(.name == "cedana") | .chart')
+    debug_log "Checkpointing a pod on $UPGRADE_FROM, before the upgrade..."
+
+    local spec
+    spec=$(cmd_pod_spec "alpine:latest" "$(cat "$WORKLOADS"/count-loop.sh)")
+    kubectl apply -f "$spec" &&
+        UPGRADE_POD=$(get_created_pod "$spec" "$NAMESPACE" 30) &&
+        validate_pod "$UPGRADE_POD" 120 &&
+        wait_for_log_trigger "$UPGRADE_POD" "COUNT 10" 60 || return 1
+    UPGRADE_COUNT=$(last_count "$UPGRADE_POD")
+    UPGRADE_ACTION_ID=$(checkpoint_pod "$(get_pod_id "$UPGRADE_POD" "$NAMESPACE")") &&
+        validate_action_id "$UPGRADE_ACTION_ID" &&
+        poll_action_status "$UPGRADE_ACTION_ID" "checkpoint" 180 &&
+        kubectl delete pod "$UPGRADE_POD" -n "$NAMESPACE" --wait=true || return 1
+    export UPGRADE_FROM UPGRADE_POD UPGRADE_COUNT UPGRADE_ACTION_ID
+
+    debug_log "Upgrading from $UPGRADE_FROM to this chart..."
+    # The released chart's helper installed its own plugins over this build's
+    if [ "${CEDANA_PLUGINS_BUILDS:-}" = "local" ]; then
+        install_local_plugins || return 1
+    fi
+    helm_install_cedana "$cluster_id" "$namespace" &&
+        kubectl rollout status daemonset/cedana-helper -n "$namespace" --timeout=5m
 }
 
 helm_is_cedana_installed() {

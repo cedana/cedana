@@ -2,9 +2,10 @@
 
 # bats file_tags=k8s,kubernetes,upgrade
 
-# Upgrading the way customers do: from the previous release to this one, with checkpoints
-# taken before the upgrade. Runs with UPGRADE_FROM_CHART set (e.g. "latest"), when the
-# suite starts from that released chart (see setup_suite.bash).
+# Upgrading the way customers do: from the previous release to this one, with a checkpoint
+# taken before the upgrade. With UPGRADE_FROM_CHART set (e.g. "latest"), the suite starts from
+# that released chart and upgrades to this one before any test (see helm_upgrade_cedana), so
+# these only check the upgrade, and every other test runs after it.
 
 load ../helpers/utils
 load ../helpers/daemon
@@ -44,37 +45,7 @@ helpers_on_digest() {
     )' <<<"$pods" >/dev/null
 }
 
-# bats test_tags=restore
-@test "Upgrade from the previous release, and restore a checkpoint taken before it" {
-    local from
-    from=$(helm list -n "$CEDANA_NAMESPACE" -o json | jq -r '.[] | select(.name == "cedana") | .chart')
-    debug_log "Upgrading from $from"
-
-    # Checkpoint a workload on the previous release
-    local script spec name
-    script=$(cat "$WORKLOADS"/count-loop.sh)
-    spec=$(cmd_pod_spec "alpine:latest" "$script")
-    kubectl apply -f "$spec"
-    name=$(get_created_pod "$spec" "$NAMESPACE" 30)
-    TEST_PODS+=("$name")
-    validate_pod "$name" 120
-    wait_for_log_trigger "$name" "COUNT 10" 60
-
-    local count pod_id action_id
-    count=$(last_count "$name")
-    pod_id=$(get_pod_id "$name" "$NAMESPACE")
-    action_id=$(checkpoint_pod "$pod_id")
-    validate_action_id "$action_id"
-    poll_action_status "$action_id" "checkpoint" 180
-    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
-
-    # Upgrade to this chart, with this build's images and plugins
-    if [ "${CEDANA_PLUGINS_BUILDS:-}" = "local" ]; then
-        install_local_plugins
-    fi
-    helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
-    kubectl rollout status daemonset/"$HELPER_DAEMONSET" -n "$CEDANA_NAMESPACE" --timeout=5m
-
+@test "Upgrade from the previous release runs this build on every node" {
     # The upgrade landed: helm can leave a DaemonSet patched in place on the old image
     if [ -n "${HELPER_DIGEST:-}" ]; then
         wait_for_cmd 120 helpers_on_digest "$HELPER_DIGEST" || {
@@ -83,7 +54,6 @@ helpers_on_digest() {
             return 1
         }
     fi
-    wait_for_ready "$CEDANA_NAMESPACE" 300
 
     # It runs the cedana under test, not some other build (e.g. a stale one downloaded)
     local expected actual
@@ -94,10 +64,15 @@ helpers_on_digest() {
         error_log "The upgraded helper runs cedana $actual, but this is $expected"
         return 1
     fi
+}
+
+# bats test_tags=restore
+@test "Restore a checkpoint taken before the upgrade from the previous release" {
+    local name="$UPGRADE_POD" count="$UPGRADE_COUNT" from="$UPGRADE_FROM"
 
     # The old checkpoint restores, or is refused explicitly: never a silent cold start or a hang
     local restore_id restored
-    restore_id=$(restore_pod "$action_id" "$CLUSTER_ID")
+    restore_id=$(restore_pod "$UPGRADE_ACTION_ID" "$CLUSTER_ID")
     validate_action_id "$restore_id"
     restored=$(wait_for_cmd 60 get_restored_pod "$name" "$NAMESPACE") || true
     if [ -n "$restored" ]; then TEST_PODS+=("$restored"); fi

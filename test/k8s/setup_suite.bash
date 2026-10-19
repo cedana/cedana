@@ -28,6 +28,8 @@
 #   SAMPLES_DIR                     - Path to cedana-samples/kubernetes (default: auto-detect)
 #   PROPAGATOR_REPO                 - If set (with PROPAGATOR_DIGEST or PROPAGATOR_TAG), deploy this
 #                                     propagator into the cluster and test against it (see propagator_deploy.bash)
+#   UPGRADE_FROM_CHART              - If set (e.g. "latest"), install that released chart, checkpoint a pod on it,
+#                                     and upgrade to this one: the suite runs after the upgrade (see upgrade.bats)
 
 ################################################################################
 # Setup and Configuration
@@ -107,12 +109,8 @@ setup_suite() {
         fi
 
         helm_uninstall_cedana "$CEDANA_NAMESPACE"
-        if [ -n "${UPGRADE_FROM_CHART:-}" ]; then
-            # The upgrade tests start from a released chart, and upgrade to this one
-            helm_install_released_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE" "$UPGRADE_FROM_CHART"
-        else
-            helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
-        fi
+        # With UPGRADE_FROM_CHART, start from that released chart, upgraded to this one below
+        helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE" "${UPGRADE_FROM_CHART:-}"
     else
         debug_log "Skipping helm install (SKIP_HELM=1)"
         if [ -z "$CLUSTER_ID" ]; then
@@ -138,6 +136,12 @@ setup_suite() {
     # Create test namespace
     delete_namespace "$NAMESPACE"
     create_namespace "$NAMESPACE"
+
+    # The suite then runs on the upgraded install, and upgrade.bats checks the upgrade itself
+    if [ -n "${UPGRADE_FROM_CHART:-}" ] && [ "${SKIP_HELM:-0}" != "1" ]; then
+        helm_upgrade_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE" || return 1
+        wait_for_ready "$CEDANA_NAMESPACE" 300
+    fi
 }
 
 teardown_suite() {
