@@ -438,7 +438,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}${{ matrix.k3s_containerd && format('-{0}', matrix.k3s_containerd) || '' }}
-          path: /tmp/report*.xml
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
 
       - name: Upload propagator logs
         if: always() && inputs.propagator

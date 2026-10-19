@@ -305,7 +305,22 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}
-          path: /tmp/report*.xml
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
+
+      # Daemon and job logs, as bats only shows those of failed tests
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-logs-${{ matrix.arch }}
+          path: |
+            /tmp/cedana-daemon-*.log
+            /tmp/cedana-*/**/*.log
+            /var/log/cedana*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   plugin:
     name: Plugin
@@ -464,7 +479,22 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
-          path: /tmp/report*.xml
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
+
+      # Daemon and job logs, as bats only shows those of failed tests
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-logs-${{ matrix.arch }}-${{ env.PLUGIN }}
+          path: |
+            /tmp/cedana-daemon-*.log
+            /tmp/cedana-*/**/*.log
+            /var/log/cedana*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload race reports
         if: always() && env.RACE == 'true'

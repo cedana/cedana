@@ -49,16 +49,16 @@ check_gpu_shm_leaks() {
         [ -z "$leaked" ] && return 0
         sleep 1
     done
-    warn_log "GPU shared memory left behind after the suite (leaked):"
-    local segment id log
+    local segment id log detail=""
     for segment in $leaked; do
-        warn_log "  /dev/shm/$segment ($(du -h --apparent-size "/dev/shm/$segment" 2>/dev/null | cut -f1)), held by: $(fuser "/dev/shm/$segment" 2>/dev/null || echo none)"
+        detail+="/dev/shm/$segment ($(du -h --apparent-size "/dev/shm/$segment" 2>/dev/null | cut -f1)), held by: $(fuser "/dev/shm/$segment" 2>/dev/null || echo none)"$'\n'
         # Which daemon (so test) spawned its controller, and the controller's last words
         id=${segment#cedana-gpu.}
         for log in $(grep -l "ID=$id" /tmp/cedana-daemon-*.log 2>/dev/null); do
-            warn_log "    spawned by the daemon logging to $log:"
-            grep -E "ID=$id|JID=" "$log" | grep -E "ID=$id|managing job|job exited" | tail -n 8 | while IFS= read -r line; do warn_log "      $line"; done
+            detail+="  spawned by the daemon logging to $log:"$'\n'
+            detail+=$(grep -E "ID=$id|JID=" "$log" | grep -E "ID=$id|managing job|job exited" | tail -n 8 | sed 's/^/    /')$'\n'
         done
     done
+    report_warning "GPU shared memory left behind after the suite (leaked): $(wc -w <<<"$leaked") segment(s)" "${detail%$'\n'}"
     return 1
 }

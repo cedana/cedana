@@ -390,7 +390,7 @@ verify_restored_pod() {
             local uts
             uts=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /proc/sys/kernel/hostname 2>&1 | tr -d '[:space:]')
             [ "$uts" = "$hostname" ] ||
-                warn_log "$container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)"
+                report_warning "$container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)"
         fi
 
         local gpus
@@ -411,7 +411,7 @@ verify_restored_pod() {
             # Only warns for now: restores may not rebuild the loader cache yet (the nvidia hook
             # that runs ldconfig is removed on restore). Make it an error once they pass.
             [ -z "$gpu_problems" ] ||
-                warn_log "$container: GPU: $(tr '\n' ';' <<<"$gpu_problems")"
+                report_warning "$container: GPU: $(tr '\n' ';' <<<"$gpu_problems")"
         fi
 
         if [ "$automount" != "false" ]; then

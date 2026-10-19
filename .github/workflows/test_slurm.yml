@@ -288,7 +288,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: test-report-amd64-slurm-ansible
-          path: /tmp/report*.xml
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
 
       - name: Upload SLURM debug logs
         if: always()
@@ -863,7 +865,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: test-report-amd64-slurm-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}
-          path: /tmp/report*.xml
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
 
       - name: Upload SLURM debug logs
         if: always()

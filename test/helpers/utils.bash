@@ -270,6 +270,24 @@ warn_log() {
     echo -e "${YELLOW}[WARN] $message${NC}" >&"${OUTPUT_FD}"
 }
 
+# Where report_warning records warnings, one JSON object per line. CI uploads it beside the
+# job's report, and cedana-test-summary shows them next to the suite's results.
+export WARNINGS_FILE="${WARNINGS_FILE:-/tmp/warnings.jsonl}"
+
+# A warn_log that also shows in the CI summary, for problems that don't fail a test (yet).
+# The detail (optional, multi-line) is logged indented.
+report_warning() {
+    local title="$1"
+    local detail="${2:-}"
+    warn_log "$title"
+    if [ -n "$detail" ]; then
+        while IFS= read -r line; do warn_log "  $line"; done <<<"$detail"
+    fi
+    jq -nc --arg title "$title" --arg detail "$detail" --arg test "${BATS_TEST_DESCRIPTION:-}" \
+        '{title: $title} + ({detail: $detail, test: $test} | with_entries(select(.value != "")))' \
+        >>"$WARNINGS_FILE" 2>/dev/null || true
+}
+
 debug_log() {
     local message="$1"
     if [ "$DEBUG" == "1" ]; then

@@ -235,7 +235,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
-          path: /tmp/report*.xml
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
 
       # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests
       - name: Upload logs
