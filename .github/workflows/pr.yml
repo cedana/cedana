@@ -25,6 +25,11 @@ on:
         description: "Run publish with debugging enabled"
         required: false
         default: false
+      race:
+        type: boolean
+        description: "Also run the runc and containerd plugin tests against race-detector builds"
+        required: false
+        default: false
 
 concurrency:
   group: ${{ github.repository }}-pr-${{ github.event.pull_request.number || github.ref }}
@@ -48,6 +53,7 @@ jobs:
       plugins: true
       image: true
       image_name: cedana/cedana-helper-test
+      race: ${{ inputs.race || false }}
 
   download:
     name: Download
@@ -86,6 +92,7 @@ jobs:
       debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
       propagator: true
+      race: ${{ inputs.race || false }}
 
   bench:
     name: Bench
