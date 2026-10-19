@@ -29,16 +29,25 @@ jobs:
       streamer_version: ${{ vars.NIGHTLY_STREAMER_VERSION }}
       helm_chart_version: ${{ vars.NIGHTLY_HELM_CHART_VERSION }}
       controller_version: ${{ vars.NIGHTLY_CONTROLLER_VERSION }}
-      containerd_runtime_version: cedana
+      containerd_runtime_version: ${{ vars.NIGHTLY_CONTAINERD_RUNTIME_VERSION }}
       oci_runtime_version: ${{ vars.NIGHTLY_OCI_RUNTIME_VERSION || 'main' }}
       slurm_version: ${{ vars.NIGHTLY_SLURM_VERSION }}
       csx_version: ${{ vars.NIGHTLY_CSX_VERSION }}
       propagator_version: ${{ vars.NIGHTLY_PROPAGATOR_VERSION }}
 
+  # Only the race-detector builds (for test's race): the rest is downloaded
+  build:
+    name: Build
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+    with:
+      ref: ${{ github.ref }}
+      race: true
+
   test:
     name: Test
     uses: ./.github/workflows/test.yml
-    needs: download
+    needs: [download, build]
     secrets: inherit
     with:
       ref: ${{ github.ref }}
@@ -49,7 +58,7 @@ jobs:
       cloud_kubernetes: true # doesn't block anyone at night, and the only place Nebius runs (large)
       upgrade: true
       soak: true # each checkpoint/restore many times, for 1-in-N failures
-      race: true # base and runc suites against a race-detector build
+      race: true # the runc and containerd plugin tests against race-detector builds
       runner: 8cpu # use larger runner
       runner_gpu: 16cpu-1gpu # use larger runner
       parallelism: 4

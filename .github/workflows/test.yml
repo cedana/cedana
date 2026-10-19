@@ -43,7 +43,7 @@ on:
         default: false
       upgrade:
         type: boolean
-        description: "Also test upgrading from the latest released chart (on one K3s job)"
+        description: "Start one K3s job from the latest released chart, and run its suite after upgrading to this one"
         required: false
         default: false
       soak:
@@ -53,7 +53,7 @@ on:
         default: false
       race:
         type: boolean
-        description: "Also run the base and runc suites against a daemon built with the race detector"
+        description: "Run the runc and containerd plugin tests (amd64) against race-detector builds (the cedana-race-* and plugin-race-* artifacts, from build.yml's race)"
         required: false
         default: false
       slurm:
@@ -102,8 +102,6 @@ jobs:
   unit:
     name: Unit
     runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache # compiles test binaries in parallel
-    env:
-      CONTAINERD_TEST_VERSIONS: 1.7.36 2.0.14 2.1.9 2.2.10 2.3.7 2.4.2
     strategy:
       fail-fast: false
       matrix:
@@ -171,13 +169,13 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /opt/containerd-bins
-          key: containerd-bins-${{ matrix.arch }}-${{ env.CONTAINERD_TEST_VERSIONS }}
+          key: containerd-bins-${{ matrix.arch }}-${{ hashFiles('plugins/k8s/containerd-versions') }}
 
       - name: Download containerd binaries
         if: steps.containerd-bins.outputs.cache-hit != 'true'
         run: |
           mkdir -p /opt/containerd-bins
-          for v in $CONTAINERD_TEST_VERSIONS; do
+          for v in $(awk '{sub(/#.*/, ""); if (NF) print $1}' plugins/k8s/containerd-versions); do
             curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
               "https://github.com/containerd/containerd/releases/download/v$v/containerd-$v-linux-${{ matrix.arch }}.tar.gz" |
               tar -xzO bin/containerd >"/opt/containerd-bins/containerd-$v"
@@ -309,100 +307,6 @@ jobs:
           name: test-report-${{ matrix.arch }}
           path: /tmp/report*.xml
 
-  # The base and runc suites against cedana (and its runc plugin) built with the race
-  # detector, which reports data races the daemon hits in them (to /tmp/race, uploaded)
-  race:
-    name: Race
-    if: inputs.race
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-amd64/extras=s3-cache
-    timeout-minutes: 90
-    container:
-      image: cedana/cedana-test:latest
-      credentials:
-        username: ${{ vars.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init --cgroupns=host
-    steps:
-      - uses: runs-on/action@v2
-      - uses: actions/checkout@v5
-        with:
-          repository: cedana/cedana # required for workflows reusing this workflow
-          ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
-          submodules: recursive
-          token: ${{ secrets.GIT_CI_PAT }}
-
-      - name: Download CRIU
-        uses: actions/download-artifact@v7
-        with:
-          name: criu-amd64
-
-      - name: Cache Go modules and build cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            /go/pkg/mod
-            /root/.cache/go-build
-          key: go-race-amd64-${{ hashFiles('**/go.sum') }}
-          restore-keys: go-race-amd64-
-
-      - name: Mark git dir as safe
-        run: git config --global --add safe.directory "$(pwd)"
-
-      - name: Build with the race detector
-        run: make cedana "$PWD/libcedana-runc.so" RACE=1 VERSION="$(git describe --tags --always)"
-
-      - name: Install
-        run: |
-          chmod +x ./criu
-          echo "$PWD" >> $GITHUB_PATH
-          export PATH="$PWD:$PATH"
-          make install
-          sudo -E cedana plugin install criu runc
-
-      - name: Run regression tests
-        env:
-          # Report every race (one file per process), without stopping the process. A daemon
-          # across tests (persistent), which serves many jobs at once, is where races are likeliest
-          GORACE: log_path=/tmp/race/report halt_on_error=0
-          PARALLELISM: ${{ inputs.parallelism }}
-        run: |
-          mkdir -p /tmp/race
-          status=0
-          make test-regression DAEMON_MODE=persistent TAGS=base,!large,!soak PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-race-base || status=$?
-          make test-regression DAEMON_MODE=persistent TAGS=runc,!gpu,!streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-race-runc || status=$?
-          exit $status
-
-      - name: Check for races
-        if: always()
-        run: |
-          if ls /tmp/race/report.* >/dev/null 2>&1; then
-            echo "::error title=Data races::$(grep -c '^WARNING: DATA RACE' /tmp/race/report.* | awk -F: '{s+=$2} END {print s}') data race(s) found, see the race-reports artifact"
-            grep -h -A 30 '^WARNING: DATA RACE' /tmp/race/report.* | head -n 300
-            exit 1
-          fi
-          echo "No data races found"
-
-      - name: Upload race reports
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: race-reports
-          path: /tmp/race/
-          if-no-files-found: ignore
-
-      - name: Label report # with the job name, so the summary can link to it
-        if: always()
-        run: find /tmp -maxdepth 1 -name 'report-race*.xml' -exec sed -i 's|<testsuites |<testsuites name="Race" |' {} +
-
-      - name: Upload report
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: test-report-race
-          path: /tmp/report-race*.xml
-
   plugin:
     name: Plugin
     runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/tag=${{ matrix.plugin }}/extras=s3-cache
@@ -421,6 +325,10 @@ jobs:
         arch:
           - amd64
           - arm64
+    env:
+      # With race: these against the race-detector builds, which report the data races the
+      # daemon hits (to /tmp/race). Not every job: the rest of the matrix runs as usual.
+      RACE: ${{ inputs.race && matrix.arch == 'amd64' && (matrix.plugin == 'runc' || matrix.plugin == 'containerd') }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -439,13 +347,13 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v7
         with:
-          name: cedana-${{ matrix.arch }}
+          name: cedana-${{ env.RACE == 'true' && 'race-' || '' }}${{ matrix.arch }}
 
       - name: Download plugins
         uses: actions/download-artifact@v7
         with:
           path: .
-          pattern: plugin-${{ matrix.arch }}*
+          pattern: plugin-${{ env.RACE == 'true' && 'race-' || '' }}${{ matrix.arch }}-*
           merge-multiple: true
 
       - name: Download CRIU
@@ -514,7 +422,12 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PLUGIN: ${{ matrix.plugin }}
+          # Race: report every race (a file per process) without stopping the process, from a
+          # daemon across tests (persistent), which serves many jobs at once: where races are likeliest
+          GORACE: ${{ env.RACE == 'true' && 'log_path=/tmp/race/report halt_on_error=0' || '' }}
+          DAEMON_MODE: ${{ env.RACE == 'true' && 'persistent' || 'both' }}
         run: |
+          mkdir -p /tmp/race
           # replace slash in plugin with colon so that the tag is namespaced correctly
           # e.g. storage/cedana -> storage:cedana
           PLUGIN=$(echo $PLUGIN | sed 's/\//:/g')
@@ -523,6 +436,16 @@ jobs:
           else
             make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
+
+      - name: Check for races
+        if: always() && env.RACE == 'true'
+        run: |
+          if ls /tmp/race/report.* >/dev/null 2>&1; then
+            echo "::error title=Data races::$(grep -c '^WARNING: DATA RACE' /tmp/race/report.* | awk -F: '{s+=$2} END {print s}') data race(s) found, see the race-reports-* artifact"
+            grep -h -A 30 '^WARNING: DATA RACE' /tmp/race/report.* | head -n 300
+            exit 1
+          fi
+          echo "No data races found"
 
       - name: Set plugin name
         if: always()
@@ -542,6 +465,14 @@ jobs:
         with:
           name: test-report-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: /tmp/report*.xml
+
+      - name: Upload race reports
+        if: always() && env.RACE == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: race-reports-${{ env.PLUGIN }}
+          path: /tmp/race/
+          if-no-files-found: ignore
 
   streamer:
     name: Streamer
@@ -610,7 +541,7 @@ jobs:
   post-summary:
     name: Post Summary
     if: always()
-    needs: [unit, script, basic, race, plugin, streamer, gpu, k8s, slurm]
+    needs: [unit, script, basic, plugin, streamer, gpu, k8s, slurm]
     runs-on: ubuntu-24.04
     permissions:
       pull-requests: write

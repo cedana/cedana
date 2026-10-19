@@ -48,10 +48,15 @@ on:
         description: "Name of the test Docker image to build"
         required: false
         default: "cedana/cedana-test"
+      race:
+        type: boolean
+        description: "Also build cedana and the plugins with the race detector (amd64), as cedana-race-* and plugin-race-* artifacts. Alone, only these"
+        required: false
+        default: false
 
 jobs:
   cedana:
-    name: Cedana
+    name: Cedana (${{ matrix.arch }}${{ matrix.race && ', race' || '' }})
     runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}/extras=s3-cache # finishes with the plugin builds, which the image waits for too
     strategy:
       fail-fast: true
@@ -59,7 +64,13 @@ jobs:
         arch:
           - amd64
           - arm64
-    if: inputs.cedana || inputs.image
+        # Also with the race detector (amd64), if asked: a plugin only loads into a cedana
+        # built the same way, so cedana and every plugin get one. Asked for alone, only these.
+        race: ${{ fromJSON(!inputs.race && '[false]' || ((inputs.cedana || inputs.image) && '[false, true]' || '[true]')) }}
+        exclude:
+          - race: true
+            arch: arm64
+    if: inputs.cedana || inputs.image || inputs.race
     container:
       image: rockylinux:8
       credentials:
@@ -100,11 +111,12 @@ jobs:
       - name: Build
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make cedana VERSION=$VERSION -j $(nproc)
+          make cedana VERSION=$VERSION RACE=${{ matrix.race && '1' || '0' }} -j $(nproc)
           echo $VERSION > ./cedana-version.txt
 
       - id: "inject-version"
         name: Inject VERSION into install-release.sh
+        if: ${{ !matrix.race }}
         run: |
           VERSION="${{ github.head_ref || github.ref_name }}"
           sed -i "s|^VERSION=\${VERSION:-\".*\"}|VERSION=\${VERSION:-\"$VERSION\"}|" scripts/install-release.sh
@@ -112,12 +124,13 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: cedana-${{ matrix.arch }}
+          name: cedana-${{ matrix.race && 'race-' || '' }}${{ matrix.arch }}
           path: |
             ./cedana
             ./cedana-version.txt
 
       - name: Upload scripts
+        if: ${{ !matrix.race }}
         uses: actions/upload-artifact@v6
         with:
           name: cedana-scripts-${{ matrix.arch }}
@@ -125,7 +138,7 @@ jobs:
             scripts/install-release.sh
 
   plugin:
-    name: Plugin
+    name: Plugin (${{ matrix.plugin }}, ${{ matrix.arch }}${{ matrix.race && ', race' || '' }})
     runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
@@ -147,7 +160,13 @@ jobs:
         arch:
           - amd64
           - arm64
-    if: inputs.plugins || inputs.image
+        # Also with the race detector (amd64), if asked: a plugin only loads into a cedana
+        # built the same way, so cedana and every plugin get one. Asked for alone, only these.
+        race: ${{ fromJSON(!inputs.race && '[false]' || ((inputs.plugins || inputs.image) && '[false, true]' || '[true]')) }}
+        exclude:
+          - race: true
+            arch: arm64
+    if: inputs.plugins || inputs.image || inputs.race
     container:
       image: rockylinux:8
       credentials:
@@ -197,13 +216,13 @@ jobs:
           PLUGIN: ${{ env.PLUGIN }}
         run: |
           VERSION=${{ github.head_ref || github.ref_name }}
-          make ${PWD}/libcedana-${PLUGIN}.so VERSION=$VERSION -j $(nproc)
+          make ${PWD}/libcedana-${PLUGIN}.so VERSION=$VERSION RACE=${{ matrix.race && '1' || '0' }} -j $(nproc)
           echo $VERSION > ./plugin-version.txt
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
+          name: plugin-${{ matrix.race && 'race-' || '' }}${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
             ./libcedana-*.so
             ./plugin-version.txt
