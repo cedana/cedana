@@ -31,7 +31,10 @@ teardown_file() {
 
 # A process tree holding the fd kinds servers use (epoll, eventfd, timerfd, signalfd,
 # inotify, pipes, FIFOs, socketpairs, a pty, UDP, unix and TCP connections), each with state
-# in flight: all of it must come back after a restore (see fd_zoo.py)
+# in flight: all of it must come back after a restore (see fd_zoo.py).
+# XXX: without inotify, as CRIU can't dump a watch on overlayfs (CI's /tmp): it can't open
+# overlayfs file handles, and its fallback scan doesn't look there ("fsnotify: Can't dump that
+# handle"). Without udp, as CRIU doesn't dump UDP receive queues (datagrams UDP may drop anyway).
 # bats test_tags=dump,restore
 @test "restore a process tree holding many kinds of fds, with state in flight" {
     if [ ! -x "$FD_ZOO" ]; then
@@ -42,7 +45,7 @@ teardown_file() {
     log=$(mktemp /tmp/cedana-fds-XXXXXX.log)
     gate="$log.gate"
     dir=$(mktemp -d /tmp/cedana-fds-XXXXXX)
-    "$FD_ZOO" --log "$log" --dir "$dir" --gate "$gate" &
+    "$FD_ZOO" --log "$log" --dir "$dir" --gate "$gate" --skip inotify,udp &
     local pid=$!
     WORKLOAD_PID=$pid # for teardown
     wait_for_cmd 30 grep -q '^OK' "$log"
