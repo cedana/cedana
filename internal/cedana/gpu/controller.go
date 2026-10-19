@@ -478,7 +478,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump complete")
 		}()
-		return nil
+		return <-dumpErr
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
