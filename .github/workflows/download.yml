@@ -8,10 +8,20 @@ permissions:
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CHANNEL: ${{ inputs.channel }}
 
 on:
   workflow_call:
     inputs:
+      channel:
+        type: string
+        description: >-
+          Channel to download binaries and images from: "auto" (versions starting with "v" and "release"
+          from the release channel, anything else from alpha), "alpha" (alpha, falling back to the release
+          channel for versions that aren't in alpha, e.g. tags released before alpha-at-tag) or "release".
+          A version of "release" is the latest release in every channel
+        required: false
+        default: "auto"
       cedana_version:
         type: string
         description: Version for Cedana binaries (branch name, tag or "release" for latest release)
@@ -57,6 +67,11 @@ on:
         description: Version for cedana-slurm binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+      slurm_ref:
+        type: string
+        description: Ref of cedana-slurm to check out (scripts, slurm-versions), if different from slurm_version (e.g. a PR head tested with binaries published at a release version)
+        required: false
+        default: ""
       csx_version:
         type: string
         description: Version for csx binaries (branch name, tag or "release" for latest release)
@@ -90,10 +105,23 @@ jobs:
           VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           set -euo pipefail
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
 
           mkdir -p cedana
           cd cedana
@@ -101,7 +129,9 @@ jobs:
           ARCH="${{ matrix.arch }}"
           FILE="cedana"
 
-          curl -fL \
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
             "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "$FILE"
@@ -118,13 +148,21 @@ jobs:
 
       - name: Get digest
         env:
-          IMAGE_NAME: ${{ (inputs.cedana_version == 'release' || startsWith(inputs.cedana_version, 'v')) && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
+          IMAGE_NAMES: ${{ (inputs.channel == 'alpha' && inputs.cedana_version != 'release' && 'cedana/cedana-helper-test cedana/cedana-helper') || ((inputs.channel == 'release' || inputs.cedana_version == 'release' || startsWith(inputs.cedana_version, 'v')) && 'cedana/cedana-helper') || 'cedana/cedana-helper-test' }}
           TAG: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
           TAG=$(echo $TAG | sed 's/\//-/g')
-          docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
+          # The first image that has the tag, so alpha falls back to the release image
+          IMAGE_NAME=""
+          for NAME in $IMAGE_NAMES; do
+            if docker pull --platform=linux/${{ matrix.arch }} $NAME:$TAG; then
+              IMAGE_NAME=$NAME
+              break
+            fi
+          done
+          test -n "$IMAGE_NAME" || { echo "No image found for tag $TAG in: $IMAGE_NAMES"; exit 1; }
           digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
           touch "/tmp/digests/${digest#sha256:}"
           echo "$IMAGE_NAME" > /tmp/image-name/name.txt
@@ -155,6 +193,7 @@ jobs:
           - runc
           - crun
           - containerd
+          - podman
           - crio
           - kata
           - cloud-hypervisor
@@ -178,18 +217,33 @@ jobs:
       - name: Download plugin
         env:
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           set -euo pipefail
 
-          VERSION="${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}"
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           ARCH="${{ matrix.arch }}"
           FILE="libcedana-${PLUGIN}.so"
 
-          curl -fL \
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
             "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "$FILE"
@@ -223,15 +277,30 @@ jobs:
           VERSION: ${{ inputs.criu_version == 'release' && 'latest' || inputs.criu_version }}
         run: |
           set -euo pipefail
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p criu
           ARCH="${{ matrix.arch }}"
           FILE="criu"
 
-          curl -fL \
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
             "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "criu/${FILE}"
@@ -263,10 +332,23 @@ jobs:
           VERSION: ${{ inputs.gpu_version == 'release' && 'latest' || inputs.gpu_version }}
         run: |
           set -euo pipefail
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p gpu
 
           ARCH="${{ matrix.arch }}"
@@ -276,7 +358,8 @@ jobs:
             "libcedana-gpu-tracer.so"
           )
           for FILE in "${BINARIES[@]}"; do
-            curl -fL \
+            # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+            curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
               "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
               --output "gpu/${FILE}"
@@ -308,16 +391,31 @@ jobs:
           VERSION: ${{ inputs.streamer_version == 'release' && 'latest' || inputs.streamer_version }}
         run: |
           set -euo pipefail
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p streamer
 
           ARCH="${{ matrix.arch }}"
           FILE="cedana-image-streamer"
 
-          curl -fL \
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
             "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "streamer/${FILE}"
@@ -351,13 +449,21 @@ jobs:
 
       - name: Get digest
         env:
-          IMAGE_NAME: ${{ (inputs.controller_version == 'release' || startsWith(inputs.controller_version, 'v')) && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
+          IMAGE_NAMES: ${{ (inputs.channel == 'alpha' && inputs.controller_version != 'release' && 'cedana/cedana-controller-test cedana/cedana-controller') || ((inputs.channel == 'release' || inputs.controller_version == 'release' || startsWith(inputs.controller_version, 'v')) && 'cedana/cedana-controller') || 'cedana/cedana-controller-test' }}
           TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
         run: |
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
           TAG=$(echo $TAG | sed 's/\//-/g')
-          docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
+          # The first image that has the tag, so alpha falls back to the release image
+          IMAGE_NAME=""
+          for NAME in $IMAGE_NAMES; do
+            if docker pull --platform=linux/${{ matrix.arch }} $NAME:$TAG; then
+              IMAGE_NAME=$NAME
+              break
+            fi
+          done
+          test -n "$IMAGE_NAME" || { echo "No image found for tag $TAG in: $IMAGE_NAMES"; exit 1; }
           digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
           touch "/tmp/digests/${digest#sha256:}"
           echo "$IMAGE_NAME" > /tmp/image-name/name.txt
@@ -404,19 +510,33 @@ jobs:
           set -euo pipefail
           # Releases are only tagged by version, so resolve "release" to the latest one
           if [ "$VERSION" = "release" ]; then
-            IMAGE_NAME=cedana/cedana-propagator
+            IMAGE_NAMES=cedana/cedana-propagator
             TAG=$(gh release view --repo cedana/cedana-propagator --json tagName --jq .tagName)
           elif [ "${VERSION#v}" != "$VERSION" ]; then
-            IMAGE_NAME=cedana/cedana-propagator
+            IMAGE_NAMES=cedana/cedana-propagator
             TAG=$VERSION
           else
-            IMAGE_NAME=cedana/cedana-propagator-test
+            IMAGE_NAMES=cedana/cedana-propagator-test
             TAG=$VERSION
+          fi
+          if [ "$VERSION" != "release" ]; then
+            case "$CHANNEL" in
+              alpha) IMAGE_NAMES="cedana/cedana-propagator-test cedana/cedana-propagator" ;;
+              release) IMAGE_NAMES=cedana/cedana-propagator ;;
+            esac
           fi
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
           TAG=$(echo $TAG | sed 's/\//-/g')
-          docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
+          # The first image that has the tag, so alpha falls back to the release image
+          IMAGE_NAME=""
+          for NAME in $IMAGE_NAMES; do
+            if docker pull --platform=linux/${{ matrix.arch }} $NAME:$TAG; then
+              IMAGE_NAME=$NAME
+              break
+            fi
+          done
+          test -n "$IMAGE_NAME" || { echo "No image found for tag $TAG in: $IMAGE_NAMES"; exit 1; }
           digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
           touch "/tmp/digests/${digest#sha256:}"
           echo "$IMAGE_NAME" > /tmp/image-name/name.txt
@@ -453,16 +573,31 @@ jobs:
           VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
         run: |
           set -euo pipefail
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p containerd-runtime-runc
 
           ARCH="${{ matrix.arch }}"
           FILE="cedana-shim-runc-v2"
 
-          curl -fL \
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
             "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "containerd-runtime-runc/${FILE}"
@@ -494,16 +629,31 @@ jobs:
           VERSION: ${{ inputs.oci_runtime_version == 'release' && 'latest' || inputs.oci_runtime_version }}
         run: |
           set -euo pipefail
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p oci-runtime
 
           ARCH="${{ matrix.arch }}"
           FILE="cedana-oci-runtime"
 
-          curl -fL \
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
             "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "oci-runtime/${FILE}"
@@ -560,7 +710,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: cedana/cedana-slurm
-          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
+          ref: ${{ inputs.slurm_ref != '' && inputs.slurm_ref || (inputs.slurm_version == 'release' && 'main' || inputs.slurm_version) }}
           token: ${{ secrets.GIT_CI_PAT }}
           sparse-checkout: slurm-versions
           sparse-checkout-cone-mode: false
@@ -591,7 +741,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: cedana/cedana-slurm
-          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
+          ref: ${{ inputs.slurm_ref != '' && inputs.slurm_ref || (inputs.slurm_version == 'release' && 'main' || inputs.slurm_version) }}
           path: slurm/cedana-slurm
           token: ${{ secrets.GIT_CI_PAT }}
           submodules: recursive
@@ -609,10 +759,23 @@ jobs:
           set -euo pipefail
 
           VERSION=$(echo $VERSION | sed 's/\//-/g')
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
 
           mkdir -p slurm/build
 
@@ -636,7 +799,8 @@ jobs:
             "job_submit_cedana.so"
           )
           for binary in "${BINARIES[@]}"; do
-            curl -fL \
+            # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+            curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
               "${CEDANA_URL}/plugins/download/${binary}?version=${PKG_VERSION}&arch=${ARCH}&build=${BUILD}" \
               -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
               --output "slurm/build/${binary}"
@@ -650,6 +814,9 @@ jobs:
         with:
           name: ${{ matrix.slurm }}-${{ matrix.arch }}
           path: ./slurm/*
+          # Callers that also run cedana-slurm's build.yml (e.g. cedana-marshal's release suite) already
+          # have an artifact with this name: replace it with what was published
+          overwrite: true
 
   csx:
     name: CSX
@@ -668,16 +835,31 @@ jobs:
           VERSION: ${{ inputs.csx_version == 'release' && 'latest' || inputs.csx_version }}
         run: |
           set -euo pipefail
-          BUILD="alpha"
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            BUILD=""
-          fi
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p csx
 
           ARCH="${{ matrix.arch }}"
           FILE="csx"
 
-          curl -fL \
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
             "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
             -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
             --output "csx/${FILE}"

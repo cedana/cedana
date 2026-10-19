@@ -18,16 +18,47 @@ import (
 type ManagerSimple struct {
 	controllers pool
 
-	plugins plugins.Manager
-	sync    sync.Mutex // Used to prevent concurrent syncs
-	syncs   sync.WaitGroup
-	wg      *sync.WaitGroup
+	plugins   plugins.Manager
+	syncState sync.Mutex    // Guards syncDone
+	syncDone  chan struct{} // Closed when the running sync ends, nil when no sync runs
+	wg        *sync.WaitGroup
+}
+
+// Instead of stacking up syncs, a caller that finds one running waits for it to end, or
+// for its own context: a sync can wait on a controller's termination for a long time.
+// Returns a done function when the caller must run the sync itself, nil after a wait.
+func (m *ManagerSimple) waitOrStartSync(ctx context.Context) (done func(), err error) {
+	m.syncState.Lock()
+	if running := m.syncDone; running != nil {
+		m.syncState.Unlock()
+		select {
+		case <-running:
+			return nil, nil
+		case <-ctx.Done():
+			return nil, fmt.Errorf("waiting for the running GPU controller sync: %w", ctx.Err())
+		}
+	}
+	ch := make(chan struct{})
+	m.syncDone = ch
+	m.syncState.Unlock()
+
+	return func() {
+		m.syncState.Lock()
+		m.syncDone = nil
+		m.syncState.Unlock()
+		close(ch)
+	}, nil
 }
 
 func NewSimpleManager(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager) (*ManagerSimple, error) {
+	return newSimpleManager(ctx, serverWg, plugins, false)
+}
+
+// With tailLogs, ships the log files of all GPU controllers it finds or spawns
+func newSimpleManager(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager, tailLogs bool) (*ManagerSimple, error) {
 	manager := &ManagerSimple{
 		plugins:     plugins,
-		controllers: pool{},
+		controllers: pool{tailLogs: tailLogs},
 		wg:          serverWg,
 	}
 
@@ -112,14 +143,11 @@ func (m *ManagerSimple) GetID(pid uint32) string {
 }
 
 func (m *ManagerSimple) Sync(ctx context.Context) error {
-	m.syncs.Add(1)
-	if !m.sync.TryLock() {
-		m.syncs.Done()
-		m.syncs.Wait() // Instead of stacking up syncs, just wait for the current one to finish
-		return nil
+	done, err := m.waitOrStartSync(ctx)
+	if err != nil || done == nil {
+		return err
 	}
-	defer m.syncs.Done()
-	defer m.sync.Unlock()
+	defer done()
 
 	return m.controllers.Sync(ctx)
 }

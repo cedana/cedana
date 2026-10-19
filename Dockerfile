@@ -1,7 +1,12 @@
 # syntax=docker/dockerfile:1.6
-FROM rockylinux:8 as builder
 
+# With PREBUILT_BINARIES=1, the binaries are taken from the build context as is, and the
+# builder stage is skipped altogether, as nothing depends on it
 ARG PREBUILT_BINARIES=0
+
+FROM rockylinux:8 AS builder
+
+ARG PREBUILT_BINARIES
 ARG ALL_PLUGINS=0
 ARG VERSION
 ARG GO_VERSION=1.25.0
@@ -37,6 +42,13 @@ if [ "${PREBUILT_BINARIES}" -ne "1" ]; then
 fi
 EOT
 
+FROM builder AS binaries-0
+
+FROM scratch AS binaries-1
+COPY libcedana*.so cedana /app/
+
+FROM binaries-${PREBUILT_BINARIES} AS binaries
+
 FROM ubuntu:22.04
 
 RUN <<EOT
@@ -47,8 +59,8 @@ apt-get install -y --no-install-recommends software-properties-common make sudo
 rm -rf /var/lib/apt/lists/*
 EOT
 
-COPY --from=builder /app/libcedana*.so /usr/local/lib/
-COPY --from=builder /app/cedana /usr/local/bin/
+COPY --from=binaries /app/libcedana*.so /usr/local/lib/
+COPY --from=binaries /app/cedana /usr/local/bin/
 RUN chmod +x /usr/local/bin/cedana
 
 ENV USER="root"

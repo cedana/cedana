@@ -142,6 +142,11 @@ func WaitForFile[T any](ctx context.Context, path string, timeout <-chan T) ([]b
 				return os.ReadFile(path)
 			}
 		case <-timeout:
+			// It may have appeared since the last tick, e.g. a pid file written right before
+			// its writer exits (what timeout often is)
+			if PathExists(path) {
+				return os.ReadFile(path)
+			}
 			return nil, fmt.Errorf("timed out waiting for %s", path)
 		}
 	}

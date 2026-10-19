@@ -73,6 +73,11 @@ jobs:
         arch:
           - amd64
           - arm64
+        # The suite runs with a daemon per test, and with one across tests. These are
+        # independent, so run in parallel rather than one after the other.
+        daemon:
+          - isolated
+          - persistent
         exclude: # to reduce CI minutes
           - cuda_version: 12-2
             cr: streamer
@@ -194,15 +199,15 @@ jobs:
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,!streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,!streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
 
@@ -213,18 +218,31 @@ jobs:
         if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
         env:
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
-        run: make test-regression TAGS=cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-cuda-samples
+        run: make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-cuda-samples
 
       - name: Label reports # with the job name, so the summary can link to it
         if: always()
-        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})" |' {} +
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }}, ${{ matrix.daemon }})" |' {} +
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
+          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
           path: /tmp/report*.xml
+
+      # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
+          path: |
+            /tmp/cedana-daemon-*.log
+            /tmp/cedana-*/**/*.log
+            /var/log/cedana*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   post-summary:
     name: Post Summary
