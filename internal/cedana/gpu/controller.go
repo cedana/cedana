@@ -550,7 +550,16 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump complete")
 		}()
-		return <-dumpErr
+
+		err := <-dumpErr
+		if err != nil {
+			log.Err(err).Msg("GPU DUMP FAILED")
+		}
+
+		log.Info().Msg("STARTING SLEEP FOR TESTING")
+		time.Sleep(1 * time.Minute)
+		log.Info().Msg("FINISHED SLEEP")
+		return nil
 	}
 
 	// Wait for GPU dump to finish before finalizing the dump
