@@ -217,10 +217,10 @@ jobs:
       - name: Download plugin
         env:
           CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           set -euo pipefail
 
-          VERSION="${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}"
           case "$CHANNEL" in
             alpha)
               # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
