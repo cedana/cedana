@@ -238,6 +238,19 @@ require_reset_fix() {
     restore_sample jit_modules
 }
 
+# Modules whose image file is replaced by rename after they're loaded, by path and from a
+# mapping, as when a late rank's JIT rewrites a file other ranks loaded (CED-2400). Each must keep
+# running the image it was loaded from, and a later load of the path the new one
+# bats test_tags=run,jit
+@test "[$GPU_INFO] run GPU process with modules whose files are replaced" {
+    run_sample replaced_module
+}
+
+# bats test_tags=restore,jit
+@test "[$GPU_INFO] restore GPU process with modules whose files are replaced" {
+    restore_sample replaced_module
+}
+
 # VMM mappings (remapped, aliased) and stream-ordered allocation pools
 # bats test_tags=run,vmm
 @test "[$GPU_INFO] run GPU process using VMM and memory pools" {
