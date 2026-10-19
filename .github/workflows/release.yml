@@ -1,5 +1,9 @@
 name: Release
 
+# Tags only publish to the alpha channel (propagator cedana-alpha, cedana/cedana-helper-test image) at
+# version = tag. cedana-marshal's release suite tests these exact artifacts, and its release-publish
+# promotes them to the release channel, moves latest and creates the GitHub release.
+
 on:
   push:
     tags:
@@ -9,16 +13,6 @@ on:
       debug_build:
         type: boolean
         description: "Run build with debugging enabled"
-        required: false
-        default: false
-      debug_test:
-        type: boolean
-        description: "Run tests with debugging enabled"
-        required: false
-        default: false
-      debug_bench:
-        type: boolean
-        description: "Run benchmark with debugging enabled"
         required: false
         default: false
       debug_publish:
@@ -41,28 +35,10 @@ jobs:
       cedana: true
       plugins: true
       image: true
+      image_name: cedana/cedana-helper-test
 
-  download:
-    name: Download
-    uses: ./.github/workflows/download.yml
-    secrets: inherit
-    with:
-      criu_version: criu-dev
-      gpu_version: main
-      streamer_version: main
-      helm_chart_version: main
-      controller_version: main
-      containerd_runtime_version: cedana
-      oci_runtime_version: main
-      slurm_version: main
-      csx_version: main
-      propagator_version: main
-
-  # Publish to the alpha channel first so that tests (e.g. EKS/GKE) can download
-  # this build from the propagator. The actual release publish happens after
-  # tests pass.
-  prepublish:
-    name: Pre-publish
+  publish:
+    name: Publish
     uses: ./.github/workflows/publish.yml
     needs: build
     secrets: inherit
@@ -72,44 +48,3 @@ jobs:
       propagator_repo: cedana-alpha
       dockerhub: true
       post_summary: false
-
-  test:
-    name: Test
-    uses: ./.github/workflows/test.yml
-    needs: [prepublish, download]
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      slurm_versions: ${{ needs.download.outputs.slurm_versions }}
-      propagator: true
-      cloud_kubernetes: true
-
-  bench:
-    name: Bench
-    uses: ./.github/workflows/bench.yml
-    needs: [prepublish, download]
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_bench }}
-      samples: 2
-      post_summary_pr: false
-      post_summary_slack: default
-      comparison_previous: true
-      comparison_runtime: true
-      push_results: true
-      results_dataset: cedana
-
-  publish:
-    name: Publish
-    uses: ./.github/workflows/publish.yml
-    # Not bench: it still runs to record the release's results, but shouldn't block or delay it
-    needs: test
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_publish }}
-      github: true
-      propagator: true
-      propagator_repo: cedana
-      dockerhub: true
-      dockerhub_latest: true
-      post_summary: true
