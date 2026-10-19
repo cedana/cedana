@@ -554,11 +554,9 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		err := <-dumpErr
 		if err != nil {
 			log.Err(err).Msg("GPU DUMP FAILED")
+		} else {
+			log.Info().Msg("GPU DUMP succeeded")
 		}
-
-		log.Info().Msg("STARTING SLEEP FOR TESTING")
-		time.Sleep(1 * time.Minute)
-		log.Info().Msg("FINISHED SLEEP")
 		return nil
 	}
 
