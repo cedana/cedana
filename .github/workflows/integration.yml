@@ -149,7 +149,7 @@ jobs:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
       platforms: ${{ fromJSON(inputs.plan).kubernetes }}
       propagator: ${{ fromJSON(inputs.plan).propagator }}
-      post_summary: false
+      post_summary: true # the summary (matrix image, failed tests) marshal posts on the PRs
 
   gpu:
     name: Test / GPU
@@ -159,7 +159,7 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
-      post_summary: false
+      post_summary: true # the summary (matrix image, failed tests) marshal posts on the PRs
 
   streamer:
     name: Test / Streamer
@@ -169,7 +169,7 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
-      post_summary: false
+      post_summary: true # the summary (matrix image, failed tests) marshal posts on the PRs
 
   slurm:
     name: Test / Slurm
@@ -180,4 +180,4 @@ jobs:
     with:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
-      post_summary: false
+      post_summary: true # the summary (matrix image, failed tests) marshal posts on the PRs
