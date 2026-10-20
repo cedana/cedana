@@ -1,0 +1,183 @@
+name: Integration
+run-name: integration ${{ inputs.id }} ${{ inputs.rev }} attempt ${{ inputs.attempt }}
+
+# Dispatched by cedana-marshal to test components together (marshal's pkg/integrations):
+#
+#   - A group of open PRs across repos (sharing a Linear ticket, or listing each other as accompanying
+#     PRs), or one PR alone: every member's branch (published to alpha by its pr.yml), the other
+#     components at their default branch's alpha build. Dispatched on the cedana member's branch when
+#     it has this file, so that branch's test workflows run, else on main.
+#   - A release (marshal's release suite): every component at the tag the release pins, the helm chart
+#     at the release PR head, cedana-slurm's alpha built at the release version. Dispatched on main.
+#
+# Runs the smallest set of the test workflows covering what's asked (the plan): test.yml once when
+# `full` (it covers GPU and the streamer, and Kubernetes and SLURM by flag), else test_k8s, test_gpu,
+# test_streamer and test_slurm as needed. Marshal reads the jobs and JUnit reports and reports back.
+
+on:
+  workflow_dispatch:
+    inputs:
+      id:
+        type: string
+        description: "Group id (a Linear ticket, e.g. CED-2527, or its first PR) or release id"
+        required: true
+      rev:
+        type: string
+        description: "Hash of the members' heads, or the release version"
+        required: true
+      attempt:
+        type: string
+        description: "Attempt number, for the run name"
+        required: false
+        default: "1"
+      members:
+        type: string
+        description: "What is tested, e.g. 'cedana#947 cedana-helm-charts#160' or 'helm + slurm v0.9.404'"
+        required: true
+      plan:
+        type: string
+        description: "Test plan (JSON): full, kubernetes (JSON list of platforms), cloud_kubernetes, propagator, gpu, streamer, slurm, cedana_ref, slurm_ref"
+        required: true
+      versions:
+        type: string
+        description: "download.yml versions (JSON, input -> branch)"
+        required: true
+
+# The most the reused workflows need: download.yml (contents: write), the test workflows (id-token,
+# pull-requests, checks, actions, packages: read)
+permissions:
+  contents: write
+  packages: read
+  actions: read
+  id-token: write
+  pull-requests: write
+  checks: write
+
+# A new push to a member is a new rev of the same group: it replaces the running one (a release
+# retries under the same id too).
+concurrency:
+  group: integration-${{ inputs.id }}
+  cancel-in-progress: true
+
+jobs:
+  manifest:
+    name: Manifest
+    runs-on: ubuntu-latest
+    outputs:
+      cedana_version: ${{ steps.parse.outputs.cedana_version }}
+      controller_version: ${{ steps.parse.outputs.controller_version }}
+      gpu_version: ${{ steps.parse.outputs.gpu_version }}
+      criu_version: ${{ steps.parse.outputs.criu_version }}
+      containerd_runtime_version: ${{ steps.parse.outputs.containerd_runtime_version }}
+      streamer_version: ${{ steps.parse.outputs.streamer_version }}
+      csx_version: ${{ steps.parse.outputs.csx_version }}
+      oci_runtime_version: ${{ steps.parse.outputs.oci_runtime_version }}
+      propagator_version: ${{ steps.parse.outputs.propagator_version }}
+      helm_chart_version: ${{ steps.parse.outputs.helm_chart_version }}
+      slurm_version: ${{ steps.parse.outputs.slurm_version }}
+    steps:
+      - name: Parse
+        id: parse
+        env:
+          MEMBERS: ${{ inputs.members }}
+          PLAN: ${{ inputs.plan }}
+          VERSIONS: ${{ inputs.versions }}
+        run: |
+          set -euo pipefail
+          jq -e 'type == "object"' <<<"$PLAN" >/dev/null || { echo "::error::plan isn't a JSON object"; exit 1; }
+          # Every version is a branch, a tag or "none"; anything else is refused before it reaches a shell.
+          jq -r 'to_entries[] | "\(.key)=\(.value)"' <<<"$VERSIONS" | while IFS= read -r kv; do
+            [[ "$kv" =~ ^[a-z_]+_version=[A-Za-z0-9._/-]+$ ]] || { echo "::error::invalid version: $kv"; exit 1; }
+            echo "$kv" >> "$GITHUB_OUTPUT"
+          done
+          for ref in "$(jq -r .cedana_ref <<<"$PLAN")" "$(jq -r '.slurm_ref // ""' <<<"$PLAN")"; do
+            [[ -z "$ref" || "$ref" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "::error::invalid ref: $ref"; exit 1; }
+          done
+          {
+            echo "## Integration $MEMBERS"
+            echo "| download input | version |"
+            echo "|---|---|"
+            jq -r 'to_entries[] | "| \(.key) | \(.value) |"' <<<"$VERSIONS"
+            echo
+            echo '```json'
+            jq . <<<"$PLAN"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  download:
+    name: Download
+    needs: manifest
+    uses: ./.github/workflows/download.yml
+    secrets: inherit
+    with:
+      channel: alpha
+      cedana_version: ${{ needs.manifest.outputs.cedana_version }}
+      controller_version: ${{ needs.manifest.outputs.controller_version }}
+      gpu_version: ${{ needs.manifest.outputs.gpu_version }}
+      criu_version: ${{ needs.manifest.outputs.criu_version }}
+      containerd_runtime_version: ${{ needs.manifest.outputs.containerd_runtime_version }}
+      streamer_version: ${{ needs.manifest.outputs.streamer_version }}
+      csx_version: ${{ needs.manifest.outputs.csx_version }}
+      oci_runtime_version: ${{ needs.manifest.outputs.oci_runtime_version }}
+      propagator_version: ${{ needs.manifest.outputs.propagator_version }}
+      helm_chart_version: ${{ needs.manifest.outputs.helm_chart_version }}
+      slurm_version: ${{ needs.manifest.outputs.slurm_version }}
+      slurm_ref: ${{ fromJSON(inputs.plan).slurm_ref }}
+
+  test:
+    name: Test # the jobs read "Test / <suite> / …", as in the release suite
+    needs: [manifest, download]
+    if: ${{ !cancelled() && needs.download.result == 'success' && fromJSON(inputs.plan).full }}
+    uses: ./.github/workflows/test.yml
+    secrets: inherit
+    with:
+      ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      propagator: ${{ fromJSON(inputs.plan).propagator }}
+      kubernetes: ${{ fromJSON(inputs.plan).kubernetes != '' }}
+      cloud_kubernetes: ${{ fromJSON(inputs.plan).cloud_kubernetes }}
+      slurm: ${{ fromJSON(inputs.plan).slurm }}
+      slurm_versions: ${{ needs.download.outputs.slurm_versions }}
+      post_summary_slack: ""
+
+  kubernetes:
+    name: Test / Kubernetes
+    needs: [manifest, download]
+    if: ${{ !cancelled() && needs.download.result == 'success' && !fromJSON(inputs.plan).full && fromJSON(inputs.plan).kubernetes != '' }}
+    uses: ./.github/workflows/test_k8s.yml
+    secrets: inherit
+    with:
+      ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      platforms: ${{ fromJSON(inputs.plan).kubernetes }}
+      propagator: ${{ fromJSON(inputs.plan).propagator }}
+      post_summary: false
+
+  gpu:
+    name: Test / GPU
+    needs: [manifest, download]
+    if: ${{ !cancelled() && needs.download.result == 'success' && fromJSON(inputs.plan).gpu }}
+    uses: ./.github/workflows/test_gpu.yml
+    secrets: inherit
+    with:
+      ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      post_summary: false
+
+  streamer:
+    name: Test / Streamer
+    needs: [manifest, download]
+    if: ${{ !cancelled() && needs.download.result == 'success' && fromJSON(inputs.plan).streamer }}
+    uses: ./.github/workflows/test_streamer.yml
+    secrets: inherit
+    with:
+      ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      post_summary: false
+
+  slurm:
+    name: Test / Slurm
+    needs: [manifest, download]
+    if: ${{ !cancelled() && needs.download.result == 'success' && !fromJSON(inputs.plan).full && fromJSON(inputs.plan).slurm && needs.download.outputs.slurm_versions != '' }}
+    uses: ./.github/workflows/test_slurm.yml
+    secrets: inherit
+    with:
+      ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      slurm_versions: ${{ needs.download.outputs.slurm_versions }}
+      post_summary: false
