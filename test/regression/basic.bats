@@ -50,3 +50,7 @@ teardown_file() {
 @test "health check (full, daemon)" {
     cedana daemon check --full
 }
+
+@test "health check (ping, daemon)" {
+    cedana daemon check --ping
+}
