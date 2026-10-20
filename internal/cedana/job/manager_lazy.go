@@ -398,6 +398,16 @@ func (m *ManagerLazy) AddCheckpoint(jid string, paths []string, at time.Time) {
 	}
 }
 
+func (m *ManagerLazy) AddCheckpointOnceStored(jid string, path string, at time.Time, stored func() error) {
+	m.wg.Go(func() {
+		if err := stored(); err != nil {
+			log.Error().Err(err).Str("JID", jid).Str("path", path).Msg("checkpoint not added to the job: it was not stored")
+			return
+		}
+		m.AddCheckpoint(jid, []string{path}, at)
+	})
+}
+
 func (m *ManagerLazy) GetCheckpoint(id string) *daemon.Checkpoint {
 	checkpoint, ok := m.checkpoints.Load(id)
 	if !ok {

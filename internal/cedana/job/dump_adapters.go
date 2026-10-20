@@ -7,7 +7,6 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -70,16 +69,12 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 					continue
 				}
 				waitCtx := context.WithoutCancel(ctx)
-				opts.WG.Go(func() {
+				jobs.AddCheckpointOnceStored(jid, path, taken, func() error {
 					result, err := opts.Uploads.Wait(waitCtx, path)
-					if err == nil {
-						err = result.Err
-					}
 					if err != nil {
-						log.Error().Err(err).Str("jid", jid).Str("path", path).Msg("checkpoint not saved for the job: its upload failed")
-						return
+						return err
 					}
-					jobs.AddCheckpoint(jid, []string{path}, taken)
+					return result.Err
 				})
 			}
 			jobs.AddCheckpoint(jid, stored, taken)

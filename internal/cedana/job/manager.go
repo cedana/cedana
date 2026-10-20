@@ -66,6 +66,11 @@ type Manager interface {
 	// AddCheckpoint adds a checkpoint path to the job, taken at the given time.
 	AddCheckpoint(jid string, paths []string, at time.Time)
 
+	// AddCheckpointOnceStored adds a checkpoint path to the job, taken at the given time, in the
+	// background once stored returns nil; if it returns an error, the path is not added.
+	// The manager waits for it before its last sync with the DB on shutdown.
+	AddCheckpointOnceStored(jid string, path string, at time.Time, stored func() error)
+
 	// Get a specific checkpoint.
 	GetCheckpoint(id string) *daemon.Checkpoint
 
