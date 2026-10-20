@@ -103,40 +103,51 @@ func TestManageDumpSavesPendingPathsOnlyOnceStored(t *testing.T) {
 	}
 }
 
-// The manager's last sync with the DB on shutdown waits for its background routines, so a
-// checkpoint whose upload ends during shutdown is still queued for the DB
-func TestAddCheckpointOnceStoredIsWaitedForOnShutdown(t *testing.T) {
-	m := &ManagerLazy{pending: make(chan action, 64), wg: &sync.WaitGroup{}}
+// The manager's last sync with the DB on shutdown includes the checkpoints whose uploads end
+// during it, and reads the queue while it waits for them, so more of them than the queue holds
+// do not block it
+func TestFlushSyncsCheckpointsStoredDuringShutdown(t *testing.T) {
+	m := &ManagerLazy{pending: make(chan action, 1), wg: &sync.WaitGroup{}}
 	m.jobs.Store("job", fromProto(&daemon.Job{JID: "job"}))
 
 	release := make(chan struct{})
-	m.AddCheckpointOnceStored("job", "/dumps/stored.tar", time.Now(), func() error {
-		<-release
-		return nil
-	})
+	stored := []string{"/dumps/1.tar", "/dumps/2.tar", "/dumps/3.tar", "/dumps/4.tar"}
+	for _, path := range stored {
+		m.AddCheckpointOnceStored("job", path, time.Now(), func() error {
+			<-release
+			return nil
+		})
+	}
 	m.AddCheckpointOnceStored("job", "/dumps/failed.tar", time.Now(), func() error {
+		<-release
 		return errors.New("upload failed")
 	})
 
-	waited := make(chan struct{})
+	var synced []string
+	flushed := make(chan struct{})
 	go func() {
-		m.wg.Wait()
-		close(waited)
+		defer close(flushed)
+		m.flush(func(action action) error {
+			synced = append(synced, m.GetCheckpoint(action.id).GetPath())
+			return nil
+		})
 	}()
 
 	select {
-	case <-waited:
-		t.Fatal("the manager's wait returned before the upload had ended")
+	case <-flushed:
+		t.Fatal("the flush returned before the uploads had ended")
 	case <-time.After(20 * time.Millisecond):
 	}
 
 	close(release)
-	<-waited
-
-	if got := len(m.pending); got != 1 {
-		t.Fatalf("queued DB writes = %d, want 1", got)
+	select {
+	case <-flushed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the flush did not return: a save blocked on the full queue")
 	}
-	if action := <-m.pending; action.typ != putCheckpoint || m.GetCheckpoint(action.id).GetPath() != "/dumps/stored.tar" {
-		t.Fatalf("queued %v for %q, want the stored checkpoint", action.typ, m.GetCheckpoint(action.id).GetPath())
+
+	slices.Sort(synced)
+	if !slices.Equal(synced, stored) {
+		t.Fatalf("synced = %v, want %v", synced, stored)
 	}
 }
