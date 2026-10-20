@@ -1,0 +1,52 @@
+# bats-core PR #1281 (fixes #1278), the code only, on bats 1.14.0: a parallel test's status is
+# recorded in its output dir, as bash 5.2 may drop the saved status of a reaped child whose pid
+# is reused, and the file then fails on 'wait: pid N is not a child of this shell' though every
+# test passed. Drop it once a bats release has the fix.
+diff --git a/lib/bats-core/semaphore.bash b/lib/bats-core/semaphore.bash
+index 51fc255252..3985b1e952 100644
+--- a/lib/bats-core/semaphore.bash
++++ b/lib/bats-core/semaphore.bash
+@@ -35,6 +35,10 @@ bats_semaphore_release_wrapper() {
+   "$@" 2>"$output_dir/stderr" >"$output_dir/stdout"
+   local status=$?
+ 
++  # Keep the command status outside Bash's job table. A delayed `wait` can no
++  # longer retrieve it if the PID has been reused.
++  printf '%d\n' "$status" >"$output_dir/status"
++
+   # bash bug: the exit trap is not called for the background process
+   bats_semaphore_release_slot "$semaphore_name"
+   trap - EXIT # avoid calling release twice
+diff --git a/libexec/bats-core/bats-exec-file b/libexec/bats-core/bats-exec-file
+index 3fa5cee46e..2c572e1bbc 100755
+--- a/libexec/bats-core/bats-exec-file
++++ b/libexec/bats-core/bats-exec-file
+@@ -191,17 +191,24 @@ function teardown_file() {
+ 
+ bats_forward_output_of_parallel_test() {
+   local test_number_in_suite=$1
+-  local status=0
+-  wait "$(cat "$output_folder/$test_number_in_suite/pid")" || status=1
++  local PID status
++  read -r PID <"$output_folder/$test_number_in_suite/pid"
++  # The status is recorded by the wrapper because Bash can discard the saved
++  # status of an already-reaped child when its PID is reused.
++  wait "$PID" 2>/dev/null || :
++  if ! read -r status <"$output_folder/$test_number_in_suite/status"; then
++    printf 'bats: parallel test %d did not record an exit status\n' "$test_number_in_suite" >&2
++    return 1
++  fi
+   cat "$output_folder/$test_number_in_suite/stdout"
+   cat "$output_folder/$test_number_in_suite/stderr" >&2
+-  return $status
++  [[ $status -eq 0 ]]
+ }
+ 
+ bats_is_next_parallel_test_finished() {
+   local PID
+   # get the pid of the next potentially finished test
+-  PID=$(cat "$output_folder/$((test_number_in_suite_of_last_finished_test + 1))/pid")
++  read -r PID <"$output_folder/$((test_number_in_suite_of_last_finished_test + 1))/pid"
+   # try to send a signal to this process
+   # if it fails, the process exited,
+   # if it succeeds, the process is still running

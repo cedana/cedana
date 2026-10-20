@@ -73,12 +73,16 @@ EOT
 # Ubuntu's bats (1.10) crashes its junit formatter when setup_suite fails
 # ("file_count: unbound variable"), swallowing the failure output. Fixed in 1.13.
 # Also predates bats_test_function (1.11), which cuda_samples.bats relies on.
+# With bats-core#1281, for an all-ok file failing on "wait: pid N is not a child of this shell"
+# (bats-core#1278; see the patch)
+COPY bats-parallel-status.patch /tmp/
 RUN <<EOT
 set -eux
 apt-get install -y bats-assert bats-support bats-file
 curl -fsSL https://github.com/bats-core/bats-core/archive/refs/tags/v${BATS_VERSION}.tar.gz | tar -xz -C /tmp
+git -C /tmp/bats-core-${BATS_VERSION} apply /tmp/bats-parallel-status.patch
 /tmp/bats-core-${BATS_VERSION}/install.sh /usr/local
-rm -rf /tmp/bats-core-${BATS_VERSION}
+rm -rf /tmp/bats-core-${BATS_VERSION} /tmp/bats-parallel-status.patch
 EOT
 
 # install rush
