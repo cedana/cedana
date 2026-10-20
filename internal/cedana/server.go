@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -144,10 +145,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 		if address == "" {
 			address = config.DEFAULT_SOCK_ADDR
 		}
-		listener, err = net.Listen("unix", address)
-		if err == nil {
-			err = os.Chmod(address, config.DEFAULT_SOCK_PERMS)
-		}
+		listener, err = listenUnix(address)
 	case "vsock":
 		if address == "" {
 			return nil, fmt.Errorf("vsock address is required")
@@ -173,6 +171,37 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 	log.Info().Str("mac", host.MAC).Str("id", host.ID).Str("hostname", host.Hostname).Msg("host")
 
 	return server, err
+}
+
+// Listens on a unix socket, creating its directory if needed. A daemon that was killed
+// leaves its socket file behind, which would fail the bind, so it is removed first,
+// unless another daemon is still serving on it.
+func listenUnix(address string) (net.Listener, error) {
+	err := os.MkdirAll(filepath.Dir(address), 0o755)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create socket directory: %w", err)
+	}
+
+	if conn, err := net.Dial("unix", address); err == nil {
+		conn.Close()
+		return nil, fmt.Errorf("another daemon is already listening on %s", address)
+	}
+	err = os.Remove(address)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("failed to remove stale socket: %w", err)
+	}
+
+	listener, err := net.Listen("unix", address)
+	if err != nil {
+		return nil, err
+	}
+	err = os.Chmod(address, config.DEFAULT_SOCK_PERMS)
+	if err != nil {
+		listener.Close()
+		return nil, err
+	}
+
+	return listener, nil
 }
 
 // Takes in a context that allows for cancellation from the cmdline
