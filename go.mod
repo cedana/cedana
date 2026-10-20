@@ -1,6 +1,6 @@
 module github.com/cedana/cedana
 
-go 1.26.0
+go 1.25.0
 
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-2268b00eea49.1
@@ -10,7 +10,7 @@ require (
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-b5e10c6d5556.2
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-20261015214105-0213eb4730a3.2
 	cloud.google.com/go/auth v0.23.0
-	cloud.google.com/go/storage v1.69.0
+	cloud.google.com/go/storage v1.68.0
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
@@ -26,7 +26,7 @@ require (
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/cyphar/filepath-securejoin v0.5.1
-	github.com/fsouza/fake-gcs-server v1.56.1
+	github.com/fsouza/fake-gcs-server v1.54.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/uuid v1.6.0
 	github.com/jedib0t/go-pretty/v6 v6.6.8
@@ -127,7 +127,7 @@ require (
 	github.com/google/renameio/v2 v2.0.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.20 // indirect
-	github.com/googleapis/gax-go/v2 v2.26.2 // indirect
+	github.com/googleapis/gax-go/v2 v2.24.1 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.3 // indirect
