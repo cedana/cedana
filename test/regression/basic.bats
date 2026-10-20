@@ -54,3 +54,9 @@ teardown_file() {
 @test "health check (ping, daemon)" {
     cedana daemon check --ping
 }
+
+@test "address flag overrides config" {
+    run cedana --address "/tmp/nonexistent-$(unix_nano).sock" daemon check --ping
+    assert_failure
+    assert_output --partial "nonexistent"
+}
