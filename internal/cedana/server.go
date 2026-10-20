@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -182,13 +183,32 @@ func listenUnix(address string) (net.Listener, error) {
 		return nil, fmt.Errorf("failed to create socket directory: %w", err)
 	}
 
+	// Serialize concurrent starts on the same address, so only one of them can find the socket stale
+	lock, err := os.OpenFile(address+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open socket lock: %w", err)
+	}
+	defer lock.Close() // releases the lock
+	err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lock socket: %w", err)
+	}
+
 	if conn, err := net.Dial("unix", address); err == nil {
 		conn.Close()
 		return nil, fmt.Errorf("another daemon is already listening on %s", address)
 	}
-	err = os.Remove(address)
-	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("failed to remove stale socket: %w", err)
+	info, err := os.Lstat(address)
+	if err == nil {
+		if info.Mode().Type() != os.ModeSocket {
+			return nil, fmt.Errorf("%s exists and is not a socket", address)
+		}
+		err = os.Remove(address)
+		if err != nil {
+			return nil, fmt.Errorf("failed to remove stale socket: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
 	}
 
 	listener, err := net.Listen("unix", address)
