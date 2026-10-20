@@ -35,6 +35,8 @@ teardown_file() {
 # XXX: without inotify, as CRIU can't dump a watch on overlayfs (CI's /tmp): it can't open
 # overlayfs file handles, and its fallback scan doesn't look there ("fsnotify: Can't dump that
 # handle"). Without udp, as CRIU doesn't dump UDP receive queues (datagrams UDP may drop anyway).
+# Without timerfd, as CRIU restores a periodic timerfd disarmed if a tick was unread at dump
+# (fdinfo's it_value is 0 then, and timerfd_settime with it_value 0 disarms it).
 # bats test_tags=dump,restore
 @test "restore a process tree holding many kinds of fds, with state in flight" {
     if [ ! -x "$FD_ZOO" ]; then
@@ -45,7 +47,7 @@ teardown_file() {
     log=$(mktemp /tmp/cedana-fds-XXXXXX.log)
     gate="$log.gate"
     dir=$(mktemp -d /tmp/cedana-fds-XXXXXX)
-    "$FD_ZOO" --log "$log" --dir "$dir" --gate "$gate" --skip inotify,udp &
+    "$FD_ZOO" --log "$log" --dir "$dir" --gate "$gate" --skip inotify,udp,timerfd &
     local pid=$!
     WORKLOAD_PID=$pid # for teardown
     wait_for_cmd 30 grep -q '^OK' "$log"

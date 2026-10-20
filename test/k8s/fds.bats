@@ -44,9 +44,11 @@ exec python3 $sample $*")
 # overlayfs file handles (no nfs_export), and its fallback scan doesn't look in the rootfs
 # ("fsnotify: Can't dump that handle"). Without udp, as CRIU doesn't dump UDP receive queues
 # (datagrams UDP may drop anyway).
+# Without timerfd, as CRIU restores a periodic timerfd disarmed if a tick was unread at dump
+# (fdinfo's it_value is 0 then, and timerfd_settime with it_value 0 disarms it).
 # bats test_tags=dump,restore
 @test "Restore a pod holding many kinds of fds, with state in flight" {
-    restore_sample_pod fd_zoo.py --skip inotify,udp
+    restore_sample_pod fd_zoo.py --skip inotify,udp,timerfd
 }
 
 # The shape of KV-cache offload in a pod: processes sharing unlinked /dev/shm files (the
