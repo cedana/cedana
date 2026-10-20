@@ -89,6 +89,7 @@ jobs:
 
   bench:
     name: Bench
+    if: false # benchmarks are disabled while they are reworked
     uses: ./.github/workflows/bench.yml
     needs: [publish, download]
     secrets: inherit
