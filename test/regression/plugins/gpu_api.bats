@@ -198,6 +198,18 @@ require_reset_fix() {
     restore_sample cuda_ipc
 }
 
+# Two processes sharing VMM allocations through exported file descriptors sent over a unix
+# socket, as NCCL does with cuMem buffers; one fd closed after the import, the other kept open
+# bats test_tags=run,ipc
+@test "[$GPU_INFO] run GPU processes sharing VMM memory as exported fds" {
+    run_sample cumem_ipc_fd
+}
+
+# bats test_tags=restore,ipc
+@test "[$GPU_INFO] restore GPU processes sharing VMM memory as exported fds" {
+    restore_sample cumem_ipc_fd
+}
+
 # Async copies between pinned host memory and reallocated device buffers, still in flight at
 # the checkpoint (a stale device pointer replayed, cedana-gpu #288)
 # bats test_tags=run,memcpy
