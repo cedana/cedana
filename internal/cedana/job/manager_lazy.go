@@ -378,7 +378,7 @@ func (m *ManagerLazy) Done(jid string) <-chan error {
 	return job.done
 }
 
-func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
+func (m *ManagerLazy) AddCheckpoint(jid string, paths []string, at time.Time) {
 	job := m.lookup(jid)
 	if job == nil {
 		return
@@ -389,7 +389,7 @@ func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
 			ID:   uuid.New().String(),
 			JID:  jid,
 			Path: path,
-			Time: time.Now().UnixMilli(),
+			Time: at.UnixMilli(),
 			Size: utils.SizeFromPath(path),
 		}
 		m.checkpoints.Store(checkpoint.ID, checkpoint)

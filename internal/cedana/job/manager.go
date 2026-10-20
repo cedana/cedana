@@ -7,6 +7,7 @@ package job
 import (
 	"context"
 	"syscall"
+	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 )
@@ -62,8 +63,8 @@ type Manager interface {
 	//// Checkpoints ////
 	/////////////////////
 
-	// AddCheckpoint adds a checkpoint path to the job.
-	AddCheckpoint(jid string, paths []string)
+	// AddCheckpoint adds a checkpoint path to the job, taken at the given time.
+	AddCheckpoint(jid string, paths []string, at time.Time)
 
 	// Get a specific checkpoint.
 	GetCheckpoint(id string) *daemon.Checkpoint

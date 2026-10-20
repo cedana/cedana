@@ -7,6 +7,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/types"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -45,6 +46,8 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			proto.Merge(mergedDetails, req.GetDetails())
 			req.Details = mergedDetails
 
+			taken := time.Now()
+
 			code, err = next(ctx, opts, resp, req)
 			if err != nil {
 				return code, err
@@ -52,7 +55,34 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 
 			job.Sync(ctx, resp.GetState())
 
-			jobs.AddCheckpoint(jid, resp.GetPaths())
+			// A restore of the job takes its latest saved checkpoint, so a path whose compress
+			// or upload still runs is saved only once it has succeeded, in the background
+			pending := make(map[string]bool, len(resp.GetPending()))
+			if opts.Uploads != nil {
+				for _, path := range resp.GetPending() {
+					pending[path] = true
+				}
+			}
+			var stored []string
+			for _, path := range resp.GetPaths() {
+				if !pending[path] {
+					stored = append(stored, path)
+					continue
+				}
+				waitCtx := context.WithoutCancel(ctx)
+				opts.WG.Go(func() {
+					result, err := opts.Uploads.Wait(waitCtx, path)
+					if err == nil {
+						err = result.Err
+					}
+					if err != nil {
+						log.Error().Err(err).Str("jid", jid).Str("path", path).Msg("checkpoint not saved for the job: its upload failed")
+						return
+					}
+					jobs.AddCheckpoint(jid, []string{path}, taken)
+				})
+			}
+			jobs.AddCheckpoint(jid, stored, taken)
 
 			// Wait for job exit & cleanup
 			if !req.Criu.GetLeaveRunning() {
