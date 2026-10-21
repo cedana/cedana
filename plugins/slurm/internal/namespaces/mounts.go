@@ -2,21 +2,31 @@ package namespaces
 
 // Recognizes the directories SLURM's namespace plugin gives the job.
 //
-// job_container/tmpfs (namespace/tmpfs from 26.05) makes each directory it is
-// configured with (Dirs, /tmp by default) under <basepath>/<jobid>/.<jobid>/ and
-// bind-mounts it into the job's mount namespace. Made for the job and removed
-// with it, so a job restored gets new, empty ones: what was in them goes into the
-// dump. Its /dev/shm is a tmpfs of the kernel's, whose contents are the shared
-// memory of the processes that map them, which CRIU dumps with the processes.
+// job_container/tmpfs (namespace/tmpfs from 26.05) runs the job in a mount
+// namespace of its own with, for each directory in Dirs (/tmp,/dev/shm by
+// default), a directory of the job's. For /tmp and any other path it is a
+// directory under <basepath>/<jobid>/.<jobid>/, bind-mounted into the job's
+// namespace. For /dev/shm it is a new tmpfs, mounted over the node's and with
+// nothing of it under <basepath>. All are made for the job and removed with it,
+// so a job restored gets new, empty ones: what was in them goes into the dump.
+// A file in them is dumped by path, as any other, the tmpfs at /dev/shm
+// included: CRIU keeps the contents of a tmpfs only when it dumps the mount
+// namespace, which a dump from inside the job's does not.
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
+
+// The mounts of the node, as seen by init. Readable by any user, unlike init's namespace links.
+const initMountinfo = "/proc/1/mountinfo"
 
 type mount struct {
 	ID         int
@@ -30,8 +40,11 @@ type mount struct {
 type PrivateMount struct {
 	Mountpoint string
 	FSType     string
-	// Where it is on the node: <basepath>/<jobid>/.<jobid>/<dir>
+	// The root of the mount within its filesystem: <basepath>/<jobid>/.<jobid>/<dir> for a
+	// bind mount made from the plugin's directory, / for a tmpfs of the job's own
 	Root string
+	// major:minor of the mount's filesystem
+	Device string
 }
 
 // SlurmMounts returns the mounts of pid that SLURM's namespace plugin made for the job,
@@ -42,22 +55,59 @@ func SlurmMounts(pid uint32, jobID uint32) ([]PrivateMount, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", jobPath, err)
 	}
-	return slurmMounts(job, jobID), nil
+	node, err := readMountinfo(initMountinfo)
+	if err != nil {
+		// e.g. hidepid on /proc: the job's directories are then only those with the
+		// plugin's path, which a tmpfs at /dev/shm doesn't have
+		log.Warn().Err(err).Msgf("failed to read %s, recognizing the job's private mounts by their path alone", initMountinfo)
+		node = nil
+	}
+	return slurmMounts(job, node, jobID), nil
 }
 
-// slurmMounts picks the mounts whose root is in the plugin's directory for the job, by the
-// <jobid>/.<jobid> in its path. The pin of the namespace (<basepath>/<jobid>/.ns) is not one.
-func slurmMounts(job []mount, jobID uint32) []PrivateMount {
+// slurmMounts picks the mounts the job has to itself: those whose root is in the plugin's
+// directory for the job, by the <jobid>/.<jobid> in its path, and those of a filesystem the
+// node has no mount of. A mount namespace starts as a copy of its parent's mounts, which keep
+// their device and root, so a mount of the job's whose filesystem is nowhere on the node was
+// made for the job and goes away with it: the tmpfs the plugin mounts at /dev/shm, or one a
+// launcher mounts. A bind mount of part of a filesystem the node has, such as a scratch
+// directory, is the node's, and so is everything that came with the copy. The plugin's bind
+// mounts are of the node's filesystem too, which is what the path tells apart. The pin of the
+// namespace (<basepath>/<jobid>/.ns) is on the node and not in the job, so it is not one.
+//
+// With no mounts of the node to compare with, the path alone decides.
+func slurmMounts(job, node []mount, jobID uint32) []PrivateMount {
 	id := strconv.FormatUint(uint64(jobID), 10)
 
 	var mounts []PrivateMount
 	for _, m := range job {
-		if !ofJob(m.Root, id) {
+		var how string
+		switch {
+		case ofJob(m.Root, id):
+			how = "the root of the mount is in the plugin's directory for the job"
+		case node != nil && !onNode(m, node):
+			how = "the node has no mount of this filesystem"
+		default:
 			continue
 		}
-		mounts = append(mounts, PrivateMount{Mountpoint: m.Mountpoint, FSType: m.FSType, Root: m.Root})
+		log.Debug().Str("mountpoint", m.Mountpoint).Str("device", m.Device).Str("root", m.Root).Msgf("private mount of the job: %s", how)
+		mounts = append(mounts, PrivateMount{Mountpoint: m.Mountpoint, FSType: m.FSType, Root: m.Root, Device: m.Device})
 	}
 	return mounts
+}
+
+// onNode tells whether the node has a mount of the filesystem of m that holds m's root: the
+// same device, with a root that is m's or above it
+func onNode(m mount, node []mount) bool {
+	for _, n := range node {
+		if n.Device != m.Device {
+			continue
+		}
+		if n.Root == m.Root || n.Root == "/" || strings.HasPrefix(m.Root, n.Root+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // ofJob tells a path with <id>/.<id> in it, followed by something
@@ -69,6 +119,43 @@ func ofJob(path, id string) bool {
 		}
 	}
 	return false
+}
+
+// ownMountNamespace tells whether pid is in a mount namespace other than init's, from the
+// mounts alone: a new mount namespace gets a copy of every mount of its parent, each with a
+// mount ID of its own, so the root mount of pid has an ID that init's mounts don't when the
+// namespace is not init's. Any user can read both files, unlike the namespace links of init,
+// which only root can.
+func ownMountNamespace(pid uint32) (bool, error) {
+	jobPath := fmt.Sprintf("/proc/%d/mountinfo", pid)
+	job, err := readMountinfo(jobPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read %s: %w", jobPath, err)
+	}
+	node, err := readMountinfo(initMountinfo)
+	if err != nil {
+		return false, fmt.Errorf("failed to read %s: %w", initMountinfo, err)
+	}
+	return ownMountNamespaceOf(job, node)
+}
+
+func ownMountNamespaceOf(job, node []mount) (bool, error) {
+	rootID := -1
+	for _, m := range job {
+		if m.Mountpoint == "/" {
+			rootID = m.ID
+			break
+		}
+	}
+	if rootID < 0 {
+		return false, errors.New("no mount at / in the mounts of the process")
+	}
+	for _, m := range node {
+		if m.ID == rootID {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func readMountinfo(path string) ([]mount, error) {

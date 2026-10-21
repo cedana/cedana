@@ -58,12 +58,12 @@ func TestArchiveExtractDir(t *testing.T) {
 	t.Cleanup(func() { os.Chmod(filepath.Join(src, "a/b"), 0o750) })
 
 	var buf bytes.Buffer
-	written, err := archiveDir(src, &buf, noLimit)
+	written, err := archiveDir(src, &buf, noLimit, nil)
 	must(err)
 	if written != 6 { // "hello" once, and "x"
 		t.Errorf("expected 6 bytes of contents, got %d", written)
 	}
-	if size, err := contentSize(src); err != nil || size != written {
+	if size, err := contentSize(src, nil); err != nil || size != written {
 		t.Errorf("expected a size of %d, got %d, %v", written, size, err)
 	}
 
@@ -154,13 +154,13 @@ func TestArchiveDirLimit(t *testing.T) {
 	}
 	sparse.Close()
 
-	size, err := contentSize(src)
+	size, err := contentSize(src, nil)
 	if err != nil || size != 1<<40+5 {
 		t.Errorf("expected a size of %d, got %d, %v", 1<<40+5, size, err)
 	}
 
 	var buf bytes.Buffer
-	written, err := archiveDir(src, &buf, 1<<20)
+	written, err := archiveDir(src, &buf, 1<<20, nil)
 	if err == nil {
 		t.Error("expected an error")
 	}
@@ -168,7 +168,7 @@ func TestArchiveDirLimit(t *testing.T) {
 		t.Errorf("wrote %d bytes of contents, %d in all", written, buf.Len())
 	}
 
-	if _, err := archiveDir(src, &bytes.Buffer{}, 4); err == nil {
+	if _, err := archiveDir(src, &bytes.Buffer{}, 4, nil); err == nil {
 		t.Error("expected an error with a limit below the smallest file")
 	}
 }
@@ -187,7 +187,7 @@ func TestExtractDirStaysOnFilesystem(t *testing.T) {
 		t.Fatal(err)
 	}
 	var buf bytes.Buffer
-	if _, err := archiveDir(src, &buf, noLimit); err != nil {
+	if _, err := archiveDir(src, &buf, noLimit, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -373,6 +373,63 @@ func TestExtractLeavesWhatItMayNotSet(t *testing.T) {
 		defer inside.Close()
 		if err := setOwner(inside, "file", 0, 0); err == nil {
 			t.Error("expected giving a file to root to fail")
+		}
+	}
+}
+
+// The GPU controller's entries in the job's /dev/shm are left out: the segment of
+// gpu.shm_size and its .misc directory, which the GPU plugin makes anew for the restored
+// job. The job's own files, among them one named like the controller's but deeper, are kept.
+func TestArchiveDirSkipsGPUController(t *testing.T) {
+	src := t.TempDir()
+	must := func(err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(os.WriteFile(filepath.Join(src, "cedana-gpu.1234"), make([]byte, 1<<16), 0o666))
+	must(os.WriteFile(filepath.Join(src, "cedana-gpu.1234.booking"), nil, 0o600))
+	must(os.MkdirAll(filepath.Join(src, "cedana-gpu.1234.misc"), 0o777))
+	must(os.WriteFile(filepath.Join(src, "cedana-gpu.1234.misc/hostmem-1"), []byte("x"), 0o600))
+	must(os.WriteFile(filepath.Join(src, "sglang_loads_abc.shm"), []byte("load"), 0o600))
+	must(os.MkdirAll(filepath.Join(src, "job/cedana-gpu.keep"), 0o700))
+	must(os.WriteFile(filepath.Join(src, "job/cedana-gpu.keep/data"), []byte("mine"), 0o600))
+
+	size, err := contentSize(src, isGPUControllerEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if size != 8 { // "load" and "mine"
+		t.Errorf("contentSize counted the controller's entries: %d", size)
+	}
+
+	var buf bytes.Buffer
+	written, err := archiveDir(src, &buf, noLimit, isGPUControllerEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if written != size {
+		t.Errorf("archived %d bytes, contentSize said %d", written, size)
+	}
+
+	names := map[string]bool{}
+	tr := tar.NewReader(&buf)
+	for {
+		header, err := tr.Next()
+		if err != nil {
+			break
+		}
+		names[header.Name] = true
+	}
+	for _, kept := range []string{".", "sglang_loads_abc.shm", "job", "job/cedana-gpu.keep", "job/cedana-gpu.keep/data"} {
+		if !names[kept] {
+			t.Errorf("%s was not archived", kept)
+		}
+	}
+	for _, skipped := range []string{"cedana-gpu.1234", "cedana-gpu.1234.booking", "cedana-gpu.1234.misc", "cedana-gpu.1234.misc/hostmem-1"} {
+		if names[skipped] {
+			t.Errorf("%s was archived", skipped)
 		}
 	}
 }
