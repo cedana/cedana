@@ -7,7 +7,7 @@ GOCMD=go
 # Pin the toolchain: binaries + plugins built with Go 1.27 panic at runtime with
 # "*daemon.Job, not *daemon.Job (types from different scopes)" once several
 # plugins are loaded. A go.mod toolchain line can't do this (Go never downgrades).
-export GOTOOLCHAIN?=go1.25.11
+export GOTOOLCHAIN?=go1.26.10
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
