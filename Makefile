@@ -7,7 +7,7 @@ GOCMD=go
 # Pin the toolchain: binaries + plugins built with Go 1.27 panic at runtime with
 # "*daemon.Job, not *daemon.Job (types from different scopes)" once several
 # plugins are loaded. A go.mod toolchain line can't do this (Go never downgrades).
-export GOTOOLCHAIN?=go1.25.11
+export GOTOOLCHAIN?=go1.26.10
 GOBUILD=CGO_ENABLED=1 $(GOCMD) build
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
@@ -121,6 +121,8 @@ PARALLELISM?=8
 TAGS?=
 ARGS?=
 RETRIES?=0
+# isolated (a daemon per test), persistent (one across tests), or both
+DAEMON_MODE?=both
 GPU?=0
 REPORT?=
 PROVIDER?=K3s
@@ -152,28 +154,33 @@ test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/... -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], REPORT=<name>)
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], REPORT=<name>, DAEMON_MODE=[both|isolated|persistent])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Retries: $(RETRIES)" ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		echo "\nUsing unique instance of daemon per test...\n" ;\
-		if [ "$(TAGS)" = "" ]; then \
-			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
-		else \
-			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
+		status_isolated=0 ; status_persistent=0 ;\
+		if [ "$(DAEMON_MODE)" != "persistent" ]; then \
+			echo "\nUsing unique instance of daemon per test...\n" ;\
+			if [ "$(TAGS)" = "" ]; then \
+				$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
+			else \
+				$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
+			fi ;\
+			if [ -f /tmp/report.xml ]; then \
+				mv /tmp/report.xml /tmp/$(or $(REPORT),report)-isolated.xml ;\
+			fi ;\
 		fi ;\
-		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/$(or $(REPORT),report)-isolated.xml ;\
-		fi ;\
-		echo "\nUsing a persistent instance of daemon across tests...\n" ;\
-		if [ "$(TAGS)" = "" ]; then \
-			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
-		else \
-			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persistent=$$? ;\
-		fi ;\
-		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/$(or $(REPORT),report)-persistent.xml ;\
+		if [ "$(DAEMON_MODE)" != "isolated" ]; then \
+			echo "\nUsing a persistent instance of daemon across tests...\n" ;\
+			if [ "$(TAGS)" = "" ]; then \
+				PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
+			else \
+				PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persistent=$$? ;\
+			fi ;\
+			if [ -f /tmp/report.xml ]; then \
+				mv /tmp/report.xml /tmp/$(or $(REPORT),report)-persistent.xml ;\
+			fi ;\
 		fi ;\
 		if [ $$status_isolated -ne 0 ]; then \
 			echo "Isolated tests failed" ;\
@@ -195,7 +202,8 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
-				REPORT=$(REPORT) ;\
+				REPORT=$(REPORT) \
+				DAEMON_MODE=$(DAEMON_MODE) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
@@ -208,7 +216,8 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
 				DEBUG=$(DEBUG) \
-				REPORT=$(REPORT) ;\
+				REPORT=$(REPORT) \
+				DAEMON_MODE=$(DAEMON_MODE) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
 	fi

@@ -483,10 +483,12 @@ func GetCmd(ctx context.Context, pid uint32) (string, []string, error) {
 }
 
 func IsTTY(path string) (bool, error) {
-	file, err := os.Open(path)
+	// Don't block on a FIFO with no writer, or take a controlling terminal.
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOCTTY, 0)
 	if err != nil {
 		return false, err
 	}
+	defer file.Close()
 	return isatty.IsTerminal(file.Fd()), nil
 }
 

@@ -6,15 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 const (
@@ -64,6 +67,7 @@ type signozWriter struct {
 	endpoint    string
 	accessToken string
 	resource    map[string]string
+	services    map[string]map[string]string // Resource of each other service logged through us, by service/plugin
 	logBuffer   []signozLogEntry
 
 	mu sync.Mutex
@@ -79,6 +83,7 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 		endpoint:    "https://" + Credentials.Endpoint + ":443/logs/json",
 		accessToken: Credentials.Headers,
 		resource:    make(map[string]string),
+		services:    make(map[string]map[string]string),
 		logBuffer:   make([]signozLogEntry, 0, LOGGER_MAX_BATCH_SIZE),
 	}
 
@@ -133,12 +138,16 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 	}
 
 	attributes := make(map[string]string)
+	resource := sw.resource
+	var service string
 
 	for k, v := range zerologEntry {
 		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName || k == zerolog.ErrorFieldName {
 			continue
 		}
 		switch k {
+		case logging.SERVICE_FIELD:
+			service, _ = v.(string)
 		case zerolog.CallerFieldName:
 			attributes["code.filepath"], _ = v.(string)
 		case zerolog.ErrorStackFieldName:
@@ -148,13 +157,17 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 		}
 	}
 
+	if service != "" {
+		resource = sw.serviceResource(service, attributes["plugin"])
+	}
+
 	logEntry := signozLogEntry{
 		Timestamp:      tsNano,
 		SeverityText:   severityText,
 		SeverityNumber: severityNumber,
 		Body:           body,
 		Attributes:     attributes,
-		Resources:      sw.resource,
+		Resources:      resource,
 	}
 
 	sw.mu.Lock()
@@ -162,6 +175,27 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 	sw.mu.Unlock()
 
 	return len(p), nil
+}
+
+// Returns our resource as the given service, with the installed version of the plugin
+// that ships it instead of ours
+func (sw *signozWriter) serviceResource(service string, plugin string) map[string]string {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+
+	key := service + "/" + plugin
+	if resource, ok := sw.services[key]; ok {
+		return resource
+	}
+	resource := maps.Clone(sw.resource)
+	resource[string(semconv.ServiceNameKey)] = service
+	delete(resource, string(semconv.ServiceVersionKey))
+	if version, ok := sw.resource[plugins.VersionAttributeKey(strings.ToLower(plugin))]; ok && plugin != "" {
+		resource[string(semconv.ServiceVersionKey)] = version
+	}
+	sw.services[key] = resource
+
+	return resource
 }
 
 func (sw *signozWriter) flushBuffer() {

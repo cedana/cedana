@@ -530,6 +530,110 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# A mount whose source is gone, left at a bind mount's destination on the (shared) rootfs,
+# e.g. the GPU shm mount of a container restored earlier, once its GPU controller exited,
+# must not break restoring ("possibly malicious path detected"), and must be cleaned up
+# bats test_tags=restore
+@test "restore container (stale mount on rootfs)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    dest="/stale-mount-$id"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 2
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    stale=$(mktemp)
+    mount --bind "$stale" "$rootfs$dest"
+    rm "$stale"
+    run grep -F " $rootfs$dest " /proc/self/mountinfo
+    assert_output --partial "//deleted" # as left in CI
+
+    cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+
+    run grep -F " $rootfs$dest " /proc/self/mountinfo
+    refute_output --partial "//deleted"
+
+    run runc delete --force "$id"
+    run umount -l "$rootfs$dest" # whether anything is left is the next test's concern
+    rm -f "$bind_source"
+    rm -rf "$rootfs"
+}
+
+# Restoring must not leave mounts on the (shared) rootfs: once the container is gone and its
+# bind source deleted (as the GPU shm file is, when its controller exits), they'd break every
+# later restore there
+# bats test_tags=restore
+@test "restore container (no mount left on rootfs)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    dest="/leaked-mount-$id"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 2
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+
+    run runc delete --force "$id" # kills it, and waits for it to be gone
+    rm -f "$bind_source"
+
+    # Anywhere: the rootfs is also reachable through other mounts of it (e.g. CRIU's root)
+    run grep -F "$dest " /proc/self/mountinfo
+    assert_output ""
+    rm -rf "$rootfs"
+}
+
+# A restore that fails after setting up its mounts must not leave them on the (shared) rootfs
+# bats test_tags=restore
+@test "restore container (failed, no mount left on rootfs)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    dest="/leaked-mount-$id"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 2
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    # Without its memory pages, CRIU fails the restore after the mounts are set up
+    run find "$dump_file" -name 'pages-*.img' -delete -print
+    assert_output --partial "pages-"
+
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+    assert_failure
+
+    run grep -F "$dest " /proc/self/mountinfo # anywhere, see above
+    assert_output ""
+
+    run runc delete --force "$id"
+    rm -f "$bind_source"
+    rm -rf "$rootfs"
+}
+
 # bats test_tags=restore
 @test "restore container (PID file)" {
     id=$(unix_nano)

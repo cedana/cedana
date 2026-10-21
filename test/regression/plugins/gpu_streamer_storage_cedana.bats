@@ -15,6 +15,7 @@ load_lib file
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 
 setup_file() {
+    trap_gpu_signals
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -22,15 +23,18 @@ setup_file() {
 }
 
 setup() {
+    trap_gpu_signals
     setup_daemon
 }
 
 teardown() {
     teardown_daemon
+    check_gpu_signals
 }
 
 teardown_file() {
     teardown_file_daemon
+    check_gpu_signals
 }
 
 ############

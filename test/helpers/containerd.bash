@@ -6,6 +6,12 @@ export CONTAINERD_CONFIG_PATH="/etc/containerd/config.toml"
 export CONTAINERD_ADDRESS="/run/containerd/containerd.sock"
 export CONTAINERD_SNAPSHOTTER="native"
 
+# Command for the nginx image that listens on $NGINX_PORT. The stock image ignores
+# NGINX_PORT (it only substitutes env into /etc/nginx/templates), so containers
+# sharing a network namespace (e.g. the host's, with `cedana run containerd`)
+# would otherwise all race for :80.
+NGINX_CMD=(sh -c 'sed -i -E "s/(listen[[:space:]]+(\[::\]:)?)80;/\1$NGINX_PORT;/" /etc/nginx/conf.d/default.conf && exec nginx -g "daemon off;"')
+
 pull_images() {
     if ! cmd_exists containerd; then
         error_log "containerd is not installed. Please install it first."

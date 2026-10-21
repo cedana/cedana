@@ -106,3 +106,17 @@ func TestSwrkFailureCarriesItsOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestCriuEnvPutsSystemBinFirst(t *testing.T) {
+	t.Setenv("PATH", "/var/lib/rancher/k3s/data/abc/bin:/usr/bin")
+	var paths []string
+	for _, e := range criuEnv() {
+		if strings.HasPrefix(e, "PATH=") {
+			paths = append(paths, e)
+		}
+	}
+	want := "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/lib/rancher/k3s/data/abc/bin:/usr/bin"
+	if len(paths) != 1 || paths[0] != want {
+		t.Fatalf("got %v, want [%s]", paths, want)
+	}
+}

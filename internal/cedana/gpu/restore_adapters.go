@@ -97,11 +97,13 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		var toClose []*os.File
 		var logDir string
 		var isContainer bool
-		shmFileRegex := regexp.MustCompile(CONTROLLER_SHM_FILE_PATTERN)
+		// Anchored, as a process shares the host's mounts, which may include another container's
+		// shm bind mount under its rootfs (e.g. /tmp/rootfs/dev/shm/cedana-gpu.container)
+		shmFileRegex := regexp.MustCompile("^" + CONTROLLER_SHM_FILE_PATTERN)
 
 		mounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			// If the shm file appears in the mounts, it means this restore is for a container
+			// If the shm file is mounted at its own path, it means this restore is for a container
 			isContainer = isContainer || shmFileRegex.MatchString(m.MountPoint)
 
 			mounts[m.ID] = nil

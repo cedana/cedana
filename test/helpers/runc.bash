@@ -28,6 +28,47 @@ setup_rootfs_cuda() {
     debug_log "CUDA Rootfs setup complete"
 }
 
+add_bind_mount_to_bundle() {
+    local bundle="$1"
+    local source="$2"
+    local dest="$3"
+    jq --arg source "$source" --arg dest "$dest" \
+        '.mounts += [{"destination": $dest, "type": "bind", "source": $source, "options": ["bind", "rw"]}]' \
+        "$bundle"/config.json > "$bundle"/config.json.tmp
+    mv "$bundle"/config.json.tmp "$bundle"/config.json
+}
+
+# Gives the bundle a rootfs of its own, a copy of the shared one, and prints its path. For
+# tests that check what's mounted on the rootfs: a restore of another container on the shared
+# rootfs (in a parallel test) takes a copy of whatever is mounted on it, for as long as it runs.
+use_private_rootfs() {
+    local bundle=$1
+    local rootfs
+    rootfs=$(mktemp -d)
+    cp -a "$ROOTFS"/. "$rootfs"
+    jq --arg root "$rootfs" '.root.path = $root' "$bundle"/config.json >"$bundle"/config.json.tmp
+    mv "$bundle"/config.json.tmp "$bundle"/config.json
+    echo "$rootfs"
+}
+
+# Fails if a mount whose source is gone (e.g. the GPU shm bind mount of a restore, once
+# its controller exits) was left on the shared CUDA rootfs, as it breaks every later
+# container restore ("possibly malicious path detected"). Removes it, so it doesn't.
+# Mounts of restores still in progress (in parallel tests) have their source, so are kept.
+check_rootfs_cuda_mounts() {
+    local leaked
+    leaked=$(awk -v root="$ROOTFS_CUDA/" 'index($5, root) == 1 && $4 ~ /\/\/deleted$/ {print $5}' /proc/self/mountinfo)
+    if [ -z "$leaked" ]; then
+        return 0
+    fi
+    echo "Mounts with a deleted source left on $ROOTFS_CUDA:"
+    grep -F "$ROOTFS_CUDA/" /proc/self/mountinfo
+    for m in $(echo "$leaked" | sort -r); do
+        umount -l "$m" || true
+    done
+    return 1
+}
+
 create_workload_bundle() {
     local workload="$1"
     local arg="$2"
