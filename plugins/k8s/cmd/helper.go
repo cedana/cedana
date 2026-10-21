@@ -199,12 +199,15 @@ func runHelper(ctx context.Context) {
 
 	<-ctx.Done()
 	log.Info().Err(ctx.Err()).Msg("stopping daemon")
-	wg.Wait()
 
+	// Stop the daemon before waiting on the event stream, which may be stuck
+	// dialing rabbitmq (not cancellable) for up to the dial timeout.
 	err := script.Run(context.WithoutCancel(ctx), script.Chroot("/host", scripts.ResetService))
 	if err != nil {
 		log.Error().Err(err).Msg("error stopping daemon")
 	}
+
+	wg.Wait()
 }
 
 // superviseEventStream keeps the event stream running until ctx is done,
