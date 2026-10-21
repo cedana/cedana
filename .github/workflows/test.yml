@@ -51,11 +51,6 @@ on:
         description: "Also run the soak tests (each checkpoint/restore many times, to catch 1-in-N failures)"
         required: false
         default: false
-      race:
-        type: boolean
-        description: "Run the runc and containerd plugin tests (amd64) against race-detector builds (the cedana-race-* and plugin-race-* artifacts, from build.yml's race)"
-        required: false
-        default: false
       slurm:
         type: boolean
         description: "Run slurm tests"
@@ -340,10 +335,6 @@ jobs:
         arch:
           - amd64
           - arm64
-    env:
-      # With race: these against the race-detector builds, which report the data races the
-      # daemon hits (to /tmp/race). Not every job: the rest of the matrix runs as usual.
-      RACE: ${{ inputs.race && matrix.arch == 'amd64' && (matrix.plugin == 'runc' || matrix.plugin == 'containerd') }}
     container:
       image: cedana/cedana-test:latest
       credentials:
@@ -362,13 +353,13 @@ jobs:
       - name: Download binary
         uses: actions/download-artifact@v7
         with:
-          name: cedana-${{ env.RACE == 'true' && 'race-' || '' }}${{ matrix.arch }}
+          name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
         uses: actions/download-artifact@v7
         with:
           path: .
-          pattern: plugin-${{ env.RACE == 'true' && 'race-' || '' }}${{ matrix.arch }}-*
+          pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download CRIU
@@ -437,12 +428,7 @@ jobs:
           LARGE: ${{ inputs.large }}
           PARALLELISM: ${{ inputs.parallelism }}
           PLUGIN: ${{ matrix.plugin }}
-          # Race: report every race (a file per process) without stopping the process, from a
-          # daemon across tests (persistent), which serves many jobs at once: where races are likeliest
-          GORACE: ${{ env.RACE == 'true' && 'log_path=/tmp/race/report halt_on_error=0' || '' }}
-          DAEMON_MODE: ${{ env.RACE == 'true' && 'persistent' || 'both' }}
         run: |
-          mkdir -p /tmp/race
           # replace slash in plugin with colon so that the tag is namespaced correctly
           # e.g. storage/cedana -> storage:cedana
           PLUGIN=$(echo $PLUGIN | sed 's/\//:/g')
@@ -451,16 +437,6 @@ jobs:
           else
             make test-regression TAGS=!gpu,!streamer,$PLUGIN,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
           fi
-
-      - name: Check for races
-        if: always() && env.RACE == 'true'
-        run: |
-          if ls /tmp/race/report.* >/dev/null 2>&1; then
-            echo "::error title=Data races::$(grep -c '^WARNING: DATA RACE' /tmp/race/report.* | awk -F: '{s+=$2} END {print s}') data race(s) found, see the race-reports-* artifact"
-            grep -h -A 30 '^WARNING: DATA RACE' /tmp/race/report.* | head -n 300
-            exit 1
-          fi
-          echo "No data races found"
 
       - name: Set plugin name
         if: always()
@@ -496,13 +472,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Upload race reports
-        if: always() && env.RACE == 'true'
-        uses: actions/upload-artifact@v6
-        with:
-          name: race-reports-${{ env.PLUGIN }}
-          path: /tmp/race/
-          if-no-files-found: ignore
 
   streamer:
     name: Streamer

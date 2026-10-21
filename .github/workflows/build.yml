@@ -48,11 +48,6 @@ on:
         description: "Name of the test Docker image to build"
         required: false
         default: "cedana/cedana-test"
-      race:
-        type: boolean
-        description: "Also build cedana and the plugins with the race detector (amd64), as cedana-race-* and plugin-race-* artifacts"
-        required: false
-        default: false
 
 jobs:
   cedana:
@@ -128,20 +123,6 @@ jobs:
           name: cedana-scripts-${{ matrix.arch }}
           path: |
             scripts/install-release.sh
-
-      # A plugin only loads into a cedana built the same way, so cedana and every plugin get one
-      - name: Build (race)
-        if: inputs.race && matrix.arch == 'amd64'
-        run: make -B cedana VERSION=${{ github.head_ref || github.ref_name }} RACE=1 -j $(nproc) # -B: over the build above
-
-      - name: Upload artifacts (race)
-        if: inputs.race && matrix.arch == 'amd64'
-        uses: actions/upload-artifact@v6
-        with:
-          name: cedana-race-${{ matrix.arch }}
-          path: |
-            ./cedana
-            ./cedana-version.txt
 
   plugin:
     name: Plugin
@@ -223,21 +204,6 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
-          path: |
-            ./libcedana-*.so
-            ./plugin-version.txt
-
-      - name: Build (race)
-        if: inputs.race && matrix.arch == 'amd64'
-        env:
-          PLUGIN: ${{ env.PLUGIN }}
-        run: make -B ${PWD}/libcedana-${PLUGIN}.so VERSION=${{ github.head_ref || github.ref_name }} RACE=1 -j $(nproc) # -B: over the build above
-
-      - name: Upload artifacts (race)
-        if: inputs.race && matrix.arch == 'amd64'
-        uses: actions/upload-artifact@v6
-        with:
-          name: plugin-race-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
             ./libcedana-*.so
             ./plugin-version.txt
