@@ -5,6 +5,7 @@ package filesystem
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -18,16 +19,27 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// The GPU controller of the job keeps its shared memory in the job's /dev/shm: the segment
-// of gpu.shm_size, cedana-gpu.<id>, with its .booking file and its .misc directory, and its
-// logs under gpu.log_dir, /tmp by default, as cedana-gpu.<id>/. The GPU plugin makes them anew
-// for the restored job, and the segment alone, 24 GiB on a serving node, is more than a dump
-// may hold. So the controller's entries are left out of every private mount.
+// The GPU controller of the job keeps its shared memory in the job's /dev/shm: the segment of
+// gpu.shm_size as the regular file cedana-gpu.<id>, its booking file cedana-gpu.<id>.booking,
+// and the directory cedana-gpu.<id>.misc of what it shares with the workers. The GPU plugin
+// makes them anew for the restored job, and the segment alone, 24 GiB on a serving node, is
+// more than a dump may hold. So they are left out of every private mount.
+//
+// The controller's directory under gpu.log_dir, /tmp by default, is the directory
+// cedana-gpu.<id> with its logs and the libcuda.so.1 link that the job's LD_PRELOAD names
+// (internal/cedana/gpu/run_adapters.go). A process the restored job starts needs it, so it stays.
 const gpuControllerPrefix = "cedana-gpu."
 
-// isGPUControllerEntry tells an entry at the top of a private mount that is the GPU controller's
-func isGPUControllerEntry(rel string) bool {
-	return !strings.Contains(rel, "/") && strings.HasPrefix(rel, gpuControllerPrefix)
+// isGPUControllerShm tells an entry at the top of a private mount that is the GPU controller's
+// shared memory: anything named cedana-gpu.* but the directory cedana-gpu.<id> itself
+func isGPUControllerShm(rel string, info fs.FileInfo) bool {
+	if strings.Contains(rel, "/") || !strings.HasPrefix(rel, gpuControllerPrefix) {
+		return false
+	}
+	if !info.IsDir() {
+		return true // the segment, or its booking file
+	}
+	return strings.HasSuffix(rel, ".misc")
 }
 
 // A job in a mount namespace of its own is dumped from inside it (see
@@ -53,7 +65,7 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 		for _, m := range private {
 			log.Debug().Str("mountpoint", m.Mountpoint).Str("root", m.Root).Msg("private mount of the job")
 
-			size, err := contentSize(pathInJob(pid, m.Mountpoint), isGPUControllerEntry)
+			size, err := contentSize(pathInJob(pid, m.Mountpoint), isGPUControllerShm)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get size of private mount %s: %v", m.Mountpoint, err)
 			}
@@ -92,7 +104,7 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 				left := max // the job was still running when checked above
 				for _, m := range mounts {
 					log.Debug().Str("mountpoint", m.Mountpoint).Str("archive", m.Archive).Msg("dumping private mount")
-					written, err := archiveToDump(dumpFs, m.Archive, pathInJob(pid, m.Mountpoint), left, isGPUControllerEntry)
+					written, err := archiveToDump(dumpFs, m.Archive, pathInJob(pid, m.Mountpoint), left, isGPUControllerShm)
 					if err != nil {
 						return fmt.Errorf("failed to dump private mount %s: %w", m.Mountpoint, err)
 					}
