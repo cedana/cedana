@@ -12,7 +12,7 @@ fi
 # Define packages for YUM and APT
 YUM_PACKAGES=(
     wget git make psmisc
-    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel # CRIU
+    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel lz4-devel # CRIU
     yq
 )
 

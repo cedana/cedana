@@ -68,6 +68,8 @@ const (
 	DEFAULT_SLURM_DB_PORT = 3306
 	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
 
+	DEFAULT_K8S_FALLBACK_COLD_START = true
+
 	DEFAULT_AWS_CREDENTIALS_MODE = "static"
 
 	DEFAULT_CSX_SOCK_ADDR = "/run/csx.sock"
@@ -128,6 +130,9 @@ var Global Config = Config{
 		Unprivileged: false,
 		DBPort:       DEFAULT_SLURM_DB_PORT,
 		DBName:       DEFAULT_SLURM_DB_NAME,
+	},
+	K8s: K8s{
+		FallbackColdStart: DEFAULT_K8S_FALLBACK_COLD_START,
 	},
 	AWS: AWS{
 		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,

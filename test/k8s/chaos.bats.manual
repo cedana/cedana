@@ -220,10 +220,8 @@ check_checkpoint_status() {
     local action_id="$1"
     action_id="${action_id//\"/}"
 
-    local base_url
-    base_url=$(normalize_url "$CEDANA_URL")
     local response
-    response=$(curl -s -X GET "${base_url}/checkpoint/status/${action_id}" \
+    response=$(curl -s -X GET "${CEDANA_URL}/checkpoint/status/${action_id}" \
         -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}" 2>/dev/null)
 

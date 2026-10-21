@@ -43,3 +43,25 @@ download_hf_models() {
         python3 /cedana-samples/gpu_smr/pytorch/llm/download_hf_model.py --model "$model" &>/dev/null
     done
 }
+
+# The GPU controller and workers send SIGUSR2 to the application on a premature exit. Our own
+# test processes should never get it, but tests have been vanishing mid-run ("Executed N
+# instead of expected M tests"). Catch it in the test (or file) process, report it, and fail
+# in teardown, instead of the process dying without a result.
+trap_gpu_signals() {
+    GPU_SIGNAL_LOG="${BATS_TEST_TMPDIR:-$BATS_FILE_TMPDIR}/gpu-signals"
+    trap gpu_signal_handler USR2
+}
+
+gpu_signal_handler() {
+    local who="${BATS_TEST_NAME:-file $(basename "$BATS_TEST_FILENAME")}"
+    echo "# $(date +%T) SIGUSR2 received by bats PID $BASHPID (PGID $(cut -d" " -f5 /proc/$BASHPID/stat)) in $who" |
+        tee -a "$GPU_SIGNAL_LOG" >&3
+}
+
+check_gpu_signals() {
+    if [ -s "$GPU_SIGNAL_LOG" ]; then
+        cat "$GPU_SIGNAL_LOG"
+        return 1
+    fi
+}

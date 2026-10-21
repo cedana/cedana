@@ -7,14 +7,32 @@
 # Local K3s cluster for CI/development testing.
 # Creates a fresh K3s cluster on setup and tears it down completely.
 #
+# K3S_CONTAINERD selects the containerd k3s runs on:
+#   external (default) - the suite's own containerd (see containerd.bash)
+#   embedded           - k3s's bundled containerd, as on a stock k3s install
+#
 
+export K3S_CONTAINERD="${K3S_CONTAINERD:-external}"
 export CONTAINERD_NAMESPACE="k8s.io"
 export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
 START_K3S_SERVER="server \
         --write-kubeconfig-mode=644 \
         --disable=traefik \
-        --snapshotter=native \
-        --container-runtime-endpoint=$CONTAINERD_ADDRESS"
+        --snapshotter=native"
+
+case "$K3S_CONTAINERD" in
+external)
+    START_K3S_SERVER="$START_K3S_SERVER --container-runtime-endpoint=$CONTAINERD_ADDRESS"
+    ;;
+embedded)
+    export CONTAINERD_ADDRESS="/run/k3s/containerd/containerd.sock"
+    K3S_CONTAINERD_TEMPLATE="/var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl"
+    ;;
+*)
+    error_log "Unknown K3S_CONTAINERD=$K3S_CONTAINERD (expected external or embedded)"
+    return 1
+    ;;
+esac
 
 export GPU_OPERATOR_NAMESPACE="${GPU_OPERATOR_NAMESPACE:-gpu-operator}"
 export GPU_OPERATOR_VERSION="${GPU_OPERATOR_VERSION:-v25.10}"
@@ -30,8 +48,36 @@ setup_cluster() {
     download_k3s
     install_containerd_plugins
     configure_containerd_runtime
-    start_containerd
+    # The shim inherits containerd's environment, and env beats the host config file the
+    # helper writes (/etc/cedana). Keep the suite's CEDANA_URL/CEDANA_AUTH_TOKEN out of it so
+    # the shim follows the helper's config, which is what points at an in-cluster propagator.
+    # An embedded containerd is started by k3s, so k3s must not see them either.
+    if [ "$K3S_CONTAINERD" = "embedded" ]; then
+        (
+            unset CEDANA_URL CEDANA_AUTH_TOKEN OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_HEADERS
+            start_cluster
+        )
+        preload_all_images
+    else
+        (
+            unset CEDANA_URL CEDANA_AUTH_TOKEN OTEL_EXPORTER_OTLP_ENDPOINT OTEL_EXPORTER_OTLP_HEADERS
+            start_containerd
+        )
+        preload_all_images
+        start_cluster
+    fi
 
+    mkdir -p ~/.kube
+    cat $KUBECONFIG >~/.kube/config
+
+    if [ "${GPU:-0}" = "1" ]; then
+        setup_gpu_operator
+    fi
+
+    debug_log "k3s cluster is ready"
+}
+
+preload_all_images() {
     if [ -n "$CONTROLLER_DIGEST" ]; then
         preload_images "$CONTROLLER_REPO@$CONTROLLER_DIGEST"
     elif [ -n "$CONTROLLER_TAG" ]; then
@@ -42,24 +88,15 @@ setup_cluster() {
     elif [ -n "$HELPER_TAG" ]; then
         preload_images "$HELPER_REPO:$HELPER_TAG"
     fi
+    if [ -n "$PROPAGATOR_DIGEST" ]; then
+        preload_images "$PROPAGATOR_REPO@$PROPAGATOR_DIGEST"
+    elif [ -n "$PROPAGATOR_TAG" ]; then
+        preload_images "$PROPAGATOR_REPO:$PROPAGATOR_TAG"
+    fi
     if [ "${GPU:-0}" = "1" ]; then
         preload_images "cedana/cedana-test:cuda" # likely available as we are running inside it
         preload_images "cedana/cedana-samples:cuda"
     fi
-
-    start_cluster
-
-    mkdir -p ~/.kube
-    cat $KUBECONFIG > ~/.kube/config
-
-    if [ "${GPU:-0}" = "1" ]; then
-        setup_gpu_operator
-    fi
-
-    # XXX: The tar in busybox is incompatible with CRIU
-    rm -f /var/lib/rancher/k3s/data/current/bin/tar
-
-    debug_log "k3s cluster is ready"
 }
 
 # Teardown k3s cluster completely
@@ -94,16 +131,16 @@ download_k3s() {
     local binary_name
 
     case "$arch" in
-        x86_64)
-            binary_name="k3s"
-            ;;
-        aarch64|arm64)
-            binary_name="k3s-arm64"
-            ;;
-        *)
-            error_log "Unsupported architecture: $arch. Only x86_64 and arm64/aarch64 are supported."
-            return 1
-            ;;
+    x86_64)
+        binary_name="k3s"
+        ;;
+    aarch64 | arm64)
+        binary_name="k3s-arm64"
+        ;;
+    *)
+        error_log "Unsupported architecture: $arch. Only x86_64 and arm64/aarch64 are supported."
+        return 1
+        ;;
     esac
 
     wget -q "https://github.com/k3s-io/k3s/releases/download/v1.34.2%2Bk3s1/$binary_name" -O /usr/local/bin/k3s
@@ -114,6 +151,26 @@ download_k3s() {
 
 configure_containerd_runtime() {
     debug_log "Configuring containerd runtime for k3s..."
+
+    if [ "$K3S_CONTAINERD" = "embedded" ]; then
+        if [ "${GPU:-0}" = "1" ]; then
+            error_log "K3S_CONTAINERD=embedded does not support GPU yet"
+            return 1
+        fi
+        # k3s regenerates its containerd config on every start, so extend it through
+        # the template (config version 3, as k3s ships containerd 2.x)
+        debug_log "Writing containerd config template to $K3S_CONTAINERD_TEMPLATE"
+        mkdir -p "$(dirname "$K3S_CONTAINERD_TEMPLATE")"
+        cat >"$K3S_CONTAINERD_TEMPLATE" <<'END_CAT'
+{{ template "base" . }}
+
+[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
+  runtime_type = "io.containerd.runc.v2"
+  runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+END_CAT
+        debug_log "Configured containerd runtime for k3s"
+        return 0
+    fi
 
     check_env CONTAINERD_CONFIG_PATH
 
@@ -127,7 +184,7 @@ configure_containerd_runtime() {
     fi
 
     debug_log "Writing containerd config to $path"
-    cat >> "$path" <<'END_CAT'
+    cat >>"$path" <<'END_CAT'
 [plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
     runtime_type = "io.containerd.runc.v2"
     runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
@@ -141,7 +198,7 @@ END_CAT
 start_cluster() {
     debug_log "Starting k3s cluster..."
 
-    if ! command -v k3s &> /dev/null; then
+    if ! command -v k3s &>/dev/null; then
         error_log "k3s binary not found"
         return 1
     fi
@@ -197,7 +254,15 @@ preload_images() {
         return 0
     fi
 
-    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import "$tar"
+    # docker's containerd image store saves a multi-platform index, which ctr 2.x
+    # refuses to unpack unless told which platform to use. --local makes it honor
+    # --platform instead of deferring to the transfer service's (empty) config.
+    local platform
+    case "$(uname -m)" in
+    aarch64 | arm64) platform=linux/arm64 ;;
+    *) platform=linux/amd64 ;;
+    esac
+    ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images import --local --platform "$platform" "$tar"
     rm -f "$tar"
 
     ctr -n $CONTAINERD_NAMESPACE --address "$CONTAINERD_ADDRESS" images tag docker.io/"$image" docker.io/"$digest_ref"
@@ -208,14 +273,14 @@ preload_images() {
 setup_gpu_operator() {
     debug_log "Installing NVIDIA GPU operator..."
 
-    helm repo add nvidia https://helm.ngc.nvidia.com/nvidia \
-        && helm repo update
+    helm repo add nvidia https://helm.ngc.nvidia.com/nvidia &&
+        helm repo update
 
     mount --make-rshared /
 
     # See https://github.com/NVIDIA/gpu-operator/issues/569
     # Because we are working inside a container.
-    cat << END_CAT > /tmp/gpu-operator-values.yaml
+    cat <<END_CAT >/tmp/gpu-operator-values.yaml
 validator:
   driver:
     env:

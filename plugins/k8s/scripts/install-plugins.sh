@@ -7,12 +7,15 @@ CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=${CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
+CEDANA_PLUGINS_CRIU_NVIDIA_DEV=${CEDANA_PLUGINS_CRIU_NVIDIA_DEV:-"true"}
+CEDANA_PLUGINS_CRIU_INFINIBAND=${CEDANA_PLUGINS_CRIU_INFINIBAND:-"true"}
 CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"/tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
 echo "Starting cedana plugin setup"
 echo "Config: BUILDS=$CEDANA_PLUGINS_BUILDS NATIVE=$CEDANA_PLUGINS_NATIVE_VERSION CRIU=$CEDANA_PLUGINS_CRIU_VERSION CONTAINERD_RUNTIME=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION GPU=$CEDANA_PLUGINS_GPU_VERSION STREAMER=$CEDANA_PLUGINS_STREAMER_VERSION"
 echo "Config: CHECKPOINT_DIR=$CEDANA_CHECKPOINT_DIR CHECKPOINT_STREAMS=$CEDANA_CHECKPOINT_STREAMS"
+echo "Config: CRIU_NVIDIA_DEV=$CEDANA_PLUGINS_CRIU_NVIDIA_DEV CRIU_INFINIBAND=$CEDANA_PLUGINS_CRIU_INFINIBAND"
 
 # XXX: We always install the GPU plugin because the race w/ gpu-operator (if the cluster is using it)
 # is not worth defending against. In any case, the resources check on using gpus in the yaml will prevent
@@ -31,6 +34,22 @@ if [ "$CEDANA_PLUGINS_GPU_VERSION" != "none" ]; then
 else
     echo "GPU plugin disabled (CEDANA_PLUGINS_GPU_VERSION=none), marking for removal"
     PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE gpu"
+fi
+
+if [ "$CEDANA_PLUGINS_CRIU_NVIDIA_DEV" = "true" ]; then
+    echo "CRIU nvidia-dev plugin enabled, adding to install list"
+    PLUGINS="$PLUGINS criu/nvidia-dev@$CEDANA_PLUGINS_CRIU_VERSION"
+else
+    echo "CRIU nvidia-dev plugin disabled (CEDANA_PLUGINS_CRIU_NVIDIA_DEV=$CEDANA_PLUGINS_CRIU_NVIDIA_DEV), marking for removal"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE criu/nvidia-dev"
+fi
+
+if [ "$CEDANA_PLUGINS_CRIU_INFINIBAND" = "true" ]; then
+    echo "CRIU infiniband plugin enabled, adding to install list"
+    PLUGINS="$PLUGINS criu/infiniband@$CEDANA_PLUGINS_CRIU_VERSION"
+else
+    echo "CRIU infiniband plugin disabled (CEDANA_PLUGINS_CRIU_INFINIBAND=$CEDANA_PLUGINS_CRIU_INFINIBAND), marking for removal"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE criu/infiniband"
 fi
 
 # check if a storage plugin is required
@@ -269,13 +288,21 @@ else
         exit 1
     fi
 
-    # Detect containerd config version
-    if grep -q 'version = 2' "$CONTAINERD_CONFIG_PATH"; then
-        CONTAINERD_VERSION=2
-    elif grep -q 'version = 3' "$CONTAINERD_CONFIG_PATH"; then
-        CONTAINERD_VERSION=3
-    else
-        echo "ERROR: Unsupported containerd config version. Only version 2 and 3 are supported." >&2
+    # Detect containerd config version. containerd migrates every file (main
+    # config and each import) from its own version, and a file without a
+    # version line is version 1, so the main config alone is not enough: use
+    # the highest version across the main config and conf.d files. Version 3+
+    # files only load on containerd 2.x.
+    CONTAINERD_VERSION=0
+    for FILE in "$CONTAINERD_CONFIG_PATH" "$CONTAINERD_CONFD_DIR"/*.toml; do
+        [ -f "$FILE" ] && [ "$FILE" != "$CONTAINERD_CONFD_DIR/999-cedana.toml" ] || continue
+        FILE_VERSION=$(sed -n 's/^[[:space:]]*version[[:space:]]*=[[:space:]]*\([0-9]\+\).*/\1/p' "$FILE" | head -n 1)
+        if [ "${FILE_VERSION:-0}" -gt "$CONTAINERD_VERSION" ]; then
+            CONTAINERD_VERSION=$FILE_VERSION
+        fi
+    done
+    if [ "$CONTAINERD_VERSION" -lt 2 ]; then
+        echo "ERROR: Unsupported containerd config version. Version 2 or higher is required." >&2
         exit 1
     fi
     echo "Detected containerd config version $CONTAINERD_VERSION"
@@ -322,8 +349,10 @@ else
             fi
         fi
     else
-        # Version 3: conf.d files merge properly, so ship a dedicated conf.d
-        # file with only the cedana runtime and make sure it gets imported.
+        # Version 3+ (containerd 2.x): conf.d files merge properly, so ship a
+        # dedicated conf.d file with only the cedana runtime and make sure it
+        # gets imported. The file has no version line, as containerd rejects
+        # drop-ins with a higher version than the main config.
         TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
         mkdir -p "$CONTAINERD_CONFD_DIR"
 
@@ -336,9 +365,13 @@ else
                 # bracket (TOML allows a trailing comma before the closing one)
                 echo "Adding conf.d glob to multiline imports in $CONTAINERD_CONFIG_PATH"
                 sed -i "/^imports = \[/a \"$CONTAINERD_CONFD_DIR/*.toml\"," "$CONTAINERD_CONFIG_PATH"
-            else
+            elif grep -q '^[[:space:]]*version[[:space:]]*=' "$CONTAINERD_CONFIG_PATH"; then
                 echo "Adding imports line to $CONTAINERD_CONFIG_PATH"
-                sed -i "/^version = 3/a imports = [\"$CONTAINERD_CONFD_DIR/*.toml\"]" "$CONTAINERD_CONFIG_PATH"
+                sed -i "/^[[:space:]]*version[[:space:]]*=/a imports = [\"$CONTAINERD_CONFD_DIR/*.toml\"]" "$CONTAINERD_CONFIG_PATH"
+            else
+                # No version line: top-level keys must precede all tables
+                echo "Adding imports line to $CONTAINERD_CONFIG_PATH"
+                sed -i "1i imports = [\"$CONTAINERD_CONFD_DIR/*.toml\"]" "$CONTAINERD_CONFIG_PATH"
             fi
             if ! grep -qF "$CONTAINERD_CONFD_DIR/*.toml" "$CONTAINERD_CONFIG_PATH"; then
                 echo "ERROR: Failed to add $CONTAINERD_CONFD_DIR/*.toml to imports in $CONTAINERD_CONFIG_PATH, please add it manually" >&2

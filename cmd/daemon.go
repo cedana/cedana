@@ -23,6 +23,9 @@ func init() {
 		StringP(flags.DBFlag.Full, flags.DBFlag.Short, "", "path to local database")
 	checkDaemonCmd.PersistentFlags().
 		BoolP(flags.FullFlag.Full, flags.FullFlag.Short, false, "perform a full check (including plugins)")
+	checkDaemonCmd.PersistentFlags().
+		Bool(flags.PingFlag.Full, false, "only check that the daemon is serving (e.g. for liveness probes)")
+	checkDaemonCmd.MarkFlagsMutuallyExclusive(flags.FullFlag.Full, flags.PingFlag.Full)
 }
 
 var daemonCmd = &cobra.Command{
@@ -75,10 +78,18 @@ var checkDaemonCmd = &cobra.Command{
 		}
 
 		full, _ := cmd.Flags().GetBool(flags.FullFlag.Full)
+		ping, _ := cmd.Flags().GetBool(flags.PingFlag.Full)
 
-		_, err = client.HealthCheckConnection(ctx)
+		serving, err := client.HealthCheckConnection(ctx)
 		if err != nil {
 			return fmt.Errorf("Error connecting to daemon: %v", err)
+		}
+
+		if ping {
+			if !serving {
+				return fmt.Errorf("Daemon is not serving")
+			}
+			return nil
 		}
 
 		resp, err := client.HealthCheck(ctx, &daemon.HealthCheckReq{Full: full})

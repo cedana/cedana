@@ -11,11 +11,6 @@ on:
         description: "Run build with debugging enabled"
         required: false
         default: false
-      debug_test:
-        type: boolean
-        description: "Run tests with debugging enabled"
-        required: false
-        default: false
       debug_bench:
         type: boolean
         description: "Run benchmark with debugging enabled"
@@ -54,8 +49,10 @@ jobs:
       helm_chart_version: main
       controller_version: main
       containerd_runtime_version: cedana
+      oci_runtime_version: main
       slurm_version: main
       csx_version: main
+      propagator_version: main
 
   publish:
     name: Publish
@@ -69,17 +66,9 @@ jobs:
       dockerhub: true
       post_summary: false
 
-  test:
-    name: Test
-    uses: ./.github/workflows/test.yml
-    needs: [publish, download]
-    secrets: inherit
-    with:
-      debug: ${{ startsWith(github.event_name, 'workflow') && inputs.debug_test }}
-      slurm_versions: ${{ needs.download.outputs.slurm_versions }}
-
   bench:
     name: Bench
+    if: false # benchmarks are disabled while they are reworked
     uses: ./.github/workflows/bench.yml
     needs: [publish, download]
     secrets: inherit

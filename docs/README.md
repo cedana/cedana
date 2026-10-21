@@ -72,7 +72,7 @@ For all available CLI options, see [CLI reference](references/cli/cedana.md). Di
 
 ### Get started
 
-- [Quick start](./#quick-start)
+- [Quick start](.#quick-start)
 - [Installation](get-started/installation.md)
 - [Authentication](get-started/authentication.md)
 - [Configuration](get-started/configuration.md)
@@ -83,13 +83,14 @@ For all available CLI options, see [CLI reference](references/cli/cedana.md). Di
 ### Checkpoint/restore
 
 - [Managed process/container](guides/managed.md)
-- [Checkpoint/restore basics](guides/cr.md)
-- [Checkpoint/restore with GPUs](guides/gpu/cr.md)
-- [Checkpoint/restore runc](guides/runc/cr.md)
-- [Checkpoint/restore crun](guides/crun/cr.md)
-- [Checkpoint/restore containerd](guides/containerd/cr.md)
-- [Checkpoint/restore streamer](guides/streamer/cr.md)
-- [Checkpoint/restore kubernetes](guides/k8s/cr.md)
+- [Checkpoint/restore basics](guides/basics.md)
+- [Checkpoint/restore with GPUs](guides/gpu.md)
+- [Checkpoint/restore runc](guides/runc.md)
+- [Checkpoint/restore crun](guides/crun.md)
+- [Checkpoint/restore containerd](guides/containerd.md)
+- [Checkpoint/restore podman](guides/podman.md)
+- [Checkpoint/restore streamer](guides/streamer.md)
+- [Checkpoint/restore kubernetes](guides/kubernetes.md)
 
 ### Storage
 

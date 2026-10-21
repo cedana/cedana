@@ -6,6 +6,7 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  actions: read # to list the jobs of the run when posting the summary
 
 on:
   workflow_call:
@@ -72,6 +73,11 @@ jobs:
         arch:
           - amd64
           - arm64
+        # The suite runs with a daemon per test, and with one across tests. These are
+        # independent, so run in parallel rather than one after the other.
+        daemon:
+          - isolated
+          - persistent
         exclude: # to reduce CI minutes
           - cuda_version: 12-2
             cr: streamer
@@ -144,6 +150,13 @@ jobs:
         with:
           name: criu-${{ matrix.arch }}
 
+      - name: Download OCI runtime
+        uses: actions/download-artifact@v4
+        with:
+          path: .
+          pattern: oci-runtime-${{ matrix.arch }}
+          merge-multiple: true
+
       - name: Download CSX
         uses: actions/download-artifact@v4
         with:
@@ -162,7 +175,7 @@ jobs:
         run: |
           make install
           # Plugins below are used across multiple tests, so install them always
-          sudo -E cedana plugin install criu runc crun containerd containerd/runtime-runc
+          sudo -E cedana plugin install criu runc crun containerd containerd/runtime-runc podman oci-runtime
           sudo -E cedana plugin install storage/cedana storage/s3 storage/gcs storage/csx csx
           sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
           if [ "$STREAMER" = "true" ]; then
@@ -186,15 +199,15 @@ jobs:
         run: |
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,!streamer PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,!streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!large,!cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
 
@@ -203,101 +216,54 @@ jobs:
         # runner for backward-compat (12.8 binaries under a newer driver).
         # Missing samples auto-skip, so the same curated list is safe on both.
         if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
-        run: |
-          mkdir -p /tmp/cuda-samples
-          bats --filter-tags cuda-samples -r test/regression \
-            --output /tmp/cuda-samples --report-formatter junit
+        env:
+          PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
+        run: make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-cuda-samples
 
-      - name: Setup node
+      - name: Label reports # with the job name, so the summary can link to it
         if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate report (isolated)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
-
-      - name: Generate report (persistent)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
-
-      - name: Generate report (cuda-samples)
-        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
-        run: |
-          npx junit-to-ctrf "/tmp/cuda-samples/report.xml" -t bats -o /tmp/report-cuda-samples.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA samples (intercepted, ${{ matrix.cuda_version }})"
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }}, ${{ matrix.daemon }})" |' {} +
 
       - name: Upload report
         if: always()
-        id: upload-report
         uses: actions/upload-artifact@v4
         with:
-          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
+          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
+          path: /tmp/report*.xml
+
+      # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
           path: |
-            /tmp/report*.json
+            /tmp/cedana-daemon-*.log
+            /tmp/cedana-*/**/*.log
+            /var/log/cedana*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: cuda
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        cuda_version:
-          # - 12-2
-          # - 12-4
-          - 12-8
-          - 13-2
-        arch:
-          - amd64
-          - arm64
     steps:
-      - name: Download report
-        id: download-report
+      - name: Download reports
         uses: actions/download-artifact@v4
         with:
-          pattern: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-*
+          pattern: test-report-*-cuda-*
           path: report
 
-      - name: Post report
-        uses: ctrf-io/github-test-reporter@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Post summary
+        uses: cedana/cedana-test-summary@v1
         with:
-          report-path: report/**/*.json
-          github-report: true
-          failed-folded-report: true
-          summary: true
-          pull-request: true
-          title: CUDA ${{ matrix.cuda_version }}, ${{ matrix.arch }}
-          update-comment: true
-          overwrite-comment: true
-          comment-tag: test-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
-          group-by: "suite"
-          always-group-by: true
-          upload-artifact: true
-          artifact-name: ctrf-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
+          reports: report/**/*.xml
+          title: CUDA
+          jobs-filter: '(^|/ )CUDA \('
+          image-branch: test-summary-assets
+          image-repository: cedana/summaries # public, so the image renders when called from private repos
+          image-token: ${{ secrets.GIT_CI_PAT }}
+          matrix-sections: | # one per CUDA version found in the suite names
+            $1=\b(\d+-\d+)\b
