@@ -145,10 +145,12 @@ teardown_file() {
 
 # Print the PID cedana monitors (and so checkpoints, or has restored) for a
 # job. The `cedana-slurm monitor <job_id> --task-pid=<pid>` process on the
-# node names the batch step, and cedana writes the workload's PID to
-# /tmp/cedana-<job_id>.pid in the job's own namespace once it is up, read here
-# through the batch step's root. The monitor starts a few seconds after the job
-# does and the workload a little after that, so wait for both.
+# node names the batch step. Its shell runs `cedana run|restore --no-server
+# --pid-file=/tmp/cedana-<job_id>.pid`, which runs the workload as its own
+# child (a restore too, as cedana restores as a child), alongside the GPU
+# controller for a GPU job and, briefly, CRIU for a restore. The monitor starts
+# a few seconds after the job does and the workload a little after that, so
+# wait for both.
 _monitored_pid() {
     local host="$1" job_id="$2" task="" pid="" waited=0
 
@@ -156,7 +158,25 @@ _monitored_pid() {
         task="$(docker exec "$host" ps -eo args= 2>/dev/null |
             awk -v job="$job_id" '$2 == "monitor" && $3 == job && sub("^--task-pid=", "", $4) { print $4; exit }')"
         if [ -n "$task" ]; then
-            pid="$(docker exec "$host" cat "/proc/${task}/root/tmp/cedana-${job_id}.pid" 2>/dev/null | tr -d '[:space:]')"
+            # The child of cedana run|restore is the PID cedana writes to the pid
+            # file: run starts the workload as its child, and restore restores it
+            # as one (RstSibling). The monitor deletes that file as soon as it reads
+            # it, so it is gone before this can look, while the process tree lasts.
+            # comm is cut to 15 characters, so cedana-gpu-controller shows as cedana-gpu-cont.
+            pid="$(docker exec "$host" ps -eo pid=,ppid=,comm=,args= 2>/dev/null |
+                awk -v task="$task" -v pidfile="--pid-file=/tmp/cedana-${job_id}.pid" '
+                    { ppid[$1] = $2; comm[$1] = $3 }
+                    $2 == task && index($0 " ", " " pidfile " ") { cedana = $1 }
+                    END {
+                        if (cedana == "") exit
+                        for (p in ppid) {
+                            if (ppid[p] == cedana && comm[p] != "cedana-gpu-cont" && comm[p] != "criu") {
+                                n++
+                                found = p
+                            }
+                        }
+                        if (n == 1) print found
+                    }')"
             [ -n "$pid" ] && break
         fi
         sleep 1
