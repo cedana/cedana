@@ -5,6 +5,7 @@ package filesystem
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -16,6 +17,18 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// The GPU controller of the job keeps its shared memory in the job's /dev/shm: the segment
+// of gpu.shm_size, cedana-gpu.<id>, with its .booking file and its .misc directory, and its
+// logs under gpu.log_dir, /tmp by default, as cedana-gpu.<id>/. The GPU plugin makes them anew
+// for the restored job, and the segment alone, 24 GiB on a serving node, is more than a dump
+// may hold. So the controller's entries are left out of every private mount.
+const gpuControllerPrefix = "cedana-gpu."
+
+// isGPUControllerEntry tells an entry at the top of a private mount that is the GPU controller's
+func isGPUControllerEntry(rel string) bool {
+	return !strings.Contains(rel, "/") && strings.HasPrefix(rel, gpuControllerPrefix)
+}
 
 // A job in a mount namespace of its own is dumped from inside it (see
 // namespaces.AddRecognizedExternalNamespacesForDump), so CRIU dumps files by path and knows
@@ -40,7 +53,7 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 		for _, m := range private {
 			log.Debug().Str("mountpoint", m.Mountpoint).Str("root", m.Root).Msg("private mount of the job")
 
-			size, err := contentSize(pathInJob(pid, m.Mountpoint))
+			size, err := contentSize(pathInJob(pid, m.Mountpoint), isGPUControllerEntry)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get size of private mount %s: %v", m.Mountpoint, err)
 			}
@@ -79,7 +92,7 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 				left := max // the job was still running when checked above
 				for _, m := range mounts {
 					log.Debug().Str("mountpoint", m.Mountpoint).Str("archive", m.Archive).Msg("dumping private mount")
-					written, err := archiveToDump(dumpFs, m.Archive, pathInJob(pid, m.Mountpoint), left)
+					written, err := archiveToDump(dumpFs, m.Archive, pathInJob(pid, m.Mountpoint), left, isGPUControllerEntry)
 					if err != nil {
 						return fmt.Errorf("failed to dump private mount %s: %w", m.Mountpoint, err)
 					}
@@ -93,7 +106,7 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 	}
 }
 
-func archiveToDump(dumpFs afero.Fs, name, dir string, max uint64) (written uint64, err error) {
+func archiveToDump(dumpFs afero.Fs, name, dir string, max uint64, skip skipFunc) (written uint64, err error) {
 	file, err := dumpFs.Create(name)
 	if err != nil {
 		return 0, err
@@ -104,5 +117,5 @@ func archiveToDump(dumpFs afero.Fs, name, dir string, max uint64) (written uint6
 		}
 	}()
 
-	return archiveDir(dir, file, max)
+	return archiveDir(dir, file, max, skip)
 }
