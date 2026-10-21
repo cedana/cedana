@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 	"syscall"
 	"testing"
@@ -288,5 +289,79 @@ func TestVerifyManifestWithAShardNotReadToItsEnd(t *testing.T) {
 	check.Strict = true
 	if err := verifyManifest(check, resp, "crc32c:00000000", "", "/checkpoints/dump", true); err != nil || resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MATCH {
 		t.Fatalf("err=%v result=%v, want MATCH", err, resp.ChecksumResult)
+	}
+}
+
+// A remote store whose download of every shard but the first stalls after the
+// shard's last byte, as a connection that hangs on the trailing bytes of an object
+// does, until the read is cancelled. The first shard holds the small files, which
+// the streamer reads to their end before it serves anything.
+type stallingStore struct {
+	remoteStorage
+}
+
+func (s *stallingStore) Open(ctx context.Context, path string) (io.ReadCloser, error) {
+	file, err := s.remoteStorage.Open(ctx, path)
+	if err != nil || shardNumber(filepath.Base(path)) == 0 {
+		return file, err
+	}
+	return &stalledAtEnd{ReadCloser: file, ctx: ctx}, nil
+}
+
+type stalledAtEnd struct {
+	io.ReadCloser
+	ctx context.Context
+}
+
+func (r *stalledAtEnd) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	if err == io.EOF {
+		<-r.ctx.Done()
+		return n, r.ctx.Err()
+	}
+	return n, err
+}
+
+// The shards stall before their end, so the strict check gives up at post-restore:
+// the restore must fail and return, not wait on the stalled reads
+func TestStrictStreamedRestoreReturnsWhenTheShardsStall(t *testing.T) {
+	skipWithoutStreamer(t)
+	config.Global.Checkpoint.Checksum = true
+	previous := SHARDS_READ_TIMEOUT_STRICT
+	SHARDS_READ_TIMEOUT_STRICT = 500 * time.Millisecond
+	t.Cleanup(func() { SHARDS_READ_TIMEOUT_STRICT = previous })
+	streams := int32(2)
+	path, sum := streamedCheckpoint(t, streams)
+	setVerifyMode(t, config.CHECKSUM_VERIFY_STRICT)
+	process := standIn(t)
+
+	type result struct {
+		resp *daemon.RestoreResp
+		run  *restoreRun
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		resp, run, err := restoreStreamed(t, &stallingStore{}, path, sum, streams, process.Process.Pid)
+		done <- result{resp, run, err}
+	}()
+	var got result
+	select {
+	case got = <-done:
+	case <-time.After(30 * time.Second):
+		t.Fatal("the restore must return once the strict check gave up on the stalled shards")
+	}
+	if status.Code(got.err) != codes.FailedPrecondition || got.run.read != 6 {
+		t.Fatalf("err=%v images read=%d; want FailedPrecondition after every image was served", got.err, got.run.read)
+	}
+	if got.resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
+		t.Fatalf("result = %v, want NOT_CHECKED", got.resp.ChecksumResult)
+	}
+	exited := make(chan error, 1)
+	go func() { exited <- process.Wait() }()
+	select {
+	case <-exited:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the restored tasks must be killed when the strict check gives up")
 	}
 }

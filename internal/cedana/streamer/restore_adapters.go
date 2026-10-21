@@ -26,7 +26,8 @@ import (
 // CRIU has read every image by then; only the end of a shard can be in flight. In
 // warn mode the check moves after the restore when the wait runs out; in strict
 // mode the restored tasks must not run unverified, so the wait is long and running
-// out fails the restore.
+// out fails the restore and cancels the reads: a failed restore does not wait on
+// a stalled download.
 var (
 	SHARDS_READ_TIMEOUT        = 10 * time.Second
 	SHARDS_READ_TIMEOUT_STRICT = 5 * time.Minute
@@ -115,9 +116,15 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 
 			// Setup filesystem that can be used by future adapters to directly read files from the checkpoint
 
+			// The shards are read under their own context, cancelled when the strict
+			// check gives up on them: the restore has failed by then, and the wait for
+			// the reads below must not hang on a download that stalls
+			ioCtx, cancelIO := context.WithCancel(ctx)
+			defer cancelIO()
+
 			var waitForIO func() error
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
-				ctx,
+				ioCtx,
 				imgStreamer.BinaryPaths()[0],
 				imagesDirectory,
 				storage,
@@ -153,6 +160,7 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 								verified = true
 								verifyErr = err
 							})
+							cancelIO()
 						})
 					},
 				})
@@ -164,9 +172,10 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				end()
 
 				// A failed verification is the restore's error, not CRIU's report of it;
-				// a failed read of the shards explains a checksum that was not verified
+				// a failed read of the shards explains a checksum that was not verified,
+				// unless the check gave up on the reads and cancelled them
 				if verifyErr != nil {
-					if err != nil {
+					if err != nil && !errors.Is(err, context.Canceled) {
 						err = status.Errorf(status.Code(verifyErr), "%s: %v", status.Convert(verifyErr).Message(), err)
 						return
 					}
@@ -221,8 +230,8 @@ func verifyManifest(check *verify.Check, resp *daemon.RestoreResp, manifest, sto
 // checksumPostRestore is the check at CRIU's post-restore notification, when the tasks are
 // restored and not yet running. It waits for the last shard to be read to its end, then
 // verifies; a strict mismatch kills the tasks and fails the restore. When the wait runs
-// out, warn mode lets the tasks run and verifies after the restore, and strict mode kills
-// the tasks and fails the restore: they must not run unverified.
+// out, warn mode lets the tasks run and verifies after the restore, and strict mode gives
+// up on the shards, kills the tasks and fails the restore: they must not run unverified.
 func checksumPostRestore(shardsRead <-chan struct{}, strict bool, pid int32, verifyNow func() error, giveUp func(error)) error {
 	timeout := SHARDS_READ_TIMEOUT
 	if strict {
