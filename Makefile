@@ -7,10 +7,11 @@ GOCMD=go
 # Pin the toolchain: binaries + plugins built with Go 1.27 panic at runtime with
 # "*daemon.Job, not *daemon.Job (types from different scopes)" once several
 # plugins are loaded. A go.mod toolchain line can't do this (Go never downgrades).
-export GOTOOLCHAIN?=go1.25.11
+
 # RACE=1 builds with the race detector. Plugins only load into a binary built the same way,
 # so build cedana and its plugins with it together.
 # (-race through GOFLAGS, as go build takes -C only as its first flag)
+export GOTOOLCHAIN?=go1.26.10
 GOBUILD=CGO_ENABLED=1 $(if $(filter 1,$(RACE)),GOFLAGS=-race )$(GOCMD) build
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana

@@ -34,6 +34,7 @@ var (
 	FileLocksFlag   = Flag{Full: "file-locks"}
 	TypeFlag        = Flag{Full: "type", Short: "t"}
 	FullFlag        = Flag{Full: "full"}
+	PingFlag        = Flag{Full: "ping"}
 	ErrorsFlag      = Flag{Full: "errors"}
 	CompressionFlag = Flag{Full: "compression"}
 	AsRootFlag      = Flag{Full: "as-root"}
