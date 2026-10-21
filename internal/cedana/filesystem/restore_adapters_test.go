@@ -71,6 +71,20 @@ func flip(t *testing.T, path string) {
 	}
 }
 
+// damageHeader changes one byte of the first tar header in a file, so that the
+// archive fails to extract at its first entry
+func damageHeader(t *testing.T, path string) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data[0] ^= 0x20
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // restoreWith runs the adapter with a stand-in for the rest of the restore, which
 // records whether it ran and what the images directory held
 func restoreWith(t *testing.T, storage cedana_io.Storage, path, expected string) (resp *daemon.RestoreResp, ran bool, images []string, err error) {
@@ -237,11 +251,13 @@ func TestRestoreVerifiesALocalDirectory(t *testing.T) {
 }
 
 // A remote store that holds the right bytes and reports value as its own
-// checksum, while the first corruptReads downloads alter one byte in transfer
+// checksum, while the first corruptReads downloads alter one byte in transfer: of
+// the content of the pages image, or of the first tar header when inHeader is set
 type flakyStore struct {
 	Storage
 	value        string
 	corruptReads int32
+	inHeader     bool
 	opens        atomic.Int32
 }
 
@@ -261,7 +277,10 @@ func (s *flakyStore) Open(ctx context.Context, path string) (io.ReadCloser, erro
 		return nil, err
 	}
 	if n <= s.corruptReads {
-		i := bytes.Index(data, []byte("restored process"))
+		i := 0
+		if !s.inHeader {
+			i = bytes.Index(data, []byte("restored process"))
+		}
 		data[i] ^= 0x20
 	}
 	return io.NopCloser(bytes.NewReader(data)), nil
@@ -283,6 +302,23 @@ func TestRestoreFromARemoteStore(t *testing.T) {
 	})
 	t.Run("transfer corrupted twice", func(t *testing.T) {
 		store := &flakyStore{value: sum, corruptReads: 2}
+		resp, ran, _, err := restoreWith(t, store, path, sum)
+		if ran || status.Code(err) != codes.FailedPrecondition || resp.ChecksumReason != daemon.ChecksumReason_REASON_TRANSFER {
+			t.Fatalf("ran=%t err=%v reason=%v, want a failed restore with TRANSFER", ran, err, resp.ChecksumReason)
+		}
+	})
+	t.Run("header damaged in transfer once, the second read restores", func(t *testing.T) {
+		store := &flakyStore{value: sum, corruptReads: 1, inHeader: true}
+		resp, ran, images, err := restoreWith(t, store, path, sum)
+		if err != nil || !ran || resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MATCH {
+			t.Fatalf("ran=%t err=%v result=%v", ran, err, resp.ChecksumResult)
+		}
+		if store.opens.Load() != 2 || len(images) != 3 {
+			t.Fatalf("opens = %d, images = %v; want a second read that extracts every image", store.opens.Load(), images)
+		}
+	})
+	t.Run("header damaged in transfer twice", func(t *testing.T) {
+		store := &flakyStore{value: sum, corruptReads: 2, inHeader: true}
 		resp, ran, _, err := restoreWith(t, store, path, sum)
 		if ran || status.Code(err) != codes.FailedPrecondition || resp.ChecksumReason != daemon.ChecksumReason_REASON_TRANSFER {
 			t.Fatalf("ran=%t err=%v reason=%v, want a failed restore with TRANSFER", ran, err, resp.ChecksumReason)
@@ -343,4 +379,49 @@ func TestRestoreOfAnUnreadableDirectory(t *testing.T) {
 	if err != nil || !ran || resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
 		t.Fatalf("warn mode restores unverified: ran=%t err=%v result=%v", ran, err, resp.ChecksumResult)
 	}
+}
+
+// The archive is damaged where the tar reader looks, so it fails to extract: the
+// checksum of the whole file is read and recorded all the same
+func TestRestoreOfADamagedLocalTarball(t *testing.T) {
+	path, sum := tarball(t, checkpointFiles(t))
+	damageHeader(t, path)
+	damagedSum, err := checksumOfFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("strict", func(t *testing.T) {
+		setVerify(t, config.CHECKSUM_VERIFY_STRICT)
+		resp, ran, _, err := restoreWith(t, &Storage{}, path, sum)
+		if ran || status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("ran=%t err=%v, want FailedPrecondition: the mismatch is the restore's error", ran, err)
+		}
+		if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MISMATCH || resp.ChecksumReason != daemon.ChecksumReason_REASON_STORED {
+			t.Fatalf("result = %v %v, want MISMATCH STORED", resp.ChecksumResult, resp.ChecksumReason)
+		}
+		if resp.Checksum != damagedSum {
+			t.Fatalf("checksum = %q, want that of the damaged file %q", resp.Checksum, damagedSum)
+		}
+	})
+	t.Run("warn", func(t *testing.T) {
+		setVerify(t, config.CHECKSUM_VERIFY_WARN)
+		resp, ran, _, err := restoreWith(t, &Storage{}, path, sum)
+		if ran || status.Code(err) != codes.Internal {
+			t.Fatalf("ran=%t err=%v, want the extraction error", ran, err)
+		}
+		if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MISMATCH || resp.Checksum != damagedSum {
+			t.Fatalf("result = %v %q, want MISMATCH %q recorded with the failed restore", resp.ChecksumResult, resp.Checksum, damagedSum)
+		}
+	})
+	t.Run("recorded as damaged", func(t *testing.T) {
+		setVerify(t, config.CHECKSUM_VERIFY_STRICT)
+		resp, ran, _, err := restoreWith(t, &Storage{}, path, damagedSum)
+		if ran || status.Code(err) != codes.Internal {
+			t.Fatalf("ran=%t err=%v, want the extraction error", ran, err)
+		}
+		if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MATCH {
+			t.Fatalf("result = %v, want MATCH: the bytes are the bytes recorded, damaged as they were", resp.ChecksumResult)
+		}
+	})
 }

@@ -123,17 +123,22 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 				log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Untar, compression)
-				err = io.Untar(tarball, imagesDirectory, compression)
-				if err != nil {
-					return "", fmt.Errorf("failed to decompress dump: %v", err)
+				if err = io.Untar(tarball, imagesDirectory, compression); err != nil {
+					err = fmt.Errorf("failed to decompress dump: %v", err)
 				}
 
-				// The tar and compression readers can stop before the end of the file
+				// The tar and compression readers can stop before the end of the file,
+				// and a damaged archive stops them early: the rest of the file is read
+				// all the same, so that the checksum tells whether the bytes are the
+				// bytes recorded. A failed extraction keeps its error.
 				if hashed != nil {
-					if err := hashed.Drain(); err != nil {
-						return "", fmt.Errorf("failed to read dump file: %v", err)
+					if drainErr := hashed.Drain(); drainErr != nil {
+						return "", errors.Join(err, fmt.Errorf("failed to read dump file: %v", drainErr))
 					}
 					sum = hashed.Sum()
+				}
+				if err != nil {
+					return sum, err
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("decompressed tarball")
@@ -141,12 +146,9 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 				return sum, nil
 			}
 
+			// A read that failed before the end of the file has no checksum to compare
 			sum, err := decompress(ctx)
-			if err != nil {
-				return nil, status.Error(codes.Internal, err.Error())
-			}
-
-			if check != nil {
+			if check != nil && sum != "" {
 				local := !storage.IsRemote()
 				outcome := check.Compare(sum, store, local)
 				// The stored bytes may be right and the read wrong: read once more
@@ -155,14 +157,22 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 					if err := emptyDir(imagesDirectory); err != nil {
 						return nil, status.Errorf(codes.Internal, "failed to clear restore dir: %v", err)
 					}
-					if sum, err = decompress(ctx); err != nil {
+					if sum, err = decompress(ctx); sum == "" {
 						return nil, status.Error(codes.Internal, err.Error())
 					}
 					outcome = check.Compare(sum, store, local)
 				}
-				if err := check.Record(resp, outcome); err != nil {
-					return nil, err
+				// The outcome is recorded whether or not the archive extracted: a strict
+				// mismatch is the restore's error, and explains a failed extraction
+				if recordErr := check.Record(resp, outcome); recordErr != nil {
+					if err != nil {
+						log.Debug().Err(err).Msg("the checkpoint also failed to extract")
+					}
+					return nil, recordErr
 				}
+			}
+			if err != nil {
+				return nil, status.Error(codes.Internal, err.Error())
 			}
 		}
 
