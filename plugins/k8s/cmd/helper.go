@@ -80,6 +80,7 @@ var setupCmd = &cobra.Command{
 			script.Chroot("/host", scripts.InstallDeps),
 			k8scripts.Install,
 			script.Chroot("/host", k8scripts.InstallPlugins),
+			script.Chroot("/host", k8scripts.ConfigureContainerd),
 			script.Chroot("/host", k8scripts.ConfigureKubelet),
 			script.Chroot("/host", scripts.ConfigureShm),
 			script.Chroot("/host", scripts.InstallService),
