@@ -377,9 +377,11 @@ func TestExtractLeavesWhatItMayNotSet(t *testing.T) {
 	}
 }
 
-// The GPU controller's entries in the job's /dev/shm are left out: the segment of
-// gpu.shm_size and its .misc directory, which the GPU plugin makes anew for the restored
-// job. The job's own files, among them one named like the controller's but deeper, are kept.
+// The GPU controller's shared memory in the job's /dev/shm is left out: the segment of
+// gpu.shm_size, its booking file and its .misc directory, which the GPU plugin makes anew for
+// the restored job. Its log directory, as in the job's /tmp, is kept: the job's LD_PRELOAD
+// names the libcuda.so.1 in it. The job's own files, among them one named like the
+// controller's but deeper, are kept.
 func TestArchiveDirSkipsGPUController(t *testing.T) {
 	src := t.TempDir()
 	must := func(err error) {
@@ -395,17 +397,21 @@ func TestArchiveDirSkipsGPUController(t *testing.T) {
 	must(os.WriteFile(filepath.Join(src, "sglang_loads_abc.shm"), []byte("load"), 0o600))
 	must(os.MkdirAll(filepath.Join(src, "job/cedana-gpu.keep"), 0o700))
 	must(os.WriteFile(filepath.Join(src, "job/cedana-gpu.keep/data"), []byte("mine"), 0o600))
+	// The log directory of a controller, as in /tmp
+	must(os.MkdirAll(filepath.Join(src, "cedana-gpu.5678"), 0o755))
+	must(os.WriteFile(filepath.Join(src, "cedana-gpu.5678/cedana-gpu-controller-1.log"), []byte("log"), 0o644))
+	must(os.Symlink("/usr/local/lib/libcedana-gpu.so", filepath.Join(src, "cedana-gpu.5678/libcuda.so.1")))
 
-	size, err := contentSize(src, isGPUControllerEntry)
+	size, err := contentSize(src, isGPUControllerShm)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if size != 8 { // "load" and "mine"
-		t.Errorf("contentSize counted the controller's entries: %d", size)
+	if size != 11 { // "load", "mine" and "log"
+		t.Errorf("contentSize counted the controller's shared memory: %d", size)
 	}
 
 	var buf bytes.Buffer
-	written, err := archiveDir(src, &buf, noLimit, isGPUControllerEntry)
+	written, err := archiveDir(src, &buf, noLimit, isGPUControllerShm)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +428,8 @@ func TestArchiveDirSkipsGPUController(t *testing.T) {
 		}
 		names[header.Name] = true
 	}
-	for _, kept := range []string{".", "sglang_loads_abc.shm", "job", "job/cedana-gpu.keep", "job/cedana-gpu.keep/data"} {
+	for _, kept := range []string{".", "sglang_loads_abc.shm", "job", "job/cedana-gpu.keep", "job/cedana-gpu.keep/data",
+		"cedana-gpu.5678", "cedana-gpu.5678/cedana-gpu-controller-1.log", "cedana-gpu.5678/libcuda.so.1"} {
 		if !names[kept] {
 			t.Errorf("%s was not archived", kept)
 		}

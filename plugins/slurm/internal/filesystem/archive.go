@@ -56,9 +56,9 @@ func walkMount(dir string, fn func(path string, info fs.FileInfo, st *syscall.St
 	})
 }
 
-// skipFunc says whether an entry of the directory archived, by its path relative to it, is
-// left out, with everything under it when it is a directory. nil leaves nothing out.
-type skipFunc func(rel string) bool
+// skipFunc says whether an entry of the directory archived, by its path relative to it and
+// what it is, is left out, with everything under it when it is a directory. nil leaves nothing out.
+type skipFunc func(rel string, info fs.FileInfo) bool
 
 // walkMountSkipping is walkMount without the entries skip says to leave out
 func walkMountSkipping(dir string, skip skipFunc, fn func(path string, info fs.FileInfo, st *syscall.Stat_t) error) error {
@@ -71,7 +71,7 @@ func walkMountSkipping(dir string, skip skipFunc, fn func(path string, info fs.F
 		if err != nil {
 			return err
 		}
-		if rel != "." && skip(rel) {
+		if rel != "." && skip(rel, info) {
 			log.Debug().Str("path", path).Msg("not archiving, left out on purpose")
 			if info.IsDir() {
 				return filepath.SkipDir
