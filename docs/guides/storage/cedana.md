@@ -22,7 +22,7 @@ To checkpoint to Cedana Storage, simply set the `--dir` to a path that starts wi
 cedana dump ... --dir cedana://path/to/dir
 ```
 
-For example, as explained in [managed checkpoint/restore](../cr.md#managed-checkpoint-restore), to checkpoint a job to Cedana Storage:
+For example, as explained in [managed checkpoint/restore](../basics.md#managed-checkpoint-restore), to checkpoint a job to Cedana Storage:
 
 ```sh
 cedana dump job my-job-1 --dir cedana://my-checkpoints
@@ -43,7 +43,7 @@ Similarly, to restore from Cedana Storage, simply set the `--path` to your check
 cedana restore ... --path cedana://path/to/dump.tar
 ```
 
-For example, as explained in [managed checkpoint/restore](../cr.md#managed-checkpoint-restore), to restore a job from Cedana Storage:
+For example, as explained in [managed checkpoint/restore](../basics.md#managed-checkpoint-restore), to restore a job from Cedana Storage:
 
 ```sh
 cedana restore job --attach my-job-1
@@ -53,15 +53,15 @@ This will automatically restore from the latest checkpoint for `my-job-1`, which
 
 ## Compression
 
-All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../cr.md#compression) for more information.
+All compression algorithms supported for basic checkpoint/restore are supported. See [compression](../basics.md#compression) for more information.
 
 {% hint style="info" %}
-For better performance when remote checkpointing/restoring large processes/containers, especially when using [checkpoint/restore with GPUs](../gpu/cr.md), always use compression. The `lz4` compression algorithm is a good compromise between speed and compression ratio.
+For better performance when remote checkpointing/restoring large processes/containers, especially when using [checkpoint/restore with GPUs](../gpu.md), always use compression. The `lz4` compression algorithm is a good compromise between speed and compression ratio.
 {% endhint %}
 
 ## Streaming
 
-High-performance low-overhead streaming of checkpoints is also supported by the `storage/cedana` plugin. Follow instructions on [checkpoint/restore streamer](../cr.md#checkpoint-restore-streamer) to use streaming with this plugin.
+High-performance low-overhead streaming of checkpoints is also supported by the `storage/cedana` plugin. Follow instructions on [checkpoint/restore streamer](../basics.md#checkpoint-restore-streamer) to use streaming with this plugin.
 
 ## Enable by default
 

@@ -51,6 +51,11 @@ var Registry = []Plugin{
 		Libraries: []Binary{{Name: "libcedana-containerd.so"}},
 	},
 	{
+		Name:      "podman",
+		Type:      SUPPORTED,
+		Libraries: []Binary{{Name: "libcedana-podman.so"}},
+	},
+	{
 		Name:      "crio",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-crio.so"}},
@@ -111,6 +116,11 @@ var Registry = []Plugin{
 		Type:      EXTERNAL,
 		Libraries: []Binary{},
 		Binaries:  []Binary{{Name: "cedana-shim-runc-v2"}},
+	},
+	{
+		Name:     "oci-runtime",
+		Type:     EXTERNAL,
+		Binaries: []Binary{{Name: "cedana-oci-runtime"}},
 	},
 	{
 		Name:      "slurm",

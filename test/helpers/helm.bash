@@ -46,7 +46,7 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.awsAccessKeyId=$AWS_ACCESS_KEY_ID"
     helm_cmd="$helm_cmd --set config.awsSecretAccessKey=$AWS_SECRET_ACCESS_KEY"
     helm_cmd="$helm_cmd --set config.awsRegion=$AWS_REGION"
-    helm_cmd="$helm_cmd --set config.containerdAddress=$CONTAINERD_ADDRESS"
+    helm_cmd="$helm_cmd --set hostConfig.containerdAddress=$CONTAINERD_ADDRESS"
     helm_cmd="$helm_cmd --set config.profiling=$CEDANA_PROFILING_ENABLED"
     helm_cmd="$helm_cmd --set config.metrics=$CEDANA_METRICS_ENABLED"
 
