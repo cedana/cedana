@@ -1,9 +1,9 @@
 package scripts
 
-// Tests the containerd configuration part of install-plugins.sh (between its BEGIN/END
-// CONTAINERD CONFIG markers) against node configs as we find them in the wild, and checks
+// Tests configure-containerd.sh against node configs as we find them in the wild, and checks
 // with real containerd binaries that the result loads, has the cedana runtime, and keeps
-// what was configured before (e.g. the nvidia runtime).
+// what was configured before (e.g. the nvidia runtime). configure-containerd.bats covers the
+// script's restarts.
 //
 // Set CEDANA_TEST_CONTAINERD_BINS to a directory with containerd-<version> binaries
 // (e.g. containerd-1.7.36, containerd-2.3.7) to check against them; otherwise only the
@@ -45,6 +45,24 @@ var containerdFixtures = []containerdFixture{
 
 [plugins."io.containerd.grpc.v1.cri".containerd]
   default_runtime_name = "runc"
+`,
+		},
+		keepRuntimes: []string{"runc"},
+	},
+	{
+		// A tool that re-serializes config.toml writes the key unquoted: a second cedana
+		// table appended to it is a duplicate, and containerd doesn't start
+		name:       "v2 main rewritten with the cedana key unquoted",
+		maxVersion: 2,
+		files: map[string]string{
+			"etc/containerd/config.toml": `version = 2
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
+  runtime_type = "io.containerd.runc.v2"
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.cedana]
+  runtime_type = "io.containerd.runc.v2"
+  runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
 `,
 		},
 		keepRuntimes: []string{"runc"},
@@ -154,7 +172,7 @@ var containerdVersionsFor = map[int][]string{
 }
 
 func TestContainerdConfig(t *testing.T) {
-	block := containerdConfigBlock(t)
+	skipOnRancherNode(t)
 	bins := containerdBinaries(t)
 
 	for _, f := range containerdFixtures {
@@ -164,11 +182,11 @@ func TestContainerdConfig(t *testing.T) {
 			config := filepath.Join(root, "etc/containerd/config.toml")
 			env := []string{"CONTAINERD_CONFIG_PATH=" + config}
 
-			runContainerdConfig(t, block, root, env)
+			runContainerdConfig(t, root, env)
 			after := snapshot(t, root)
 
 			// Idempotent: running again (e.g. a helper restart) changes nothing
-			runContainerdConfig(t, block, root, env)
+			runContainerdConfig(t, root, env)
 			if again := snapshot(t, root); !maps.Equal(after, again) {
 				t.Errorf("a second run changed the config:\n%s", diffSnapshots(after, again))
 			}
@@ -195,73 +213,15 @@ func TestContainerdConfig(t *testing.T) {
 	}
 }
 
-// k3s and RKE2 regenerate their containerd config, so the script extends it through a template
-func TestContainerdConfigRancherTemplate(t *testing.T) {
-	block := containerdConfigBlock(t)
-
-	cases := []struct {
-		name     string
-		files    map[string]string
-		template string
-		key      string
-	}{
-		{
-			name:     "k3s with a generated v3 config",
-			files:    map[string]string{"var/lib/rancher/k3s/agent/etc/containerd/config.toml": "version = 3\n"},
-			template: "var/lib/rancher/k3s/agent/etc/containerd/config-v3.toml.tmpl",
-			key:      `[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]`,
-		},
-		{
-			name:     "k3s with a generated v2 config",
-			files:    map[string]string{"var/lib/rancher/k3s/agent/etc/containerd/config.toml": "version = 2\n"},
-			template: "var/lib/rancher/k3s/agent/etc/containerd/config.toml.tmpl",
-			key:      `[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]`,
-		},
-		{
-			name: "rke2 with an existing v3 template",
-			files: map[string]string{
-				"var/lib/rancher/rke2/agent/etc/containerd/config.toml":         "version = 3\n",
-				"var/lib/rancher/rke2/agent/etc/containerd/config-v3.toml.tmpl": "{{ template \"base\" . }}\n\n# ours\n",
-			},
-			template: "var/lib/rancher/rke2/agent/etc/containerd/config-v3.toml.tmpl",
-			key:      `[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]`,
-		},
-	}
-
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			root := t.TempDir()
-			writeFixture(t, root, c.files)
-
-			runContainerdConfig(t, block, root, nil)
-			after := snapshot(t, root)
-			runContainerdConfig(t, block, root, nil)
-			if again := snapshot(t, root); !maps.Equal(after, again) {
-				t.Errorf("a second run changed the template:\n%s", diffSnapshots(after, again))
-			}
-
-			template := after[c.template]
-			if !strings.Contains(template, `{{ template "base" . }}`) {
-				t.Errorf("template does not include the base template:\n%s", template)
-			}
-			if !strings.Contains(template, c.key) || !strings.Contains(template, shimPath) {
-				t.Errorf("template has no cedana runtime (want %s):\n%s", c.key, template)
-			}
-			if strings.Count(template, "runtimes.\"cedana\"") != 1 {
-				t.Errorf("template has the cedana runtime more than once:\n%s", template)
-			}
-		})
-	}
-}
-
-func containerdConfigBlock(t *testing.T) string {
+// The script configures a k3s or RKE2 node's own containerd when it finds one, so it can't be
+// pointed at fixtures there
+func skipOnRancherNode(t *testing.T) {
 	t.Helper()
-	start := strings.Index(InstallPlugins, "# BEGIN CONTAINERD CONFIG")
-	end := strings.Index(InstallPlugins, "# END CONTAINERD CONFIG")
-	if start < 0 || end < start {
-		t.Fatal("no BEGIN/END CONTAINERD CONFIG markers in install-plugins.sh")
+	for _, name := range []string{"k3s", "rke2"} {
+		if _, err := os.Stat("/var/lib/rancher/" + name + "/agent/etc/containerd/config.toml"); err == nil {
+			t.Skipf("this is a %s node: configure-containerd.sh would configure its containerd", name)
+		}
 	}
-	return InstallPlugins[start:end]
 }
 
 // Binaries found in CEDANA_TEST_CONTAINERD_BINS, by minor version (e.g. "2.3")
@@ -299,19 +259,28 @@ func writeFixture(t *testing.T, root string, files map[string]string) {
 	}
 }
 
-func runContainerdConfig(t *testing.T, block, root string, env []string) {
+// Runs configure-containerd.sh, with systemctl stubbed (as configure-containerd.bats does), so
+// that it restarts nothing
+func runContainerdConfig(t *testing.T, root string, env []string) {
 	t.Helper()
-	cmd := exec.Command("bash", "-c", "set -e\n"+block)
+	stubs := filepath.Join(root, "stubs")
+	if err := os.MkdirAll(stubs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stubs, "systemctl"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "-c", ConfigureContainerd)
 	cmd.Env = append([]string{
-		"PATH=" + os.Getenv("PATH"),
-		"RANCHER_ROOT=" + root,
+		"PATH=" + stubs + ":" + os.Getenv("PATH"),
+		"ENV=production",
 		"CEDANA_PLUGINS_BIN_DIR=" + filepath.Dir(shimPath),
 	}, env...)
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out
 	if err := cmd.Run(); err != nil {
-		t.Fatalf("containerd config failed: %v\n%s", err, out.String())
+		t.Fatalf("configure-containerd.sh failed: %v\n%s", err, out.String())
 	}
 }
 
@@ -328,6 +297,9 @@ func snapshot(t *testing.T, root string) map[string]string {
 			return err
 		}
 		rel, _ := filepath.Rel(root, path)
+		if strings.HasPrefix(rel, "stubs/") {
+			return nil
+		}
 		files[rel] = string(data)
 		return nil
 	})
