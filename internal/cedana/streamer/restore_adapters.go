@@ -138,12 +138,7 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 			verifyNow := func() error {
 				verifyOnce.Do(func() {
 					verified = true
-					manifest := streamFs.Manifest()
-					if manifest == "" {
-						log.Warn().Str("path", path).Msg("a shard was not read to its end, checkpoint checksum not verified")
-						return
-					}
-					verifyErr = check.Record(resp, check.Compare(manifest, store, !storage.IsRemote()))
+					verifyErr = verifyManifest(check, resp, streamFs.Manifest(), store, path, !storage.IsRemote())
 				})
 				return verifyErr
 			}
@@ -168,8 +163,13 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				err = errors.Join(err, waitForIO())
 				end()
 
-				// A failed verification is the restore's error, not CRIU's report of it
+				// A failed verification is the restore's error, not CRIU's report of it;
+				// a failed read of the shards explains a checksum that was not verified
 				if verifyErr != nil {
+					if err != nil {
+						err = status.Errorf(status.Code(verifyErr), "%s: %v", status.Convert(verifyErr).Message(), err)
+						return
+					}
 					err = verifyErr
 					return
 				}
@@ -201,6 +201,21 @@ func storeManifest(ctx context.Context, storage cedana_io.Storage, paths []strin
 		}
 	}
 	return shardManifest(paths, values)
+}
+
+// verifyManifest compares the manifest of the shards as read with the expected
+// checksum and records the outcome. An empty manifest says a shard failed before
+// its end, so its checksum is unknown: strict mode fails the restore, it does not
+// restore what it cannot verify; warn mode restores unverified.
+func verifyManifest(check *verify.Check, resp *daemon.RestoreResp, manifest, store, path string, local bool) error {
+	if manifest == "" {
+		if check.Strict {
+			return status.Errorf(codes.FailedPrecondition, "checkpoint checksum not verified: a shard of %s was not read to its end", path)
+		}
+		log.Warn().Str("path", path).Msg("a shard was not read to its end, checkpoint checksum not verified")
+		return nil
+	}
+	return check.Record(resp, check.Compare(manifest, store, local))
 }
 
 // checksumPostRestore is the check at CRIU's post-restore notification, when the tasks are

@@ -13,6 +13,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/filesystem"
+	"github.com/cedana/cedana/internal/cedana/verify"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -259,5 +260,33 @@ func TestStreamedRestoreFailsFastOnAStoreValueThatDiffers(t *testing.T) {
 	}
 	if status.Code(err) != codes.FailedPrecondition || resp.ChecksumReason != daemon.ChecksumReason_REASON_STORED {
 		t.Fatalf("err=%v reason=%v, want FailedPrecondition with STORED", err, resp.ChecksumReason)
+	}
+}
+
+// A shard failed before its end, so the manifest of the shards as read is empty:
+// strict mode must not let the tasks run unverified, warn mode restores unverified
+func TestVerifyManifestWithAShardNotReadToItsEnd(t *testing.T) {
+	check := &verify.Check{Expected: "crc32c:00000000", Strict: true}
+	resp := &daemon.RestoreResp{}
+	err := verifyManifest(check, resp, "", "", "/checkpoints/dump", true)
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("err = %v, want FailedPrecondition: strict mode does not restore what it cannot verify", err)
+	}
+	if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
+		t.Fatalf("result = %v, want NOT_CHECKED", resp.ChecksumResult)
+	}
+
+	check.Strict = false
+	if err := verifyManifest(check, resp, "", "", "/checkpoints/dump", true); err != nil {
+		t.Fatalf("warn mode must restore unverified: %v", err)
+	}
+	if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
+		t.Fatalf("result = %v, want NOT_CHECKED", resp.ChecksumResult)
+	}
+
+	// With every shard read, the manifest is compared as usual
+	check.Strict = true
+	if err := verifyManifest(check, resp, "crc32c:00000000", "", "/checkpoints/dump", true); err != nil || resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MATCH {
+		t.Fatalf("err=%v result=%v, want MATCH", err, resp.ChecksumResult)
 	}
 }
