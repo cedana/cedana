@@ -33,6 +33,7 @@ const (
 	DEFAULT_CHECKPOINT_DIR                    = "/tmp"
 	DEFAULT_CHECKPOINT_STREAMS                = 0
 	DEFAULT_CHECKPOINT_ASYNC                  = false
+	DEFAULT_CHECKPOINT_CHECKSUM               = true
 	DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB = 4000
 
 	DEFAULT_DB_REMOTE = false
@@ -71,6 +72,7 @@ const (
 	DEFAULT_K8S_FALLBACK_COLD_START = true
 
 	DEFAULT_AWS_CREDENTIALS_MODE = "static"
+	DEFAULT_GCS_CREDENTIALS_MODE = "ambient"
 
 	DEFAULT_CSX_SOCK_ADDR = "/run/csx.sock"
 )
@@ -89,6 +91,7 @@ var Global Config = Config{
 		Compression:       DEFAULT_CHECKPOINT_COMPRESSION,
 		Streams:           DEFAULT_CHECKPOINT_STREAMS,
 		Async:             DEFAULT_CHECKPOINT_ASYNC,
+		Checksum:          DEFAULT_CHECKPOINT_CHECKSUM,
 		StreamMemoryLimit: DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB,
 	},
 	DB: DB{
@@ -136,6 +139,9 @@ var Global Config = Config{
 	},
 	AWS: AWS{
 		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,
+	},
+	GCS: GCS{
+		CredentialsMode: DEFAULT_GCS_CREDENTIALS_MODE,
 	},
 	CSX: CSX{
 		SockAddr: DEFAULT_CSX_SOCK_ADDR,

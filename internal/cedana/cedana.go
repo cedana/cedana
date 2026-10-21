@@ -12,6 +12,7 @@ import (
 	"github.com/cedana/cedana/pkg/metrics"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
+	"github.com/cedana/cedana/pkg/upload"
 	"github.com/cedana/cedana/pkg/version"
 )
 
@@ -19,6 +20,8 @@ import (
 type Cedana struct {
 	plugins plugins.Manager
 	gpus    gpu.Manager
+
+	uploads *upload.Registry
 
 	wg       *sync.WaitGroup
 	lifetime context.Context
@@ -51,6 +54,7 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	return &Cedana{
 		plugins:  pluginManager,
 		gpus:     gpuManager,
+		uploads:  upload.NewRegistry(),
 		wg:       wg,
 		lifetime: ctx,
 		cancel:   cancel,

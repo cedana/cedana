@@ -93,21 +93,10 @@ func NewManagerLazy(
 			select {
 			case <-lifetime.Done():
 				log.Info().Msg("syncing job manager with DB before shutdown")
-				var errs []error
-				var failedActions []action
-				manager.wg.Wait() // wait for all background routines
-				manager.pending <- action{shutdown, ""}
-				for action := range manager.pending {
-					if action.typ == shutdown {
-						break
-					}
-					ctx := context.WithoutCancel(lifetime)
-					err := manager.syncWithDB(ctx, action)
-					if err != nil {
-						errs = append(errs, err)
-						failedActions = append(failedActions, action)
-					}
-				}
+				ctx := context.WithoutCancel(lifetime)
+				failedActions, errs := manager.flush(func(action action) error {
+					return manager.syncWithDB(ctx, action)
+				})
 				err = errors.Join(errs...)
 				if err != nil {
 					log.Error().Msg("failed to sync job manager with DB before shutdown")
@@ -130,6 +119,43 @@ func NewManagerLazy(
 	})
 
 	return manager, nil
+}
+
+// flush syncs the queued actions until all background routines have ended, and then the
+// ones left in the queue. It reads the queue while it waits, since a routine can queue an
+// action before it ends, and would block on a full queue. Returns the actions that failed.
+func (m *ManagerLazy) flush(sync func(action) error) (failed []action, errs []error) {
+	do := func(action action) {
+		if err := sync(action); err != nil {
+			errs = append(errs, err)
+			failed = append(failed, action)
+		}
+	}
+
+	ended := make(chan struct{})
+	go func() {
+		m.wg.Wait()
+		close(ended)
+	}()
+
+wait:
+	for {
+		select {
+		case action := <-m.pending:
+			do(action)
+		case <-ended:
+			break wait
+		}
+	}
+
+	for {
+		select {
+		case action := <-m.pending:
+			do(action)
+		default:
+			return failed, errs
+		}
+	}
 }
 
 /////////////////
@@ -378,7 +404,7 @@ func (m *ManagerLazy) Done(jid string) <-chan error {
 	return job.done
 }
 
-func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
+func (m *ManagerLazy) AddCheckpoint(jid string, paths []string, at time.Time) {
 	job := m.lookup(jid)
 	if job == nil {
 		return
@@ -389,13 +415,23 @@ func (m *ManagerLazy) AddCheckpoint(jid string, paths []string) {
 			ID:   uuid.New().String(),
 			JID:  jid,
 			Path: path,
-			Time: time.Now().UnixMilli(),
+			Time: at.UnixMilli(),
 			Size: utils.SizeFromPath(path),
 		}
 		m.checkpoints.Store(checkpoint.ID, checkpoint)
 
 		m.pending <- action{putCheckpoint, checkpoint.ID}
 	}
+}
+
+func (m *ManagerLazy) AddCheckpointOnceStored(jid string, path string, at time.Time, stored func() error) {
+	m.wg.Go(func() {
+		if err := stored(); err != nil {
+			log.Error().Err(err).Str("JID", jid).Str("path", path).Msg("checkpoint not added to the job: it was not stored")
+			return
+		}
+		m.AddCheckpoint(jid, []string{path}, at)
+	})
 }
 
 func (m *ManagerLazy) GetCheckpoint(id string) *daemon.Checkpoint {
