@@ -57,22 +57,14 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 	}, nil
 }
 
-func (c *Cedana) Profile() *profiling.Data {
+func (c *Cedana) Finalize() *profiling.Data {
 	c.cancel()
 	data, ok := c.lifetime.Value(keys.PROFILING_CONTEXT_KEY).(*profiling.Data)
 	if ok {
 		profiling.Clean(data)
 		profiling.Flatten(data)
 	}
-	return data
-}
-
-func (c *Cedana) Wait() {
 	c.wg.Wait()
-}
 
-func (c *Cedana) Finalize() *profiling.Data {
-	data := c.Profile()
-	c.Wait()
 	return data
 }
