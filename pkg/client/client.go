@@ -358,10 +358,10 @@ func (c *Client) DeleteCheckpoint(ctx context.Context, args *daemon.DeleteCheckp
 
 // WaitUpload blocks until the background upload of an asynchronous dump has ended.
 // An upload can take long, so no timeout is set other than that of the provided context.
+// The error is the daemon's gRPC status, so that a caller can retry a lost connection.
 func (c *Client) WaitUpload(ctx context.Context, args *daemon.WaitUploadReq, opts ...grpc.CallOption) (*daemon.WaitUploadResp, error) {
 	opts = addDefaultOptions(opts)
-	resp, err := c.daemonClient.WaitUpload(ctx, args, opts...)
-	return resp, utils.GRPCErrorColored(err)
+	return c.daemonClient.WaitUpload(ctx, args, opts...)
 }
 
 // DeletePath deletes a checkpoint. Errors are gRPC statuses as for ListPath.

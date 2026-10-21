@@ -31,6 +31,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 	"github.com/wagslane/go-rabbitmq"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
@@ -61,6 +62,13 @@ var defaultDumpOpts = &criu.CriuOpts{
 }
 
 var queryExpiryMs = 30 * time.Minute.Milliseconds()
+
+// Backoff bounds for waiting on an upload while the daemon cannot be reached.
+// Variables, so that tests can shorten them.
+var (
+	WAIT_UPLOAD_MIN_BACKOFF = 1 * time.Second
+	WAIT_UPLOAD_MAX_BACKOFF = 1 * time.Minute
+)
 
 // Exchange the propagator publishes checkpoint file requests for local checkpoints to.
 // A request is routed either to every helper on a cluster (routing key `<cluster>`, to
@@ -873,7 +881,7 @@ func (es *EventStream) reportUpload(
 
 	// An error, or a daemon that no longer knows the path (NotFound: it restarted and
 	// lost its record), means the checkpoint cannot be restored from
-	resp, err := es.cedana.WaitUpload(ctx, &daemon.WaitUploadReq{Path: path})
+	resp, err := es.waitUpload(ctx, path)
 	if err == nil && resp.GetError() != "" {
 		err = errors.New(resp.GetError())
 	}
@@ -912,6 +920,27 @@ func (es *EventStream) reportUpload(
 	}
 
 	log.Info().Str("checksum", checksum).Msg("checkpoint uploaded")
+}
+
+// Waits for the daemon to end the upload of a path. A lost connection to the daemon
+// is retried with backoff: the daemon finishes the upload without the caller, so
+// the checkpoint stays pending until the daemon answers or ctx is done.
+func (es *EventStream) waitUpload(ctx context.Context, path string) (*daemon.WaitUploadResp, error) {
+	log := log.Ctx(ctx)
+	backoff := WAIT_UPLOAD_MIN_BACKOFF
+	for {
+		resp, err := es.cedana.WaitUpload(ctx, &daemon.WaitUploadReq{Path: path})
+		if status.Code(err) != codes.Unavailable || ctx.Err() != nil {
+			return resp, err
+		}
+		log.Warn().Err(err).Dur("retry_in", backoff).Msg("lost the daemon while waiting for the upload, retrying")
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-time.After(backoff):
+		}
+		backoff = min(backoff*2, WAIT_UPLOAD_MAX_BACKOFF)
+	}
 }
 
 func (es *EventStream) getImageSecret() (*imageSecret, error) {
