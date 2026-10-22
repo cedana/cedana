@@ -203,6 +203,11 @@ jobs:
           SOAK_TAG: ${{ !inputs.soak && ',!soak' || '' }}
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
+          # The processes every minute, the last snapshot kept: on a hang that hits the job timeout
+          # (which kills this step), it shows what was stuck and in what state (uploaded with the logs)
+          ( while sleep 60; do ps -eo pid,ppid,pgid,stat,etime,wchan:24,args --forest >/tmp/processes.txt.new 2>&1 && mv /tmp/processes.txt.new /tmp/processes.txt; done ) &
+          trap 'kill $! 2>/dev/null' EXIT
+
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
               make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
@@ -239,7 +244,8 @@ jobs:
             /tmp/report*.xml
             /tmp/warnings.jsonl
 
-      # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests
+      # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests, and
+      # bats' own per-test output (bats-run-*), which shows a test that never finished
       - name: Upload logs
         if: failure() || cancelled() # a hang that hits the job timeout too
         uses: actions/upload-artifact@v6
@@ -249,6 +255,8 @@ jobs:
             /tmp/cedana-daemon-*.log
             /tmp/cedana-*/**/*.log
             /var/log/cedana*.log
+            /tmp/processes.txt
+            /tmp/bats-run-*/
           retention-days: 7
           if-no-files-found: ignore
 
