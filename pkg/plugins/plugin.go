@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -144,6 +145,15 @@ func (p *Plugin) SyncVersion() {
 	}
 
 	p.Version = version
+}
+
+// A copy whose files can be changed (e.g. by SyncInstalled) without changing the
+// original's: a plain copy shares their backing arrays, so syncing a copy of a Registry
+// entry would write into the global Registry, which concurrent requests share.
+func (p Plugin) clone() Plugin {
+	p.Libraries = slices.Clone(p.Libraries)
+	p.Binaries = slices.Clone(p.Binaries)
+	return p
 }
 
 // Syncs plugin information with local info, whether it is installed or not.

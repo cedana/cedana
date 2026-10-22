@@ -250,6 +250,16 @@ wait_for_file() {
     return 0
 }
 
+# Stops a test's workload (one it started itself, not a job of the daemon's) and its children,
+# whether the originals or restored ones (a restore keeps their pids). For teardown, so a
+# test that fails half-way doesn't leave them running.
+stop_workload() {
+    local pid="${1:-}"
+    [ -n "$pid" ] || return 0
+    pkill -KILL -P "$pid" 2>/dev/null || true
+    kill -KILL "$pid" 2>/dev/null || true
+}
+
 info_log() {
     local message="$1"
     echo -e "${BLUE}$message${NC}" >&"${OUTPUT_FD}"
@@ -258,6 +268,24 @@ info_log() {
 warn_log() {
     local message="$1"
     echo -e "${YELLOW}[WARN] $message${NC}" >&"${OUTPUT_FD}"
+}
+
+# Where report_warning records warnings, one JSON object per line. CI uploads it beside the
+# job's report, and cedana-test-summary shows them next to the suite's results.
+export WARNINGS_FILE="${WARNINGS_FILE:-/tmp/warnings.jsonl}"
+
+# A warn_log that also shows in the CI summary, for problems that don't fail a test (yet).
+# The detail (optional, multi-line) is logged indented.
+report_warning() {
+    local title="$1"
+    local detail="${2:-}"
+    warn_log "$title"
+    if [ -n "$detail" ]; then
+        while IFS= read -r line; do warn_log "  $line"; done <<<"$detail"
+    fi
+    jq -nc --arg title "$title" --arg detail "$detail" --arg test "${BATS_TEST_DESCRIPTION:-}" \
+        '{title: $title} + ({detail: $detail, test: $test} | with_entries(select(.value != "")))' \
+        >>"$WARNINGS_FILE" 2>/dev/null || true
 }
 
 debug_log() {
