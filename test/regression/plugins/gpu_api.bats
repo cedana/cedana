@@ -76,11 +76,12 @@ restore_sample() {
     SAMPLE_JID=$jid # for teardown
     gate="/tmp/cedana-gate-$jid"
 
-    cedana run process -g --jid "$jid" -- "$SAMPLES/$sample" "$gate"
+    # Bounded, as the attached restore below is: a hang fails this test, not the whole job
+    timeout 120 cedana run process -g --jid "$jid" -- "$SAMPLES/$sample" "$gate"
     log=$(logfile_for_jid "$jid")
     wait_for_cmd 60 grep -q READY "$log"
 
-    cedana dump job "$jid"
+    timeout 180 cedana dump job "$jid"
 
     touch "$gate"
     run timeout 180 cedana restore job "$jid" --attach

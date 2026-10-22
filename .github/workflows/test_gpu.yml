@@ -241,7 +241,7 @@ jobs:
 
       # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests
       - name: Upload logs
-        if: failure()
+        if: failure() || cancelled() # a hang that hits the job timeout too
         uses: actions/upload-artifact@v6
         with:
           name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
