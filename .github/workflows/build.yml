@@ -125,10 +125,8 @@ jobs:
             scripts/install-release.sh
 
   plugin:
-    name: Plugin
-    # storage/s3 compiles the AWS SDK's service/s3, which needs more than the 2 GiB of a 1cpu runner
-    # on arm64 (OOM-killed, exit code 137): 2cpu has twice the memory
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.plugin == 'storage/s3' && '2cpu' || '1cpu' }}-${{ matrix.arch }}/extras=s3-cache
+    name: Plugin (${{ matrix.plugin }}, ${{ matrix.arch }}) # without the runner size
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.runner || '1cpu' }}-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
@@ -149,6 +147,11 @@ jobs:
         arch:
           - amd64
           - arm64
+        # A larger runner than 1cpu (2 GiB) for a plugin whose build needs it: storage/s3 compiles
+        # the AWS SDK's service/s3, which ran a 1cpu arm64 runner out of memory (exit code 137)
+        include:
+          - plugin: storage/s3
+            runner: 2cpu
     if: inputs.plugins || inputs.image
     container:
       image: rockylinux:8
