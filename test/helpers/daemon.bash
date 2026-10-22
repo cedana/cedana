@@ -132,7 +132,10 @@ follow_daemon_log() {
 
 unfollow_daemon_log() {
     if [ -n "$TAIL_PID" ]; then
-        kill "$TAIL_PID" 2>/dev/null
+        # KILL, not TERM: in CI, a tail started by a test that ended right away (skipped) outlived
+        # TERM, and the wait below then never returned, hanging the test and its file until the
+        # job timed out. KILL can't be caught, ignored or blocked.
+        kill -KILL "$TAIL_PID" 2>/dev/null
         wait "$TAIL_PID" 2>/dev/null || true
         TAIL_PID=
     fi
