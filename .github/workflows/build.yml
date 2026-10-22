@@ -126,7 +126,9 @@ jobs:
 
   plugin:
     name: Plugin
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
+    # storage/s3 compiles the AWS SDK's service/s3, which needs more than the 2 GiB of a 1cpu runner
+    # on arm64 (OOM-killed, exit code 137): 2cpu has twice the memory
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.plugin == 'storage/s3' && '2cpu' || '1cpu' }}-${{ matrix.arch }}/extras=s3-cache
     strategy:
       fail-fast: false
       matrix:
