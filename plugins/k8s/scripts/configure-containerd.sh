@@ -151,11 +151,14 @@ else
     echo "Detected containerd config version $CONTAINERD_VERSION"
 
     if [ "$CONTAINERD_VERSION" = "2" ]; then
-        # Whether any config defines a runtime (see cedana_runtime_config)
+        # Whether any config defines runtimes (see cedana_runtime_config), in any form: a runtimes
+        # table ([...containerd.runtimes]), a runtime's ([...containerd.runtimes.runc]), or a key
+        # (runtimes = {...}, runtimes.runc = {...}). Adding runc where it's already defined, e.g. as
+        # an inline table, redefines it, and containerd refuses the config.
         RUNC_ARG=with-runc
         for FILE in "$CONTAINERD_CONFIG_PATH" "$CONTAINERD_CONFD_DIR"/*.toml; do
             [ -f "$FILE" ] && [ "$FILE" != "$CONTAINERD_CONFD_DIR/999-cedana.toml" ] || continue
-            if grep -qE '^[[:space:]]*\[[^]]*containerd\.runtimes\.' "$FILE"; then
+            if grep -qE '^[[:space:]]*(\[[^]]*containerd\.runtimes(\]|\.)|runtimes[[:space:]]*(=|\.))' "$FILE"; then
                 RUNC_ARG=""
                 break
             fi

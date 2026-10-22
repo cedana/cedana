@@ -68,6 +68,19 @@ var containerdFixtures = []containerdFixture{
 		keepRuntimes: []string{"runc"},
 	},
 	{
+		// Runtimes defined as inline tables, under a runtimes table: runc must not be added again
+		name:       "v2 main with inline runtimes",
+		maxVersion: 2,
+		files: map[string]string{
+			"etc/containerd/config.toml": `version = 2
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+  runc = { runtime_type = "io.containerd.runc.v2" }
+`,
+		},
+		keepRuntimes: []string{"runc"},
+	},
+	{
 		name:       "v2 main with nvidia conf.d (nvidia-ctk on containerd 1.7)",
 		maxVersion: 2,
 		files: map[string]string{
