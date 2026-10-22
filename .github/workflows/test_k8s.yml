@@ -31,6 +31,16 @@ on:
         description: "Deploy the propagator from the propagator-digests-* artifacts into the cluster, instead of using CEDANA_URL"
         required: false
         default: false
+      upgrade:
+        type: boolean
+        description: "Start one K3s job from the latest released chart, and run its suite after upgrading to this one"
+        required: false
+        default: false
+      soak:
+        type: boolean
+        description: "Also run the soak tests (each checkpoint/restore many times, to catch 1-in-N failures)"
+        required: false
+        default: false
       large:
         type: boolean
         description: "Run large tests"
@@ -92,12 +102,12 @@ jobs:
   propagator-connectivity:
     name: Propagator Connectivity
     if: ${{ !inputs.propagator }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Quick connectivity test
         run: |
@@ -105,8 +115,46 @@ jobs:
           curl -I "$CEDANA_URL/user" -H "Authorization: Bearer $CEDANA_AUTH_TOKEN"
           echo "✓ Connectivity test completed"
 
+  # The K8s jobs, one per line, of the platforms asked for. Each line is a job (a matrix of
+  # dimensions would need excludes to stay this small, and couldn't be filtered by platform).
+  matrix:
+    name: Matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: List jobs
+        id: matrix
+        env:
+          PLATFORMS: ${{ inputs.platforms }}
+        run: |
+          # k3s_containerd: which containerd k3s runs on, the suite's own at the default socket
+          # (external), or k3s's bundled one at /run/k3s/containerd, as on a stock k3s install
+          # (embedded). The K3s jobs run different k3s and containerd versions, so together they
+          # cover what customers run (the defaults: k3s v1.34.2, and the test image's containerd).
+          # Cloud platforms get one job each, as they're serialized on a shared cluster.
+          jobs=$(grep -v '^#' <<'EOF'
+          # containerd 1.7: config version 2 only
+          {"platform": "K3s", "compute": "CPU", "cr": "default", "storage": "storage/local", "arch": "arm64", "k3s_containerd": "external", "containerd_version": "1.7.36", "versions": "k3s v1.34.2, containerd 1.7.36"}
+          # Kubernetes 1.36
+          {"platform": "K3s", "compute": "CPU", "cr": "default", "storage": "storage/local", "arch": "arm64", "k3s_containerd": "embedded", "k3s_version": "v1.36.5+k3s1", "versions": "k3s v1.36.5, containerd 2.3.4"}
+          # containerd 2.4: config version 4
+          {"platform": "K3s", "compute": "CPU", "cr": "streamer", "storage": "storage/local", "arch": "arm64", "k3s_containerd": "external", "containerd_version": "2.4.2", "versions": "k3s v1.34.2, containerd 2.4.2"}
+          # GPU streamer is covered by the GPU suite's streamer jobs
+          {"platform": "K3s", "compute": "CUDA", "cr": "default", "storage": "storage/local", "arch": "amd64", "k3s_containerd": "external", "versions": "k3s v1.34.2, containerd of the test image"}
+          # a customer's GPU nodes
+          {"platform": "K3s", "compute": "CUDA", "cr": "default", "storage": "storage/local", "arch": "amd64", "k3s_containerd": "embedded", "k3s_version": "v1.34.8+k3s1", "versions": "k3s v1.34.8, containerd 2.2.3"}
+          {"platform": "EKS", "compute": "CPU", "cr": "default", "storage": "storage/s3", "arch": "arm64"}
+          {"platform": "EKS-Karpenter", "compute": "CPU", "cr": "default", "storage": "storage/cedana", "arch": "amd64"}
+          {"platform": "GKE", "compute": "CPU", "cr": "streamer", "storage": "storage/cedana", "arch": "amd64"}
+          {"platform": "Nebius", "compute": "CUDA", "cr": "default", "storage": "storage/local", "arch": "amd64"}
+          EOF
+          )
+          echo "matrix=$(jq -sc --argjson platforms "$PLATFORMS" \
+            '{include: map(select(.platform as $p | $platforms | index($p)))}' <<<"$jobs")" >>"$GITHUB_OUTPUT"
+
   k8s:
-    name: Kubernetes
+    name: Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}${{ matrix.k3s_containerd && format(', {0}', matrix.k3s_containerd) || '' }}${{ matrix.versions && format(', {0}', matrix.versions) || '' }})
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache{6}',
       github.run_id,
@@ -118,8 +166,8 @@ jobs:
       (inputs.propagator && matrix.platform == 'K3s') && '/volume=80gb' || ''
       ) }}
     timeout-minutes: 240
-    needs: propagator-connectivity
-    if: ${{ !cancelled() && needs.propagator-connectivity.result != 'failure' }}
+    needs: [matrix, propagator-connectivity]
+    if: ${{ !cancelled() && needs.matrix.result == 'success' && needs.propagator-connectivity.result != 'failure' }}
     concurrency:
       # Cloud platforms share a cluster per arch, so their jobs run one at a time (also across runs)
       # and wait in line instead of being cancelled. K3s jobs get a unique group each, so they still
@@ -128,107 +176,23 @@ jobs:
       queue: max
     strategy:
       fail-fast: false
-      matrix:
-        platform: ${{ fromJSON(inputs.platforms) }}
-        compute:
-          - CPU
-          - CUDA
-        cr:
-          - default
-          - streamer
-        storage:
-          - storage/local
-          - storage/cedana
-          - storage/s3
-        arch:
-          - amd64
-          - arm64
-        # Which containerd k3s runs on: the suite's own at the default socket, or k3s's bundled
-        # one at /run/k3s/containerd, as on a stock k3s install. Only applies to K3s.
-        containerd:
-          - external
-          - embedded
-        exclude:
-          - platform: EKS
-            containerd: embedded
-          - platform: GKE
-            containerd: embedded
-          - platform: Nebius
-            containerd: embedded
-          - platform: EKS-Karpenter
-            containerd: embedded
-          - platform: K3s
-            containerd: embedded
-            cr: streamer
-
-          # XXX: To reduce overusage of CI minutes
-          - platform: K3s
-            storage: storage/s3
-          - platform: K3s
-            storage: storage/cedana
-          - platform: K3s
-            compute: CUDA
-            arch: arm64
-          - platform: K3s
-            compute: CPU
-            arch: amd64
-          - platform: K3s
-            compute: CUDA # XXX: Skip until fixed
-
-          - platform: EKS
-            compute: CUDA
-          - platform: EKS
-            arch: amd64
-          - platform: EKS
-            cr: streamer
-          - platform: EKS
-            storage: storage/local
-          - platform: EKS # One variant per cloud platform, as they're serialized on a shared cluster
-            storage: storage/cedana
-
-          - platform: GKE
-            compute: CUDA
-          - platform: GKE
-            arch: arm64
-          - platform: GKE
-            cr: default
-          - platform: GKE
-            storage: storage/local
-          - platform: GKE
-            storage: storage/s3
-
-          - platform: Nebius
-            compute: CPU
-          - platform: Nebius
-            arch: arm64
-          - platform: Nebius
-            cr: streamer
-          - platform: Nebius
-            storage: storage/s3
-          - platform: Nebius
-            storage: storage/cedana
-
-          - platform: EKS-Karpenter
-            compute: CUDA
-          - platform: EKS-Karpenter
-            arch: arm64
-          - platform: EKS-Karpenter
-            cr: streamer
-          - platform: EKS-Karpenter
-            storage: storage/local
-          - platform: EKS-Karpenter
-            storage: storage/s3
+      matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
 
     container:
       image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
-      options: --privileged --init ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && '--ipc=host --gpus all' || '' }} --cgroupns=host
+      # K3s: the container state dirs are on the runner's disk, as overlayfs (the snapshotter
+      # real nodes use) can't be on the container's overlay root
+      options: >-
+        --privileged --init --cgroupns=host
+        ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && '--ipc=host --gpus all' || '' }}
+        ${{ matrix.platform == 'K3s' && '-v /var/lib/cedana-ci/rancher:/var/lib/rancher -v /var/lib/cedana-ci/containerd:/var/lib/containerd' || '' }}
     steps:
-      - uses: runs-on/action@v1
+      - uses: runs-on/action@v2
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
@@ -236,68 +200,68 @@ jobs:
           fetch-tags: true
 
       - name: Download helm chart
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: helm-chart
           path: /tmp/helm-chart
 
       - name: Download helper digest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: digests-${{ matrix.arch }}
           path: /tmp/digests
 
       - name: Download helper image name
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: image-name
           path: /tmp/image-name
 
       - name: Download controller digest
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: controller-digests-${{ matrix.arch }}
           path: /tmp/controller-digests
 
       - name: Download controller image name
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: controller-image-name
           path: /tmp/controller-image-name
 
       - name: Download propagator digest
         if: inputs.propagator
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: propagator-digests-${{ matrix.arch }}
           path: /tmp/propagator-digests
 
       - name: Download propagator image name
         if: inputs.propagator
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: propagator-image-name
           path: /tmp/propagator-image-name
 
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
       - name: Download containerd runtime
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: containerd-runtime-${{ matrix.arch }}-*
@@ -305,13 +269,13 @@ jobs:
 
       - name: Download GPU plugin
         if: ${{ matrix.compute == 'CUDA' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-${{ matrix.arch }}
 
       - name: Download streamer plugin
         if: ${{ matrix.cr == 'streamer' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
@@ -356,7 +320,14 @@ jobs:
           CEDANA_CHECKPOINT_STREAMS: ${{ matrix.cr == 'streamer' && '4' || '0' }}
           CEDANA_PLUGINS_BUILDS: ${{ matrix.platform == 'K3s' && 'local' || 'alpha' }}
           PLATFORM: ${{ matrix.platform }}
-          K3S_CONTAINERD: ${{ matrix.containerd }}
+          K3S_CONTAINERD: ${{ matrix.k3s_containerd || '' }}
+          # From the matrix's include (empty: the defaults)
+          K3S_VERSION: ${{ matrix.k3s_version || '' }}
+          CONTAINERD_VERSION: ${{ matrix.containerd_version || '' }}
+          # Soak tests run on K3s only: cloud clusters are shared
+          SOAK: ${{ (inputs.soak && matrix.platform == 'K3s') && '1' || '0' }}
+          # This job's suite then runs on an install upgraded from the latest release
+          UPGRADE: ${{ (inputs.upgrade && matrix.platform == 'K3s' && matrix.compute == 'CPU' && matrix.cr == 'default' && matrix.k3s_containerd == 'external') && '1' || '0' }}
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ (inputs.large && matrix.platform != 'K3s') && '1' || '0' }} # K3s is only for small tests
@@ -399,6 +370,9 @@ jobs:
           esac
 
           TAGS="k8s"
+          if [ "$SOAK" != "1" ]; then
+            TAGS="${TAGS},!soak"
+          fi
           if [ "$GPU" = "1" ]; then
             TAGS="${TAGS},gpu"
           else
@@ -421,26 +395,35 @@ jobs:
             TAGS="${TAGS},!large"
           fi
 
-          make test-k8s \
-            TAGS=$TAGS \
-            PROVIDER=$PROVIDER \
-            K3S_CONTAINERD=$K3S_CONTAINERD \
-            GPU=$GPU \
-            FORMATTER=$FORMATTER \
-            DEBUG=$DEBUG \
-            PARALLELISM=$PARALLELISM \
-            RETRIES=$RETRIES \
-            CONTROLLER_REPO=$CONTROLLER_REPO \
-            CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
-            HELPER_REPO=$HELPER_REPO \
-            HELPER_DIGEST=$HELPER_DIGEST \
-            PROPAGATOR_REPO=$PROPAGATOR_REPO \
-            PROPAGATOR_DIGEST=$PROPAGATOR_DIGEST \
-            HELM_CHART=$HELM_CHART
+          run_suite() {
+            make test-k8s "$@" \
+              PROVIDER=$PROVIDER \
+              K3S_CONTAINERD=$K3S_CONTAINERD \
+              GPU=$GPU \
+              FORMATTER=$FORMATTER \
+              DEBUG=$DEBUG \
+              CONTROLLER_REPO=$CONTROLLER_REPO \
+              CONTROLLER_DIGEST=$CONTROLLER_DIGEST \
+              HELPER_REPO=$HELPER_REPO \
+              HELPER_DIGEST=$HELPER_DIGEST \
+              PROPAGATOR_REPO=$PROPAGATOR_REPO \
+              PROPAGATOR_DIGEST=$PROPAGATOR_DIGEST \
+              HELM_CHART=$HELM_CHART
+          }
+
+          # The suite then starts from the latest released chart, and runs on it upgraded to
+          # this one (see setup_suite.bash)
+          if [ "$UPGRADE" = "1" ]; then
+            export UPGRADE_FROM_CHART=latest
+          else
+            TAGS="${TAGS},!upgrade"
+          fi
+
+          run_suite TAGS=$TAGS PARALLELISM=$PARALLELISM RETRIES=$RETRIES
 
       - name: Label report # with the job name, so the summary can link to it
         if: always()
-        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}, ${{ matrix.containerd }})" |' {} +
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}${{ matrix.k3s_containerd && format(', {0}', matrix.k3s_containerd) || '' }}${{ matrix.versions && format(', {0}', matrix.versions) || '' }})" |' {} +
 
       - name: Set sanitized storage
         if: always()
@@ -452,28 +435,39 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.containerd }}
-          path: /tmp/report*.xml
+          name: test-report-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}${{ matrix.k3s_containerd && format('-{0}', matrix.k3s_containerd) || '' }}
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
 
       - name: Upload propagator logs
         if: always() && inputs.propagator
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: propagator-logs-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}-${{ matrix.containerd }}
+          name: propagator-logs-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}${{ matrix.k3s_containerd && format('-{0}', matrix.k3s_containerd) || '' }}
           path: |
             /tmp/propagator*.log
           if-no-files-found: ignore
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: k8s-diagnostics-${{ matrix.arch }}-k8s-${{ matrix.platform }}-${{ matrix.cr }}-${{ env.STORAGE }}-${{ matrix.compute }}${{ matrix.k3s_containerd && format('-{0}', matrix.k3s_containerd) || '' }}
+          path: /tmp/k8s-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: k8s
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*-k8s-*
           path: report
