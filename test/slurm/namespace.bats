@@ -144,46 +144,58 @@ teardown_file() {
 }
 
 # Print the PID cedana monitors (and so checkpoints, or has restored) for a
-# job. The `cedana-slurm monitor <job_id> --task-pid=<pid>` process on the
-# node names the batch step. Its shell runs `cedana run|restore --no-server
-# --pid-file=/tmp/cedana-<job_id>.pid`, which runs the workload as its own
-# child (a restore too, as cedana restores as a child), alongside the GPU
-# controller for a GPU job and, briefly, CRIU for a restore. The monitor starts
-# a few seconds after the job does and the workload a little after that, so
-# wait for both.
+# job, found through the process tree, as the monitor deletes the pid file
+# once it has read it:
+#
+#   batch shell                          the monitor's --task-pid
+#   └─ cedana run|restore --pid-file=/tmp/cedana-<job_id>.pid
+#      ├─ workload                       the PID cedana wrote (restore: RstSibling)
+#      ├─ cedana-gpu-controller          GPU jobs
+#      └─ criu                           briefly, during a restore
+#
+# The monitor starts a few seconds after the job does and the workload a
+# little after that, so wait for both. On failure, log the step that found
+# nothing.
 _monitored_pid() {
-    local host="$1" job_id="$2" task="" pid="" waited=0
+    local phase="$1" host="$2" job_id="$3" waited=0
+    local procs task cedana reason
+    local -a workload
 
-    while [ "$waited" -lt 30 ]; do
-        task="$(docker exec "$host" ps -eo args= 2>/dev/null |
-            awk -v job="$job_id" '$2 == "monitor" && $3 == job && sub("^--task-pid=", "", $4) { print $4; exit }')"
-        if [ -n "$task" ]; then
-            # The child of cedana run|restore is the PID cedana writes to the pid
-            # file: run starts the workload as its child, and restore restores it
-            # as one (RstSibling). The monitor deletes that file as soon as it reads
-            # it, so it is gone before this can look, while the process tree lasts.
-            # comm is cut to 15 characters, so cedana-gpu-controller shows as cedana-gpu-cont.
-            pid="$(docker exec "$host" ps -eo pid=,ppid=,comm=,args= 2>/dev/null |
-                awk -v task="$task" -v pidfile="--pid-file=/tmp/cedana-${job_id}.pid" '
-                    { ppid[$1] = $2; comm[$1] = $3 }
-                    $2 == task && index($0 " ", " " pidfile " ") { cedana = $1 }
-                    END {
-                        if (cedana == "") exit
-                        for (p in ppid) {
-                            if (ppid[p] == cedana && comm[p] != "cedana-gpu-cont" && comm[p] != "criu") {
-                                n++
-                                found = p
-                            }
-                        }
-                        if (n == 1) print found
-                    }')"
-            [ -n "$pid" ] && break
+    while :; do
+        procs="$(docker exec "$host" ps -eo pid=,ppid=,comm=,args= 2>/dev/null)"
+
+        # Fields: pid ppid comm, then `cedana-slurm monitor <job_id> --task-pid=<pid> ...`
+        task="$(awk -v job="$job_id" '$5 == "monitor" && $6 == job {
+            for (i = 7; i <= NF; i++) if (sub("^--task-pid=", "", $i)) { print $i; exit }
+        }' <<<"$procs")"
+        if [ -z "$task" ]; then
+            reason="no cedana-slurm monitor for job $job_id"
+        else
+            cedana="$(awk -v task="$task" -v pidfile="--pid-file=/tmp/cedana-${job_id}.pid" '
+                $2 == task && index($0 " ", " " pidfile " ") { print $1; exit }
+            ' <<<"$procs")"
+            if [ -z "$cedana" ]; then
+                reason="batch shell (PID $task) of job $job_id runs no cedana run|restore"
+            else
+                # comm is cut to 15 characters: cedana-gpu-controller shows as cedana-gpu-cont.
+                mapfile -t workload < <(awk -v cedana="$cedana" '
+                    $2 == cedana && $3 != "cedana-gpu-cont" && $3 != "criu" { print $1 }
+                ' <<<"$procs")
+                if [ "${#workload[@]}" -eq 1 ]; then
+                    echo "${workload[0]}"
+                    return 0
+                fi
+                reason="cedana (PID $cedana) of job $job_id has no single workload child (found: ${workload[*]:-none})"
+            fi
         fi
+
+        [ "$waited" -ge 30 ] && break
         sleep 1
         waited=$((waited + 1))
     done
 
-    [ -n "$pid" ] && echo "$pid"
+    error_log "[$phase] $reason on $host"
+    return 1
 }
 
 # Find the job's node and the PID cedana monitors there, then run each given
@@ -200,10 +212,7 @@ _run_job_checks() {
         return 1
     }
 
-    pid="$(_monitored_pid "$host" "$job_id")" || {
-        error_log "[$phase] no cedana-slurm monitor for job $job_id on $host"
-        return 1
-    }
+    pid="$(_monitored_pid "$phase" "$host" "$job_id")" || return 1
 
     for check in "$@"; do
         "$check" "$phase" "$job_id" "$host" "$pid" || return 1
