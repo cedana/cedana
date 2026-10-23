@@ -10,6 +10,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/internal/cedana/verify"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -23,10 +24,14 @@ import (
 
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
+// When the request carries the checksum recorded at dump, the adapter verifies the
+// checkpoint before the restore: a tarball as it is read, a local directory by one
+// read of its files. See package verify for what a mismatch does.
 func RestoreFilesystem(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
 		path := req.GetPath()
+		check := verify.For(req)
 
 		var isDir bool
 		var imagesDirectory string
@@ -57,6 +62,20 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 			// Add profiling data manually as no IO can be measured
 			size := utils.SizeFromPath(imagesDirectory)
 			profiling.AddIO(ctx, size)
+
+			// CRIU reads the files itself, so the directory is read once for its checksum
+			if check != nil {
+				sum, err := checksumOfPath(imagesDirectory)
+				if err != nil {
+					// Strict mode does not restore what it cannot verify
+					if check.Strict {
+						return nil, status.Errorf(codes.FailedPrecondition, "checkpoint checksum not verified: cannot read the checkpoint directory: %v", err)
+					}
+					log.Warn().Err(err).Str("path", imagesDirectory).Msg("could not read the checkpoint directory for its checksum, not verified")
+				} else if err := check.Record(resp, check.Compare(sum, "", true)); err != nil {
+					return nil, err
+				}
+			}
 		} else {
 			// Create a temporary directory for the restore
 			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().UnixNano()))
@@ -70,35 +89,88 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 			}
 			defer os.RemoveAll(imagesDirectory)
 
-			decompress := func(ctx context.Context) (err error) {
+			// The store's own value of the object, compared before the download: a value
+			// that differs says the stored bytes are bad without transferring them
+			var store string
+			if check != nil {
+				store = verify.StoreValue(ctx, storage, path)
+				if check.StoreDiffers(store) && check.Strict {
+					return nil, check.Record(resp, check.Stored(store))
+				}
+			}
+
+			decompress := func(ctx context.Context) (sum string, err error) {
 				// Detect compression from path
 				compression, err := io.CompressionFromExt(path)
 				if err != nil {
-					return err
+					return "", err
 				}
 
 				tarball, err := storage.Open(ctx, path)
 				if err != nil {
-					return fmt.Errorf("failed to open dump file: %v", err)
+					return "", fmt.Errorf("failed to open dump file: %v", err)
 				}
 				defer func() {
 					err = errors.Join(err, tarball.Close())
 				}()
 
+				var hashed *io.ChecksumReader
+				if check != nil {
+					hashed = io.NewChecksumReader(tarball)
+					tarball = hashed
+				}
+
 				log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Untar, compression)
-				err = io.Untar(tarball, imagesDirectory, compression)
+				if err = io.Untar(tarball, imagesDirectory, compression); err != nil {
+					err = fmt.Errorf("failed to decompress dump: %v", err)
+				}
+
+				// The tar and compression readers can stop before the end of the file,
+				// and a damaged archive stops them early: the rest of the file is read
+				// all the same, so that the checksum tells whether the bytes are the
+				// bytes recorded. A failed extraction keeps its error.
+				if hashed != nil {
+					if drainErr := hashed.Drain(); drainErr != nil {
+						return "", errors.Join(err, fmt.Errorf("failed to read dump file: %v", drainErr))
+					}
+					sum = hashed.Sum()
+				}
 				if err != nil {
-					return fmt.Errorf("failed to decompress dump: %v", err)
+					return sum, err
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("decompressed tarball")
 
-				return nil
+				return sum, nil
 			}
 
-			err = decompress(ctx)
+			// A read that failed before the end of the file has no checksum to compare
+			sum, err := decompress(ctx)
+			if check != nil && sum != "" {
+				local := !storage.IsRemote()
+				outcome := check.Compare(sum, store, local)
+				// The stored bytes may be right and the read wrong: read once more
+				if check.Retry(outcome) {
+					log.Warn().Str("reason", verify.ReasonName(outcome.Reason)).Msg("checkpoint checksum mismatch, reading the checkpoint once more")
+					if err := emptyDir(imagesDirectory); err != nil {
+						return nil, status.Errorf(codes.Internal, "failed to clear restore dir: %v", err)
+					}
+					if sum, err = decompress(ctx); sum == "" {
+						return nil, status.Error(codes.Internal, err.Error())
+					}
+					outcome = check.Compare(sum, store, local)
+				}
+				// The outcome is recorded whether or not the archive extracted: a strict
+				// mismatch is the restore's error, and explains a failed extraction
+				if recordErr := check.Record(resp, outcome); recordErr != nil {
+					if err != nil {
+						log.Debug().Err(err).Msg("the checkpoint also failed to extract")
+					}
+					return nil, recordErr
+				}
+			}
 			if err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
@@ -124,4 +196,18 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 
 		return next(ctx, opts, resp, req)
 	}
+}
+
+// emptyDir removes everything in a directory and keeps the directory
+func emptyDir(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
 }
