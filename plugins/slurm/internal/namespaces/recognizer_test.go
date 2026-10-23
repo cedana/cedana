@@ -183,6 +183,15 @@ const (
 531 522 0:22 / /var/tmp rw,nosuid - tmpfs tmpfs rw
 532 522 0:22 /scratch /scratch rw,nosuid - tmpfs tmpfs rw
 `
+	// An NFS share a launcher mounts for the job alone, which the node has no mount of.
+	// It outlives the job, so it is not the job's to archive and put back.
+	testLauncherShareJobMountinfo = `522 400 8:1 / / rw,relatime - ext4 /dev/sda1 rw
+523 522 0:21 / /proc rw,nosuid - proc proc rw
+524 522 0:22 / /dev/shm rw,nosuid - tmpfs tmpfs rw
+525 522 8:1 /export/tmp /tmp rw - ext4 /dev/sda1 rw
+530 522 0:40 / /home rw - nfs4 server:/home rw
+533 522 0:41 / /scratch rw - nfs4 server:/scratch rw
+`
 )
 
 func TestSlurmMounts(t *testing.T) {
@@ -214,6 +223,8 @@ func TestSlurmMounts(t *testing.T) {
 		{"AnotherJob", parse(testSlurmJobMountinfo), host, 123, []PrivateMount{slurmShm}},
 		// The host's tmpfs bind-mounted in the job, in full and in part, is the host's
 		{"SharedWithHost", parse(testSharedJobMountinfo), host, 1234, nil},
+		// A share the node has no mount of is not a tmpfs: it outlives the job and stays out
+		{"ShareOfALauncher", parse(testLauncherShareJobMountinfo), host, 1234, nil},
 		// Without the node's mounts, the path alone: /tmp and nothing else
 		{"TmpfsOfALauncherByPath", parse(testJobMountinfo), nil, 1234, nil},
 		{"SlurmTmpByPath", parse(testSlurmJobMountinfo), nil, 1234, []PrivateMount{slurmTmp}},
