@@ -151,8 +151,6 @@ require_reset_fix() {
 # bats test_tags=restore,child
 @test "[$GPU_INFO] restore GPU job, then start a CUDA child process in it" {
     require_sample gpu_props
-    # XXX: remove once fixed, this test found it
-    skip "known bug: a CUDA process started after the restore hangs, as does the controller's restore (it never completes once the process attaches)"
 
     local jid gate
     jid=$(unix_nano)
