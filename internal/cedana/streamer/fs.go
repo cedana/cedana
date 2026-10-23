@@ -322,6 +322,9 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("failed to start streamer: %w", err)
 	}
 
+	// The shard reads can outlive a failed return, which sets fs to nil: the goroutine
+	// closes the channel, not fs's field
+	shardsRead := make(chan struct{})
 	fs = &Fs{
 		mode:       mode,
 		conn:       nil,
@@ -329,11 +332,11 @@ func NewStreamingFs(
 		globCache:  make(map[string][]string),
 		checksums:  checksums,
 		paths:      paths,
-		shardsRead: make(chan struct{}),
+		shardsRead: shardsRead,
 	}
 	go func() {
 		io.Wait()
-		close(fs.shardsRead)
+		close(shardsRead)
 	}()
 
 	// Clean up on exit

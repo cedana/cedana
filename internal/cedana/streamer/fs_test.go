@@ -302,3 +302,84 @@ func TestStreamingFsReturnsEveryShardCloseError(t *testing.T) {
 		t.Fatal("the wait did not return: a shard's second error blocked its worker")
 	}
 }
+
+// Storage whose readers report when they are closed, the last thing a shard read does
+type closeReportingStorage struct {
+	filesystem.Storage
+	closed chan string
+}
+
+type closeReportingReader struct {
+	io.ReadCloser
+	path   string
+	closed chan string
+}
+
+func (r closeReportingReader) Close() error {
+	err := r.ReadCloser.Close()
+	r.closed <- r.path
+	return err
+}
+
+func (s *closeReportingStorage) Open(ctx context.Context, path string) (io.ReadCloser, error) {
+	file, err := s.Storage.Open(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return closeReportingReader{file, path, s.closed}, nil
+}
+
+// A streamer that fails to start makes NewStreamingFs return an error while the shard
+// reads still run. Their end must not touch the Fs, which the error return discards.
+func TestStreamingFsFailedStartOutlivesShardReads(t *testing.T) {
+	tmpDir := t.TempDir()
+	streamerBinary := filepath.Join(tmpDir, "streamer")
+	if err := os.WriteFile(streamerBinary, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	serveDir := filepath.Join(tmpDir, "serve")
+	shardDir := filepath.Join(tmpDir, "shards")
+	for _, dir := range []string{serveDir, shardDir} {
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// Shards larger than a pipe, so that their reads block until the streamer's
+	// ends of the pipes are closed, after NewStreamingFs has returned
+	streams := int32(2)
+	shard := make([]byte, 2*PIPE_SIZE)
+	for i := range streams {
+		if err := os.WriteFile(filepath.Join(shardDir, fmt.Sprintf(IMG_FILE_FORMATTER, i)), shard, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	storage := &closeReportingStorage{closed: make(chan string, streams)}
+	fs, _, err := NewStreamingFs(
+		context.Background(),
+		streamerBinary,
+		serveDir,
+		storage,
+		shardDir,
+		streams,
+		READ_ONLY,
+	)
+	if err == nil {
+		t.Fatal("expected an error from a streamer that exits at start")
+	}
+	if fs != nil {
+		t.Fatalf("expected no Fs with the error, got %v", fs)
+	}
+
+	for range streams {
+		select {
+		case <-storage.closed:
+		case <-time.After(30 * time.Second):
+			t.Fatal("the shard reads did not end after the streamer failed")
+		}
+	}
+	// Each shard read signals that it is done right after its close. A daemon that
+	// crashes on it does so now.
+	time.Sleep(200 * time.Millisecond)
+}
