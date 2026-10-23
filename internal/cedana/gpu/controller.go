@@ -371,10 +371,34 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		return
 	}
 
-	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
-
 	c.Termination.Lock()
 	defer c.Termination.Unlock()
+
+	p.terminate(ctx, c)
+}
+
+// Like Terminate, but does not wait for a dump or a restore that holds the controller's
+// termination lock: it returns false at once and changes nothing. True when the controller
+// is terminated, or there is nothing to terminate. Booking must be held before calling TryTerminate
+func (p *pool) TryTerminate(ctx context.Context, id string) bool {
+	c := p.Get(id)
+	if c == nil {
+		return true
+	}
+
+	if !c.Termination.TryLock() {
+		return false
+	}
+	defer c.Termination.Unlock()
+
+	p.terminate(ctx, c)
+	return true
+}
+
+// Termination must be held before calling terminate
+func (p *pool) terminate(ctx context.Context, c *controller) {
+	id := c.ID
+	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
 
 	if c.Terminating.Load() {
 		log.Debug().Msg("termination of GPU controller already in progress, skipping duplicate termination attempt")
