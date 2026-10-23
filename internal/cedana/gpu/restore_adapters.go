@@ -55,7 +55,7 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 				id = req.GPUID
 			} else {
 				_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-				id, err = gpus.Attach(ctx, pid)
+				id, err = gpus.Attach(ctx, pid, state.GPUID)
 				end()
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)

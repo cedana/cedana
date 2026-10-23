@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -70,7 +71,7 @@ func newSimpleManager(ctx context.Context, serverWg *sync.WaitGroup, plugins plu
 	return manager, nil
 }
 
-func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id string, err error) {
+func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32, reuseID string) (id string, err error) {
 	// Check if GPU plugin is installed
 	var gpuPlugin *plugins.Plugin
 	if gpuPlugin = m.plugins.Get("gpu"); !gpuPlugin.IsInstalled() {
@@ -82,7 +83,18 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		return "", err
 	}
 
-	controller := m.controllers.Book()
+	var controller *controller
+	if reuseID != "" {
+		controller, err = m.controllers.spawn(ctx, binary, reuseID)
+		if errors.Is(err, errControllerIDInUse) {
+			log.Warn().Str("ID", reuseID).Msg("dumped GPU controller ID in use, spawning under a new ID")
+		} else if err != nil {
+			return "", err
+		}
+	}
+	if controller == nil {
+		controller = m.controllers.Book()
+	}
 
 	if controller == nil {
 		controller, err = m.controllers.Spawn(ctx, binary)
