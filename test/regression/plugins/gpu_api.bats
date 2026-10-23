@@ -71,13 +71,20 @@ restore_sample() {
     local sample="$1"
     require_sample "$sample"
 
+    restore_gated "$SAMPLES/$sample"
+    assert_output --partial PASS
+}
+
+# Checkpoints a gated command (the gate file appended as its last argument) once it's READY,
+# restores it and lets it finish
+restore_gated() {
     local jid gate log
     jid=$(unix_nano)
     SAMPLE_JID=$jid # for teardown
     gate="/tmp/cedana-gate-$jid"
 
     # Bounded, as the attached restore below is: a hang fails this test, not the whole job
-    timeout 120 cedana run process -g --jid "$jid" -- "$SAMPLES/$sample" "$gate"
+    timeout 120 cedana run process -g --jid "$jid" -- "$@" "$gate"
     log=$(logfile_for_jid "$jid")
     wait_for_cmd 60 grep -q READY "$log"
 
@@ -87,7 +94,6 @@ restore_sample() {
     run timeout 180 cedana restore job "$jid" --attach
     rm -f "$gate"
     assert_success
-    assert_output --partial PASS
 }
 
 # XXX: remove once cedana-gpu #309 (CED-2507) is in the GPU plugin; these hang until then
@@ -122,8 +128,6 @@ require_reset_fix() {
 # bats test_tags=restore,probe
 @test "[$GPU_INFO] restore GPU job after a short-lived CUDA probe in it" {
     require_sample gpu_props
-    # XXX: remove once fixed, this test found it
-    skip "known bug: when the job's only CUDA process exits, the GPU controller shuts down and signals the job's whole process group (SIGUSR2, exit 12)"
 
     local jid log
     jid=$(unix_nano)
@@ -167,6 +171,23 @@ require_reset_fix() {
     assert_success
     assert_output --partial "Device name"
     assert_output --partial "CHILD_EXIT=0"
+}
+
+# bats test_tags=restore,child
+@test "[$GPU_INFO] restore GPU job that ran CUDA child processes, then start more in it" {
+    restore_gated "$WORKLOADS"/cuda-children-across-checkpoint.sh
+}
+
+# bats test_tags=run,threads
+@test "[$GPU_INFO] run GPU process whose threads race their first CUDA call" {
+    SAMPLE_JID=$(unix_nano) # for teardown
+    run timeout 180 cedana run process --attach -g --jid "$SAMPLE_JID" -- python3 "$WORKLOADS"/cuinit-thread-race.py
+    assert_success
+}
+
+# bats test_tags=restore,modules
+@test "[$GPU_INFO] restore GPU process that set an attribute on a kernel of an unloaded library" {
+    restore_gated python3 "$WORKLOADS"/unloaded-library-kernel-attribute.py
 }
 
 # Pinned host memory (cudaHostRegister, from malloc and MAP_SHARED) that kernels use zero-copy
