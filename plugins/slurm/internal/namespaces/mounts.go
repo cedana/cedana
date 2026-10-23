@@ -28,6 +28,9 @@ import (
 // The mounts of the node, as seen by init. Readable by any user, unlike init's namespace links.
 const initMountinfo = "/proc/1/mountinfo"
 
+// The one kind of filesystem that is gone with the mount namespace it was made in
+const disposableFSType = "tmpfs"
+
 type mount struct {
 	ID         int
 	Device     string // major:minor. Unique to each instance of a virtual filesystem like tmpfs
@@ -66,14 +69,17 @@ func SlurmMounts(pid uint32, jobID uint32) ([]PrivateMount, error) {
 }
 
 // slurmMounts picks the mounts the job has to itself: those whose root is in the plugin's
-// directory for the job, by the <jobid>/.<jobid> in its path, and those of a filesystem the
-// node has no mount of. A mount namespace starts as a copy of its parent's mounts, which keep
-// their device and root, so a mount of the job's whose filesystem is nowhere on the node was
-// made for the job and goes away with it: the tmpfs the plugin mounts at /dev/shm, or one a
-// launcher mounts. A bind mount of part of a filesystem the node has, such as a scratch
-// directory, is the node's, and so is everything that came with the copy. The plugin's bind
-// mounts are of the node's filesystem too, which is what the path tells apart. The pin of the
-// namespace (<basepath>/<jobid>/.ns) is on the node and not in the job, so it is not one.
+// directory for the job, by the <jobid>/.<jobid> in its path, and the tmpfs mounts of a
+// filesystem the node has no mount of. A mount namespace starts as a copy of its parent's
+// mounts, which keep their device and root, so a tmpfs of the job's that is nowhere on the
+// node was made for the job and goes away with it: the one the plugin mounts at /dev/shm, or
+// one a launcher mounts. Only a tmpfs: a filesystem that outlives the job, such as an NFS share
+// a launcher mounts for it alone, keeps what the job wrote and may be written by others since
+// the dump, and a restore must not put the archived files back over it. A bind mount of part of
+// a filesystem the node has, such as a scratch directory, is the node's, and so is everything
+// that came with the copy. The plugin's bind mounts are of the node's filesystem too, which is
+// what the path tells apart. The pin of the namespace (<basepath>/<jobid>/.ns) is on the node
+// and not in the job, so it is not one.
 //
 // With no mounts of the node to compare with, the path alone decides.
 func slurmMounts(job, node []mount, jobID uint32) []PrivateMount {
@@ -85,8 +91,8 @@ func slurmMounts(job, node []mount, jobID uint32) []PrivateMount {
 		switch {
 		case ofJob(m.Root, id):
 			how = "the root of the mount is in the plugin's directory for the job"
-		case node != nil && !onNode(m, node):
-			how = "the node has no mount of this filesystem"
+		case node != nil && m.FSType == disposableFSType && !onNode(m, node):
+			how = "a tmpfs the node has no mount of"
 		default:
 			continue
 		}
