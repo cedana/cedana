@@ -1,12 +1,20 @@
 package gpu
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/gofrs/flock"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type syncer interface {
@@ -115,5 +123,106 @@ func TestSyncRunsOneAtATime(t *testing.T) {
 	wg.Wait()
 	if most.Load() != 1 {
 		t.Fatalf("%d syncs ran at once, want 1", most.Load())
+	}
+}
+
+// A plugins manager whose GPU plugin has a binary that does not exist, so a spawn fails
+type fakePlugins struct {
+	plugins.Manager
+	gets atomic.Int32
+}
+
+func (f *fakePlugins) Get(name string) *plugins.Plugin {
+	f.gets.Add(1)
+	return &plugins.Plugin{Binaries: []plugins.Binary{{Name: "nonexistent", InstallDir: "/nonexistent"}}}
+}
+
+// A pool manager with no controller sockets on disk, so only the controllers a test stores
+func newTestPoolManager(t *testing.T, poolSize int) (*ManagerPool, *fakePlugins) {
+	t.Helper()
+	gpuConfig := config.Global.GPU
+	t.Cleanup(func() { config.Global.GPU = gpuConfig })
+	config.Global.GPU.SockDir = t.TempDir()
+	config.Global.GPU.LogDir = ""
+	config.Global.GPU.Debug = false
+
+	fake := &fakePlugins{}
+	return &ManagerPool{ManagerSimple: &ManagerSimple{plugins: fake}, poolSize: poolSize}, fake
+}
+
+// Captures the global log for the test
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	logger := log.Logger
+	t.Cleanup(func() { log.Logger = logger })
+	buf := &bytes.Buffer{}
+	log.Logger = zerolog.New(buf).Level(zerolog.DebugLevel)
+	return buf
+}
+
+// A stale controller that a dump or a restore holds must not make the sync wait: the sync
+// skips it, leaves it as it was, refills the pool, and terminates it once the lock is free
+func TestPoolSyncSkipsHeldController(t *testing.T) {
+	m, fake := newTestPoolManager(t, 1)
+	c := newStaleController(t, &m.controllers)
+
+	c.Termination.Lock() // the dump
+	if err := syncReturns(t, m, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if m.controllers.Get(c.ID) == nil {
+		t.Fatal("the held controller is no longer in the pool")
+	}
+	if _, ok := m.held[c.ID]; !ok {
+		t.Fatal("the held controller is not recorded as skipped")
+	}
+	booking := flock.New(c.Booking.Path())
+	if locked, _ := booking.TryLock(); !locked {
+		t.Fatal("the sync kept the booking lock of the held controller")
+	}
+	booking.Unlock()
+	if fake.gets.Load() == 0 {
+		t.Fatal("the sync did not go on to refill the pool")
+	}
+
+	c.Termination.Unlock() // FinalizeDump
+	if err := syncReturns(t, m, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if m.controllers.Get(c.ID) != nil {
+		t.Fatal("the sync did not terminate the controller once the lock was free")
+	}
+	if len(m.held) != 0 {
+		t.Fatalf("%d controllers still recorded as skipped", len(m.held))
+	}
+}
+
+// A controller held for more than HELD_WARN_AFTER gets one warning, not one per sync
+func TestPoolSyncWarnsOnceForHeldController(t *testing.T) {
+	m, _ := newTestPoolManager(t, 0)
+	c := newStaleController(t, &m.controllers)
+	logs := captureLog(t)
+
+	c.Termination.Lock()
+	defer c.Termination.Unlock()
+
+	const warning = "held by a dump or restore for more than 1 min"
+	for i := range 7 {
+		if err := syncReturns(t, m, context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			if strings.Contains(logs.String(), warning) {
+				t.Fatal("warned on the first skip")
+			}
+			m.held[c.ID].since = time.Now().Add(-2 * HELD_WARN_AFTER)
+		}
+	}
+	if n := strings.Count(logs.String(), warning); n != 1 {
+		t.Fatalf("%d warnings for 7 syncs, want 1", n)
+	}
+	if n := strings.Count(logs.String(), "skipping stale GPU controller held by a dump or restore"); n != 7 {
+		t.Fatalf("%d skips logged for 7 syncs, want 7", n)
 	}
 }

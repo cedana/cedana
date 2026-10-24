@@ -14,6 +14,7 @@ import (
 const (
 	SYNC_INTERVAL         = 10 * time.Second
 	SYNC_SHUTDOWN_TIMEOUT = 45 * time.Second
+	HELD_WARN_AFTER       = 1 * time.Minute // Warn about a stale controller a dump or a restore holds for longer
 )
 
 // Implements a GPU manager pool that is capable of maintaining a pool of GPU controllers
@@ -24,6 +25,13 @@ type ManagerPool struct {
 	free     int
 	busy     int
 	stale    int
+	held     map[string]*heldController // Stale controllers the last sync skipped, by ID
+}
+
+// A stale controller that the sync skips, because a dump or a restore holds it
+type heldController struct {
+	since  time.Time // First skip
+	warned bool
 }
 
 func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize int, plugins plugins.Manager) (*ManagerPool, error) {
@@ -112,6 +120,9 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 
 	// Remove controllers not in either free or busy list
 
+	held := make(map[string]*heldController)
+	defer func() { m.held = held }()
+
 	for i, controller := range remaining {
 		acquired, err := controller.Booking.TryLock()
 		if err != nil {
@@ -128,10 +139,16 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 				}
 			}
 			log.Debug().Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("clearing stale GPU controller in pool")
+			if !m.controllers.TryTerminate(ctx, controller.ID) {
+				// A dump or a restore holds it, e.g. CRIU killed the job before FinalizeDump. Waiting
+				// here would make every caller of the sync wait for that dump: try again next sync.
+				controller.Booking.Unlock()
+				held[controller.ID] = m.skipHeld(controller.ID, remainingReason[i])
+				continue
+			}
 			if stderr := controller.ErrBuf.String(); stderr != "" {
 				log.Error().Str("ID", controller.ID).Str("reason", remainingReason[i]).Str("stderr", stderr).Msg("stale GPU controller captured stderr")
 			}
-			m.controllers.Terminate(ctx, controller.ID)
 		}
 	}
 
@@ -167,4 +184,22 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// Logs the skip of a stale controller that a dump or a restore holds, and warns once when
+// the same controller stays held for more than HELD_WARN_AFTER: a dump that holds it that
+// long is likely stuck. Returns the controller's record for the next sync.
+func (m *ManagerPool) skipHeld(id string, reason string) *heldController {
+	h := m.held[id]
+	if h == nil {
+		h = &heldController{since: time.Now()}
+	}
+	held := time.Since(h.since)
+
+	log.Debug().Str("ID", id).Str("reason", reason).Dur("held", held).Msg("skipping stale GPU controller held by a dump or restore")
+	if held > HELD_WARN_AFTER && !h.warned {
+		log.Warn().Str("ID", id).Str("reason", reason).Dur("held", held).Msg("stale GPU controller held by a dump or restore for more than 1 min")
+		h.warned = true
+	}
+	return h
 }
