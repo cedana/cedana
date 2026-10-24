@@ -29,6 +29,15 @@ NAMESPACE_BASE_PATH=/var/tmp/slurm-ns
 NAMESPACE_TMP_FILE=/tmp/namespace-marker
 NAMESPACE_TMP_FD=3
 
+# The same for the job's private /dev/shm, which the plugin makes as a fresh
+# tmpfs rather than a bind mount from BasePath (designs/sglang-bug.org in
+# cedana-slurm-example). SGLang keeps a load-snapshot file open and mapped
+# there, and its restore failed with "Can't open file dev/shm/...". A regular
+# file on a tmpfs is dumped by path, so the file has to be put back before CRIU
+# opens it.
+NAMESPACE_SHM_FILE=/dev/shm/namespace-marker
+NAMESPACE_SHM_FD=4
+
 # cedana's GPU controller makes an 8 GiB shared memory segment by default
 # (gpu.shm_size), but the plugin gives each job a fresh /dev/shm of the
 # kernel's default size, half the node's RAM, which on the CI runners is less.
@@ -102,11 +111,29 @@ exec ${NAMESPACE_TMP_FD}>${NAMESPACE_TMP_FILE}
 bash cpu_smr/counting.sh >&${NAMESPACE_TMP_FD}
 EOF
 
+    # The same job with the file in its private /dev/shm, held open and
+    # written to for its whole life, as SGLang holds its load snapshot.
+    cat >"$BATS_FILE_TMPDIR/namespace-shm.sbatch" <<EOF
+#!/bin/bash
+#SBATCH --job-name=namespace-shm
+#SBATCH --output=namespace-shm-%j.out
+#SBATCH --error=namespace-shm-%j.err
+#SBATCH --cpus-per-task=1
+#SBATCH --mem=100M
+#SBATCH --export=CEDANA_ENABLE=1
+
+exec ${NAMESPACE_SHM_FD}>${NAMESPACE_SHM_FILE}
+bash cpu_smr/counting.sh >&${NAMESPACE_SHM_FD}
+EOF
+
     # The plugin reads job_container.conf from /etc/slurm. Without a BasePath
-    # it disables itself on the node, logging that only at debug level.
+    # it disables itself on the node, logging that only at debug level. Dirs
+    # is its default, spelled out: /tmp as a bind mount from BasePath, and
+    # /dev/shm as a new tmpfs, as production sites set it.
     cat >"$BATS_FILE_TMPDIR/job_container.conf" <<EOF
 AutoBasePath=true
 BasePath=${NAMESPACE_BASE_PATH}
+Dirs=/tmp,/dev/shm
 EOF
 
     slurm_conf_overlay_apply "$BATS_FILE_TMPDIR/job_container.conf" <<'EOF'
@@ -214,33 +241,71 @@ _check_in_job_namespace() {
     fi
 }
 
-# The file the job opened in its private /tmp must still be open, still owned
-# by the job's user, and still hold everything written to it before the dump.
-# It is read through the job's fd, which reaches it whatever namespace it is in.
-_check_tmp_file_kept() {
-    local phase="$1" job_id="$2" host="$3" pid="$4"
-    local fd="/proc/${pid}/fd/${NAMESPACE_TMP_FD}"
-    local saved="$BATS_TEST_TMPDIR/namespace-tmp"
+# The file the job opened in one of its private directories must still be
+# open on the given fd, still owned by the job's user, and still hold
+# everything written to it before the dump. It is read through the job's fd,
+# which reaches it whatever namespace it is in.
+# $5 is the fd, $6 the path the job opened, for the messages.
+_check_held_file_kept() {
+    local phase="$1" job_id="$2" host="$3" pid="$4" fd_num="$5" path="$6"
+    local fd="/proc/${pid}/fd/${fd_num}"
+    local saved="$BATS_TEST_TMPDIR/held-file-${fd_num}"
     local owner
 
     docker exec "$host" cat "$fd" >"$saved.$phase" 2>/dev/null || {
-        error_log "[$phase] job $job_id does not have $NAMESPACE_TMP_FILE open on fd $NAMESPACE_TMP_FD"
+        error_log "[$phase] job $job_id does not have $path open on fd $fd_num"
         return 1
     }
 
     owner="$(docker exec "$host" stat -L -c '%U' "$fd" 2>/dev/null)"
     if [ "$owner" != "${SLURM_SUBMIT_USER:-root}" ]; then
-        error_log "[$phase] $NAMESPACE_TMP_FILE is owned by '${owner}', not ${SLURM_SUBMIT_USER:-root}"
+        error_log "[$phase] $path is owned by '${owner}', not ${SLURM_SUBMIT_USER:-root}"
         return 1
     fi
 
-    info_log "[$phase] job $job_id: $NAMESPACE_TMP_FILE has $(wc -l <"$saved.$phase" | tr -d ' ') lines"
+    info_log "[$phase] job $job_id: $path has $(wc -l <"$saved.$phase" | tr -d ' ') lines"
 
     # The job kept writing after the pre-dump check, so what was there then
     # is the start of what is there now.
     if [ "$phase" = "post-restore" ] &&
         ! head -c "$(wc -c <"$saved.pre-dump")" "$saved.$phase" | cmp -s - "$saved.pre-dump"; then
-        error_log "[$phase] $NAMESPACE_TMP_FILE lost what the job wrote before the dump"
+        error_log "[$phase] $path lost what the job wrote before the dump"
+        return 1
+    fi
+}
+
+_check_tmp_file_kept() {
+    _check_held_file_kept "$@" "$NAMESPACE_TMP_FD" "$NAMESPACE_TMP_FILE"
+}
+
+_check_shm_file_kept() {
+    _check_held_file_kept "$@" "$NAMESPACE_SHM_FD" "$NAMESPACE_SHM_FILE"
+}
+
+# The job's /dev/shm must be its own, not the node's: a tmpfs of another
+# device than the one at /dev/shm in the node's namespace. The file is then
+# where the dump cannot see it by path alone, which is what the test is for.
+# After the restore, the file must be in the new job's own /dev/shm too, not
+# left on the node's by a restore run from the wrong namespace.
+_check_shm_private() {
+    local phase="$1" job_id="$2" host="$3" pid="$4"
+    local job_dev node_dev file_dev
+
+    job_dev="$(docker exec "$host" stat -c '%d' "/proc/${pid}/root/dev/shm" 2>/dev/null)" || {
+        error_log "[$phase] could not stat /dev/shm of job $job_id through PID $pid"
+        return 1
+    }
+    node_dev="$(docker exec "$host" stat -c '%d' /dev/shm 2>/dev/null)"
+    file_dev="$(docker exec "$host" stat -L -c '%d' "/proc/${pid}/fd/${NAMESPACE_SHM_FD}" 2>/dev/null)"
+
+    info_log "[$phase] job $job_id: /dev/shm device $job_dev in the job, $node_dev on the node, file on $file_dev"
+
+    if [ "$job_dev" = "$node_dev" ]; then
+        error_log "[$phase] /dev/shm of job $job_id is the node's own, not a private tmpfs"
+        return 1
+    fi
+    if [ "$file_dev" != "$job_dev" ]; then
+        error_log "[$phase] $NAMESPACE_SHM_FILE of job $job_id is not in the job's own /dev/shm"
         return 1
     fi
 }
@@ -248,6 +313,10 @@ _check_tmp_file_kept() {
 # SLURM_JOB_CHECKs for test_slurm_job
 _check_cpu_job() {
     _run_job_checks "$1" "$2" _check_in_job_namespace _check_tmp_file_kept
+}
+
+_check_shm_job() {
+    _run_job_checks "$1" "$2" _check_in_job_namespace _check_shm_private _check_shm_file_kept
 }
 
 _check_gpu_job() {
@@ -260,6 +329,17 @@ _check_gpu_job() {
 @test "Namespace: Dump/Restore a job in a private mount namespace (job_container/tmpfs)" {
     SLURM_JOB_SUBMIT=slurm_submit_script SLURM_JOB_CHECK=_check_cpu_job \
         test_slurm_job SUBMIT_DUMP_RESTORE "$BATS_FILE_TMPDIR/namespace-tmp.sbatch" 15
+}
+
+# A regular file held open in the job's private /dev/shm. The plugin makes
+# that /dev/shm as a new tmpfs, not as a bind mount from BasePath like /tmp,
+# so the dump has to find it another way and carry its files. Without that
+# the restore fails at CRIU's open of the fd: "Can't open file
+# dev/shm/namespace-marker on restore: No such file or directory".
+# bats test_tags=dump,restore,samples
+@test "Namespace: Dump/Restore a job holding a file in its private /dev/shm (job_container/tmpfs)" {
+    SLURM_JOB_SUBMIT=slurm_submit_script SLURM_JOB_CHECK=_check_shm_job \
+        test_slurm_job SUBMIT_DUMP_RESTORE "$BATS_FILE_TMPDIR/namespace-shm.sbatch" 15
 }
 
 # GPU checkpoint/restore leans on /tmp (the controller's socket) and /dev/shm
