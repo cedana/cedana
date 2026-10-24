@@ -145,6 +145,8 @@ type (
 		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
 		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
+		// DirectIOWrite sets whether to write GPU checkpoints with O_DIRECT (on supported filesystems)
+		DirectIOWrite bool `json:"direct_io_write" key:"direct_io_write" yaml:"direct_io_write" mapstructure:"direct_io_write"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 	}
