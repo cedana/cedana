@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-2268b00eea49.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-2268b00eea49.2
-	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1
+	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.12-00000000000000-12d830f0a94d.2
 	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-de9086dfb2a8.1
 	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-de9086dfb2a8.2
 	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-73627a8c670c.2
@@ -65,6 +65,7 @@ require (
 )
 
 require (
+	buf.build/gen/go/cedana/cedana-image-streamer/grpc/go v1.6.2-00000000000000-12d830f0a94d.1 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
