@@ -202,7 +202,7 @@ jobs:
           SLURM_TAG="${{ fromJSON(inputs.slurm_versions)[0] }}"
           export SLURM_VERSION="$(echo "$SLURM_TAG" | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
           NODE_IMAGE="cedana/cedana-slurm-node:${SLURM_TAG}"
-          if docker pull "$NODE_IMAGE" >/dev/null 2>&1; then
+          if docker pull -q "$NODE_IMAGE"; then
             export SLURM_BASE_IMAGE="$NODE_IMAGE"
             echo "Using prebaked node image $NODE_IMAGE"
           else
@@ -509,7 +509,7 @@ jobs:
           export SLURM_VERSION="$(echo '${{ matrix.slurm }}' | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
 
           NODE_IMAGE="cedana/cedana-slurm-node:${{ matrix.slurm }}"
-          if docker pull "$NODE_IMAGE" >/dev/null 2>&1; then
+          if docker pull -q "$NODE_IMAGE"; then
             export SLURM_BASE_IMAGE="$NODE_IMAGE"
             echo "Using prebaked node image $NODE_IMAGE"
           else

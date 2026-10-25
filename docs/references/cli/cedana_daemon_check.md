@@ -11,6 +11,7 @@ cedana daemon check [flags]
 ```
       --full   perform a full check (including plugins)
   -h, --help   help for check
+      --ping   only check that the daemon is serving (e.g. for liveness probes)
 ```
 
 ### Options inherited from parent commands

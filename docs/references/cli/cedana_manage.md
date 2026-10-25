@@ -32,6 +32,7 @@ Manage an existing/upcoming process/container (create a job)
 * [cedana](cedana.md)	 - Root command for Cedana
 * [cedana manage containerd](cedana_manage_containerd.md)	 - Manage a containerd container
 * [cedana manage crun](cedana_manage_crun.md)	 - manage an existing crun container
+* [cedana manage podman](cedana_manage_podman.md)	 - Manage a podman container
 * [cedana manage process](cedana_manage_process.md)	 - Managed existing process (job)
 * [cedana manage runc](cedana_manage_runc.md)	 - manage an existing runc container
 

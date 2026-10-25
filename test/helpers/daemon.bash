@@ -63,21 +63,44 @@ setup_daemon() {
         export CEDANA_DB_PATH=/tmp/cedana-"$(basename "$SOCK")".db
         export CEDANA_ADDRESS="$SOCK"
         debug start_daemon_at "$SOCK"
+        follow_daemon_log "$SOCK" +1 # all of it, as it's this test's daemon
     else
-        log_file=$(daemon_log_file "$CEDANA_ADDRESS")
-        tail -f "$log_file" &
-        TAIL_PID=$!
-        export TAIL_PID
+        check_daemon_alive "$CEDANA_ADDRESS" || return 1 # e.g. crashed in an earlier test
+        follow_daemon_log "$CEDANA_ADDRESS" 0 # from now on, for this test
     fi
 }
 
 teardown_daemon() {
     if ! env_exists "PERSIST_DAEMON"; then
         stop_daemon_at "$SOCK"
+    fi
+    unfollow_daemon_log
+    if env_exists "PERSIST_DAEMON"; then
+        check_daemon_alive "$CEDANA_ADDRESS" # crashed in this test
+    fi
+}
+
+# Fails with the end of the daemon's log if it's no longer running (e.g. it panicked), as
+# otherwise later tests only see "connection refused"
+check_daemon_alive() {
+    local sock=$1
+    if [ -z "$(recorded_pid "$(daemon_pid_file "$sock")")" ]; then
+        error_log "Daemon at $sock is no longer running"
+        show_daemon_crash "$(daemon_log_file "$sock")"
+        return 1
+    fi
+}
+
+# Shows the crash from a daemon's log: from a Go panic or fatal error to the end (its whole
+# stack trace, whose top would otherwise be cut off), else just the end of the log
+show_daemon_crash() {
+    local log=$1
+    local line
+    line=$(grep -nE '^(panic: |fatal error: )' "$log" 2>/dev/null | head -1 | cut -d: -f1)
+    if [ -n "$line" ]; then
+        tail -n +"$line" "$log"
     else
-        if [ -n "$TAIL_PID" ]; then
-            wait_for_stop "$SOCK" && kill "$TAIL_PID" &
-        fi
+        tail -n 50 "$log"
     fi
 }
 
@@ -87,53 +110,116 @@ teardown_daemon() {
 
 start_daemon_at() {
     local sock=$1
-    id=$(basename "$sock")
     debug_log "Starting daemon at socket $sock with config $CEDANA_CONFIG_DIR/config.json"
-    cedana daemon start --init-config | tee "$(daemon_log_file "$sock")" &
-    wait_for_start "$sock"
+    # Only to its log file: the daemon (and anything it spawns) must not hold the test's or the
+    # runner's output open, or the parallel runner fails the file once they outlive it.
+    # Tests see the log through follow_daemon_log.
+    cedana daemon start --init-config >"$(daemon_log_file "$sock")" 2>&1 </dev/null 3>&- &
+    record_pid $! "$(daemon_pid_file "$sock")"
+    wait_for_start "$sock" $!
 }
 
+# Shows the daemon's log in the test's output, from the given line (+1 for all, 0 for new)
+follow_daemon_log() {
+    local sock=$1
+    local from=$2
+    tail -n "$from" -F "$(daemon_log_file "$sock")" 2>/dev/null 3>&- &
+    TAIL_PID=$!
+}
+
+unfollow_daemon_log() {
+    if [ -n "$TAIL_PID" ]; then
+        kill "$TAIL_PID" 2>/dev/null
+        wait "$TAIL_PID" 2>/dev/null || true
+        TAIL_PID=
+    fi
+}
+
+# Polled often, as it's on the path of every test. Fails right away if the daemon exits.
 wait_for_start() {
     local sock=$1
+    local pid=$2
     local i=0
     while [ ! -S "$sock" ]; do
-        sleep 1
+        if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+            error_log "Daemon exited before starting, see $(daemon_log_file "$sock")"
+            return 1
+        fi
+        sleep 0.1
         i=$((i + 1))
-        if [ $i -gt $WAIT_TIMEOUT ]; then
+        if [ $i -gt $((WAIT_TIMEOUT * 10)) ]; then
             error_log "Daemon failed to start after $WAIT_TIMEOUT seconds"
-            exit 1
+            return 1
         fi
     done
 }
 
 stop_daemon_at() {
     local sock=$1
-    if [ ! -e "$sock" ] || [ ! -S "$sock" ]; then
-        debug_log "Socket $sock does not exist, skipping stop"
+    if [ ! -S "$sock" ] && [ -z "$(recorded_pid "$(daemon_pid_file "$sock")")" ]; then
+        debug_log "Daemon at $sock is not running, skipping stop"
         return 0
     fi
     debug_log "Stopping daemon at socket $sock"
-    kill_at_sock "$sock" TERM
+    terminate_at_sock "$sock"
     wait_for_stop "$sock"
 }
 
+# Sends TERM to the daemon at sock, by its recorded PID, as finding who holds the socket
+# (fuser) scans every process
+terminate_at_sock() {
+    local sock=$1
+    local pid
+    pid=$(recorded_pid "$(daemon_pid_file "$sock")")
+    if [ -z "$pid" ] || ! kill -TERM "$pid" 2>/dev/null; then
+        kill_at_sock "$sock" TERM
+    fi
+}
+
+# Waits for the daemon process to exit, not just its socket, which goes away first. A daemon
+# that crashed leaves its socket behind, so with its PID recorded, only the process counts.
 wait_for_stop() {
     local sock=$1
+    local pid_file
+    pid_file=$(daemon_pid_file "$sock")
     local i=0
-    while [ -S "$sock" ]; do
-        sleep 1
+    while if [ -s "$pid_file" ]; then [ -n "$(recorded_pid "$pid_file")" ]; else [ -S "$sock" ]; fi; do
+        sleep 0.1
         i=$((i + 1))
-        if [ $i -gt $WAIT_TIMEOUT ]; then
+        if [ $i -gt $((WAIT_TIMEOUT * 10)) ]; then
             error_log "Daemon failed to stop after $WAIT_TIMEOUT seconds"
-            exit 1
+            return 1
         fi
     done
+    rm -f "$sock" # left behind if it crashed
 }
 
 daemon_log_file() {
-    local sock=$1
-    id=$(basename "$sock")
-    echo /tmp/cedana-daemon-"$id".log
+    echo /tmp/cedana-daemon-"$(basename "$1")".log
+}
+
+daemon_pid_file() {
+    echo /tmp/cedana-daemon-"$(basename "$1")".pid
+}
+
+# A process's start time (in clock ticks since boot), which tells it apart from a later
+# process reusing its PID
+pid_start_time() {
+    sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20
+}
+
+record_pid() {
+    echo "$1 $(pid_start_time "$1")" >"$2"
+}
+
+# The PID recorded in file, if that process is still running (and not another one that
+# reused its PID)
+recorded_pid() {
+    local pid start
+    { read -r pid start <"$1"; } 2>/dev/null || return 0
+    if [ -n "$pid" ] && [ -n "$start" ] && [ "$(pid_start_time "$pid")" = "$start" ]; then
+        echo "$pid"
+    fi
 }
 
 pid_for_jid() {

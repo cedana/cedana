@@ -19,8 +19,10 @@ import (
 
 	"buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go/img_streamer"
 	cedana_io "github.com/cedana/cedana/pkg/io"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
@@ -40,6 +42,8 @@ const (
 	SERVE_SOCK         = "streamer-serve.sock"
 	INIT_PROGRESS_MSG  = "socket-init"
 	STOP_LISTENER_MSG  = "stop-listener"
+	SERVICE            = "cedana-image-streamer"
+	ERROR_MSG_PREFIX   = "cedana-image-streamer Error:"
 	IMG_FILE_PATTERN   = "^img-*"
 	IMG_FILE_FORMATTER = "img-%d"
 	CONNECTION_TIMEOUT = 5 * time.Minute
@@ -222,6 +226,7 @@ func NewStreamingFs(
 
 	// Mark ready when we read init progress message on stderr
 	wg.Go(func() {
+		streamerLog := logging.Unfiltered(log.With().Str(logging.SERVICE_FIELD, SERVICE).Logger())
 		scanner := bufio.NewScanner(stderrPipe)
 		for {
 			if !scanner.Scan() || ctx.Err() != nil {
@@ -231,7 +236,13 @@ func NewStreamingFs(
 			if lastMsg == INIT_PROGRESS_MSG {
 				ready <- true
 			}
-			log.Debug().Msg(lastMsg)
+			// The streamer has no log levels, it only marks the error it exits with. The rest
+			// are details to us, so trace.
+			level := zerolog.TraceLevel
+			if strings.HasPrefix(lastMsg, ERROR_MSG_PREFIX) {
+				level = zerolog.ErrorLevel
+			}
+			streamerLog.WithLevel(level).Msg(lastMsg)
 		}
 	})
 

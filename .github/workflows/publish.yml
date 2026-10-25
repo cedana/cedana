@@ -221,18 +221,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        plugin:
-          - runc
-          - containerd
-          - crio
-          - kata
-          - cloud-hypervisor
-          - k8s
-          - slurm
-          - storage/cedana
-          - storage/s3
-          - storage/gcs
-          - storage/csx
         arch:
           - amd64
           - arm64
@@ -264,6 +252,7 @@ jobs:
             "runc"
             "crun"
             "containerd"
+            "podman"
             "crio"
             "kata"
             "cloud-hypervisor"
@@ -533,6 +522,7 @@ jobs:
             "libcedana-crun.so"
             "libcedana-k8s.so"
             "libcedana-kata.so"
+            "libcedana-podman.so"
             "libcedana-runc.so"
             "libcedana-slurm.so"
             "libcedana-storage-cedana.so"
@@ -581,6 +571,7 @@ jobs:
             "libcedana-crun.so"
             "libcedana-k8s.so"
             "libcedana-kata.so"
+            "libcedana-podman.so"
             "libcedana-runc.so"
             "libcedana-slurm.so"
             "libcedana-storage-cedana.so"

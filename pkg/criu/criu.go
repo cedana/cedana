@@ -18,6 +18,7 @@ import (
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -33,7 +34,14 @@ type Criu struct {
 	swrkSaid   chan string
 	// How swrk ended, for an operation that failed
 	swrkExit string
+	// Whether the operation failed on our side (a notify callback returned an error): swrk is
+	// then given SWRK_FAIL_GRACE to finish its own teardown before it is killed, as its restore
+	// teardown blocks forever once the restored tasks were killed while it still traced them.
+	failed bool
 }
+
+// SWRK_FAIL_GRACE is how long a failed operation waits for swrk to exit before killing it.
+const SWRK_FAIL_GRACE = 10 * time.Second
 
 // MakeCriu returns the Criu object required for most operations
 func MakeCriu() *Criu {
@@ -69,6 +77,7 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	cmd.Env = criuEnv()
 
 	// Keep what swrk says for the error if it fails, when nobody else is listening. A pipe of
 	// our own, as a writer would have exec copying in a goroutine that outlives Process.Wait.
@@ -130,7 +139,31 @@ func (c *Criu) Cleanup() error {
 		c.swrkSk = nil
 		// XXX: We don't use s.swrkCmd.Wait() because it can hang forever
 		// since the stdin, stdout, and stderr copy might not be over.
-		state, err := c.swrkCmd.Process.Wait()
+		type waited struct {
+			state *os.ProcessState
+			err   error
+		}
+		done := make(chan waited, 1)
+		go func() {
+			state, err := c.swrkCmd.Process.Wait()
+			done <- waited{state, err}
+		}()
+		var state *os.ProcessState
+		var err error
+		if c.failed {
+			select {
+			case w := <-done:
+				state, err = w.state, w.err
+			case <-time.After(SWRK_FAIL_GRACE):
+				log.Warn().Int("pid", c.swrkCmd.Process.Pid).Dur("grace", SWRK_FAIL_GRACE).Msg("criu swrk did not exit after the failed operation, killing it")
+				c.swrkCmd.Process.Kill()
+				w := <-done
+				state, err = w.state, w.err
+			}
+		} else {
+			w := <-done
+			state, err = w.state, w.err
+		}
 		if err != nil {
 			// ECHILD means the process was already reaped (e.g. by the
 			// embedding process's signal handler or the Go runtime).
@@ -458,6 +491,7 @@ func (c *Criu) doSwrkWithResp(
 		}
 
 		if err != nil {
+			c.failed = true
 			return resp, err
 		}
 
@@ -581,6 +615,22 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// criuEnv returns our environment with the system bin dirs first in PATH. CRIU runs tools like
+// tar by name, and k3s starts shims with its own bin dir (BusyBox tar) ahead of /usr/bin.
+func criuEnv() []string {
+	path := "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	if p := os.Getenv("PATH"); p != "" {
+		path += ":" + p
+	}
+	env := []string{path}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "PATH=") {
+			env = append(env, e)
+		}
+	}
+	return env
 }
 
 // tailOf reads r to its end and returns the last of it

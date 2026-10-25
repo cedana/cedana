@@ -70,11 +70,26 @@ get_kubelet_arg_value() {
 
 echo "Looking for running kubelet process..."
 KUBELET_PID=$(pidof kubelet || true)
+K3S_UNIT=""
 if [ -z "$KUBELET_PID" ]; then
-    echo "Error: kubelet is not running" >&2
-    exit 1
+    # k3s runs kubelet inside its own process, so look for the k3s service instead
+    if command -v systemctl >/dev/null 2>&1; then
+        for unit in k3s k3s-agent; do
+            if systemctl is-active --quiet "$unit"; then
+                K3S_UNIT="$unit"
+                break
+            fi
+        done
+    fi
+    if [ -z "$K3S_UNIT" ]; then
+        echo "Error: kubelet is not running" >&2
+        exit 1
+    fi
+    KUBELET_PID=$(systemctl show -p MainPID --value "$K3S_UNIT")
+    echo "Found k3s service $K3S_UNIT running kubelet (PID=$KUBELET_PID)"
+else
+    echo "Found kubelet process (PID=$KUBELET_PID)"
 fi
-echo "Found kubelet process (PID=$KUBELET_PID)"
 
 # True if kubelet (re)started after the given config file was last written,
 # i.e. the config is already in effect (guards against a previous run that
@@ -87,19 +102,29 @@ kubelet_has_config() {
     [ "$started" -ge "$(stat -c %Y "$1")" ]
 }
 
-echo "Reading kubelet arguments..."
-KUBELET_ARGS=$(ps -o args= -p "$KUBELET_PID")
-if [ -z "$KUBELET_ARGS" ]; then
-    echo "WARNING: Could not get kubelet arguments, please manually modify request timeout" >&2
-    exit 0
+if [ -n "$K3S_UNIT" ]; then
+    # k3s passes its kubelet a drop-in config dir (v1.32+)
+    KUBELET_CONFIG_DIR="/var/lib/rancher/k3s/agent/etc/kubelet.conf.d"
+    KUBELET_CONFIG_FILE=""
+    if [ ! -d "$KUBELET_CONFIG_DIR" ]; then
+        echo "WARNING: k3s kubelet config dir $KUBELET_CONFIG_DIR not found (requires k3s v1.32+); skipping kubelet config update, please manually set runtimeRequestTimeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT" >&2
+        exit 0
+    fi
+else
+    echo "Reading kubelet arguments..."
+    KUBELET_ARGS=$(ps -o args= -p "$KUBELET_PID")
+    if [ -z "$KUBELET_ARGS" ]; then
+        echo "WARNING: Could not get kubelet arguments, please manually modify request timeout" >&2
+        exit 0
+    fi
+    echo "Raw kubelet args: $KUBELET_ARGS"
+
+    # Split into proper positional parameters (preserves quoted arguments)
+    eval "set -- $KUBELET_ARGS"
+
+    KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$@")
+    KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$@")
 fi
-echo "Raw kubelet args: $KUBELET_ARGS"
-
-# Split into proper positional parameters (preserves quoted arguments)
-eval "set -- $KUBELET_ARGS"
-
-KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$@")
-KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$@")
 
 echo "Resolved --config-dir: ${KUBELET_CONFIG_DIR:-<not set>}"
 echo "Resolved --config:     ${KUBELET_CONFIG_FILE:-<not set>}"
@@ -175,6 +200,17 @@ fi
 # Restart kubelet to apply changes
 echo "Attempting to restart kubelet to apply changes..."
 success_method=""
+
+if [ -n "$K3S_UNIT" ]; then
+    # Restarting k3s does not stop running containers
+    echo "Restarting k3s service $K3S_UNIT"
+    if systemctl restart "$K3S_UNIT"; then
+        echo "Done. kubelet configuration update complete (restarted $K3S_UNIT)"
+        exit 0
+    fi
+    echo "ERROR: systemctl restart $K3S_UNIT failed; please restart manually" >&2
+    exit 1
+fi
 
 if command -v systemctl >/dev/null 2>&1; then
     echo "systemctl is available, trying: systemctl restart kubelet"

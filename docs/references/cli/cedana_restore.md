@@ -42,6 +42,7 @@ Restore a container/process
 * [cedana restore containerd](cedana_restore_containerd.md)	 - Restore a containerd container
 * [cedana restore crun](cedana_restore_crun.md)	 - Restore a crun container
 * [cedana restore job](cedana_restore_job.md)	 - Restore a managed process/container (job)
+* [cedana restore podman](cedana_restore_podman.md)	 - Restore a podman container
 * [cedana restore process](cedana_restore_process.md)	 - Restore a process
 * [cedana restore runc](cedana_restore_runc.md)	 - Restore a runc container
 
