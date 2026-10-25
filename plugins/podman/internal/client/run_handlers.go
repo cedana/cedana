@@ -90,15 +90,22 @@ func Run[REQ, RESP any](ctx context.Context, opts types.Opts, resp *RESP, req *R
 		}
 	}
 
+	logsDone := make(chan struct{})
 	if opts.IO.Stdout != nil || opts.IO.Stderr != nil {
 		logs := exec.CommandContext(opts.Lifetime, utils.PODMAN_BINARY, "logs", "--follow", id)
 		logs.Stdout = opts.IO.Stdout
 		logs.Stderr = opts.IO.Stderr
 		if err := logs.Start(); err != nil {
 			log.Warn().Err(err).Str("id", id).Msg("failed to follow container logs")
+			close(logsDone)
 		} else {
-			opts.WG.Go(func() { logs.Wait() })
+			opts.WG.Go(func() {
+				defer close(logsDone)
+				logs.Wait()
+			})
 		}
+	} else {
+		close(logsDone)
 	}
 
 	// Wait for the container to exit, send exit code. Stops waiting when the
@@ -118,6 +125,12 @@ func Run[REQ, RESP any](ctx context.Context, opts types.Opts, resp *RESP, req *R
 		if err != nil {
 			log.Trace().Err(err).Uint32("PID", pid).Msg("container wait")
 			return
+		}
+		// Only once the logs are all forwarded: the exit starts the job's cleanup, which
+		// removes the container, and with it the logs not yet read (e.g. all of a short one's)
+		select {
+		case <-logsDone:
+		case <-opts.Lifetime.Done():
 		}
 		exitCode <- status
 	})

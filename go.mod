@@ -39,6 +39,7 @@ require (
 	github.com/opencontainers/runc v1.3.2
 	github.com/opencontainers/runtime-spec v1.2.1
 	github.com/opencontainers/selinux v1.13.1
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0
@@ -65,7 +66,6 @@ require (
 )
 
 require (
-	buf.build/gen/go/cedana/cedana-image-streamer/grpc/go v1.6.2-00000000000000-12d830f0a94d.1 // indirect
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -125,7 +125,6 @@ require (
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
