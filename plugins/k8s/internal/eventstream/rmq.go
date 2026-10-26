@@ -910,8 +910,7 @@ func (es *EventStream) reportUpload(
 	info := models.NewCheckpointSuccessInfo()
 	info.SetRestorePath(&path)
 	if checksum != "" {
-		// The SDK model predates the field; it is sent as additional data
-		info.SetAdditionalData(map[string]any{"checksum": checksum})
+		info.SetChecksum(&checksum)
 	}
 	_, err = es.propagator.V1().Checkpoints().Uploaded().ById(checkpointId).Post(ctx, info, nil)
 	if err != nil {
