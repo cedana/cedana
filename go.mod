@@ -6,9 +6,9 @@ require (
 	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-2268b00eea49.1
 	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-2268b00eea49.2
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-b5e10c6d5556.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-b5e10c6d5556.2
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-20261015214105-0213eb4730a3.2
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-96dfb354ecb2.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-96dfb354ecb2.2
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-d871545ec8a5.2
 	cloud.google.com/go/auth v0.23.0
 	cloud.google.com/go/storage v1.68.0
 	github.com/aws/aws-sdk-go-v2 v1.41.5
@@ -42,6 +42,7 @@ require (
 	github.com/opencontainers/runc v1.3.2
 	github.com/opencontainers/runtime-spec v1.2.1
 	github.com/opencontainers/selinux v1.13.1
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0
@@ -148,7 +149,6 @@ require (
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pkg/xattr v0.4.12 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
