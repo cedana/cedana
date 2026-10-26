@@ -31,6 +31,13 @@ setup() {
 }
 
 teardown() {
+    # A failed dump_restore_cufft stops before its own cleanup, and the sample waits on its
+    # gate with the GPU in use until it is killed.
+    if [ -n "${gate:-}" ]; then
+        rm -f "$gate"
+        cedana job kill "$jid" &>/dev/null || true
+        unset gate
+    fi
     teardown_daemon
 }
 
@@ -63,9 +70,6 @@ dump_restore_cufft() {
     wait_for_cmd 60 grep -q PASS "$log_file"
     run grep -E "MISMATCH|FAIL" "$log_file"
     assert_failure
-
-    rm -f "$gate"
-    run cedana job kill "$jid"
 }
 
 ###########
