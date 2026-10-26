@@ -141,6 +141,12 @@ type (
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		// ShmCommit is the size in bytes of the shared memory segment backed with pages at creation (rest is backed on first touch)
+		ShmCommit int64 `json:"shm_commit" key:"shm_commit" yaml:"shm_commit" mapstructure:"shm_commit"`
+		// ImageZeroCopy sets whether module/library images that are file-backed are mapped by the worker instead of staged as a copy
+		ImageZeroCopy bool `json:"image_zero_copy" key:"image_zero_copy" yaml:"image_zero_copy" mapstructure:"image_zero_copy"`
+		// ImageForceFallback forces the worker to copy every image out of the client process (for testing the fallback path)
+		ImageForceFallback bool `json:"image_force_fallback" key:"image_force_fallback" yaml:"image_force_fallback" mapstructure:"image_force_fallback"`
 		// DedupEnabled sets whether to use deduplication for GPU checkpoints (reduces checkpoint size)
 		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
 		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
