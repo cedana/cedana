@@ -8,15 +8,15 @@ load ../helpers/k8s
 load ../helpers/helm
 load ../helpers/propagator
 
-# Dumps and restores a pod running a cedana-samples:cpu sample (path under /app/cpu_smr, then
-# its args), which exits on any lost or corrupted state: it isn't restarted from scratch, so
+# Dumps and restores a pod running a cedana-samples sample (path under /cedana-samples/cpu_smr,
+# then its args), which exits on any lost or corrupted state: it isn't restarted from scratch, so
 # the restored pod fails then. With PERSISTENT_MOUNTS set, the container gets it as
 # CEDANA_PERSISTENT_MOUNTS, under the cedana runtime class, which applies it on creation.
 restore_sample_pod() {
-    local sample="/app/cpu_smr/$1"
+    local sample="/cedana-samples/cpu_smr/$1"
     shift
     local spec
-    spec=$(cmd_pod_spec "cedana/cedana-samples:cpu" "if [ ! -x $sample ]; then echo NO_SAMPLE; exec sleep infinity; fi
+    spec=$(cmd_pod_spec "$SAMPLES_IMAGE" "if [ ! -x $sample ]; then echo NO_SAMPLE; exec sleep infinity; fi
 exec python3 $sample $*")
     sed -i 's/^spec:$/spec:\n  restartPolicy: Never/' "$spec"
     if [ -n "${PERSISTENT_MOUNTS:-}" ]; then
@@ -31,7 +31,7 @@ exec python3 $sample $*")
     wait_for_cmd 60 "kubectl logs $name -n $NAMESPACE | grep -qE '^(OK|NO_SAMPLE)'"
     if kubectl logs "$name" -n "$NAMESPACE" | grep -q NO_SAMPLE; then
         kubectl delete pod "$name" -n "$NAMESPACE" --wait=false
-        skip "$sample is not in cedana/cedana-samples:cpu yet"
+        skip "$sample is not in $SAMPLES_IMAGE yet"
     fi
     kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
 
