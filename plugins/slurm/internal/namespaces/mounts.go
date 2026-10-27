@@ -2,12 +2,8 @@ package namespaces
 
 // Recognizes the directories SLURM's namespace plugin gives the job.
 //
-// job_container/tmpfs (namespace/tmpfs from 26.05) runs the job in a mount
-// namespace of its own with a directory of the job's for each entry of Dirs
-// (/tmp,/dev/shm by default): a bind mount from <basepath>/<jobid>/.<jobid>/
-// for /tmp, a new tmpfs for /dev/shm. Both go away with the job, and a dump
-// from inside the namespace records their files by path only, so what is in
-// them goes into the dump (CED-2532).
+// job_container/tmpfs gives the job a mount namespace with its own /tmp and
+// /dev/shm. Both go away with the job, so the dump carries their files (CED-2532).
 
 import (
 	"bufio"
@@ -21,10 +17,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// The node's mounts. Readable by any user, unlike init's namespace links.
+// The node's mounts. Any user can read them.
 const initMountinfo = "/proc/1/mountinfo"
 
-// The one kind of filesystem that goes away with its mount namespace
+// The one filesystem type that goes away with its mount namespace
 const disposableFSType = "tmpfs"
 
 type mount struct {
@@ -39,9 +35,9 @@ type mount struct {
 type PrivateMount struct {
 	Mountpoint string
 	FSType     string
-	// Root of the mount in its filesystem: the plugin's directory for a bind mount, / for a tmpfs
+	// Root of the mount in its filesystem
 	Root string
-	// major:minor of the mount's filesystem
+	// major:minor of the filesystem
 	Device string
 }
 
@@ -55,19 +51,15 @@ func SlurmMounts(pid uint32, jobID uint32) ([]PrivateMount, error) {
 	}
 	node, err := readMountinfo(initMountinfo)
 	if err != nil {
-		// e.g. hidepid on /proc: the path rule alone, which misses the tmpfs at /dev/shm
+		// e.g. hidepid on /proc
 		log.Warn().Err(err).Msgf("failed to read %s, recognizing the job's private mounts by their path alone", initMountinfo)
 		node = nil
 	}
 	return slurmMounts(job, node, jobID), nil
 }
 
-// slurmMounts picks the mounts the job has to itself: those rooted in the plugin's directory
-// for the job (<jobid>/.<jobid> in the path), and a tmpfs the node has no mount of. A new mount
-// namespace copies its parent's mounts with their device and root, so a tmpfs that is nowhere
-// on the node was made for the job and goes away with it. Only a tmpfs: a filesystem that
-// outlives the job, such as an NFS share mounted for it, must not be overwritten by the restore.
-// Without the node's mounts, the path alone decides. See CED-2532.
+// slurmMounts picks the job's own mounts: the plugin's bind mounts, by their path, and a tmpfs
+// the node has no mount of. Other filesystems outlive the job (CED-2532).
 func slurmMounts(job, node []mount, jobID uint32) []PrivateMount {
 	id := strconv.FormatUint(uint64(jobID), 10)
 
@@ -88,7 +80,7 @@ func slurmMounts(job, node []mount, jobID uint32) []PrivateMount {
 	return mounts
 }
 
-// onNode tells whether the node has a mount of m's filesystem that holds m's root
+// onNode tells whether the node mounts m's filesystem at or above m's root
 func onNode(m mount, node []mount) bool {
 	for _, n := range node {
 		if n.Device != m.Device {
@@ -112,9 +104,7 @@ func ofJob(path, id string) bool {
 	return false
 }
 
-// ownMountNamespace tells whether pid is in a mount namespace other than init's, from the
-// mounts alone, which any user can read: a new namespace copies every mount under new mount
-// IDs, so the ID of pid's root mount is one init's mounts lack.
+// ownMountNamespace tells from the mount IDs whether pid is in a mount namespace other than init's
 func ownMountNamespace(pid uint32) (bool, error) {
 	jobPath := fmt.Sprintf("/proc/%d/mountinfo", pid)
 	job, err := readMountinfo(jobPath)

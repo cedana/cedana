@@ -29,8 +29,7 @@ NAMESPACE_BASE_PATH=/var/tmp/slurm-ns
 NAMESPACE_TMP_FILE=/tmp/namespace-marker
 NAMESPACE_TMP_FD=3
 
-# The same for the job's private /dev/shm, a fresh tmpfs rather than a bind
-# mount from BasePath, which the dump has to carry too (CED-2532).
+# The same for the job's private /dev/shm, a tmpfs of its own (CED-2532).
 NAMESPACE_SHM_FILE=/dev/shm/namespace-marker
 NAMESPACE_SHM_FD=4
 
@@ -107,8 +106,7 @@ exec ${NAMESPACE_TMP_FD}>${NAMESPACE_TMP_FILE}
 bash cpu_smr/counting.sh >&${NAMESPACE_TMP_FD}
 EOF
 
-    # The same job with the file in its private /dev/shm, held open and
-    # written to for its whole life, as SGLang holds its load snapshot.
+    # The same job, with the file in its private /dev/shm
     cat >"$BATS_FILE_TMPDIR/namespace-shm.sbatch" <<EOF
 #!/bin/bash
 #SBATCH --job-name=namespace-shm
@@ -235,9 +233,7 @@ _check_in_job_namespace() {
     fi
 }
 
-# The file the job opened in one of its private directories is still open on
-# fd $5 (path $6, for the messages), owned by the job's user, and holds
-# everything written before the dump. It is read through the job's fd.
+# The job still holds the file on fd $5 (path $6), owned by its user, with all its content.
 _check_held_file_kept() {
     local phase="$1" job_id="$2" host="$3" pid="$4" fd_num="$5" path="$6"
     local fd="/proc/${pid}/fd/${fd_num}"
@@ -274,8 +270,7 @@ _check_shm_file_kept() {
     _check_held_file_kept "$@" "$NAMESPACE_SHM_FD" "$NAMESPACE_SHM_FILE"
 }
 
-# The job's /dev/shm is its own: a tmpfs of another device than the node's.
-# After the restore, the file is in the new job's own /dev/shm, not the node's.
+# The job's /dev/shm is a tmpfs of its own, before and after the restore.
 _check_shm_private() {
     local phase="$1" job_id="$2" host="$3" pid="$4"
     local job_dev node_dev file_dev
@@ -320,8 +315,7 @@ _check_gpu_job() {
         test_slurm_job SUBMIT_DUMP_RESTORE "$BATS_FILE_TMPDIR/namespace-tmp.sbatch" 15
 }
 
-# A regular file held open in the job's private /dev/shm, a tmpfs the dump has
-# to find by the node's mounts and carry (CED-2532).
+# A file held open in the job's private /dev/shm (CED-2532).
 # bats test_tags=dump,restore,samples
 @test "Namespace: Dump/Restore a job holding a file in its private /dev/shm (job_container/tmpfs)" {
     SLURM_JOB_SUBMIT=slurm_submit_script SLURM_JOB_CHECK=_check_shm_job \

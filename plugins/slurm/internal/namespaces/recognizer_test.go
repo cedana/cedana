@@ -183,7 +183,7 @@ const (
 531 522 0:22 / /var/tmp rw,nosuid - tmpfs tmpfs rw
 532 522 0:22 /scratch /scratch rw,nosuid - tmpfs tmpfs rw
 `
-	// An NFS share mounted for the job alone: the node has no mount of it, and it outlives the job
+	// An NFS share mounted for the job alone. It outlives the job.
 	testLauncherShareJobMountinfo = `522 400 8:1 / / rw,relatime - ext4 /dev/sda1 rw
 523 522 0:21 / /proc rw,nosuid - proc proc rw
 524 522 0:22 / /dev/shm rw,nosuid - tmpfs tmpfs rw
@@ -215,16 +215,16 @@ func TestSlurmMounts(t *testing.T) {
 		expected []PrivateMount
 	}{
 		{"HostNamespace", host, host, 1234, nil},
-		// A tmpfs made for the job by its launcher goes away with it, as the plugin's do
+		// A launcher's tmpfs goes away with the job
 		{"TmpfsOfALauncher", parse(testJobMountinfo), host, 1234, []PrivateMount{launcherTmp}},
-		// Its /dev/shm is a tmpfs of its own, which only the node's mounts tell; not the pin
+		// The job's own tmpfs at /dev/shm. The pin is not the job's.
 		{"SlurmTmp", parse(testSlurmJobMountinfo), host, 1234, []PrivateMount{slurmShm, slurmTmp}},
 		{"AnotherJob", parse(testSlurmJobMountinfo), host, 123, []PrivateMount{slurmShm}},
-		// The host's tmpfs bind-mounted in the job, in full and in part, is the host's
+		// Bind mounts of the host's tmpfs are the host's
 		{"SharedWithHost", parse(testSharedJobMountinfo), host, 1234, nil},
-		// A share the node has no mount of is not a tmpfs: it outlives the job and stays out
+		// A share is not a tmpfs. It stays out.
 		{"ShareOfALauncher", parse(testLauncherShareJobMountinfo), host, 1234, nil},
-		// Without the node's mounts, the path alone: /tmp and nothing else
+		// Without the node's mounts, the path rule alone
 		{"TmpfsOfALauncherByPath", parse(testJobMountinfo), nil, 1234, nil},
 		{"SlurmTmpByPath", parse(testSlurmJobMountinfo), nil, 1234, []PrivateMount{slurmTmp}},
 		{"AnotherJobByPath", parse(testSlurmJobMountinfo), nil, 123, nil},

@@ -19,14 +19,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// The GPU controller's shared memory in the job's /dev/shm (the segment cedana-gpu.<id>, its
-// .booking file and its .misc directory) is made anew for the restored job and too large for a
-// dump, so it is left out of every private mount. The controller's log directory cedana-gpu.<id>
-// under gpu.log_dir (/tmp by default) stays: the job's LD_PRELOAD names the libcuda.so.1 in it.
+// The GPU controller's shared memory (cedana-gpu.<id>, .booking, .misc) is not archived. The
+// restore makes it anew. The controller's log directory cedana-gpu.<id> is archived (CED-2532).
 const gpuControllerPrefix = "cedana-gpu."
 
-// isGPUControllerShm tells a top-level entry of a private mount that is the GPU controller's
-// shared memory: cedana-gpu.* except the directory cedana-gpu.<id>
+// isGPUControllerShm tells the GPU controller's shared memory at the top of a private mount
 func isGPUControllerShm(rel string, info fs.FileInfo) bool {
 	if strings.Contains(rel, "/") || !strings.HasPrefix(rel, gpuControllerPrefix) {
 		return false

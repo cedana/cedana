@@ -377,8 +377,7 @@ func TestExtractLeavesWhatItMayNotSet(t *testing.T) {
 	}
 }
 
-// The GPU controller's segment, booking file and .misc directory are left out; its log
-// directory and the job's own files, one of them named like the controller's but deeper, stay.
+// The controller's segment, booking file and .misc directory are left out. The rest stays.
 func TestArchiveDirSkipsGPUController(t *testing.T) {
 	src := t.TempDir()
 	must := func(err error) {
@@ -394,7 +393,7 @@ func TestArchiveDirSkipsGPUController(t *testing.T) {
 	must(os.WriteFile(filepath.Join(src, "sglang_loads_abc.shm"), []byte("load"), 0o600))
 	must(os.MkdirAll(filepath.Join(src, "job/cedana-gpu.keep"), 0o700))
 	must(os.WriteFile(filepath.Join(src, "job/cedana-gpu.keep/data"), []byte("mine"), 0o600))
-	// The log directory of a controller, as in /tmp
+	// The controller's log directory
 	must(os.MkdirAll(filepath.Join(src, "cedana-gpu.5678"), 0o755))
 	must(os.WriteFile(filepath.Join(src, "cedana-gpu.5678/cedana-gpu-controller-1.log"), []byte("log"), 0o644))
 	must(os.Symlink("/usr/local/lib/libcedana-gpu.so", filepath.Join(src, "cedana-gpu.5678/libcuda.so.1")))

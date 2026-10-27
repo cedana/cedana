@@ -6,9 +6,7 @@ import (
 	"testing"
 )
 
-// The mounts of a job under job_container/tmpfs with Dirs=/tmp,/dev/shm, and of init on the
-// same node, captured on SLURM 26.05.4: /tmp a bind mount from the plugin's directory, /dev/shm
-// a tmpfs of its own.
+// The mounts of a job under job_container/tmpfs and of init, captured on SLURM 26.05.4
 func loadMountinfo(t *testing.T, name string) []mount {
 	t.Helper()
 	file, err := os.Open(filepath.Join("testdata", name))
@@ -44,7 +42,7 @@ func TestSlurmMountsJobContainerTmpfs(t *testing.T) {
 	if !ok || shm.FSType != "tmpfs" || shm.Root != "/" {
 		t.Errorf("/dev/shm: got %+v", shm)
 	}
-	// Not the node's /dev/shm, which the job's replaced
+	// The job's /dev/shm replaces the node's
 	for _, m := range node {
 		if m.Mountpoint == "/dev/shm" && m.Device == shm.Device {
 			t.Errorf("/dev/shm of the job has the node's device %s", m.Device)
@@ -55,7 +53,7 @@ func TestSlurmMountsJobContainerTmpfs(t *testing.T) {
 func TestSlurmMountsNothingOfTheNode(t *testing.T) {
 	node := loadMountinfo(t, "job_container_tmpfs-init.mountinfo")
 
-	// A process in init's namespace shares every mount with it
+	// A process in init's namespace has init's mounts
 	if got := slurmMounts(node, node, 1); len(got) != 0 {
 		t.Errorf("expected no private mount, got %+v", got)
 	}
@@ -64,7 +62,7 @@ func TestSlurmMountsNothingOfTheNode(t *testing.T) {
 func TestSlurmMountsByPathAlone(t *testing.T) {
 	job := loadMountinfo(t, "job_container_tmpfs-job.mountinfo")
 
-	// Without the node's mounts to compare with, only /tmp has the plugin's path
+	// Without the node's mounts, the path rule alone
 	got := slurmMounts(job, nil, 1)
 	if len(got) != 1 || got[0].Mountpoint != "/tmp" {
 		t.Errorf("expected /tmp alone, got %+v", got)

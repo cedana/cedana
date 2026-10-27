@@ -85,8 +85,7 @@ func RecognizeExternalNamespaces(pid uint32, jobID uint32) ([]RecognizedNamespac
 		}
 		jobInodes[t] = ino
 
-		// The mount namespace is told from the mounts, which any user can read: as the job's
-		// user (Unprivileged mode) hostNsInode falls back to our own namespace, the job's.
+		// The mounts tell the mount namespace. As the job's user, hostNsInode falls back to our own.
 		if t == configs.NEWNS {
 			own, err := ownMountNamespace(pid)
 			if err == nil {
@@ -287,7 +286,7 @@ func nsInode(path string) (uint64, error) {
 }
 
 // hostNsInode prefers init's namespace, falling back to ours if we're not allowed to look.
-// Right for the namespaces we never enter, wrong for the mount one: see ownMountNamespace.
+// Wrong for the mount namespace: see ownMountNamespace.
 func hostNsInode(t configs.NamespaceType) (uint64, error) {
 	ino, err := nsInode(nsPathOf(t, 1))
 	if err == nil {

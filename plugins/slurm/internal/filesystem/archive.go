@@ -56,11 +56,10 @@ func walkMount(dir string, fn func(path string, info fs.FileInfo, st *syscall.St
 	})
 }
 
-// skipFunc says whether an entry, by its path relative to the archived directory, is left
-// out, with everything under it. nil leaves nothing out.
+// skipFunc returns true for an entry to leave out of the archive. nil leaves nothing out.
 type skipFunc func(rel string, info fs.FileInfo) bool
 
-// walkMountSkipping is walkMount without the entries skip says to leave out
+// walkMountSkipping is walkMount without the entries that skip rejects
 func walkMountSkipping(dir string, skip skipFunc, fn func(path string, info fs.FileInfo, st *syscall.Stat_t) error) error {
 	if skip == nil {
 		return walkMount(dir, fn)
@@ -111,7 +110,7 @@ func contentSize(dir string, skip skipFunc) (uint64, error) {
 // with the process bound to it, and a device can't be made in a tmpfs that is nodev.
 //
 // Fails before writing more than max bytes of file contents. Returns how many were written.
-// Leaves out what skip says to, if given.
+// Leaves out the entries that skip rejects.
 func archiveDir(dir string, w io.Writer, max uint64, skip skipFunc) (written uint64, err error) {
 	tw := tar.NewWriter(w)
 	links := map[uint64]string{} // inode -> first name archived, for those with more than one

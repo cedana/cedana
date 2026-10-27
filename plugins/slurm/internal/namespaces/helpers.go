@@ -121,9 +121,7 @@ func handlingFor(t configs.NamespaceType, version int) (handling Handling, reaso
 	return HandlingExternal, ""
 }
 
-// inHostNamespace tells whether pid is in init's namespace of this type. Conservative: any
-// failure to tell means no. The mounts tell for the mount namespace; init's link, without
-// hostNsInode's fallback to our own, for the others.
+// inHostNamespace tells whether pid is in init's namespace of this type. A failure means no.
 func inHostNamespace(t configs.NamespaceType, pid uint32) bool {
 	if t == configs.NEWNS {
 		if own, err := ownMountNamespace(pid); err == nil {
