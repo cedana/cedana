@@ -14,7 +14,7 @@ import (
 const (
 	SYNC_INTERVAL         = 10 * time.Second
 	SYNC_SHUTDOWN_TIMEOUT = 45 * time.Second
-	HELD_WARN_AFTER       = 1 * time.Minute // Warn about a stale controller a dump or a restore holds for longer
+	HELD_WARN_AFTER       = 1 * time.Minute // Warn when a stale controller stays held longer
 )
 
 // Implements a GPU manager pool that is capable of maintaining a pool of GPU controllers
@@ -25,10 +25,10 @@ type ManagerPool struct {
 	free     int
 	busy     int
 	stale    int
-	held     map[string]*heldController // Stale controllers the last sync skipped, by ID
+	held     map[string]*heldController // Skipped stale controllers, by ID
 }
 
-// A stale controller that the sync skips, because a dump or a restore holds it
+// A stale controller that a dump or a restore holds
 type heldController struct {
 	since  time.Time // First skip
 	warned bool
@@ -140,13 +140,12 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 			}
 			log.Debug().Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("clearing stale GPU controller in pool")
 			if !m.controllers.TryTerminate(ctx, controller.ID) {
-				// A dump or a restore holds it, e.g. CRIU killed the job before FinalizeDump. Waiting
-				// here would make every caller of the sync wait for that dump: try again next sync.
+				// A dump or a restore holds it. Try again at the next sync
 				controller.Booking.Unlock()
 				held[controller.ID] = m.skipHeld(controller.ID, remainingReason[i])
 				continue
 			}
-			// A controller found on disk, not spawned here, has no stderr buffer
+			// A controller found on disk has no ErrBuf
 			if controller.ErrBuf != nil && controller.ErrBuf.Len() > 0 {
 				log.Error().Str("ID", controller.ID).Str("reason", remainingReason[i]).Str("stderr", controller.ErrBuf.String()).Msg("stale GPU controller captured stderr")
 			}
@@ -187,9 +186,7 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 	return nil
 }
 
-// Logs the skip of a stale controller that a dump or a restore holds, and warns once when
-// the same controller stays held for more than HELD_WARN_AFTER: a dump that holds it that
-// long is likely stuck. Returns the controller's record for the next sync.
+// Logs the skip. Warns once after HELD_WARN_AFTER
 func (m *ManagerPool) skipHeld(id string, reason string) *heldController {
 	h := m.held[id]
 	if h == nil {

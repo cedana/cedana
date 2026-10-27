@@ -377,9 +377,8 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 	p.terminate(ctx, c)
 }
 
-// Like Terminate, but does not wait for a dump or a restore that holds the controller's
-// termination lock: it returns false at once and changes nothing. True when the controller
-// is terminated, or there is nothing to terminate. Booking must be held before calling TryTerminate
+// Like Terminate, but returns false at once when a dump or a restore holds Termination.
+// Booking must be held
 func (p *pool) TryTerminate(ctx context.Context, id string) bool {
 	c := p.Get(id)
 	if c == nil {
@@ -395,7 +394,7 @@ func (p *pool) TryTerminate(ctx context.Context, id string) bool {
 	return true
 }
 
-// Termination must be held before calling terminate
+// Termination must be held
 func (p *pool) terminate(ctx context.Context, c *controller) {
 	id := c.ID
 	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()

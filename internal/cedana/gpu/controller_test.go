@@ -261,7 +261,7 @@ func TestInitializeRestoreFailsOnTerminatedController(t *testing.T) {
 	c.Termination.Unlock()
 }
 
-// A stale controller in the pool, with a booking file of its own and no process
+// A stale controller with no process
 func newStaleController(t *testing.T, p *pool) *controller {
 	t.Helper()
 	c := &controller{
@@ -274,8 +274,6 @@ func newStaleController(t *testing.T, p *pool) *controller {
 	return c
 }
 
-// A dump or a restore holds the termination lock: TryTerminate must not wait for it, and
-// must leave the controller as it was
 func TestTryTerminateSkipsHeldController(t *testing.T) {
 	p := &pool{}
 	c := newStaleController(t, p)

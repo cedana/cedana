@@ -126,7 +126,7 @@ func TestSyncRunsOneAtATime(t *testing.T) {
 	}
 }
 
-// A plugins manager whose GPU plugin has a binary that does not exist, so a spawn fails
+// A GPU plugin with no binary, so a spawn fails
 type fakePlugins struct {
 	plugins.Manager
 	gets atomic.Int32
@@ -137,7 +137,7 @@ func (f *fakePlugins) Get(name string) *plugins.Plugin {
 	return &plugins.Plugin{Binaries: []plugins.Binary{{Name: "nonexistent", InstallDir: "/nonexistent"}}}
 }
 
-// A pool manager with no controller sockets on disk, so only the controllers a test stores
+// A pool manager with only the controllers a test stores
 func newTestPoolManager(t *testing.T, poolSize int) (*ManagerPool, *fakePlugins) {
 	t.Helper()
 	gpuConfig := config.Global.GPU
@@ -150,7 +150,6 @@ func newTestPoolManager(t *testing.T, poolSize int) (*ManagerPool, *fakePlugins)
 	return &ManagerPool{ManagerSimple: &ManagerSimple{plugins: fake}, poolSize: poolSize}, fake
 }
 
-// Captures the global log for the test
 func captureLog(t *testing.T) *bytes.Buffer {
 	t.Helper()
 	logger := log.Logger
@@ -160,8 +159,6 @@ func captureLog(t *testing.T) *bytes.Buffer {
 	return buf
 }
 
-// A stale controller that a dump or a restore holds must not make the sync wait: the sync
-// skips it, leaves it as it was, refills the pool, and terminates it once the lock is free
 func TestPoolSyncSkipsHeldController(t *testing.T) {
 	m, fake := newTestPoolManager(t, 1)
 	c := newStaleController(t, &m.controllers)
@@ -198,7 +195,6 @@ func TestPoolSyncSkipsHeldController(t *testing.T) {
 	}
 }
 
-// A controller held for more than HELD_WARN_AFTER gets one warning, not one per sync
 func TestPoolSyncWarnsOnceForHeldController(t *testing.T) {
 	m, _ := newTestPoolManager(t, 0)
 	c := newStaleController(t, &m.controllers)
@@ -227,8 +223,6 @@ func TestPoolSyncWarnsOnceForHeldController(t *testing.T) {
 	}
 }
 
-// The sync logs the stderr of a stale controller only when it captured some: a controller
-// found on disk has no stderr buffer, and must not log "<nil>"
 func TestPoolSyncLogsCapturedStderr(t *testing.T) {
 	tests := []struct {
 		name   string
