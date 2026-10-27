@@ -927,6 +927,7 @@ jobs:
             mkdir -p "out/$arch"
             docker cp "$id:/cedana-samples" "out/$arch/"
             docker rm "$id" >/dev/null
+            docker rmi "$IMAGE" >/dev/null # the other platform's pull can't overwrite the same digest
             echo "$IMAGE" > "out/$arch/cedana-samples/.image"
             tar -czf "samples-$arch.tar.gz" -C "out/$arch" cedana-samples
           done
