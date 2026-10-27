@@ -18,12 +18,15 @@ import (
 )
 
 // A GCS emulator in the test process, with one bucket, reached over HTTP as the
-// daemon reaches one through emulator_host
+// daemon reaches one through the SDK's STORAGE_EMULATOR_HOST
 func newEmulatedStorage(t *testing.T) *Storage {
 	t.Helper()
 	server, err := fakestorage.NewServerWithOptions(fakestorage.Options{
-		Scheme:         "http",
-		Host:           "127.0.0.1",
+		Scheme: "http",
+		Host:   "127.0.0.1",
+		// The SDK reads objects through the XML API, at the emulator's host; the
+		// emulator serves those reads only for its public host
+		PublicHost:     "127.0.0.1",
 		InitialObjects: nil,
 	})
 	if err != nil {
@@ -32,9 +35,7 @@ func newEmulatedStorage(t *testing.T) *Storage {
 	t.Cleanup(server.Stop)
 	server.CreateBucketWithOpts(fakestorage.CreateBucketOpts{Name: "ckpt"})
 
-	settings := cedana_config.Global.GCS
-	t.Cleanup(func() { cedana_config.Global.GCS = settings })
-	cedana_config.Global.GCS.EmulatorHost = server.URL()
+	t.Setenv(EMULATOR_HOST_ENV, server.URL())
 	cedana_config.Global.Checkpoint.Checksum = true
 
 	storage, err := NewStorage(context.Background())
@@ -197,7 +198,6 @@ func TestClientOptions(t *testing.T) {
 		{"ServiceAccountWithoutKey", cedana_config.GCS{CredentialsMode: "serviceAccount"}, 0, true},
 		{"ServiceAccountMissingFile", cedana_config.GCS{CredentialsMode: "serviceAccount", ServiceAccountKey: key + ".missing"}, 0, true},
 		{"UnknownMode", cedana_config.GCS{CredentialsMode: "static"}, 0, true},
-		{"Emulator", cedana_config.GCS{CredentialsMode: "static", EmulatorHost: "localhost:4443"}, 3, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opts, err := ClientOptions(tc.settings)
@@ -205,11 +205,5 @@ func TestClientOptions(t *testing.T) {
 				t.Fatalf("ClientOptions = %d options, %v; want %d, fails=%t", len(opts), err, tc.options, tc.fails)
 			}
 		})
-	}
-	if got, _ := emulatorEndpoint("localhost:4443"); got != "http://localhost:4443/storage/v1/" {
-		t.Fatalf("emulatorEndpoint = %s", got)
-	}
-	if got, _ := emulatorEndpoint("https://gcs:4443"); got != "https://gcs:4443/storage/v1/" {
-		t.Fatalf("emulatorEndpoint = %s", got)
 	}
 }
