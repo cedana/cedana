@@ -123,10 +123,7 @@ preload_all_images() {
     elif [ -n "$PROPAGATOR_TAG" ]; then
         preload_images "$PROPAGATOR_REPO:$PROPAGATOR_TAG"
     fi
-    if [ "${GPU:-0}" = "1" ]; then
-        preload_images "$GPU_WORKLOAD_IMAGE"
-        preload_images "cedana/cedana-samples:cuda"
-    fi
+    preload_images "$SAMPLES_IMAGE"
 }
 
 # Teardown k3s cluster completely
