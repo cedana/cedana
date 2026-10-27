@@ -44,12 +44,14 @@ teardown_file() {
 }
 
 # Writes a script with an EXIT trap that runs a CUDA sample and then sleeps
-# longer than the worker's poll of its process. Prints the script's path.
+# longer than the worker's poll of its process. A sample that fails or is
+# missing ends the script with the sample's code, so the trap does not print
+# "END rc=0" without CUDA work. Prints the script's path.
 write_script() {
     local script="$BATS_TEST_TMPDIR/job.sh"
     cat >"$script" <<'SCRIPT'
 trap 'echo "END rc=$?"' EXIT
-/cedana-samples/gpu_smr/mem-throughput-saxpy
+/cedana-samples/gpu_smr/mem-throughput-saxpy || exit $?
 sleep 1
 SCRIPT
     echo "$script"
