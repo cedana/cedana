@@ -223,6 +223,18 @@ require_reset_fix() {
     restore_sample memcpy_async_pinned
 }
 
+# Event records posted asynchronously on one thread must still order a wait or a query on
+# another (CED-2567: stale cuStreamWaitEvent, early cuEventQuery under the launch ring)
+# bats test_tags=run,events
+@test "[$GPU_INFO] run GPU process ordering events across threads" {
+    run_sample event_race
+}
+
+# bats test_tags=restore,events
+@test "[$GPU_INFO] restore GPU process ordering events across threads" {
+    restore_sample event_race
+}
+
 # __device__ and __constant__ globals, by symbol and by address (globals moved, CED-2487)
 # bats test_tags=run,globals
 @test "[$GPU_INFO] run GPU process using device globals" {
