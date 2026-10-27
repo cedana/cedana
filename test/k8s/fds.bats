@@ -11,7 +11,9 @@ load ../helpers/propagator
 # Dumps and restores a pod running a cedana-samples sample (path under /cedana-samples/cpu_smr,
 # then its args), which exits on any lost or corrupted state: it isn't restarted from scratch, so
 # the restored pod fails then. With PERSISTENT_MOUNTS set, the container gets it as
-# CEDANA_PERSISTENT_MOUNTS, under the cedana runtime class, which applies it on creation.
+# CEDANA_PERSISTENT_MOUNTS, under the cedana runtime class, which applies it on creation. The
+# samples image is CUDA's, whose NVIDIA_VISIBLE_DEVICES=all would make the runtime run it as a
+# GPU job: the pod claims none.
 restore_sample_pod() {
     local sample="/cedana-samples/cpu_smr/$1"
     shift
@@ -21,7 +23,7 @@ exec python3 $sample $*")
     sed -i 's/^spec:$/spec:\n  restartPolicy: Never/' "$spec"
     if [ -n "${PERSISTENT_MOUNTS:-}" ]; then
         sed -i 's/^spec:$/spec:\n  runtimeClassName: cedana/' "$spec"
-        printf '    env:\n    - name: CEDANA_PERSISTENT_MOUNTS\n      value: "%s"\n' "$PERSISTENT_MOUNTS" >>"$spec"
+        printf '    env:\n    - name: CEDANA_PERSISTENT_MOUNTS\n      value: "%s"\n    - name: NVIDIA_VISIBLE_DEVICES\n      value: ""\n' "$PERSISTENT_MOUNTS" >>"$spec"
     fi
 
     local name
