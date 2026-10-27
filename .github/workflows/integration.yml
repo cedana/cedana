@@ -10,6 +10,9 @@ run-name: integration ${{ inputs.id }} ${{ inputs.rev }} attempt ${{ inputs.atte
 #   - A release (marshal's release suite): every component at the tag the release pins, the helm chart
 #     at the release PR head, cedana-slurm's alpha built at the release version. Dispatched on main.
 #
+# The tests run cedana-samples' lite image (its workloads) at a cedana-samples member's head commit,
+# else main's.
+#
 # Runs the smallest set of the test workflows covering what's asked (the plan): test.yml once when
 # `full` (it covers GPU and the streamer, and Kubernetes and SLURM by flag), else test_k8s, test_gpu,
 # test_streamer and test_slurm as needed. Marshal reads the jobs and JUnit reports and reports back.
@@ -75,6 +78,7 @@ jobs:
       propagator_version: ${{ steps.parse.outputs.propagator_version }}
       helm_chart_version: ${{ steps.parse.outputs.helm_chart_version }}
       slurm_version: ${{ steps.parse.outputs.slurm_version }}
+      samples_version: ${{ steps.parse.outputs.samples_version }}
     steps:
       - name: Parse
         id: parse
@@ -123,6 +127,7 @@ jobs:
       helm_chart_version: ${{ needs.manifest.outputs.helm_chart_version }}
       slurm_version: ${{ needs.manifest.outputs.slurm_version }}
       slurm_ref: ${{ fromJSON(inputs.plan).slurm_ref }}
+      samples_version: ${{ needs.manifest.outputs.samples_version || 'main' }} # main unless a cedana-samples PR is a member
 
   test:
     name: Test # the jobs read "Test / <suite> / …", as in the release suite

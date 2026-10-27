@@ -26,6 +26,8 @@
 #   CEDANA_NAMESPACE                - Namespace for Cedana components (default: cedana-system)
 #   NAMESPACE                       - Namespace for test pods (default: test)
 #   SAMPLES_DIR                     - Path to cedana-samples/kubernetes (default: auto-detect)
+#   SAMPLES_IMAGE                   - cedana-samples' lite image the pods run (default: the run's, in
+#                                     /cedana-samples/.image, else cedana/cedana-samples:cuda-lite)
 #   PROPAGATOR_REPO                 - If set (with PROPAGATOR_DIGEST or PROPAGATOR_TAG), deploy this
 #                                     propagator into the cluster and test against it (see propagator_deploy.bash)
 #   UPGRADE_FROM_CHART              - If set (e.g. "latest"), install that released chart, checkpoint a pod on it,

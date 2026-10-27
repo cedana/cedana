@@ -82,6 +82,13 @@ on:
         description: Version for propagator image (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+      samples_version:
+        type: string
+        description: >-
+          Version of cedana-samples' lite image, the workloads the tests run: a commit (a PR's head, as
+          marshal passes), a branch ("main") or "release" for the latest release
+        required: false
+        default: "none"
     outputs:
       slurm_versions:
         description: "SLURM versions, from cedana-slurm's slurm-versions file (JSON array)"
@@ -873,3 +880,66 @@ jobs:
         with:
           name: csx-${{ matrix.arch }}
           path: ./csx/*
+
+  # cedana-samples' lite image at the version: its /cedana-samples (every workload built, the
+  # Kubernetes manifests, the SLURM scripts) for the test jobs to install, with the image's digest
+  # in /cedana-samples/.image for the pods they start.
+  samples:
+    name: Samples
+    if: ${{ inputs.samples_version != 'none' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Resolve image
+        id: image
+        env:
+          VERSION: ${{ inputs.samples_version }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "::error::invalid samples_version: $VERSION"; exit 1; }
+          if [ "$VERSION" = "release" ]; then
+            ref=cedana/cedana-samples:cuda12.8-lite
+          else
+            ref=cedana/cedana-samples-test:cuda12.8-lite-${VERSION//\//-}
+          fi
+          # A commit just merged to main may still be building (cedana-samples' push.yml)
+          for i in $(seq 20); do
+            digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' 2>/dev/null | jq -r .digest) && break
+            echo "$ref not published yet ($i/20)"
+            sleep 30
+          done
+          [ -n "${digest:-}" ] || { echo "::error::$ref isn't published"; exit 1; }
+          echo "image=${ref%:*}@$digest" >> "$GITHUB_OUTPUT"
+          echo "cedana-samples: $ref = ${ref%:*}@$digest" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Extract workloads
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            id=$(docker create --platform "linux/$arch" "$IMAGE")
+            mkdir -p "out/$arch"
+            docker cp "$id:/cedana-samples" "out/$arch/"
+            docker rm "$id" >/dev/null
+            echo "$IMAGE" > "out/$arch/cedana-samples/.image"
+            tar -czf "samples-$arch.tar.gz" -C "out/$arch" cedana-samples
+          done
+          ls -la samples-*.tar.gz
+
+      - name: Upload samples (amd64)
+        uses: actions/upload-artifact@v6
+        with:
+          name: samples-amd64
+          path: samples-amd64.tar.gz
+
+      - name: Upload samples (arm64)
+        uses: actions/upload-artifact@v6
+        with:
+          name: samples-arm64
+          path: samples-arm64.tar.gz
