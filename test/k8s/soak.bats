@@ -45,7 +45,7 @@ cpu_spec() {
 }
 
 gpu_spec() {
-    cmd_pod_spec_gpu "$GPU_WORKLOAD_IMAGE" '/cedana-samples/gpu_smr/mem-throughput-saxpy-loop' 1
+    cmd_pod_spec_gpu "$SAMPLES_IMAGE" '/cedana-samples/gpu_smr/mem-throughput-saxpy-loop' 1
 }
 
 # bats test_tags=dump,restore
