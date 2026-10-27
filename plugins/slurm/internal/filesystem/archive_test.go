@@ -377,11 +377,8 @@ func TestExtractLeavesWhatItMayNotSet(t *testing.T) {
 	}
 }
 
-// The GPU controller's shared memory in the job's /dev/shm is left out: the segment of
-// gpu.shm_size, its booking file and its .misc directory, which the GPU plugin makes anew for
-// the restored job. Its log directory, as in the job's /tmp, is kept: the job's LD_PRELOAD
-// names the libcuda.so.1 in it. The job's own files, among them one named like the
-// controller's but deeper, are kept.
+// The GPU controller's segment, booking file and .misc directory are left out; its log
+// directory and the job's own files, one of them named like the controller's but deeper, stay.
 func TestArchiveDirSkipsGPUController(t *testing.T) {
 	src := t.TempDir()
 	must := func(err error) {

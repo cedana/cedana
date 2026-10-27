@@ -19,19 +19,14 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// The GPU controller of the job keeps its shared memory in the job's /dev/shm: the segment of
-// gpu.shm_size as the regular file cedana-gpu.<id>, its booking file cedana-gpu.<id>.booking,
-// and the directory cedana-gpu.<id>.misc of what it shares with the workers. The GPU plugin
-// makes them anew for the restored job, and the segment alone, 24 GiB on a serving node, is
-// more than a dump may hold. So they are left out of every private mount.
-//
-// The controller's directory under gpu.log_dir, /tmp by default, is the directory
-// cedana-gpu.<id> with its logs and the libcuda.so.1 link that the job's LD_PRELOAD names
-// (internal/cedana/gpu/run_adapters.go). A process the restored job starts needs it, so it stays.
+// The GPU controller's shared memory in the job's /dev/shm (the segment cedana-gpu.<id>, its
+// .booking file and its .misc directory) is made anew for the restored job and too large for a
+// dump, so it is left out of every private mount. The controller's log directory cedana-gpu.<id>
+// under gpu.log_dir (/tmp by default) stays: the job's LD_PRELOAD names the libcuda.so.1 in it.
 const gpuControllerPrefix = "cedana-gpu."
 
-// isGPUControllerShm tells an entry at the top of a private mount that is the GPU controller's
-// shared memory: anything named cedana-gpu.* but the directory cedana-gpu.<id> itself
+// isGPUControllerShm tells a top-level entry of a private mount that is the GPU controller's
+// shared memory: cedana-gpu.* except the directory cedana-gpu.<id>
 func isGPUControllerShm(rel string, info fs.FileInfo) bool {
 	if strings.Contains(rel, "/") || !strings.HasPrefix(rel, gpuControllerPrefix) {
 		return false

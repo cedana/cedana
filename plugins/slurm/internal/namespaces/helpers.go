@@ -122,10 +122,8 @@ func handlingFor(t configs.NamespaceType, version int) (handling Handling, reaso
 }
 
 // inHostNamespace tells whether pid is in init's namespace of this type. Conservative: any
-// failure to tell means no. For the mount namespace the mounts tell, which any user can read.
-// For the others it is init's own namespace link, and not hostNsInode: its fallback to our own
-// namespace would make this true of ourselves whenever init's link cannot be read, as it
-// cannot by the job's user, who runs the restore.
+// failure to tell means no. The mounts tell for the mount namespace; init's link, without
+// hostNsInode's fallback to our own, for the others.
 func inHostNamespace(t configs.NamespaceType, pid uint32) bool {
 	if t == configs.NEWNS {
 		if own, err := ownMountNamespace(pid); err == nil {

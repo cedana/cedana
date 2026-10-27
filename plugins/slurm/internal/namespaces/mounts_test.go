@@ -6,9 +6,9 @@ import (
 	"testing"
 )
 
-// The mounts of a job under job_container/tmpfs with Dirs=/tmp,/dev/shm, and of init on
-// the same node, as captured on SLURM 26.05.4 (jobs/shm-file of cedana-slurm-example).
-// /tmp is a bind mount from <basepath>/<jobid>/.<jobid>/_tmp, /dev/shm a tmpfs of its own.
+// The mounts of a job under job_container/tmpfs with Dirs=/tmp,/dev/shm, and of init on the
+// same node, captured on SLURM 26.05.4: /tmp a bind mount from the plugin's directory, /dev/shm
+// a tmpfs of its own.
 func loadMountinfo(t *testing.T, name string) []mount {
 	t.Helper()
 	file, err := os.Open(filepath.Join("testdata", name))

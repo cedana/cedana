@@ -183,8 +183,7 @@ const (
 531 522 0:22 / /var/tmp rw,nosuid - tmpfs tmpfs rw
 532 522 0:22 /scratch /scratch rw,nosuid - tmpfs tmpfs rw
 `
-	// An NFS share a launcher mounts for the job alone, which the node has no mount of.
-	// It outlives the job, so it is not the job's to archive and put back.
+	// An NFS share mounted for the job alone: the node has no mount of it, and it outlives the job
 	testLauncherShareJobMountinfo = `522 400 8:1 / / rw,relatime - ext4 /dev/sda1 rw
 523 522 0:21 / /proc rw,nosuid - proc proc rw
 524 522 0:22 / /dev/shm rw,nosuid - tmpfs tmpfs rw
