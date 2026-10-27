@@ -226,3 +226,41 @@ func TestPoolSyncWarnsOnceForHeldController(t *testing.T) {
 		t.Fatalf("%d skips logged for 7 syncs, want 7", n)
 	}
 }
+
+// The sync logs the stderr of a stale controller only when it captured some: a controller
+// found on disk has no stderr buffer, and must not log "<nil>"
+func TestPoolSyncLogsCapturedStderr(t *testing.T) {
+	tests := []struct {
+		name   string
+		errBuf *bytes.Buffer
+		want   int
+	}{
+		{"found on disk", nil, 0},
+		{"spawned, no stderr", &bytes.Buffer{}, 0},
+		{"spawned, with stderr", bytes.NewBufferString("cuda init failed"), 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := newTestPoolManager(t, 0)
+			c := newStaleController(t, &m.controllers)
+			c.ErrBuf = tt.errBuf
+			logs := captureLog(t)
+
+			if err := syncReturns(t, m, context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if m.controllers.Get(c.ID) != nil {
+				t.Fatal("the sync did not terminate the stale controller")
+			}
+			if n := strings.Count(logs.String(), "stale GPU controller captured stderr"); n != tt.want {
+				t.Fatalf("%d stderr logs, want %d", n, tt.want)
+			}
+			if strings.Contains(logs.String(), "<nil>") {
+				t.Fatal("logged <nil>")
+			}
+			if tt.want > 0 && !strings.Contains(logs.String(), "cuda init failed") {
+				t.Fatal("the stderr log does not carry the captured stderr")
+			}
+		})
+	}
+}

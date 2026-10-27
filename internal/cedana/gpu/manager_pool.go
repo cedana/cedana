@@ -146,8 +146,9 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 				held[controller.ID] = m.skipHeld(controller.ID, remainingReason[i])
 				continue
 			}
-			if stderr := controller.ErrBuf.String(); stderr != "" {
-				log.Error().Str("ID", controller.ID).Str("reason", remainingReason[i]).Str("stderr", stderr).Msg("stale GPU controller captured stderr")
+			// A controller found on disk, not spawned here, has no stderr buffer
+			if controller.ErrBuf != nil && controller.ErrBuf.Len() > 0 {
+				log.Error().Str("ID", controller.ID).Str("reason", remainingReason[i]).Str("stderr", controller.ErrBuf.String()).Msg("stale GPU controller captured stderr")
 			}
 		}
 	}
