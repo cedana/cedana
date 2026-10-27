@@ -1,15 +1,8 @@
 #!/usr/bin/env bats
 
-# GPU freeze of a job whose default stream holds seconds of queued work. The
-# freeze parks the job's threads, then waits for the GPU to finish what is
-# already queued. deep_queue keeps about 2 s of kernels queued, more than the
-# controller's freeze windows of 150 ms and 300 ms, as a GPU-bound job such as
-# ESMFold does. A single-device job gets a longer drain, so the dump succeeds.
-# deep_queue self-validates its completions and exits non-zero on a gap, so a
-# corrupted restore halts the job.
-#
-# Requires deep_queue from the cedana-samples image, and a cedana-gpu with the
-# single-device drain; skips if the image predates the sample.
+# Dump and restore of a job with about 2 s of work queued on the default stream
+# (CED-2505). deep_queue exits non-zero on a gap in its count. Skips if the
+# cedana-samples image has no deep_queue.
 #
 # bats file_tags=gpu,freeze
 
