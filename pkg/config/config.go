@@ -56,7 +56,7 @@ const (
 	DEFAULT_GPU_DEBUG             = false
 	DEFAULT_GPU_DEDUP_ENABLED     = false
 	DEFAULT_GPU_TEMPLATES_ENABLED = false
-	DEFAULT_GPU_DIRECT_IO         = false
+	DEFAULT_GPU_DIRECT_IO         = true
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
