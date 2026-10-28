@@ -373,7 +373,7 @@ teardown_file() {
     jid=$(unix_nano)
     log="/tmp/restore-$jid.log"
 
-    "$WORKLOADS"/date-loop.sh &> "$log" < /dev/null &
+    "$WORKLOADS"/date-loop.sh &>"$log" </dev/null &
     pid=$!
 
     cedana manage process $pid --jid "$jid"
@@ -443,6 +443,29 @@ teardown_file() {
     cedana restore process --path "/tmp/$name.tar" --no-server --pid-file "$pid_file"
 
     assert_exists "$pid_file"
+}
+
+# bats test_tags=restore,serverless
+@test "restore process (without daemon, signal forwarding)" {
+    "$WORKLOADS"/date-loop.sh 20 &
+    pid=$!
+    name=$(unix_nano)
+    pid_file="/tmp/$name.pid"
+
+    cedana dump process $pid --name "$name" --dir /tmp --compression tar
+
+    cedana restore process --path "/tmp/$name.tar" --no-server --pid-file "$pid_file" &
+    cedana_pid=$!
+
+    wait_for_file "$pid_file" 5
+    pid=$(cat "$pid_file")
+
+    sleep 2 # so we don't "cancel" cedana run itself while it's still starting up the process
+
+    kill -TERM "$cedana_pid"
+    wait_for_no_pid "$pid" 5
+    run wait $cedana_pid
+    assert_equal $status 42
 }
 
 # bats test_tags=restore

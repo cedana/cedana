@@ -6,10 +6,16 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  actions: read # to list the jobs of the run when posting the summary
 
 on:
   workflow_call:
     inputs:
+      soak:
+        type: boolean
+        description: "Also run the soak tests (each checkpoint/restore many times, to catch 1-in-N failures)"
+        required: false
+        default: false
       ref:
         type: string
         description: "The branch, tag, or SHA to run on"
@@ -57,7 +63,7 @@ jobs:
   cuda:
     name: CUDA
     runs-on: runs-on=${{github.run_id}}/runner=${{  inputs.runner }}-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}/tag=${{ matrix.cr }}/extras=s3-cache
-    timeout-minutes: 30
+    timeout-minutes: ${{ inputs.soak && 90 || 30 }} # the soak tests take ~30m more
     strategy:
       fail-fast: false
       matrix:
@@ -72,6 +78,11 @@ jobs:
         arch:
           - amd64
           - arm64
+        # The suite runs with a daemon per test, and with one across tests. These are
+        # independent, so run in parallel rather than one after the other.
+        daemon:
+          - isolated
+          - persistent
         exclude: # to reduce CI minutes
           - cuda_version: 12-2
             cr: streamer
@@ -101,21 +112,33 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init --ipc=host --device nvidia.com/gpu=all --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Download samples
+        id: samples
+        continue-on-error: true # without download.yml's samples (a caller that doesn't ask for them), the image's own
+        uses: actions/download-artifact@v7
+        with:
+          name: samples-${{ matrix.arch }}
+          path: /tmp/samples
+
+      - name: Install samples
+        if: steps.samples.outcome == 'success'
+        run: rm -rf /cedana-samples && tar -xzf /tmp/samples/samples-*.tar.gz -C /
+
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
@@ -123,24 +146,44 @@ jobs:
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
         if: ${{ matrix.cr == 'streamer' }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-${{ matrix.arch }}
 
+      - name: Download containerd runtime
+        uses: actions/download-artifact@v7
+        with:
+          path: .
+          pattern: containerd-runtime-${{ matrix.arch }}-*
+          merge-multiple: true
+
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
+
+      - name: Download OCI runtime
+        uses: actions/download-artifact@v7
+        with:
+          path: .
+          pattern: oci-runtime-${{ matrix.arch }}
+          merge-multiple: true
+
+      - name: Download CSX
+        uses: actions/download-artifact@v7
+        with:
+          name: csx-${{ matrix.arch }}
 
       - name: Make executable
         run: |
           chmod +x ./cedana*
           chmod +x ./criu
+          chmod +x ./csx
           echo "$PWD" >> $GITHUB_PATH
 
       - name: Install
@@ -148,7 +191,9 @@ jobs:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
         run: |
           make install
-          sudo -E cedana plugin install runc containerd crio criu storage/cedana storage/s3 storage/gcs
+          # Plugins below are used across multiple tests, so install them always
+          sudo -E cedana plugin install criu runc crun containerd containerd/runtime-runc podman oci-runtime
+          sudo -E cedana plugin install storage/cedana storage/s3 storage/gcs storage/csx csx
           sudo -E cedana plugin install gpu # automatically installs the downloaded binary if available instead
           if [ "$STREAMER" = "true" ]; then
             sudo -E cedana plugin install streamer # automatically installs the downloaded binary if available instead
@@ -167,19 +212,25 @@ jobs:
         env:
           STREAMER: ${{ matrix.cr == 'streamer' && 'true' || 'false' }}
           LARGE: ${{ inputs.large }}
+          SOAK_TAG: ${{ !inputs.soak && ',!soak' || '' }}
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: |
+          # The processes every minute, the last snapshot kept: on a hang that hits the job timeout
+          # (which kills this step), it shows what was stuck and in what state (uploaded with the logs)
+          ( while sleep 60; do ps -eo pid,ppid,pgid,stat,etime,wchan:24,args --forest >/tmp/processes.txt.new 2>&1 && mv /tmp/processes.txt.new /tmp/processes.txt; done ) &
+          trap 'kill $! 2>/dev/null' EXIT
+
           if [ "$STREAMER" = "true" ]; then
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,streamer PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!large,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           else
             if [ "$LARGE" = "true" ]; then
-              make test-regression TAGS=gpu,!streamer PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             else
-              make test-regression TAGS=gpu,!streamer,!large PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
+              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!large,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
             fi
           fi
 
@@ -188,101 +239,59 @@ jobs:
         # runner for backward-compat (12.8 binaries under a newer driver).
         # Missing samples auto-skip, so the same curated list is safe on both.
         if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
-        run: |
-          mkdir -p /tmp/cuda-samples
-          bats --filter-tags cuda-samples -r test/regression \
-            --output /tmp/cuda-samples --report-formatter junit
+        env:
+          PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
+        run: make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-cuda-samples
 
-      - name: Setup node
+      - name: Label reports # with the job name, so the summary can link to it
         if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate report (isolated)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
-
-      - name: Generate report (persistent)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }})"
-
-      - name: Generate report (cuda-samples)
-        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
-        run: |
-          npx junit-to-ctrf "/tmp/cuda-samples/report.xml" -t bats -o /tmp/report-cuda-samples.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="CUDA samples (intercepted, ${{ matrix.cuda_version }})"
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }}, ${{ matrix.daemon }})" |' {} +
 
       - name: Upload report
         if: always()
-        id: upload-report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}
+          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
+
+      # Daemon, GPU controller/worker and job logs, as bats only shows those of failed tests, and
+      # bats' own per-test output (bats-run-*), which shows a test that never finished
+      - name: Upload logs
+        if: failure() || cancelled() # a hang that hits the job timeout too
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
           path: |
-            /tmp/report*.json
+            /tmp/cedana-daemon-*.log
+            /tmp/cedana-*/**/*.log
+            /var/log/cedana*.log
+            /tmp/processes.txt
+            /tmp/bats-run-*/
+          retention-days: 7
+          if-no-files-found: ignore
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: cuda
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        cuda_version:
-          # - 12-2
-          # - 12-4
-          - 12-8
-          - 13-2
-        arch:
-          - amd64
-          - arm64
+    runs-on: ubuntu-24.04
     steps:
-      - name: Download report
-        id: download-report
-        uses: actions/download-artifact@v4
+      - name: Download reports
+        uses: actions/download-artifact@v7
         with:
-          pattern: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-*
+          pattern: test-report-*-cuda-*
           path: report
 
-      - name: Post report
-        uses: ctrf-io/github-test-reporter@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Post summary
+        uses: cedana/cedana-test-summary@v1
         with:
-          report-path: report/**/*.json
-          github-report: true
-          failed-folded-report: true
-          summary: true
-          pull-request: true
-          title: CUDA ${{ matrix.cuda_version }}, ${{ matrix.arch }}
-          update-comment: true
-          overwrite-comment: true
-          comment-tag: test-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
-          group-by: "suite"
-          always-group-by: true
-          upload-artifact: true
-          artifact-name: ctrf-report-cuda-${{ matrix.cuda_version }}-${{ matrix.arch }}
+          reports: report/**/*.xml
+          title: CUDA
+          jobs-filter: '(^|/ )CUDA \('
+          image-branch: test-summary-assets
+          image-repository: cedana/summaries # public, so the image renders when called from private repos
+          image-token: ${{ secrets.GIT_CI_PAT }}
+          matrix-sections: | # one per CUDA version found in the suite names
+            $1=\b(\d+-\d+)\b

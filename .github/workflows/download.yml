@@ -6,9 +6,22 @@ name: Download
 permissions:
   contents: write
 
+env:
+  CEDANA_URL: ${{ vars.CEDANA_URL }}
+  CHANNEL: ${{ inputs.channel }}
+
 on:
   workflow_call:
     inputs:
+      channel:
+        type: string
+        description: >-
+          Channel to download binaries and images from: "auto" (versions starting with "v" and "release"
+          from the release channel, anything else from alpha), "alpha" (alpha, falling back to the release
+          channel for versions that aren't in alpha, e.g. tags released before alpha-at-tag) or "release".
+          A version of "release" is the latest release in every channel
+        required: false
+        default: "auto"
       cedana_version:
         type: string
         description: Version for Cedana binaries (branch name, tag or "release" for latest release)
@@ -39,6 +52,11 @@ on:
         description: Version for containerd runtime binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+      oci_runtime_version:
+        type: string
+        description: Version for OCI runtime binaries (branch name, tag or "release" for latest release)
+        required: false
+        default: "none"
       helm_chart_version:
         type: string
         description: Version for Cedana Helm chart (branch name, tag or "release" for latest release)
@@ -49,12 +67,38 @@ on:
         description: Version for cedana-slurm binaries (branch name, tag or "release" for latest release)
         required: false
         default: "none"
+      slurm_ref:
+        type: string
+        description: Ref of cedana-slurm to check out (scripts, slurm-versions), if different from slurm_version (e.g. a PR head tested with binaries published at a release version)
+        required: false
+        default: ""
+      csx_version:
+        type: string
+        description: Version for csx binaries (branch name, tag or "release" for latest release)
+        required: false
+        default: "none"
+      propagator_version:
+        type: string
+        description: Version for propagator image (branch name, tag or "release" for latest release)
+        required: false
+        default: "none"
+      samples_version:
+        type: string
+        description: >-
+          Version of cedana-samples' lite image, the workloads the tests run: a commit (a PR's head, as
+          marshal passes), a branch ("main") or "release" for the latest release
+        required: false
+        default: "none"
+    outputs:
+      slurm_versions:
+        description: "SLURM versions, from cedana-slurm's slurm-versions file (JSON array)"
+        value: ${{ jobs.slurm-versions.outputs.versions }}
 
 jobs:
   cedana:
     name: Cedana
     if: ${{ inputs.cedana_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -64,50 +108,74 @@ jobs:
     steps:
       - name: Download cedana
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
-          ARCH: ${{ matrix.arch }}
         run: |
+          set -euo pipefail
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
+
           mkdir -p cedana
           cd cedana
-          echo $VERSION > cedana-version.txt
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana"
-          else
-            REPO="cedana/cedana-alpha"
-          fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-${ARCH}/versions/${VERSION}/cedana"
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o cedana-${ARCH} "$URL2"
-          fi
-          mv cedana-${ARCH} cedana
+          ARCH="${{ matrix.arch }}"
+          FILE="cedana"
+
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "$FILE"
+
+          test -f "$FILE"
+          test -s "$FILE"
+          echo "${VERSION}" > cedana-version.txt
 
       - name: Upload cedana
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: cedana-${{ matrix.arch }}
           path: ./cedana/*
 
       - name: Get digest
         env:
-          IMAGE_NAME: ${{ (inputs.cedana_version == 'release' || startsWith(inputs.cedana_version, 'v')) && 'cedana/cedana-helper' || 'cedana/cedana-helper-test' }}
+          IMAGE_NAMES: ${{ (inputs.channel == 'alpha' && inputs.cedana_version != 'release' && 'cedana/cedana-helper-test cedana/cedana-helper') || ((inputs.channel == 'release' || inputs.cedana_version == 'release' || startsWith(inputs.cedana_version, 'v')) && 'cedana/cedana-helper') || 'cedana/cedana-helper-test' }}
           TAG: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
         run: |
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
           TAG=$(echo $TAG | sed 's/\//-/g')
-          docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
+          # The first image that has the tag, so alpha falls back to the release image
+          IMAGE_NAME=""
+          for NAME in $IMAGE_NAMES; do
+            if docker pull --platform=linux/${{ matrix.arch }} $NAME:$TAG; then
+              IMAGE_NAME=$NAME
+              break
+            fi
+          done
+          test -n "$IMAGE_NAME" || { echo "No image found for tag $TAG in: $IMAGE_NAMES"; exit 1; }
           digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
           touch "/tmp/digests/${digest#sha256:}"
           echo "$IMAGE_NAME" > /tmp/image-name/name.txt
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: digests-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -115,7 +183,7 @@ jobs:
 
       - name: Upload image name
         if: ${{ matrix.arch == 'amd64' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: image-name
           path: /tmp/image-name/*
@@ -124,13 +192,15 @@ jobs:
   plugin:
     name: Plugin
     if: ${{ inputs.cedana_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
         plugin:
           - runc
+          - crun
           - containerd
+          - podman
           - crio
           - kata
           - cloud-hypervisor
@@ -139,6 +209,7 @@ jobs:
           - storage/cedana
           - storage/s3
           - storage/gcs
+          - storage/csx
         arch:
           - amd64
           - arm64
@@ -152,30 +223,44 @@ jobs:
 
       - name: Download plugin
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          PLUGIN: ${{ env.PLUGIN }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.cedana_version == 'release' && 'latest' || inputs.cedana_version }}
-          ARCH: ${{ matrix.arch }}
         run: |
-          echo $VERSION > plugins-version.txt
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana"
-          else
-            REPO="cedana/cedana-alpha"
-          fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-${PLUGIN}.so-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-${PLUGIN}.so-${ARCH}/versions/${VERSION}/libcedana-${PLUGIN}.so"
+          set -euo pipefail
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o libcedana-${PLUGIN}.so-${ARCH} "$URL2"
-          fi
-          mv libcedana-${PLUGIN}.so-${ARCH} libcedana-${PLUGIN}.so
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
+          ARCH="${{ matrix.arch }}"
+          FILE="libcedana-${PLUGIN}.so"
+
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "$FILE"
+
+          test -f "$FILE"
+          test -s "$FILE"
+          echo "${VERSION}" > plugin-version.txt
 
       - name: Upload plugin
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: plugin-${{ matrix.arch }}-${{ env.PLUGIN }}
           path: |
@@ -185,7 +270,7 @@ jobs:
   criu:
     name: CRIU
     if: ${{ inputs.criu_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -195,31 +280,44 @@ jobs:
     steps:
       - name: Download CRIU
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.criu_version == 'release' && 'latest' || inputs.criu_version }}
-          ARCH: ${{ matrix.arch }}
         run: |
+          set -euo pipefail
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p criu
-          cd criu
-          echo $VERSION > criu-version.txt
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/criu"
-          else
-            REPO="cedana/criu-alpha"
-          fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/criu-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/criu-${ARCH}/versions/${VERSION}/criu"
+          ARCH="${{ matrix.arch }}"
+          FILE="criu"
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o criu-${ARCH} "$URL2"
-          fi
-          mv criu-${ARCH} criu
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "criu/${FILE}"
+
+          test -f "criu/${FILE}"
+          test -s "criu/${FILE}"
+          echo "${VERSION}" > criu/criu-version.txt
 
       - name: Upload CRIU
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: criu-${{ matrix.arch }}
           path: ./criu/*
@@ -227,7 +325,7 @@ jobs:
   gpu:
     name: GPU
     if: ${{ inputs.gpu_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -235,52 +333,50 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download binaries
+      - name: Download GPU binaries
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.gpu_version == 'release' && 'latest' || inputs.gpu_version }}
-          ARCH: ${{ matrix.arch }}
         run: |
+          set -euo pipefail
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p gpu
-          cd gpu
-          echo $VERSION > gpu-version.txt
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana-gpu"
-          else
-            REPO="cedana/cedana-gpu-alpha"
-          fi
 
-          # Download cedana-gpu-controller with fallback
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-gpu-controller-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-gpu-controller-${ARCH}/versions/${VERSION}/cedana-gpu-controller"
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed for cedana-gpu-controller, trying alternative URL..."
-            curl -1Lf -o cedana-gpu-controller-${ARCH} "$URL2"
-          fi
-
-          # Download libcedana-gpu.so with fallback
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-gpu.so-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-gpu.so-${ARCH}/versions/${VERSION}/libcedana-gpu.so"
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed for libcedana-gpu.so, trying alternative URL..."
-            curl -1Lf -o libcedana-gpu.so-${ARCH} "$URL2"
-          fi
-
-          # Download libcedana-gpu-tracer.so with fallback
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/libcedana-gpu-tracer.so-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/libcedana-gpu-tracer.so-${ARCH}/versions/${VERSION}/libcedana-gpu-tracer.so"
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed for libcedana-gpu-tracer.so, trying alternative URL..."
-            curl -1Lf -o libcedana-gpu-tracer.so-${ARCH} "$URL2"
-          fi
-
-          mv cedana-gpu-controller-${ARCH} cedana-gpu-controller
-          mv libcedana-gpu.so-${ARCH} libcedana-gpu.so
-          mv libcedana-gpu-tracer.so-${ARCH} libcedana-gpu-tracer.so
+          ARCH="${{ matrix.arch }}"
+          BINARIES=(
+            "cedana-gpu-controller"
+            "libcedana-gpu.so"
+            "libcedana-gpu-tracer.so"
+          )
+          for FILE in "${BINARIES[@]}"; do
+            # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+            curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+              "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+              --output "gpu/${FILE}"
+            test -f "gpu/${FILE}"
+            test -s "gpu/${FILE}"
+          done
+          echo "${VERSION}" > gpu/gpu-version.txt
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: gpu-${{ matrix.arch }}
           path: ./gpu/*
@@ -288,7 +384,7 @@ jobs:
   streamer:
     name: Streamer
     if: ${{ inputs.streamer_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -296,34 +392,47 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download binaries
+      - name: Download streamer
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.streamer_version == 'release' && 'latest' || inputs.streamer_version }}
-          ARCH: ${{ matrix.arch }}
         run: |
+          set -euo pipefail
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
           mkdir -p streamer
-          cd streamer
-          echo $VERSION > streamer-version.txt
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana-image-streamer"
-          else
-            REPO="cedana/cedana-image-streamer-alpha"
-          fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-image-streamer-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-image-streamer-${ARCH}/versions/${VERSION}/cedana-image-streamer"
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o cedana-image-streamer-${ARCH} "$URL2"
-          fi
-          mv cedana-image-streamer-${ARCH} cedana-image-streamer
-          echo $VERSION > streamer-version.txt
+          ARCH="${{ matrix.arch }}"
+          FILE="cedana-image-streamer"
+
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "streamer/${FILE}"
+
+          test -f "streamer/${FILE}"
+          test -s "streamer/${FILE}"
+          echo "${VERSION}" > streamer/streamer-version.txt
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: streamer-${{ matrix.arch }}
           path: ./streamer/*
@@ -331,7 +440,7 @@ jobs:
   controller:
     name: Controller
     if: ${{ inputs.controller_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -340,26 +449,34 @@ jobs:
           - arm64
     steps:
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
 
       - name: Get digest
         env:
-          IMAGE_NAME: ${{ (inputs.controller_version == 'release' || startsWith(inputs.controller_version, 'v')) && 'cedana/cedana-controller' || 'cedana/cedana-controller-test' }}
+          IMAGE_NAMES: ${{ (inputs.channel == 'alpha' && inputs.controller_version != 'release' && 'cedana/cedana-controller-test cedana/cedana-controller') || ((inputs.channel == 'release' || inputs.controller_version == 'release' || startsWith(inputs.controller_version, 'v')) && 'cedana/cedana-controller') || 'cedana/cedana-controller-test' }}
           TAG: ${{ inputs.controller_version == 'release' && 'latest' || inputs.controller_version }}
         run: |
           mkdir -p /tmp/digests
           mkdir -p /tmp/image-name
           TAG=$(echo $TAG | sed 's/\//-/g')
-          docker pull --platform=linux/${{ matrix.arch }} $IMAGE_NAME:$TAG
+          # The first image that has the tag, so alpha falls back to the release image
+          IMAGE_NAME=""
+          for NAME in $IMAGE_NAMES; do
+            if docker pull --platform=linux/${{ matrix.arch }} $NAME:$TAG; then
+              IMAGE_NAME=$NAME
+              break
+            fi
+          done
+          test -n "$IMAGE_NAME" || { echo "No image found for tag $TAG in: $IMAGE_NAMES"; exit 1; }
           digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
           touch "/tmp/digests/${digest#sha256:}"
           echo "$IMAGE_NAME" > /tmp/image-name/name.txt
 
       - name: Upload digest
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: controller-digests-${{ matrix.arch }}
           path: /tmp/digests/*
@@ -367,16 +484,18 @@ jobs:
 
       - name: Upload image name
         if: ${{ matrix.arch == 'amd64' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: controller-image-name
           path: /tmp/image-name/*
           if-no-files-found: error
 
-  containerd-runtime-runc:
-    name: Containerd Runtime
-    if: ${{ inputs.containerd_runtime_version != 'none' }}
-    runs-on: ubuntu-latest
+  # Artifact names match cedana-propagator's build workflow, so its CI can
+  # reuse test workflows with a freshly built image without this job.
+  propagator:
+    name: Propagator
+    if: ${{ inputs.propagator_version != 'none' }}
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
@@ -384,43 +503,182 @@ jobs:
           - amd64
           - arm64
     steps:
-      - name: Download runtime binaries
-        env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
-          VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
-          ARCH: ${{ matrix.arch }}
-        run: |
-          mkdir -p containerd-runtime-runc
-          cd containerd-runtime-runc
-          echo $VERSION > containerd-runtime-version.txt
-          VERSION=$(echo $VERSION | sed 's/\//-/g')
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana-runtime-shim"
-          else
-            REPO="cedana/cedana-runtime-shim-alpha"
-          fi
-          URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${VERSION}/cedana-shim-runc-v2-${ARCH}"
-          URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/cedana-shim-runc-v2-${ARCH}/versions/${VERSION}/cedana-shim-runc-v2"
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
 
-          # Try first URL, if 404 then try alternative URL
-          if ! curl -1Lf -O "$URL1"; then
-            echo "Primary URL failed, trying alternative URL..."
-            curl -1Lf -o cedana-shim-runc-v2-${ARCH} "$URL2"
+      - name: Get digest
+        env:
+          GH_TOKEN: ${{ secrets.GIT_CI_PAT }}
+          VERSION: ${{ inputs.propagator_version }}
+        run: |
+          set -euo pipefail
+          # Releases are only tagged by version, so resolve "release" to the latest one
+          if [ "$VERSION" = "release" ]; then
+            IMAGE_NAMES=cedana/cedana-propagator
+            TAG=$(gh release view --repo cedana/cedana-propagator --json tagName --jq .tagName)
+          elif [ "${VERSION#v}" != "$VERSION" ]; then
+            IMAGE_NAMES=cedana/cedana-propagator
+            TAG=$VERSION
+          else
+            IMAGE_NAMES=cedana/cedana-propagator-test
+            TAG=$VERSION
           fi
-          mv cedana-shim-runc-v2-${ARCH} cedana-shim-runc-v2
-          cd -
-          # TODO: Can add more runtimes here in the future
+          if [ "$VERSION" != "release" ]; then
+            case "$CHANNEL" in
+              alpha) IMAGE_NAMES="cedana/cedana-propagator-test cedana/cedana-propagator" ;;
+              release) IMAGE_NAMES=cedana/cedana-propagator ;;
+            esac
+          fi
+          mkdir -p /tmp/digests
+          mkdir -p /tmp/image-name
+          TAG=$(echo $TAG | sed 's/\//-/g')
+          # The first image that has the tag, so alpha falls back to the release image
+          IMAGE_NAME=""
+          for NAME in $IMAGE_NAMES; do
+            if docker pull --platform=linux/${{ matrix.arch }} $NAME:$TAG; then
+              IMAGE_NAME=$NAME
+              break
+            fi
+          done
+          test -n "$IMAGE_NAME" || { echo "No image found for tag $TAG in: $IMAGE_NAMES"; exit 1; }
+          digest=$(docker inspect --format='{{index .RepoDigests 0}}' $IMAGE_NAME:$TAG | cut -d'@' -f2)
+          touch "/tmp/digests/${digest#sha256:}"
+          echo "$IMAGE_NAME" > /tmp/image-name/name.txt
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v6
+        with:
+          name: propagator-digests-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+
+      - name: Upload image name
+        if: ${{ matrix.arch == 'amd64' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: propagator-image-name
+          path: /tmp/image-name/*
+          if-no-files-found: error
+
+  containerd-runtime-runc:
+    name: Containerd Runtime
+    if: ${{ inputs.containerd_runtime_version != 'none' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Download runtime
+        env:
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: ${{ inputs.containerd_runtime_version == 'release' && 'latest' || inputs.containerd_runtime_version }}
+        run: |
+          set -euo pipefail
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
+          mkdir -p containerd-runtime-runc
+
+          ARCH="${{ matrix.arch }}"
+          FILE="cedana-shim-runc-v2"
+
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "containerd-runtime-runc/${FILE}"
+
+          test -f "containerd-runtime-runc/${FILE}"
+          test -s "containerd-runtime-runc/${FILE}"
+          echo "${VERSION}" > containerd-runtime-runc/containerd-runtime-version.txt
 
       - name: Upload runtime runc artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: containerd-runtime-${{ matrix.arch }}-runc
           path: ./containerd-runtime-runc/*
 
+  oci-runtime:
+    name: OCI Runtime
+    if: ${{ inputs.oci_runtime_version != 'none' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Download runtime
+        env:
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: ${{ inputs.oci_runtime_version == 'release' && 'latest' || inputs.oci_runtime_version }}
+        run: |
+          set -euo pipefail
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
+          mkdir -p oci-runtime
+
+          ARCH="${{ matrix.arch }}"
+          FILE="cedana-oci-runtime"
+
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "oci-runtime/${FILE}"
+
+          test -f "oci-runtime/${FILE}"
+          test -s "oci-runtime/${FILE}"
+          echo "${VERSION}" > oci-runtime/oci-runtime-version.txt
+
+      - name: Upload runtime artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: oci-runtime-${{ matrix.arch }}
+          path: ./oci-runtime/*
+
   helm-chart:
     name: Helm Chart
     if: ${{ inputs.helm_chart_version != 'none' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Get tag
         id: get_tag
@@ -435,32 +693,62 @@ jobs:
           fi
 
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: cedana/cedana-helm-charts
           ref: ${{ steps.get_tag.outputs.tag }}
 
       - name: Upload helm chart
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: helm-chart
           path: cedana-helm
 
+  # cedana-slurm's slurm-versions file is the single source of truth for which SLURM
+  # versions exist. Read it here so this workflow and test_slurm.yml agree.
+  slurm-versions:
+    name: Slurm Versions
+    if: ${{ inputs.slurm_version != 'none' }}
+    runs-on: ubuntu-24.04
+    outputs:
+      versions: ${{ steps.read.outputs.versions }}
+    steps:
+      - name: Checkout cedana-slurm
+        uses: actions/checkout@v5
+        with:
+          repository: cedana/cedana-slurm
+          ref: ${{ inputs.slurm_ref != '' && inputs.slurm_ref || (inputs.slurm_version == 'release' && 'main' || inputs.slurm_version) }}
+          token: ${{ secrets.GIT_CI_PAT }}
+          sparse-checkout: slurm-versions
+          sparse-checkout-cone-mode: false
+
+      - name: Read slurm-versions
+        id: read
+        run: |
+          set -euo pipefail
+          # Entries are SchedMD git tags ("slurm-25-11-5-1") and are used verbatim.
+          versions=$(sed -E 's/#.*$//; s/^[[:space:]]*//; s/[[:space:]]*$//' slurm-versions | grep -v '^$')
+          json=$(jq -Rsc 'split("\n") | map(select(. != ""))' <<<"$versions")
+          echo "versions=$json" >> "$GITHUB_OUTPUT"
+          echo "Resolved SLURM versions: $json"
+
   slurm:
     name: Slurm
     if: ${{ inputs.slurm_version != 'none' }}
-    runs-on: ubuntu-latest
+    needs: slurm-versions
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: true
       matrix:
         arch:
           - amd64
+        slurm: ${{ fromJSON(needs.slurm-versions.outputs.versions) }}
     steps:
       - name: Checkout cedana-slurm
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: cedana/cedana-slurm
-          ref: ${{ inputs.slurm_version == 'release' && 'main' || inputs.slurm_version }}
+          ref: ${{ inputs.slurm_ref != '' && inputs.slurm_ref || (inputs.slurm_version == 'release' && 'main' || inputs.slurm_version) }}
           path: slurm/cedana-slurm
           token: ${{ secrets.GIT_CI_PAT }}
           submodules: recursive
@@ -470,12 +758,31 @@ jobs:
 
       - name: Resolve slurm binaries
         env:
-          API_KEY: ${{ secrets.CLOUDSMITH_ENTITLEMENT_TOKEN }}
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
           VERSION: ${{ inputs.slurm_version == 'release' && 'latest' || inputs.slurm_version }}
-          SLURM_VERSION: slurm-25-11-5-1
+          SLURM_VERSION: ${{ matrix.slurm }}
           ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
+
+          VERSION=$(echo $VERSION | sed 's/\//-/g')
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
 
           mkdir -p slurm/build
 
@@ -484,38 +791,156 @@ jobs:
           CHECKOUT_SHA="$(git -C slurm/cedana-slurm rev-parse HEAD)"
           ORIGIN_FILE="slurm/slurm-artifact-origin.txt"
 
-          if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
-            REPO="cedana/cedana-slurm"
-          else
-            REPO="cedana/cedana-slurm-alpha"
-          fi
           {
-            echo "source_mode=cloudsmith"
+            echo "source_mode=s3"
             echo "source_ref=${VERSION_REF}"
             echo "package_version=${PKG_VERSION}"
             echo "checkout_sha=${CHECKOUT_SHA}"
-            echo "cloudsmith_repo=${REPO}"
           } > "$ORIGIN_FILE"
 
-          cd slurm
-          for binary in cedana-slurm spank_cedana.so task_cedana.so cli_filter_cedana.so job_submit_cedana.so; do
-            URL1="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/versions/${PKG_VERSION}/${binary}-${ARCH}"
-            URL2="https://dl.cloudsmith.io/${API_KEY}/${REPO}/raw/names/${binary}-${ARCH}/versions/${PKG_VERSION}/${binary}"
-            if ! curl -1Lf -O "$URL1"; then
-              echo "Primary URL failed for ${binary}, trying alternative URL..."
-              curl -1Lf -o "${binary}-${ARCH}" "$URL2"
-            fi
-            mv "${binary}-${ARCH}" "build/${binary}" 2>/dev/null || mv "${binary}" "build/${binary}" 2>/dev/null || true
+          BINARIES=(
+            "cedana-slurm"
+            "spank_cedana.so"
+            "task_cedana.so"
+            "cli_filter_cedana.so"
+            "job_submit_cedana.so"
+          )
+          for binary in "${BINARIES[@]}"; do
+            # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+            curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+              "${CEDANA_URL}/plugins/download/${binary}?version=${PKG_VERSION}&arch=${ARCH}&build=${BUILD}" \
+              -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+              --output "slurm/build/${binary}"
+            test -f "slurm/build/${binary}"
+            test -s "slurm/build/${binary}"
           done
-          cd ..
-          echo "$VERSION_REF" > slurm/slurm-version.txt
-
-          echo "=== Binary checksums ==="
-          md5sum slurm/build/* 2>/dev/null || true
-          ls -la slurm/build/
+          echo "${VERSION_REF}" > slurm/slurm-version.txt
 
       - name: Upload slurm artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
-          name: slurm-${{ matrix.arch }}
+          name: ${{ matrix.slurm }}-${{ matrix.arch }}
           path: ./slurm/*
+          # Callers that also run cedana-slurm's build.yml (e.g. cedana-marshal's release suite) already
+          # have an artifact with this name: replace it with what was published
+          overwrite: true
+
+  csx:
+    name: CSX
+    if: ${{ inputs.csx_version != 'none' }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - name: Download CSX
+        env:
+          CEDANA_AUTH_TOKEN: ${{ secrets.CEDANA_AUTH_TOKEN }}
+          VERSION: ${{ inputs.csx_version == 'release' && 'latest' || inputs.csx_version }}
+        run: |
+          set -euo pipefail
+          case "$CHANNEL" in
+            alpha)
+              # The propagator falls back to the release channel if missing in alpha. "release" is still the latest release.
+              BUILD="alpha"
+              if [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            release) BUILD="" ;;
+            auto)
+              BUILD="alpha"
+              if [ "${VERSION#v}" != "$VERSION" ] || [ "$VERSION" = "latest" ]; then
+                BUILD=""
+              fi
+              ;;
+            *) echo "Invalid channel: ${CHANNEL} (expected auto, alpha or release)"; exit 1 ;;
+          esac
+          mkdir -p csx
+
+          ARCH="${{ matrix.arch }}"
+          FILE="csx"
+
+          # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason
+
+          curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+            "${CEDANA_URL}/plugins/download/${FILE}?version=${VERSION}&arch=${ARCH}&build=${BUILD}" \
+            -H "Authorization: Bearer $CEDANA_AUTH_TOKEN" \
+            --output "csx/${FILE}"
+
+          test -f "csx/${FILE}"
+          test -s "csx/${FILE}"
+          echo "${VERSION}" > csx/csx-version.txt
+
+      - name: Upload CSX
+        uses: actions/upload-artifact@v6
+        with:
+          name: csx-${{ matrix.arch }}
+          path: ./csx/*
+
+  # cedana-samples' lite image at the version: its /cedana-samples (every workload built, the
+  # Kubernetes manifests, the SLURM scripts) for the test jobs to install, with the image's digest
+  # in /cedana-samples/.image for the pods they start.
+  samples:
+    name: Samples
+    if: ${{ inputs.samples_version != 'none' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Resolve image
+        id: image
+        env:
+          VERSION: ${{ inputs.samples_version }}
+        run: |
+          set -euo pipefail
+          [[ "$VERSION" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "::error::invalid samples_version: $VERSION"; exit 1; }
+          if [ "$VERSION" = "release" ]; then
+            ref=cedana/cedana-samples:cuda12.8-lite
+          else
+            ref=cedana/cedana-samples-test:cuda12.8-lite-${VERSION//\//-}
+          fi
+          # A commit just merged to main may still be building (cedana-samples' push.yml)
+          for i in $(seq 20); do
+            digest=$(docker buildx imagetools inspect "$ref" --format '{{json .Manifest}}' 2>/dev/null | jq -r .digest) && break
+            echo "$ref not published yet ($i/20)"
+            sleep 30
+          done
+          [ -n "${digest:-}" ] || { echo "::error::$ref isn't published"; exit 1; }
+          echo "image=${ref%:*}@$digest" >> "$GITHUB_OUTPUT"
+          echo "cedana-samples: $ref = ${ref%:*}@$digest" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Extract workloads
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            id=$(docker create --platform "linux/$arch" "$IMAGE")
+            mkdir -p "out/$arch"
+            docker cp "$id:/cedana-samples" "out/$arch/"
+            docker rm "$id" >/dev/null
+            docker rmi "$IMAGE" >/dev/null # the other platform's pull can't overwrite the same digest
+            echo "$IMAGE" > "out/$arch/cedana-samples/.image"
+            tar -czf "samples-$arch.tar.gz" -C "out/$arch" cedana-samples
+          done
+          ls -la samples-*.tar.gz
+
+      - name: Upload samples (amd64)
+        uses: actions/upload-artifact@v6
+        with:
+          name: samples-amd64
+          path: samples-amd64.tar.gz
+
+      - name: Upload samples (arm64)
+        uses: actions/upload-artifact@v6
+        with:
+          name: samples-arm64
+          path: samples-arm64.tar.gz

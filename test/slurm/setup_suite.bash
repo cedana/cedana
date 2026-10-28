@@ -24,6 +24,7 @@ setup_suite() {
     # If SLURM_CLUSTER_ID is already set (e.g. from a prior workflow step), skip setup
     if [ -n "${SLURM_CLUSTER_ID:-}" ]; then
         debug_log "Cluster already provisioned (SLURM_CLUSTER_ID=$SLURM_CLUSTER_ID), skipping setup"
+        export SLURM_CLUSTER_ID_PROVIDED=1
 
         if [ -z "${SLURM_SAMPLES_DIR:-}" ]; then
             if [ -d "../cedana-samples/slurm" ]; then
@@ -92,6 +93,9 @@ teardown_suite() {
         deregister_slurm_cluster "$SLURM_CLUSTER_ID" || true
     fi
 
-    # Tear down the SLURM cluster
-    teardown_slurm_cluster
+    # Only tear down a cluster this suite created; an externally provisioned
+    # one may still be needed by a later test run in the same job.
+    if [ -z "${SLURM_CLUSTER_ID_PROVIDED:-}" ]; then
+        teardown_slurm_cluster
+    fi
 }

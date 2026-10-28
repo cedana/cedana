@@ -343,13 +343,12 @@ var pluginFeaturesCmd = &cobra.Command{
 
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.RunHandler, pluginNames, &errs))
-			tableWriter.AppendRow(featureRow(manager, features.RunServerlessSupport, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunMiddleware, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.RunMiddlewareLate, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.ManageHandler, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.KillSignal, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.Cleanup, pluginNames, &errs))
-			tableWriter.AppendRow(featureRow(manager, features.Reaper, pluginNames, &errs))
+			tableWriter.AppendRow(featureRow(manager, features.ServerlessSupport, pluginNames, &errs))
 			tableWriter.AppendSeparator()
 			tableWriter.AppendRow(featureRow(manager, features.GPUInterception, pluginNames, &errs))
 			tableWriter.AppendRow(featureRow(manager, features.GPUInterceptionRestore, pluginNames, &errs))
@@ -402,6 +401,14 @@ func featureRow[T any](manager plugins.Manager, feature plugins.Feature[T], plug
 			*errs = append(*errs, err)
 			row = append(row, style.NegativeColors.Sprint(style.CrossMark))
 		} else {
+			if available { // for boolean features, also check the value (e.g. ServerlessSupport = false)
+				feature.IfAvailable(func(_ string, sym T) error {
+					if b, ok := any(sym).(bool); ok {
+						available = b
+					}
+					return nil
+				}, name)
+			}
 			row = append(row, style.BoolStr(available, style.TickMark, style.BulletMark))
 		}
 	}

@@ -16,8 +16,9 @@ type File struct {
 	uploadURL   string
 
 	reader io.ReadCloser
-	writer io.WriteCloser
-	done   chan error
+	// Uploads are spooled to a temp file and sent on Close: the presigned S3 PUT
+	// needs a Content-Length, which a streamed (chunked) body cannot provide.
+	spool *os.File
 }
 
 func NewDownloadableFile(ctx context.Context, downloadUrl string) *File {
@@ -50,38 +51,15 @@ func (c *File) Read(p []byte) (int, error) {
 }
 
 func (c *File) Write(p []byte) (int, error) {
-	if c.writer == nil {
-		pr, pw, err := os.Pipe()
+	if c.spool == nil {
+		f, err := os.CreateTemp("", "cedana-upload-*")
 		if err != nil {
-			return 0, err
+			return 0, fmt.Errorf("failed to create upload spool: %w", err)
 		}
-
-		c.writer = pw
-		c.done = make(chan error, 1)
-
-		req, err := http.NewRequestWithContext(c.ctx, "PUT", c.uploadURL, pr)
-		if err != nil {
-			return 0, err
-		}
-
-		go func() {
-			defer close(c.done)
-
-			resp, err := http.DefaultClient.Do(req)
-			if err != nil {
-				c.done <- fmt.Errorf("upload failed: %w", err)
-				return
-			}
-			defer resp.Body.Close()
-
-			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-				c.done <- fmt.Errorf("upload failed with status: %s", resp.Status)
-				return
-			}
-		}()
+		c.spool = f
 	}
 
-	return c.writer.Write(p)
+	return c.spool.Write(p)
 }
 
 func (c *File) Close() error {
@@ -90,12 +68,40 @@ func (c *File) Close() error {
 	if c.reader != nil {
 		err = errors.Join(err, c.reader.Close())
 	}
-	if c.writer != nil {
-		err = errors.Join(err, c.writer.Close())
-	}
-	if c.done != nil {
-		err = errors.Join(err, <-c.done)
+	if c.spool != nil {
+		err = errors.Join(err, c.upload())
 	}
 
 	return err
+}
+
+// upload sends the spooled bytes with a known Content-Length and removes the spool.
+func (c *File) upload() error {
+	defer os.Remove(c.spool.Name())
+	defer c.spool.Close()
+
+	size, err := c.spool.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return err
+	}
+	if _, err := c.spool.Seek(0, io.SeekStart); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(c.ctx, "PUT", c.uploadURL, c.spool)
+	if err != nil {
+		return err
+	}
+	req.ContentLength = size
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("upload failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("upload failed with status: %s", resp.Status)
+	}
+	return nil
 }

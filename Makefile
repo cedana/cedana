@@ -4,7 +4,15 @@ INSTALL_BIN_DIR=/usr/local/bin
 INSTALL_LIB_DIR=/usr/local/lib
 SCRIPTS_DIR=$(PWD)/scripts
 GOCMD=go
-GOBUILD=CGO_ENABLED=1 $(GOCMD) build
+# Pin the toolchain: binaries + plugins built with Go 1.27 panic at runtime with
+# "*daemon.Job, not *daemon.Job (types from different scopes)" once several
+# plugins are loaded. A go.mod toolchain line can't do this (Go never downgrades).
+
+# RACE=1 builds with the race detector. Plugins only load into a binary built the same way,
+# so build cedana and its plugins with it together.
+# (-race through GOFLAGS, as go build takes -C only as its first flag)
+export GOTOOLCHAIN?=go1.26.10
+GOBUILD=CGO_ENABLED=1 $(if $(filter 1,$(RACE)),GOFLAGS=-race )$(GOCMD) build
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
@@ -28,7 +36,7 @@ LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
 DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
-cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
+cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1], RACE=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building $(BINARY) with debug symbols..." ;\
@@ -88,7 +96,7 @@ PLUGIN_NAMES=$(shell ls plugins)
 PLUGIN_BINARIES=$(patsubst %,$(OUT_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 PLUGIN_INSTALL_PATHS=$(patsubst %,$(INSTALL_LIB_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 
-plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
+plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1], RACE=[0|1])
 $(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building plugin $* with debug symbols..." ;\
@@ -117,8 +125,12 @@ PARALLELISM?=8
 TAGS?=
 ARGS?=
 RETRIES?=0
+# isolated (a daemon per test), persistent (one across tests), or both
+DAEMON_MODE?=both
 GPU?=0
+REPORT?=
 PROVIDER?=K3s
+K3S_CONTAINERD?=external
 SKIP_HELM?=0
 HELPER_REPO?=
 HELPER_TAG?=""
@@ -126,14 +138,19 @@ HELPER_DIGEST?=""
 CONTROLLER_REPO?=
 CONTROLLER_TAG?=""
 CONTROLLER_DIGEST?=""
+PROPAGATOR_REPO?=
+PROPAGATOR_TAG?=""
+PROPAGATOR_DIGEST?=""
 HELM_CHART?=""
 FORMATTER?=pretty
-BATS_CMD_TAGS=export BATS_NO_FAIL_FOCUS_RUN=1; export BATS_RETRIES=$(RETRIES); bats \
+BATS_CMD_TAGS=BATS_NO_FAIL_FOCUS_RUN=1 BATS_RETRIES=$(RETRIES) bats \
 				--filter-tags $(TAGS) --jobs $(PARALLELISM) $(ARGS) \
-				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
-BATS_CMD=export BATS_NO_FAIL_FOCUS_RUN=1; export BATS_RETRIES=$(RETRIES); bats \
+				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush \
+				--allow-empty-suite
+BATS_CMD=BATS_NO_FAIL_FOCUS_RUN=1 BATS_RETRIES=$(RETRIES) bats \
 		        --jobs $(PARALLELISM) $(ARGS) \
-				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush
+				--output /tmp --report-formatter $(FORMATTER) --parallel-binary-name rush \
+				--allow-empty-suite
 
 test: test-unit test-regression test-k8s test-slurm ## Run all tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 
@@ -141,28 +158,33 @@ test-unit: ## Run unit tests (with benchmarks)
 	@echo "Running unit tests..."
 	$(GOCMD) test -v $(GOMODULE)/... -bench=. -benchmem
 
-test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1], REPORT=<name>, DAEMON_MODE=[both|isolated|persistent])
 	if [ -f /.dockerenv ]; then \
 		echo "Running regression tests..." ;\
 		echo "Retries: $(RETRIES)" ;\
 		echo "Parallelism: $(PARALLELISM)" ;\
-		echo "\nUsing unique instance of daemon per test...\n" ;\
-		if [ "$(TAGS)" = "" ]; then \
-			$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
-		else \
-			$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
+		status_isolated=0 ; status_persistent=0 ;\
+		if [ "$(DAEMON_MODE)" != "persistent" ]; then \
+			echo "\nUsing unique instance of daemon per test...\n" ;\
+			if [ "$(TAGS)" = "" ]; then \
+				$(BATS_CMD) -r test/regression ; status_isolated=$$? ;\
+			else \
+				$(BATS_CMD_TAGS) -r test/regression ; status_isolated=$$? ;\
+			fi ;\
+			if [ -f /tmp/report.xml ]; then \
+				mv /tmp/report.xml /tmp/$(or $(REPORT),report)-isolated.xml ;\
+			fi ;\
 		fi ;\
-		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-isolated.xml ;\
-		fi ;\
-		echo "\nUsing a persistent instance of daemon across tests...\n" ;\
-		if [ "$(TAGS)" = "" ]; then \
-			PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
-		else \
-			PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persistent=$$? ;\
-		fi ;\
-		if [ -f /tmp/report.xml ]; then \
-			mv /tmp/report.xml /tmp/report-persistent.xml ;\
+		if [ "$(DAEMON_MODE)" != "isolated" ]; then \
+			echo "\nUsing a persistent instance of daemon across tests...\n" ;\
+			if [ "$(TAGS)" = "" ]; then \
+				PERSIST_DAEMON=1 $(BATS_CMD) -r test/regression ; status_persistent=$$? ;\
+			else \
+				PERSIST_DAEMON=1 $(BATS_CMD_TAGS) -r test/regression ; status_persistent=$$? ;\
+			fi ;\
+			if [ -f /tmp/report.xml ]; then \
+				mv /tmp/report.xml /tmp/$(or $(REPORT),report)-persistent.xml ;\
+			fi ;\
 		fi ;\
 		if [ $$status_isolated -ne 0 ]; then \
 			echo "Isolated tests failed" ;\
@@ -183,7 +205,9 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				PARALLELISM=$(PARALLELISM) \
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
-				DEBUG=$(DEBUG) ;\
+				DEBUG=$(DEBUG) \
+				REPORT=$(REPORT) \
+				DAEMON_MODE=$(DAEMON_MODE) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		else \
 			echo "Running in container $(DOCKER_TEST_IMAGE)..." ;\
@@ -195,12 +219,14 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 				GPU=$(GPU) \
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
-				DEBUG=$(DEBUG) ;\
+				DEBUG=$(DEBUG) \
+				REPORT=$(REPORT) \
+				DAEMON_MODE=$(DAEMON_MODE) ;\
 			$(DOCKER_TEST_REMOVE) ;\
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINERD=[external|embedded], K3S_VERSION=<v1.x.y+k3sN>, CONTAINERD_VERSION=<x.y.z>, TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Retries: $(RETRIES)" ;\
@@ -209,6 +235,9 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 			$(BATS_CMD) -r test/k8s ; status=$$? ;\
 		else \
 			$(BATS_CMD_TAGS) -r test/k8s ; status=$$? ;\
+		fi ;\
+		if [ -n "$(REPORT)" ] && [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/$(REPORT).xml ;\
 		fi ;\
 		if [ $$status -ne 0 ]; then \
 			echo "Kubernetes e2e tests failed" ;\
@@ -235,8 +264,12 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
 				GPU=$(GPU) \
+				REPORT=$(REPORT) \
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
+				K3S_CONTAINERD=$(K3S_CONTAINERD) \
+				K3S_VERSION=$(K3S_VERSION) \
+				CONTAINERD_VERSION=$(CONTAINERD_VERSION) \
 				CLUSTER_ID=$(CLUSTER_ID) \
 				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -257,8 +290,12 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, 
 				TAGS=$(TAGS) \
 				RETRIES=$(RETRIES) \
 				GPU=$(GPU) \
+				REPORT=$(REPORT) \
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
+				K3S_CONTAINERD=$(K3S_CONTAINERD) \
+				K3S_VERSION=$(K3S_VERSION) \
+				CONTAINERD_VERSION=$(CONTAINERD_VERSION) \
 				CLUSTER_ID=$(CLUSTER_ID) \
 				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -282,6 +319,9 @@ test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RET
 		else \
 			$(BATS_CMD_TAGS) -r test/slurm ; status=$$? ;\
 		fi ;\
+		if [ -n "$(REPORT)" ] && [ -f /tmp/report.xml ]; then \
+			mv /tmp/report.xml /tmp/$(REPORT).xml ;\
+		fi ;\
 		if [ $$status -ne 0 ]; then \
 			echo "Slurm e2e tests failed" ;\
 			exit $$status ;\
@@ -303,6 +343,7 @@ test-slurm: ## Run slurm e2e tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags>, RET
 			TAGS=$(TAGS) \
 			RETRIES=$(RETRIES) \
 			GPU=$(GPU) \
+			REPORT=$(REPORT) \
 			FORMATTER=$(FORMATTER) \
 			DEBUG=$(DEBUG) ;\
 		$(DOCKER_TEST_REMOVE) ;\
@@ -355,23 +396,29 @@ PLUGIN_BIN_COPY=find /usr/local/bin -type f -name '*cedana*' -not -name '*gpu*' 
 PLUGIN_LIB_COPY_GPU=find /usr/local/lib -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY_GPU=find /usr/local/bin -type f -name '*cedana*' -and -name '*gpu*' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 PLUGIN_BIN_COPY_CRIU=find /usr/local/bin -type f -name 'criu' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
+PLUGIN_BIN_COPY_CSX=find /usr/local/bin -type f -name 'csx' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 RUSH_BIN_COPY=find /usr/local/bin -type f -name 'rush' -exec docker cp {} $(DOCKER_TEST_CONTAINER_NAME):{} \; >/dev/null
 HELM_CHART_COPY=if [ -n "$$HELM_CHART" ]; then docker cp $(HELM_CHART) $(DOCKER_TEST_CONTAINER_NAME):/helm-chart ; fi >/dev/null
 
 DOCKER_TEST_CREATE_OPTS=--privileged --init --cgroupns=host --stop-signal=SIGTERM --entrypoint tail --name=$(DOCKER_TEST_CONTAINER_NAME) \
 				-v $(PWD):/src:ro -v /var/run/docker.sock:/var/run/docker.sock \
 				-e CEDANA_URL=$(CEDANA_URL) -e CEDANA_AUTH_TOKEN=$(CEDANA_AUTH_TOKEN) \
+				-e PROPAGATOR_REPO=$(PROPAGATOR_REPO) -e PROPAGATOR_DIGEST=$(PROPAGATOR_DIGEST) -e PROPAGATOR_TAG=$(PROPAGATOR_TAG) \
+				-e PROPAGATOR_BUCKET_NAME=$(PROPAGATOR_BUCKET_NAME) -e PROPAGATOR_PLUGINS_BUCKET=$(PROPAGATOR_PLUGINS_BUCKET) \
+				-e DOCKER_USERNAME=$(DOCKER_USERNAME) -e DOCKER_TOKEN=$(DOCKER_TOKEN) \
 				-e CEDANA_LOG_LEVEL=$(CEDANA_LOG_LEVEL) \
 				-e CEDANA_METRICS_ENABLED=$(CEDANA_METRICS_ENABLED) -e CEDANA_PROFILING_ENABLED=$(CEDANA_PROFILING_ENABLED) \
 				-e HF_TOKEN=$(HF_TOKEN) \
-				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_REGION=$(AWS_REGION) \
+				-e AWS_ACCESS_KEY_ID=$(AWS_ACCESS_KEY_ID) -e AWS_SECRET_ACCESS_KEY=$(AWS_SECRET_ACCESS_KEY) -e AWS_SESSION_TOKEN=$(AWS_SESSION_TOKEN) -e AWS_REGION=$(AWS_REGION) \
 				-e GCLOUD_PROJECT_ID=$(GCLOUD_PROJECT_ID) -e GCLOUD_SERVICE_ACCOUNT_KEY='$(GCLOUD_SERVICE_ACCOUNT_KEY)' -e GCLOUD_REGION=$(GCLOUD_REGION) \
+				-e OTEL_EXPORTER_OTLP_ENDPOINT=$(OTEL_EXPORTER_OTLP_ENDPOINT) -e OTEL_EXPORTER_OTLP_HEADERS=$(OTEL_EXPORTER_OTLP_HEADERS) \
 				-e EKS_CLUSTER_NAME=$(EKS_CLUSTER_NAME) -e GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) -e NB_CLUSTER_NAME=$(NB_CLUSTER_NAME)\
 				$(DOCKER_ADDITIONAL_OPTS)
 DOCKER_TEST_CREATE=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
 						$(PLUGIN_LIB_COPY) && \
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_BIN_COPY_CRIU) && \
+						$(PLUGIN_BIN_COPY_CSX) && \
 						$(RUSH_BIN_COPY) && \
 						$(HELM_CHART_COPY) >/dev/null
 DOCKER_TEST_CREATE_NO_PLUGINS=docker create $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE) -f /dev/null >/dev/null && \
@@ -381,7 +428,8 @@ DOCKER_TEST_CREATE_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE
 						$(PLUGIN_BIN_COPY) && \
 						$(PLUGIN_LIB_COPY_GPU) && \
 						$(PLUGIN_BIN_COPY_GPU) && \
-						$(PLUGIN_BIN_COPY_CRIU) >/dev/null
+						$(PLUGIN_BIN_COPY_CRIU) && \
+						$(PLUGIN_BIN_COPY_CSX) >/dev/null
 DOCKER_TEST_CREATE_NO_PLUGINS_CUDA=docker create --gpus=all --ipc=host $(DOCKER_TEST_CREATE_OPTS) $(DOCKER_TEST_IMAGE_CUDA) -f /dev/null >/dev/null && \
 						$(HELM_CHART_COPY) >/dev/null
 

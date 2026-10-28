@@ -12,13 +12,13 @@ fi
 # Define packages for YUM and APT
 YUM_PACKAGES=(
     wget git make psmisc
-    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel # CRIU
+    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel lz4-devel # CRIU
     yq
 )
 
 APT_PACKAGES=(
     wget git make psmisc
-    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev iptables libnftables1 # CRIU
+    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev iptables libnftables1 liblz4-dev # CRIU
     sysvinit-utils
 )
 
@@ -78,22 +78,32 @@ else
     exit 1
 fi
 
-# Install yq if not already installed
+# Install yq if not already installed and working
 # yq is needed to configure kubelet, but not available in all distros
-if ! command -v yq &> /dev/null; then
+# NOTE: gate on it actually running, not just existing — an interrupted or
+# failed download can leave a broken or non-executable binary behind
+if ! yq --version &> /dev/null; then
     case "$(uname -m)" in
         x86_64)
-            wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+            YQ_BINARY=yq_linux_amd64
             ;;
         arm64 | aarch64)
-            wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
+            YQ_BINARY=yq_linux_arm64
             ;;
         *)
             echo "Unsupported architecture: $(uname -m)"
             exit 1
             ;;
     esac
-    chmod +x /usr/local/bin/yq
+    # Download to a temp file and only move into place once verified, so a
+    # failed download never leaves a broken yq on the node
+    YQ_TMP=$(mktemp /usr/local/bin/.yq.XXXXXX)
+    trap 'rm -f "$YQ_TMP"' EXIT
+    wget -q "https://github.com/mikefarah/yq/releases/latest/download/$YQ_BINARY" -O "$YQ_TMP"
+    chmod +x "$YQ_TMP"
+    "$YQ_TMP" --version > /dev/null
+    mv "$YQ_TMP" /usr/local/bin/yq
+    trap - EXIT
     echo "yq has been installed"
 else
     echo "yq is already installed"

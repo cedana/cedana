@@ -1,0 +1,122 @@
+package criu
+
+import (
+	"context"
+	"errors"
+	"net"
+	"os"
+	"path/filepath"
+	"slices"
+	"strings"
+	"syscall"
+	"testing"
+
+	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"google.golang.org/protobuf/proto"
+)
+
+func TestDedupe(t *testing.T) {
+	got := dedupe([]string{"mnt[/a]:/a", "file[1:2]", "mnt[/a]:/a", "mnt[/b]:/b", "file[1:2]"})
+	want := []string{"mnt[/a]:/a", "file[1:2]", "mnt[/b]:/b"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+}
+
+func TestExternalsToConfig(t *testing.T) {
+	prev, err := os.CreateTemp(t.TempDir(), "prev.conf")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev.WriteString("tcp-close")
+	prev.Close()
+
+	opts := &criu.CriuOpts{
+		ConfigFile: proto.String(prev.Name()),
+		External:   []string{"mnt[/a]:/a", "mnt[/has space]:/x", "file[1:2]", "mnt[/has#hash]:/y"},
+	}
+	path, err := externalsToConfig(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(path) })
+
+	if opts.GetConfigFile() != path {
+		t.Fatalf("ConfigFile not updated: %q", opts.GetConfigFile())
+	}
+	if want := []string{"mnt[/has space]:/x", "mnt[/has#hash]:/y"}; !slices.Equal(opts.External, want) {
+		t.Fatalf("inline externals %v want %v", opts.External, want)
+	}
+	b, _ := os.ReadFile(path)
+	if want := "tcp-close\nexternal mnt[/a]:/a\nexternal file[1:2]\n"; string(b) != want {
+		t.Fatalf("config:\n%s\nwant:\n%s", b, want)
+	}
+}
+
+func TestExternalsToConfigNoExternals(t *testing.T) {
+	opts := &criu.CriuOpts{ConfigFile: proto.String("/keep/me")}
+	path, err := externalsToConfig(opts)
+	if err != nil || path != "" || opts.GetConfigFile() != "/keep/me" {
+		t.Fatalf("path=%q cfg=%q err=%v", path, opts.GetConfigFile(), err)
+	}
+}
+
+func TestSendAndRecvReportsOversizedRequest(t *testing.T) {
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_SEQPACKET|syscall.SOCK_CLOEXEC, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cln := os.NewFile(uintptr(fds[0]), "cln")
+	defer cln.Close()
+	conn, err := net.FileConn(cln)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := os.NewFile(uintptr(fds[1]), "srv")
+	t.Cleanup(func() { conn.Close(); srv.Close() })
+
+	c := &Criu{swrkSk: conn.(*net.UnixConn)}
+	var sndbuf int
+	raw, _ := c.swrkSk.SyscallConn()
+	raw.Control(func(fd uintptr) {
+		sndbuf, _ = syscall.GetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_SNDBUF)
+	})
+
+	_, _, _, _, err = c.sendAndRecv(make([]byte, sndbuf)) // > sk_sndbuf-32
+	if !errors.Is(err, syscall.EMSGSIZE) || !strings.Contains(err.Error(), "exceeds the socket send buffer") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestSwrkFailureCarriesItsOutput(t *testing.T) {
+	// Far more than a pipe holds first, which must not stop it from exiting
+	fake := filepath.Join(t.TempDir(), "criu")
+	if err := os.WriteFile(fake, []byte("#!/bin/sh\nhead -c 300000 /dev/zero | tr '\\0' x >&2\necho\necho 'no can do' >&2\nexit 3\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := MakeCriu()
+	c.SetCriuPath(fake)
+	_, err := c.GetCriuVersion(context.Background())
+	if err == nil {
+		t.Fatal("expected the version request to fail")
+	}
+	for _, want := range []string{"exit status 3", "no can do"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("expected the error to carry %q, got: %v", want, err)
+		}
+	}
+}
+
+func TestCriuEnvPutsSystemBinFirst(t *testing.T) {
+	t.Setenv("PATH", "/var/lib/rancher/k3s/data/abc/bin:/usr/bin")
+	var paths []string
+	for _, e := range criuEnv() {
+		if strings.HasPrefix(e, "PATH=") {
+			paths = append(paths, e)
+		}
+	}
+	want := "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/lib/rancher/k3s/data/abc/bin:/usr/bin"
+	if len(paths) != 1 || paths[0] != want {
+		t.Fatalf("got %v, want [%s]", paths, want)
+	}
+}

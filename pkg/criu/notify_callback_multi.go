@@ -6,6 +6,7 @@ package criu
 
 import (
 	"context"
+	"errors"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 )
@@ -40,44 +41,56 @@ func (n NotifyCallbackMulti) Initialize(ctx context.Context, criuPid int32) erro
 	return nil
 }
 
+// CRIU calls no FinalizeDump after a failed InitializeDump, so on a failure the callbacks
+// that already started are finalized here, with the error. The one that failed is not:
+// it cleans up after itself.
 func (n NotifyCallbackMulti) InitializeDump(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].InitializeDump(ctx, opts)
-		if err != nil {
-			return err
+		initErr := n.callbacks[i].InitializeDump(ctx, opts)
+		if initErr == nil {
+			continue
 		}
+		err := initErr
+		for j := len(n.callbacks) - 1; j > i; j-- {
+			err = errors.Join(err, n.callbacks[j].FinalizeDump(ctx, opts, initErr))
+		}
+		return err
 	}
 	return nil
 }
 
+// Same as InitializeDump, for restore
 func (n NotifyCallbackMulti) InitializeRestore(ctx context.Context, opts *criu.CriuOpts) error {
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].InitializeRestore(ctx, opts)
-		if err != nil {
-			return err
+		initErr := n.callbacks[i].InitializeRestore(ctx, opts)
+		if initErr == nil {
+			continue
 		}
+		err := initErr
+		for j := len(n.callbacks) - 1; j > i; j-- {
+			err = errors.Join(err, n.callbacks[j].FinalizeRestore(ctx, opts, initErr))
+		}
+		return err
 	}
 	return nil
 }
 
-func (n NotifyCallbackMulti) FinalizeDump(ctx context.Context, opts *criu.CriuOpts, err error) error {
+// Every callback is finalized, even after one fails: a callback left out keeps what it
+// holds, such as the GPU controller's termination lock.
+func (n NotifyCallbackMulti) FinalizeDump(ctx context.Context, opts *criu.CriuOpts, dumpErr error) error {
+	var errs error
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].FinalizeDump(ctx, opts, err)
-		if err != nil {
-			return err
-		}
+		errs = errors.Join(errs, n.callbacks[i].FinalizeDump(ctx, opts, dumpErr))
 	}
-	return nil
+	return errs
 }
 
-func (n NotifyCallbackMulti) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts, err error) error {
+func (n NotifyCallbackMulti) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts, restoreErr error) error {
+	var errs error
 	for i := len(n.callbacks) - 1; i >= 0; i-- {
-		err := n.callbacks[i].FinalizeRestore(ctx, opts, err)
-		if err != nil {
-			return err
-		}
+		errs = errors.Join(errs, n.callbacks[i].FinalizeRestore(ctx, opts, restoreErr))
 	}
-	return nil
+	return errs
 }
 
 func (n NotifyCallbackMulti) PreDump(ctx context.Context, opts *criu.CriuOpts) error {
@@ -188,6 +201,18 @@ func (n NotifyCallbackMulti) SkipNamespaces(ctx context.Context, pid int32) erro
 		}
 	}
 	return nil
+}
+
+func (n NotifyCallbackMulti) QueryExtFiles(ctx context.Context) ([]string, error) {
+	var external []string
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		files, err := n.callbacks[i].QueryExtFiles(ctx)
+		if err != nil {
+			return nil, err
+		}
+		external = append(external, files...)
+	}
+	return external, nil
 }
 
 func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) error {

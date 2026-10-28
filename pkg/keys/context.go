@@ -24,4 +24,9 @@ const (
 	CLIENT_CONTEXT_KEY
 	PLUGIN_MANAGER_CONTEXT_KEY
 	PROFILING_CONTEXT_KEY
+
+	// []int: device minors of the GPUs a restore moves the process onto, set by a plugin that
+	// restores onto other GPUs than the checkpoint's (see the runc plugin's GPU remap). Passed
+	// to the GPU controller, whose restore workers may start before the restored /dev has them.
+	GPU_RESTORE_DEVICE_MINORS_CONTEXT_KEY
 )

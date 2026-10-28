@@ -3,58 +3,40 @@
 #####################################
 ### Cedana Propagator API Helpers ###
 #####################################
+#
+# All functions talk to the propagator at CEDANA_URL (full base URL, no trailing
+# slash) using CEDANA_AUTH_TOKEN. The caller is responsible for setting both.
 
-# Default propagator service configuration
-# Normalize the URL to ensure it includes protocol and has the correct format
-normalize_url() {
-    local url="$1"
-    # Remove trailing slashes and /v1 suffix
-    url="${url%/}"
-    url="${url%/v1}"
-
-    # Add https:// if no protocol specified
-    if [[ ! "$url" =~ ^https?:// ]]; then
-        url="https://$url"
-    fi
-
-    echo "$url"
-}
-
-PROPAGATOR_BASE_URL=""
-if [ -n "${CEDANA_URL:-}" ]; then
-    PROPAGATOR_BASE_URL=$(normalize_url "$CEDANA_URL")
-fi
-
-PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN}"
-
-# Checkpoint a pod via propagator API
+# Checkpoint a pod via propagator API (cedana finds the pod's runc root itself)
 # @param $1: Pod ID (UID)
-# @param $2: Runc root path
+# @param $2: Checkpoint directory, overriding the configured one (optional)
+# @param $3: Compression, overriding the configured one (optional)
 # Returns: Action ID for polling
 checkpoint_pod() {
     local pod_id="$1"
-    local runc_root=${2:-"/run/containerd/runc/k8s.io"}
+    local directory="${2:-}"
+    local compression="${3:-}"
 
-    if [ -z "$pod_id" ] || [ -z "$runc_root" ]; then
-        error_log "checkpoint_pod requires pod_id and runc_root"
+    if [ -z "$pod_id" ]; then
+        error_log "checkpoint_pod requires pod_id"
         return 1
     fi
 
-    debug_log "Checkpointing pod '$pod_id' with runc root '$runc_root'..."
+    debug_log "Checkpointing pod '$pod_id'..."
 
     local payload
     payload=$(jq -n \
             --arg pod_id "$pod_id" \
-            --arg runc_root "$runc_root" \
-            '{
-            "pod_id": $pod_id,
-            "runc_root": $runc_root
-    }')
+            --arg directory "$directory" \
+            --arg compression "$compression" \
+            '{"pod_id": $pod_id} +
+        ({"directory": $directory, "compression": $compression} | with_entries(select(.value != "")) |
+        if . == {} then {} else {"overrides": .} end)')
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/checkpoint/pod" \
+    response=$(curl -s -X POST "${CEDANA_URL}/checkpoint/pod" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -d "$payload" \
         -w "%{http_code}")
 
@@ -66,6 +48,40 @@ checkpoint_pod() {
         return 0
     else
         error_log "Failed to checkpoint pod (HTTP $http_code): $body"
+        return 1
+    fi
+}
+
+checkpoint_pod_by_name() {
+    local name="$1"
+    local namespace="$2"
+
+    if [ -z "$name" ] || [ -z "$namespace" ]; then
+        error_log "checkpoint_pod_by_name requires pod name and namespace"
+        return 1
+    fi
+
+    debug_log "Checkpointing pod '$namespace/$name' by name..."
+
+    local payload
+    payload=$(jq -n --arg name "$name" --arg namespace "$namespace" \
+        '{"pod_name": $name, "namespace": $namespace}')
+
+    local response
+    response=$(curl -s -X POST "${CEDANA_URL}/checkpoint/pod" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
+            -d "$payload" \
+        -w "%{http_code}")
+
+    local http_code="${response: -3}"
+    local body="${response%???}"
+
+    if [ "$http_code" -eq 200 ]; then
+        echo "$body"
+        return 0
+    else
+        error_log "Failed to checkpoint pod by name (HTTP $http_code): $body"
         return 1
     fi
 }
@@ -111,9 +127,9 @@ restore_pod() {
     fi
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/restore/pod" \
+    response=$(curl -s -X POST "${CEDANA_URL}/restore/pod" \
             -H "Content-Type: application/json" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -d "$payload" \
         -w "%{http_code}" 2>&1)
 
@@ -150,8 +166,8 @@ poll_action_status() {
 
     for i in $(seq 1 $timeout); do
         local response
-        response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/checkpoint/status/${action_id}" \
-                -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+        response=$(curl -s -X GET "${CEDANA_URL}/checkpoint/status/${action_id}" \
+                -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -w "%{http_code}")
 
         local http_code="${response: -3}"
@@ -186,8 +202,8 @@ poll_action_status() {
             debug_log "Warning: Dedicated status endpoint not found, trying general actions endpoint..."
             # Fallback to general actions endpoint
             local actions_response
-            actions_response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
-                    -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            actions_response=$(curl -s -X GET "${CEDANA_URL}/actions" \
+                    -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
                 -w "%{http_code}")
 
             local actions_http_code="${actions_response: -3}"
@@ -234,6 +250,76 @@ poll_action_status() {
     return 1
 }
 
+# Polls a restore until it's done, and fails unless it actually restored. A pod that becomes
+# Ready proves nothing: a restore that falls back to a cold start (status "fallback"), or that
+# never runs (e.g. the runtime takes the run path), still ends with a Ready pod.
+# @param $1: Restore action ID (same as the restore's UUID)
+# @param $2: Timeout in seconds (optional, defaults to 300)
+poll_restore_status() {
+    local restore_id="$1"
+    restore_id="${restore_id//\"/}" # remove quotes if present
+    local timeout_seconds=${2:-300}
+    local interval=5
+
+    if [ -z "$restore_id" ]; then
+        error_log "poll_restore_status requires a restore action ID"
+        return 1
+    fi
+
+    debug_log "Polling restore $restore_id..."
+
+    local status="" restore=""
+    for _ in $(seq 1 $((timeout_seconds / interval))); do
+        local response
+        response=$(curl -s --max-time 10 -X GET "${CEDANA_URL}/restores?restore_uuid=${restore_id}&limit=1" \
+                -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
+            -w "%{http_code}")
+        local http_code="${response: -3}"
+        local body="${response%???}"
+
+        if [ "$http_code" -eq 200 ]; then
+            restore=$(echo "$body" | jq -c '.[0] // empty' 2>/dev/null)
+            status=$(echo "$restore" | jq -r '.status // empty' 2>/dev/null)
+            case "$status" in
+                "success")
+                    debug_log "Restore $restore_id succeeded"
+                    return 0
+                    ;;
+                "fallback"|"error"|"failed") # fallback: a cold start instead
+                    error_log "Restore $restore_id ended as $status: $(echo "$restore" | jq -r '.error_message // "no error message"')"
+                    debug_log "Restore record: $restore"
+                    return 1
+                    ;;
+            esac
+            debug_log "Restore status: ${status:-not recorded yet}"
+        else
+            debug_log "Failed to get restore $restore_id (HTTP $http_code): $body"
+        fi
+        sleep $interval
+    done
+
+    error_log "Restore $restore_id did not finish within ${timeout_seconds}s (last status: ${status:-not recorded}), e.g. it never ran"
+    debug_log "Restore record: ${restore:-none}"
+    return 1
+}
+
+# The status of a checkpoint (e.g. initialized, processing, ready, error), or nothing
+# @param $1: Checkpoint action ID
+get_checkpoint_status() {
+    local action_id="${1//\"/}"
+    curl -s --max-time 10 -X GET "${CEDANA_URL}/checkpoint/status/${action_id}" \
+        -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | jq -r '.status // empty' 2>/dev/null
+}
+
+# The status of a restore (e.g. starting, pod_created, success, fallback, error), or nothing
+# if it isn't recorded yet
+# @param $1: Restore action ID
+get_restore_status() {
+    local restore_id="${1//\"/}"
+    curl -s --max-time 10 -X GET "${CEDANA_URL}/restores?restore_uuid=${restore_id}&limit=1" \
+        -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" | jq -r '.[0].status // empty' 2>/dev/null
+}
+
 # Get checkpoint ID from action ID using the actions API
 # @param $1: Action ID
 # Returns: Checkpoint ID
@@ -249,8 +335,8 @@ get_checkpoint_id_from_action() {
     debug_log "Getting checkpoint ID for action '$action_id'..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X GET "${CEDANA_URL}/actions" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -287,8 +373,8 @@ cleanup_checkpoint() {
     debug_log "Deprecating checkpoint '$checkpoint_id'..."
 
     local response
-    response=$(curl -s -X PATCH "${PROPAGATOR_BASE_URL}/v2/checkpoints/deprecate/${checkpoint_id}" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X PATCH "${CEDANA_URL}/checkpoints/deprecate/${checkpoint_id}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -322,8 +408,8 @@ validate_propagator_connectivity() {
     debug_log "Validating propagator service connectivity..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/user" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X GET "${CEDANA_URL}/user" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -362,14 +448,14 @@ get_checkpoints() {
 
     debug_log "Retrieving checkpoints from propagator..."
 
-    local url="${PROPAGATOR_BASE_URL}/v2/checkpoints"
+    local url="${CEDANA_URL}/checkpoints"
     if [ -n "$cluster_id" ]; then
         url="${url}?cluster_id=${cluster_id}"
     fi
 
     local response
     response=$(curl -s -X GET "$url" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -428,8 +514,8 @@ get_latest_pod_action_id() {
     debug_log "Getting latest action ID for pod '$pod_id'..."
 
     local response
-    response=$(curl -s -X GET "${PROPAGATOR_BASE_URL}/v2/actions/from_pod/${pod_id}" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X GET "${CEDANA_URL}/actions/from_pod/${pod_id}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"
@@ -459,8 +545,8 @@ register_cluster() {
     debug_log "Registering a new cluster with name '$name'..."
 
     local response
-    response=$(curl -s -X POST "${PROPAGATOR_BASE_URL}/v2/cluster" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X POST "${CEDANA_URL}/cluster" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
             -H "Content-Type: application/json" \
             -d '{ "cluster_name": "'"${name}"'" }' \
         -w "%{http_code}")
@@ -488,8 +574,8 @@ deregister_cluster() {
     debug_log "Deregistering a new cluster with ID '$id'..."
 
     local response
-    response=$(curl -s -X DELETE "${PROPAGATOR_BASE_URL}/v2/cluster/${id}" \
-            -H "Authorization: Bearer ${PROPAGATOR_AUTH_TOKEN}" \
+    response=$(curl -s -X DELETE "${CEDANA_URL}/cluster/${id}" \
+            -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN}" \
         -w "%{http_code}")
 
     local http_code="${response: -3}"

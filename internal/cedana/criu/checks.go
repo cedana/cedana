@@ -5,6 +5,7 @@ package criu
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -26,29 +27,22 @@ func CheckVersion(manager plugins.Manager) types.Check {
 
 		component := &daemon.HealthCheckComponent{Name: "version"}
 
-		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); !p.IsInstalled() {
-			// Set custom path if specified in config, as a fallback
-			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-				component.Warnings = append(component.Warnings,
-					"CRIU plugin not installed but a custom CRIU path was provided. It's recommended to install the plugin for full feature support.",
-				)
-				c.SetCriuPath(custom_path)
-			} else if path, err := exec.LookPath("criu"); err == nil {
-				component.Warnings = append(component.Warnings,
-					"CRIU plugin not installed but CRIU binary found in PATH. It's recommended to install the plugin for full feature support.",
-				)
-				c.SetCriuPath(path)
-			} else {
-				installed = false
-				component.Errors = append(component.Errors,
-					"CRIU plugin is not installed. This is required for userspace C/R support.",
-				)
-			}
-		} else {
+		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
+			c.SetCriuPath(custom_path)
+		} else if p = manager.Get("criu"); p.IsInstalled() {
 			c.SetCriuPath(p.BinaryPaths()[0])
+		} else if path, err := exec.LookPath("criu"); err == nil {
+			component.Warnings = append(component.Warnings,
+				"CRIU plugin not installed but CRIU binary found in PATH. It's recommended to install the plugin for full feature support.",
+			)
+			c.SetCriuPath(path)
+		} else {
+			installed = false
+			component.Errors = append(component.Errors,
+				"CRIU plugin is not installed. This is required for userspace C/R support.",
+			)
 		}
 
 		if installed {
@@ -79,20 +73,16 @@ func CheckFeatures(manager plugins.Manager, all bool) types.Check {
 
 		component := &daemon.HealthCheckComponent{Name: "features"}
 
-		// Check if CRIU plugin is installed, then use that binary
 		var p *plugins.Plugin
 		installed := true
-		if p = manager.Get("criu"); !p.IsInstalled() {
-			// Set custom path if specified in config, as a fallback
-			if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
-				c.SetCriuPath(custom_path)
-			} else if path, err := exec.LookPath("criu"); err == nil {
-				c.SetCriuPath(path)
-			} else {
-				installed = false
-			}
-		} else {
+		if custom_path := config.Global.CRIU.BinaryPath; custom_path != "" {
+			c.SetCriuPath(custom_path)
+		} else if p = manager.Get("criu"); p.IsInstalled() {
 			c.SetCriuPath(p.BinaryPaths()[0])
+		} else if path, err := exec.LookPath("criu"); err == nil {
+			c.SetCriuPath(path)
+		} else {
+			installed = false
 		}
 
 		if installed {
@@ -163,4 +153,28 @@ func parseCheckOutput(out string) (warnings, errors []string) {
 	}
 
 	return
+}
+
+// CheckPluginLibraries verifies that every library of a CRIU plugin (e.g. criu/nvidia-dev)
+// is present where CRIU auto-loads it from. CRIU does not report plugins via `criu check`.
+func CheckPluginLibraries(manager plugins.Manager, plugin string) types.Check {
+	return func(ctx context.Context) []*daemon.HealthCheckComponent {
+		component := &daemon.HealthCheckComponent{Name: "libraries"}
+
+		p := manager.Get(plugin)
+		if p == nil {
+			component.Errors = append(component.Errors, fmt.Sprintf("Unknown plugin %s", plugin))
+			return []*daemon.HealthCheckComponent{component}
+		}
+
+		paths := p.LibraryPaths()
+		component.Data = strings.Join(paths, ",")
+		for _, path := range paths {
+			if _, err := os.Stat(path); err != nil {
+				component.Errors = append(component.Errors, fmt.Sprintf("Library %s not found: %v", path, err))
+			}
+		}
+
+		return []*daemon.HealthCheckComponent{component}
+	}
 }

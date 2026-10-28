@@ -55,8 +55,9 @@ var (
 	}
 	ManageHandler types.Run = client.Manage
 
-	KillSignal = syscall.SIGKILL
-	Cleanup    = client.Cleanup
+	KillSignal             = syscall.SIGKILL
+	Cleanup                = client.Cleanup
+	ServerlessSupport bool = false
 
 	GPUInterception        types.Adapter[types.Run]     = gpu.Interception
 	GPUInterceptionRestore types.Adapter[types.Restore] = gpu.Interception

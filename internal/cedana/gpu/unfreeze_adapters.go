@@ -2,6 +2,7 @@ package gpu
 
 import (
 	"context"
+	"errors"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -48,7 +49,11 @@ func Unfreeze(gpus Manager) types.Adapter[types.Freeze] {
 			err = gpus.Unfreeze(ctx, pid)
 			end()
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to unfreeze GPU state: %v", err)
+				// Still unfreeze the rest (e.g. the container cgroup), so a GPU failure
+				// does not leave the whole workload frozen
+				log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to unfreeze GPU state, unfreezing the rest")
+				code, nextErr := next(ctx, opts, resp, req)
+				return code, errors.Join(status.Errorf(codes.Internal, "failed to unfreeze GPU state: %v", err), nextErr)
 			}
 
 			log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU unfreeze completed")

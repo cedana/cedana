@@ -25,6 +25,7 @@ type Notify interface {
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
+	QueryExtFiles(ctx context.Context) ([]string, error) // return external file keys after CRIU has seized the process tree.
 }
 
 // NoNotify struct
@@ -112,4 +113,8 @@ func (c NoNotify) PostResume(ctx context.Context) error {
 
 func (c NoNotify) OrphanPtsMaster(ctx context.Context, fd int32) error {
 	return nil
+}
+
+func (c NoNotify) QueryExtFiles(ctx context.Context) ([]string, error) {
+	return nil, nil
 }

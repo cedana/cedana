@@ -19,6 +19,7 @@ fi
 if [ -f "$SERVICE_FILE" ]; then
     echo "Stopping $APP_NAME service..."
     systemctl stop "$APP_NAME".service
+    systemctl disable "$APP_NAME".service &>/dev/null || true
 
     # truncate the logs
     echo -n > "$LOG_PATH"

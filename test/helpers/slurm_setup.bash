@@ -9,6 +9,7 @@ CEDANA_SLURM_DIR="${CEDANA_SLURM_DIR:-}"
 
 SLURM_DATA_DIR="${SLURM_DATA_DIR:-/data}"
 SLURM_CONTROLLER_CONTAINER="${SLURM_CONTROLLER_CONTAINER:-slurm-controller}"
+CEDANA_INSTALL_STAGE="${CEDANA_INSTALL_STAGE:-/tmp/cedana-slurm-install}"
 # Must match docker-deploy.sh COMPUTE_NODES / LOGIN_NODES
 COMPUTE_NODES="${COMPUTE_NODES:-1}"
 LOGIN_NODES="${LOGIN_NODES:-1}"
@@ -47,8 +48,20 @@ slurm_submission_container() {
     fi
 }
 
+# Runs a command on the submission host as the submit user. A leading -i passes
+# stdin through to it.
 slurm_submit_exec() {
-    docker exec "$(slurm_submission_container)" "$@"
+    local opts=()
+
+    if [ "${1:-}" = "-i" ]; then
+        opts+=(-i)
+        shift
+    fi
+    if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
+        opts+=(-u "$SLURM_SUBMIT_USER")
+    fi
+
+    docker exec "${opts[@]}" "$(slurm_submission_container)" "$@"
 }
 
 _wait_for_port() {
@@ -151,6 +164,102 @@ _svc_restart() {
     return 1
 }
 
+# Copy the controller's SLURM config to the other nodes. /etc/slurm is local
+# to each node (not NFS), so every edit made on the controller has to be pushed
+# out. Login nodes only get slurm.conf and the overlay it includes; the
+# cli_filter plugin it names reaches them through the shared plugin dir, and
+# gives each job the UUID its monitor is found by. Any extra file names given
+# are pushed to compute nodes,
+# and must exist on the controller. Fails if any copy fails, since a node left
+# on the old config would still come up ready.
+_sync_slurm_conf() {
+    local compute_containers=() login_containers=()
+    # shellcheck disable=SC2207
+    compute_containers=($(_slurm_compute_containers))
+    if [ "${LOGIN_NODES:-0}" -ge 1 ]; then
+        # shellcheck disable=SC2207
+        login_containers=($(_slurm_login_containers))
+    fi
+
+    local overlay_name
+    overlay_name="$(basename "$SLURM_CONF_OVERLAY")"
+
+    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes (slurm.conf only to login)..."
+    local conf c targets
+    for conf in slurm.conf cgroup.conf plugstack.conf "$overlay_name" "$@"; do
+        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
+            case " $* " in
+            *" $conf "*)
+                error_log "/etc/slurm/${conf} not found on $SLURM_CONTROLLER_CONTAINER"
+                return 1
+                ;;
+            esac
+            continue
+        fi
+
+        targets=("${compute_containers[@]}")
+        if [ "$conf" = "slurm.conf" ] || [ "$conf" = "$overlay_name" ]; then
+            targets+=("${login_containers[@]}")
+        fi
+
+        local tmpfile="/tmp/slurm-${conf}.sync.$$"
+        docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile" || {
+            error_log "Failed to copy /etc/slurm/${conf} from $SLURM_CONTROLLER_CONTAINER"
+            rm -f "$tmpfile"
+            return 1
+        }
+        for c in "${targets[@]}"; do
+            docker cp "$tmpfile" "${c}:/etc/slurm/${conf}" || {
+                error_log "Failed to copy /etc/slurm/${conf} to $c"
+                rm -f "$tmpfile"
+                return 1
+            }
+        done
+        rm -f "$tmpfile"
+    done
+}
+
+# Restart slurmctld, then slurmd on the controller and every compute node, so
+# they reread their config.
+_restart_slurm_daemons() {
+    local compute_containers=()
+    # shellcheck disable=SC2207
+    compute_containers=($(_slurm_compute_containers))
+
+    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld ||
+        {
+            error_log "Failed to restart slurmctld"
+            return 1
+        }
+    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmd /usr/sbin/slurmd ||
+        {
+            error_log "Failed to restart controller slurmd"
+            return 1
+        }
+    _log_gpu_debug_state "$SLURM_CONTROLLER_CONTAINER" "post-controller-slurmd-restart"
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd ||
+            {
+                error_log "Failed to restart slurmd on $c"
+                return 1
+            }
+        _log_gpu_debug_state "$c" "post-slurmd-restart"
+    done
+    sleep 5
+
+    if [ "${GPU:-0}" = "1" ]; then
+        debug_log "Clearing transient GPU drain state after SLURM restarts..."
+        for c in "${compute_containers[@]}"; do
+            local node_hostname
+            node_hostname=$(docker exec "$c" hostname)
+            # slurmctld may briefly drain the node while it still sees the
+            # pre-restart registration without GRES; clear that once slurmd is back.
+            slurm_exec scontrol update NodeName="$node_hostname" State=RESUME \
+                >/dev/null 2>&1 || true
+        done
+    fi
+}
+
 ##############################
 # Cluster Setup
 ##############################
@@ -174,6 +283,13 @@ slurm_cluster_name: cedana_test_cluster
 slurm_accounting_enabled: false
 nfs_shared_install: true
 EOF
+
+    # SLURM is built from source by the ansible role, and the SPANK ABI is
+    # version-locked, so this must match the version the plugins were built for.
+    if [ -n "${SLURM_VERSION:-}" ]; then
+        echo "slurm_version: \"${SLURM_VERSION}\"" >>"$vars_file"
+        info_log "Pinning cluster SLURM version to ${SLURM_VERSION}"
+    fi
 
     if [ "${NFS_ROOT_SQUASH:-1}" = "0" ]; then
         cat >>"$vars_file" <<'EOF'
@@ -460,13 +576,292 @@ wait_for_slurm_ready() {
 }
 
 ##############################
+# SLURM Config Overlay
+##############################
+
+# Tests that need a different SLURM config layer it over the baseline instead
+# of editing slurm.conf. slurm.conf ends with an Include of the overlay, and for
+# a key set more than once SLURM uses the latest value, so the overlay wins.
+# Empty, it changes nothing.
+SLURM_CONF_OVERLAY="/etc/slurm/overlay.conf"
+# Names of the extra files (e.g. job_container.conf) the overlay installed into
+# /etc/slurm, so a reset knows what to remove.
+SLURM_CONF_OVERLAY_FILES="/etc/slurm/overlay.files"
+
+# Make the overlay Include the last line of the controller's slurm.conf, moving
+# it there if something has appended settings after it.
+_slurm_conf_include_overlay() {
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        set -euo pipefail
+        touch '$SLURM_CONF_OVERLAY' '$SLURM_CONF_OVERLAY_FILES'
+        sed -i '\|^Include $SLURM_CONF_OVERLAY\$|d' /etc/slurm/slurm.conf
+        echo 'Include $SLURM_CONF_OVERLAY' >> /etc/slurm/slurm.conf
+    " || {
+        error_log "Failed to include $SLURM_CONF_OVERLAY in slurm.conf"
+        return 1
+    }
+}
+
+# Cancel every job in the queue and wait for it to drain. Changing SLURM's
+# config under running jobs can break them, and a job left over from an
+# earlier test would otherwise run under the new config.
+_slurm_cancel_all_jobs() {
+    local jobs
+    jobs="$(slurm_exec squeue -h -o '%i' 2>/dev/null | tr '\n' ' ')"
+    [ -n "${jobs// /}" ] || return 0
+
+    warn_log "Cancelling leftover SLURM jobs before reconfiguring: $jobs"
+    # shellcheck disable=SC2086
+    slurm_exec scancel $jobs 2>/dev/null || true
+
+    # Cancelled jobs stay listed while they complete, up to KillWait (30s).
+    local waited=0
+    while [ "$waited" -lt 120 ]; do
+        [ -z "$(slurm_exec squeue -h -o '%i' 2>/dev/null)" ] && return 0
+        sleep 2
+        waited=$((waited + 2))
+    done
+
+    error_log "SLURM jobs still queued ${waited}s after cancelling them"
+    slurm_exec squeue 2>/dev/null || true
+    return 1
+}
+
+# Apply a SLURM config overlay: the slurm.conf fragment on stdin, plus any extra
+# config files given as paths, which are installed into /etc/slurm under their
+# basename. Replaces any overlay already applied. Restarts SLURM.
+#
+#   slurm_conf_overlay_apply "$BATS_FILE_TMPDIR/job_container.conf" <<'EOF'
+#   JobContainerType=job_container/tmpfs
+#   EOF
+slurm_conf_overlay_apply() {
+    local fragment f name
+    local names=()
+    fragment="$(cat)"
+
+    for f in "$@"; do
+        name="$(basename "$f")"
+        case "$name" in
+        slurm.conf | cgroup.conf | plugstack.conf | gres.conf | slurmdbd.conf | \
+            "$(basename "$SLURM_CONF_OVERLAY")" | "$(basename "$SLURM_CONF_OVERLAY_FILES")")
+            # A reset deletes these files, so they cannot be baseline config.
+            error_log "Overlay file $name would replace baseline SLURM config"
+            return 1
+            ;;
+        esac
+        [ -f "$f" ] || {
+            error_log "Overlay file $f not found"
+            return 1
+        }
+        names+=("$name")
+    done
+
+    info_log "Applying SLURM config overlay${names[*]:+ (with ${names[*]})}..."
+    printf '%s\n' "$fragment" >&"${OUTPUT_FD}"
+
+    _slurm_cancel_all_jobs || return 1
+
+    # Record the files before installing any, so a reset removes whatever part
+    # of them got installed if this fails partway. Added to what is recorded
+    # already, which a reset has not removed yet.
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        sh -c 'out="$1"; shift; { cat "$out" 2>/dev/null; for n; do echo "$n"; done; } | sort -u > "$out.new" && mv "$out.new" "$out"' \
+        _ "$SLURM_CONF_OVERLAY_FILES" "${names[@]}" || {
+        error_log "Failed to record overlay files in $SLURM_CONF_OVERLAY_FILES"
+        return 1
+    }
+
+    printf '%s\n' "$fragment" |
+        docker exec -i "$SLURM_CONTROLLER_CONTAINER" sh -c 'cat > "$1"' _ "$SLURM_CONF_OVERLAY" || {
+        error_log "Failed to write $SLURM_CONF_OVERLAY"
+        return 1
+    }
+    for f in "$@"; do
+        docker exec -i "$SLURM_CONTROLLER_CONTAINER" \
+            sh -c 'cat > "$1"' _ "/etc/slurm/$(basename "$f")" <"$f" || {
+            error_log "Failed to install $(basename "$f") into /etc/slurm"
+            return 1
+        }
+    done
+
+    _slurm_conf_include_overlay || return 1
+    _sync_slurm_conf "${names[@]}" || return 1
+    _restart_slurm_daemons || return 1
+    wait_for_slurm_ready 180
+}
+
+# Remove the overlay applied by slurm_conf_overlay_apply, returning SLURM to its
+# baseline config. Restarts SLURM.
+slurm_conf_overlay_reset() {
+    info_log "Resetting SLURM config overlay..."
+
+    _slurm_cancel_all_jobs || return 1
+
+    local names=()
+    read -ra names <<<"$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        cat "$SLURM_CONF_OVERLAY_FILES" 2>/dev/null | tr '\n' ' ')"
+
+    if [ "${#names[@]}" -gt 0 ]; then
+        local c
+        for c in "$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers); do
+            docker exec "$c" sh -c 'cd /etc/slurm && rm -f -- "$@"' _ "${names[@]}" || {
+                error_log "Failed to remove overlay files from $c"
+                return 1
+            }
+        done
+    fi
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        sh -c ': > "$1" && : > "$2"' _ "$SLURM_CONF_OVERLAY" "$SLURM_CONF_OVERLAY_FILES" || {
+        error_log "Failed to clear $SLURM_CONF_OVERLAY"
+        return 1
+    }
+
+    _sync_slurm_conf || return 1
+    _restart_slurm_daemons || return 1
+    wait_for_slurm_ready 180
+}
+
+# Print the value SLURM is actually running with for a key, as reported by
+# `scontrol show config` (empty if the key is not reported).
+slurm_conf_value() {
+    local key="$1"
+    slurm_exec scontrol show config 2>/dev/null |
+        awk -v key="$key" '$1 == key { sub(/^[^=]*=[[:space:]]*/, ""); print; exit }'
+}
+
+##############################
 # Cedana Installation
 ##############################
+
+# Install a host file onto the controller; compute nodes inherit it over NFS.
+# Staging is required: /usr/local/{bin,lib} are tmpfs mounts, and a direct
+# docker cp lands in the image layer underneath them where nothing can see it.
+_install_into_controller() {
+    local src="$1" dest="$2" mode="$3"
+    local stage="$CEDANA_INSTALL_STAGE"
+    local name
+    name="$(basename "$dest")"
+
+    docker cp "$src" "${SLURM_CONTROLLER_CONTAINER}:${stage}/${name}" &&
+        docker exec "$SLURM_CONTROLLER_CONTAINER" \
+            install -m "$mode" "${stage}/${name}" "$dest" || {
+        error_log "Failed to install ${name} into $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    }
+}
+
+# Point SLURM at the GPUs on each compute node. Called by
+# install_cedana_in_slurm once the binaries are in place.
+_configure_slurm_gres() {
+    [ "${GPU:-0}" = "1" ] || return 0
+
+    local compute_containers=()
+    # shellcheck disable=SC2207
+    compute_containers=($(_slurm_compute_containers))
+
+    debug_log "Configuring SLURM GPU GRES resources..."
+    for c in "${compute_containers[@]}"; do
+        local gpu_count
+        gpu_count=$(docker exec "$c" bash -c 'ls -1 /dev/nvidia[0-9]* 2>/dev/null | wc -l' || echo "0")
+        if [ "$gpu_count" -eq 0 ]; then
+            error_log "GPU test requested but no /dev/nvidia* devices were found in $c"
+            docker exec "$c" bash -c 'ls -la /dev/nvidia* 2>/dev/null || true; nvidia-smi -L 2>/dev/null || true' || true
+            return 1
+        fi
+        debug_log "Detected $gpu_count GPU(s) on $c"
+
+        local node_hostname
+        node_hostname=$(docker exec "$c" hostname)
+
+        # AutoDetect=nvidia needs SLURM built against NVML, which the
+        # ansible role does not do; enumerate the devices instead.
+        docker exec "$c" bash -c '
+            mkdir -p /etc/slurm
+            : > /etc/slurm/gres.conf
+            for dev in /dev/nvidia[0-9]*; do
+                [ -e "$dev" ] || continue
+                echo "Name=gpu File=$dev" >> /etc/slurm/gres.conf
+            done
+            cat /etc/slurm/gres.conf
+        ' || {
+            error_log "Failed to write gres.conf on $c"
+            return 1
+        }
+
+        _log_gpu_debug_state "$c" "post-gres-config"
+
+        # Untyped, matching gres.conf: a type slurmd cannot match makes it
+        # drop the devices and register zero GPUs.
+        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+            set -euo pipefail
+            SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
+
+            grep -q '^GresTypes=' \"\$SLURM_CONF\" || \
+                echo 'GresTypes=gpu' >> \"\$SLURM_CONF\"
+            grep -q '^DebugFlags=.*NO_CONF_HASH' \"\$SLURM_CONF\" || \
+                echo 'DebugFlags=NO_CONF_HASH' >> \"\$SLURM_CONF\"
+
+            if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
+                if grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
+                    sed -i 's|^\(NodeName=$node_hostname.*\) Gres=[^[:space:]]*|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
+                else
+                    sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
+                fi
+            fi
+            echo 'GRES config updated for $node_hostname'
+        " || {
+            error_log "Failed to update slurm.conf GRES on controller for $c"
+            return 1
+        }
+    done
+
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        mkdir -p /etc/slurm
+        test -f /etc/slurm/gres.conf || echo '' > /etc/slurm/gres.conf
+    "
+
+    for c in "${compute_containers[@]}"; do
+        _log_gpu_debug_state "$c" "post-gres-config-pre-sync"
+    done
+}
+
+# Add the priority tiers and GraceTime the preemption tests need.
+_configure_slurm_preemption() {
+    [ "${PREEMPT:-0}" = "1" ] || return 0
+
+    debug_log "Configuring SLURM partition preemption (PREEMPT=1)..."
+    local preempt_grace="${PREEMPT_GRACE_TIME:-120}"
+    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
+        set -euo pipefail
+        SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
+
+        grep -q '^PreemptType=' \"\$SLURM_CONF\" || echo 'PreemptType=preempt/partition_prio' >> \"\$SLURM_CONF\"
+        grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=REQUEUE' >> \"\$SLURM_CONF\"
+        grep -q '^PreemptParameters=' \"\$SLURM_CONF\" || echo 'PreemptParameters=send_user_signal' >> \"\$SLURM_CONF\"
+        grep -q '^SchedulerParameters=' \"\$SLURM_CONF\" || echo 'SchedulerParameters=preempt_reorder_count=100,preempt_strict_order' >> \"\$SLURM_CONF\"
+
+        if grep -q '^PartitionName=debug' \"\$SLURM_CONF\"; then
+            grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PriorityTier=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PriorityTier=1|' \"\$SLURM_CONF\"
+            grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=REQUEUE|' \"\$SLURM_CONF\"
+            grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'GraceTime=' || sed -i 's|^\(PartitionName=debug .*\)|\1 GraceTime=${preempt_grace}|' \"\$SLURM_CONF\"
+        fi
+
+        if ! grep -q '^PartitionName=high ' \"\$SLURM_CONF\"; then
+            nodes=\$(grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -oE 'Nodes=[^[:space:]]+' | head -1 | cut -d= -f2)
+            echo \"PartitionName=high Nodes=\${nodes:-ALL} MaxTime=INFINITE State=UP PreemptMode=CANCEL PriorityTier=2\" >> \"\$SLURM_CONF\"
+        fi
+
+        echo '--- preemption config ---'
+        grep -E '^(PreemptType|PreemptMode|PreemptParameters|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
+    " >&"${OUTPUT_FD}" 2>&1 || {
+        error_log "Failed to configure SLURM preemption on controller"
+        return 1
+    }
+}
 
 install_cedana_in_slurm() {
     info_log "Installing Cedana into SLURM cluster containers..."
 
-    local install_stage="/tmp/cedana-slurm-install"
     local all_containers=("$SLURM_CONTROLLER_CONTAINER")
     local compute_containers=()
     # shellcheck disable=SC2207
@@ -480,7 +875,8 @@ install_cedana_in_slurm() {
             apt-get install -y -qq \
                 libprotobuf-c1 libnet1 libgnutls30 libnl-3-200 \
                 libbsd0 libcap2 libcap2-bin libnftables1 iptables \
-                python3 python3-pip python3-venv
+                python3 python3-pip python3-venv \
+                curl jq
         " || {
             error_log "Failed to install dependencies in $c"
             return 1
@@ -518,63 +914,48 @@ install_cedana_in_slurm() {
         return 1
     fi
 
-    debug_log "Copying cedana + criu binaries into controller..."
-    docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "rm -rf '$install_stage' && mkdir -p '$install_stage/bin' '$install_stage/lib'" ||
-        {
-            error_log "Failed to prepare install staging directory in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        }
-    if ! docker cp "$cedana_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana"; then
-        error_log "Failed to stage cedana binary in $SLURM_CONTROLLER_CONTAINER"
-        return 1
-    fi
-    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana" /usr/local/bin/cedana; then
-        error_log "Failed to install cedana binary in $SLURM_CONTROLLER_CONTAINER"
-        return 1
-    fi
-    if ! docker cp "$criu_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/criu"; then
-        error_log "Failed to stage criu binary in $SLURM_CONTROLLER_CONTAINER"
-        return 1
-    fi
-    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/criu" /usr/local/bin/criu; then
-        error_log "Failed to install criu binary in $SLURM_CONTROLLER_CONTAINER"
-        return 1
-    fi
-
-    debug_log "Copying plugin libraries into controller..."
-    for so in /usr/local/lib/libcedana-*.so \
-        /usr/local/lib/task_cedana.so \
-        /usr/local/lib/spank_cedana.so \
-        /usr/local/lib/cli_filter_cedana.so \
-        /usr/local/lib/job_submit_cedana.so; do
-        [ -f "$so" ] || continue
-        local so_name
-        so_name="$(basename "$so")"
-        if ! docker cp "$so" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/lib/${so_name}"; then
-            error_log "Failed to stage ${so_name} in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        fi
-        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0644 "${install_stage}/lib/${so_name}" "/usr/local/lib/${so_name}"; then
-            error_log "Failed to install ${so_name} in $SLURM_CONTROLLER_CONTAINER"
-            return 1
-        fi
-    done
-
     local cedana_slurm_bin="${CEDANA_SLURM_BIN:-/usr/local/bin/cedana-slurm}"
     if [ ! -f "$cedana_slurm_bin" ]; then
         error_log "cedana-slurm binary not found at $cedana_slurm_bin"
         return 1
     fi
 
-    debug_log "Copying cedana-slurm binary into controller..."
-    if ! docker cp "$cedana_slurm_bin" "${SLURM_CONTROLLER_CONTAINER}:${install_stage}/bin/cedana-slurm"; then
-        error_log "Failed to stage cedana-slurm in $SLURM_CONTROLLER_CONTAINER"
-        return 1
+    local bins=("$cedana_bin" "$criu_bin" "$cedana_slurm_bin")
+    if [ "${GPU:-0}" = "1" ]; then
+        # `cedana run -g` spawns this; libcedana-gpu.so alone is not enough.
+        if [ ! -x /usr/local/bin/cedana-gpu-controller ]; then
+            error_log "GPU requested but /usr/local/bin/cedana-gpu-controller is missing (install the gpu plugin)"
+            return 1
+        fi
+        bins+=(/usr/local/bin/cedana-gpu-controller)
     fi
-    if ! docker exec "$SLURM_CONTROLLER_CONTAINER" install -m 0755 "${install_stage}/bin/cedana-slurm" /usr/local/bin/cedana-slurm; then
-        error_log "Failed to install cedana-slurm in $SLURM_CONTROLLER_CONTAINER"
+
+    local libs=()
+    local so
+    for so in /usr/local/lib/libcedana-*.so \
+        /usr/local/lib/task_cedana.so \
+        /usr/local/lib/spank_cedana.so \
+        /usr/local/lib/cli_filter_cedana.so \
+        /usr/local/lib/job_submit_cedana.so; do
+        [ -f "$so" ] || continue
+        # The tracer is not loaded at runtime.
+        [[ "$so" == *libcedana-gpu-tracer.so ]] && continue
+        libs+=("$so")
+    done
+
+    debug_log "Copying ${#bins[@]} binaries and ${#libs[@]} libraries into controller..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        bash -c "rm -rf '$CEDANA_INSTALL_STAGE' && mkdir -p '$CEDANA_INSTALL_STAGE'" || {
+        error_log "Failed to prepare install staging directory in $SLURM_CONTROLLER_CONTAINER"
         return 1
-    fi
+    }
+    local f
+    for f in "${bins[@]}"; do
+        _install_into_controller "$f" "/usr/local/bin/$(basename "$f")" 0755 || return 1
+    done
+    for f in "${libs[@]}"; do
+        _install_into_controller "$f" "/usr/local/lib/$(basename "$f")" 0644 || return 1
+    done
 
     debug_log "Waiting for NFS-shared binaries to be visible on compute nodes..."
     for c in "${compute_containers[@]}"; do
@@ -752,120 +1133,9 @@ EOF
         fi
     done
 
-    if [ "${GPU:-0}" = "1" ]; then
-        debug_log "Configuring SLURM GPU GRES resources..."
-        for c in "${compute_containers[@]}"; do
-            local gpu_count
-            local detected_gres
-            gpu_count=$(docker exec "$c" bash -c 'ls -1 /dev/nvidia[0-9]* 2>/dev/null | wc -l' || echo "0")
-            if [ "$gpu_count" -eq 0 ]; then
-                error_log "GPU test requested but no /dev/nvidia* devices were found in $c"
-                docker exec "$c" bash -c 'ls -la /dev/nvidia* 2>/dev/null || true; nvidia-smi -L 2>/dev/null || true' || true
-                return 1
-            fi
-            debug_log "Detected $gpu_count GPU(s) on $c"
+    _configure_slurm_gres || return 1
 
-            local node_hostname
-            node_hostname=$(docker exec "$c" hostname)
-
-            if ! detected_gres=$(docker exec "$c" bash -lc "/usr/sbin/slurmd -C 2>/dev/null | tr ' ' '\n' | grep '^Gres=' | cut -d= -f2- | head -n 1"); then
-                detected_gres=""
-            fi
-            if [ -z "$detected_gres" ]; then
-                detected_gres="gpu:$gpu_count"
-                debug_log "slurmd -C did not report GRES on $c, falling back to $detected_gres"
-            else
-                debug_log "slurmd -C detected GRES '$detected_gres' on $c"
-            fi
-
-            docker exec "$c" bash -c "
-                mkdir -p /etc/slurm
-                echo 'AutoDetect=nvidia' > /etc/slurm/gres.conf
-                cat /etc/slurm/gres.conf
-            " || {
-                error_log "Failed to write autodetect gres.conf on $c"
-                return 1
-            }
-
-            _log_gpu_debug_state "$c" "post-gres-config"
-
-            docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-                set -euo pipefail
-                SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
-
-                grep -q '^GresTypes=' \"\$SLURM_CONF\" || \
-                    echo 'GresTypes=gpu' >> \"\$SLURM_CONF\"
-
-                if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
-                    if ! grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
-                        sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=gpu:$gpu_count|' \"\$SLURM_CONF\"
-                    fi
-                fi
-                echo 'GRES config updated for $node_hostname'
-            " || {
-                error_log "Failed to update slurm.conf GRES on controller for $c"
-                return 1
-            }
-
-            docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-                set -euo pipefail
-                SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
-
-                grep -q '^DebugFlags=.*NO_CONF_HASH' \"\$SLURM_CONF\" || \
-                    echo 'DebugFlags=NO_CONF_HASH' >> \"\$SLURM_CONF\"
-
-                if grep -q '^NodeName=$node_hostname' \"\$SLURM_CONF\"; then
-                    if grep '^NodeName=$node_hostname' \"\$SLURM_CONF\" | grep -q 'Gres='; then
-                        sed -i 's|^\(NodeName=$node_hostname.*\) Gres=[^[:space:]]*|\1 Gres=$detected_gres|' \"\$SLURM_CONF\"
-                    else
-                        sed -i 's|^\(NodeName=$node_hostname.*\)|\1 Gres=$detected_gres|' \"\$SLURM_CONF\"
-                    fi
-                fi
-            " || {
-                error_log "Failed to align controller GRES with detected value '$detected_gres' for $c"
-                return 1
-            }
-        done
-
-        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-            mkdir -p /etc/slurm
-            test -f /etc/slurm/gres.conf || echo '' > /etc/slurm/gres.conf
-        "
-
-        for c in "${compute_containers[@]}"; do
-            _log_gpu_debug_state "$c" "post-slurm-conf-sync"
-        done
-    fi
-
-    if [ "${PREEMPT:-0}" = "1" ]; then
-        debug_log "Configuring SLURM partition preemption (PREEMPT=1)..."
-        local preempt_grace="${PREEMPT_GRACE_TIME:-120}"
-        docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-            set -euo pipefail
-            SLURM_CONF=\"\${SLURM_CONF:-/etc/slurm/slurm.conf}\"
-
-            grep -q '^PreemptType=' \"\$SLURM_CONF\" || echo 'PreemptType=preempt/partition_prio' >> \"\$SLURM_CONF\"
-            grep -q '^PreemptMode=' \"\$SLURM_CONF\" || echo 'PreemptMode=CANCEL' >> \"\$SLURM_CONF\"
-            grep -q '^SchedulerParameters=' \"\$SLURM_CONF\" || echo 'SchedulerParameters=preempt_reorder_count=100,preempt_strict_order' >> \"\$SLURM_CONF\"
-
-            if grep -q '^PartitionName=debug' \"\$SLURM_CONF\"; then
-                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PriorityTier=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PriorityTier=1|' \"\$SLURM_CONF\"
-                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'PreemptMode=' || sed -i 's|^\(PartitionName=debug .*\)|\1 PreemptMode=CANCEL|' \"\$SLURM_CONF\"
-                grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -q 'GraceTime=' || sed -i 's|^\(PartitionName=debug .*\)|\1 GraceTime=${preempt_grace}|' \"\$SLURM_CONF\"
-            fi
-
-            if ! grep -q '^PartitionName=high ' \"\$SLURM_CONF\"; then
-                nodes=\$(grep '^PartitionName=debug' \"\$SLURM_CONF\" | grep -oE 'Nodes=[^[:space:]]+' | head -1 | cut -d= -f2)
-                echo \"PartitionName=high Nodes=\${nodes:-ALL} MaxTime=INFINITE State=UP PreemptMode=CANCEL PriorityTier=2\" >> \"\$SLURM_CONF\"
-            fi
-
-            echo '--- preemption config ---'
-            grep -E '^(PreemptType|PreemptMode|SchedulerParameters|PartitionName)' \"\$SLURM_CONF\"
-        " >&"${OUTPUT_FD}" 2>&1 || {
-            error_log "Failed to configure SLURM preemption on controller"
-            return 1
-        }
-    fi
+    _configure_slurm_preemption || return 1
 
     debug_log "Configuring SLURM to load Cedana plugins (controller)..."
     docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash <<'SETUP_EOF' >&"${OUTPUT_FD}" 2>&1 ||
@@ -916,29 +1186,15 @@ SETUP_EOF
             return 1
         }
 
-    debug_log "Syncing controller's /etc/slurm/*.conf to compute nodes (slurm.conf only to login)..."
-    local login_containers=()
-    if [ "${LOGIN_NODES:-0}" -ge 1 ]; then
-        # shellcheck disable=SC2207
-        login_containers=($(_slurm_login_containers))
-    fi
-    for conf in slurm.conf cgroup.conf plugstack.conf; do
-        if ! docker exec "$SLURM_CONTROLLER_CONTAINER" test -f "/etc/slurm/${conf}" 2>/dev/null; then
-            continue
-        fi
-        local tmpfile="/tmp/slurm-${conf}.sync.$$"
-        docker cp "${SLURM_CONTROLLER_CONTAINER}:/etc/slurm/${conf}" "$tmpfile"
-        for c in "${compute_containers[@]}"; do
-            docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
-        done
-        if [ "$conf" = "slurm.conf" ]; then
-            for c in "${login_containers[@]}"; do
-                docker cp "$tmpfile" "${c}:/etc/slurm/${conf}"
-                docker exec "$c" sed -i '/^CliFilterPlugins=cli_filter\/cedana/d' "/etc/slurm/${conf}" 2>/dev/null || true
-            done
-        fi
-        rm -f "$tmpfile"
-    done
+    debug_log "Adding empty SLURM config overlay (see slurm_conf_overlay_apply)..."
+    docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        sh -c ': > "$1" && : > "$2"' _ "$SLURM_CONF_OVERLAY" "$SLURM_CONF_OVERLAY_FILES" || {
+        error_log "Failed to create $SLURM_CONF_OVERLAY"
+        return 1
+    }
+    _slurm_conf_include_overlay || return 1
+
+    _sync_slurm_conf || return 1
 
     debug_log "Verifying Cedana plugin libs (NFS) and slurm.conf (local) on compute nodes..."
     for c in "${compute_containers[@]}"; do
@@ -1019,38 +1275,7 @@ SETUP_EOF
     done
 
     debug_log "Restarting SLURM services to load task_cedana plugin..."
-    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmctld /usr/sbin/slurmctld ||
-        {
-            error_log "Failed to restart slurmctld"
-            return 1
-        }
-    _svc_restart "$SLURM_CONTROLLER_CONTAINER" slurmd /usr/sbin/slurmd ||
-        {
-            error_log "Failed to restart controller slurmd"
-            return 1
-        }
-    _log_gpu_debug_state "$SLURM_CONTROLLER_CONTAINER" "post-controller-slurmd-restart"
-    for c in "${compute_containers[@]}"; do
-        _svc_restart "$c" slurmd /usr/sbin/slurmd ||
-            {
-                error_log "Failed to restart slurmd on $c"
-                return 1
-            }
-        _log_gpu_debug_state "$c" "post-slurmd-restart"
-    done
-    sleep 5
-
-    if [ "${GPU:-0}" = "1" ]; then
-        debug_log "Clearing transient GPU drain state after SLURM restarts..."
-        for c in "${compute_containers[@]}"; do
-            local node_hostname
-            node_hostname=$(docker exec "$c" hostname)
-            # slurmctld may briefly drain the node while it still sees the
-            # pre-restart registration without GRES; clear that once slurmd is back.
-            slurm_exec scontrol update NodeName="$node_hostname" State=RESUME \
-                >/dev/null 2>&1 || true
-        done
-    fi
+    _restart_slurm_daemons || return 1
 
     debug_log "Restarting cedana daemon on all nodes (post-SLURM restart)..."
     for c in "${all_containers[@]}"; do
@@ -1189,6 +1414,23 @@ start_cedana_slurm_daemon() {
             }
     done
 
+    debug_log "Waiting for slurm accounting DB before starting cedana-slurm daemon..."
+    local db_ready=false
+    for i in $(seq 1 45); do
+        if docker exec "$SLURM_CONTROLLER_CONTAINER" mysqladmin ping --silent &>/dev/null \
+            && docker exec "$SLURM_CONTROLLER_CONTAINER" test -r /etc/slurm/slurmdbd.conf \
+            && slurm_exec sacctmgr show cluster -n &>/dev/null; then
+            db_ready=true
+            break
+        fi
+        sleep 2
+    done
+    if [ "$db_ready" = false ]; then
+        error_log "slurm accounting DB not reachable after 90s; cedana-slurm SyncJobs would be disabled"
+        docker exec "$SLURM_CONTROLLER_CONTAINER" tail -30 /var/log/slurm/slurmdbd.log 2>/dev/null || true
+        return 1
+    fi
+
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec -d \
@@ -1217,10 +1459,6 @@ start_cedana_slurm_daemon() {
     done
 }
 
-# Restart the cedana-slurm daemon with CEDANA_SLURM_UNPRIVILEGED=1 on all nodes.
-# Sets CAP_SYS_PTRACE,CAP_DAC_READ_SEARCH,CAP_CHECKPOINT_RESTORE on the binary via setcap,
-# then starts the daemon with CEDANA_SLURM_UNPRIVILEGED=1 so both the daemon and any monitors
-# it spawns use the embedded dump path.
 restart_cedana_slurm_daemon_unprivileged() {
     local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
     cluster_id="${cluster_id//\"/}"
@@ -1234,17 +1472,35 @@ restart_cedana_slurm_daemon_unprivileged() {
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
-    debug_log "Restarting cedana-slurm daemon (unprivileged/embedded) on SLURM nodes..."
+    debug_log "Restarting cedana-slurm daemon (unprivileged) on SLURM nodes..."
 
     for c in "${targets[@]}"; do
         docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec "$c" bash -c '
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/bin/cedana-slurm
-            setcap cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip /usr/local/bin/cedana-slurm 2>/dev/null || true
+            caps=cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip
+            install -m 0755 /usr/local/bin/cedana /usr/bin/cedana
+            install -m 0755 /usr/local/bin/criu /usr/bin/criu
+            # bin_dir is repointed to /usr/bin below, so anything cedana execs
+            # has to be here too or the plugin looks uninstalled.
+            if [ -x /usr/local/bin/cedana-gpu-controller ]; then
+                install -m 0755 /usr/local/bin/cedana-gpu-controller /usr/bin/cedana-gpu-controller
+            fi
+            setcap $caps /usr/bin/cedana-slurm
+            setcap $caps /usr/bin/cedana
+            setcap $caps /usr/bin/criu
         ' || {
-            error_log "Failed to set capabilities on cedana-slurm in $c"
+            error_log "Failed to stage/setcap cedana/criu binaries in $c"
             return 1
         }
+        docker exec "$c" mkdir -p /etc/cedana
+        docker exec -e CEDANA_SLURM_UNPRIVILEGED=1 \
+            -e CEDANA_PLUGINS_BIN_DIR=/usr/bin \
+            -e CEDANA_CRIU_BINARY_PATH=/usr/bin/criu \
+            "$c" /usr/local/bin/cedana --merge-config version ||
+            {
+                error_log "Failed to persist slurm.unprivileged into config on $c"
+                return 1
+            }
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
@@ -1253,7 +1509,7 @@ restart_cedana_slurm_daemon_unprivileged() {
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-debug}" \
             -e CEDANA_SLURM_UNPRIVILEGED=1 \
             "$c" \
-            bash -c '/usr/local/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
+            bash -c '/usr/bin/cedana-slurm daemon start >/var/log/cedana-slurm.log 2>&1' || {
             error_log "Failed to launch cedana-slurm daemon (unprivileged) on $c"
             return 1
         }
@@ -1268,6 +1524,17 @@ restart_cedana_slurm_daemon_unprivileged() {
             docker exec "$c" tail -20 /var/log/cedana-slurm.log 2>/dev/null || true
             return 1
         fi
+    done
+
+    for c in "${targets[@]}"; do
+        docker exec "$c" chmod 666 /var/log/cedana-slurm.log 2>/dev/null || true
+    done
+
+    for c in "${compute_containers[@]}"; do
+        _svc_restart "$c" slurmd /usr/sbin/slurmd || {
+            error_log "Failed to restart slurmd on $c"
+            return 1
+        }
     done
 }
 
@@ -1318,21 +1585,35 @@ restart_cedana_slurm_daemon() {
 # Samples Setup
 ##############################
 
+# Puts cedana-samples in every node: the run's (/cedana-samples, from the lite image download.yml
+# took), else a clone of main.
 setup_slurm_samples() {
-    info_log "Cloning cedana-samples into cluster nodes..."
-
     local sample_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
 
+    if [ -d /cedana-samples/slurm ]; then
+        info_log "Copying cedana-samples ($(cat /cedana-samples/.image 2>/dev/null || echo /cedana-samples)) into cluster nodes..."
+    else
+        info_log "Cloning cedana-samples into cluster nodes..."
+    fi
+
     for c in "${sample_targets[@]}"; do
-        docker exec "$c" bash -c '
-            apt-get install -y -qq git 2>/dev/null
-            rm -rf /data/cedana-samples
-            mkdir -p /data
-            git clone --depth 1 https://github.com/cedana/cedana-samples.git /data/cedana-samples
-        ' || {
-            error_log "Failed to clone cedana-samples into $c"
-            return 1
-        }
+        if [ -d /cedana-samples/slurm ]; then
+            docker exec "$c" bash -c 'rm -rf /data/cedana-samples && mkdir -p /data' &&
+                docker cp /cedana-samples "$c:/data/cedana-samples" || {
+                error_log "Failed to copy cedana-samples into $c"
+                return 1
+            }
+        else
+            docker exec "$c" bash -c '
+                apt-get install -y -qq git 2>/dev/null
+                rm -rf /data/cedana-samples
+                mkdir -p /data
+                git clone --depth 1 -b main https://github.com/cedana/cedana-samples.git /data/cedana-samples
+            ' || {
+                error_log "Failed to clone cedana-samples into $c"
+                return 1
+            }
+        fi
 
         docker exec "$c" ls -la /data/cedana-samples/ 2>&1 | head -20 >&"${OUTPUT_FD}" || true
     done
@@ -1344,6 +1625,8 @@ setup_slurm_samples() {
         docker exec "$c" bash -c "
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
+            apt-get install -y -qq libffi-dev build-essential 2>/dev/null || true
+            /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
         "
     done
 
@@ -1357,4 +1640,31 @@ setup_slurm_samples() {
     done
 
     info_log "cedana-samples ready in all cluster nodes"
+}
+
+setup_slurm_unprivileged_user() {
+    local user="${SLURM_SUBMIT_USER:-cedana}"
+    local uid="${SLURM_SUBMIT_UID:-2000}"
+    local all_nodes=("$SLURM_CONTROLLER_CONTAINER" "$(slurm_submission_container)" $(_slurm_compute_containers) $(_slurm_login_containers))
+    local compute_nodes=($(_slurm_compute_containers))
+
+    info_log "Creating unprivileged submit user '$user' (uid $uid) on cluster nodes..."
+
+    for c in "${all_nodes[@]}"; do
+        docker exec "$c" bash -c "
+            id '$user' &>/dev/null || useradd -m -u '$uid' -U -s /bin/bash '$user'
+            chmod -R a+rwX /data/cedana-samples 2>/dev/null || true
+        " || {
+            error_log "Failed to create submit user '$user' in $c"
+            return 1
+        }
+    done
+
+    for c in "${compute_nodes[@]}"; do
+        docker exec "$c" bash -c "touch /var/log/cedana-slurm.log && chmod 666 /var/log/cedana-slurm.log" || true
+    done
+
+    slurm_exec sacctmgr -i add user "$user" Account=default 2>/dev/null || true
+
+    debug_log "Unprivileged submit user '$user' ready"
 }

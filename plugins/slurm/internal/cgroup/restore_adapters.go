@@ -4,15 +4,10 @@ package cgroup
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"os"
 	"strings"
-	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
-	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
@@ -44,18 +39,7 @@ func ApplyCgroupsOnRestore(next types.Restore) types.Restore {
 
 		callback := &criu.NotifyCallback{
 			InitializeFunc: func(ctx context.Context, criuPid int32) (err error) {
-				err = manager.Apply(int(criuPid))
-				if err != nil {
-					if config.Global.Slurm.Unprivileged &&
-						(os.IsPermission(err) || errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.EPERM)) {
-						log.Warn().Msgf("skipping cgroup apply (unprivileged): %v\n", err)
-					} else {
-						return fmt.Errorf("failed to apply cgroups to CRIU process: %v", err)
-					}
-				}
-				paths := manager.GetPaths()
-
-				for c, p := range paths {
+				for c, p := range manager.GetPaths() {
 					p = strings.TrimPrefix(p, CGROUPS_BASE_PATH)
 					log.Debug().Str("controller", c).Str("path", p).Msg("setting cgroup root for CRIU")
 					cgroupRoot := &criu_proto.CgroupRoot{

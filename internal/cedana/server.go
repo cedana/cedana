@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/grpc/go/daemon/daemongrpc"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -60,8 +62,13 @@ type ServeOpts struct {
 func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error) {
 	wg := &sync.WaitGroup{}
 
+	pluginManager := plugins.NewLocalManager()
+
 	if config.Global.Metrics {
-		metrics.Init(ctx, wg, "cedana", version.Version)
+		// Installed plugin versions are attached as resource attributes so that
+		// every log line carries them alongside service.version.
+		metrics.Init(ctx, wg, "cedana", version.Version,
+			metrics.ResourceAttributes(plugins.InstalledVersionAttributes(pluginManager))...)
 	}
 
 	host, err := utils.GetHost(ctx)
@@ -83,8 +90,6 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to put host info: %w", err)
 	}
-
-	pluginManager := plugins.NewLocalManager()
 
 	var gpuManager gpu.Manager
 	if config.Global.GPU.SingleProcess {
@@ -147,10 +152,7 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 		if address == "" {
 			address = config.DEFAULT_SOCK_ADDR
 		}
-		listener, err = net.Listen("unix", address)
-		if err == nil {
-			err = os.Chmod(address, config.DEFAULT_SOCK_PERMS)
-		}
+		listener, err = listenUnix(address)
 	case "vsock":
 		if address == "" {
 			return nil, fmt.Errorf("vsock address is required")
@@ -176,6 +178,56 @@ func NewServer(ctx context.Context, opts *ServeOpts) (server *Server, err error)
 	log.Info().Str("mac", host.MAC).Str("id", host.ID).Str("hostname", host.Hostname).Msg("host")
 
 	return server, err
+}
+
+// Listens on a unix socket, creating its directory if needed. A daemon that was killed
+// leaves its socket file behind, which would fail the bind, so it is removed first,
+// unless another daemon is still serving on it.
+func listenUnix(address string) (net.Listener, error) {
+	err := os.MkdirAll(filepath.Dir(address), 0o755)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create socket directory: %w", err)
+	}
+
+	// Serialize concurrent starts on the same address, so only one of them can find the socket stale
+	lock, err := os.OpenFile(address+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open socket lock: %w", err)
+	}
+	defer lock.Close() // releases the lock
+	err = syscall.Flock(int(lock.Fd()), syscall.LOCK_EX)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lock socket: %w", err)
+	}
+
+	if conn, err := net.Dial("unix", address); err == nil {
+		conn.Close()
+		return nil, fmt.Errorf("another daemon is already listening on %s", address)
+	}
+	info, err := os.Lstat(address)
+	if err == nil {
+		if info.Mode().Type() != os.ModeSocket {
+			return nil, fmt.Errorf("%s exists and is not a socket", address)
+		}
+		err = os.Remove(address)
+		if err != nil {
+			return nil, fmt.Errorf("failed to remove stale socket: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	listener, err := net.Listen("unix", address)
+	if err != nil {
+		return nil, err
+	}
+	err = os.Chmod(address, config.DEFAULT_SOCK_PERMS)
+	if err != nil {
+		listener.Close()
+		return nil, err
+	}
+
+	return listener, nil
 }
 
 // Takes in a context that allows for cancellation from the cmdline

@@ -37,9 +37,13 @@ type (
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
 		// SLURM settings
 		Slurm Slurm `json:"slurm" key:"slurm" yaml:"slurm" mapstructure:"slurm"`
+		// K8s settings
+		K8s K8s `json:"k8s" key:"k8s" yaml:"k8s" mapstructure:"k8s"`
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+		// CSX (Cedana Storage Express) settings
+		CSX CSX `json:"csx" key:"csx" yaml:"csx" mapstructure:"csx"`
 	}
 
 	Slurm struct {
@@ -55,6 +59,12 @@ type (
 		DBPort int `json:"db_port" key:"db_port" yaml:"db_port" mapstructure:"db_port"`
 		// DBName is the name of the slurmdbd database to connect to
 		DBName string `json:"db_name" key:"db_name" yaml:"db_name" mapstructure:"db_name"`
+	}
+
+	K8s struct {
+		// FallbackColdStart sets whether the containerd runtime shim should fall back to a normal (cold) start
+		// of the container if the cedana restore fails for some reason.
+		FallbackColdStart bool `json:"fallback_cold_start" key:"fallback_cold_start" yaml:"fallback_cold_start" mapstructure:"fallback_cold_start"`
 	}
 
 	Connection struct {
@@ -114,8 +124,12 @@ type (
 		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
 		// ManageCgroups sets the default cgroup C/R mode for CRIU (default, cg_none, props, soft, full, strict, ignore)
 		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
-		// LogLevel sets the default log level for CRIU (2 - errors, 3 - warnings, 4 - debug)
+		// LogLevel sets the default log level for CRIU (1 - errors, 2 - warnings, 3 - info, 4 - debug)
 		LogLevel int32 `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
+		// ZeroElide omits all-zero shared memory and ghost file pages from the dump
+		ZeroElide bool `json:"zero_elide" key:"zero_elide" yaml:"zero_elide" mapstructure:"zero_elide"`
+		// ShmemDumpThreads sets how many threads scan and write shared memory segments
+		ShmemDumpThreads int32 `json:"shmem_dump_threads" key:"shmem_dump_threads" yaml:"shmem_dump_threads" mapstructure:"shmem_dump_threads"`
 	}
 
 	GPU struct {
@@ -151,6 +165,8 @@ type (
 	}
 
 	AWS struct {
+		// CredentialsMode selects the AWS credential provider (static, eksPodIdentity, or ambient)
+		CredentialsMode string `json:"credentials_mode" key:"credentials_mode" yaml:"credentials_mode" mapstructure:"credentials_mode" env_aliases:"AWS_CREDENTIALS_MODE"`
 		// AccessKeyID is the AWS access key ID
 		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
 		// SecretAccessKey is the AWS secret access key
@@ -159,5 +175,10 @@ type (
 		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
 		// Endpoint is a custom AWS endpoint to use (e.g. for S3-compatible storage)
 		Endpoint string `json:"endpoint" key:"endpoint" yaml:"endpoint" mapstructure:"endpoint" env_aliases:"AWS_ENDPOINT"`
+	}
+
+	CSX struct {
+		// path to socket where the CSX daemon is running
+		SockAddr string `json:"sock_addr" key:"sock_addr" yaml:"sock_addr" mapstructure:"sock_addr"`
 	}
 )

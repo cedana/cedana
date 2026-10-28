@@ -27,6 +27,7 @@ GRAPH_WARMTH=/cedana-samples/gpu_smr/cuda_graph_warmth
 GRAPH_SIBLINGS=/cedana-samples/gpu_smr/cuda_graph_siblings
 
 setup_file() {
+    trap_gpu_signals
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -37,15 +38,18 @@ setup_file() {
 }
 
 setup() {
+    trap_gpu_signals
     setup_daemon
 }
 
 teardown() {
     teardown_daemon
+    check_gpu_signals
 }
 
 teardown_file() {
     teardown_file_daemon
+    check_gpu_signals
 }
 
 ###########

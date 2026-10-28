@@ -29,6 +29,7 @@ type NotifyCallback struct {
 	PreResumeFunc           NotifyFunc
 	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
+	QueryExtFilesFunc       NotifyFuncExtFiles
 
 	Name string // to give some context to this callback
 }
@@ -40,6 +41,7 @@ type (
 	NotifyFuncOptsErr     func(ctx context.Context, opts *criu.CriuOpts, err error) error
 	NotifyFuncPid         func(ctx context.Context, pid int32) error
 	NotifyFuncFd          func(ctx context.Context, fd int32) error
+	NotifyFuncExtFiles    func(ctx context.Context) ([]string, error)
 	InitializeFunc        func(ctx context.Context, criuPid int32) error
 )
 
@@ -281,6 +283,22 @@ func (n NotifyCallback) PostResume(ctx context.Context) error {
 		}
 	}
 	return nil
+}
+
+func (n NotifyCallback) QueryExtFiles(ctx context.Context) ([]string, error) {
+	if n.QueryExtFilesFunc != nil {
+		log.Trace().Str("name", n.Name).Msg("CRIU query-ext-files callback")
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		external, err := n.QueryExtFilesFunc(ctx)
+		if err != nil {
+			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU query-ext-files callback failed")
+			return nil, fmt.Errorf("query-ext-files callback: %v", err)
+		}
+		return external, nil
+	}
+	return nil, nil
 }
 
 func (n NotifyCallback) OrphanPtsMaster(ctx context.Context, fd int32) error {

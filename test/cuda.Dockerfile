@@ -8,6 +8,8 @@ LABEL org.opencontainers.image.source https://github.com/cedana/cedana
 ARG GO_VERSION=1.25.1
 ARG KUBECTL_VERSION=1.33.0
 ARG K9S_VERSION=latest
+ARG CRUN_VERSION=1.28
+ARG BATS_VERSION=1.14.0
 
 # install packages
 RUN <<EOT
@@ -23,6 +25,26 @@ apt-get update
 for pkg in $APT_PACKAGES; do
     apt-get install -y --no-install-recommends $pkg || echo "failed to install $pkg" >&2
 done
+EOT
+
+# install crun
+RUN <<EOT
+set -eux
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)
+        CRUN_ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        CRUN_ARCH="arm64"
+        ;;
+    *)
+        echo "Unsupported architecture for crun: $ARCH"
+        exit 1
+        ;;
+esac
+wget -q https://github.com/containers/crun/releases/download/${CRUN_VERSION}/crun-${CRUN_VERSION}-linux-"${CRUN_ARCH}" -O /usr/local/bin/crun
+chmod +x /usr/local/bin/crun
 EOT
 
 # Install NVIDIA container toolkit
@@ -48,9 +70,15 @@ apt-get install -y --no-install-recommends cuda-nvrtc-12-8
 EOT
 
 # install bats
+# Ubuntu's bats (1.10) crashes its junit formatter when setup_suite fails
+# ("file_count: unbound variable"), swallowing the failure output. Fixed in 1.13.
+# Also predates bats_test_function (1.11), which cuda_samples.bats relies on.
 RUN <<EOT
 set -eux
-apt-get install -y bats bats-assert bats-support bats-file
+apt-get install -y bats-assert bats-support bats-file
+curl -fsSL https://github.com/bats-core/bats-core/archive/refs/tags/v${BATS_VERSION}.tar.gz | tar -xz -C /tmp
+/tmp/bats-core-${BATS_VERSION}/install.sh /usr/local
+rm -rf /tmp/bats-core-${BATS_VERSION}
 EOT
 
 # install rush
@@ -180,8 +208,39 @@ snapshotter = "native"
       [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
         [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runc]
           runtime_type = "io.containerd.runc.v2"
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.crun]
+          runtime_type = "io.containerd.runc.v2"
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.crun.options]
+            BinaryName = "crun"
 CONFIG
 nvidia-ctk runtime configure --runtime=containerd
+EOT
+
+# Install and configure podman
+RUN <<'EOT'
+set -eux
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends podman
+mkdir -p /etc/containers
+# NOTE: overlay can't be nested in the test container's overlay root, so use
+# vfs (same reason containerd uses the native snapshotter above)
+cat > /etc/containers/storage.conf <<'CONFIG'
+[storage]
+driver = "vfs"
+runroot = "/run/containers/storage"
+graphroot = "/var/lib/containers/storage"
+CONFIG
+cat > /etc/containers/containers.conf <<'CONFIG'
+[containers]
+log_driver = "k8s-file"
+
+[engine]
+cgroup_manager = "cgroupfs"
+events_logger = "file"
+
+[engine.runtimes]
+crun = ["/usr/local/bin/crun"]
+CONFIG
 EOT
 
 # copy cedana-samples

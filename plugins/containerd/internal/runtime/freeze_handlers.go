@@ -26,7 +26,10 @@ func freeze(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *da
 		return nil, status.Errorf(codes.Internal, "failed to get containerd client from context")
 	}
 
-	plugin := utils.PluginForRuntime(client.Runtime())
+	plugin, runtime, _, err := utils.PluginForContainer(ctx, client, id)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get runtime info for container %s: %v", id, err)
+	}
 
 	var runtimeFreezeHandler types.Freeze
 
@@ -35,16 +38,16 @@ func freeze(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *da
 		return nil
 	}, plugin)
 	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "unsupported runtime %s: %v", client.Runtime(), err)
+		return nil, status.Errorf(codes.FailedPrecondition, "unsupported runtime %s: %v", runtime, err)
 	}
 
 	// Add runtime-specific details to the request
 
 	switch plugin {
-	case "runc":
+	case "runc", "crun":
 		details.Runc = &runc.Runc{
 			ID:   id,
-			Root: utils.RootFromPlugin(plugin, namespace),
+			Root: utils.RootFromRuntime(runtime, namespace),
 		}
 	default:
 		return nil, status.Errorf(codes.Unimplemented, "unsupported plugin %s", plugin)

@@ -1,6 +1,7 @@
 package criu
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -10,11 +11,14 @@ import (
 	"os/exec"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -23,7 +27,21 @@ type Criu struct {
 	swrkCmd  *exec.Cmd
 	swrkSk   *net.UnixConn
 	swrkPath string
+
+	// What swrk had to say, when the caller gave it no stderr of its own: the pipe, and the
+	// tail of it once the pipe is done with
+	swrkStderr *os.File
+	swrkSaid   chan string
+	// How swrk ended, for an operation that failed
+	swrkExit string
+	// Whether the operation failed on our side (a notify callback returned an error): swrk is
+	// then given SWRK_FAIL_GRACE to finish its own teardown before it is killed, as its restore
+	// teardown blocks forever once the restored tasks were killed while it still traced them.
+	failed bool
 }
+
+// SWRK_FAIL_GRACE is how long a failed operation waits for swrk to exit before killing it.
+const SWRK_FAIL_GRACE = 10 * time.Second
 
 // MakeCriu returns the Criu object required for most operations
 func MakeCriu() *Criu {
@@ -59,6 +77,21 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	cmd.Stdin = stdin
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
+	cmd.Env = criuEnv()
+
+	// Keep what swrk says for the error if it fails, when nobody else is listening. A pipe of
+	// our own, as a writer would have exec copying in a goroutine that outlives Process.Wait.
+	c.swrkStderr = nil
+	var stderrW *os.File
+	if stderr == nil {
+		var err error
+		c.swrkStderr, stderrW, err = os.Pipe()
+		if err != nil {
+			clnNet.Close()
+			return err
+		}
+		cmd.Stderr = stderrW
+	}
 	cmd.ExtraFiles = append(extraFiles, srv)
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGKILL, // kill even if server dies suddenly
@@ -70,14 +103,28 @@ func (c *Criu) Prepare(ctx context.Context, stdin io.Reader, stdout, stderr io.W
 	runtime.LockOSThread()
 
 	err = cmd.Start()
+	if stderrW != nil {
+		stderrW.Close() // the child has its copy
+	}
 	if err != nil {
 		runtime.UnlockOSThread()
 		clnNet.Close()
+		if c.swrkStderr != nil {
+			c.swrkStderr.Close()
+			c.swrkStderr = nil
+		}
 		return err
 	}
 
 	c.swrkCmd = cmd
 	c.swrkSk = clnNet.(*net.UnixConn)
+
+	// Read as it comes, or swrk blocks on a full pipe before it can answer
+	if c.swrkStderr != nil {
+		r := c.swrkStderr
+		c.swrkSaid = make(chan string, 1)
+		go func() { c.swrkSaid <- tailOf(r) }()
+	}
 
 	return nil
 }
@@ -92,17 +139,125 @@ func (c *Criu) Cleanup() error {
 		c.swrkSk = nil
 		// XXX: We don't use s.swrkCmd.Wait() because it can hang forever
 		// since the stdin, stdout, and stderr copy might not be over.
-		if _, err := c.swrkCmd.Process.Wait(); err != nil {
+		type waited struct {
+			state *os.ProcessState
+			err   error
+		}
+		done := make(chan waited, 1)
+		go func() {
+			state, err := c.swrkCmd.Process.Wait()
+			done <- waited{state, err}
+		}()
+		var state *os.ProcessState
+		var err error
+		if c.failed {
+			select {
+			case w := <-done:
+				state, err = w.state, w.err
+			case <-time.After(SWRK_FAIL_GRACE):
+				log.Warn().Int("pid", c.swrkCmd.Process.Pid).Dur("grace", SWRK_FAIL_GRACE).Msg("criu swrk did not exit after the failed operation, killing it")
+				c.swrkCmd.Process.Kill()
+				w := <-done
+				state, err = w.state, w.err
+			}
+		} else {
+			w := <-done
+			state, err = w.state, w.err
+		}
+		if err != nil {
 			// ECHILD means the process was already reaped (e.g. by the
 			// embedding process's signal handler or the Go runtime).
 			if !errors.Is(err, syscall.ECHILD) {
 				errs = append(errs, fmt.Errorf("criu swrk failed: %w", err))
+			}
+		} else {
+			c.swrkExit = state.String()
+		}
+		if c.swrkStderr != nil {
+			// Something swrk left behind may still hold the pipe open; not for long
+			var said string
+			select {
+			case said = <-c.swrkSaid:
+			case <-time.After(time.Second):
+				c.swrkStderr.Close() // ends the read
+				said = <-c.swrkSaid
+			}
+			c.swrkStderr.Close()
+			c.swrkStderr = nil
+			if said != "" {
+				c.swrkExit += ", stderr: " + said
 			}
 		}
 		c.swrkCmd = nil
 		runtime.UnlockOSThread()
 	}
 	return errors.Join(errs...)
+}
+
+// externalsToConfig moves opts.External into a CRIU config file, so the external
+// list never counts against the RPC socket's per-message size limit (the kernel
+// rejects a seqpacket message larger than sk_sndbuf-32, ~208 KiB by default). CRIU
+// appends config-file externals to the RPC ones; keys its parser can't represent
+// (it strips at '#', splits on whitespace) stay inline. Returns the file to remove.
+func externalsToConfig(opts *criu.CriuOpts) (string, error) {
+	if len(opts.External) == 0 {
+		return "", nil
+	}
+	f, err := os.CreateTemp("", "cedana-criu-external-*.conf")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	var buf bytes.Buffer
+	if prev := opts.GetConfigFile(); prev != "" {
+		b, err := os.ReadFile(prev)
+		if err != nil {
+			return f.Name(), fmt.Errorf("read CRIU config file %s: %w", prev, err)
+		}
+		buf.Write(b)
+		if len(b) > 0 && b[len(b)-1] != '\n' {
+			buf.WriteByte('\n')
+		}
+	}
+
+	inline := opts.External[:0]
+	for _, k := range opts.External {
+		if configSafe(k) {
+			fmt.Fprintf(&buf, "external %s\n", k)
+		} else {
+			inline = append(inline, k)
+		}
+	}
+	if _, err := f.Write(buf.Bytes()); err != nil {
+		return f.Name(), err
+	}
+
+	opts.External = inline
+	opts.ConfigFile = proto.String(f.Name())
+	return f.Name(), nil
+}
+
+func configSafe(key string) bool {
+	return key != "" &&
+		!strings.ContainsAny(key, "#\"\\") &&
+		!strings.ContainsFunc(key, unicode.IsSpace) &&
+		!strings.ContainsFunc(key, unicode.IsControl)
+}
+
+// dedupe removes duplicate keys, keeping first-seen order. Adapters walk the whole
+// process tree, so the same mount/file key shows up once per process.
+func dedupe(keys []string) []string {
+	seen := make(map[string]struct{}, len(keys))
+	out := keys[:0]
+	for _, k := range keys {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	return out
 }
 
 func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn int, err error) {
@@ -114,6 +269,9 @@ func (c *Criu) sendAndRecv(reqB []byte) (respB []byte, n int, oobB []byte, oobn 
 		wrote, _, err = cln.WriteMsgUnix(reqB, nil, nil)
 		if err == nil && wrote == len(reqB) {
 			break
+		}
+		if errors.Is(err, syscall.EMSGSIZE) {
+			return nil, 0, nil, 0, fmt.Errorf("CRIU request (%d bytes) exceeds the socket send buffer: %w", len(reqB), err)
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
@@ -198,6 +356,9 @@ func (c *Criu) doSwrkWithResp(
 		if err != nil {
 			retErr = errors.Join(retErr, err)
 		}
+		if retErr != nil && c.swrkExit != "" {
+			retErr = fmt.Errorf("%w (criu swrk: %s)", retErr, c.swrkExit)
+		}
 	}()
 
 	if nfy != nil {
@@ -231,7 +392,23 @@ func (c *Criu) doSwrkWithResp(
 		}
 	}
 
+	if opts != nil {
+		opts.External = dedupe(opts.External)
+		cfgPath, err := externalsToConfig(opts)
+		if cfgPath != "" {
+			defer os.Remove(cfgPath)
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for {
+		// Notify replies (query-ext-files) carry only the post-seize delta,
+		// so they stay inline.
+		if req.Opts != nil {
+			req.Opts.External = dedupe(req.Opts.External)
+		}
 		reqB, err := proto.Marshal(&req)
 		if err != nil {
 			return nil, err
@@ -262,6 +439,10 @@ func (c *Criu) doSwrkWithResp(
 		}
 
 		notify := resp.GetNotify()
+
+		// Only query-ext-files expects anything back other than an ack.
+		var replyOpts *criu.CriuOpts
+
 		switch notify.GetScript() {
 		case "pre-dump":
 			err = nfy.PreDump(ctx, opts)
@@ -285,6 +466,16 @@ func (c *Criu) doSwrkWithResp(
 			err = nfy.PostResume(ctx)
 		case "skip-namespaces":
 			err = nfy.SkipNamespaces(ctx, notify.GetPid())
+		case "query-ext-files":
+			var external []string
+			external, err = nfy.QueryExtFiles(ctx)
+			if err == nil {
+				replyOpts = &criu.CriuOpts{
+					// Required field, ignored by CRIU for this reply.
+					ImagesDirFd: proto.Int32(-1),
+					External:    external,
+				}
+			}
 		case "orphan-pts-master":
 			scm, err := syscall.ParseSocketControlMessage(oobB[:oobn])
 			if err != nil {
@@ -300,12 +491,14 @@ func (c *Criu) doSwrkWithResp(
 		}
 
 		if err != nil {
+			c.failed = true
 			return resp, err
 		}
 
 		req = criu.CriuReq{
 			Type:          &respType,
 			NotifySuccess: proto.Bool(true),
+			Opts:          replyOpts,
 		}
 	}
 
@@ -422,4 +615,42 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
+}
+
+// criuEnv returns our environment with the system bin dirs first in PATH. CRIU runs tools like
+// tar by name, and k3s starts shims with its own bin dir (BusyBox tar) ahead of /usr/bin.
+func criuEnv() []string {
+	path := "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+	if p := os.Getenv("PATH"); p != "" {
+		path += ":" + p
+	}
+	env := []string{path}
+	for _, e := range os.Environ() {
+		if !strings.HasPrefix(e, "PATH=") {
+			env = append(env, e)
+		}
+	}
+	return env
+}
+
+// tailOf reads r to its end and returns the last of it
+func tailOf(r io.Reader) string {
+	const keep = 16 << 10
+	var tail []byte
+	buf := make([]byte, 4096)
+	for {
+		n, err := r.Read(buf)
+		tail = append(tail, buf[:n]...)
+		if len(tail) > keep {
+			tail = tail[len(tail)-keep:]
+		}
+		if err != nil {
+			break
+		}
+	}
+	text := strings.TrimSpace(string(tail))
+	if len(text) > 2048 {
+		text = "..." + text[len(text)-2048:]
+	}
+	return text
 }

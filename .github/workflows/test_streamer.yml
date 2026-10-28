@@ -6,6 +6,7 @@ permissions:
   id-token: write
   pull-requests: write
   checks: write
+  actions: read # to list the jobs of the run when posting the summary
 
 on:
   workflow_call:
@@ -79,39 +80,51 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Download samples
+        id: samples
+        continue-on-error: true # without download.yml's samples (a caller that doesn't ask for them), the image's own
+        uses: actions/download-artifact@v7
+        with:
+          name: samples-${{ matrix.arch }}
+          path: /tmp/samples
+
+      - name: Install samples
+        if: steps.samples.outcome == 'success'
+        run: rm -rf /cedana-samples && tar -xzf /tmp/samples/samples-*.tar.gz -C /
+
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
         if: matrix.compute == 'CUDA'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-${{ matrix.arch }}
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
@@ -161,79 +174,53 @@ jobs:
             fi
           fi
 
-      - name: Setup node
+      - name: Label report # with the job name, so the summary can link to it
         if: always()
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Generate report (isolated)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-isolated.xml" -t bats -o /tmp/report-isolated.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="streamer (${{ matrix.compute }}, ${{ matrix.arch }})"
-
-      - name: Generate report (persistent)
-        if: always()
-        run: |
-          npx junit-to-ctrf "/tmp/report-persistent.xml" -t bats -o /tmp/report-persistent.json -e \
-            appName="cedana" appVersion="$(git describe --tags --always)" \
-            buildName="${{ github.head_ref || github.ref_name }}" buildNumber="${{ github.run_number }}" \
-            buildUrl="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
-            repositoryName="${{ github.repository }}" repositoryUrl="${{ github.server_url }}/${{ github.repository }}" \
-            commit="${{ github.sha }}" branchName="${{ github.head_ref || github.ref_name }}" \
-            osPlatform="$(uname -s) (${{ matrix.arch }})" osRelease="$(uname -r)" \
-            testEnvironment="cedana/cedana-test" reportName="streamer (${{ matrix.compute }}, ${{ matrix.arch }})"
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Streamer (${{ matrix.compute }}, ${{ matrix.arch }})" |' {} +
 
       - name: Upload report
         if: always()
-        id: upload-report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-streamer-${{ matrix.compute }}
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
+
+      # Daemon and job logs, as bats only shows those of failed tests
+      - name: Upload logs
+        if: failure() || cancelled() # a hang that hits the job timeout too
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-logs-${{ matrix.arch }}-streamer-${{ matrix.compute }}
           path: |
-            /tmp/report*.json
+            /tmp/cedana-daemon-*.log
+            /tmp/cedana-*/**/*.log
+            /var/log/cedana*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: streamer
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        arch:
-          - amd64
-          - arm64
+    runs-on: ubuntu-24.04
     steps:
-      - name: Download report
-        id: download-report
-        uses: actions/download-artifact@v4
+      - name: Download reports
+        uses: actions/download-artifact@v7
         with:
-          pattern: test-report-${{ matrix.arch }}-streamer-*
+          pattern: test-report-*-streamer-*
           path: report
 
-      - name: Post report
-        uses: ctrf-io/github-test-reporter@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Post summary
+        uses: cedana/cedana-test-summary@v1
         with:
-          report-path: report/**/*.json
-          github-report: true
-          failed-folded-report: true
-          summary: true
-          pull-request: true
-          title: ${{ matrix.arch }}
-          update-comment: true
-          overwrite-comment: true
-          comment-tag: test-report-streamer-${{ matrix.arch }}
-          group-by: "suite"
-          always-group-by: true
-          upload-artifact: true
-          artifact-name: ctrf-report-streamer-${{ matrix.arch }}
+          reports: report/**/*.xml
+          title: Streamer
+          jobs-filter: '(^|/ )Streamer \('
+          image-branch: test-summary-assets
+          image-repository: cedana/summaries # public, so the image renders when called from private repos
+          image-token: ${{ secrets.GIT_CI_PAT }}
+          matrix-split: |
+            CPU
+            CUDA=\b(CUDA|GPU)\b

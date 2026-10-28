@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 // Default filesystem storage
@@ -27,7 +28,9 @@ func (s *Storage) Create(_ context.Context, path string) (io.WriteCloser, error)
 }
 
 func (s *Storage) Delete(_ context.Context, path string) error {
-	err := os.Remove(path)
+	// A checkpoint may be a directory (uncompressed dump), and is already gone
+	// if the path does not exist
+	err := os.RemoveAll(path)
 	if err != nil {
 		return fmt.Errorf("failed to delete file: %w", err)
 	}
@@ -57,4 +60,17 @@ func (s *Storage) ReadDir(_ context.Context, path string) ([]string, error) {
 
 func (s *Storage) IsRemote() bool {
 	return false
+}
+
+func (s *Storage) ReadPath(_ context.Context, path string) (string, func() error, error) {
+	return path, nil, nil
+}
+
+func (s *Storage) CreatePath(_ context.Context, dir, name string) (path string, cleanup func(cancel bool) error, err error) {
+	// Check if the provided dir exists
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return "", nil, fmt.Errorf("dump dir does not exist: %s", dir)
+	}
+
+	return filepath.Join(dir, name), nil, nil
 }
