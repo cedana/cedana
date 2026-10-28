@@ -156,6 +156,10 @@ type (
 		// Verify sets whether restored GPU state is checked against the checkpoint (off; warn: log
 		// mismatches; strict: fail the restore)
 		Verify string `json:"verify" key:"verify" yaml:"verify" mapstructure:"verify"`
+		// ProfilingEnabled enables CUDA call profiling in the GPU plugin
+		ProfilingEnabled bool `json:"profiling_enabled" key:"profiling_enabled" yaml:"profiling_enabled" mapstructure:"profiling_enabled"`
+		// ComputeSanitizer runs restored GPU workers under compute-sanitizer
+		ComputeSanitizer bool `json:"compute_sanitizer" key:"compute_sanitizer" yaml:"compute_sanitizer" mapstructure:"compute_sanitizer"`
 	}
 
 	Plugins struct {

@@ -59,6 +59,8 @@ const (
 	DEFAULT_GPU_RESTORE_NIC       = "auto"
 	DEFAULT_GPU_DELTA_ENABLED     = false
 	DEFAULT_GPU_VERIFY            = "off"
+	DEFAULT_GPU_PROFILING_ENABLED = false
+	DEFAULT_GPU_COMPUTE_SANITIZER = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -121,6 +123,8 @@ var Global Config = Config{
 		RestoreNic:       DEFAULT_GPU_RESTORE_NIC,
 		DeltaEnabled:     DEFAULT_GPU_DELTA_ENABLED,
 		Verify:           DEFAULT_GPU_VERIFY,
+		ProfilingEnabled: DEFAULT_GPU_PROFILING_ENABLED,
+		ComputeSanitizer: DEFAULT_GPU_COMPUTE_SANITIZER,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
