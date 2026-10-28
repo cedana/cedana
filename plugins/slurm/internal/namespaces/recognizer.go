@@ -85,6 +85,18 @@ func RecognizeExternalNamespaces(pid uint32, jobID uint32) ([]RecognizedNamespac
 		}
 		jobInodes[t] = ino
 
+		// The mounts tell the mount namespace. As the job's user, hostNsInode falls back to our own.
+		if t == configs.NEWNS {
+			own, err := ownMountNamespace(pid)
+			if err == nil {
+				if !own {
+					hostInodes[t] = ino // the host's, as far as its mounts tell
+				}
+				continue
+			}
+			log.Warn().Err(err).Msg("failed to compare the mounts of the job with init's, comparing the namespace links instead")
+		}
+
 		hostIno, err := hostNsInode(t)
 		if err != nil {
 			return nil, err
@@ -273,7 +285,8 @@ func nsInode(path string) (uint64, error) {
 	return uint64(st.Ino), nil
 }
 
-// hostNsInode prefers init's namespace, falling back to ours if we're not allowed to look
+// hostNsInode prefers init's namespace, falling back to ours if we're not allowed to look.
+// Wrong for the mount namespace: see ownMountNamespace.
 func hostNsInode(t configs.NamespaceType) (uint64, error) {
 	ino, err := nsInode(nsPathOf(t, 1))
 	if err == nil {
