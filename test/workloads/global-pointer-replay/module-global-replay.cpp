@@ -35,10 +35,22 @@ int main(int argc, char **argv) {
   CUmodule module;
   // A larger recorded range covers the driver's arena alignment rounding.
   const size_t elements = allocationCase ? 128 * 1024 * 1024 : 64;
-  const std::string ptx = std::string(ptxHeader) +
-                          ".visible .global .align 4 .u32 arr[" +
-                          std::to_string(elements) + "];\n";
+  // readArr reads arr by symbol, reaching the restored global even where the
+  // app's address for it now belongs to a new allocation.
+  const std::string ptx =
+      std::string(ptxHeader) + ".visible .global .align 4 .u32 arr[" +
+      std::to_string(elements) +
+      "];\n"
+      ".visible .entry readArr(.param .u64 out, .param .u64 index) {\n"
+      "  .reg .u64 %rd<4>;\n  .reg .u32 %r<2>;\n"
+      "  ld.param.u64 %rd1, [out];\n  ld.param.u64 %rd2, [index];\n"
+      "  mov.u64 %rd3, arr;\n  shl.b64 %rd2, %rd2, 2;\n"
+      "  add.u64 %rd3, %rd3, %rd2;\n  ld.global.u32 %r1, [%rd3];\n"
+      "  cvta.to.global.u64 %rd1, %rd1;\n  st.global.u32 [%rd1], %r1;\n"
+      "  ret;\n}\n";
   check(cuModuleLoadData(&module, ptx.c_str()), "module");
+  CUfunction readArr;
+  check(cuModuleGetFunction(&readArr, module, "readArr"), "readArr");
   CUdeviceptr global;
   size_t bytes;
   check(cuModuleGetGlobal(&global, &bytes, module, "arr"), "global");
@@ -80,16 +92,6 @@ int main(int argc, char **argv) {
     std::vector<int> buffer(allocationBytes / sizeof(int), -7);
     check(cuMemcpyHtoD(fresh, buffer.data(), allocationBytes),
           "initialize new allocation");
-    CUdeviceptr currentGlobal;
-    size_t currentBytes;
-    check(cuModuleGetGlobal(&currentGlobal, &currentBytes, module, "arr"),
-          "restored global");
-    require(currentGlobal != global && currentBytes == bytes,
-            "global actually relocated");
-    const CUdeviceptr globalTarget = currentGlobal + (target - global);
-    int sentinel = -1;
-    check(cuMemcpyHtoD(globalTarget, &sentinel, sizeof(sentinel)),
-          "initialize restored global sentinel");
     check(cuMemcpyHtoDAsync(target, &value, sizeof(value), stream),
           "copy into allocation at old global interior address");
     check(cuStreamSynchronize(stream), "copy completion");
@@ -100,9 +102,19 @@ int main(int argc, char **argv) {
       require(buffer[i] == (i == targetIndex ? 42 : -7),
               "copy reaches new allocation, preserving surrounding bytes");
     }
-    check(cuMemcpyDtoH(&sentinel, globalTarget, sizeof(sentinel)),
-          "read restored global sentinel");
-    require(sentinel == -1, "allocation copy must not alter restored global");
+    // The app keeps the global's recorded address, so the overlapping bytes
+    // are only reachable by symbol. Elements past the sentinels stay zero.
+    unsigned long long index = (target - global) / sizeof(int);
+    CUdeviceptr out = fresh + allocationBytes - sizeof(int);
+    void *args[] = {&out, &index};
+    check(cuLaunchKernel(readArr, 1, 1, 1, 1, 1, 1, 0, stream, args, nullptr),
+          "read restored global");
+    check(cuStreamSynchronize(stream), "read completion");
+    int restored;
+    check(cuMemcpyDtoH(&restored, out, sizeof(restored)),
+          "copy restored global value");
+    require(restored == (index < 64 ? -1 : 0),
+            "allocation copy must not alter restored global");
     check(cuMemFree(fresh), "free new allocation");
   } else {
     check(cuMemcpyHtoDAsync(global + 16 * sizeof(int), &value, sizeof(value),
