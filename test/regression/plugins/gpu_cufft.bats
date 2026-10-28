@@ -1,8 +1,6 @@
 #!/usr/bin/env bats
 
-# A process that destroys cuFFT plans and creates new ones before a checkpoint, as the PME
-# tuning of GROMACS does. cuFFT unloads the modules of a destroyed plan. Skips if the samples
-# image predates the binary.
+# cuFFT plans destroyed and created again before a checkpoint (CED-2542).
 #
 # bats file_tags=gpu,cufft
 
@@ -31,8 +29,7 @@ setup() {
 }
 
 teardown() {
-    # A failed dump_restore_cufft stops before its own cleanup, and the sample waits on its
-    # gate with the GPU in use until it is killed.
+    # Kill the sample that a failed restore test left on the GPU.
     if [ -n "${gate:-}" ]; then
         rm -f "$gate"
         cedana job kill "$jid" &>/dev/null || true
@@ -45,8 +42,7 @@ teardown_file() {
     teardown_file_daemon
 }
 
-# Runs the sample with a gate file, dumps it after READY, restores it, opens the gate and
-# checks that every FFT round trip after the restore is right. Args: extra sample flags.
+# Dump after READY, restore, open the gate and check the result. Args: sample flags.
 dump_restore_cufft() {
     jid=$(unix_nano)
     gate=/tmp/gate-$jid
@@ -56,7 +52,7 @@ dump_restore_cufft() {
     log_file=$(logfile_for_jid "$jid")
     watch_logs "$jid"
 
-    wait_for_cmd 60 grep -q READY "$log_file" # the last plan pair exists and works
+    wait_for_cmd 60 grep -q READY "$log_file"
 
     cedana dump job "$jid"
 
@@ -65,7 +61,7 @@ dump_restore_cufft() {
     watch_logs "$jid"
 
     sleep 1
-    touch "$gate" # finish the round trips on the restored plans
+    touch "$gate"
 
     wait_for_cmd 60 grep -q PASS "$log_file"
     run grep -E "MISMATCH|FAIL" "$log_file"
@@ -96,18 +92,15 @@ dump_restore_cufft() {
 ### Restore ###
 ###############
 
-# The control: no plan is destroyed, so no module is unloaded before the dump.
+# Control: no plan is destroyed.
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU process (one cuFFT plan pair)" {
     dump_restore_cufft --control
 }
 
-# The dump drops the load record of each module that cufftDestroy unloaded, and the GPU
-# worker must also drop the hiddenFFTModule record of that module. With the record kept, the
-# replay gives libcuda a module handle of the first worker, and the worker segfaults.
 # bats test_tags=restore
 @test "[$GPU_INFO] restore GPU process (cuFFT plans destroyed and created again)" {
-    skip "the GPU worker replays the cuFFT module call of an unloaded module (CED-2542); remove after a cedana-gpu release with the fix"
+    skip "needs a cedana-gpu release with the CED-2542 fix"
 
     dump_restore_cufft
 }
