@@ -2,6 +2,7 @@ package gcs
 
 import (
 	"context"
+	"os"
 	"strings"
 	"time"
 
@@ -20,10 +21,12 @@ func CheckConfig() types.Check {
 			Name: "GCS Credentials Mode",
 			Data: settings.CredentialsMode,
 		}}
-		if settings.EmulatorHost != "" {
+		// The SDK sends every request to an emulator, without credentials, when its
+		// variable is set; a variable left set would redirect the checkpoints silently
+		if host := os.Getenv(EMULATOR_HOST_ENV); host != "" {
 			components = append(components, &daemon.HealthCheckComponent{
 				Name:     "GCS Emulator",
-				Data:     settings.EmulatorHost,
+				Data:     host,
 				Warnings: []string{"GCS requests go to an emulator, without credentials"},
 			})
 			return components

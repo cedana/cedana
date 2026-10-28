@@ -26,8 +26,12 @@
 #   CEDANA_NAMESPACE                - Namespace for Cedana components (default: cedana-system)
 #   NAMESPACE                       - Namespace for test pods (default: test)
 #   SAMPLES_DIR                     - Path to cedana-samples/kubernetes (default: auto-detect)
+#   SAMPLES_IMAGE                   - cedana-samples' lite image the pods run (default: the run's, in
+#                                     /cedana-samples/.image, else cedana/cedana-samples:cuda-lite)
 #   PROPAGATOR_REPO                 - If set (with PROPAGATOR_DIGEST or PROPAGATOR_TAG), deploy this
 #                                     propagator into the cluster and test against it (see propagator_deploy.bash)
+#   UPGRADE_FROM_CHART              - If set (e.g. "latest"), install that released chart, checkpoint a pod on it,
+#                                     and upgrade to this one: the suite runs after the upgrade (see upgrade.bats)
 
 ################################################################################
 # Setup and Configuration
@@ -46,6 +50,11 @@ source "${BATS_TEST_DIRNAME}"/../helpers/helm.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/propagator.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/propagator_deploy.bash
 source "${BATS_TEST_DIRNAME}"/../helpers/metrics.bash
+
+# daemon.bash turns on GPU restore verification for the tests' own daemons. Here only the shim
+# (restores) would get it, through containerd's environment on K3s, and not the node's daemon
+# (dumps), so no checkpoint would have what it verifies against.
+unset CEDANA_GPU_VERIFY
 
 # Generate cluster name if not provided
 if [ -z "$CLUSTER_NAME" ]; then
@@ -102,7 +111,8 @@ setup_suite() {
         fi
 
         helm_uninstall_cedana "$CEDANA_NAMESPACE"
-        helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE"
+        # With UPGRADE_FROM_CHART, start from that released chart, upgraded to this one below
+        helm_install_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE" "${UPGRADE_FROM_CHART:-}"
     else
         debug_log "Skipping helm install (SKIP_HELM=1)"
         if [ -z "$CLUSTER_ID" ]; then
@@ -128,9 +138,18 @@ setup_suite() {
     # Create test namespace
     delete_namespace "$NAMESPACE"
     create_namespace "$NAMESPACE"
+
+    # The suite then runs on the upgraded install, and upgrade.bats checks the upgrade itself
+    if [ -n "${UPGRADE_FROM_CHART:-}" ] && [ "${SKIP_HELM:-0}" != "1" ]; then
+        helm_upgrade_cedana "$CLUSTER_ID" "$CEDANA_NAMESPACE" || return 1
+        wait_for_ready "$CEDANA_NAMESPACE" 300
+    fi
 }
 
 teardown_suite() {
+    # Collect what's needed to debug a failure (uploaded by CI), before anything is torn down
+    collect_diagnostics "${K8S_DIAGNOSTICS_DIR:-/tmp/k8s-diagnostics}" || true
+
     # Stop log tailing
     if [ -n "$TAIL_PID" ]; then
         pkill -P "$TAIL_PID" 2>/dev/null || true

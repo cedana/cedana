@@ -93,6 +93,37 @@ func TestInitPersistsExplicitAWSCredentialsMode(t *testing.T) {
 	}
 }
 
+// A config written by a newer version (with fields this one doesn't know) must still load,
+// as daemons and their configs are upgraded separately, e.g. helm upgrades on a node
+func TestLoadIgnoresUnknownFields(t *testing.T) {
+	originalGlobal := Global
+	originalDir := Dir
+	t.Cleanup(func() {
+		viper.Reset()
+		Global = originalGlobal
+		Dir = originalDir
+		setDefaults()
+		bindEnvVars()
+	})
+
+	viper.Reset()
+	setDefaults()
+	bindEnvVars()
+
+	configDir := t.TempDir()
+	newer := `{"address": "0.0.0.0:9999", "added_in_a_newer_version": true, "checkpoint": {"also_new": 1}}`
+	if err := os.WriteFile(filepath.Join(configDir, FILE_NAME+"."+FILE_TYPE), []byte(newer), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Load(Args{ConfigDir: configDir}); err != nil {
+		t.Fatalf("a config with unknown fields failed to load: %v", err)
+	}
+	if Global.Address != "0.0.0.0:9999" {
+		t.Errorf("address is %q, want the config's %q", Global.Address, "0.0.0.0:9999")
+	}
+}
+
 func TestChecksumVerifyDefaultsToWarnAndReadsTheEnvironment(t *testing.T) {
 	originalGlobal := Global
 	originalDir := Dir

@@ -176,8 +176,6 @@ type (
 		CredentialsMode string `json:"credentials_mode" key:"credentials_mode" yaml:"credentials_mode" mapstructure:"credentials_mode" env_aliases:"GCS_CREDENTIALS_MODE"`
 		// ServiceAccountKey is a service account key file path, or the key's JSON, for the serviceAccount mode
 		ServiceAccountKey string `json:"service_account_key" key:"service_account_key" yaml:"service_account_key" mapstructure:"service_account_key" env_aliases:"GCS_SERVICE_ACCOUNT_KEY"`
-		// EmulatorHost is the host of a GCS emulator (e.g. fake-gcs-server), used without authentication
-		EmulatorHost string `json:"emulator_host" key:"emulator_host" yaml:"emulator_host" mapstructure:"emulator_host" env_aliases:"STORAGE_EMULATOR_HOST"`
 	}
 
 	AWS struct {

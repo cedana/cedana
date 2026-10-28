@@ -80,39 +80,51 @@ jobs:
         password: ${{ secrets.DOCKER_TOKEN }}
       options: --privileged --init ${{ matrix.compute == 'CUDA' && '--ipc=host --gpus all' || '' }} --cgroupns=host
     steps:
-      - uses: runs-on/action@v1
-      - uses: actions/checkout@v4
+      - uses: runs-on/action@v2
+      - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Download samples
+        id: samples
+        continue-on-error: true # without download.yml's samples (a caller that doesn't ask for them), the image's own
+        uses: actions/download-artifact@v7
+        with:
+          name: samples-${{ matrix.arch }}
+          path: /tmp/samples
+
+      - name: Install samples
+        if: steps.samples.outcome == 'success'
+        run: rm -rf /cedana-samples && tar -xzf /tmp/samples/samples-*.tar.gz -C /
+
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download streamer plugin # if provided from a caller workflow, will be later installed
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: streamer-${{ matrix.arch }}
 
       - name: Download GPU plugin # if provided from a caller workflow, will be later installed
         if: matrix.compute == 'CUDA'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: gpu-${{ matrix.arch }}
 
       - name: Download CRIU
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: criu-${{ matrix.arch }}
 
@@ -168,19 +180,34 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-report-${{ matrix.arch }}-streamer-${{ matrix.compute }}
-          path: /tmp/report*.xml
+          path: | # with the suite's warnings (see report_warning), shown in the summary
+            /tmp/report*.xml
+            /tmp/warnings.jsonl
+
+      # Daemon and job logs, as bats only shows those of failed tests
+      - name: Upload logs
+        if: failure() || cancelled() # a hang that hits the job timeout too
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-logs-${{ matrix.arch }}-streamer-${{ matrix.compute }}
+          path: |
+            /tmp/cedana-daemon-*.log
+            /tmp/cedana-*/**/*.log
+            /var/log/cedana*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
   post-summary:
     name: Post Summary
     if: inputs.post_summary && always()
     needs: streamer
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download reports
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: test-report-*-streamer-*
           path: report

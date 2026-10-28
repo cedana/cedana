@@ -32,6 +32,7 @@ func NewLocalManager() *LocalManager {
 func (m *LocalManager) Get(name string) *Plugin {
 	for _, p := range Registry {
 		if p.Name == name {
+			p := p.clone()
 			p.SyncInstalled()
 			return &p
 		}
@@ -47,6 +48,7 @@ func (m *LocalManager) Getf(format string, a ...any) *Plugin {
 func (m *LocalManager) IsInstalled(name string) bool {
 	for _, p := range Registry {
 		if p.Name == name {
+			p := p.clone()
 			p.SyncInstalled()
 			return p.IsInstalled()
 		}
@@ -74,6 +76,7 @@ func (m *LocalManager) List(latest bool, filter ...string) (list []Plugin, err e
 			continue
 		}
 
+		p := p.clone()
 		p.SyncInstalled()
 
 		if !latest {

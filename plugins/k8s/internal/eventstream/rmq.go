@@ -640,30 +640,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 
 		var dumpReqs []*daemon.DumpReq
 		for i, container := range containers {
-			dumpReq := &daemon.DumpReq{
-				Name: checkpointIdMap[i],
-				Type: "containerd",
-				Criu: defaultDumpOpts,
-				// The compress, the upload and the checksum run after the dump has returned,
-				// so the containers are unfrozen as soon as CRIU has finished
-				Async: true,
-				Details: &daemon.Details{
-					Containerd: container,
-				},
-			}
-			if req.Overrides != nil {
-				criuOpts := &criu.CriuOpts{}
-				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
-				} else {
-					dumpReq.Criu = criuOpts
-				}
-				dumpReq.Compression = req.Overrides.Compression
-				dumpReq.Dir = req.Overrides.Directory
-				dumpReq.Streams = int32(req.Overrides.Streams)
-				dumpReq.Async = req.Overrides.Async
-			}
+			dumpReq := newDumpReq(log.WithContext(ctx), checkpointIdMap[i], container, req.Overrides)
 			log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
 			dumpReqs = append(dumpReqs, dumpReq)
 		}
@@ -770,6 +747,36 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 
 		return rabbitmq.Ack
 	}
+}
+
+// Builds the dump request of one container. With checksums on, the dump is asynchronous:
+// the compress, the upload and the checksum run after the dump has returned, so the
+// containers are unfrozen as soon as CRIU has finished. With checksums off, the dump
+// is synchronous, as before checksums. The request's overrides take precedence.
+func newDumpReq(ctx context.Context, name string, container *containerd.Containerd, overrides *checkpointOverrides) *daemon.DumpReq {
+	dumpReq := &daemon.DumpReq{
+		Name:  name,
+		Type:  "containerd",
+		Criu:  defaultDumpOpts,
+		Async: config.Global.Checkpoint.Checksum,
+		Details: &daemon.Details{
+			Containerd: container,
+		},
+	}
+	if overrides != nil {
+		criuOpts := &criu.CriuOpts{}
+		err := json.Unmarshal([]byte(overrides.CRIUOpts), criuOpts)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
+		} else {
+			dumpReq.Criu = criuOpts
+		}
+		dumpReq.Compression = overrides.Compression
+		dumpReq.Dir = overrides.Directory
+		dumpReq.Streams = int32(overrides.Streams)
+		dumpReq.Async = overrides.Async
+	}
+	return dumpReq
 }
 
 func (es *EventStream) publishCheckpoint(
@@ -910,8 +917,7 @@ func (es *EventStream) reportUpload(
 	info := models.NewCheckpointSuccessInfo()
 	info.SetRestorePath(&path)
 	if checksum != "" {
-		// The SDK model predates the field; it is sent as additional data
-		info.SetAdditionalData(map[string]any{"checksum": checksum})
+		info.SetChecksum(&checksum)
 	}
 	_, err = es.propagator.V1().Checkpoints().Uploaded().ById(checkpointId).Post(ctx, info, nil)
 	if err != nil {

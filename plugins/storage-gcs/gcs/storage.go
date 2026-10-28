@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"cloud.google.com/go/storage"
@@ -27,8 +28,8 @@ type Storage struct {
 
 func NewStorage(ctx context.Context) (cedana_io.Storage, error) {
 	settings := cedana_config.Global.GCS
-	if settings.EmulatorHost != "" {
-		log.Info().Str("storage", "GCS").Str("emulator_host", settings.EmulatorHost).Msg("Using a GCS emulator")
+	if host := os.Getenv(EMULATOR_HOST_ENV); host != "" {
+		log.Info().Str("storage", "GCS").Str("emulator_host", host).Msg("Using a GCS emulator")
 	}
 	opts, err := ClientOptions(settings)
 	if err != nil {

@@ -17,7 +17,13 @@ fi
 # check if systemd is available and running
 if ! systemctl status &>/dev/null; then
     echo "Systemd not available. Starting $APP_NAME daemon directly without service setup..." >&2
-    $APP_PATH daemon start &> "$LOG_PATH" &
+    # In the host's mount namespace, as a service would be: started from a pod (e.g. the k8s
+    # helper), the pod's wouldn't see later mounts, e.g. new containers' rootfs (RW layers).
+    if [ "$(readlink /proc/1/ns/mnt)" != "$(readlink /proc/self/ns/mnt)" ] && command -v nsenter &>/dev/null; then
+        nsenter -t 1 -m -- "$APP_PATH" daemon start &> "$LOG_PATH" &
+    else
+        $APP_PATH daemon start &> "$LOG_PATH" &
+    fi
     exit
 fi
 
@@ -38,6 +44,11 @@ CONTAINERD_ENV=""
 if [ -n "${CONTAINERD_ADDRESS:-}" ]; then
     CONTAINERD_ENV="Environment=\"CONTAINERD_ADDRESS=${CONTAINERD_ADDRESS}\""
 fi
+# The GCS SDK's emulator variable, for tests: set on the helper, the daemon needs it too
+STORAGE_EMULATOR_ENV=""
+if [ -n "${STORAGE_EMULATOR_HOST:-}" ]; then
+    STORAGE_EMULATOR_ENV="Environment=\"STORAGE_EMULATOR_HOST=${STORAGE_EMULATOR_HOST}\""
+fi
 cat <<EOF | tee "$SERVICE_FILE" >/dev/null
 [Unit]
 Description=Cedana Daemon
@@ -48,6 +59,7 @@ Group=root
 Restart=no
 $POD_IDENTITY_ENV
 $CONTAINERD_ENV
+$STORAGE_EMULATOR_ENV
 
 [Install]
 WantedBy=multi-user.target

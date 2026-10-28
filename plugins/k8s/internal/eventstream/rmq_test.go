@@ -1,9 +1,12 @@
 package eventstream
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/containerd"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/profiling"
 )
 
@@ -113,4 +116,43 @@ func TestCheckpointInfoUploadPending(t *testing.T) {
 	if _, ok := fields["upload_pending"]; ok {
 		t.Fatal("checkpoint payload must omit upload_pending for a checkpoint that is already uploaded")
 	}
+}
+
+func TestNewDumpReqAsyncOnlyWithChecksums(t *testing.T) {
+	checksum := config.Global.Checkpoint.Checksum
+	t.Cleanup(func() { config.Global.Checkpoint.Checksum = checksum })
+	ctx := context.Background()
+	container := &containerd.Containerd{ID: "app"}
+
+	t.Run("ChecksumOn", func(t *testing.T) {
+		config.Global.Checkpoint.Checksum = true
+		req := newDumpReq(ctx, "checkpoint", container, nil)
+		if !req.GetAsync() {
+			t.Fatal("with checksums on, the compress, the upload and the checksum must run after the dump")
+		}
+		if req.GetName() != "checkpoint" || req.GetDetails().GetContainerd() != container {
+			t.Fatalf("unexpected request %v", req)
+		}
+	})
+
+	t.Run("ChecksumOff", func(t *testing.T) {
+		config.Global.Checkpoint.Checksum = false
+		if newDumpReq(ctx, "checkpoint", container, nil).GetAsync() {
+			t.Fatal("with checksums off, the dump must be synchronous")
+		}
+	})
+
+	t.Run("OverridesTakePrecedence", func(t *testing.T) {
+		config.Global.Checkpoint.Checksum = true
+		req := newDumpReq(ctx, "checkpoint", container, &checkpointOverrides{Async: false, Streams: 4, Compression: "lz4"})
+		if req.GetAsync() || req.GetStreams() != 4 || req.GetCompression() != "lz4" {
+			t.Fatalf("expected the overrides in the request, got async=%v streams=%d compression=%q",
+				req.GetAsync(), req.GetStreams(), req.GetCompression())
+		}
+
+		config.Global.Checkpoint.Checksum = false
+		if !newDumpReq(ctx, "checkpoint", container, &checkpointOverrides{Async: true}).GetAsync() {
+			t.Fatal("an override can ask for an asynchronous dump with checksums off")
+		}
+	})
 }

@@ -42,3 +42,13 @@ func TestLoadCredentialsParsesTheKey(t *testing.T) {
 		t.Fatal("an unknown mode loaded")
 	}
 }
+
+// The SDK's emulator variable redirects every request, so the check warns of it
+func TestCheckConfigWarnsOfTheEmulatorVariable(t *testing.T) {
+	t.Setenv(EMULATOR_HOST_ENV, "localhost:4443")
+	components := CheckConfig()(context.Background())
+	last := components[len(components)-1]
+	if last.Name != "GCS Emulator" || last.Data != "localhost:4443" || len(last.Warnings) == 0 {
+		t.Fatalf("component = %+v, want GCS Emulator localhost:4443 with a warning", last)
+	}
+}
