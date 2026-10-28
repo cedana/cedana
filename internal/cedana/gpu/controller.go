@@ -12,6 +12,8 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -312,17 +314,30 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		cmd.Stderr = c.ErrBuf
 	}
 
+	// The controller enables the sanitizer when the var is set at all, even to "false", so only the
+	// config decides whether it is set
 	cmd.Env = append(
-		os.Environ(),
+		slices.DeleteFunc(os.Environ(), func(e string) bool {
+			return strings.HasPrefix(e, "CEDANA_GPU_COMPUTE_SANITIZER=")
+		}),
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
 		"CEDANA_GPU_RESTORE_NIC="+config.Global.GPU.RestoreNic,
+		"CEDANA_GPU_DELTA_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DeltaEnabled),
+		"CEDANA_GPU_VERIFY="+config.Global.GPU.Verify,
+		"CEDANA_GPU_HOSTREG_RESTORE_WAIT_S="+fmt.Sprintf("%v", config.Global.GPU.HostregRestoreWaitS),
+		"CEDANA_GPU_WORKER_LAYOUT="+config.Global.GPU.WorkerLayout,
+		"CEDANA_GPU_PROFILING_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.ProfilingEnabled),
 		// Restores attach twice: at CRIU's setup-namespaces hook and post-restore (see CRIUCallback)
 		"CEDANA_GPU_ATTACH_STAGED=1",
 	)
+
+	if config.Global.GPU.ComputeSanitizer {
+		cmd.Env = append(cmd.Env, "CEDANA_GPU_COMPUTE_SANITIZER=1")
+	}
 
 	cmd.Env = append(cmd.Env, env...)
 

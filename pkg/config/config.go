@@ -49,14 +49,20 @@ const (
 
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
-	DEFAULT_GPU_POOL_SIZE         = 0
-	DEFAULT_GPU_LOG_DIR           = "/tmp"
-	DEFAULT_GPU_SOCK_DIR          = "/tmp"
-	DEFAULT_GPU_SHM_SIZE          = 8 * utils.GIBIBYTE
-	DEFAULT_GPU_DEBUG             = false
-	DEFAULT_GPU_DEDUP_ENABLED     = false
-	DEFAULT_GPU_TEMPLATES_ENABLED = false
-	DEFAULT_GPU_RESTORE_NIC       = "auto"
+	DEFAULT_GPU_POOL_SIZE              = 0
+	DEFAULT_GPU_LOG_DIR                = "/tmp"
+	DEFAULT_GPU_SOCK_DIR               = "/tmp"
+	DEFAULT_GPU_SHM_SIZE               = 8 * utils.GIBIBYTE
+	DEFAULT_GPU_DEBUG                  = false
+	DEFAULT_GPU_DEDUP_ENABLED          = false
+	DEFAULT_GPU_TEMPLATES_ENABLED      = false
+	DEFAULT_GPU_RESTORE_NIC            = "auto"
+	DEFAULT_GPU_DELTA_ENABLED          = false
+	DEFAULT_GPU_VERIFY                 = "off"
+	DEFAULT_GPU_HOSTREG_RESTORE_WAIT_S = 120
+	DEFAULT_GPU_WORKER_LAYOUT          = "auto"
+	DEFAULT_GPU_PROFILING_ENABLED      = false
+	DEFAULT_GPU_COMPUTE_SANITIZER      = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -109,14 +115,20 @@ var Global Config = Config{
 		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,
 	},
 	GPU: GPU{
-		PoolSize:         DEFAULT_GPU_POOL_SIZE,
-		LogDir:           DEFAULT_GPU_LOG_DIR,
-		SockDir:          DEFAULT_GPU_SOCK_DIR,
-		ShmSize:          DEFAULT_GPU_SHM_SIZE,
-		Debug:            DEFAULT_GPU_DEBUG,
-		DedupEnabled:     DEFAULT_GPU_DEDUP_ENABLED,
-		TemplatesEnabled: DEFAULT_GPU_TEMPLATES_ENABLED,
-		RestoreNic:       DEFAULT_GPU_RESTORE_NIC,
+		PoolSize:            DEFAULT_GPU_POOL_SIZE,
+		LogDir:              DEFAULT_GPU_LOG_DIR,
+		SockDir:             DEFAULT_GPU_SOCK_DIR,
+		ShmSize:             DEFAULT_GPU_SHM_SIZE,
+		Debug:               DEFAULT_GPU_DEBUG,
+		DedupEnabled:        DEFAULT_GPU_DEDUP_ENABLED,
+		TemplatesEnabled:    DEFAULT_GPU_TEMPLATES_ENABLED,
+		RestoreNic:          DEFAULT_GPU_RESTORE_NIC,
+		DeltaEnabled:        DEFAULT_GPU_DELTA_ENABLED,
+		Verify:              DEFAULT_GPU_VERIFY,
+		HostregRestoreWaitS: DEFAULT_GPU_HOSTREG_RESTORE_WAIT_S,
+		WorkerLayout:        DEFAULT_GPU_WORKER_LAYOUT,
+		ProfilingEnabled:    DEFAULT_GPU_PROFILING_ENABLED,
+		ComputeSanitizer:    DEFAULT_GPU_COMPUTE_SANITIZER,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
