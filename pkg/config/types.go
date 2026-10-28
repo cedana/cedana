@@ -153,16 +153,9 @@ type (
 		RestoreNic string `json:"restore_nic" key:"restore_nic" yaml:"restore_nic" mapstructure:"restore_nic"`
 		// DeltaEnabled sets whether GPU checkpoints only save memory changed since the previous checkpoint
 		DeltaEnabled bool `json:"delta_enabled" key:"delta_enabled" yaml:"delta_enabled" mapstructure:"delta_enabled"`
-		// Verify sets how GPU memory is verified after restore (off, warn, strict)
+		// Verify sets whether restored GPU state is checked against the checkpoint (off; warn: log
+		// mismatches; strict: fail the restore)
 		Verify string `json:"verify" key:"verify" yaml:"verify" mapstructure:"verify"`
-		// HostregRestoreWaitS is how many seconds a restore waits for a registered host memory file to be restored
-		HostregRestoreWaitS int `json:"hostreg_restore_wait_s" key:"hostreg_restore_wait_s" yaml:"hostreg_restore_wait_s" mapstructure:"hostreg_restore_wait_s"`
-		// WorkerLayout sets the mmap layout of GPU workers (auto: opposite to the application's; native: the default)
-		WorkerLayout string `json:"worker_layout" key:"worker_layout" yaml:"worker_layout" mapstructure:"worker_layout"`
-		// ProfilingEnabled enables CUDA call profiling in the GPU plugin
-		ProfilingEnabled bool `json:"profiling_enabled" key:"profiling_enabled" yaml:"profiling_enabled" mapstructure:"profiling_enabled"`
-		// ComputeSanitizer runs restored GPU workers under compute-sanitizer
-		ComputeSanitizer bool `json:"compute_sanitizer" key:"compute_sanitizer" yaml:"compute_sanitizer" mapstructure:"compute_sanitizer"`
 	}
 
 	Plugins struct {
