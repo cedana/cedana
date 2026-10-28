@@ -36,14 +36,8 @@ load ../helpers/slurm_propagator
 # Controller shutdown #
 #######################
 
-# The job's bash outlives its CUDA process: an EXIT trap and a sleep after the
-# sample, longer than the GPU worker's 500 ms poll. The GPU controller sends
-# SIGUSR2 to the job script when its last worker ends while the script is still
-# alive. The wrapper of cedana-slurm makes the job script ignore it with the
-# first line of the script file it runs, so the job ends with the script's own
-# exit code. Without that line the script dies of the signal and Slurm records
-# FAILED 255 after the job did all its work (cedana-slurm#202,
-# designs/controller-exit-race.org in cedana-slurm-example).
+# The script outlives its CUDA process, and the GPU controller sends it SIGUSR2.
+# The wrapper of cedana-slurm makes the script ignore the signal. See CED-2541.
 # bats test_tags=run,samples
 @test "Run: a GPU job script that outlives its CUDA process ends COMPLETED 0" {
     local script="$BATS_TEST_TMPDIR/exit-race.sbatch"
@@ -68,7 +62,7 @@ EOF
     exit_code=$(grep -oP 'ExitCode=\K\S+' <<<"$job_show" | head -1)
     [ "$exit_code" = "0:0" ]
 
-    # The output lands in the job's working directory on its node.
+    # The output is on the job's node.
     host=$(_get_batch_host "$job_id")
     out_file=$(grep -oP 'StdOut=\K\S+' <<<"$job_show" | head -1)
     output=$(docker exec "$host" cat "$out_file")
