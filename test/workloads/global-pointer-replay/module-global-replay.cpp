@@ -18,7 +18,7 @@ static void require(bool ok, const char *operation) {
   }
 }
 static const char ptxHeader[] =
-    ".version 7.0\n.target sm_80\n.address_size 64\n";
+    ".version 7.0\n.target sm_52\n.address_size 64\n";
 
 int main(int argc, char **argv) {
   require(argc == 2, "usage: module-global-replay GATE_PATH");
