@@ -321,6 +321,7 @@ func (s *unreadableStorage) ChecksumPath(ctx context.Context, path string) (stri
 // not failed; a directory that is not there is a failed checkpoint
 func TestDirectoryReadErrorLeavesTheCheckpointWithoutAChecksum(t *testing.T) {
 	config.Global.Checkpoint.Checksum = true
+	checksumDirectories(t, true)
 	ctx := context.Background()
 	for _, tc := range []struct {
 		name   string
@@ -359,8 +360,17 @@ func TestDirectoryReadErrorLeavesTheCheckpointWithoutAChecksum(t *testing.T) {
 	}
 }
 
+// Sets ChecksumDirectories for one test
+func checksumDirectories(t *testing.T, on bool) {
+	t.Helper()
+	before := config.Global.Checkpoint.ChecksumDirectories
+	t.Cleanup(func() { config.Global.Checkpoint.ChecksumDirectories = before })
+	config.Global.Checkpoint.ChecksumDirectories = on
+}
+
 func TestDirectoryDumpHoldsTheManifestChecksum(t *testing.T) {
 	config.Global.Checkpoint.Checksum = true
+	checksumDirectories(t, true)
 	ctx := context.Background()
 	opts := types.Opts{
 		WG:           &sync.WaitGroup{},
@@ -390,4 +400,32 @@ func TestDirectoryDumpHoldsTheManifestChecksum(t *testing.T) {
 		t.Fatalf("checksum = %q, want the manifest %q", result.Checksum, want)
 	}
 	opts.WG.Wait()
+}
+
+// With ChecksumDirectories off, the default, a directory is not read: it is not
+// pending, and the registry holds nothing for it
+func TestDirectoryDumpWithoutDirectoryChecksums(t *testing.T) {
+	config.Global.Checkpoint.Checksum = true
+	checksumDirectories(t, config.DEFAULT_CHECKPOINT_CHECKSUM_DIRECTORIES)
+	ctx := context.Background()
+	opts := types.Opts{
+		WG:           &sync.WaitGroup{},
+		CRIUCallback: &criu_client.NotifyCallbackMulti{},
+		Storage:      &unreadableStorage{err: errors.New("the directory was read")},
+		Uploads:      upload.NewRegistry(),
+	}
+	req := &daemon.DumpReq{Dir: t.TempDir(), Name: "dump-dir", Compression: "none"}
+	resp := &daemon.DumpResp{}
+
+	_, err := DumpFilesystem(dumpImages(t))(ctx, opts, resp, req)
+	if err != nil {
+		t.Fatalf("dump failed: %v", err)
+	}
+	opts.WG.Wait()
+	if len(resp.Paths) != 1 || len(resp.Pending) != 0 {
+		t.Fatalf("paths = %v, pending = %v; want one path, none pending", resp.Paths, resp.Pending)
+	}
+	if result, err := opts.Uploads.Wait(ctx, resp.Paths[0]); !errors.Is(err, upload.ErrNotFound) {
+		t.Fatalf("Wait = %+v, %v; want ErrNotFound for a directory that was not read", result, err)
+	}
 }

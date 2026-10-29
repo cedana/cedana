@@ -248,8 +248,10 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 			// CRIU writes the files itself, so no writer saw the bytes: the storage reads
 			// the directory for its checksum after the dump has returned, one at a time
-			// on this node, and the caller learns it the way it learns an upload's outcome
-			if pc, ok := storage.(io.PathChecksummer); ok && config.Global.Checkpoint.Checksum && opts.Uploads != nil {
+			// on this node, and the caller learns it the way it learns an upload's outcome.
+			// Only with ChecksumDirectories on: the read is of every byte of the checkpoint
+			if pc, ok := storage.(io.PathChecksummer); ok && config.Global.Checkpoint.Checksum &&
+				config.Global.Checkpoint.ChecksumDirectories && opts.Uploads != nil {
 				finish := opts.Uploads.Start(dirPath)
 				resp.Pending = append(resp.Pending, dirPath)
 				checksumCtx := context.WithoutCancel(ctx)
