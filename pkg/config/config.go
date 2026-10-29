@@ -56,6 +56,7 @@ const (
 	DEFAULT_GPU_DEBUG             = false
 	DEFAULT_GPU_DEDUP_ENABLED     = false
 	DEFAULT_GPU_TEMPLATES_ENABLED = false
+	DEFAULT_GPU_RESTORE_NIC       = "auto"
 	DEFAULT_GPU_DIRECT_IO         = true
 	DEFAULT_GPU_MEM_RING_BUF_SIZE = 8
 
@@ -117,6 +118,7 @@ var Global Config = Config{
 		Debug:            DEFAULT_GPU_DEBUG,
 		DedupEnabled:     DEFAULT_GPU_DEDUP_ENABLED,
 		TemplatesEnabled: DEFAULT_GPU_TEMPLATES_ENABLED,
+		RestoreNic:       DEFAULT_GPU_RESTORE_NIC,
 		DirectIO:         DEFAULT_GPU_DIRECT_IO,
 		MemRingBufSize:   DEFAULT_GPU_MEM_RING_BUF_SIZE,
 	},

@@ -243,6 +243,18 @@ jobs:
           name: propagator-image-name
           path: /tmp/propagator-image-name
 
+      - name: Download samples
+        id: samples
+        continue-on-error: true # without download.yml's samples (a caller that doesn't ask for them), the image's own
+        uses: actions/download-artifact@v7
+        with:
+          name: samples-${{ matrix.arch }}
+          path: /tmp/samples
+
+      - name: Install samples
+        if: steps.samples.outcome == 'success'
+        run: rm -rf /cedana-samples && tar -xzf /tmp/samples/samples-*.tar.gz -C /
+
       - name: Download binary
         uses: actions/download-artifact@v7
         with:
