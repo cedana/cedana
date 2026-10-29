@@ -147,6 +147,10 @@ type (
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
+		// RestoreNic is how a restored process's UCX contexts pick their RDMA NIC on this node (auto: the
+		// rail closest to the GPU it now runs on; mapping: VLLM_GPU_NIC_PCIE_MAPPING's NIC; off: as
+		// checkpointed). A workload's own CEDANA_GPU_RESTORE_NIC takes precedence.
+		RestoreNic string `json:"restore_nic" key:"restore_nic" yaml:"restore_nic" mapstructure:"restore_nic"`
 	}
 
 	Plugins struct {
