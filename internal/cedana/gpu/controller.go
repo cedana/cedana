@@ -852,8 +852,13 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 }
 
 // Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.
-func (c *controller) Attach(ctx context.Context, pid uint32) (err error) {
-	_, err = c.ControllerClient.Attach(ctx, &gpu.AttachReq{PID: pid})
+// deviceMinors are the GPUs a run's container is allocated, which its GPU workers are confined to.
+func (c *controller) Attach(ctx context.Context, pid uint32, deviceMinors ...int) (err error) {
+	req := &gpu.AttachReq{PID: pid}
+	for _, minor := range deviceMinors {
+		req.DeviceMinors = append(req.DeviceMinors, uint32(minor))
+	}
+	_, err = c.ControllerClient.Attach(ctx, req)
 	if err != nil {
 		return utils.GRPCErrorShort(err, c.ErrBuf.String())
 	}
