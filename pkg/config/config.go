@@ -74,6 +74,7 @@ const (
 	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
 
 	DEFAULT_K8S_FALLBACK_COLD_START = true
+	DEFAULT_K8S_INSTALL_DEPS        = true
 
 	DEFAULT_AWS_CREDENTIALS_MODE = "static"
 
@@ -143,6 +144,7 @@ var Global Config = Config{
 	},
 	K8s: K8s{
 		FallbackColdStart: DEFAULT_K8S_FALLBACK_COLD_START,
+		InstallDeps:       DEFAULT_K8S_INSTALL_DEPS,
 	},
 	AWS: AWS{
 		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,
