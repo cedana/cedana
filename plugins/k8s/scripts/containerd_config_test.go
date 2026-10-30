@@ -102,6 +102,31 @@ imports = ["{{ROOT}}/etc/containerd/conf.d/*.toml"]
 		keepRuntimes: []string{"nvidia"},
 	},
 	{
+		name:       "v2 main with nvidia conf.d rewritten from a merged config with cedana",
+		maxVersion: 2,
+		files: map[string]string{
+			"etc/containerd/config.toml": `version = 2
+imports = ["{{ROOT}}/etc/containerd/conf.d/*.toml"]
+`,
+			"etc/containerd/conf.d/99-nvidia.toml": `version = 2
+
+[plugins."io.containerd.grpc.v1.cri".containerd]
+  default_runtime_name = "nvidia"
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.cedana]
+  runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+  runtime_type = "io.containerd.runc.v2"
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+  runtime_type = "io.containerd.runc.v2"
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+  BinaryName = "/usr/bin/nvidia-container-runtime"
+`,
+		},
+		keepRuntimes: []string{"nvidia"},
+	},
+	{
 		name:       "v3 main with nvidia conf.d",
 		maxVersion: 3,
 		files: map[string]string{
@@ -273,15 +298,18 @@ func writeFixture(t *testing.T, root string, files map[string]string) {
 }
 
 // Runs configure-containerd.sh, with systemctl stubbed (as configure-containerd.bats does), so
-// that it restarts nothing
+// that it restarts nothing, and containerd stubbed, as the merged config is checked against
+// CEDANA_TEST_CONTAINERD_BINS
 func runContainerdConfig(t *testing.T, root string, env []string) {
 	t.Helper()
 	stubs := filepath.Join(root, "stubs")
 	if err := os.MkdirAll(stubs, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(stubs, "systemctl"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
+	for _, stub := range []string{"systemctl", "containerd"} {
+		if err := os.WriteFile(filepath.Join(stubs, stub), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	cmd := exec.Command("bash", "-c", ConfigureContainerd)
 	cmd.Env = append([]string{
