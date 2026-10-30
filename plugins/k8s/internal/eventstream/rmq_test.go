@@ -156,3 +156,31 @@ func TestNewDumpReqAsyncOnlyWithChecksums(t *testing.T) {
 		}
 	})
 }
+
+// A checkpoint complete when the dump returned, a directory, carries its checksum on
+// the first report, which the propagator records; a pending one carries none
+func TestCheckpointInfoChecksumOnTheFirstReport(t *testing.T) {
+	info := checkpointInfo{ActionId: "a", Status: "success", Path: "/tmp/dump", Checksum: "crc32c:e3069283"}
+	payload, err := json.Marshal(info)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if string(fields["checksum"]) != `"crc32c:e3069283"` {
+		t.Fatalf("checkpoint payload must carry the checksum: %s", payload)
+	}
+	if _, ok := fields["upload_pending"]; ok {
+		t.Fatal("a checkpoint with its checksum is not pending")
+	}
+
+	info = checkpointInfo{ActionId: "a", Status: "success", Path: "s3://b/dump.tar.lz4", UploadPending: true}
+	payload, _ = json.Marshal(info)
+	fields = map[string]json.RawMessage{}
+	json.Unmarshal(payload, &fields)
+	if _, ok := fields["checksum"]; ok {
+		t.Fatal("a pending checkpoint has no checksum yet")
+	}
+}

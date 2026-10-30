@@ -17,6 +17,7 @@ import (
 	"unicode"
 
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/protobuf/proto"
@@ -476,6 +477,10 @@ func (c *Criu) doSwrkWithResp(
 					External:    external,
 				}
 			}
+		case "mem-verify-manifest":
+			err = nfy.MemVerifyManifest(ctx, notify.GetPayload())
+		case "mem-verify-result":
+			err = nfy.MemVerifyResult(ctx, notify.GetPayload())
 		case "orphan-pts-master":
 			scm, err := syscall.ParseSocketControlMessage(oobB[:oobn])
 			if err != nil {
@@ -617,16 +622,21 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	return string(out), err
 }
 
-// criuEnv returns our environment with the system bin dirs first in PATH. CRIU runs tools like
-// tar by name, and k3s starts shims with its own bin dir (BusyBox tar) ahead of /usr/bin.
+// MEM_VERIFY_CHECKSUM_ENV tells the mem-verify CRIU plugin to record the checksum of every
+// image it dumps and write the checkpoint's manifest (cedana-designs/mem-verify.org)
+const MEM_VERIFY_CHECKSUM_ENV = "CEDANA_CHECKPOINT_CHECKSUM"
+
+// criuEnv returns our environment with the system bin dirs first in PATH, and what the
+// mem-verify plugin reads. CRIU runs tools like tar by name, and k3s starts shims with
+// its own bin dir (BusyBox tar) ahead of /usr/bin.
 func criuEnv() []string {
 	path := "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 	if p := os.Getenv("PATH"); p != "" {
 		path += ":" + p
 	}
-	env := []string{path}
+	env := []string{path, MEM_VERIFY_CHECKSUM_ENV + "=" + strconv.FormatBool(config.Global.Checkpoint.Checksum)}
 	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "PATH=") {
+		if !strings.HasPrefix(e, "PATH=") && !strings.HasPrefix(e, MEM_VERIFY_CHECKSUM_ENV+"=") {
 			env = append(env, e)
 		}
 	}

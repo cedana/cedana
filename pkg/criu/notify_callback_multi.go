@@ -224,3 +224,23 @@ func (n NotifyCallbackMulti) OrphanPtsMaster(ctx context.Context, fd int32) erro
 	}
 	return nil
 }
+
+func (n NotifyCallbackMulti) MemVerifyManifest(ctx context.Context, payload []byte) error {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		err := n.callbacks[i].MemVerifyManifest(ctx, payload)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallbackMulti) MemVerifyResult(ctx context.Context, payload []byte) error {
+	for i := len(n.callbacks) - 1; i >= 0; i-- {
+		err := n.callbacks[i].MemVerifyResult(ctx, payload)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

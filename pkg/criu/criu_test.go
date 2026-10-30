@@ -3,10 +3,12 @@ package criu
 import (
 	"context"
 	"errors"
+	"github.com/cedana/cedana/pkg/config"
 	"net"
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -118,5 +120,43 @@ func TestCriuEnvPutsSystemBinFirst(t *testing.T) {
 	want := "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/var/lib/rancher/k3s/data/abc/bin:/usr/bin"
 	if len(paths) != 1 || paths[0] != want {
 		t.Fatalf("got %v, want [%s]", paths, want)
+	}
+}
+
+// The mem-verify plugin reads CEDANA_CHECKPOINT_CHECKSUM from CRIU's environment;
+// the daemon sets it from its configuration, over anything inherited
+func TestCriuEnvCarriesTheChecksumSetting(t *testing.T) {
+	t.Setenv(MEM_VERIFY_CHECKSUM_ENV, "inherited")
+	for _, on := range []bool{true, false} {
+		config.Global.Checkpoint.Checksum = on
+		var found []string
+		for _, e := range criuEnv() {
+			if strings.HasPrefix(e, MEM_VERIFY_CHECKSUM_ENV+"=") {
+				found = append(found, e)
+			}
+		}
+		want := MEM_VERIFY_CHECKSUM_ENV + "=" + strconv.FormatBool(on)
+		if len(found) != 1 || found[0] != want {
+			t.Fatalf("on=%t: got %v, want [%s]", on, found, want)
+		}
+	}
+}
+
+// The manifest's checksum the plugin notifies is kept for the dump; an unreadable
+// notice is ignored
+func TestManifestChecksumKeepsTheNotice(t *testing.T) {
+	nfy := &NotifyCallbackMulti{}
+	manifest := ManifestChecksum(nfy)
+	if manifest() != "" {
+		t.Fatal("nothing before the notice")
+	}
+	if err := nfy.MemVerifyManifest(context.Background(), []byte(`{"manifest":"crc32c:e3069283","files":3}`)); err != nil {
+		t.Fatal(err)
+	}
+	if manifest() != "crc32c:e3069283" {
+		t.Fatalf("got %q", manifest())
+	}
+	if err := nfy.MemVerifyManifest(context.Background(), []byte(`garbage`)); err != nil || manifest() != "crc32c:e3069283" {
+		t.Fatalf("an unreadable notice must be ignored: %v, %q", err, manifest())
 	}
 }

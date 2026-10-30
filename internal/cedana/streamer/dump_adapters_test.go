@@ -116,6 +116,9 @@ func (m *streamingPlugins) Get(name string) *plugins.Plugin {
 	}
 }
 
+// The manifest's checksum the fake dump notifies, which every streamed dump records
+const noticedManifest = "crc32c:0badf00d"
+
 func TestDumpFilesystem(t *testing.T) {
 	config.Global.Checkpoint.Checksum = true
 	streamerBinary := "/usr/local/bin/cedana-image-streamer"
@@ -141,7 +144,8 @@ func TestDumpFilesystem(t *testing.T) {
 				return nil, err
 			}
 		}
-		return nil, nil
+		// As the mem-verify plugin does from CRIU's fini: the checkpoint's checksum
+		return nil, opts.CRIUCallback.MemVerifyManifest(ctx, []byte(`{"manifest":"`+noticedManifest+`","files":5}`))
 	}
 
 	for _, compression := range []string{"none", "lz4"} {
@@ -185,8 +189,8 @@ func TestDumpFilesystem(t *testing.T) {
 			if err != nil || result.Err != nil {
 				t.Fatalf("Wait = %+v, %v", result, err)
 			}
-			if want := manifestOf(t, resp.Paths[0], streams, ext); result.Checksum != want {
-				t.Fatalf("checksum = %s, want the manifest of the shards %s", result.Checksum, want)
+			if result.Checksum != noticedManifest {
+				t.Fatalf("checksum = %s, want the manifest's %s, not the shards' %s", result.Checksum, noticedManifest, manifestOf(t, resp.Paths[0], streams, ext))
 			}
 		})
 	}
@@ -229,8 +233,8 @@ func TestDumpFilesystem(t *testing.T) {
 			t.Fatalf("upload failed: %v", result.Err)
 		}
 		shardsOf(t, path, streams, ".lz4")
-		if want := manifestOf(t, path, streams, ".lz4"); result.Checksum != want {
-			t.Fatalf("checksum = %s, want the manifest of the uploaded shards %s", result.Checksum, want)
+		if result.Checksum != noticedManifest {
+			t.Fatalf("checksum = %s, want the manifest's %s, not the uploaded shards' %s", result.Checksum, noticedManifest, manifestOf(t, path, streams, ".lz4"))
 		}
 
 		opts.WG.Wait()
@@ -270,15 +274,10 @@ func TestDumpFilesystem(t *testing.T) {
 			t.Fatalf("the upload must stand, got: %v", result.Err)
 		}
 		shardsOf(t, path, streams, ".lz4")
-		entries := make([]cedana_io.ManifestEntry, 0, streams)
-		for i := range streams {
-			entries = append(entries, cedana_io.ManifestEntry{Name: fmt.Sprintf(IMG_FILE_FORMATTER, i) + ".lz4", Checksum: "crc32c:00000000"})
-		}
-		if want := cedana_io.ManifestChecksum(entries); result.Checksum != want {
-			t.Fatalf("checksum = %s, want the manifest of the values the store's writers reported %s", result.Checksum, want)
-		}
-		if local := manifestOf(t, path, streams, ".lz4"); result.Checksum == local {
-			t.Fatalf("the checksum must be the uploaded values, not the shards written")
+		// The store's values and the shards' are logged against each other; the
+		// recorded value is the manifest's all the same
+		if result.Checksum != noticedManifest {
+			t.Fatalf("checksum = %s, want the manifest's %s", result.Checksum, noticedManifest)
 		}
 
 		opts.WG.Wait()

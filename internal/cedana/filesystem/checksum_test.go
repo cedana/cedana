@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/cedana/cedana/pkg/config"
@@ -59,36 +60,66 @@ func TestChecksumPathOfATarball(t *testing.T) {
 	}
 }
 
+// A directory's checksum is that of the manifest the mem-verify plugin wrote in it
+// during the dump; nothing else is read
 func TestChecksumPathOfADirectoryIsItsManifest(t *testing.T) {
 	config.Global.Checkpoint.Checksum = true
 	dir := t.TempDir()
-	for name, content := range map[string]string{"pages-1.img": "pages", "core-1.img": "core", "criu-dump.log": "x", "stats-dump": "x"} {
+	for name, content := range map[string]string{"pages-1.img": "pages", "core-1.img": "core", "criu-dump.log": "x", "stats-dump": "x", "mem-verify-gpu-0": "gpu-mem-w0-0 crc32c:deadbeef\n"} {
 		os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644)
 	}
 	os.Mkdir(filepath.Join(dir, "sub"), 0o755)
 	os.WriteFile(filepath.Join(dir, "sub", "ignored"), []byte("x"), 0o644)
-	// A link to a file is hashed as that file; a link to a directory is left out
-	os.Symlink("core-1.img", filepath.Join(dir, "link"))
-	os.Symlink("sub", filepath.Join(dir, "link-to-dir"))
+	entries := []cedana_io.ManifestEntry{
+		{Name: "core-1.img", Checksum: sumOf(t, []byte("core"))},
+		{Name: "gpu-mem-w0-0", Checksum: "crc32c:deadbeef"},
+		{Name: "pages-1.img", Checksum: sumOf(t, []byte("pages"))},
+	}
+	manifest := manifestText(entries)
+	os.WriteFile(filepath.Join(dir, cedana_io.ManifestImage), []byte(manifest), 0o644)
 
 	got, err := (&Storage{}).ChecksumPath(context.Background(), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := cedana_io.ManifestChecksum([]cedana_io.ManifestEntry{
-		{Name: "core-1.img", Checksum: sumOf(t, []byte("core"))},
-		{Name: "link", Checksum: sumOf(t, []byte("core"))},
-		{Name: "pages-1.img", Checksum: sumOf(t, []byte("pages"))},
-	})
-	if got != want {
+	if want := cedana_io.ManifestChecksum(entries); got != want {
 		t.Fatalf("ChecksumPath = %s, want %s", got, want)
 	}
-
-	empty := t.TempDir()
-	os.WriteFile(filepath.Join(empty, "criu-dump.log"), []byte("x"), 0o644)
-	if got, err := (&Storage{}).ChecksumPath(context.Background(), empty); err != nil || got != "" {
-		t.Fatalf("a directory with nothing to hash must have no checksum, got %q, %v", got, err)
+	// The value is the CRC32C of the manifest's bytes, the one the plugin notifies
+	if got != sumOf(t, []byte(manifest)) {
+		t.Fatalf("ChecksumPath = %s, want the manifest's own checksum %s", got, sumOf(t, []byte(manifest)))
 	}
+
+	// Computed from the files, the manifest is the one the plugin wrote, without the
+	// GPU controller's own lines, which the plugin merges
+	computed, err := manifestOfDirectory(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := entries[:1]; !slices.Equal(computed, append(want, entries[2])) {
+		t.Fatalf("manifest of the files = %v", computed)
+	}
+
+	// Without a manifest there is no checksum, and no error: the plugin is missing
+	os.Remove(filepath.Join(dir, cedana_io.ManifestImage))
+	if got, err := (&Storage{}).ChecksumPath(context.Background(), dir); err != nil || got != "" {
+		t.Fatalf("a directory without a manifest must have no checksum, got %q, %v", got, err)
+	}
+
+	// A manifest that is not one is an error
+	os.WriteFile(filepath.Join(dir, cedana_io.ManifestImage), []byte("pages-1.img nohash\n"), 0o644)
+	if _, err := (&Storage{}).ChecksumPath(context.Background(), dir); err == nil {
+		t.Fatal("a bad manifest line must be an error")
+	}
+}
+
+// manifestText is the manifest as the plugin writes it: the text ManifestChecksum hashes
+func manifestText(entries []cedana_io.ManifestEntry) string {
+	var b bytes.Buffer
+	for _, e := range entries {
+		b.WriteString(e.Name + " " + e.Checksum + "\n")
+	}
+	return b.String()
 }
 
 func TestChecksumPathOfAMissingPath(t *testing.T) {
