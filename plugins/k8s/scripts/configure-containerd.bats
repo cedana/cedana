@@ -118,3 +118,108 @@ EOF
     [ "$(cedana_blocks)" -eq 1 ]
     [ ! -e "$RESTARTS" ]
 }
+
+nvidia_v2_confd() {
+    mkdir -p "$TMP/etc/containerd/conf.d"
+    cat >"$CONTAINERD_CONFIG_PATH" <<EOF2
+version = 2
+imports = ["$TMP/etc/containerd/conf.d/*.toml"]
+EOF2
+    cat >"$TMP/etc/containerd/conf.d/99-nvidia.toml" <<'EOF2'
+version = 2
+
+[plugins]
+
+  [plugins."io.containerd.grpc.v1.cri"]
+
+    [plugins."io.containerd.grpc.v1.cri".containerd]
+      default_runtime_name = "nvidia"
+
+      [plugins."io.containerd.grpc.v1.cri".containerd.runtimes]
+
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia]
+          runtime_type = "io.containerd.runc.v2"
+
+          [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.nvidia.options]
+            BinaryName = "/usr/bin/nvidia-container-runtime"
+EOF2
+}
+
+confd_cedana_blocks() {
+    grep -cE "runtimes\\.([\"']?)cedana\\1\\]" "$TMP/etc/containerd/conf.d/999-cedana.toml" || true
+}
+
+# After a reboot, the NVIDIA toolkit rewrites 99-nvidia.toml from the merged config, which by
+# then has the cedana runtime from 999-cedana.toml: copying it and appending the runtime again
+# defined it twice ("toml: table cedana already exists"), and containerd didn't come back.
+@test "a re-run after the NVIDIA toolkit rewrote its conf.d file with the cedana runtime does not define it twice" {
+    nvidia_v2_confd
+    run_script
+    [ "$status" -eq 0 ]
+    [ "$(confd_cedana_blocks)" -eq 1 ]
+
+    cat >>"$TMP/etc/containerd/conf.d/99-nvidia.toml" <<'EOF2'
+
+        [plugins."io.containerd.grpc.v1.cri".containerd.runtimes.cedana]
+          runtime_path = "/usr/local/bin/cedana-shim-runc-v2"
+          runtime_type = "io.containerd.runc.v2"
+EOF2
+    rm -f "$RESTARTS"
+    run_script
+    [ "$status" -eq 0 ]
+    [ "$(confd_cedana_blocks)" -eq 1 ]
+    cmp "$TMP/etc/containerd/conf.d/99-nvidia.toml" "$TMP/etc/containerd/conf.d/999-cedana.toml"
+    grep -qx containerd "$RESTARTS"
+    assert_containerd_loads
+
+    rm -f "$RESTARTS"
+    run_script
+    [ "$status" -eq 0 ]
+    [ ! -e "$RESTARTS" ]
+}
+
+@test "a config containerd refuses is rolled back and containerd is not restarted" {
+    nvidia_v2_confd
+    printf '#!/bin/sh\necho "toml: table cedana already exists" >&2\nexit 1\n' >"$TMP/bin/containerd-refuses"
+    chmod +x "$TMP/bin/containerd-refuses"
+    echo "previous" >"$TMP/etc/containerd/conf.d/999-cedana.toml"
+    export CONTAINERD_BIN="$TMP/bin/containerd-refuses"
+    run_script
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"rolling it back"* ]]
+    [ "$(cat "$TMP/etc/containerd/conf.d/999-cedana.toml")" = "previous" ]
+    [ ! -e "$RESTARTS" ]
+}
+
+@test "a config written by this run is removed when containerd refuses it" {
+    nvidia_v2_confd
+    printf '#!/bin/sh\nexit 1\n' >"$TMP/bin/containerd-refuses"
+    chmod +x "$TMP/bin/containerd-refuses"
+    export CONTAINERD_BIN="$TMP/bin/containerd-refuses"
+    run_script
+    [ "$status" -eq 1 ]
+    [ ! -e "$TMP/etc/containerd/conf.d/999-cedana.toml" ]
+    [ ! -e "$RESTARTS" ]
+}
+
+@test "a failed restart rolls the config back and restarts containerd again" {
+    nvidia_v2_confd
+    echo "previous" >"$TMP/etc/containerd/conf.d/999-cedana.toml"
+    cat >"$TMP/bin/systemctl" <<'EOF2'
+#!/bin/bash
+case "$1" in
+restart)
+    echo "$2" >>"$RESTARTS"
+    [ "$(wc -l <"$RESTARTS")" -gt 1 ]
+    exit
+    ;;
+show) echo 4242 ;;
+esac
+exit 0
+EOF2
+    export CONTAINERD_BIN=true
+    run_script
+    [ "$status" -eq 1 ]
+    [ "$(cat "$TMP/etc/containerd/conf.d/999-cedana.toml")" = "previous" ]
+    [ "$(grep -c containerd "$RESTARTS")" -eq 2 ]
+}

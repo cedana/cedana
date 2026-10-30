@@ -166,6 +166,16 @@ else
     echo "Local build mode detected, skipping plugin install/remove"
 fi
 
+CRIU_BIN="$CEDANA_PLUGINS_BIN_DIR/criu"
+if [ -x "$CRIU_BIN" ] && command -v ldd >/dev/null 2>&1; then
+    CRIU_MISSING_LIBS=$(ldd "$CRIU_BIN" 2>/dev/null | awk '/not found/ {print $1}' | tr '\n' ' ')
+    if [ -n "$CRIU_MISSING_LIBS" ]; then
+        echo "WARNING: $CRIU_BIN is missing shared libraries: $CRIU_MISSING_LIBS(install them on the node, see install-deps)" >&2
+    else
+        echo "All shared libraries of $CRIU_BIN are present"
+    fi
+fi
+
 # Improve streaming performance
 echo "Configuring pipe settings for streaming performance..."
 echo 0 >/proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
