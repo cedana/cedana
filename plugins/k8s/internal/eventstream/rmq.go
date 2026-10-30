@@ -522,6 +522,7 @@ type checkpointInfo struct {
 	Status         string        `json:"status"`
 	Path           string        `json:"path"`
 	UploadPending  bool          `json:"upload_pending,omitempty"`
+	Checksum       string        `json:"checksum,omitempty"` // known when the dump returned; the propagator records it on this report
 	GPU            bool          `json:"gpu"`
 	Platform       string        `json:"platform"`
 	ProfilingInfo  profilingInfo `json:"profiling_info"`
@@ -686,6 +687,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					nil,
 					"",
 					false,
+					"",
 					nil,
 					i,
 					specMap[i],
@@ -705,12 +707,14 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
 				var path string
 				var pending bool
+				var checksum string
 				var state *daemon.ProcessState
 				if err == nil {
 					path = dumpResp.Paths[0]
-					// The daemon finishes the checkpoint after the dump has returned, and holds
-					// its outcome and checksum: the compress, the upload, or a directory's read
+					// The daemon finishes a tarball or an upload after the dump has returned, and
+					// holds its outcome and checksum. A directory is complete, with its checksum
 					pending = slices.Contains(dumpResp.Pending, path)
+					checksum = dumpResp.GetChecksums()[path]
 					state = dumpResp.State
 				}
 				es.publishCheckpoint(
@@ -721,6 +725,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					profiling,
 					path,
 					pending,
+					checksum,
 					state,
 					i,
 					specMap[i],
@@ -787,6 +792,7 @@ func (es *EventStream) publishCheckpoint(
 	profilingData *profiling.Data,
 	path string,
 	uploadPending bool,
+	checksum string,
 	state *daemon.ProcessState,
 	containerOrder int,
 	containerSpec *specs.Spec,
@@ -826,6 +832,7 @@ func (es *EventStream) publishCheckpoint(
 		ci.Platform = state.GetHost().GetPlatform()
 		ci.Path = path
 		ci.UploadPending = uploadPending
+		ci.Checksum = checksum
 	}
 
 	if profilingData != nil {
@@ -902,6 +909,7 @@ func (es *EventStream) reportUpload(
 			nil,
 			path,
 			false,
+			"",
 			state,
 			containerOrder,
 			containerSpec,
