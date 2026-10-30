@@ -95,12 +95,8 @@ type (
 		// checkpoint request to return early.
 		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
 		// Checksum records an integrity checksum of each checkpoint as stored, computed
-		// as it is written, uploaded or streamed.
+		// as it is uploaded or streamed, or read back by the k8s helper for a local one.
 		Checksum bool `json:"checksum" key:"checksum" yaml:"checksum" mapstructure:"checksum"`
-		// ChecksumDirectories, with Checksum, also records the checksum of an uncompressed
-		// directory, which CRIU writes itself: the node reads every byte of it after the
-		// dump. Off by default, so a directory checkpoint has no checksum.
-		ChecksumDirectories bool `json:"checksum_directories" key:"checksum_directories" yaml:"checksum_directories" mapstructure:"checksum_directories"`
 	}
 
 	DB struct {
