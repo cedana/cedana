@@ -555,6 +555,13 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump complete")
 		}()
+
+		err := <-dumpErr
+		if err != nil {
+			log.Err(err).Msg("GPU DUMP FAILED")
+		} else {
+			log.Info().Msg("GPU DUMP succeeded")
+		}
 		return nil
 	}
 
