@@ -13,7 +13,7 @@ fi
 # upgraded, and when everything is present the package manager is not run at all.
 #
 # With CEDANA_INSTALL_DEPS=false, nothing is installed: what is missing is reported, with the
-# commands that install it. The k8s helper runs it this way unless k8s.install_deps is set;
+# commands that install it. The k8s helper runs it this way when k8s.install_deps is false;
 # `cedana k8s deps-script` prints this script, to run on the node (e.g. in the node image).
 CEDANA_INSTALL_DEPS=${CEDANA_INSTALL_DEPS:-true}
 
@@ -86,7 +86,7 @@ fi
 
 if [ "$CEDANA_INSTALL_DEPS" != true ]; then
     {
-        echo "WARNING: not installing missing host dependencies (set k8s.install_deps to install them). Missing packages: ${MISSING[*]}."
+        echo "WARNING: not installing missing host dependencies (k8s.install_deps is false). Missing packages: ${MISSING[*]}."
         echo "To install them (e.g. in the node image), run 'cedana k8s deps-script' for the full script, or as root:"
         if [ "$PACKAGE_MANAGER" = apt ]; then
             echo "  apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade ${MISSING[*]}"

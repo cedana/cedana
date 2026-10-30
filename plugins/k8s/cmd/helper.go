@@ -76,7 +76,7 @@ var setupCmd = &cobra.Command{
 		}
 		defer restorePodIdentityEnv()
 
-		// No package changes on the host unless asked for: install-deps.sh only reports what's missing
+		// Without k8s.install_deps, no package changes on the host: install-deps.sh only reports what's missing
 		if err := os.Setenv("CEDANA_INSTALL_DEPS", strconv.FormatBool(config.Global.K8s.InstallDeps)); err != nil {
 			return fmt.Errorf("failed to set CEDANA_INSTALL_DEPS: %w", err)
 		}
