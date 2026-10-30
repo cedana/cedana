@@ -77,6 +77,33 @@ EOF
     grep -qx kubelet "$RESTARTS"
 }
 
+# JSON is valid YAML: a YAML line appended to it is not, and kubelet would not start
+@test "a .yaml config holding JSON is merged as JSON" {
+    printf '{\n  "apiVersion": "kubelet.config.k8s.io/v1beta1",\n  "kind": "KubeletConfiguration",\n  "cgroupDriver": "systemd"\n}\n' >"$KUBELET_CONFIG"
+    if ! command -v jq >/dev/null; then
+        cp "$KUBELET_CONFIG" "$TMP/before"
+        run_script
+        [ "$status" -eq 0 ]
+        cmp "$TMP/before" "$KUBELET_CONFIG"
+        return
+    fi
+    run_script
+    [ "$status" -eq 0 ]
+    [ "$(jq -r .runtimeRequestTimeout "$KUBELET_CONFIG")" = 10m ]
+    [ "$(jq -r .cgroupDriver "$KUBELET_CONFIG")" = systemd ]
+    grep -qx kubelet "$RESTARTS"
+}
+
+@test "a config in a format it can't edit is left alone" {
+    echo '{apiVersion: kubelet.config.k8s.io/v1beta1, kind: KubeletConfiguration}' >"$KUBELET_CONFIG"
+    cp "$KUBELET_CONFIG" "$TMP/before"
+    run_script
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"please manually set runtimeRequestTimeout"* ]]
+    cmp "$TMP/before" "$KUBELET_CONFIG"
+    [ ! -e "$RESTARTS" ]
+}
+
 @test "a re-run on the config it wrote changes nothing" {
     kubeadm_config 10m
     cp "$KUBELET_CONFIG" "$TMP/before"

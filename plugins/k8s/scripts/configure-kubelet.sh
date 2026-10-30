@@ -138,26 +138,27 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
         exit 1
     fi
 
-    FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
-    echo "Detected config file extension: .$FILE_EXTENSION"
-    if [ "$FILE_EXTENSION" = "json" ] && ! command -v jq >/dev/null 2>&1; then
-        echo "WARNING: jq is not installed, skipping kubelet config update; please manually set runtimeRequestTimeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT in $KUBELET_CONFIG_FILE" >&2
-        exit 0
-    fi
+    # The format is the content's, not the extension's: JSON is valid YAML, so a .yaml config may be
+    # JSON, which a YAML line appended to it would break. Anything else is left alone.
+    SKIP_MESSAGE="skipping kubelet config update; please manually set runtimeRequestTimeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT in $KUBELET_CONFIG_FILE"
     TEMP_CONFIG=$(mktemp)
-    echo "Created temp file for merge: $TEMP_CONFIG"
-
-    if [ "$FILE_EXTENSION" == "json" ]; then
+    if [ "$(tr -d '[:space:]' <"$KUBELET_CONFIG_FILE" | head -c 1)" = "{" ]; then
+        if ! command -v jq >/dev/null 2>&1; then
+            echo "WARNING: $KUBELET_CONFIG_FILE is JSON and jq is not installed, $SKIP_MESSAGE" >&2
+            rm -f "$TEMP_CONFIG"
+            exit 0
+        fi
         echo "Merging JSON config..."
-        jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"
-        echo "JSON merge complete"
-
-    elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
+        if ! jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"; then
+            echo "WARNING: jq could not parse $KUBELET_CONFIG_FILE, $SKIP_MESSAGE" >&2
+            rm -f "$TEMP_CONFIG"
+            exit 0
+        fi
+    elif grep -q '^kind:[[:space:]]*KubeletConfiguration' "$KUBELET_CONFIG_FILE"; then
         echo "Setting runtimeRequestTimeout in YAML config..."
         set_yaml_runtime_request_timeout "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
-
     else
-        echo "WARNING: Unsupported kubelet configuration file type: .$FILE_EXTENSION, skipping kubelet config update" >&2
+        echo "WARNING: $KUBELET_CONFIG_FILE is neither JSON nor block-style YAML, $SKIP_MESSAGE" >&2
         rm -f "$TEMP_CONFIG"
         exit 0
     fi
