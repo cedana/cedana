@@ -13,6 +13,14 @@ var Registry = []Plugin{
 		Binaries: []Binary{{Name: "criu"}},
 	},
 	{
+		// The checksum of every file of a checkpoint, recorded during the dump and verified
+		// during the restore (cedana-designs/mem-verify.org). Installed with criu; CRIU
+		// loads it from its plugin directory and it does nothing unless the daemon asks
+		Name:      "criu/mem-verify",
+		Type:      EXTERNAL,
+		Libraries: []Binary{{Name: "mem-verify-plugin.so", InstallDir: "/usr/lib/criu"}}, // Do not change
+	},
+	{
 		Name:      "cloud-hypervisor",
 		Type:      SUPPORTED,
 		Libraries: []Binary{{Name: "libcedana-cloud-hypervisor.so"}},

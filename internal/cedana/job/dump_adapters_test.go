@@ -1,0 +1,153 @@
+package job
+
+import (
+	"context"
+	"errors"
+	"slices"
+	"sync"
+	"testing"
+	"time"
+
+	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/types"
+	"github.com/cedana/cedana/pkg/upload"
+	"google.golang.org/protobuf/proto"
+)
+
+// checkpointRecorder is a Manager with one running job, that keeps the checkpoints added to it
+type checkpointRecorder struct {
+	Manager
+	job *Job
+
+	mu    sync.Mutex
+	added map[string]time.Time
+	saves sync.WaitGroup
+}
+
+func (r *checkpointRecorder) Get(ctx context.Context, jid string) *Job {
+	return r.job
+}
+
+func (r *checkpointRecorder) AddCheckpoint(jid string, paths []string, at time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, path := range paths {
+		r.added[path] = at
+	}
+}
+
+func (r *checkpointRecorder) AddCheckpointOnceStored(jid string, path string, at time.Time, stored func() error) {
+	r.saves.Go(func() {
+		if stored() == nil {
+			r.AddCheckpoint(jid, []string{path}, at)
+		}
+	})
+}
+
+func (r *checkpointRecorder) paths() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var paths []string
+	for path := range r.added {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+	return paths
+}
+
+// A managed dump saves a path whose upload still runs only once the upload has succeeded,
+// with the time of the dump, and never saves one whose upload failed
+func TestManageDumpSavesPendingPathsOnlyOnceStored(t *testing.T) {
+	jobs := &checkpointRecorder{
+		job: fromProto(&daemon.Job{
+			JID:     "job",
+			Type:    "process",
+			State:   &daemon.ProcessState{IsRunning: true},
+			Details: &daemon.Details{JID: proto.String("job")},
+		}),
+		added: make(map[string]time.Time),
+	}
+	uploads := upload.NewRegistry()
+
+	var finishStored, finishFailed func(string, error)
+	dump := func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (func() <-chan int, error) {
+		finishStored = opts.Uploads.Start("/dumps/stored.tar")
+		finishFailed = opts.Uploads.Start("/dumps/failed.tar")
+		resp.Paths = []string{"/dumps/dir", "/dumps/stored.tar", "/dumps/failed.tar"}
+		resp.Pending = []string{"/dumps/stored.tar", "/dumps/failed.tar"}
+		return nil, nil
+	}
+
+	before := time.Now()
+	req := &daemon.DumpReq{Details: &daemon.Details{JID: proto.String("job")}, Criu: &criu_proto.CriuOpts{LeaveRunning: proto.Bool(true)}}
+	_, err := ManageDump(jobs)(dump)(context.Background(), types.Opts{Uploads: uploads}, &daemon.DumpResp{}, req)
+	if err != nil {
+		t.Fatalf("ManageDump: %v", err)
+	}
+
+	if got, want := jobs.paths(), []string{"/dumps/dir"}; !slices.Equal(got, want) {
+		t.Fatalf("saved before the uploads ended = %v, want %v", got, want)
+	}
+
+	time.Sleep(10 * time.Millisecond)
+	finishStored("crc32c:00000000", nil)
+	finishFailed("", errors.New("upload failed"))
+	jobs.saves.Wait()
+
+	if got, want := jobs.paths(), []string{"/dumps/dir", "/dumps/stored.tar"}; !slices.Equal(got, want) {
+		t.Fatalf("saved after the uploads ended = %v, want %v", got, want)
+	}
+	if at := jobs.added["/dumps/stored.tar"]; at.Before(before) || !at.Equal(jobs.added["/dumps/dir"]) {
+		t.Fatalf("the stored path was saved at %v, want the time of the dump %v", at, jobs.added["/dumps/dir"])
+	}
+}
+
+// The manager's last sync with the DB on shutdown includes the checkpoints whose uploads end
+// during it, and reads the queue while it waits for them, so more of them than the queue holds
+// do not block it
+func TestFlushSyncsCheckpointsStoredDuringShutdown(t *testing.T) {
+	m := &ManagerLazy{pending: make(chan action, 1), wg: &sync.WaitGroup{}}
+	m.jobs.Store("job", fromProto(&daemon.Job{JID: "job"}))
+
+	release := make(chan struct{})
+	stored := []string{"/dumps/1.tar", "/dumps/2.tar", "/dumps/3.tar", "/dumps/4.tar"}
+	for _, path := range stored {
+		m.AddCheckpointOnceStored("job", path, time.Now(), func() error {
+			<-release
+			return nil
+		})
+	}
+	m.AddCheckpointOnceStored("job", "/dumps/failed.tar", time.Now(), func() error {
+		<-release
+		return errors.New("upload failed")
+	})
+
+	var synced []string
+	flushed := make(chan struct{})
+	go func() {
+		defer close(flushed)
+		m.flush(func(action action) error {
+			synced = append(synced, m.GetCheckpoint(action.id).GetPath())
+			return nil
+		})
+	}()
+
+	select {
+	case <-flushed:
+		t.Fatal("the flush returned before the uploads had ended")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case <-flushed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the flush did not return: a save blocked on the full queue")
+	}
+
+	slices.Sort(synced)
+	if !slices.Equal(synced, stored) {
+		t.Fatalf("synced = %v, want %v", synced, stored)
+	}
+}

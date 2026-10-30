@@ -1,0 +1,105 @@
+package io
+
+import (
+	"bytes"
+	"hash/crc32"
+	"slices"
+	"strings"
+	"testing"
+)
+
+func TestChecksumWriterHashesWhatItWrites(t *testing.T) {
+	var buf bytes.Buffer
+	w := NewChecksumWriter(&buf)
+	for _, part := range []string{"check", "point"} {
+		if _, err := w.Write([]byte(part)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := FormatChecksum(crc32.Checksum([]byte("checkpoint"), crc32.MakeTable(crc32.Castagnoli)))
+	if got := w.Sum(); got != want {
+		t.Fatalf("Sum = %s, want %s", got, want)
+	}
+	if buf.String() != "checkpoint" {
+		t.Fatalf("underlying writer got %q", buf.String())
+	}
+	if !strings.HasPrefix(want, "crc32c:") || len(want) != len("crc32c:")+8 {
+		t.Fatalf("checksum %q is not crc32c: and eight hex digits", want)
+	}
+}
+
+func TestChecksumOfMatchesWriter(t *testing.T) {
+	data := bytes.Repeat([]byte("abc"), 10000)
+	fromReader, err := ChecksumOf(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := NewChecksumWriter(&bytes.Buffer{})
+	w.Write(data)
+	if fromReader != w.Sum() {
+		t.Fatalf("ChecksumOf = %s, writer = %s", fromReader, w.Sum())
+	}
+	// A known value: CRC32C("123456789") is 0xe3069283
+	known, _ := ChecksumOf(strings.NewReader("123456789"))
+	if known != "crc32c:e3069283" {
+		t.Fatalf("CRC32C of the check string = %s", known)
+	}
+}
+
+func TestManifestChecksum(t *testing.T) {
+	entries := []ManifestEntry{{"img-0", "crc32c:00000001"}, {"img-1", "crc32c:00000002"}}
+	manifest := "img-0 crc32c:00000001\nimg-1 crc32c:00000002\n"
+	want, _ := ChecksumOf(strings.NewReader(manifest))
+	if got := ManifestChecksum(entries); got != want {
+		t.Fatalf("ManifestChecksum = %s, want %s", got, want)
+	}
+	if got := ManifestChecksum(nil); got != "" {
+		t.Fatalf("an empty manifest must have no checksum, got %s", got)
+	}
+	// The order is the caller's: a different order is a different checksum
+	if ManifestChecksum([]ManifestEntry{entries[1], entries[0]}) == want {
+		t.Fatal("the manifest must depend on the order of its entries")
+	}
+}
+
+func TestParseManifest(t *testing.T) {
+	entries, err := ParseManifest(strings.NewReader("core-1.img crc32c:0000abcd\npages-1.img crc32c:e3069283\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []ManifestEntry{{Name: "core-1.img", Checksum: "crc32c:0000abcd"}, {Name: "pages-1.img", Checksum: "crc32c:e3069283"}}
+	if !slices.Equal(entries, want) {
+		t.Fatalf("entries = %v", entries)
+	}
+	// The checksum of the parsed manifest is that of its text: what the plugin notifies
+	text := "core-1.img crc32c:0000abcd\npages-1.img crc32c:e3069283\n"
+	if sum, _ := ChecksumOf(strings.NewReader(text)); ManifestChecksum(want) != sum {
+		t.Fatalf("ManifestChecksum = %s, text = %s", ManifestChecksum(want), sum)
+	}
+	for _, bad := range []string{"noname\n", " crc32c:1\n", "pages-1.img nohash\n"} {
+		if _, err := ParseManifest(strings.NewReader(bad)); err == nil {
+			t.Fatalf("%q must be an error", bad)
+		}
+	}
+}
+
+func TestParseManifestNotice(t *testing.T) {
+	notice, err := ParseManifestNotice([]byte(`{"manifest":"crc32c:e3069283","files":12}`))
+	if err != nil || notice.Manifest != "crc32c:e3069283" || notice.Files != 12 {
+		t.Fatalf("notice = %+v, %v", notice, err)
+	}
+	for _, bad := range []string{`{"files":1}`, `not json`, ``} {
+		if _, err := ParseManifestNotice([]byte(bad)); err == nil {
+			t.Fatalf("%q must be an error", bad)
+		}
+	}
+}
+
+func TestRecordedChecksumIsTheManifests(t *testing.T) {
+	if got := RecordedChecksum("crc32c:11111111", "crc32c:22222222", "tarball"); got != "crc32c:22222222" {
+		t.Fatalf("got %s, want the manifest's", got)
+	}
+	if got := RecordedChecksum("crc32c:11111111", "", "tarball"); got != "" {
+		t.Fatalf("got %s, want none without a manifest", got)
+	}
+}

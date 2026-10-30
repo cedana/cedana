@@ -202,13 +202,28 @@ func (s *Server) ReadPath(req *daemon.ReadPathReq, stream daemongrpc.Daemon_Read
 	}
 }
 
+// The plugin that serves a path scheme, where the two differ: Google Cloud
+// Storage paths are gs://, and the plugin is storage/gcs
+var storageSchemePlugins = map[string]string{
+	"gs": "gcs",
+}
+
+// storagePluginName returns the name of the storage plugin for a `scheme://` path
+func storagePluginName(path string) string {
+	scheme := strings.Split(path, "://")[0]
+	if name, ok := storageSchemePlugins[scheme]; ok {
+		scheme = name
+	}
+	return fmt.Sprintf("storage/%s", scheme)
+}
+
 // storageForPath returns the storage plugin for a `scheme://` path, or the
 // local filesystem storage for any other path.
 func storageForPath(ctx context.Context, path string) (cedana_io.Storage, error) {
 	if !strings.Contains(path, "://") {
 		return &filesystem.Storage{}, nil
 	}
-	pluginName := fmt.Sprintf("storage/%s", strings.Split(path, "://")[0])
+	pluginName := storagePluginName(path)
 	var storage cedana_io.Storage
 	err := features.Storage.IfAvailable(func(name string, newPluginStorage func(context.Context) (cedana_io.Storage, error)) error {
 		if newPluginStorage == nil {

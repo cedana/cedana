@@ -45,6 +45,8 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 			proto.Merge(mergedDetails, req.GetDetails())
 			req.Details = mergedDetails
 
+			taken := time.Now()
+
 			code, err = next(ctx, opts, resp, req)
 			if err != nil {
 				return code, err
@@ -52,7 +54,30 @@ func ManageDump(jobs Manager) types.Adapter[types.Dump] {
 
 			job.Sync(ctx, resp.GetState())
 
-			jobs.AddCheckpoint(jid, resp.GetPaths())
+			// A restore of the job takes its latest saved checkpoint, so a path whose compress
+			// or upload still runs is saved only once it has succeeded, in the background
+			pending := make(map[string]bool, len(resp.GetPending()))
+			if opts.Uploads != nil {
+				for _, path := range resp.GetPending() {
+					pending[path] = true
+				}
+			}
+			var stored []string
+			for _, path := range resp.GetPaths() {
+				if !pending[path] {
+					stored = append(stored, path)
+					continue
+				}
+				waitCtx := context.WithoutCancel(ctx)
+				jobs.AddCheckpointOnceStored(jid, path, taken, func() error {
+					result, err := opts.Uploads.Wait(waitCtx, path)
+					if err != nil {
+						return err
+					}
+					return result.Err
+				})
+			}
+			jobs.AddCheckpoint(jid, stored, taken)
 
 			// Wait for job exit & cleanup
 			if !req.Criu.GetLeaveRunning() {

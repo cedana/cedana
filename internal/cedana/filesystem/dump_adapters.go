@@ -32,6 +32,11 @@ const DUMP_DIR_PERMS = 0o755
 //   - "tar" creates a tarball of the dump directory
 //   - "gzip" creates a gzipped tarball of the dump directory
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
+//
+// The checksum recorded for the checkpoint, of every kind, is the manifest's: the
+// mem-verify CRIU plugin writes the manifest of the images during the dump and sends
+// its checksum before CRIU exits. A directory's is in the response; a tarball's and
+// an upload's are held in the upload registry once the compress or the upload has ended.
 func DumpFilesystem(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
@@ -70,7 +75,13 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			}
 		}
 
-		async := (req.Async || config.Global.Checkpoint.Async) && storage.IsRemote()
+		// The asynchronous mode applies to every storage: the compress of a local tarball
+		// runs after the dump has returned, so its hash runs outside the freeze
+		async := req.Async || config.Global.Checkpoint.Async
+
+		// The mem-verify plugin sends the manifest's checksum from CRIU's fini, before CRIU
+		// exits: the checkpoint's checksum, whatever the storage writes
+		manifest := criu_client.ManifestChecksum(opts.CRIUCallback)
 
 		// Create the directory
 		if err := os.Mkdir(imagesDirectory, DUMP_DIR_PERMS); err != nil {
@@ -113,21 +124,26 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			}
 			path := req.Dir + "/" + req.Name + ".tar" + ext // do not use filepath.Join as it removes a slash (for remote)
 
-			compress := func(ctx context.Context) (err error) {
+			// The storage's writer knows the checksum of the tarball as stored, once closed
+			compress := func(ctx context.Context) (checksum string, err error) {
 				// detect FuseFs if dir is not remote and not provided by a plugin
 				isFuse, err := isFuseFS(req.Dir, !storage.IsRemote() && !strings.Contains(req.Dir, "://"))
 				if err != nil {
-					return fmt.Errorf("failed to determine filesystem type: %w", err)
+					return "", fmt.Errorf("failed to determine filesystem type: %w", err)
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Bool("is_fuse", isFuse).Msg("starting compression of dump")
 
 				tarball, err := storage.Create(ctx, path)
 				if err != nil {
-					return fmt.Errorf("failed to create tarball in storage: %w", err)
+					return "", fmt.Errorf("failed to create tarball in storage: %w", err)
 				}
+				created := tarball
 				defer func() {
 					err = errors.Join(err, tarball.Close())
+					if err == nil {
+						checksum = io.ChecksumOfWriter(created)
+					}
 				}()
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("creating tarball")
@@ -138,13 +154,13 @@ func DumpFilesystem(next types.Dump) types.Dump {
 				if err != nil {
 					storage.Delete(ctx, path)
 					os.RemoveAll(imagesDirectory)
-					return fmt.Errorf("failed to create tarball: %w", err)
+					return "", fmt.Errorf("failed to create tarball: %w", err)
 				}
 
 				log.Debug().Str("path", path).Str("compression", compression).Msg("created tarball")
 
 				os.RemoveAll(imagesDirectory)
-				return nil
+				return checksum, nil
 			}
 
 			resp.Paths = append(resp.Paths, path)
@@ -153,6 +169,10 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			// will continue running regardless of the success of the dump/compress/upload. If leave-running is not set,
 			// then we need to ensure that the dump is compressed/uploaded in the post-dump hook so that it
 			// can be resumed on failure.
+			//
+			// When async, the response is returned before the compress/upload is complete, so the
+			// path is marked as pending on the response and the outcome is available from the
+			// upload's result once it has ended.
 
 			if async {
 				defer func() {
@@ -169,24 +189,42 @@ func DumpFilesystem(next types.Dump) types.Dump {
 					// context will be canceled after the dump completes.
 					compressCtx := context.WithoutCancel(ctx)
 
+					finish := opts.Uploads.Start(path)
+					resp.Pending = append(resp.Pending, path)
+
 					opts.WG.Go(func() {
 						log.Info().Msg("async dump compress/upload started")
-						if compressErr := compress(compressCtx); compressErr != nil {
+						if checksum, compressErr := compress(compressCtx); compressErr != nil {
 							log.Error().Err(compressErr).Msg("async compress/upload failed")
+							finish("", compressErr)
 						} else {
-							log.Info().Msg("async dump compress/upload completed")
+							log.Info().Str("written", checksum).Msg("async dump compress/upload completed")
+							finish(io.RecordedChecksum(checksum, manifest(), "tarball"), nil)
 						}
 					})
 				}()
 			} else {
 				if req.GetCriu().GetLeaveRunning() {
 					defer func() {
-						err = errors.Join(err, compress(ctx))
+						checksum, compressErr := compress(ctx)
+						err = errors.Join(err, compressErr)
+						// A synchronous dump's checksum is known when it returns; it is kept where
+						// an upload's outcome is kept, so a caller learns it the same way
+						if err == nil && checksum != "" && opts.Uploads != nil {
+							opts.Uploads.Record(path, io.RecordedChecksum(checksum, manifest(), "tarball"))
+							resp.Pending = append(resp.Pending, path)
+						}
 					}()
 				} else {
 					callback := &criu_client.NotifyCallback{
-						PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) (err error) {
-							return compress(ctx)
+						PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) error {
+							checksum, err := compress(ctx)
+							if err == nil && checksum != "" && opts.Uploads != nil {
+								// As for a leave-running dump: the checksum is known when the dump returns
+								opts.Uploads.Record(path, io.RecordedChecksum(checksum, manifest(), "tarball"))
+								resp.Pending = append(resp.Pending, path)
+							}
+							return err
 						},
 					}
 					opts.CRIUCallback.Include(callback)
@@ -202,10 +240,36 @@ func DumpFilesystem(next types.Dump) types.Dump {
 
 			// If imagesDirectory was provided by a plugin
 			// dump path to be req.Dir + req.Name
+			var dirPath string
 			if strings.Contains(req.Dir, "://") {
-				resp.Paths = append(resp.Paths, req.Dir+req.Name)
+				dirPath = req.Dir + req.Name
 			} else {
-				resp.Paths = append(resp.Paths, imagesDirectory)
+				dirPath = imagesDirectory
+			}
+			resp.Paths = append(resp.Paths, dirPath)
+
+			// The mem-verify plugin wrote the manifest while CRIU wrote the images, so the
+			// checksum is known as soon as CRIU has returned: it is in the response, and
+			// nothing is pending. The manifest file is read rather than the notification
+			// taken, so that a directory without one gets the warning of a missing plugin
+			if pc, ok := storage.(io.PathChecksummer); ok && config.Global.Checkpoint.Checksum {
+				defer func() {
+					if err != nil {
+						return
+					}
+					sum, cerr := pc.ChecksumPath(ctx, dirPath)
+					if cerr != nil {
+						// The checkpoint is stored all the same: it has no checksum
+						log.Error().Err(cerr).Str("path", dirPath).Msg("could not read the checkpoint's manifest, no checksum")
+						return
+					}
+					if sum != "" {
+						if resp.Checksums == nil {
+							resp.Checksums = map[string]string{}
+						}
+						resp.Checksums[dirPath] = sum
+					}
+				}()
 			}
 		}
 

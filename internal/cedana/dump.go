@@ -62,6 +62,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		Lifetime: s.lifetime,
 		Plugins:  s.plugins,
 		WG:       s.wg,
+		Uploads:  s.uploads,
 	}
 	resp := &daemon.DumpResp{}
 
@@ -110,6 +111,7 @@ func (s *Cedana) Dump(req *daemon.DumpReq) (*daemon.DumpResp, error) {
 		Lifetime:   s.lifetime,
 		Plugins:    s.plugins,
 		WG:         s.wg,
+		Uploads:    s.uploads,
 		Serverless: true,
 	}
 	resp := &daemon.DumpResp{}
@@ -170,7 +172,7 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 		var storage io.Storage = &filesystem.Storage{}
 
 		if strings.Contains(dir, "://") {
-			pluginName := fmt.Sprintf("storage/%s", strings.Split(dir, "://")[0])
+			pluginName := storagePluginName(dir)
 			err := features.Storage.IfAvailable(func(name string, newPluginStorage func(ctx context.Context) (io.Storage, error)) (err error) {
 				if newPluginStorage == nil {
 					return fmt.Errorf("plugin '%s' does not implement '%s'", name, features.Storage)

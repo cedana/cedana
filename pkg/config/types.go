@@ -42,6 +42,8 @@ type (
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+		// GCS (Google Cloud Storage) settings
+		GCS GCS `json:"gcs" key:"gcs" yaml:"gcs" mapstructure:"gcs"`
 		// CSX (Cedana Storage Express) settings
 		CSX CSX `json:"csx" key:"csx" yaml:"csx" mapstructure:"csx"`
 	}
@@ -95,6 +97,9 @@ type (
 		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
 		// checkpoint request to return early.
 		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
+		// Checksum records an integrity checksum of each checkpoint as stored, computed
+		// as it is uploaded or streamed, or read back by the k8s helper for a local one.
+		Checksum bool `json:"checksum" key:"checksum" yaml:"checksum" mapstructure:"checksum"`
 	}
 
 	DB struct {
@@ -174,6 +179,15 @@ type (
 		Builds string `json:"builds" key:"builds" yaml:"builds" mapstructure:"builds" env_aliases:"CEDANA_PLUGINS_BUILD"`
 		// LocalSearchPath is a colon-separated list of local directories to search for locally built plugins
 		LocalSearchPath string `json:"local_search_path" key:"local_search_path" yaml:"local_search_path" mapstructure:"local_search_path"`
+	}
+
+	GCS struct {
+		// CredentialsMode selects the GCS credential source: ambient (the SDK's default chain:
+		// Workload Identity, the metadata server, GOOGLE_APPLICATION_CREDENTIALS) or
+		// serviceAccount (the key in ServiceAccountKey)
+		CredentialsMode string `json:"credentials_mode" key:"credentials_mode" yaml:"credentials_mode" mapstructure:"credentials_mode" env_aliases:"GCS_CREDENTIALS_MODE"`
+		// ServiceAccountKey is a service account key file path, or the key's JSON, for the serviceAccount mode
+		ServiceAccountKey string `json:"service_account_key" key:"service_account_key" yaml:"service_account_key" mapstructure:"service_account_key" env_aliases:"GCS_SERVICE_ACCOUNT_KEY"`
 	}
 
 	AWS struct {

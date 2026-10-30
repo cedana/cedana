@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	cedana_config "github.com/cedana/cedana/pkg/config"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/rs/zerolog/log"
@@ -82,13 +83,63 @@ func (s *Storage) Create(ctx context.Context, path string) (io.WriteCloser, erro
 	return NewFile(ctx, s.client, bucket, key), nil
 }
 
-func (s *Storage) Delete(_ context.Context, path string) error {
-	_, _, err := s.sanitizePath(path)
+// Delete removes the object at path and, since a streamed checkpoint is a
+// "directory" of shard objects under its path, every object under path/.
+func (s *Storage) Delete(ctx context.Context, path string) error {
+	bucket, key, err := s.sanitizePath(path)
 	if err != nil {
 		return err
 	}
 
-	return fmt.Errorf("this operation is currently not supported for s3 storage")
+	keys := []string{key}
+	prefix := strings.TrimSuffix(key, "/") + "/"
+	paginator := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{
+		Bucket: &bucket,
+		Prefix: &prefix,
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to list objects under %s/%s: %w", bucket, prefix, err)
+		}
+		for _, obj := range page.Contents {
+			if obj.Key != nil {
+				keys = append(keys, *obj.Key)
+			}
+		}
+	}
+
+	for _, key := range keys {
+		_, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{
+			Bucket: &bucket,
+			Key:    &key,
+		})
+		if err != nil {
+			return fmt.Errorf("failed to delete object %s/%s: %w", bucket, key, err)
+		}
+	}
+	return nil
+}
+
+// ChecksumPath returns the store's whole-object CRC32C of the object at path,
+// "crc32c:<hex>", or "" if the store holds none or a composite one
+func (s *Storage) ChecksumPath(ctx context.Context, path string) (string, error) {
+	bucket, key, err := s.sanitizePath(path)
+	if err != nil {
+		return "", err
+	}
+	attrs, err := s.client.GetObjectAttributes(ctx, &s3.GetObjectAttributesInput{
+		Bucket:           &bucket,
+		Key:              &key,
+		ObjectAttributes: []types.ObjectAttributes{types.ObjectAttributesChecksum},
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to get the attributes of %s/%s: %w", bucket, key, err)
+	}
+	if attrs.Checksum == nil || attrs.Checksum.ChecksumCRC32C == nil || attrs.Checksum.ChecksumType == types.ChecksumTypeComposite {
+		return "", nil
+	}
+	return decodeCRC32C(*attrs.Checksum.ChecksumCRC32C), nil
 }
 
 func (s *Storage) IsDir(_ context.Context, path string) (bool, error) {

@@ -25,7 +25,9 @@ type Notify interface {
 	PreResume(ctx context.Context) error
 	PostResume(ctx context.Context) error
 	OrphanPtsMaster(ctx context.Context, fd int32) error
-	QueryExtFiles(ctx context.Context) ([]string, error) // return external file keys after CRIU has seized the process tree.
+	QueryExtFiles(ctx context.Context) ([]string, error)         // return external file keys after CRIU has seized the process tree.
+	MemVerifyManifest(ctx context.Context, payload []byte) error // the mem-verify plugin wrote the manifest: its checksum, at the end of a dump
+	MemVerifyResult(ctx context.Context, payload []byte) error   // the mem-verify plugin's result, before the restored tasks resume
 }
 
 // NoNotify struct
@@ -117,4 +119,12 @@ func (c NoNotify) OrphanPtsMaster(ctx context.Context, fd int32) error {
 
 func (c NoNotify) QueryExtFiles(ctx context.Context) ([]string, error) {
 	return nil, nil
+}
+
+func (c NoNotify) MemVerifyManifest(ctx context.Context, payload []byte) error {
+	return nil
+}
+
+func (c NoNotify) MemVerifyResult(ctx context.Context, payload []byte) error {
+	return nil
 }

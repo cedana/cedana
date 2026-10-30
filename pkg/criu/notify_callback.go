@@ -30,6 +30,8 @@ type NotifyCallback struct {
 	PostResumeFunc          NotifyFunc
 	OrphanPtsMasterFunc     NotifyFuncFd
 	QueryExtFilesFunc       NotifyFuncExtFiles
+	MemVerifyManifestFunc   NotifyFuncPayload
+	MemVerifyResultFunc     NotifyFuncPayload
 
 	Name string // to give some context to this callback
 }
@@ -42,6 +44,7 @@ type (
 	NotifyFuncPid         func(ctx context.Context, pid int32) error
 	NotifyFuncFd          func(ctx context.Context, fd int32) error
 	NotifyFuncExtFiles    func(ctx context.Context) ([]string, error)
+	NotifyFuncPayload     func(ctx context.Context, payload []byte) error
 	InitializeFunc        func(ctx context.Context, criuPid int32) error
 )
 
@@ -311,6 +314,36 @@ func (n NotifyCallback) OrphanPtsMaster(ctx context.Context, fd int32) error {
 		if err != nil {
 			log.Trace().Err(err).Int32("fd", fd).Str("name", n.Name).Msg("CRIU orphan-pts-master callback failed")
 			return fmt.Errorf("orphan-pts-master callback: %v", err)
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallback) MemVerifyManifest(ctx context.Context, payload []byte) error {
+	if n.MemVerifyManifestFunc != nil {
+		log.Trace().Str("name", n.Name).Msg("CRIU mem-verify-manifest callback")
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		err := n.MemVerifyManifestFunc(ctx, payload)
+		if err != nil {
+			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU mem-verify-manifest callback failed")
+			return fmt.Errorf("mem-verify-manifest callback: %v", err)
+		}
+	}
+	return nil
+}
+
+func (n NotifyCallback) MemVerifyResult(ctx context.Context, payload []byte) error {
+	if n.MemVerifyResultFunc != nil {
+		log.Trace().Str("name", n.Name).Msg("CRIU mem-verify-result callback")
+		var end func()
+		ctx, end = profiling.StartTimingCategory(ctx, n.Name)
+		defer end()
+		err := n.MemVerifyResultFunc(ctx, payload)
+		if err != nil {
+			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU mem-verify-result callback failed")
+			return fmt.Errorf("mem-verify-result callback: %v", err)
 		}
 	}
 	return nil

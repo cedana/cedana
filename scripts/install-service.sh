@@ -44,6 +44,11 @@ CONTAINERD_ENV=""
 if [ -n "${CONTAINERD_ADDRESS:-}" ]; then
     CONTAINERD_ENV="Environment=\"CONTAINERD_ADDRESS=${CONTAINERD_ADDRESS}\""
 fi
+# The GCS SDK's emulator variable, for tests: set on the helper, the daemon needs it too
+STORAGE_EMULATOR_ENV=""
+if [ -n "${STORAGE_EMULATOR_HOST:-}" ]; then
+    STORAGE_EMULATOR_ENV="Environment=\"STORAGE_EMULATOR_HOST=${STORAGE_EMULATOR_HOST}\""
+fi
 cat <<EOF | tee "$SERVICE_FILE" >/dev/null
 [Unit]
 Description=Cedana Daemon
@@ -54,6 +59,7 @@ Group=root
 Restart=no
 $POD_IDENTITY_ENV
 $CONTAINERD_ENV
+$STORAGE_EMULATOR_ENV
 
 [Install]
 WantedBy=multi-user.target
