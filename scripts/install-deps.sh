@@ -18,10 +18,10 @@ fi
 CEDANA_INSTALL_DEPS=${CEDANA_INSTALL_DEPS:-true}
 
 # Define packages for YUM and APT
+# CRIU's shared libraries (libbsd is in EPEL on RHEL 8/9 and their rebuilds); yq is a pinned download below
 YUM_PACKAGES=(
-    wget git make psmisc
-    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel lz4-devel # CRIU
-    yq
+    wget psmisc procps-ng
+    libbsd libselinux gnutls protobuf-c libnl3 libnet libuuid iptables # CRIU
 )
 
 APT_PACKAGES=(
@@ -99,9 +99,6 @@ if [ "$PACKAGE_MANAGER" = apt ]; then
     done
 else
     for pkg in "${YUM_PACKAGES[@]}"; do
-        if [ "$pkg" = yq ] && yq_works; then
-            continue
-        fi
         rpm -q --whatprovides "$pkg" &>/dev/null || MISSING+=("$pkg")
     done
 fi
@@ -158,8 +155,7 @@ if [ "${#MISSING[@]}" -gt 0 ]; then
     fi
 fi
 
-# yum may have installed it
-if ! yq_works; then
+if [ "$YQ_MISSING" = true ]; then
     # Download to a temp file and only move into place once verified, so a
     # failed download never leaves a broken yq on the node
     YQ_TMP=$(mktemp /usr/local/bin/.yq.XXXXXX)
