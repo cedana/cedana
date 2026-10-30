@@ -18,35 +18,17 @@ fi
 CEDANA_INSTALL_DEPS=${CEDANA_INSTALL_DEPS:-true}
 
 # Define packages for YUM and APT
-# CRIU's shared libraries (libbsd is in EPEL on RHEL 8/9 and their rebuilds); yq is a pinned download below
+# CRIU's shared libraries (libbsd is in EPEL on RHEL 8/9 and their rebuilds)
 YUM_PACKAGES=(
-    wget psmisc procps-ng
+    psmisc procps-ng
     libbsd libselinux gnutls protobuf-c libnl3 libnet libuuid iptables # CRIU
 )
 
 # CRIU's other shared libraries (libselinux1, gnutls, libuuid1) are always installed: apt depends on them
 APT_PACKAGES=(
-    wget psmisc sysvinit-utils
+    psmisc sysvinit-utils
     libbsd0 libprotobuf-c1 libnl-3-200 libnet1 iptables # CRIU
 )
-
-# yq is needed to configure kubelet, but not available in all distros: a pinned release instead
-YQ_VERSION=v4.44.3
-case "$(uname -m)" in
-    x86_64)
-        YQ_BINARY=yq_linux_amd64
-        YQ_SHA256=a2c097180dd884a8d50c956ee16a9cec070f30a7947cf4ebf87d5f36213e9ed7
-        ;;
-    arm64 | aarch64)
-        YQ_BINARY=yq_linux_arm64
-        YQ_SHA256=0e7e1524f68d91b3ff9b089872d185940ab0fa020a5a9052046ef10547023156
-        ;;
-    *)
-        echo "Unsupported architecture: $(uname -m)"
-        exit 1
-        ;;
-esac
-YQ_URL="https://github.com/mikefarah/yq/releases/download/$YQ_VERSION/$YQ_BINARY"
 
 detect_package_manager() {
     local id="" id_like=""
@@ -84,12 +66,6 @@ detect_package_manager() {
     fi
 }
 
-# NOTE: gate on it actually running, not just existing — an interrupted or
-# failed download can leave a broken or non-executable binary behind
-yq_works() {
-    yq --version &>/dev/null
-}
-
 PACKAGE_MANAGER=$(detect_package_manager)
 
 MISSING=()
@@ -103,68 +79,43 @@ else
     done
 fi
 
-YQ_MISSING=false
-yq_works || YQ_MISSING=true
-
-if [ "${#MISSING[@]}" -eq 0 ] && [ "$YQ_MISSING" = false ]; then
+if [ "${#MISSING[@]}" -eq 0 ]; then
     echo "All host dependencies are installed"
     exit 0
 fi
 
 if [ "$CEDANA_INSTALL_DEPS" != true ]; then
     {
-        echo "WARNING: not installing missing host dependencies (set k8s.install_deps to install them).${MISSING[*]:+ Missing packages: ${MISSING[*]}.}"
+        echo "WARNING: not installing missing host dependencies (set k8s.install_deps to install them). Missing packages: ${MISSING[*]}."
         echo "To install them (e.g. in the node image), run 'cedana k8s deps-script' for the full script, or as root:"
-        if [ "${#MISSING[@]}" -gt 0 ]; then
-            if [ "$PACKAGE_MANAGER" = apt ]; then
-                echo "  apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade ${MISSING[*]}"
-            else
-                echo "  yum install -y --skip-broken ${MISSING[*]}"
-            fi
-        fi
-        if [ "$YQ_MISSING" = true ]; then
-            echo "  wget -q -O /usr/local/bin/yq $YQ_URL"
-            echo "  echo '$YQ_SHA256  /usr/local/bin/yq' | sha256sum -c -"
-            echo "  chmod +x /usr/local/bin/yq"
+        if [ "$PACKAGE_MANAGER" = apt ]; then
+            echo "  apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade ${MISSING[*]}"
+        else
+            echo "  yum install -y --skip-broken ${MISSING[*]}"
         fi
     } >&2
     exit 0
 fi
 
-if [ "${#MISSING[@]}" -gt 0 ]; then
-    echo "Installing missing packages: ${MISSING[*]}"
-    if [ "$PACKAGE_MANAGER" = apt ]; then
-        export DEBIAN_FRONTEND=noninteractive
-        # Fix any interrupted dpkg state first
-        if ! apt-get check &>/dev/null; then
-            echo "Fixing interrupted dpkg state..." >&2
-            dpkg --configure -a || true
-        fi
-        apt-get update
-        for pkg in "${MISSING[@]}"; do
-            if ! apt-get install -y --no-upgrade "$pkg"; then
-                echo "Skipping missing package: $pkg" >&2
-            fi
-        done
-    else
-        for pkg in "${MISSING[@]}"; do
-            if ! yum install -y --skip-broken "$pkg"; then
-                echo "Skipping missing package: $pkg" >&2
-            fi
-        done
+echo "Installing missing packages: ${MISSING[*]}"
+if [ "$PACKAGE_MANAGER" = apt ]; then
+    export DEBIAN_FRONTEND=noninteractive
+    # Fix any interrupted dpkg state first
+    if ! apt-get check &>/dev/null; then
+        echo "Fixing interrupted dpkg state..." >&2
+        dpkg --configure -a || true
     fi
+    apt-get update
+    for pkg in "${MISSING[@]}"; do
+        if ! apt-get install -y --no-upgrade "$pkg"; then
+            echo "Skipping missing package: $pkg" >&2
+        fi
+    done
+else
+    for pkg in "${MISSING[@]}"; do
+        if ! yum install -y --skip-broken "$pkg"; then
+            echo "Skipping missing package: $pkg" >&2
+        fi
+    done
 fi
 
-if [ "$YQ_MISSING" = true ]; then
-    # Download to a temp file and only move into place once verified, so a
-    # failed download never leaves a broken yq on the node
-    YQ_TMP=$(mktemp /usr/local/bin/.yq.XXXXXX)
-    trap 'rm -f "$YQ_TMP"' EXIT
-    wget -q "$YQ_URL" -O "$YQ_TMP"
-    echo "$YQ_SHA256  $YQ_TMP" | sha256sum -c - >/dev/null
-    chmod +x "$YQ_TMP"
-    "$YQ_TMP" --version >/dev/null
-    mv "$YQ_TMP" /usr/local/bin/yq
-    trap - EXIT
-    echo "yq $YQ_VERSION has been installed"
-fi

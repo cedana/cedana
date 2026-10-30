@@ -6,15 +6,6 @@ if [ "$ENV" != "production" ]; then
     exit 0
 fi
 
-# Only merging into a --config file needs jq (JSON) or yq (YAML); a drop-in config dir needs neither
-require_tool() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        echo "Error: '$1' is not installed. Please install it to update $2 kubelet configurations." >&2
-        exit 1
-    fi
-    echo "$1 found at: $(command -v "$1") ($("$1" --version))"
-}
-
 # Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
 echo "Target runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT"
@@ -30,13 +21,15 @@ KUBELET_CONFIG_CONTENT_JSON=$(
 EOF
 )
 
-KUBELET_CONFIG_CONTENT_YAML=$(
-    cat <<EOF
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT
-EOF
-)
+# Sets runtimeRequestTimeout in a YAML kubelet config, leaving the rest of the file as it is: a
+# top-level key in the block-style YAML kubelet writes, so no YAML tool is needed on the node
+set_yaml_runtime_request_timeout() {
+    awk -v value="$KUBELET_RUNTIME_REQUEST_TIMEOUT" '
+        /^runtimeRequestTimeout:/ { print "runtimeRequestTimeout: " value; done = 1; next }
+        { print }
+        END { if (!done) print "runtimeRequestTimeout: " value }
+    ' "$1"
+}
 
 get_kubelet_arg_value() {
     local arg="$1"
@@ -147,10 +140,10 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
 
     FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
     echo "Detected config file extension: .$FILE_EXTENSION"
-    case "$FILE_EXTENSION" in
-        json) require_tool jq JSON ;;
-        yaml | yml) require_tool yq YAML ;;
-    esac
+    if [ "$FILE_EXTENSION" = "json" ] && ! command -v jq >/dev/null 2>&1; then
+        echo "WARNING: jq is not installed, skipping kubelet config update; please manually set runtimeRequestTimeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT in $KUBELET_CONFIG_FILE" >&2
+        exit 0
+    fi
     TEMP_CONFIG=$(mktemp)
     echo "Created temp file for merge: $TEMP_CONFIG"
 
@@ -160,10 +153,8 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
         echo "JSON merge complete"
 
     elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
-        echo "Merging YAML config..."
-        yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' \
-            "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_YAML") >"$TEMP_CONFIG"
-        echo "YAML merge complete"
+        echo "Setting runtimeRequestTimeout in YAML config..."
+        set_yaml_runtime_request_timeout "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
 
     else
         echo "WARNING: Unsupported kubelet configuration file type: .$FILE_EXTENSION, skipping kubelet config update" >&2
