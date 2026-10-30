@@ -10,6 +10,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/internal/cedana/verify"
 	"github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -23,10 +24,16 @@ import (
 
 // This adapter decompresses (if required) the dump to a temporary directory for restore.
 // Automatically detects the compression format from the file extension.
+// When the request carries the checksum recorded at dump, the adapter includes the
+// callback that verifies the checkpoint: the mem-verify CRIU plugin checks every image
+// as CRIU reads it, from the directory or from the extracted tarball, and reports the
+// manifest's checksum before the tasks resume. See package verify for what a mismatch
+// does.
 func RestoreFilesystem(next types.Restore) types.Restore {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
 		path := req.GetPath()
+		check := verify.For(req)
 
 		var isDir bool
 		var imagesDirectory string
@@ -57,6 +64,7 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 			// Add profiling data manually as no IO can be measured
 			size := utils.SizeFromPath(imagesDirectory)
 			profiling.AddIO(ctx, size)
+
 		} else {
 			// Create a temporary directory for the restore
 			imagesDirectory = filepath.Join(os.TempDir(), fmt.Sprintf("restore-%d", time.Now().UnixNano()))
@@ -88,8 +96,7 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 				log.Debug().Str("path", path).Str("compression", compression).Msg("decompressing tarball")
 
 				tarball = profiling.IOCategory(ctx, tarball, "storage", io.Untar, compression)
-				err = io.Untar(tarball, imagesDirectory, compression)
-				if err != nil {
+				if err = io.Untar(tarball, imagesDirectory, compression); err != nil {
 					return fmt.Errorf("failed to decompress dump: %v", err)
 				}
 
@@ -98,8 +105,7 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 				return nil
 			}
 
-			err = decompress(ctx)
-			if err != nil {
+			if err := decompress(ctx); err != nil {
 				return nil, status.Error(codes.Internal, err.Error())
 			}
 		}
@@ -121,6 +127,13 @@ func RestoreFilesystem(next types.Restore) types.Restore {
 		// Setup dump fs that can be used by future adapters to directly read files
 		// to the dump directory
 		opts.DumpFs = afero.NewBasePathFs(afero.NewOsFs(), imagesDirectory)
+
+		// The mem-verify plugin verifies the files as CRIU reads them, from the directory or
+		// from the extracted tarball, and reports the manifest's checksum: the callback
+		// compares it with the expected value at pre-resume and acts
+		if check != nil {
+			opts.CRIUCallback.Include(check.Callback(resp))
+		}
 
 		return next(ctx, opts, resp, req)
 	}

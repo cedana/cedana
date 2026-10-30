@@ -34,6 +34,7 @@ const (
 	DEFAULT_CHECKPOINT_STREAMS                = 0
 	DEFAULT_CHECKPOINT_ASYNC                  = false
 	DEFAULT_CHECKPOINT_CHECKSUM               = true
+	DEFAULT_CHECKPOINT_CHECKSUM_VERIFY        = CHECKSUM_VERIFY_WARN
 	DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB = 4000
 
 	DEFAULT_DB_REMOTE = false
@@ -77,6 +78,28 @@ const (
 	DEFAULT_CSX_SOCK_ADDR = "/run/csx.sock"
 )
 
+// The values of Checkpoint.ChecksumVerify
+const (
+	CHECKSUM_VERIFY_OFF    = "off"
+	CHECKSUM_VERIFY_WARN   = "warn"
+	CHECKSUM_VERIFY_STRICT = "strict"
+)
+
+// ChecksumVerifyMode is Checkpoint.ChecksumVerify as one of the values above: the one
+// mode of the three checks, the mem-verify plugin's, the daemon's compare and the GPU
+// state verification (cedana-designs/mem-verify.org). The default when unset; warn
+// when unknown.
+func ChecksumVerifyMode() string {
+	switch mode := strings.ToLower(strings.TrimSpace(Global.Checkpoint.ChecksumVerify)); mode {
+	case CHECKSUM_VERIFY_OFF, CHECKSUM_VERIFY_WARN, CHECKSUM_VERIFY_STRICT:
+		return mode
+	case "":
+		return DEFAULT_CHECKPOINT_CHECKSUM_VERIFY
+	default:
+		return CHECKSUM_VERIFY_WARN
+	}
+}
+
 // The default global config. This will get overwritten
 // by the config file or env vars during startup, if they exist.
 var Global Config = Config{
@@ -92,6 +115,7 @@ var Global Config = Config{
 		Streams:           DEFAULT_CHECKPOINT_STREAMS,
 		Async:             DEFAULT_CHECKPOINT_ASYNC,
 		Checksum:          DEFAULT_CHECKPOINT_CHECKSUM,
+		ChecksumVerify:    DEFAULT_CHECKPOINT_CHECKSUM_VERIFY,
 		StreamMemoryLimit: DEFAULT_CHECKPOINT_STREAM_MEMORY_LIMIT_MB,
 	},
 	DB: DB{

@@ -160,3 +160,22 @@ func TestManifestChecksumKeepsTheNotice(t *testing.T) {
 		t.Fatalf("an unreadable notice must be ignored: %v, %q", err, manifest())
 	}
 }
+
+// The plugin's restore mode follows Checkpoint.ChecksumVerify, normalised
+func TestCriuEnvCarriesTheVerifyMode(t *testing.T) {
+	previous := config.Global.Checkpoint.ChecksumVerify
+	t.Cleanup(func() { config.Global.Checkpoint.ChecksumVerify = previous })
+	t.Setenv(MEM_VERIFY_VERIFY_ENV, "inherited")
+	for raw, want := range map[string]string{"strict": "strict", " Warn": "warn", "off": "off", "": config.DEFAULT_CHECKPOINT_CHECKSUM_VERIFY, "bogus": "warn"} {
+		config.Global.Checkpoint.ChecksumVerify = raw
+		var found []string
+		for _, e := range criuEnv() {
+			if strings.HasPrefix(e, MEM_VERIFY_VERIFY_ENV+"=") {
+				found = append(found, e)
+			}
+		}
+		if len(found) != 1 || found[0] != MEM_VERIFY_VERIFY_ENV+"="+want {
+			t.Fatalf("%q: got %v, want %s", raw, found, want)
+		}
+	}
+}

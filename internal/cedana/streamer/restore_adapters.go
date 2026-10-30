@@ -7,6 +7,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/internal/cedana/verify"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -20,6 +21,11 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 		return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
 			storage := opts.Storage
 			path := req.GetPath()
+
+			// The mem-verify plugin verifies the images as CRIU reads them through the
+			// streamer and reports the manifest's checksum, the checkpoint's: the callback
+			// compares it with the expected value at pre-resume and acts
+			check := verify.For(req)
 
 			var imagesDirectory string
 
@@ -90,6 +96,9 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 			)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
+			}
+			if check != nil {
+				opts.CRIUCallback.Include(check.Callback(resp))
 			}
 
 			defer func() {

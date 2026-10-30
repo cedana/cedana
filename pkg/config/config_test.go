@@ -123,3 +123,49 @@ func TestLoadIgnoresUnknownFields(t *testing.T) {
 		t.Errorf("address is %q, want the config's %q", Global.Address, "0.0.0.0:9999")
 	}
 }
+
+func TestChecksumVerifyDefaultsToWarnAndReadsTheEnvironment(t *testing.T) {
+	originalGlobal := Global
+	originalDir := Dir
+	t.Cleanup(func() {
+		viper.Reset()
+		Global = originalGlobal
+		Dir = originalDir
+		setDefaults()
+		bindEnvVars()
+	})
+
+	viper.Reset()
+	Global = originalGlobal
+	setDefaults()
+	bindEnvVars()
+	if err := Init(Args{ConfigDir: t.TempDir()}); err != nil {
+		t.Fatalf("init config: %v", err)
+	}
+	if Global.Checkpoint.ChecksumVerify != CHECKSUM_VERIFY_WARN {
+		t.Fatalf("default checksum_verify = %q, want %q", Global.Checkpoint.ChecksumVerify, CHECKSUM_VERIFY_WARN)
+	}
+
+	t.Setenv("CEDANA_CHECKPOINT_CHECKSUM_VERIFY", CHECKSUM_VERIFY_STRICT)
+	viper.Reset()
+	Global = originalGlobal
+	setDefaults()
+	bindEnvVars()
+	if err := Init(Args{ConfigDir: t.TempDir()}); err != nil {
+		t.Fatalf("init config: %v", err)
+	}
+	if Global.Checkpoint.ChecksumVerify != CHECKSUM_VERIFY_STRICT {
+		t.Fatalf("checksum_verify from the environment = %q, want %q", Global.Checkpoint.ChecksumVerify, CHECKSUM_VERIFY_STRICT)
+	}
+}
+
+func TestChecksumVerifyMode(t *testing.T) {
+	previous := Global.Checkpoint.ChecksumVerify
+	t.Cleanup(func() { Global.Checkpoint.ChecksumVerify = previous })
+	for raw, want := range map[string]string{"off": "off", "warn": "warn", "strict": "strict", " STRICT\n": "strict", "": DEFAULT_CHECKPOINT_CHECKSUM_VERIFY, "bogus": "warn"} {
+		Global.Checkpoint.ChecksumVerify = raw
+		if got := ChecksumVerifyMode(); got != want {
+			t.Errorf("%q: got %q, want %q", raw, got, want)
+		}
+	}
+}

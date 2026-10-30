@@ -622,9 +622,13 @@ func (c *Criu) Check(ctx context.Context, flags ...string) (string, error) {
 	return string(out), err
 }
 
-// MEM_VERIFY_CHECKSUM_ENV tells the mem-verify CRIU plugin to record the checksum of every
-// image it dumps and write the checkpoint's manifest (cedana-designs/mem-verify.org)
-const MEM_VERIFY_CHECKSUM_ENV = "CEDANA_CHECKPOINT_CHECKSUM"
+// The mem-verify CRIU plugin reads these from CRIU's environment (cedana-designs/mem-verify.org):
+// whether to record the checksum of every image it dumps and write the checkpoint's manifest,
+// and in which mode to verify the images it restores, off, warn or strict
+const (
+	MEM_VERIFY_CHECKSUM_ENV = "CEDANA_CHECKPOINT_CHECKSUM"
+	MEM_VERIFY_VERIFY_ENV   = "CEDANA_CHECKPOINT_CHECKSUM_VERIFY"
+)
 
 // criuEnv returns our environment with the system bin dirs first in PATH, and what the
 // mem-verify plugin reads. CRIU runs tools like tar by name, and k3s starts shims with
@@ -634,9 +638,13 @@ func criuEnv() []string {
 	if p := os.Getenv("PATH"); p != "" {
 		path += ":" + p
 	}
-	env := []string{path, MEM_VERIFY_CHECKSUM_ENV + "=" + strconv.FormatBool(config.Global.Checkpoint.Checksum)}
+	env := []string{
+		path,
+		MEM_VERIFY_CHECKSUM_ENV + "=" + strconv.FormatBool(config.Global.Checkpoint.Checksum),
+		MEM_VERIFY_VERIFY_ENV + "=" + config.ChecksumVerifyMode(),
+	}
 	for _, e := range os.Environ() {
-		if !strings.HasPrefix(e, "PATH=") && !strings.HasPrefix(e, MEM_VERIFY_CHECKSUM_ENV+"=") {
+		if !strings.HasPrefix(e, "PATH=") && !strings.HasPrefix(e, MEM_VERIFY_CHECKSUM_ENV+"=") && !strings.HasPrefix(e, MEM_VERIFY_VERIFY_ENV+"=") {
 			env = append(env, e)
 		}
 	}
