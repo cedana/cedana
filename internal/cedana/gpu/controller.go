@@ -540,6 +540,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				Dir:          opts.GetImagesDir(),
 				Stream:       opts.GetStream(),
 				LeaveRunning: opts.GetLeaveRunning(),
+				Verify:       gpuVerifyMode(),
 			})
 			if err != nil {
 				log.Error().Err(err).Msg("failed to dump GPU")
@@ -547,6 +548,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
+			logVerifySummary(log, "dump", resp.GetVerify())
 
 			log.Info().Msg("GPU dump complete")
 		}()
@@ -629,7 +631,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Debug().Msg("GPU restore starting")
 
-			req := &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream()}
+			req := &gpu.RestoreReq{Dir: opts.GetImagesDir(), Stream: opts.GetStream(), Verify: gpuVerifyMode()}
 
 			// A restore onto other GPUs than the checkpoint's (see keys.GPU_RESTORE_DEVICE_MINORS_CONTEXT_KEY):
 			// the controller's staged workers start before CRIU's post-restore hook creates the
@@ -648,6 +650,7 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			log.Info().Msg("GPU restore complete")
+			logVerifySummary(log, "restore", resp.GetRestoreStats().GetVerify())
 
 			restoreProfile = resp.GetProfile()
 		}()

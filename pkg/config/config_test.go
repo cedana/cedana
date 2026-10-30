@@ -158,3 +158,14 @@ func TestChecksumVerifyDefaultsToWarnAndReadsTheEnvironment(t *testing.T) {
 		t.Fatalf("checksum_verify from the environment = %q, want %q", Global.Checkpoint.ChecksumVerify, CHECKSUM_VERIFY_STRICT)
 	}
 }
+
+func TestChecksumVerifyMode(t *testing.T) {
+	previous := Global.Checkpoint.ChecksumVerify
+	t.Cleanup(func() { Global.Checkpoint.ChecksumVerify = previous })
+	for raw, want := range map[string]string{"off": "off", "warn": "warn", "strict": "strict", " STRICT\n": "strict", "": DEFAULT_CHECKPOINT_CHECKSUM_VERIFY, "bogus": "warn"} {
+		Global.Checkpoint.ChecksumVerify = raw
+		if got := ChecksumVerifyMode(); got != want {
+			t.Errorf("%q: got %q, want %q", raw, got, want)
+		}
+	}
+}

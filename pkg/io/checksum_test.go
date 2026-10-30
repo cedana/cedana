@@ -100,6 +100,8 @@ func TestChecksumReaderDrainCoversTheRest(t *testing.T) {
 	}
 	if r.Sum() != whole {
 		t.Fatalf("after Drain, Sum = %s, want %s", r.Sum(), whole)
+	}
+}
 
 func TestParseManifest(t *testing.T) {
 	entries, err := ParseManifest(strings.NewReader("core-1.img crc32c:0000abcd\npages-1.img crc32c:e3069283\n"))

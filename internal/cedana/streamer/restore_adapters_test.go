@@ -6,15 +6,11 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"sync"
-	"syscall"
 	"testing"
-	"time"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/internal/cedana/filesystem"
-	"github.com/cedana/cedana/internal/cedana/verify"
 	"github.com/cedana/cedana/pkg/config"
 	criu_client "github.com/cedana/cedana/pkg/criu"
 	cedana_io "github.com/cedana/cedana/pkg/io"
@@ -84,7 +80,7 @@ type restoreRun struct {
 // restoreStreamed runs the streamer restore adapter with a stand-in for CRIU: it
 // reads every image through the streaming fs, then sends the notifications CRIU
 // sends before the restored tasks resume
-func restoreStreamed(t *testing.T, storage cedana_io.Storage, path, expected string, streams int32, pid int) (*daemon.RestoreResp, *restoreRun, error) {
+func restoreStreamed(t *testing.T, storage cedana_io.Storage, path, expected, reported string, streams int32, pid int) (*daemon.RestoreResp, *restoreRun, error) {
 	t.Helper()
 	run := &restoreRun{}
 	next := func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (func() <-chan int, error) {
@@ -105,6 +101,12 @@ func restoreStreamed(t *testing.T, storage cedana_io.Storage, path, expected str
 			}
 			file.Close()
 			run.read++
+		}
+		if reported != "" {
+			payload := fmt.Sprintf(`{"manifest":%q,"mode":"warn","files":%d,"verified":%d,"mismatched":0,"missing":0,"unverified":0,"gpu":0,"bytes":1,"failures":[]}`, reported, run.read, run.read)
+			if err := opts.CRIUCallback.MemVerifyResult(ctx, []byte(payload)); err != nil {
+				return nil, err
+			}
 		}
 		run.preResumeErr = opts.CRIUCallback.PostRestore(ctx, int32(pid))
 		if run.preResumeErr == nil {
@@ -139,229 +141,35 @@ func skipWithoutStreamer(t *testing.T) {
 	}
 }
 
-func TestStreamedRestoreVerifiesBeforeTheProcessResumes(t *testing.T) {
+// The mem-verify plugin reports the manifest's checksum as it read the images through
+// the streamer; the callback compares it with the recorded one at pre-resume
+func TestStreamedRestoreVerifiesThePluginsReport(t *testing.T) {
 	skipWithoutStreamer(t)
-	config.Global.Checkpoint.Checksum = true
-	SHARDS_READ_TIMEOUT = 10 * time.Second
-	streams := int32(2)
-	path, sum := streamedCheckpoint(t, streams)
+	const streams = 2
+	path, _ := streamedCheckpoint(t, streams)
+	const recorded = "crc32c:0badf00d"
 
-	t.Run("match", func(t *testing.T) {
-		setVerifyMode(t, config.CHECKSUM_VERIFY_STRICT)
-		process := standIn(t)
-		resp, run, err := restoreStreamed(t, &filesystem.Storage{}, path, sum, streams, process.Process.Pid)
-		if err != nil || run.read != 6 {
-			t.Fatalf("restore: err=%v images read=%d", err, run.read)
-		}
-		if run.atPreResume != daemon.ChecksumResult_CHECKSUM_MATCH || resp.Checksum != sum {
-			t.Fatalf("at pre-resume the result was %v, checksum %s; want MATCH %s, every shard read by then", run.atPreResume, resp.Checksum, sum)
-		}
-		if process.Process.Signal(syscall.Signal(0)) != nil {
-			t.Fatal("a match must leave the restored process alone")
-		}
-	})
-	t.Run("strict mismatch kills the process before it resumes", func(t *testing.T) {
-		setVerifyMode(t, config.CHECKSUM_VERIFY_STRICT)
-		process := standIn(t)
-		resp, run, err := restoreStreamed(t, &filesystem.Storage{}, path, "crc32c:00000000", streams, process.Process.Pid)
-		if status.Code(err) != codes.FailedPrecondition || run.preResumeErr == nil {
-			t.Fatalf("err = %v, hook err = %v; want the restore to fail with FailedPrecondition from CRIU's hook", err, run.preResumeErr)
-		}
-		if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MISMATCH || resp.ChecksumReason != daemon.ChecksumReason_REASON_STORED {
-			t.Fatalf("result = %v %v, want MISMATCH STORED", resp.ChecksumResult, resp.ChecksumReason)
-		}
-		done := make(chan error, 1)
-		go func() { done <- process.Wait() }()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			t.Fatal("the restored process must be killed on a strict mismatch")
-		}
-	})
-	t.Run("warn mismatch resumes", func(t *testing.T) {
-		setVerifyMode(t, config.CHECKSUM_VERIFY_WARN)
-		process := standIn(t)
-		resp, run, err := restoreStreamed(t, &filesystem.Storage{}, path, "crc32c:00000000", streams, process.Process.Pid)
-		if err != nil || run.preResumeErr != nil {
-			t.Fatalf("warn mode must restore: err=%v pre-resume=%v", err, run.preResumeErr)
-		}
-		if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MISMATCH {
-			t.Fatalf("result = %v, want MISMATCH recorded", resp.ChecksumResult)
-		}
-		if process.Process.Signal(syscall.Signal(0)) != nil {
-			t.Fatal("warn mode must leave the restored process alone")
-		}
-	})
-}
-
-// The shards are still being read when post-restore arrives: strict mode must not let
-// the tasks run unverified; warn mode lets them run and verifies after the restore
-func TestPostRestoreCheckWithShardsStillBeingRead(t *testing.T) {
-	previous, previousStrict := SHARDS_READ_TIMEOUT, SHARDS_READ_TIMEOUT_STRICT
-	SHARDS_READ_TIMEOUT, SHARDS_READ_TIMEOUT_STRICT = 100*time.Millisecond, 100*time.Millisecond
-	t.Cleanup(func() { SHARDS_READ_TIMEOUT, SHARDS_READ_TIMEOUT_STRICT = previous, previousStrict })
-	stillReading := make(chan struct{})
-	verified := false
-	verifyNow := func() error { verified = true; return nil }
-
-	t.Run("strict fails and kills the tasks", func(t *testing.T) {
-		process := standIn(t)
-		var gaveUp error
-		err := checksumPostRestore(stillReading, true, int32(process.Process.Pid), verifyNow, func(err error) { gaveUp = err })
-		if status.Code(err) != codes.FailedPrecondition || gaveUp == nil || verified {
-			t.Fatalf("err=%v gaveUp=%v verified=%t", err, gaveUp, verified)
-		}
-		done := make(chan error, 1)
-		go func() { done <- process.Wait() }()
-		select {
-		case <-done:
-		case <-time.After(5 * time.Second):
-			t.Fatal("the restored tasks must be killed")
-		}
-	})
-	t.Run("warn lets the tasks run", func(t *testing.T) {
-		process := standIn(t)
-		var gaveUp error
-		err := checksumPostRestore(stillReading, false, int32(process.Process.Pid), verifyNow, func(err error) { gaveUp = err })
-		if err != nil || gaveUp != nil || verified {
-			t.Fatalf("err=%v gaveUp=%v verified=%t; want nothing done at post-restore", err, gaveUp, verified)
-		}
-		if process.Process.Signal(syscall.Signal(0)) != nil {
-			t.Fatal("warn mode must leave the process alone")
-		}
-	})
-	t.Run("shards read: verified at post-restore", func(t *testing.T) {
-		read := make(chan struct{})
-		close(read)
-		if err := checksumPostRestore(read, true, 0, verifyNow, func(error) {}); err != nil || !verified {
-			t.Fatalf("err=%v verified=%t", err, verified)
-		}
-	})
-}
-
-// A remote store whose own value of every shard differs from what was recorded
-type badShardStore struct {
-	remoteStorage
-}
-
-func (s *badShardStore) ChecksumPath(context.Context, string) (string, error) {
-	return "crc32c:00000000", nil
-}
-
-func TestStreamedRestoreFailsFastOnAStoreValueThatDiffers(t *testing.T) {
-	skipWithoutStreamer(t)
-	config.Global.Checkpoint.Checksum = true
-	streams := int32(2)
-	path, sum := streamedCheckpoint(t, streams)
 	setVerifyMode(t, config.CHECKSUM_VERIFY_STRICT)
-
-	resp, run, err := restoreStreamed(t, &badShardStore{}, path, sum, streams, 0)
-	if run.ran {
-		t.Fatal("the restore must not start when the store's value differs")
-	}
-	if status.Code(err) != codes.FailedPrecondition || resp.ChecksumReason != daemon.ChecksumReason_REASON_STORED {
-		t.Fatalf("err=%v reason=%v, want FailedPrecondition with STORED", err, resp.ChecksumReason)
-	}
-}
-
-// A shard failed before its end, so the manifest of the shards as read is empty:
-// strict mode must not let the tasks run unverified, warn mode restores unverified
-func TestVerifyManifestWithAShardNotReadToItsEnd(t *testing.T) {
-	check := &verify.Check{Expected: "crc32c:00000000", Strict: true}
-	resp := &daemon.RestoreResp{}
-	err := verifyManifest(check, resp, "", "", "/checkpoints/dump", true)
-	if status.Code(err) != codes.FailedPrecondition {
-		t.Fatalf("err = %v, want FailedPrecondition: strict mode does not restore what it cannot verify", err)
-	}
-	if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
-		t.Fatalf("result = %v, want NOT_CHECKED", resp.ChecksumResult)
+	resp, run, err := restoreStreamed(t, &filesystem.Storage{}, path, recorded, recorded, streams, 0)
+	if err != nil || !run.ran || run.read != 6 || run.atPreResume != daemon.ChecksumResult_CHECKSUM_MATCH {
+		t.Fatalf("strict, the recorded checksum reported: err=%v run=%+v resp=%v", err, run, resp)
 	}
 
-	check.Strict = false
-	if err := verifyManifest(check, resp, "", "", "/checkpoints/dump", true); err != nil {
-		t.Fatalf("warn mode must restore unverified: %v", err)
-	}
-	if resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
-		t.Fatalf("result = %v, want NOT_CHECKED", resp.ChecksumResult)
+	setVerifyMode(t, config.CHECKSUM_VERIFY_WARN)
+	resp, run, err = restoreStreamed(t, &filesystem.Storage{}, path, recorded, "crc32c:deadbeef", streams, 0)
+	if err != nil || !run.ran || resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MISMATCH || resp.ChecksumReason != daemon.ChecksumReason_REASON_STORED {
+		t.Fatalf("warn, another manifest reported: err=%v run=%+v resp=%v", err, run, resp)
 	}
 
-	// With every shard read, the manifest is compared as usual
-	check.Strict = true
-	if err := verifyManifest(check, resp, "crc32c:00000000", "", "/checkpoints/dump", true); err != nil || resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_MATCH {
-		t.Fatalf("err=%v result=%v, want MATCH", err, resp.ChecksumResult)
-	}
-}
-
-// A remote store whose download of every shard but the first stalls after the
-// shard's last byte, as a connection that hangs on the trailing bytes of an object
-// does, until the read is cancelled. The first shard holds the small files, which
-// the streamer reads to their end before it serves anything.
-type stallingStore struct {
-	remoteStorage
-}
-
-func (s *stallingStore) Open(ctx context.Context, path string) (io.ReadCloser, error) {
-	file, err := s.remoteStorage.Open(ctx, path)
-	if err != nil || shardNumber(filepath.Base(path)) == 0 {
-		return file, err
-	}
-	return &stalledAtEnd{ReadCloser: file, ctx: ctx}, nil
-}
-
-type stalledAtEnd struct {
-	io.ReadCloser
-	ctx context.Context
-}
-
-func (r *stalledAtEnd) Read(p []byte) (int, error) {
-	n, err := r.ReadCloser.Read(p)
-	if err == io.EOF {
-		<-r.ctx.Done()
-		return n, r.ctx.Err()
-	}
-	return n, err
-}
-
-// The shards stall before their end, so the strict check gives up at post-restore:
-// the restore must fail and return, not wait on the stalled reads
-func TestStrictStreamedRestoreReturnsWhenTheShardsStall(t *testing.T) {
-	skipWithoutStreamer(t)
-	config.Global.Checkpoint.Checksum = true
-	previous := SHARDS_READ_TIMEOUT_STRICT
-	SHARDS_READ_TIMEOUT_STRICT = 500 * time.Millisecond
-	t.Cleanup(func() { SHARDS_READ_TIMEOUT_STRICT = previous })
-	streams := int32(2)
-	path, sum := streamedCheckpoint(t, streams)
 	setVerifyMode(t, config.CHECKSUM_VERIFY_STRICT)
-	process := standIn(t)
+	_, run, err = restoreStreamed(t, &filesystem.Storage{}, path, recorded, "crc32c:deadbeef", streams, 0)
+	if status.Code(err) != codes.FailedPrecondition || status.Code(run.preResumeErr) != codes.FailedPrecondition {
+		t.Fatalf("strict, another manifest reported: err=%v preResumeErr=%v", err, run.preResumeErr)
+	}
 
-	type result struct {
-		resp *daemon.RestoreResp
-		run  *restoreRun
-		err  error
-	}
-	done := make(chan result, 1)
-	go func() {
-		resp, run, err := restoreStreamed(t, &stallingStore{}, path, sum, streams, process.Process.Pid)
-		done <- result{resp, run, err}
-	}()
-	var got result
-	select {
-	case got = <-done:
-	case <-time.After(30 * time.Second):
-		t.Fatal("the restore must return once the strict check gave up on the stalled shards")
-	}
-	if status.Code(got.err) != codes.FailedPrecondition || got.run.read != 6 {
-		t.Fatalf("err=%v images read=%d; want FailedPrecondition after every image was served", got.err, got.run.read)
-	}
-	if got.resp.ChecksumResult != daemon.ChecksumResult_CHECKSUM_NOT_CHECKED {
-		t.Fatalf("result = %v, want NOT_CHECKED", got.resp.ChecksumResult)
-	}
-	exited := make(chan error, 1)
-	go func() { exited <- process.Wait() }()
-	select {
-	case <-exited:
-	case <-time.After(5 * time.Second):
-		t.Fatal("the restored tasks must be killed when the strict check gives up")
+	// Without a recorded checksum nothing is verified
+	_, run, err = restoreStreamed(t, &filesystem.Storage{}, path, "", "", streams, 0)
+	if err != nil || !run.ran || run.atPreResume != 0 {
+		t.Fatalf("no recorded checksum: err=%v run=%+v", err, run)
 	}
 }

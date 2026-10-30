@@ -85,6 +85,21 @@ const (
 	CHECKSUM_VERIFY_STRICT = "strict"
 )
 
+// ChecksumVerifyMode is Checkpoint.ChecksumVerify as one of the values above: the one
+// mode of the three checks, the mem-verify plugin's, the daemon's compare and the GPU
+// state verification (cedana-designs/mem-verify.org). The default when unset; warn
+// when unknown.
+func ChecksumVerifyMode() string {
+	switch mode := strings.ToLower(strings.TrimSpace(Global.Checkpoint.ChecksumVerify)); mode {
+	case CHECKSUM_VERIFY_OFF, CHECKSUM_VERIFY_WARN, CHECKSUM_VERIFY_STRICT:
+		return mode
+	case "":
+		return DEFAULT_CHECKPOINT_CHECKSUM_VERIFY
+	default:
+		return CHECKSUM_VERIFY_WARN
+	}
+}
+
 // The default global config. This will get overwritten
 // by the config file or env vars during startup, if they exist.
 var Global Config = Config{

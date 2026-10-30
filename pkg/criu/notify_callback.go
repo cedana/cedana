@@ -57,7 +57,7 @@ func (n NotifyCallback) Initialize(ctx context.Context, criuPid int32) error {
 		err := n.InitializeFunc(ctx, criuPid)
 		if err != nil {
 			log.Trace().Err(err).Int32("criuPid", criuPid).Str("name", n.Name).Msg("CRIU initialize callback failed")
-			return fmt.Errorf("initialize callback: %v", err)
+			return fmt.Errorf("initialize callback: %w", err)
 		}
 	}
 	return nil
@@ -72,7 +72,7 @@ func (n NotifyCallback) InitializeDump(ctx context.Context, opts *criu.CriuOpts)
 		err := n.InitializeDumpFunc(ctx, opts)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU initialize dump callback failed")
-			return fmt.Errorf("initialize dump callback: %v", err)
+			return fmt.Errorf("initialize dump callback: %w", err)
 		}
 	}
 	return nil
@@ -87,7 +87,7 @@ func (n NotifyCallback) InitializeRestore(ctx context.Context, opts *criu.CriuOp
 		err := n.InitializeRestoreFunc(ctx, opts)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU initialize restore callback failed")
-			return fmt.Errorf("initialize restore callback: %v", err)
+			return fmt.Errorf("initialize restore callback: %w", err)
 		}
 	}
 	return nil
@@ -102,7 +102,7 @@ func (n NotifyCallback) FinalizeDump(ctx context.Context, opts *criu.CriuOpts, e
 		err := n.FinalizeDumpFunc(ctx, opts, err)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU finalize dump callback failed")
-			return fmt.Errorf("finalize dump callback: %v", err)
+			return fmt.Errorf("finalize dump callback: %w", err)
 		}
 	}
 	return nil
@@ -117,7 +117,7 @@ func (n NotifyCallback) FinalizeRestore(ctx context.Context, opts *criu.CriuOpts
 		err := n.FinalizeRestoreFunc(ctx, opts, err)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU finalize restore callback failed")
-			return fmt.Errorf("finalize restore callback: %v", err)
+			return fmt.Errorf("finalize restore callback: %w", err)
 		}
 	}
 	return nil
@@ -132,7 +132,7 @@ func (n NotifyCallback) PreDump(ctx context.Context, opts *criu.CriuOpts) error 
 		err := n.PreDumpFunc(ctx, opts)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU pre-dump callback failed")
-			return fmt.Errorf("pre-dump callback: %v", err)
+			return fmt.Errorf("pre-dump callback: %w", err)
 		}
 	}
 	return nil
@@ -147,7 +147,7 @@ func (n NotifyCallback) PostDump(ctx context.Context, opts *criu.CriuOpts) error
 		err := n.PostDumpFunc(ctx, opts)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU post-dump callback failed")
-			return fmt.Errorf("post-dump callback: %v", err)
+			return fmt.Errorf("post-dump callback: %w", err)
 		}
 	}
 	return nil
@@ -162,7 +162,7 @@ func (n NotifyCallback) PreRestore(ctx context.Context, opts *criu.CriuOpts) err
 		err := n.PreRestoreFunc(ctx, opts)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU pre-restore callback failed")
-			return fmt.Errorf("pre-restore callback: %v", err)
+			return fmt.Errorf("pre-restore callback: %w", err)
 		}
 	}
 	return nil
@@ -177,7 +177,7 @@ func (n NotifyCallback) PreResume(ctx context.Context) error {
 		err := n.PreResumeFunc(ctx)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU pre-resume callback failed")
-			return fmt.Errorf("pre-resume callback: %v", err)
+			return fmt.Errorf("pre-resume callback: %w", err)
 		}
 	}
 	return nil
@@ -192,7 +192,7 @@ func (n NotifyCallback) PostRestore(ctx context.Context, pid int32) error {
 		err := n.PostRestoreFunc(ctx, pid)
 		if err != nil {
 			log.Trace().Err(err).Int32("pid", pid).Str("name", n.Name).Msg("CRIU post-restore callback failed")
-			return fmt.Errorf("post-restore callback: %v", err)
+			return fmt.Errorf("post-restore callback: %w", err)
 		}
 	}
 	return nil
@@ -207,7 +207,7 @@ func (n NotifyCallback) NetworkLock(ctx context.Context) error {
 		err := n.NetworkLockFunc(ctx)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU network-lock callback failed")
-			return fmt.Errorf("network-lock callback: %v", err)
+			return fmt.Errorf("network-lock callback: %w", err)
 		}
 	}
 	return nil
@@ -222,7 +222,7 @@ func (n NotifyCallback) NetworkUnlock(ctx context.Context) error {
 		err := n.NetworkUnlockFunc(ctx)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU network-unlock callback failed")
-			return fmt.Errorf("network-unlock callback: %v", err)
+			return fmt.Errorf("network-unlock callback: %w", err)
 		}
 	}
 	return nil
@@ -237,7 +237,7 @@ func (n NotifyCallback) SetupNamespaces(ctx context.Context, pid int32) error {
 		err := n.SetupNamespacesFunc(ctx, pid)
 		if err != nil {
 			log.Trace().Err(err).Int32("pid", pid).Str("name", n.Name).Msg("CRIU setup-namespaces callback failed")
-			return fmt.Errorf("setup-namespaces callback: %v", err)
+			return fmt.Errorf("setup-namespaces callback: %w", err)
 		}
 	}
 	return nil
@@ -252,7 +252,7 @@ func (n NotifyCallback) PostSetupNamespaces(ctx context.Context) error {
 		err := n.PostSetupNamespacesFunc(ctx)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU post-setup-namespaces callback failed")
-			return fmt.Errorf("post-setup-namespaces callback: %v", err)
+			return fmt.Errorf("post-setup-namespaces callback: %w", err)
 		}
 	}
 	return nil
@@ -267,7 +267,7 @@ func (n NotifyCallback) SkipNamespaces(ctx context.Context, pid int32) error {
 		err := n.SkipNamespacesFunc(ctx, pid)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU skip-namespaces callback failed")
-			return fmt.Errorf("skip-namespaces callback: %v", err)
+			return fmt.Errorf("skip-namespaces callback: %w", err)
 		}
 	}
 	return nil
@@ -282,7 +282,7 @@ func (n NotifyCallback) PostResume(ctx context.Context) error {
 		err := n.PostResumeFunc(ctx)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU post-resume callback failed")
-			return fmt.Errorf("post-resume callback: %v", err)
+			return fmt.Errorf("post-resume callback: %w", err)
 		}
 	}
 	return nil
@@ -297,7 +297,7 @@ func (n NotifyCallback) QueryExtFiles(ctx context.Context) ([]string, error) {
 		external, err := n.QueryExtFilesFunc(ctx)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU query-ext-files callback failed")
-			return nil, fmt.Errorf("query-ext-files callback: %v", err)
+			return nil, fmt.Errorf("query-ext-files callback: %w", err)
 		}
 		return external, nil
 	}
@@ -313,7 +313,7 @@ func (n NotifyCallback) OrphanPtsMaster(ctx context.Context, fd int32) error {
 		err := n.OrphanPtsMasterFunc(ctx, fd)
 		if err != nil {
 			log.Trace().Err(err).Int32("fd", fd).Str("name", n.Name).Msg("CRIU orphan-pts-master callback failed")
-			return fmt.Errorf("orphan-pts-master callback: %v", err)
+			return fmt.Errorf("orphan-pts-master callback: %w", err)
 		}
 	}
 	return nil
@@ -328,7 +328,7 @@ func (n NotifyCallback) MemVerifyManifest(ctx context.Context, payload []byte) e
 		err := n.MemVerifyManifestFunc(ctx, payload)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU mem-verify-manifest callback failed")
-			return fmt.Errorf("mem-verify-manifest callback: %v", err)
+			return fmt.Errorf("mem-verify-manifest callback: %w", err)
 		}
 	}
 	return nil
@@ -343,7 +343,7 @@ func (n NotifyCallback) MemVerifyResult(ctx context.Context, payload []byte) err
 		err := n.MemVerifyResultFunc(ctx, payload)
 		if err != nil {
 			log.Trace().Err(err).Str("name", n.Name).Msg("CRIU mem-verify-result callback failed")
-			return fmt.Errorf("mem-verify-result callback: %v", err)
+			return fmt.Errorf("mem-verify-result callback: %w", err)
 		}
 	}
 	return nil
