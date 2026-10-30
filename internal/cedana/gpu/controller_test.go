@@ -1,9 +1,11 @@
 package gpu
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync/atomic"
@@ -13,6 +15,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/gofrs/flock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -256,4 +259,62 @@ func TestInitializeRestoreFailsOnTerminatedController(t *testing.T) {
 		t.Fatal("the termination lock is still held")
 	}
 	c.Termination.Unlock()
+}
+
+// A stale controller with no process
+func newStaleController(t *testing.T, p *pool) *controller {
+	t.Helper()
+	c := &controller{
+		ID:         "test-stale-controller",
+		ErrBuf:     &bytes.Buffer{},
+		Booking:    flock.New(filepath.Join(t.TempDir(), "booking")),
+		Terminated: make(chan int, 1),
+	}
+	p.Store(c.ID, c)
+	return c
+}
+
+func TestTryTerminateSkipsHeldController(t *testing.T) {
+	p := &pool{}
+	c := newStaleController(t, p)
+
+	c.Termination.Lock()
+	defer c.Termination.Unlock()
+
+	result := make(chan bool, 1)
+	go func() { result <- p.TryTerminate(context.Background(), c.ID) }()
+	select {
+	case terminated := <-result:
+		if terminated {
+			t.Fatal("TryTerminate terminated a held controller")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("TryTerminate waited for the termination lock")
+	}
+	if p.Get(c.ID) == nil {
+		t.Fatal("the held controller is no longer in the pool")
+	}
+	if c.Terminating.Load() {
+		t.Fatal("the held controller is marked as terminating")
+	}
+}
+
+func TestTryTerminateTerminatesFreeController(t *testing.T) {
+	p := &pool{}
+	c := newStaleController(t, p)
+
+	if !p.TryTerminate(context.Background(), c.ID) {
+		t.Fatal("TryTerminate skipped a controller nobody holds")
+	}
+	if p.Get(c.ID) != nil {
+		t.Fatal("the terminated controller is still in the pool")
+	}
+	select {
+	case <-c.Terminated:
+	default:
+		t.Fatal("Terminated is not closed")
+	}
+	if !p.TryTerminate(context.Background(), c.ID) {
+		t.Fatal("TryTerminate of a controller no longer in the pool returned false")
+	}
 }
