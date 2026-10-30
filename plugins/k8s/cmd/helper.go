@@ -39,7 +39,6 @@ var (
 func init() {
 	HelperCmd.AddCommand(setupCmd)
 	HelperCmd.AddCommand(destroyCmd)
-	HelperCmd.AddCommand(depsScriptCmd)
 	if addr := os.Getenv("CONTAINERD_ADDRESS"); addr != "" {
 		containerdAddress = addr
 	}
@@ -103,16 +102,6 @@ var setupCmd = &cobra.Command{
 		runHelper(ctx)
 
 		return nil
-	},
-}
-
-var depsScriptCmd = &cobra.Command{
-	Use:   "deps-script",
-	Short: "Print the script that installs the host dependencies setup needs (run it on the node, e.g. in the node image, and set CEDANA_HOST_DEPS=check)",
-	Args:  cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		_, err := fmt.Fprint(cmd.OutOrStdout(), scripts.InstallDeps)
-		return err
 	},
 }
 

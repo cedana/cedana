@@ -43,26 +43,6 @@ has_cedana_runtime() {
     grep -Eqs "runtimes\.(cedana|\"cedana\"|'cedana')\]" "$1"
 }
 
-# Prints the tables of a TOML snippet (stdin) that the given file does not define yet. Table
-# headers are compared with whitespace and key quotes ignored, so a table re-serialized by another
-# tool (e.g. the NVIDIA toolkit, which rewrites its conf.d file from the merged config, cedana
-# runtime included) counts as defined: defining it twice makes containerd refuse the whole config.
-new_tables() {
-    awk '
-        function key(header) {
-            sub(/\][^]]*$/, "]", header)
-            gsub(/[[:space:]"\047]/, "", header)
-            return header
-        }
-        FNR == NR {
-            if ($0 ~ /^[[:space:]]*\[[^[]/) defined[key($0)] = 1
-            next
-        }
-        /^[[:space:]]*\[/ { skip = (key($0) in defined) }
-        !skip { print }
-    ' "$1" -
-}
-
 CONFIG_CHANGED=false
 
 # Every file the script changes is backed up first, so that a config containerd refuses (or that
@@ -72,15 +52,10 @@ BACKUP_PATHS=()
 trap 'rm -rf "$BACKUP_DIR"' EXIT
 
 backup() {
-    local i
-    for i in "${!BACKUP_PATHS[@]}"; do
-        [ "${BACKUP_PATHS[$i]}" != "$1" ] || return 0
-    done
-    i=${#BACKUP_PATHS[@]}
-    BACKUP_PATHS+=("$1")
     if [ -e "$1" ]; then
-        cp -p "$1" "$BACKUP_DIR/$i"
+        cp -p "$1" "$BACKUP_DIR/${#BACKUP_PATHS[@]}"
     fi
+    BACKUP_PATHS+=("$1")
 }
 
 rollback() {
@@ -155,13 +130,12 @@ if [ -n "$RANCHER_SERVICES" ]; then
     fi
     echo "Using containerd config template $TEMPLATE (config version $CONTAINERD_VERSION)"
 
-    backup "$TEMPLATE"
-    if [ ! -f "$TEMPLATE" ]; then
-        echo '{{ template "base" . }}' >"$TEMPLATE"
-    fi
-
     if ! has_cedana_runtime "$TEMPLATE"; then
         echo "Adding cedana runtime config to $TEMPLATE"
+        backup "$TEMPLATE"
+        if [ ! -f "$TEMPLATE" ]; then
+            echo '{{ template "base" . }}' >"$TEMPLATE"
+        fi
         {
             echo ""
             cedana_runtime_config "$CONTAINERD_VERSION"
@@ -227,13 +201,14 @@ else
         if [ -n "$LAST_CONFD_FILE" ]; then
             TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
             echo "Basing cedana runtime config on last existing conf.d file: $LAST_CONFD_FILE"
-            if has_cedana_runtime "$LAST_CONFD_FILE"; then
-                echo "$LAST_CONFD_FILE already defines the cedana runtime, not adding it again"
-            fi
+            # After a reboot, the NVIDIA toolkit rewrites its conf.d file from the merged config,
+            # which has the cedana runtime by then: adding it again defines it twice
             NEW_CONFIG=$(
                 cat "$LAST_CONFD_FILE"
-                echo ""
-                cedana_runtime_config 2 "$RUNC_ARG" | new_tables "$LAST_CONFD_FILE"
+                if ! has_cedana_runtime "$LAST_CONFD_FILE"; then
+                    echo ""
+                    cedana_runtime_config 2 "$RUNC_ARG"
+                fi
             )
             if [ "$NEW_CONFIG" != "$(cat "$TARGET_CONFIG" 2>/dev/null)" ]; then
                 echo "Writing cedana runtime config to $TARGET_CONFIG"
@@ -251,8 +226,10 @@ else
             if ! has_cedana_runtime "$TARGET_CONFIG"; then
                 echo "No conf.d files found, adding cedana runtime config to $TARGET_CONFIG"
                 backup "$TARGET_CONFIG"
-                NEW_TABLES=$(cedana_runtime_config 2 "$RUNC_ARG" | new_tables "$TARGET_CONFIG")
-                printf '\n%s\n' "$NEW_TABLES" >>"$TARGET_CONFIG"
+                {
+                    echo ""
+                    cedana_runtime_config 2 "$RUNC_ARG"
+                } >>"$TARGET_CONFIG"
                 CONFIG_CHANGED=true
             else
                 echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
@@ -359,37 +336,18 @@ if [ "$CONFIG_CHANGED" = false ]; then
     echo "Containerd runtime configuration up to date but not applied ($RESTART_SERVICE started before it was written)"
 fi
 
-# The binary the containerd service runs (CONTAINERD_BIN overrides)
-containerd_binary() {
-    local path
-    if [ -n "${CONTAINERD_BIN:-}" ]; then
-        echo "$CONTAINERD_BIN"
-        return
-    fi
-    path=$(systemctl show -p ExecStart --value containerd 2>/dev/null | sed -n 's/.*path=\([^ ;]*\).*/\1/p' | head -n 1)
-    if [ -n "$path" ] && [ -x "$path" ]; then
-        echo "$path"
-        return
-    fi
-    command -v containerd 2>/dev/null || true
-}
-
 # Load the config (main file and every import) the way containerd will on restart, without
 # restarting it. k3s/RKE2 render their template only on start, so there's nothing to load yet.
 if [ -z "$RANCHER_SERVICES" ]; then
-    CONTAINERD_BIN_PATH=$(containerd_binary)
+    CONTAINERD_BIN_PATH=$(command -v "${CONTAINERD_BIN:-containerd}" || true)
     if [ -z "$CONTAINERD_BIN_PATH" ]; then
         echo "WARNING: containerd binary not found, not validating $CONTAINERD_CONFIG_PATH before restarting" >&2
     else
         echo "Validating $CONTAINERD_CONFIG_PATH with $CONTAINERD_BIN_PATH"
         if ! VALIDATE_OUTPUT=$("$CONTAINERD_BIN_PATH" --config "$CONTAINERD_CONFIG_PATH" config dump 2>&1 >/dev/null); then
             echo "$VALIDATE_OUTPUT" >&2
-            if [ "$CONFIG_CHANGED" = true ]; then
-                echo "ERROR: containerd does not load the cedana runtime configuration, rolling it back; not restarting $RESTART_SERVICE" >&2
-                rollback
-            else
-                echo "ERROR: containerd does not load $CONTAINERD_CONFIG_PATH; not restarting $RESTART_SERVICE" >&2
-            fi
+            echo "ERROR: containerd does not load $CONTAINERD_CONFIG_PATH, rolling back this run's changes; not restarting $RESTART_SERVICE" >&2
+            rollback
             exit 1
         fi
     fi

@@ -186,7 +186,7 @@ EOF2
     export CONTAINERD_BIN="$TMP/bin/containerd-refuses"
     run_script
     [ "$status" -eq 1 ]
-    [[ "$output" == *"rolling it back"* ]]
+    [[ "$output" == *"rolling back"* ]]
     [ "$(cat "$TMP/etc/containerd/conf.d/999-cedana.toml")" = "previous" ]
     [ ! -e "$RESTARTS" ]
 }

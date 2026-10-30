@@ -6,14 +6,25 @@ if [ "$ENV" != "production" ]; then
     exit 0
 fi
 
-# Only merging into a --config file needs jq (JSON) or yq (YAML); a drop-in config dir needs neither
-require_tool() {
-    if ! command -v "$1" >/dev/null 2>&1; then
-        echo "Error: '$1' is not installed. Please install it to update $2 kubelet configurations." >&2
-        exit 1
-    fi
-    echo "$1 found at: $(command -v "$1") ($("$1" --version))"
+# Ensure necessary tools are available
+check_tool() {
+    command -v "$1" >/dev/null 2>&1
 }
+
+echo "Checking required tools..."
+
+if ! check_tool "jq"; then
+    echo "Error: 'jq' is not installed. Please install 'jq' to update JSON kubelet configurations." >&2
+    exit 1
+fi
+echo "jq found at: $(command -v jq) ($(jq --version))"
+
+if ! check_tool "yq"; then
+    echo "Error: 'yq' is not installed. Please install 'yq' to update YAML kubelet configurations." >&2
+    echo "You can install it from https://github.com/mikefarah/yq#install" >&2
+    exit 1
+fi
+echo "yq found at: $(command -v yq) ($(yq --version))"
 
 # Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
@@ -147,10 +158,6 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
 
     FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
     echo "Detected config file extension: .$FILE_EXTENSION"
-    case "$FILE_EXTENSION" in
-        json) require_tool jq JSON ;;
-        yaml | yml) require_tool yq YAML ;;
-    esac
     TEMP_CONFIG=$(mktemp)
     echo "Created temp file for merge: $TEMP_CONFIG"
 
