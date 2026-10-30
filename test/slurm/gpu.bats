@@ -49,7 +49,7 @@ load ../helpers/slurm_propagator
 #SBATCH --output=exit-race-%j.out
 #SBATCH --gres=gpu:1
 trap 'echo "END rc=$?"' EXIT
-gpu_smr/mem-throughput-saxpy >/dev/null
+gpu_smr/mem-throughput-saxpy >/dev/null || exit $?
 sleep 1
 EOF
 
