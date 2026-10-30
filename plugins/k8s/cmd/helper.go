@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ var (
 func init() {
 	HelperCmd.AddCommand(setupCmd)
 	HelperCmd.AddCommand(destroyCmd)
+	HelperCmd.AddCommand(depsScriptCmd)
 	if addr := os.Getenv("CONTAINERD_ADDRESS"); addr != "" {
 		containerdAddress = addr
 	}
@@ -74,6 +76,11 @@ var setupCmd = &cobra.Command{
 		}
 		defer restorePodIdentityEnv()
 
+		// No package changes on the host unless asked for: install-deps.sh only reports what's missing
+		if err := os.Setenv("CEDANA_INSTALL_DEPS", strconv.FormatBool(config.Global.K8s.InstallDeps)); err != nil {
+			return fmt.Errorf("failed to set CEDANA_INSTALL_DEPS: %w", err)
+		}
+
 		err = script.Run(
 			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
 			script.Chroot("/host", scripts.ResetService),
@@ -102,6 +109,16 @@ var setupCmd = &cobra.Command{
 		runHelper(ctx)
 
 		return nil
+	},
+}
+
+var depsScriptCmd = &cobra.Command{
+	Use:   "deps-script",
+	Short: "Print the script that installs the host packages cedana needs, to run on the node (e.g. in the node image)",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		_, err := fmt.Fprint(cmd.OutOrStdout(), scripts.InstallDeps)
+		return err
 	},
 }
 
