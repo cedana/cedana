@@ -7,12 +7,16 @@ package io
 // is written costs no time.
 
 import (
+	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"hash"
 	"hash/crc32"
 	"io"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 const CHECKSUM_ALGORITHM = "crc32c"
@@ -111,6 +115,73 @@ func ChecksumOfWriter(w io.Writer) string {
 	return ""
 }
 
-// ManifestExcluded are the files of a directory checkpoint that a restore rewrites;
-// they are left out of its manifest
-var ManifestExcluded = []string{"criu-dump.log", "criu-restore.log", "stats-dump", "stats-restore"}
+// ManifestExcluded are the files of a directory checkpoint that a restore rewrites,
+// and the manifest's own files; they are left out of its manifest
+var ManifestExcluded = []string{"criu-dump.log", "criu-restore.log", "stats-dump", "stats-restore", ManifestImage, ManifestResult}
+
+// ManifestImage is the image the mem-verify CRIU plugin writes during a dump: the
+// manifest of the checkpoint's files, one line per file in the text ManifestChecksum
+// hashes, so that the CRC32C of the image is the checkpoint's checksum
+const ManifestImage = "mem-verify-manifest"
+
+// ManifestResult is the file the plugin writes its restore result to when CRIU does
+// not run under RPC, as in the plugin's tests
+const ManifestResult = "mem-verify-result"
+
+// GPULinesPrefix names the images the GPU controller writes with the checksum of its
+// own files, one per worker, which the plugin merges into the manifest
+const GPULinesPrefix = "mem-verify-gpu-"
+
+// ParseManifest reads a manifest, one line "<name> <checksum>" per file
+func ParseManifest(r io.Reader) ([]ManifestEntry, error) {
+	var entries []ManifestEntry
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+		name, sum, ok := strings.Cut(line, " ")
+		if !ok || name == "" || !strings.Contains(sum, ":") {
+			return nil, fmt.Errorf("bad manifest line %q", line)
+		}
+		entries = append(entries, ManifestEntry{Name: name, Checksum: sum})
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return entries, nil
+}
+
+// A ManifestNotice is what the mem-verify plugin sends on the notification
+// "mem-verify-manifest" when it has written the manifest: the manifest's checksum,
+// which is the checkpoint's, and its line count
+type ManifestNotice struct {
+	Manifest string `json:"manifest"`
+	Files    int    `json:"files"`
+}
+
+func ParseManifestNotice(payload []byte) (ManifestNotice, error) {
+	var notice ManifestNotice
+	if err := json.Unmarshal(payload, &notice); err != nil {
+		return notice, fmt.Errorf("bad manifest notice %q: %w", payload, err)
+	}
+	if notice.Manifest == "" {
+		return notice, fmt.Errorf("manifest notice without a checksum: %q", payload)
+	}
+	return notice, nil
+}
+
+// RecordedChecksum is the checksum a dump records for a checkpoint: the manifest's,
+// which the mem-verify plugin sent from CRIU, whatever the storage wrote. The value
+// the storage's writer computed over what it wrote, a tarball or the shards, is logged
+// beside it as a check of the transfer. "" with a warning when no manifest came: the
+// plugin is not installed, or CRIU predates it.
+func RecordedChecksum(written, manifest, what string) string {
+	if manifest == "" {
+		log.Warn().Str("written", written).Msgf("no manifest checksum from CRIU for the %s: is the mem-verify plugin installed? no checksum recorded", what)
+		return ""
+	}
+	log.Info().Str("written", written).Str("checksum", manifest).Msgf("the %s is recorded with the manifest's checksum", what)
+	return manifest
+}

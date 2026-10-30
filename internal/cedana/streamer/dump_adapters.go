@@ -14,6 +14,7 @@ import (
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/internal/cedana/filesystem"
 	"github.com/cedana/cedana/pkg/config"
+	criu_client "github.com/cedana/cedana/pkg/criu"
 	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -150,7 +151,10 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				}
 				return cedana_io.ManifestChecksum(entries)
 			}
-			manifest := func() string { return manifestOf(streamFs.Checksums()) }
+			shards := func() string { return manifestOf(streamFs.Checksums()) }
+			// The mem-verify plugin sends the manifest's checksum from CRIU's fini, before
+			// CRIU exits: the checkpoint's checksum, logged beside the shards' values
+			manifest := criu_client.ManifestChecksum(opts.CRIUCallback)
 
 			// XXX: We do not differentiate between leave-running or not, because unfortunately CRIU
 			// does not close the streaming file descriptors on its side when the PostDumpFunc is triggered.
@@ -252,15 +256,15 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 							// agree when the shards were copied byte for byte; a difference is logged,
 							// and the check that fails the upload comes later
 							checksum := manifestOf(uploaded)
-							local := manifest()
+							local := shards()
 							if local != "" && checksum != "" && local != checksum {
 								log.Warn().Str("local", local).Str("uploaded", checksum).Msg("the uploaded shards' checksums differ from the shards written")
 							}
 							if checksum == "" {
 								checksum = local
 							}
-							log.Info().Str("checksum", checksum).Msg("async dump upload completed")
-							finish(checksum, nil)
+							log.Info().Str("shards", checksum).Msg("async dump upload completed")
+							finish(cedana_io.RecordedChecksum(checksum, manifest(), "shards"), nil)
 						}
 					})
 				}()
@@ -275,7 +279,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 					}
 					// The checksum is known when the dump returns. It is kept where the
 					// outcome of an upload is kept, so a caller learns it the same way
-					if checksum := manifest(); checksum != "" {
+					if checksum := cedana_io.RecordedChecksum(shards(), manifest(), "shards"); checksum != "" {
 						opts.Uploads.Record(path, checksum)
 						resp.Pending = append(resp.Pending, path)
 					}

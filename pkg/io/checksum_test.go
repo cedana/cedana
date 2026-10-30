@@ -3,6 +3,7 @@ package io
 import (
 	"bytes"
 	"hash/crc32"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -58,5 +59,47 @@ func TestManifestChecksum(t *testing.T) {
 	// The order is the caller's: a different order is a different checksum
 	if ManifestChecksum([]ManifestEntry{entries[1], entries[0]}) == want {
 		t.Fatal("the manifest must depend on the order of its entries")
+	}
+}
+
+func TestParseManifest(t *testing.T) {
+	entries, err := ParseManifest(strings.NewReader("core-1.img crc32c:0000abcd\npages-1.img crc32c:e3069283\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []ManifestEntry{{Name: "core-1.img", Checksum: "crc32c:0000abcd"}, {Name: "pages-1.img", Checksum: "crc32c:e3069283"}}
+	if !slices.Equal(entries, want) {
+		t.Fatalf("entries = %v", entries)
+	}
+	// The checksum of the parsed manifest is that of its text: what the plugin notifies
+	text := "core-1.img crc32c:0000abcd\npages-1.img crc32c:e3069283\n"
+	if sum, _ := ChecksumOf(strings.NewReader(text)); ManifestChecksum(want) != sum {
+		t.Fatalf("ManifestChecksum = %s, text = %s", ManifestChecksum(want), sum)
+	}
+	for _, bad := range []string{"noname\n", " crc32c:1\n", "pages-1.img nohash\n"} {
+		if _, err := ParseManifest(strings.NewReader(bad)); err == nil {
+			t.Fatalf("%q must be an error", bad)
+		}
+	}
+}
+
+func TestParseManifestNotice(t *testing.T) {
+	notice, err := ParseManifestNotice([]byte(`{"manifest":"crc32c:e3069283","files":12}`))
+	if err != nil || notice.Manifest != "crc32c:e3069283" || notice.Files != 12 {
+		t.Fatalf("notice = %+v, %v", notice, err)
+	}
+	for _, bad := range []string{`{"files":1}`, `not json`, ``} {
+		if _, err := ParseManifestNotice([]byte(bad)); err == nil {
+			t.Fatalf("%q must be an error", bad)
+		}
+	}
+}
+
+func TestRecordedChecksumIsTheManifests(t *testing.T) {
+	if got := RecordedChecksum("crc32c:11111111", "crc32c:22222222", "tarball"); got != "crc32c:22222222" {
+		t.Fatalf("got %s, want the manifest's", got)
+	}
+	if got := RecordedChecksum("crc32c:11111111", "", "tarball"); got != "" {
+		t.Fatalf("got %s, want none without a manifest", got)
 	}
 }

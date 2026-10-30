@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -35,10 +33,10 @@ const DUMP_DIR_PERMS = 0o755
 //   - "gzip" creates a gzipped tarball of the dump directory
 //   - "lz4" creates an lz4-compressed tarball of the dump directory
 //
-// directoryChecksums serialises the reads of checkpoint directories for their
-// checksums: one at a time on a node, so two do not compete for the same disk
-var directoryChecksums sync.Mutex
-
+// The checksum recorded for the checkpoint, of every kind, is the manifest's: the
+// mem-verify CRIU plugin writes the manifest of the images during the dump and sends
+// its checksum before CRIU exits. A directory's is in the response; a tarball's and
+// an upload's are held in the upload registry once the compress or the upload has ended.
 func DumpFilesystem(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		storage := opts.Storage
@@ -80,6 +78,10 @@ func DumpFilesystem(next types.Dump) types.Dump {
 		// The asynchronous mode applies to every storage: the compress of a local tarball
 		// runs after the dump has returned, so its hash runs outside the freeze
 		async := req.Async || config.Global.Checkpoint.Async
+
+		// The mem-verify plugin sends the manifest's checksum from CRIU's fini, before CRIU
+		// exits: the checkpoint's checksum, whatever the storage writes
+		manifest := criu_client.ManifestChecksum(opts.CRIUCallback)
 
 		// Create the directory
 		if err := os.Mkdir(imagesDirectory, DUMP_DIR_PERMS); err != nil {
@@ -196,8 +198,8 @@ func DumpFilesystem(next types.Dump) types.Dump {
 							log.Error().Err(compressErr).Msg("async compress/upload failed")
 							finish("", compressErr)
 						} else {
-							log.Info().Str("checksum", checksum).Msg("async dump compress/upload completed")
-							finish(checksum, nil)
+							log.Info().Str("written", checksum).Msg("async dump compress/upload completed")
+							finish(io.RecordedChecksum(checksum, manifest(), "tarball"), nil)
 						}
 					})
 				}()
@@ -209,7 +211,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 						// A synchronous dump's checksum is known when it returns; it is kept where
 						// an upload's outcome is kept, so a caller learns it the same way
 						if err == nil && checksum != "" && opts.Uploads != nil {
-							opts.Uploads.Record(path, checksum)
+							opts.Uploads.Record(path, io.RecordedChecksum(checksum, manifest(), "tarball"))
 							resp.Pending = append(resp.Pending, path)
 						}
 					}()
@@ -219,7 +221,7 @@ func DumpFilesystem(next types.Dump) types.Dump {
 							checksum, err := compress(ctx)
 							if err == nil && checksum != "" && opts.Uploads != nil {
 								// As for a leave-running dump: the checksum is known when the dump returns
-								opts.Uploads.Record(path, checksum)
+								opts.Uploads.Record(path, io.RecordedChecksum(checksum, manifest(), "tarball"))
 								resp.Pending = append(resp.Pending, path)
 							}
 							return err
@@ -246,34 +248,27 @@ func DumpFilesystem(next types.Dump) types.Dump {
 			}
 			resp.Paths = append(resp.Paths, dirPath)
 
-			// CRIU writes the files itself, so no writer saw the bytes: the storage reads
-			// the directory for its checksum after the dump has returned, one at a time
-			// on this node, and the caller learns it the way it learns an upload's outcome
-			if pc, ok := storage.(io.PathChecksummer); ok && config.Global.Checkpoint.Checksum && opts.Uploads != nil {
-				finish := opts.Uploads.Start(dirPath)
-				resp.Pending = append(resp.Pending, dirPath)
-				checksumCtx := context.WithoutCancel(ctx)
-				// The read starts once the dump has returned, when the files are complete
+			// The mem-verify plugin wrote the manifest while CRIU wrote the images, so the
+			// checksum is known as soon as CRIU has returned: it is in the response, and
+			// nothing is pending. The manifest file is read rather than the notification
+			// taken, so that a directory without one gets the warning of a missing plugin
+			if pc, ok := storage.(io.PathChecksummer); ok && config.Global.Checkpoint.Checksum {
 				defer func() {
 					if err != nil {
-						finish("", err)
 						return
 					}
-					opts.WG.Go(func() {
-						directoryChecksums.Lock()
-						defer directoryChecksums.Unlock()
-						sum, err := pc.ChecksumPath(checksumCtx, dirPath)
-						if err != nil {
-							log.Error().Err(err).Str("path", dirPath).Msg("could not checksum the checkpoint directory")
-							// The checkpoint is stored all the same, so a read that fails leaves it
-							// without a checksum rather than failed; unless the directory is not
-							// there, which says the checkpoint is not stored where it was said to be
-							if !errors.Is(err, fs.ErrNotExist) {
-								err = nil
-							}
+					sum, cerr := pc.ChecksumPath(ctx, dirPath)
+					if cerr != nil {
+						// The checkpoint is stored all the same: it has no checksum
+						log.Error().Err(cerr).Str("path", dirPath).Msg("could not read the checkpoint's manifest, no checksum")
+						return
+					}
+					if sum != "" {
+						if resp.Checksums == nil {
+							resp.Checksums = map[string]string{}
 						}
-						finish(sum, err)
-					})
+						resp.Checksums[dirPath] = sum
+					}
 				}()
 			}
 		}
