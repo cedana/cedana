@@ -61,6 +61,8 @@ const (
 	DEFAULT_GPU_VERIFY            = "off"
 	DEFAULT_GPU_PROFILING_ENABLED = false
 	DEFAULT_GPU_COMPUTE_SANITIZER = false
+	DEFAULT_GPU_DIRECT_IO         = true
+	DEFAULT_GPU_MEM_RING_BUF_SIZE = 8
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -125,6 +127,8 @@ var Global Config = Config{
 		Verify:           DEFAULT_GPU_VERIFY,
 		ProfilingEnabled: DEFAULT_GPU_PROFILING_ENABLED,
 		ComputeSanitizer: DEFAULT_GPU_COMPUTE_SANITIZER,
+		DirectIO:         DEFAULT_GPU_DIRECT_IO,
+		MemRingBufSize:   DEFAULT_GPU_MEM_RING_BUF_SIZE,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
