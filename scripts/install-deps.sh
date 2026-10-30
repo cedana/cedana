@@ -24,10 +24,10 @@ YUM_PACKAGES=(
     libbsd libselinux gnutls protobuf-c libnl3 libnet libuuid iptables # CRIU
 )
 
+# CRIU's other shared libraries (libselinux1, gnutls, libuuid1) are always installed: apt depends on them
 APT_PACKAGES=(
-    wget git make psmisc
-    libnet1-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme-dev iptables libnftables1 liblz4-dev # CRIU
-    sysvinit-utils
+    wget psmisc sysvinit-utils
+    libbsd0 libprotobuf-c1 libnl-3-200 libnet1 iptables # CRIU
 )
 
 # yq is needed to configure kubelet, but not available in all distros: a pinned release instead
