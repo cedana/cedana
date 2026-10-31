@@ -70,6 +70,8 @@ const (
 	MAX_SYNC_FAILURES = 2
 )
 
+var errControllerIDInUse = errors.New("GPU controller ID is in use")
+
 type controller struct {
 	ID          string
 	PID         uint32
@@ -258,8 +260,16 @@ func (p *pool) Book() *controller {
 }
 
 // Spawns a GPU controller, and marks it as booked.
-func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *controller, err error) {
-	id := uuid.NewString()
+func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (*controller, error) {
+	return p.spawn(ctx, binary, uuid.NewString(), env...)
+}
+
+// Fails with errControllerIDInUse if the ID's shm segment exists: a live controller, or one that died.
+func (p *pool) spawn(ctx context.Context, binary string, id string, env ...string) (c *controller, err error) {
+	shmPath := fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id)
+	if utils.PathExists(shmPath) { // Fail before making a log dir and booking file for an ID in use
+		return nil, errControllerIDInUse
+	}
 
 	log.Debug().Str("ID", id).Msg("spawning new GPU controller")
 
@@ -333,9 +343,9 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 	c.Address = fmt.Sprintf(CONTROLLER_ADDRESS_FORMATTER, config.Global.GPU.SockDir, id)
 	c.Booking = flock.New(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id), flock.SetFlag(os.O_CREATE|os.O_RDWR))
 	locked, _ := c.Booking.TryLock() // Locked until whoever spawned us sets us free
-	if !locked {
-		os.Remove(fmt.Sprintf(CONTROLLER_BOOKING_LOCK_FILE_FORMATTER, id))
-		return nil, fmt.Errorf("failed to lock GPU controller booking")
+	if !locked || utils.PathExists(shmPath) {
+		c.Booking.Close()
+		return nil, errControllerIDInUse
 	}
 
 	if logDir != "" {

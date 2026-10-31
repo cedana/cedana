@@ -51,7 +51,7 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 				id = req.GPUID
 			} else {
 				_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Attach)
-				id, err = gpus.Attach(ctx, pid)
+				id, err = gpus.Attach(ctx, pid, "")
 				end()
 				if err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to attach GPU: %v", err)
