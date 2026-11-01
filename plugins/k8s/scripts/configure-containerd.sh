@@ -45,6 +45,31 @@ has_cedana_runtime() {
 
 CONFIG_CHANGED=false
 
+# Every file the script changes is backed up first, so that a config containerd refuses (or that
+# fails the restart) is rolled back instead of leaving the node without a container runtime.
+BACKUP_DIR=$(mktemp -d)
+BACKUP_PATHS=()
+trap 'rm -rf "$BACKUP_DIR"' EXIT
+
+backup() {
+    if [ -e "$1" ]; then
+        cp -p "$1" "$BACKUP_DIR/${#BACKUP_PATHS[@]}"
+    fi
+    BACKUP_PATHS+=("$1")
+}
+
+rollback() {
+    local i
+    for i in "${!BACKUP_PATHS[@]}"; do
+        if [ -e "$BACKUP_DIR/$i" ]; then
+            cp -p "$BACKUP_DIR/$i" "${BACKUP_PATHS[$i]}"
+        else
+            rm -f "${BACKUP_PATHS[$i]}"
+        fi
+        echo "Rolled back ${BACKUP_PATHS[$i]}" >&2
+    done
+}
+
 # k3s and RKE2 manage containerd themselves: <data-dir>/agent/etc/containerd/config.toml
 # is regenerated on every service start, so editing it directly is not persistent.
 # Instead, both support extending the generated config through a template that
@@ -105,12 +130,12 @@ if [ -n "$RANCHER_SERVICES" ]; then
     fi
     echo "Using containerd config template $TEMPLATE (config version $CONTAINERD_VERSION)"
 
-    if [ ! -f "$TEMPLATE" ]; then
-        echo '{{ template "base" . }}' >"$TEMPLATE"
-    fi
-
     if ! has_cedana_runtime "$TEMPLATE"; then
         echo "Adding cedana runtime config to $TEMPLATE"
+        backup "$TEMPLATE"
+        if [ ! -f "$TEMPLATE" ]; then
+            echo '{{ template "base" . }}' >"$TEMPLATE"
+        fi
         {
             echo ""
             cedana_runtime_config "$CONTAINERD_VERSION"
@@ -176,13 +201,18 @@ else
         if [ -n "$LAST_CONFD_FILE" ]; then
             TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
             echo "Basing cedana runtime config on last existing conf.d file: $LAST_CONFD_FILE"
+            # After a reboot, the NVIDIA toolkit rewrites its conf.d file from the merged config,
+            # which has the cedana runtime by then: adding it again defines it twice
             NEW_CONFIG=$(
                 cat "$LAST_CONFD_FILE"
-                echo ""
-                cedana_runtime_config 2 "$RUNC_ARG"
+                if ! has_cedana_runtime "$LAST_CONFD_FILE"; then
+                    echo ""
+                    cedana_runtime_config 2 "$RUNC_ARG"
+                fi
             )
             if [ "$NEW_CONFIG" != "$(cat "$TARGET_CONFIG" 2>/dev/null)" ]; then
                 echo "Writing cedana runtime config to $TARGET_CONFIG"
+                backup "$TARGET_CONFIG"
                 echo "$NEW_CONFIG" >"$TARGET_CONFIG"
                 CONFIG_CHANGED=true
             else
@@ -195,6 +225,7 @@ else
             TARGET_CONFIG="$CONTAINERD_CONFIG_PATH"
             if ! has_cedana_runtime "$TARGET_CONFIG"; then
                 echo "No conf.d files found, adding cedana runtime config to $TARGET_CONFIG"
+                backup "$TARGET_CONFIG"
                 {
                     echo ""
                     cedana_runtime_config 2 "$RUNC_ARG"
@@ -213,6 +244,7 @@ else
         mkdir -p "$CONTAINERD_CONFD_DIR"
 
         if ! grep -qF "$CONTAINERD_CONFD_DIR/*.toml" "$CONTAINERD_CONFIG_PATH"; then
+            backup "$CONTAINERD_CONFIG_PATH"
             if grep -q '^imports = \[.*\]' "$CONTAINERD_CONFIG_PATH"; then
                 echo "Appending conf.d glob to existing imports in $CONTAINERD_CONFIG_PATH"
                 sed -i "s|^imports = \[\(.*\)\]|imports = [\1, \"$CONTAINERD_CONFD_DIR/*.toml\"]|" "$CONTAINERD_CONFIG_PATH"
@@ -231,6 +263,7 @@ else
             fi
             if ! grep -qF "$CONTAINERD_CONFD_DIR/*.toml" "$CONTAINERD_CONFIG_PATH"; then
                 echo "ERROR: Failed to add $CONTAINERD_CONFD_DIR/*.toml to imports in $CONTAINERD_CONFIG_PATH, please add it manually" >&2
+                rollback
                 exit 1
             fi
             CONFIG_CHANGED=true
@@ -240,6 +273,7 @@ else
 
         if ! has_cedana_runtime "$TARGET_CONFIG"; then
             echo "Creating cedana runtime config at $TARGET_CONFIG"
+            backup "$TARGET_CONFIG"
             cedana_runtime_config 3 >"$TARGET_CONFIG"
             CONFIG_CHANGED=true
         else
@@ -302,11 +336,36 @@ if [ "$CONFIG_CHANGED" = false ]; then
     echo "Containerd runtime configuration up to date but not applied ($RESTART_SERVICE started before it was written)"
 fi
 
+# Load the config (main file and every import) the way containerd will on restart, without
+# restarting it. k3s/RKE2 render their template only on start, so there's nothing to load yet.
+if [ -z "$RANCHER_SERVICES" ]; then
+    CONTAINERD_BIN_PATH=$(command -v "${CONTAINERD_BIN:-containerd}" || true)
+    if [ -z "$CONTAINERD_BIN_PATH" ]; then
+        echo "WARNING: containerd binary not found, not validating $CONTAINERD_CONFIG_PATH before restarting" >&2
+    else
+        echo "Validating $CONTAINERD_CONFIG_PATH with $CONTAINERD_BIN_PATH"
+        if ! VALIDATE_OUTPUT=$("$CONTAINERD_BIN_PATH" --config "$CONTAINERD_CONFIG_PATH" config dump 2>&1 >/dev/null); then
+            echo "$VALIDATE_OUTPUT" >&2
+            echo "ERROR: containerd does not load $CONTAINERD_CONFIG_PATH, rolling back this run's changes; not restarting $RESTART_SERVICE" >&2
+            rollback
+            exit 1
+        fi
+    fi
+fi
+
 # k3s/RKE2 only re-render config.toml from the template on service restart;
 # no restart here disrupts running containers
 echo "Restarting $RESTART_SERVICE to pick up the cedana runtime configuration..."
 if ! systemctl restart "$RESTART_SERVICE"; then
-    echo "ERROR: Failed to restart $RESTART_SERVICE, please restart manually" >&2
+    if [ "${#BACKUP_PATHS[@]}" -eq 0 ]; then
+        echo "ERROR: Failed to restart $RESTART_SERVICE, please restart manually" >&2
+        exit 1
+    fi
+    echo "ERROR: Failed to restart $RESTART_SERVICE with the cedana runtime configuration, rolling it back" >&2
+    rollback
+    if ! systemctl restart "$RESTART_SERVICE"; then
+        echo "ERROR: Failed to restart $RESTART_SERVICE after rolling back, please restart manually" >&2
+    fi
     exit 1
 fi
 echo "Restarted $RESTART_SERVICE successfully"

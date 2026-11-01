@@ -65,6 +65,9 @@ type (
 		// FallbackColdStart sets whether the containerd runtime shim should fall back to a normal (cold) start
 		// of the container if the cedana restore fails for some reason.
 		FallbackColdStart bool `json:"fallback_cold_start" key:"fallback_cold_start" yaml:"fallback_cold_start" mapstructure:"fallback_cold_start"`
+		// InstallDeps sets whether the helper's setup installs missing host packages. When false, it makes no package
+		// changes and only reports them, with the commands that install them (e.g. to run in the node image).
+		InstallDeps bool `json:"install_deps" key:"install_deps" yaml:"install_deps" mapstructure:"install_deps"`
 	}
 
 	Connection struct {
