@@ -3,6 +3,7 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -12,7 +13,9 @@ import (
 
 	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -29,6 +32,26 @@ type Creds struct {
 
 var Credentials *Creds
 
+// local logs telemetry's own failures (an export SigNoz refuses, a timeout) where the
+// process's logs went before SigNoz was added: never to SigNoz, which is what failed, and
+// never to stdout or stderr directly. A shim's stdout and stderr are its reply to
+// containerd (an error printed there broke the address it hands back, and every
+// container start with it), and a restored container's are pipes nobody may be reading.
+var local = zerolog.Nop()
+
+// initLocal sets local up on the process's own log writer, before SigNoz is added to it,
+// and routes the OpenTelemetry SDK's errors (printed to stderr by default) through it.
+func initLocal(service string) {
+	w := logging.GlobalWriter
+	if w == nil {
+		w = io.Discard
+	}
+	local = zerolog.New(w).Level(logging.Level).With().Timestamp().Str("service", service).Logger()
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		local.Warn().Err(err).Msg("telemetry export failed")
+	}))
+}
+
 const (
 	CREDENTIALS_TIMEOUT = 2 * time.Second
 	EXPORT_TIMEOUT      = 2 * time.Second
@@ -44,6 +67,7 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 		log.Warn().Err(err).Msg("metrics will not be sent to SigNoz")
 	}
 
+	initLocal(service)
 	initPropagator()
 
 	err := getCreds(ctx)
