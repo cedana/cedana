@@ -71,7 +71,7 @@ setup_file() {
 
 # PIDs of the processes holding a GPU context on this node
 gpu_compute_pids() {
-    nvidia-smi --query-compute-apps=pid --format=csv,noheader | sort -n
+    nvidia-smi --query-compute-apps=pid --format=csv,noheader | sort
 }
 
 # Pods this file's tests created, deleted even when a test fails
@@ -139,7 +139,13 @@ teardown() {
         esac
         sleep 5
     done
-    debug_log "Restore of the corrupted checkpoint ended as '${status:-not recorded}'"
+    case "$status" in
+        fallback | error | failed) debug_log "Restore of the corrupted checkpoint ended as '$status'" ;;
+        *)
+            error_log "Restore $restore_id of a corrupted checkpoint didn't end in 600s (status '${status:-not recorded}')"
+            return 1
+            ;;
+    esac
 
     if [ -n "$restored" ]; then
         kubectl delete pod "$restored" -n "$NAMESPACE" --wait=true
