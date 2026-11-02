@@ -214,10 +214,11 @@ var restoreCmd = &cobra.Command{
 			data := cedana.Finalize()
 			if config.Global.Profiling.Enabled && data != nil {
 				if config.Global.Profiling.Path != "" {
-					if err := profiling.WriteJSON(config.Global.Profiling.Path, data); err != nil {
-						// The restored application's exit status stands; just say the data is lost.
-						fmt.Fprintf(os.Stderr, "cedana: writing profiling data to %s failed: %v\n", config.Global.Profiling.Path, err)
-					}
+					// A failed write isn't printed: without a server this runs as the container's
+					// process, on the container's stdout and stderr, which nothing may be
+					// draining yet (CED-2596). Whoever set the path reads the file and reports
+					// it missing (the shim does).
+					_ = profiling.WriteJSON(config.Global.Profiling.Path, data)
 				} else {
 					profiling.Print(data, features.Theme())
 				}
