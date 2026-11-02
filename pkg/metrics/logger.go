@@ -79,8 +79,8 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 	}
 
 	sw := &signozWriter{
-		httpClient:  &http.Client{Timeout: 15 * time.Second}, // Increased timeout slightly for batch
-		endpoint:    "https://" + Credentials.Endpoint + ":443/logs/json",
+		httpClient:  &http.Client{Timeout: EXPORT_TIMEOUT},
+		endpoint:    "https://" + Credentials.Endpoint + "/logs/json",
 		accessToken: Credentials.Headers,
 		resource:    make(map[string]string),
 		services:    make(map[string]map[string]string),

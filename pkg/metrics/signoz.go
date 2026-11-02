@@ -3,8 +3,12 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
+	"time"
 
 	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 	"github.com/cedana/cedana/pkg/config"
@@ -24,6 +28,11 @@ type Creds struct {
 }
 
 var Credentials *Creds
+
+const (
+	CREDENTIALS_TIMEOUT = 2 * time.Second
+	EXPORT_TIMEOUT      = 2 * time.Second
+)
 
 // Init initializes OpenTelemetry tracing and metrics with SigNoz as the backend.
 // Extra resource attributes (e.g. installed plugin versions, see
@@ -121,6 +130,9 @@ func getCreds(ctx context.Context) error {
 		return fmt.Errorf("connection URL or AuthToken unset in config/env")
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, CREDENTIALS_TIMEOUT)
+	defer cancel()
+
 	creds, err := propagatorsdk.NewClient(url, authToken).V1().Otel().Credentials().Get(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch otel credentials: %w", err)
@@ -132,9 +144,21 @@ func getCreds(ctx context.Context) error {
 		return fmt.Errorf("received incomplete credentials from server")
 	}
 
-	Credentials = &Creds{Endpoint: *endpoint, Headers: *headers}
+	Credentials = &Creds{Endpoint: hostPort(*endpoint), Headers: *headers}
 
 	return nil
+}
+
+// hostPort reduces an OTLP endpoint, with or without a scheme and port, to host:port
+func hostPort(endpoint string) string {
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		endpoint = u.Host
+	}
+	endpoint = strings.TrimSuffix(endpoint, "/")
+	if _, _, err := net.SplitHostPort(endpoint); err != nil {
+		endpoint = net.JoinHostPort(endpoint, "443")
+	}
+	return endpoint
 }
 
 // initPropagator initializes the OpenTelemetry propagator for context propagation
