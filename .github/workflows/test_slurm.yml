@@ -930,6 +930,7 @@ jobs:
         uses: cedana/cedana-test-summary@v1
         with:
           reports: report/**/*.xml
+          pr-comment: false # marshal posts the summary on the PRs it tested (from the run's test-summary artifact)
           title: Slurm
           jobs-filter: '(^|/ )Slurm \('
           image-branch: test-summary-assets
