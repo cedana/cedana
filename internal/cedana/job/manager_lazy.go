@@ -271,6 +271,23 @@ func (m *ManagerLazy) Find(pid uint32) *Job {
 	return found
 }
 
+// findManaged returns the job this daemon is actively managing with the given PID, if any.
+// Unlike Find, it ignores jobs that merely remember the PID: those loaded from the DB (possibly
+// from other hosts) and those whose process has already exited, as the PID may since have been
+// reused by an unrelated process.
+func (m *ManagerLazy) findManaged(pid uint32) *Job {
+	var found *Job
+	m.jobs.Range(func(key any, val any) bool {
+		job := val.(*Job)
+		if job.managed.Load() && job.GetPID() == pid {
+			found = job
+			return false
+		}
+		return true
+	})
+	return found
+}
+
 func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, code <-chan int) error {
 	if !m.Exists(jid) {
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
@@ -278,8 +295,8 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 	if pid == 0 {
 		return fmt.Errorf("invalid PID 0 for job %s", jid)
 	}
-	if existing := m.Find(pid); existing != nil && existing.JID != jid {
-		return fmt.Errorf("PID %d is already being managed under job %s", pid, jid)
+	if existing := m.findManaged(pid); existing != nil && existing.JID != jid {
+		return fmt.Errorf("PID %d is already being managed under job %s", pid, existing.JID)
 	}
 
 	job := m.lookup(jid)
@@ -288,6 +305,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 	job.SetPID(pid)
 	job.SyncDeep(lifetime)
 	job.done = make(chan error, 1)
+	job.managed.Store(true)
 
 	m.pending <- action{putJob, jid}
 
@@ -319,6 +337,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 			return err
 		}, job.GetType())
 
+		job.managed.Store(false)
 		close(job.done)
 	})
 
