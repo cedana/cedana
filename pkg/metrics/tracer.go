@@ -42,7 +42,9 @@ func initTracer(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		if err := traceProvider.Shutdown(context.WithoutCancel(ctx)); err != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), EXPORT_TIMEOUT)
+		defer cancel()
+		if err := traceProvider.Shutdown(shutdownCtx); err != nil {
 			log.Warn().Str("endpoint", Credentials.Endpoint).Err(err).Msg("tracing shutdown failed")
 		} else {
 			log.Debug().Str("endpoint", Credentials.Endpoint).Msg("tracing shutdown")

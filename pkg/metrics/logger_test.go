@@ -1,8 +1,17 @@
 package metrics
 
 import (
+	"bytes"
+	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"strings"
 	"testing"
 
+	"github.com/cedana/cedana/pkg/logging"
+	"go.opentelemetry.io/otel"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
@@ -40,5 +49,53 @@ func TestSignozWriterService(t *testing.T) {
 	}
 	if _, ok := gpu.Attributes["service.name"]; ok {
 		t.Errorf("service.name left in attributes: %v", gpu.Attributes)
+	}
+}
+
+// captureStdio returns what f writes to stdout and stderr.
+func captureStdio(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = w, w
+	defer func() { os.Stdout, os.Stderr = stdout, stderr }()
+	f()
+	w.Close()
+	out, _ := io.ReadAll(r)
+	return string(out)
+}
+
+// SigNoz refusing a batch (a revoked key) never reaches stdout or stderr: a shim's are its
+// reply to containerd, and the error glued onto the address it returned broke every
+// container start. It goes to the process's own log instead.
+func TestExportFailuresStayOffStdio(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte("Invalid or missing key"))
+	}))
+	defer srv.Close()
+
+	var own bytes.Buffer
+	writer, level := logging.GlobalWriter, logging.Level
+	defer func() { logging.GlobalWriter, logging.Level = writer, level }()
+	logging.GlobalWriter, logging.Level = &own, 0
+	initLocal("test")
+
+	sw := &signozWriter{httpClient: srv.Client(), endpoint: srv.URL, logBuffer: []signozLogEntry{{Body: "hello"}}}
+	out := captureStdio(t, func() {
+		sw.flushBuffer()
+		sw.Write([]byte("not json"))
+		otel.Handle(errors.New("rpc error: code = Unauthenticated desc = Invalid or missing key"))
+	})
+	if out != "" {
+		t.Errorf("telemetry wrote %q to stdout/stderr", out)
+	}
+	for _, want := range []string{"SigNoz refused a log batch", "Invalid or missing key", "dropping a log line", "telemetry export failed"} {
+		if !strings.Contains(own.String(), want) {
+			t.Errorf("the process's log lacks %q: %s", want, own.String())
+		}
 	}
 }

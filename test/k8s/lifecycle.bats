@@ -15,9 +15,10 @@ load ../helpers/propagator
 CHECKPOINTED_AT=10
 
 # A counter pod. With a grace period, it ignores SIGTERM, so it stays Terminating that long
-# after it's deleted.
+# after it's deleted. A noisy one writes ~400 KB/s to stdout.
 counter_pod_spec() {
     local grace="${1:-}"
+    local noisy="${2:-}"
 
     local name
     name="test-lifecycle-$(unix_nano)"
@@ -25,6 +26,11 @@ counter_pod_spec() {
     local on_term="exit 0"
     if [ -n "$grace" ]; then
         on_term=""
+    fi
+    local pad="" interval=1
+    if [ -n "$noisy" ]; then
+        pad='pad=" $(head -c 4000 /dev/zero | tr "\0" x)"'
+        interval=0.01
     fi
     cat >"$spec" <<EOF
 apiVersion: v1
@@ -43,8 +49,9 @@ spec:
     args:
       - |
         trap '$on_term' TERM
+        $pad
         i=0
-        while true; do echo "COUNT \$i"; i=\$((i+1)); sleep 1; done
+        while true; do echo "COUNT \$i\${pad:-}"; i=\$((i+1)); sleep $interval; done
 EOF
     echo "$spec"
 }
@@ -150,6 +157,44 @@ teardown() {
         return 1
     fi
     debug_log "Restored $restored in ${took}s at count $first, while $name was terminating"
+}
+
+# A restored process that writes to stdout as it resumes must not block its restore, e.g. on
+# a stdout pipe nothing reads yet. Covers restores hanging until kubelet's deadline once
+# ~64 KB of output was written before the restore returned.
+# bats test_tags=restore
+@test "Restore a pod that writes to stdout as it resumes" {
+    local budget=120
+
+    local spec name action_id
+    spec=$(counter_pod_spec "" noisy)
+    name=$(deploy_counter "$spec")
+    TEST_PODS+=("$name")
+    action_id=$(checkpoint_counter "$name")
+
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+
+    local start=$SECONDS
+    local restore_id restored out
+    out=$(start_restore "$action_id" "$name")
+    read -r restore_id restored <<<"$out"
+    if [ -n "$restored" ]; then TEST_PODS+=("$restored"); fi
+    [ -n "$restored" ] || {
+        error_log "Restored pod for $name did not appear"
+        return 1
+    }
+
+    validate_pod "$restored" "$budget"
+    poll_restore_status "$restore_id" "$budget"
+    verify_restored_pod "$restored" "$NAMESPACE"
+
+    local first
+    first=$(first_count "$restored")
+    if [ -z "$first" ] || [ "$first" -lt "$CHECKPOINTED_AT" ]; then
+        error_log "Pod $restored cold-started (first count '${first:-none}', checkpointed at >= $CHECKPOINTED_AT)"
+        return 1
+    fi
+    debug_log "Restored $restored in $((SECONDS - start))s at count $first"
 }
 
 # A restore that can't work must say so quickly, instead of retrying or hanging until a
