@@ -3,12 +3,12 @@ module github.com/cedana/cedana
 go 1.25.0
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-2268b00eea49.1
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-2268b00eea49.2
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-db29af256017.1
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-db29af256017.2
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-1315ebec32fe.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-1315ebec32fe.2
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-05c55e1f08d3.2
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-7d4465933043.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-7d4465933043.2
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-21ead26a7f28.2
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
