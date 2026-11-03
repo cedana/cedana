@@ -178,3 +178,43 @@ func CheckPluginLibraries(manager plugins.Manager, plugin string) types.Check {
 		return []*daemon.HealthCheckComponent{component}
 	}
 }
+
+const (
+	INOTIFY_MAX_USER_INSTANCES_PATH = "/proc/sys/fs/inotify/max_user_instances"
+	INOTIFY_MIN_USER_INSTANCES      = 8192
+)
+
+// CheckInotify warns if fs.inotify.max_user_instances is low. CRIU needs inotify instances
+// to dump and restore, and the kernel default (128) runs out on busy nodes. The k8s helper
+// raises it on setup (configure-sysctl.sh).
+func CheckInotify() types.Check {
+	return func(ctx context.Context) []*daemon.HealthCheckComponent {
+		return []*daemon.HealthCheckComponent{checkInotify(INOTIFY_MAX_USER_INSTANCES_PATH)}
+	}
+}
+
+func checkInotify(path string) *daemon.HealthCheckComponent {
+	component := &daemon.HealthCheckComponent{Name: "inotify instances"}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		component.Data = "unknown"
+		component.Warnings = append(component.Warnings, fmt.Sprintf("Failed to read %s: %v", path, err))
+		return component
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		component.Data = "unknown"
+		component.Warnings = append(component.Warnings, fmt.Sprintf("Failed to parse %s: %v", path, err))
+		return component
+	}
+
+	component.Data = strconv.Itoa(value)
+	if value < INOTIFY_MIN_USER_INSTANCES {
+		component.Warnings = append(component.Warnings, fmt.Sprintf(
+			"fs.inotify.max_user_instances is %d, recommended at least %d: dumps and restores can fail when inotify instances run out. Raise it with: sysctl -w fs.inotify.max_user_instances=%d",
+			value, INOTIFY_MIN_USER_INSTANCES, INOTIFY_MIN_USER_INSTANCES,
+		))
+	}
+	return component
+}
