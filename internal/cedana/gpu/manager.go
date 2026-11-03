@@ -33,7 +33,8 @@ type Manager interface {
 	Unfreeze(ctx context.Context, pid uint32) error
 
 	// CRIUCallback returns the CRIU notify callback for GPU checkpoint/restore.
-	CRIUCallback(id string) *criu.NotifyCallback
+	// A non-nil checksum receives the GPU state checksum of a successful dump or restore.
+	CRIUCallback(id string, checksum *string) *criu.NotifyCallback
 
 	// Sync is used to force the GPU manager to sync its state with the current system state.
 	Sync(ctx context.Context) error
@@ -66,7 +67,7 @@ func (ManagerMissing) GetID(pid uint32) string {
 	return ""
 }
 
-func (ManagerMissing) CRIUCallback(id string) *criu.NotifyCallback {
+func (ManagerMissing) CRIUCallback(id string, checksum *string) *criu.NotifyCallback {
 	return nil
 }
 

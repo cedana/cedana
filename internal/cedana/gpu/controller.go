@@ -479,7 +479,7 @@ func unfreeze(ctx context.Context, log zerolog.Logger, controller *controller) e
 	return utils.GRPCError(err)
 }
 
-func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
+func (p *pool) CRIUCallback(id string, checksum *string) *criu_client.NotifyCallback {
 	callback := &criu_client.NotifyCallback{Name: "gpu"}
 	log := log.With().Str("plugin", "gpu").Str("ID", id).Logger()
 
@@ -574,6 +574,11 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
+			log.Info().Str("checksum", resp.GetVerify().GetChecksum()).Msg("GPU state checksum")
+			if checksum != nil {
+				// Read by the dump adapter after FinalizeDumpFunc has drained dumpErr
+				*checksum = resp.GetVerify().GetChecksum()
+			}
 
 			log.Info().Msg("GPU dump complete")
 		}()
@@ -674,9 +679,13 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
 				return
 			}
-			log.Info().Msg("GPU restore complete")
+			log.Info().Str("checksum", resp.GetRestoreStats().GetVerify().GetChecksum()).Msg("GPU restore complete")
 
 			restoreProfile = resp.GetProfile()
+			if checksum != nil {
+				// Read after restoreErr is drained, like restoreProfile
+				*checksum = resp.GetRestoreStats().GetVerify().GetChecksum()
+			}
 		}()
 		return nil
 	}

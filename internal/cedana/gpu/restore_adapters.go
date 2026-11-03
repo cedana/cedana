@@ -65,7 +65,7 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 			next = next.With(InheritFilesForRestore, AddMountsForRestore)
 
 			// Import GPU CRIU callbacks
-			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
+			opts.CRIUCallback.Include(gpus.CRIUCallback(id, &resp.Checksum))
 
 			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 

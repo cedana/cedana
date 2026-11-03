@@ -516,6 +516,7 @@ type checkpointInfo struct {
 	ProfilingInfo  profilingInfo `json:"profiling_info"`
 	Info           info          `json:"info"`
 	ContainerOrder int           `json:"container_order"`
+	Checksum       string        `json:"checksum,omitempty"`
 }
 
 type profilingInfo struct {
@@ -694,6 +695,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					nil,
 					"",
+					"",
 					nil,
 					i,
 					specMap[i],
@@ -711,11 +713,12 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			go func() {
 				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
-				var path string
+				var path, checksum string
 				var state *daemon.ProcessState
 				if err == nil {
 					path = dumpResp.Paths[0]
 					state = dumpResp.State
+					checksum = dumpResp.GetChecksum()
 				}
 				es.publishCheckpoint(
 					log.WithContext(ctx),
@@ -724,6 +727,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					checkpointIdMap[i],
 					profiling,
 					path,
+					checksum,
 					state,
 					i,
 					specMap[i],
@@ -745,6 +749,7 @@ func (es *EventStream) publishCheckpoint(
 	checkpointId string,
 	profilingData *profiling.Data,
 	path string,
+	checksum string,
 	state *daemon.ProcessState,
 	containerOrder int,
 	containerSpec *specs.Spec,
@@ -783,6 +788,7 @@ func (es *EventStream) publishCheckpoint(
 		ci.GPU = state.GetGPUEnabled()
 		ci.Platform = state.GetHost().GetPlatform()
 		ci.Path = path
+		ci.Checksum = checksum
 	}
 
 	if profilingData != nil {

@@ -179,8 +179,8 @@ func (m *ManagerSimple) Checks() types.Checks {
 	}
 }
 
-func (m *ManagerSimple) CRIUCallback(id string) *criu.NotifyCallback {
-	return m.controllers.CRIUCallback(id)
+func (m *ManagerSimple) CRIUCallback(id string, checksum *string) *criu.NotifyCallback {
+	return m.controllers.CRIUCallback(id, checksum)
 }
 
 func (m *ManagerSimple) Freeze(ctx context.Context, pid uint32) error {

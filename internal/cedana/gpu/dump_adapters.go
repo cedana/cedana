@@ -59,7 +59,7 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			state.GPUEnabled = true
 
 			// Import GPU CRIU callbacks
-			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
+			opts.CRIUCallback.Include(gpus.CRIUCallback(id, &resp.Checksum))
 
 			// We mount CheckpointDir in the namespace of the container to dump
 			// GPU state. This gets unmounted after dump is complete and is not

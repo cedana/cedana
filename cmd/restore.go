@@ -205,7 +205,7 @@ var restoreCmd = &cobra.Command{
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
-			code, err := cedana.Restore(req)
+			code, resp, err := cedana.Restore(req)
 			if err != nil {
 				cedana.Finalize()
 				return utils.GRPCErrorColored(err)
@@ -220,6 +220,12 @@ var restoreCmd = &cobra.Command{
 					}
 				} else {
 					profiling.Print(data, features.Theme())
+				}
+			}
+			// The containerd shim reports this beside the profiling data
+			if p := config.Global.Profiling.Path; p != "" && resp.GetChecksum() != "" {
+				if err := os.WriteFile(p+".checksum", []byte(resp.GetChecksum()), 0o644); err != nil {
+					fmt.Fprintf(os.Stderr, "cedana: writing checksum to %s failed: %v\n", p+".checksum", err)
 				}
 			}
 
