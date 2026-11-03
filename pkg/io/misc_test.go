@@ -1,12 +1,71 @@
 package io
 
 import (
+	"archive/tar"
 	"bytes"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+func TestUntarPaths(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		wantErr bool
+	}{
+		{"checkpoint.json", false},
+		{"checkpoint..json", false},
+		{"nested/../checkpoint.json", false},
+		{"../outside", true},
+		{"nested/../../outside", true},
+		{"/absolute", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			dest := filepath.Join(root, "dest")
+			if err := os.Mkdir(dest, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			name := tc.name
+			if filepath.IsAbs(name) {
+				name = filepath.Join(root, "absolute")
+			}
+
+			var archive bytes.Buffer
+			writer := tar.NewWriter(&archive)
+			data := []byte("checkpoint contents")
+			if err := writer.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(data))}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := writer.Write(data); err != nil {
+				t.Fatal(err)
+			}
+			if err := writer.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			err := Untar(&archive, dest, "tar")
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "invalid file path") {
+					t.Fatalf("got %v, want an invalid file path error", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(dest, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, data) {
+				t.Errorf("got %q, want %q", got, data)
+			}
+		})
+	}
+}
 
 func TestListTarAndOpenTarEntry(t *testing.T) {
 	for _, compression := range []string{"tar", "gzip", "lz4", "zlib"} {

@@ -95,7 +95,7 @@ func Untar(src io.Reader, dest string, compression string) (err error) {
 
 		// Clean and validate the path
 		cleanedPath := filepath.Clean(header.Name)
-		if strings.Contains(cleanedPath, "..") {
+		if !filepath.IsLocal(cleanedPath) {
 			return fmt.Errorf("invalid file path: %s", cleanedPath)
 		}
 
