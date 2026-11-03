@@ -34,6 +34,7 @@ type ManagerLazy struct {
 	checkpoints        sync.Map
 	deletedJobs        sync.Map // to keep track of deleted jobs
 	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
+	managed            sync.Map // PID -> JID of the job this daemon is watching it under
 
 	host    *daemon.Host
 	plugins plugins.Manager
@@ -271,23 +272,6 @@ func (m *ManagerLazy) Find(pid uint32) *Job {
 	return found
 }
 
-// findManaged returns the job this daemon is actively managing with the given PID, if any.
-// Unlike Find, it ignores jobs that merely remember the PID: those loaded from the DB (possibly
-// from other hosts) and those whose process has already exited, as the PID may since have been
-// reused by an unrelated process.
-func (m *ManagerLazy) findManaged(pid uint32) *Job {
-	var found *Job
-	m.jobs.Range(func(key any, val any) bool {
-		job := val.(*Job)
-		if job.managed.Load() && job.GetPID() == pid {
-			found = job
-			return false
-		}
-		return true
-	})
-	return found
-}
-
 func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, code <-chan int) error {
 	if !m.Exists(jid) {
 		return fmt.Errorf("job %s does not exist. was it initialized?", jid)
@@ -295,8 +279,10 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 	if pid == 0 {
 		return fmt.Errorf("invalid PID 0 for job %s", jid)
 	}
-	if existing := m.findManaged(pid); existing != nil && existing.JID != jid {
-		return fmt.Errorf("PID %d is already being managed under job %s", pid, existing.JID)
+	// Only PIDs this daemon is watching count as taken. Jobs loaded from the DB (possibly from
+	// other hosts) or whose process has exited still carry a PID that may have been reused.
+	if owner, taken := m.managed.LoadOrStore(pid, jid); taken && owner != jid {
+		return fmt.Errorf("PID %d is already being managed under job %s", pid, owner)
 	}
 
 	job := m.lookup(jid)
@@ -305,7 +291,6 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 	job.SetPID(pid)
 	job.SyncDeep(lifetime)
 	job.done = make(chan error, 1)
-	job.managed.Store(true)
 
 	m.pending <- action{putJob, jid}
 
@@ -337,7 +322,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 			return err
 		}, job.GetType())
 
-		job.managed.Store(false)
+		m.managed.CompareAndDelete(pid, jid)
 		close(job.done)
 	})
 

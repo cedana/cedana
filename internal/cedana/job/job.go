@@ -8,7 +8,6 @@ import (
 	"context"
 	"os"
 	"sync"
-	"sync/atomic"
 	"syscall"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -22,11 +21,6 @@ type Job struct {
 	JID   string
 	proto daemon.Job
 	done  chan error
-
-	// managed is true while this daemon has a live Manage routine waiting on the job's process.
-	// Jobs loaded from the DB, or whose process has exited, are not managed even though they
-	// still carry a PID.
-	managed atomic.Bool
 
 	sync.RWMutex
 }
