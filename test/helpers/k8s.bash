@@ -4,9 +4,10 @@
 ### Kubernetes Helpers ###
 ##########################
 
-# Image the GPU pods run, with the CUDA workloads at /cedana-samples/gpu_smr: a slim one, as
-# customer images are (a CUDA base and the app), rather than the whole CI image
-export GPU_WORKLOAD_IMAGE="${GPU_WORKLOAD_IMAGE:-cedana/cedana-samples:cuda-smr}"
+# Image the pods run: cedana-samples' lite image, with every workload at /cedana-samples, slim as
+# customer images are (a CUDA base and the app). The one the run downloaded (download.yml's
+# samples, by digest), else the latest release
+export SAMPLES_IMAGE="${SAMPLES_IMAGE:-$(cat /cedana-samples/.image 2>/dev/null || echo cedana/cedana-samples:cuda-lite)}"
 
 install_kubectl() {
     if command -v kubectl &>/dev/null; then
@@ -119,11 +120,13 @@ pod_spec() {
     local temp_spec="/tmp/test-spec-${unique_id}.yaml"
     cp "$source_file" "$temp_spec"
 
+    # The samples' lite image is the one this run tests with
     sed -i \
         -e "/^metadata:/,/^[^ ]/ s/^  name:[[:space:]]*.*/  name: $unique_id/" \
         -e "/^metadata:/,/^[^ ]/ s/^  generateName:[[:space:]]*.*/  name: $unique_id/" \
         -e "s/namespace: default/namespace: $namespace/g" \
         -e "s/namespace: .*/namespace: $namespace/g" \
+        -e "s|image:[[:space:]]*cedana/cedana-samples:cuda-lite[[:space:]]*$|image: $SAMPLES_IMAGE|" \
         "$temp_spec"
 
     if ! grep -q "namespace:" "$temp_spec"; then
