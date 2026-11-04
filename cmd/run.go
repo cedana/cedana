@@ -163,9 +163,13 @@ var runCmd = &cobra.Command{
 
 			data := cedana.Finalize()
 			if config.Global.Profiling.Enabled && data != nil {
-				profiling.Print(data, features.Theme())
 				if config.Global.Profiling.Path != "" {
-					profiling.WriteJSON(config.Global.Profiling.Path, data)
+					if err := profiling.WriteJSON(config.Global.Profiling.Path, data); err != nil {
+						// The application's exit status stands; just say the data is lost.
+						fmt.Fprintf(os.Stderr, "cedana: writing profiling data to %s failed: %v\n", config.Global.Profiling.Path, err)
+					}
+				} else {
+					profiling.Print(data, features.Theme())
 				}
 			}
 
