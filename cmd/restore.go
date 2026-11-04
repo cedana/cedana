@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -211,21 +212,28 @@ var restoreCmd = &cobra.Command{
 				return utils.GRPCErrorColored(err)
 			}
 
+			// Cleaned so the checksum file stays a sibling of the JSON (a trailing slash would not)
+			profilingPath := config.Global.Profiling.Path
+			if profilingPath != "" {
+				profilingPath = filepath.Clean(profilingPath)
+			}
+
 			data := cedana.Finalize()
 			if config.Global.Profiling.Enabled && data != nil {
-				if config.Global.Profiling.Path != "" {
-					if err := profiling.WriteJSON(config.Global.Profiling.Path, data); err != nil {
+				if profilingPath != "" {
+					if err := profiling.WriteJSON(profilingPath, data); err != nil {
 						// The restored application's exit status stands; just say the data is lost.
-						fmt.Fprintf(os.Stderr, "cedana: writing profiling data to %s failed: %v\n", config.Global.Profiling.Path, err)
+						fmt.Fprintf(os.Stderr, "cedana: writing profiling data to %s failed: %v\n", profilingPath, err)
 					}
 				} else {
 					profiling.Print(data, features.Theme())
 				}
 			}
 			// The containerd shim reports this beside the profiling data
-			if p := config.Global.Profiling.Path; p != "" && resp.GetChecksum() != "" {
-				if err := os.WriteFile(p+".checksum", []byte(resp.GetChecksum()), 0o644); err != nil {
-					fmt.Fprintf(os.Stderr, "cedana: writing checksum to %s failed: %v\n", p+".checksum", err)
+			if profilingPath != "" && resp.GetChecksum() != "" {
+				checksumPath := profilingPath + ".checksum"
+				if err := os.WriteFile(checksumPath, []byte(resp.GetChecksum()), 0o644); err != nil {
+					fmt.Fprintf(os.Stderr, "cedana: writing checksum to %s failed: %v\n", checksumPath, err)
 				}
 			}
 
