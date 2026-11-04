@@ -9,6 +9,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -99,7 +100,11 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 
 		if ok {
-			err = controller.Attach(context.WithoutCancel(ctx), controller.AttachedPID)
+			var minors []int
+			if allocated, set := ctx.Value(keys.GPU_RUN_DEVICE_MINORS_CONTEXT_KEY).(*[]int); set {
+				minors = *allocated
+			}
+			err = controller.Attach(context.WithoutCancel(ctx), controller.AttachedPID, minors...)
 			if err != nil {
 				log.Debug().Err(err).Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("failed to forcefully attach GPU controller (FORCE_ATTACH is true)")
 				ok = false
