@@ -6,26 +6,6 @@ if [ "$ENV" != "production" ]; then
     exit 0
 fi
 
-# Ensure necessary tools are available
-check_tool() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-echo "Checking required tools..."
-
-if ! check_tool "jq"; then
-    echo "Error: 'jq' is not installed. Please install 'jq' to update JSON kubelet configurations." >&2
-    exit 1
-fi
-echo "jq found at: $(command -v jq) ($(jq --version))"
-
-if ! check_tool "yq"; then
-    echo "Error: 'yq' is not installed. Please install 'yq' to update YAML kubelet configurations." >&2
-    echo "You can install it from https://github.com/mikefarah/yq#install" >&2
-    exit 1
-fi
-echo "yq found at: $(command -v yq) ($(yq --version))"
-
 # Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
 echo "Target runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT"
@@ -41,13 +21,15 @@ KUBELET_CONFIG_CONTENT_JSON=$(
 EOF
 )
 
-KUBELET_CONFIG_CONTENT_YAML=$(
-    cat <<EOF
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT
-EOF
-)
+# Sets runtimeRequestTimeout in a YAML kubelet config, leaving the rest of the file as it is: a
+# top-level key in the block-style YAML kubelet writes, so no YAML tool is needed on the node
+set_yaml_runtime_request_timeout() {
+    awk -v value="$KUBELET_RUNTIME_REQUEST_TIMEOUT" '
+        /^runtimeRequestTimeout:/ { print "runtimeRequestTimeout: " value; done = 1; next }
+        { print }
+        END { if (!done) print "runtimeRequestTimeout: " value }
+    ' "$1"
+}
 
 get_kubelet_arg_value() {
     local arg="$1"
@@ -156,24 +138,27 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
         exit 1
     fi
 
-    FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
-    echo "Detected config file extension: .$FILE_EXTENSION"
+    # The format is the content's, not the extension's: JSON is valid YAML, so a .yaml config may be
+    # JSON, which a YAML line appended to it would break. Anything else is left alone.
+    SKIP_MESSAGE="skipping kubelet config update; please manually set runtimeRequestTimeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT in $KUBELET_CONFIG_FILE"
     TEMP_CONFIG=$(mktemp)
-    echo "Created temp file for merge: $TEMP_CONFIG"
-
-    if [ "$FILE_EXTENSION" == "json" ]; then
+    if [ "$(tr -d '[:space:]' <"$KUBELET_CONFIG_FILE" | head -c 1)" = "{" ]; then
+        if ! command -v jq >/dev/null 2>&1; then
+            echo "WARNING: $KUBELET_CONFIG_FILE is JSON and jq is not installed, $SKIP_MESSAGE" >&2
+            rm -f "$TEMP_CONFIG"
+            exit 0
+        fi
         echo "Merging JSON config..."
-        jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"
-        echo "JSON merge complete"
-
-    elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
-        echo "Merging YAML config..."
-        yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' \
-            "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_YAML") >"$TEMP_CONFIG"
-        echo "YAML merge complete"
-
+        if ! jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"; then
+            echo "WARNING: jq could not parse $KUBELET_CONFIG_FILE, $SKIP_MESSAGE" >&2
+            rm -f "$TEMP_CONFIG"
+            exit 0
+        fi
+    elif grep -q '^kind:[[:space:]]*KubeletConfiguration' "$KUBELET_CONFIG_FILE"; then
+        echo "Setting runtimeRequestTimeout in YAML config..."
+        set_yaml_runtime_request_timeout "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
     else
-        echo "WARNING: Unsupported kubelet configuration file type: .$FILE_EXTENSION, skipping kubelet config update" >&2
+        echo "WARNING: $KUBELET_CONFIG_FILE is neither JSON nor block-style YAML, $SKIP_MESSAGE" >&2
         rm -f "$TEMP_CONFIG"
         exit 0
     fi

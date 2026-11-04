@@ -223,6 +223,30 @@ require_reset_fix() {
     restore_sample memcpy_async_pinned
 }
 
+# Event records posted asynchronously on one thread must still order a wait or a query on
+# another (CED-2567: stale cuStreamWaitEvent, early cuEventQuery under the launch ring)
+# bats test_tags=run,events
+@test "[$GPU_INFO] run GPU process ordering events across threads" {
+    run_sample event_race
+}
+
+# bats test_tags=restore,events
+@test "[$GPU_INFO] restore GPU process ordering events across threads" {
+    restore_sample event_race
+}
+
+# Launches posted asynchronously on one thread must still run ahead of work another thread
+# queues on the same stream, and must not be lost when the thread exits (CED-2567)
+# bats test_tags=run,streams
+@test "[$GPU_INFO] run GPU process ordering a shared stream across threads" {
+    run_sample stream_race
+}
+
+# bats test_tags=restore,streams
+@test "[$GPU_INFO] restore GPU process ordering a shared stream across threads" {
+    restore_sample stream_race
+}
+
 # vLLM's CPU KV-cache offload (SimpleCPUOffloadConnector) with one CPU tensor on the brk heap,
 # replayed as the CUDA calls vLLM makes, without vLLM (CED-2563: a customer's prefill worker
 # failed at startup, its 0x46f78-byte tensor refused by cuMemHostRegister):

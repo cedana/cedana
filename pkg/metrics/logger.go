@@ -79,8 +79,8 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 	}
 
 	sw := &signozWriter{
-		httpClient:  &http.Client{Timeout: 15 * time.Second}, // Increased timeout slightly for batch
-		endpoint:    "https://" + Credentials.Endpoint + ":443/logs/json",
+		httpClient:  &http.Client{Timeout: EXPORT_TIMEOUT},
+		endpoint:    "https://" + Credentials.Endpoint + "/logs/json",
 		accessToken: Credentials.Headers,
 		resource:    make(map[string]string),
 		services:    make(map[string]map[string]string),
@@ -121,7 +121,7 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 func (sw *signozWriter) Write(p []byte) (n int, err error) {
 	var zerologEntry map[string]any
 	if err := json.Unmarshal(p, &zerologEntry); err != nil {
-		fmt.Printf("error unmarshalling zerolog entry: %v\n", err)
+		local.Warn().Err(err).Msg("dropping a log line SigNoz can't take")
 		return len(p), nil // Consume and drop
 	}
 
@@ -210,13 +210,13 @@ func (sw *signozWriter) flushBuffer() {
 
 	jsonData, err := json.Marshal(batchToSend)
 	if err != nil {
-		fmt.Printf("error marshalling log batch: %v\n", err)
+		local.Warn().Err(err).Msg("marshalling a log batch for SigNoz failed")
 		return
 	}
 
 	req, err := http.NewRequest("POST", sw.endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		fmt.Printf("error creating HTTP request for log batch: %v\n", err)
+		local.Warn().Err(err).Msg("creating the SigNoz log request failed")
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -224,13 +224,13 @@ func (sw *signozWriter) flushBuffer() {
 
 	resp, err := sw.httpClient.Do(req)
 	if err != nil {
-		fmt.Printf("error sending log batch: %v\n", err)
+		local.Warn().Err(err).Msg("sending logs to SigNoz failed")
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		fmt.Printf("non-2xx status sending log batch: %d, response: %s\n", resp.StatusCode, string(bodyBytes))
+		local.Warn().Int("status", resp.StatusCode).Str("response", string(bodyBytes)).Msg("SigNoz refused a log batch")
 	}
 }
