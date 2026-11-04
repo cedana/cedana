@@ -7,6 +7,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -59,7 +60,10 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			state.GPUEnabled = true
 
 			// Import GPU CRIU callbacks
-			opts.CRIUCallback.Include(gpus.CRIUCallback(id, &resp.Checksum))
+			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
+
+			var checksum string
+			ctx = context.WithValue(ctx, keys.GPU_CHECKSUM_CONTEXT_KEY, &checksum)
 
 			// We mount CheckpointDir in the namespace of the container to dump
 			// GPU state. This gets unmounted after dump is complete and is not
@@ -68,7 +72,15 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			next = next.With(AddExternalMountsForDump)
 
-			return next(ctx, opts, resp, req)
+			code, err = next(ctx, opts, resp, req)
+			if err != nil {
+				return nil, err
+			}
+
+			// The GPU dump is done by now: CRIU's finalize waited for it
+			resp.Checksum = checksum
+
+			return code, nil
 		}
 	}
 }

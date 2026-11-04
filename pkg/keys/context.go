@@ -28,4 +28,8 @@ const (
 	// restores onto other GPUs than the checkpoint's (see the runc plugin's GPU remap). Passed
 	// to the GPU controller, whose restore workers may start before the restored /dev has them.
 	GPU_RESTORE_DEVICE_MINORS_CONTEXT_KEY
+
+	// *string: receives the GPU state checksum of a successful GPU dump or restore. Set by the
+	// GPU dump/restore adapters, which read it once the CRIU dump/restore returns.
+	GPU_CHECKSUM_CONTEXT_KEY
 )

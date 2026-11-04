@@ -189,7 +189,7 @@ func waitGoroutines(t *testing.T, n int) {
 func TestInitializeDumpReleasesLockOnFailedFreeze(t *testing.T) {
 	client := &fakeControllerClient{freezeErr: errors.New("Freeze failed for worker pid 89501")}
 	p, c := newFakePool(t, client)
-	callback := p.CRIUCallback(c.ID, nil)
+	callback := p.CRIUCallback(c.ID)
 
 	before := runtime.NumGoroutine()
 	err := callback.InitializeDumpFunc(context.Background(), dumpOpts())
@@ -210,7 +210,7 @@ func TestInitializeDumpReleasesLockOnFailedFreeze(t *testing.T) {
 func TestFinalizeDumpUnfreezesWhenGPUDumpNeverStarted(t *testing.T) {
 	client := &fakeControllerClient{}
 	p, c := newFakePool(t, client)
-	callback := p.CRIUCallback(c.ID, nil)
+	callback := p.CRIUCallback(c.ID)
 
 	before := runtime.NumGoroutine()
 	if err := callback.InitializeDumpFunc(context.Background(), dumpOpts()); err != nil {
@@ -236,7 +236,7 @@ func TestFinalizeDumpUnfreezesWhenGPUDumpNeverStarted(t *testing.T) {
 func TestFinalizeDumpDoesNotUnfreezeWithoutFreeze(t *testing.T) {
 	client := &fakeControllerClient{freezeErr: errors.New("freeze failed")}
 	p, c := newFakePool(t, client)
-	callback := p.CRIUCallback(c.ID, nil)
+	callback := p.CRIUCallback(c.ID)
 
 	if err := callback.InitializeDumpFunc(context.Background(), dumpOpts()); err == nil {
 		t.Fatal("InitializeDump succeeded with a failing freeze")
@@ -282,7 +282,7 @@ func terminateWhileWaiting(t *testing.T, c *controller, callback func() error) e
 // fail, not use the terminated controller (nil client, which panicked and took down the daemon)
 func TestInitializeDumpFailsOnTerminatedController(t *testing.T) {
 	p, c := newFakePool(t, &fakeControllerClient{})
-	callback := p.CRIUCallback(c.ID, nil)
+	callback := p.CRIUCallback(c.ID)
 
 	err := terminateWhileWaiting(t, c, func() error {
 		return callback.InitializeDumpFunc(context.Background(), dumpOpts())
@@ -298,7 +298,7 @@ func TestInitializeDumpFailsOnTerminatedController(t *testing.T) {
 
 func TestInitializeRestoreFailsOnTerminatedController(t *testing.T) {
 	p, c := newFakePool(t, &fakeControllerClient{})
-	callback := p.CRIUCallback(c.ID, nil)
+	callback := p.CRIUCallback(c.ID)
 
 	err := terminateWhileWaiting(t, c, func() error {
 		return callback.InitializeRestoreFunc(context.Background(), dumpOpts())
