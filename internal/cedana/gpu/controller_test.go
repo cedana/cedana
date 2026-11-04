@@ -5,16 +5,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 
 	"buf.build/gen/go/cedana/cedana-gpu/grpc/go/gpu/gpugrpc"
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	"github.com/cedana/cedana/pkg/utils"
 	"github.com/gofrs/flock"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -102,6 +106,54 @@ func TestControllerSyncBoundsInfo(t *testing.T) {
 	}
 	if d := got.at.Sub(start); d > INFO_TIMEOUT+time.Second || d < INFO_TIMEOUT-time.Second {
 		t.Fatalf("Info deadline %v after the call, want about %v", d, INFO_TIMEOUT)
+	}
+}
+
+func TestTerminateKillsControllerIgnoringSignal(t *testing.T) {
+	cmd := exec.Command("sh", "-c", "trap '' TERM; sleep 60 & echo $!; wait")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	out, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	var worker uint32
+	if _, err := fmt.Fscan(out, &worker); err != nil {
+		cmd.Process.Kill()
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) })
+
+	c := &controller{
+		ID:         "test-unresponsive-controller",
+		PID:        uint32(cmd.Process.Pid),
+		ParentPID:  uint32(os.Getpid()),
+		Booking:    flock.New(filepath.Join(t.TempDir(), "booking")),
+		Terminated: make(chan int, 1),
+	}
+	p := &pool{}
+	p.Store(c.ID, c)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		p.Terminate(ctx, c.ID)
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Terminate still waiting for a controller that ignores its termination signal")
+	}
+
+	waitCtx, waitCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer waitCancel()
+	<-utils.WaitForPidCtx(waitCtx, worker)
+	if waitCtx.Err() != nil {
+		t.Fatal("the controller's worker is still running")
 	}
 }
 

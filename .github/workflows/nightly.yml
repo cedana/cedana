@@ -34,6 +34,7 @@ jobs:
       slurm_version: ${{ vars.NIGHTLY_SLURM_VERSION }}
       csx_version: ${{ vars.NIGHTLY_CSX_VERSION }}
       propagator_version: ${{ vars.NIGHTLY_PROPAGATOR_VERSION }}
+      samples_version: ${{ vars.NIGHTLY_SAMPLES_VERSION || 'main' }}
 
   test:
     name: Test

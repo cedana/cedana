@@ -319,6 +319,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
+		"CEDANA_GPU_RESTORE_NIC="+config.Global.GPU.RestoreNic,
+		"CEDANA_GPU_DELTA_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DeltaEnabled),
+		"CEDANA_GPU_VERIFY="+config.Global.GPU.Verify,
+		"CEDANA_GPU_PROFILING_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.ProfilingEnabled),
+		"CEDANA_GPU_COMPUTE_SANITIZER="+fmt.Sprintf("%v", config.Global.GPU.ComputeSanitizer),
 		// Restores attach twice: at CRIU's setup-namespaces hook and post-restore (see CRIUCallback)
 		"CEDANA_GPU_ATTACH_STAGED=1",
 	)
@@ -429,23 +434,45 @@ func (p *pool) terminate(ctx context.Context, c *controller) {
 	defer runtime.UnlockOSThread()
 
 	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
+
+	waitCtx, cancel := context.WithTimeout(ctx, TERMINATE_TIMEOUT)
+	defer cancel()
+
 	if int(c.ParentPID) == os.Getpid() { // If we spawned it, then reap it
 		process, err := os.FindProcess(int(c.PID))
 		if err != nil {
 			return
 		}
-		state, err := process.Wait()
-		if err != nil {
-			log.Trace().Err(err).Msg("GPU controller Wait()")
+		exited := make(chan *os.ProcessState, 1)
+		go func() {
+			state, err := process.Wait()
+			if err != nil {
+				log.Trace().Err(err).Msg("GPU controller Wait()")
+			}
+			exited <- state
+		}()
+		var state *os.ProcessState
+		select {
+		case state = <-exited:
+		case <-waitCtx.Done():
+			killControllerGroup(log, c.PID)
+			state = <-exited
 		}
 		c.Terminated <- state.ExitCode()
 		log.Debug().Int("status", state.ExitCode()).Msg("GPU controller exited")
 	} else { // Otherwise, just wait for it to exit
-		waitCtx, cancel := context.WithTimeout(ctx, TERMINATE_TIMEOUT)
-		defer cancel()
 		c.Terminated <- <-utils.WaitForPidCtx(waitCtx, c.PID)
+		if waitCtx.Err() != nil {
+			killControllerGroup(log, c.PID)
+		}
 		log.Debug().Str("status", "unknown").Msg("GPU controller exited")
 	}
+}
+
+// Kills the controller with its workers, which share its process group
+func killControllerGroup(log zerolog.Logger, pid uint32) {
+	log.Warn().Dur("timeout", TERMINATE_TIMEOUT).Msg("GPU controller did not exit after termination signal, killing it with its workers")
+	syscall.Kill(-int(pid), syscall.SIGKILL)
 }
 
 // unfreeze resumes the GPU of a dumped process
