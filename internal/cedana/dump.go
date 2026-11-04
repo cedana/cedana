@@ -194,6 +194,10 @@ func pluginDumpStorage(next types.Dump) types.Dump {
 			return nil, status.Error(codes.InvalidArgument, "A minimum of 2 streams are required for streaming. Specify 0 to disable streaming.")
 		}
 
+		if streams == 0 && config.Global.Checkpoint.EncryptionKey != "" {
+			return nil, status.Error(codes.FailedPrecondition, "Encrypted checkpoints are written by the streamer: set at least 2 streams.")
+		}
+
 		filesystem := filesystem.DumpFilesystem
 		if streams > 1 {
 			filesystem = streamer.DumpFilesystem(streams)
