@@ -104,6 +104,12 @@ func (r *Registry) Join(group string, size int, timeout time.Duration) (*Member,
 func (m *Member) Arrive(ctx context.Context) error {
 	b := m.b
 	b.mu.Lock()
+	select {
+	case <-b.failed:
+		b.mu.Unlock()
+		return b.err
+	default:
+	}
 	if !m.arrived {
 		m.arrived = true
 		b.arrived++

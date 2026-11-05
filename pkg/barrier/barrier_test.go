@@ -140,3 +140,18 @@ func TestMetadataRoundTrip(t *testing.T) {
 		t.Fatalf("accepted an invalid size")
 	}
 }
+
+func TestArriveAfterFailureFails(t *testing.T) {
+	for i := range 200 {
+		r := NewRegistry()
+		early, _ := r.Join("pod", 2, time.Millisecond)
+		late, _ := r.Join("pod", 2, time.Minute)
+
+		if err := early.Arrive(context.Background()); err == nil {
+			t.Fatalf("run %d: early member did not time out", i)
+		}
+		if err := late.Arrive(context.Background()); err == nil {
+			t.Fatalf("run %d: late member completed a failed group", i)
+		}
+	}
+}
