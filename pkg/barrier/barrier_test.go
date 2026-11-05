@@ -155,3 +155,40 @@ func TestArriveAfterFailureFails(t *testing.T) {
 		}
 	}
 }
+
+func TestStagesAreSeparate(t *testing.T) {
+	r := NewRegistry()
+	seized, err := r.Join("pod", 2, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dumped, err := r.JoinStage("pod", STAGE_DUMPED, 2, time.Second)
+	if err != nil {
+		t.Fatalf("joining the dumped stage of a group whose seize stage was joined: %v", err)
+	}
+
+	// Failing one stage leaves the other alone
+	seized.Leave(errors.New("boom"))
+	other, err := r.JoinStage("pod", STAGE_DUMPED, 2, time.Second)
+	if err != nil {
+		t.Fatalf("second member joining the dumped stage: %v", err)
+	}
+	errs := make(chan error, 2)
+	for _, m := range []*Member{dumped, other} {
+		go func() { errs <- m.Arrive(context.Background()) }()
+	}
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatalf("dumped stage: %v", err)
+		}
+	}
+	if _, err := r.JoinStage("pod", STAGE_DUMPED, 3, time.Second); err == nil {
+		t.Fatalf("joined a full stage with a different size")
+	}
+
+	// The timeout message names the stage
+	lone, _ := r.JoinStage("lone", STAGE_DUMPED, 2, 10*time.Millisecond)
+	if err := lone.Arrive(context.Background()); err == nil || !strings.Contains(err.Error(), STAGE_DUMPED) {
+		t.Fatalf("timeout error %v does not name the stage", err)
+	}
+}

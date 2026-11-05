@@ -14,6 +14,13 @@ const (
 	MD_GROUP        = "cedana-seize-group"
 	MD_SIZE         = "cedana-seize-group-size"
 	DEFAULT_TIMEOUT = 2 * time.Minute
+
+	DUMPED_TIMEOUT = 30 * time.Minute
+)
+
+const (
+	STAGE_SEIZED = "seized their processes"
+	STAGE_DUMPED = "finished dumping"
 )
 
 func WithGroup(ctx context.Context, group string, size int) context.Context {
@@ -52,7 +59,9 @@ func NewRegistry() *Registry {
 
 type Barrier struct {
 	registry *Registry
+	key      string
 	group    string
+	stage    string
 	size     int
 	timeout  time.Duration
 
@@ -72,20 +81,27 @@ type Member struct {
 }
 
 func (r *Registry) Join(group string, size int, timeout time.Duration) (*Member, error) {
+	return r.JoinStage(group, STAGE_SEIZED, size, timeout)
+}
+
+func (r *Registry) JoinStage(group, stage string, size int, timeout time.Duration) (*Member, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	b, ok := r.groups[group]
+	key := group + "\x00" + stage
+	b, ok := r.groups[key]
 	if !ok {
 		b = &Barrier{
 			registry: r,
+			key:      key,
 			group:    group,
+			stage:    stage,
 			size:     size,
 			timeout:  timeout,
 			ready:    make(chan struct{}),
 			failed:   make(chan struct{}),
 		}
-		r.groups[group] = b
+		r.groups[key] = b
 	}
 
 	b.mu.Lock()
@@ -128,7 +144,7 @@ func (m *Member) Arrive(ctx context.Context) error {
 	case <-b.failed:
 		return b.err
 	case <-timer.C:
-		b.fail(fmt.Errorf("seize group %q: only %d of %d dumps seized their processes within %s", b.group, b.arrivedCount(), b.size, b.timeout))
+		b.fail(fmt.Errorf("seize group %q: only %d of %d dumps %s within %s", b.group, b.arrivedCount(), b.size, b.stage, b.timeout))
 		return b.err
 	case <-ctx.Done():
 		b.fail(fmt.Errorf("seize group %q: a dump was cancelled: %w", b.group, ctx.Err()))
@@ -151,15 +167,15 @@ func (m *Member) Leave(err error) {
 
 	if !arrived {
 		if err == nil {
-			err = fmt.Errorf("it ended before seizing its processes")
+			err = fmt.Errorf("it ended before it %s", b.stage)
 		}
 		b.fail(fmt.Errorf("seize group %q: a dump failed: %w", b.group, err))
 	}
 
 	if done {
 		b.registry.mu.Lock()
-		if b.registry.groups[b.group] == b {
-			delete(b.registry.groups, b.group)
+		if b.registry.groups[b.key] == b {
+			delete(b.registry.groups, b.key)
 		}
 		b.registry.mu.Unlock()
 	}
@@ -181,8 +197,8 @@ func (b *Barrier) fail(err error) {
 	b.mu.Unlock()
 
 	b.registry.mu.Lock()
-	if b.registry.groups[b.group] == b {
-		delete(b.registry.groups, b.group)
+	if b.registry.groups[b.key] == b {
+		delete(b.registry.groups, b.key)
 	}
 	b.registry.mu.Unlock()
 }

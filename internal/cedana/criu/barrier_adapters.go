@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	"github.com/cedana/cedana/pkg/barrier"
 	"github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
@@ -22,24 +23,40 @@ func SeizeTogetherForDump(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		member, err := barrier.Default.Join(group, size, barrier.DEFAULT_TIMEOUT)
+		seized, err := barrier.Default.Join(group, size, barrier.DEFAULT_TIMEOUT)
 		if err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		defer func() { member.Leave(err) }()
+		defer func() { seized.Leave(err) }()
+
+		dumped, err := barrier.Default.JoinStage(group, barrier.STAGE_DUMPED, size, barrier.DUMPED_TIMEOUT)
+		if err != nil {
+			seized.Leave(err)
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		defer func() { dumped.Leave(err) }()
 
 		log := log.With().Str("group", group).Int("size", size).Logger()
 
 		opts.CRIUCallback.Include(&criu.NotifyCallback{
 			Name: "seize-barrier",
-			// The first notification after CRIU has seized the tree, and before it dumps anything
+			// Seize notification
 			QueryExtFilesFunc: func(ctx context.Context) ([]string, error) {
 				log.Debug().Msg("process tree seized, waiting for the rest of the seize group")
-				if err := member.Arrive(ctx); err != nil {
+				if err := seized.Arrive(ctx); err != nil {
 					return nil, err
 				}
 				log.Debug().Msg("seize group complete, dumping")
 				return nil, nil
+			},
+			// Dump completed notification
+			PostDumpFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
+				log.Debug().Msg("process tree dumped, waiting for the rest of the seize group")
+				if err := dumped.Arrive(ctx); err != nil {
+					return err
+				}
+				log.Debug().Msg("seize group dumped, resuming")
+				return nil
 			},
 		})
 
