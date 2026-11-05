@@ -71,6 +71,7 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			var checksum string
 			ctx = context.WithValue(ctx, keys.GPU_CHECKSUM_CONTEXT_KEY, &checksum)
+			ctx = context.WithValue(ctx, keys.GPU_EXPECTED_CHECKSUM_CONTEXT_KEY, req.GetChecksum())
 
 			code, err = next(ctx, opts, resp, req)
 			if err != nil {

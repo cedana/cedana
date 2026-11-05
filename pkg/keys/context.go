@@ -32,4 +32,8 @@ const (
 	// *string: receives the GPU state checksum of a successful GPU dump or restore. Set by the
 	// GPU dump/restore adapters, which read it once the CRIU dump/restore returns.
 	GPU_CHECKSUM_CONTEXT_KEY
+
+	// string: GPU state checksum recorded at dump (RestoreReq.Checksum); a strict restore
+	// that read a different one fails before the process resumes.
+	GPU_EXPECTED_CHECKSUM_CONTEXT_KEY
 )

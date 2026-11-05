@@ -64,6 +64,8 @@ func init() {
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.PersistentFlags().
 		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
+	restoreCmd.PersistentFlags().
+		String(flags.ChecksumFlag.Full, "", "expected GPU state checksum from the dump; a mismatch fails a strict restore")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.OutFlag.Full,
@@ -106,6 +108,7 @@ var restoreCmd = &cobra.Command{
 		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 		gpuID, _ := cmd.Flags().GetString(flags.GpuIdFlag.Full)
+		checksum, _ := cmd.Flags().GetString(flags.ChecksumFlag.Full)
 
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
@@ -160,6 +163,7 @@ var restoreCmd = &cobra.Command{
 			Criu:            criuOpts,
 			Env:             env,
 			GPUID:           gpuID,
+			Checksum:        checksum,
 			UID:             user.Uid,
 			GID:             user.Gid,
 			Groups:          user.Groups,
