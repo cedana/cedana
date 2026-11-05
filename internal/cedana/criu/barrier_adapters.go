@@ -13,6 +13,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// the kernel has access to setting JOBCTL_TRAP_FREEZE in the bit map task->jobctl while it
+// iterates over the pids in the cgroup, we do the same thing but with ptrace seize which sets
+// JOBCTL_TRAP_STOP to avoid SIGSTOP which uses JOBCTL_TRAP_PENDING which requires SIGCONT possibly
+// trigger handlers in the app, which makes it not transparent. unfortunately we don’t have access
+// to the task struct in userspace ofc so we are forced to go through the ptrace seize slow down,
+// so yeah the kernel is faster for freezing multiple processes but we don’t have many options
+// https://github.com/torvalds/linux/blob/v7.3/kernel/ptrace.c#L1277
+// https://github.com/torvalds/linux/blob/v7.3/kernel/cgroup/freezer.c#L161
+// https://github.com/torvalds/linux/blob/v7.3/kernel/signal.c#L2666
 func SeizeTogetherForDump(next types.Dump) types.Dump {
 	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
 		group, size, ok, err := barrier.FromGroup(ctx)
