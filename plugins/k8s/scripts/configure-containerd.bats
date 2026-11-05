@@ -169,13 +169,9 @@ EOF2
     [ "$status" -eq 0 ]
     [ "$(confd_cedana_blocks)" -eq 1 ]
     cmp "$TMP/etc/containerd/conf.d/99-nvidia.toml" "$TMP/etc/containerd/conf.d/999-cedana.toml"
-    grep -qx containerd "$RESTARTS"
-    assert_containerd_loads
-
-    rm -f "$RESTARTS"
-    run_script
-    [ "$status" -eq 0 ]
+    # containerd already runs with the cedana runtime: rewriting the copy needs no restart
     [ ! -e "$RESTARTS" ]
+    assert_containerd_loads
 }
 
 @test "a config containerd refuses is rolled back and containerd is not restarted" {

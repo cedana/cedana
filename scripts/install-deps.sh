@@ -70,8 +70,10 @@ PACKAGE_MANAGER=$(detect_package_manager)
 
 MISSING=()
 if [ "$PACKAGE_MANAGER" = apt ]; then
+    # Status is "<want> ok installed" for an installed package, where want is "hold" for an
+    # apt-mark held one: only the package's state (the last word) says whether it's installed
     for pkg in "${APT_PACKAGES[@]}"; do
-        dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q 'install ok installed' || MISSING+=("$pkg")
+        [[ "$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null)" == *" ok installed" ]] || MISSING+=("$pkg")
     done
 else
     for pkg in "${YUM_PACKAGES[@]}"; do

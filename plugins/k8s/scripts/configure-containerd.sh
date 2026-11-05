@@ -2,8 +2,8 @@
 set -euo pipefail
 
 # Registers the cedana runtime with containerd (or k3s/RKE2's containerd template) and restarts the
-# service when the configuration changed or has not been applied yet. Run by the k8s helper's setup
-# after install-plugins.sh; tested by configure-containerd.bats.
+# service only when this run added it. Run by the k8s helper's setup after install-plugins.sh;
+# tested by configure-containerd.bats.
 
 if [ "$ENV" != "production" ]; then
     echo "Non-production environment detected, skipping containerd runtime configuration" >&2
@@ -144,8 +144,6 @@ if [ -n "$RANCHER_SERVICES" ]; then
     else
         echo "Cedana runtime config already exists in $TEMPLATE, skipping"
     fi
-
-    RESTART_STAMP_FILES="$TEMPLATE"
 else
     CONTAINERD_CONFIG_PATH=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
     CONTAINERD_CONFD_DIR="$(dirname "$CONTAINERD_CONFIG_PATH")/conf.d"
@@ -212,9 +210,13 @@ else
             )
             if [ "$NEW_CONFIG" != "$(cat "$TARGET_CONFIG" 2>/dev/null)" ]; then
                 echo "Writing cedana runtime config to $TARGET_CONFIG"
+                # Already restarted with the cedana runtime if the base file had it (it's copied from
+                # the merged config) or the previous copy did
+                if ! has_cedana_runtime "$LAST_CONFD_FILE" && ! has_cedana_runtime "$TARGET_CONFIG"; then
+                    CONFIG_CHANGED=true
+                fi
                 backup "$TARGET_CONFIG"
                 echo "$NEW_CONFIG" >"$TARGET_CONFIG"
-                CONFIG_CHANGED=true
             else
                 echo "Cedana runtime config already up to date in $TARGET_CONFIG, skipping"
             fi
@@ -280,8 +282,13 @@ else
             echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
         fi
     fi
+fi
 
-    RESTART_STAMP_FILES="$TARGET_CONFIG $CONTAINERD_CONFIG_PATH"
+# Only adding the cedana runtime needs a restart: a config that already has it was applied when
+# it was added
+if [ "$CONFIG_CHANGED" = false ]; then
+    echo "Containerd runtime configuration already up to date, no restart needed"
+    exit 0
 fi
 
 # Determine which service provides containerd on this node
@@ -298,42 +305,6 @@ if [ -n "$RANCHER_SERVICES" ]; then
         echo "WARNING: No active service found among: $RANCHER_SERVICES; restart it manually to apply the containerd configuration" >&2
         exit 0
     fi
-fi
-
-# Epoch time the service's main process started (0 if unknown)
-service_started_at() {
-    local pid elapsed
-    pid=$(systemctl show -p MainPID --value "$1" 2>/dev/null || true)
-    if [ -z "$pid" ] || [ "$pid" = "0" ]; then
-        echo 0
-        return
-    fi
-    elapsed=$(ps -o etimes= -p "$pid" 2>/dev/null | head -n 1 | tr -d ' ')
-    if [ -z "$elapsed" ]; then
-        echo 0
-        return
-    fi
-    echo $(($(date +%s) - elapsed))
-}
-
-# Even when the config is already up to date, restart if the service hasn't
-# started since the config was last written (e.g. a previous run wrote the
-# config but its restart failed)
-if [ "$CONFIG_CHANGED" = false ]; then
-    STARTED_AT=$(service_started_at "$RESTART_SERVICE")
-    NEWEST_MTIME=0
-    for FILE in $RESTART_STAMP_FILES; do
-        [ -f "$FILE" ] || continue
-        MTIME=$(stat -c %Y "$FILE")
-        if [ "$MTIME" -gt "$NEWEST_MTIME" ]; then
-            NEWEST_MTIME=$MTIME
-        fi
-    done
-    if [ "$STARTED_AT" -eq 0 ] || [ "$STARTED_AT" -ge "$NEWEST_MTIME" ]; then
-        echo "Containerd runtime configuration already up to date, no restart needed"
-        exit 0
-    fi
-    echo "Containerd runtime configuration up to date but not applied ($RESTART_SERVICE started before it was written)"
 fi
 
 # Load the config (main file and every import) the way containerd will on restart, without
