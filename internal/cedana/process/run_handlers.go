@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"syscall"
 
@@ -61,11 +62,22 @@ func Run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		if err != nil {
 			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
 		}
-		exitCode <- cmd.ProcessState.ExitCode()
+		exitCode <- exitCodeOf(cmd.ProcessState)
 		close(exitCode)
 	})
 
 	return code, nil
+}
+
+// exitCodeOf returns the exit code to report for a process that has been
+// waited for. ProcessState.ExitCode() is -1 for a process that a signal
+// ended, and os.Exit(-1) becomes 255 in the kernel, which hides the signal.
+// A shell reports 128 plus the signal number, and so does this.
+func exitCodeOf(state *os.ProcessState) int {
+	if ws, ok := state.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return 128 + int(ws.Signal())
+	}
+	return state.ExitCode()
 }
 
 // Simply sets the PID in response, if the process exists, and returns a valid exited channel
