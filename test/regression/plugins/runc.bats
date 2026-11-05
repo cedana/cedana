@@ -657,7 +657,8 @@ teardown_file() {
     add_bind_mount_to_bundle "$bundle" "$dir"/file-source "/bind-file"
     add_bind_mount_to_bundle "$bundle" "$dir"/dir-source "/bind-dir"
 
-    runc run --bundle "$bundle" "$id" &
+    # Detached, with no fd of bats' (which waits on them), so a failure never hangs the test
+    runc run --detach --bundle "$bundle" "$id" </dev/null >/dev/null 2>&1
 
     sleep 2
 
