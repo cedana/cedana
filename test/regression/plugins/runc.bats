@@ -634,6 +634,62 @@ teardown_file() {
     rm -rf "$rootfs"
 }
 
+# With rslave root propagation (as CRI sets for a HostToContainer volume) on a shared overlay
+# rootfs (as the shim's is, under /run), the restored root is a slave of the rootfs, so
+# unmounting what the restore mounted on the rootfs must not take the container's own
+# mounts with it
+# bats test_tags=restore
+@test "restore container (rslave root propagation, keeps bind mounts)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    dir=$(mktemp -d)
+    # None of the overlay's dirs can be on overlay (e.g. the test container's root)
+    mount -t tmpfs tmpfs "$dir"
+    mount --make-shared "$dir" # as /run is, which the shim's rootfs is under
+    mkdir "$dir"/lower "$dir"/upper "$dir"/work "$dir"/rootfs "$dir"/dir-source
+    cp -a "$ROOTFS"/. "$dir"/lower
+    mount -t overlay overlay -o lowerdir="$dir"/lower,upperdir="$dir"/upper,workdir="$dir"/work "$dir"/rootfs
+    jq --arg root "$dir/rootfs" '.root.path = $root | .linux.rootfsPropagation = "rslave"' \
+        "$bundle"/config.json >"$bundle"/config.json.tmp
+    mv "$bundle"/config.json.tmp "$bundle"/config.json
+    echo "file-$id" >"$dir"/file-source
+    echo "dir-$id" >"$dir"/dir-source/marker
+    add_bind_mount_to_bundle "$bundle" "$dir"/file-source "/bind-file"
+    add_bind_mount_to_bundle "$bundle" "$dir"/dir-source "/bind-dir"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 2
+
+    # Older runc (e.g. 1.3) leaves the root private, so there's nothing to propagate
+    if ! grep -E '^\S+ \S+ \S+ / / .* master:' /proc/"$(runc state "$id" | jq -r .pid)"/mountinfo >/dev/null; then
+        runc delete --force "$id"
+        umount -l "$dir"/rootfs
+        umount -l "$dir"
+        rm -rf "$dir"
+        skip "$(runc --version | head -1) doesn't make the root a slave of the rootfs"
+    fi
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc delete --force "$id"
+    cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+
+    pid=$(runc state "$id" | jq -r .pid)
+    run cat /proc/"$pid"/root/bind-file
+    assert_output "file-$id"
+    run cat /proc/"$pid"/root/bind-dir/marker
+    assert_output "dir-$id"
+
+    run runc delete --force "$id"
+    umount -l "$dir"/rootfs
+    umount -l "$dir"
+    rm -rf "$dir"
+}
+
 # bats test_tags=restore
 @test "restore container (PID file)" {
     id=$(unix_nano)
