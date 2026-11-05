@@ -1,8 +1,8 @@
 package gpu
 
-// A GPU controller and its workers run in the cgroup of the
-// application they serve (in a cedana-gpu child of it on cgroup v2; the controller moves itself
-// there before spawning the application's first worker). The cgroup freezer would then freeze
+// A GPU controller and its workers run in the cgroup of the application they serve (the
+// controller moves itself there before spawning the application's first worker). The cgroup
+// freezer would then freeze
 // the very workers that do the GPU dump, so a GPU dump freezes the application with ptrace
 // instead, which leaves them alone:
 //
@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -31,46 +32,9 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-const (
-	CGROUP_CHILD_NAME = "cedana-gpu"
-	HOLD_TIMEOUT      = 30 * time.Second
-)
+const HOLD_TIMEOUT = 30 * time.Second
 
 var CGROUPS_MOUNT = "/sys/fs/cgroup"
-
-func createRestoreCgroups(callback *criu_client.NotifyCallback, log zerolog.Logger) {
-	initialize := callback.InitializeRestoreFunc
-
-	callback.InitializeRestoreFunc = func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-		for _, root := range opts.GetCgRoot() {
-			parent := filepath.Join(cgroupMount(root.GetCtrl()), root.GetPath())
-			if _, err := os.Stat(parent); err != nil {
-				continue
-			}
-			child := filepath.Join(parent, CGROUP_CHILD_NAME)
-			if err := os.Mkdir(child, 0o755); err != nil && !errors.Is(err, fs.ErrExist) {
-				return fmt.Errorf("failed to create the GPU controller's cgroup %s for the restore: %w", child, err)
-			}
-			log.Debug().Str("cgroup", child).Msg("created the GPU controller's cgroup for the restore")
-		}
-
-		if initialize != nil {
-			return initialize(ctx, opts)
-		}
-		return nil
-	}
-}
-
-func cgroupMount(ctrl string) string {
-	switch {
-	case ctrl == "":
-		return CGROUPS_MOUNT
-	case strings.HasPrefix(ctrl, "name="):
-		return filepath.Join(CGROUPS_MOUNT, strings.TrimPrefix(ctrl, "name="))
-	default:
-		return filepath.Join(CGROUPS_MOUNT, ctrl)
-	}
-}
 
 func (p *pool) freezeWithPtrace(callback *criu_client.NotifyCallback, id string, log zerolog.Logger) {
 	initialize := callback.InitializeDumpFunc
@@ -108,7 +72,7 @@ func (p *pool) freezeWithPtrace(callback *criu_client.NotifyCallback, id string,
 					return true
 				}
 				sid, err := ptrace.Session(pid)
-				return err != nil || sessions[sid]
+				return err != nil || sessions[sid] || isController(sid)
 			}
 
 			var err error
@@ -162,9 +126,6 @@ func cgroupProcs(root string) ([]int, error) {
 		if !d.IsDir() {
 			return nil
 		}
-		if path != root && d.Name() == CGROUP_CHILD_NAME {
-			return filepath.SkipDir
-		}
 		data, err := os.ReadFile(filepath.Join(path, "cgroup.procs"))
 		if err != nil {
 			if path != root && errors.Is(err, fs.ErrNotExist) {
@@ -213,10 +174,10 @@ func cgroupFrozen(pid uint32) bool {
 }
 
 func hasController(list, name string) bool {
-	for _, c := range strings.Split(list, ",") {
-		if c == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(strings.Split(list, ","), name)
+}
+
+func isController(pid int) bool {
+	exe, err := os.Readlink(fmt.Sprintf("/proc/%d/exe", pid))
+	return err == nil && filepath.Base(exe) == CONTROLLER_PROCESS_NAME
 }

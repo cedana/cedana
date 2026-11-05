@@ -759,7 +759,6 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	}
 
 	p.freezeWithPtrace(callback, id, log)
-	createRestoreCgroups(callback, log)
 
 	return callback
 }

@@ -30,19 +30,48 @@ func writeProcs(t *testing.T, dir string, pids ...int) {
 	}
 }
 
-func TestCgroupProcsSkipsControllerChild(t *testing.T) {
+func TestCgroupProcsIncludesSubCgroups(t *testing.T) {
 	root := t.TempDir()
-	writeProcs(t, root, 10, 11)
-	writeProcs(t, filepath.Join(root, "nested"), 12, 10)          // the app's own sub-cgroup
-	writeProcs(t, filepath.Join(root, CGROUP_CHILD_NAME), 20, 21) // controller and workers
+	writeProcs(t, root, 10, 11, 20)                      // the application, and the controller that joined it
+	writeProcs(t, filepath.Join(root, "nested"), 12, 10) // the application's own sub-cgroup
 
 	pids, err := cgroupProcs(root)
 	if err != nil {
 		t.Fatalf("cgroupProcs: %v", err)
 	}
 	slices.Sort(pids)
-	if !slices.Equal(pids, []int{10, 11, 12}) {
-		t.Fatalf("got %v, want [10 11 12]", pids)
+	if !slices.Equal(pids, []int{10, 11, 12, 20}) {
+		t.Fatalf("got %v, want [10 11 12 20]", pids)
+	}
+}
+
+func TestIsController(t *testing.T) {
+	sleep, err := exec.LookPath("sleep")
+	if err != nil {
+		t.Skip("no sleep binary")
+	}
+	data, err := os.ReadFile(sleep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(t.TempDir(), CONTROLLER_PROCESS_NAME)
+	if err := os.WriteFile(bin, data, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(bin, "30")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}()
+
+	if !isController(cmd.Process.Pid) {
+		t.Fatalf("a process running %s is not recognized as a controller", CONTROLLER_PROCESS_NAME)
+	}
+	if isController(os.Getpid()) {
+		t.Fatalf("the test process is recognized as a controller")
 	}
 }
 
@@ -113,52 +142,5 @@ func TestFreezeWithPtraceHoldsRestOfCgroup(t *testing.T) {
 	}
 	if got := state(); got == "t" || got == "T" {
 		t.Fatalf("process outside the tree has state %q after the dump, want running", got)
-	}
-}
-
-func TestCreateRestoreCgroups(t *testing.T) {
-	mount := t.TempDir()
-	old := CGROUPS_MOUNT
-	CGROUPS_MOUNT = mount
-	t.Cleanup(func() { CGROUPS_MOUNT = old })
-
-	v2 := "/system.slice/kubepods-besteffort-pod1.slice:cri-containerd:abc" // colons, as on k8s
-	v1 := "/kubepods/pod1/abc"
-	for _, dir := range []string{filepath.Join(mount, v2), filepath.Join(mount, "cpu,cpuacct", v1)} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	var initialized int
-	callback := &criu_client.NotifyCallback{
-		InitializeRestoreFunc: func(ctx context.Context, opts *criu_proto.CriuOpts) error {
-			initialized++
-			return nil
-		},
-	}
-	createRestoreCgroups(callback, zerolog.Nop())
-
-	opts := &criu_proto.CriuOpts{CgRoot: []*criu_proto.CgroupRoot{
-		{Ctrl: proto.String(""), Path: proto.String(v2)},
-		{Ctrl: proto.String("cpu,cpuacct"), Path: proto.String(v1)},
-		{Ctrl: proto.String("memory"), Path: proto.String("/not/mounted")},
-	}}
-	for range 2 { // the second time, the children already exist
-		if err := callback.InitializeRestoreFunc(context.Background(), opts); err != nil {
-			t.Fatalf("InitializeRestore: %v", err)
-		}
-	}
-	if initialized != 2 {
-		t.Fatalf("wrapped InitializeRestore called %d times, want 2", initialized)
-	}
-
-	for _, dir := range []string{filepath.Join(mount, v2, CGROUP_CHILD_NAME), filepath.Join(mount, "cpu,cpuacct", v1, CGROUP_CHILD_NAME)} {
-		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
-			t.Fatalf("%s not created: %v", dir, err)
-		}
-	}
-	if _, err := os.Stat(filepath.Join(mount, "memory")); err == nil {
-		t.Fatalf("created a cgroup in a hierarchy that is not mounted")
 	}
 }
