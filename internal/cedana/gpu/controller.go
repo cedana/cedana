@@ -223,6 +223,10 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			continue
 		}
 
+		if !discovered && cgroupFrozen(c.PID) {
+			continue
+		}
+
 		wg.Go(func() {
 			err := c.Sync(ctx, false)
 			if err == nil {
@@ -776,6 +780,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		}
 		return err
 	}
+
+	p.freezeWithPtrace(callback, id, log)
 
 	return callback
 }
