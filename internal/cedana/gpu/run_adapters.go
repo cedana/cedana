@@ -47,6 +47,9 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 
 			var id string
 
+			// Filled by the plugin's GPU interception below, read by the attach once the PID is sent
+			ctx = context.WithValue(ctx, keys.GPU_RUN_DEVICE_MINORS_CONTEXT_KEY, &[]int{})
+
 			if req.GPUID != "" {
 				id = req.GPUID
 			} else {
