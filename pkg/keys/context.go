@@ -36,4 +36,10 @@ const (
 	// string: GPU state checksum recorded at dump (RestoreReq.Checksum); a strict restore
 	// that read a different one fails before the process resumes.
 	GPU_EXPECTED_CHECKSUM_CONTEXT_KEY
+
+	// *[]int: device minors of the GPUs a run's container is allocated. Set to an empty slice by
+	// the GPU attach adapter and filled by a plugin that knows the allocation (see the runc
+	// plugin's GPU interception). Sent to the GPU controller on attach, which confines the
+	// container's GPU workers to them.
+	GPU_RUN_DEVICE_MINORS_CONTEXT_KEY
 )

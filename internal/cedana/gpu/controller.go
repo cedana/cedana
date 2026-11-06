@@ -223,6 +223,10 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			continue
 		}
 
+		if !discovered && cgroupFrozen(c.PID) {
+			continue
+		}
+
 		wg.Go(func() {
 			err := c.Sync(ctx, false)
 			if err == nil {
@@ -376,10 +380,33 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		return
 	}
 
-	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
-
 	c.Termination.Lock()
 	defer c.Termination.Unlock()
+
+	p.terminate(ctx, c)
+}
+
+// Like Terminate, but returns false at once when a dump or a restore holds Termination.
+// Booking must be held
+func (p *pool) TryTerminate(ctx context.Context, id string) bool {
+	c := p.Get(id)
+	if c == nil {
+		return true
+	}
+
+	if !c.Termination.TryLock() {
+		return false
+	}
+	defer c.Termination.Unlock()
+
+	p.terminate(ctx, c)
+	return true
+}
+
+// Termination must be held
+func (p *pool) terminate(ctx context.Context, c *controller) {
+	id := c.ID
+	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
 
 	if c.Terminating.Load() {
 		log.Debug().Msg("termination of GPU controller already in progress, skipping duplicate termination attempt")
@@ -765,6 +792,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return err
 	}
 
+	p.freezeWithPtrace(callback, id, log)
+
 	return callback
 }
 
@@ -911,8 +940,13 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 }
 
 // Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.
-func (c *controller) Attach(ctx context.Context, pid uint32) (err error) {
-	_, err = c.ControllerClient.Attach(ctx, &gpu.AttachReq{PID: pid})
+// deviceMinors are the GPUs a run's container is allocated, which its GPU workers are confined to.
+func (c *controller) Attach(ctx context.Context, pid uint32, deviceMinors ...int) (err error) {
+	req := &gpu.AttachReq{PID: pid}
+	for _, minor := range deviceMinors {
+		req.DeviceMinors = append(req.DeviceMinors, uint32(minor))
+	}
+	_, err = c.ControllerClient.Attach(ctx, req)
 	if err != nil {
 		return utils.GRPCErrorShort(err, c.ErrBuf.String())
 	}
