@@ -29,6 +29,14 @@ const (
 	// to the GPU controller, whose restore workers may start before the restored /dev has them.
 	GPU_RESTORE_DEVICE_MINORS_CONTEXT_KEY
 
+	// *string: receives the GPU state checksum of a successful GPU dump or restore. Set by the
+	// GPU dump/restore adapters, which read it once the CRIU dump/restore returns.
+	GPU_CHECKSUM_CONTEXT_KEY
+
+	// string: GPU state checksum recorded at dump (RestoreReq.Checksum); a strict restore
+	// that read a different one fails before the process resumes.
+	GPU_EXPECTED_CHECKSUM_CONTEXT_KEY
+
 	// *[]int: device minors of the GPUs a run's container is allocated. Set to an empty slice by
 	// the GPU attach adapter and filled by a plugin that knows the allocation (see the runc
 	// plugin's GPU interception). Sent to the GPU controller on attach, which confines the

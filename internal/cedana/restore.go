@@ -80,7 +80,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 }
 
 // Restore for CedanaRoot struct which avoid the use of jobs and provides runc compatible cli usage
-func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error) {
+func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, resp *daemon.RestoreResp, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
@@ -114,15 +114,15 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		WG:         s.wg,
 		Serverless: true,
 	}
-	resp := &daemon.RestoreResp{}
+	resp = &daemon.RestoreResp{}
 
 	code, err := restore(s.lifetime, opts, resp, req)
 	if err != nil {
 		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
-		return nil, err
+		return nil, nil, err
 	}
 
-	return code(), nil
+	return code(), resp, nil
 }
 
 //////////////////////////
