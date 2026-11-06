@@ -290,3 +290,30 @@ teardown_file() {
     kill -KILL "$pid"
     wait_for_no_pid "$pid"
 }
+
+# bats test_tags=restore
+@test "[$GPU_INFO] restore GPU process (dumped GPU controller ID in use)" {
+    jid=$(unix_nano)
+
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/mem-throughput-saxpy-loop
+    watch_logs "$jid"
+    pid=$(pid_for_jid "$jid")
+    segment=/dev/shm/cedana-gpu.$(tr '\0' '\n' <"/proc/$pid/environ" | sed -n 's/^CEDANA_GPU_ID=//p')
+
+    run cedana dump job "$jid"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+
+    touch "$segment" # as a controller that crashed under the ID leaves it
+    cedana restore job "$jid"
+    rm "$segment"
+    watch_logs "$jid"
+
+    run bats_pipe cedana ps \| grep "$jid"
+    assert_success
+    refute_output --partial "halted"
+    assert_file_contains "$(daemon_log_file "$CEDANA_ADDRESS")" "GPU controller ID in use"
+
+    run cedana job kill "$jid"
+    rm -rf "$dump_file"
+}
