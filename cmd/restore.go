@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -66,6 +65,8 @@ func init() {
 		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
 	restoreCmd.PersistentFlags().
 		String(flags.ChecksumFlag.Full, "", "expected GPU state checksum from the dump; a mismatch fails a strict restore")
+	restoreCmd.PersistentFlags().
+		String(flags.ChecksumFileFlag.Full, "", "write the GPU state checksum read by the restore to this file")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.OutFlag.Full,
@@ -216,30 +217,18 @@ var restoreCmd = &cobra.Command{
 				return utils.GRPCErrorColored(err)
 			}
 
-			// Cleaned so the checksum file stays a sibling of the JSON (a trailing slash would not)
-			profilingPath := config.Global.Profiling.Path
-			if profilingPath != "" {
-				profilingPath = filepath.Clean(profilingPath)
-			}
-
 			data := cedana.Finalize()
 			if config.Global.Profiling.Enabled && data != nil {
-				if profilingPath != "" {
-					if err := profiling.WriteJSON(profilingPath, data); err != nil {
+				if config.Global.Profiling.Path != "" {
+					if err := profiling.WriteJSON(config.Global.Profiling.Path, data); err != nil {
 						// The restored application's exit status stands; just say the data is lost.
-						fmt.Fprintf(os.Stderr, "cedana: writing profiling data to %s failed: %v\n", profilingPath, err)
+						fmt.Fprintf(os.Stderr, "cedana: writing profiling data to %s failed: %v\n", config.Global.Profiling.Path, err)
 					}
 				} else {
 					profiling.Print(data, features.Theme())
 				}
 			}
-			// The containerd shim reports this beside the profiling data
-			if profilingPath != "" && resp.GetChecksum() != "" {
-				checksumPath := profilingPath + ".checksum"
-				if err := os.WriteFile(checksumPath, []byte(resp.GetChecksum()), 0o644); err != nil {
-					fmt.Fprintf(os.Stderr, "cedana: writing checksum to %s failed: %v\n", checksumPath, err)
-				}
-			}
+			writeChecksumFile(cmd, resp.GetChecksum())
 
 			os.Exit(<-code)
 		} else {
@@ -262,6 +251,8 @@ var restoreCmd = &cobra.Command{
 				}
 			}
 
+			writeChecksumFile(cmd, resp.GetChecksum())
+
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {
 				return client.Attach(ctx, &daemon.AttachReq{PID: resp.PID})
@@ -274,6 +265,18 @@ var restoreCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// writeChecksumFile writes the restore's GPU state checksum to --checksum-file, if set.
+// A failed write is reported but does not fail the restore.
+func writeChecksumFile(cmd *cobra.Command, checksum string) {
+	path, _ := cmd.Flags().GetString(flags.ChecksumFileFlag.Full)
+	if path == "" || checksum == "" {
+		return
+	}
+	if err := os.WriteFile(path, []byte(checksum), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "cedana: writing checksum to %s failed: %v\n", path, err)
+	}
 }
 
 ////////////////////
