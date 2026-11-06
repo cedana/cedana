@@ -160,6 +160,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			external := !(internal || isPipe || isSocket || isAnon || isMemfd)
 
 			hostmemRegex := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
+			hostregRegex := regexp.MustCompile(CONTROLLER_HOSTREG_FILE_PATTERN)
 			interceptorLogRegex := regexp.MustCompile(INTERCEPTOR_LOG_FILE_PATTERN)
 			tracerLogRegex := regexp.MustCompile(TRACER_LOG_FILE_PATTERN)
 
@@ -220,6 +221,31 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				} else {
 					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
 				}
+			} else if matches := hostregRegex.FindStringSubmatch(path); id != "" && len(matches) == 4 {
+				// Registered host memory on a file (CEDANA_GPU_HOSTREG_THP). CRIU maps it from the new
+				// controller's directory and checks its size, which is in its name; the GPU controller
+				// fills its contents during the GPU restore
+				newPath = fmt.Sprintf(CONTROLLER_HOSTREG_FILE_FORMATTER, id, matches[2])
+				size, parseErr := strconv.ParseUint(matches[3], 16, 64)
+				if parseErr != nil {
+					err = status.Errorf(codes.Internal, "failed to parse size from hostreg file path %s: %v", path, parseErr)
+					return false
+				}
+				hostregFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+				if createErr != nil {
+					err = status.Errorf(codes.Internal, "failed to create hostreg file %s: %v", newPath, createErr)
+					return false
+				}
+				defer hostregFile.Close()
+				if chmodErr := os.Chmod(newPath, 0o666); chmodErr != nil {
+					err = status.Errorf(codes.Internal, "failed to chmod hostreg file %s: %v", newPath, chmodErr)
+					return false
+				}
+				if truncErr := hostregFile.Truncate(int64(size)); truncErr != nil {
+					err = status.Errorf(codes.Internal, "failed to truncate hostreg file %s to size %d: %v", newPath, size, truncErr)
+					return false
+				}
+				log.Debug().Str("path", newPath).Uint64("size", size).Msg("created hostreg file in host path")
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])
