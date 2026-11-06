@@ -10,10 +10,10 @@ load ../helpers/propagator
 
 setup_file() {
     # This test only applies when the pod rootfs is an overlay mount (the only
-    # case with an RW/upper layer to dump + restore). On K3s CI the pods run in a
-    # nested privileged container whose rootfs is not an overlay mount point
-    if [ "$(echo "${PROVIDER:-}" | tr '[:upper:]' '[:lower:]')" = "k3s" ]; then
-        skip "RW-layer overlay dump/restore requires an overlay-mounted rootfs (not available on K3s CI)"
+    # case with an RW/upper layer to dump + restore), so not with K3s on the native
+    # snapshotter (when its state can't be off the test container's overlay root)
+    if [ "${K3S_SNAPSHOTTER:-}" = "native" ]; then
+        skip "RW-layer overlay dump/restore requires an overlay-mounted rootfs (K3s is on the native snapshotter)"
     fi
 }
 

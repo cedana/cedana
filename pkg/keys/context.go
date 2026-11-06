@@ -28,4 +28,10 @@ const (
 	// restores onto other GPUs than the checkpoint's (see the runc plugin's GPU remap). Passed
 	// to the GPU controller, whose restore workers may start before the restored /dev has them.
 	GPU_RESTORE_DEVICE_MINORS_CONTEXT_KEY
+
+	// *[]int: device minors of the GPUs a run's container is allocated. Set to an empty slice by
+	// the GPU attach adapter and filled by a plugin that knows the allocation (see the runc
+	// plugin's GPU interception). Sent to the GPU controller on attach, which confines the
+	// container's GPU workers to them.
+	GPU_RUN_DEVICE_MINORS_CONTEXT_KEY
 )

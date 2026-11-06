@@ -4,6 +4,11 @@
 ### Kubernetes Helpers ###
 ##########################
 
+# Image the pods run: cedana-samples' lite image, with every workload at /cedana-samples, slim as
+# customer images are (a CUDA base and the app). The one the run downloaded (download.yml's
+# samples, by digest), else the latest release
+export SAMPLES_IMAGE="${SAMPLES_IMAGE:-$(cat /cedana-samples/.image 2>/dev/null || echo cedana/cedana-samples:cuda-lite)}"
+
 install_kubectl() {
     if command -v kubectl &>/dev/null; then
         debug_log "kubectl is already installed"
@@ -115,11 +120,13 @@ pod_spec() {
     local temp_spec="/tmp/test-spec-${unique_id}.yaml"
     cp "$source_file" "$temp_spec"
 
+    # The samples' lite image is the one this run tests with
     sed -i \
         -e "/^metadata:/,/^[^ ]/ s/^  name:[[:space:]]*.*/  name: $unique_id/" \
         -e "/^metadata:/,/^[^ ]/ s/^  generateName:[[:space:]]*.*/  name: $unique_id/" \
         -e "s/namespace: default/namespace: $namespace/g" \
         -e "s/namespace: .*/namespace: $namespace/g" \
+        -e "s|image:[[:space:]]*cedana/cedana-samples:cuda-lite[[:space:]]*$|image: $SAMPLES_IMAGE|" \
         "$temp_spec"
 
     if ! grep -q "namespace:" "$temp_spec"; then
@@ -328,6 +335,116 @@ validate_pod() {
     error_log "Logs from pod $name in namespace $namespace:"
     error kubectl logs "$name" -n "$namespace" --tail=1000 --prefix=true 2>/dev/null || echo "No logs available"
     return 1
+}
+
+# Checks what the kubelet gives every container of a pod, which a restore must recreate rather
+# than take from the checkpoint: /etc/resolv.conf, /etc/hosts and /etc/hostname (bind mounts;
+# without them the pod has no DNS, or keeps the checkpoint source's hostname), and the service
+# account token. Containers whose image has no `cat` are skipped.
+verify_restored_pod() {
+    local name="$1"
+    local namespace="${2:-$NAMESPACE}"
+
+    local pod
+    pod=$(kubectl get pod "$name" -n "$namespace" -o json) || {
+        error_log "Failed to get pod $name"
+        return 1
+    }
+
+    local host_network automount hostname
+    host_network=$(echo "$pod" | jq -r '.spec.hostNetwork // false')
+    automount=$(echo "$pod" | jq -r 'if .spec.automountServiceAccountToken == false then "false" else "true" end') # not `//`, which treats false as unset
+    hostname=$(echo "$pod" | jq -r '.spec.hostname // .metadata.name')
+    hostname=${hostname:0:63} # as the kubelet truncates it
+
+    local errors=()
+
+    # A restored container that crashed and was restarted from scratch makes the pod Ready
+    # again, but it isn't the restored state anymore
+    local restarted
+    restarted=$(echo "$pod" | jq -r '.status.containerStatuses[]? | select(.restartCount > 0) | "\(.name) (\(.restartCount)x)"')
+    if [ -n "$restarted" ]; then
+        errors+=("restarted after the restore: $(echo "$restarted" | tr '\n' ' ')")
+    fi
+
+    local container
+    for container in $(echo "$pod" | jq -r '.spec.containers[].name'); do
+        local resolv
+        if ! resolv=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /etc/resolv.conf 2>&1); then
+            if [[ "$resolv" == *"executable file not found"* ]]; then
+                debug_log "Skipping checks of container $container of pod $name, which has no cat"
+                continue
+            fi
+            errors+=("$container: cannot read /etc/resolv.conf: $resolv")
+            continue
+        fi
+        grep -q '^nameserver ' <<<"$resolv" || errors+=("$container: /etc/resolv.conf has no nameserver (no DNS)")
+
+        if [ "$host_network" != "true" ]; then
+            local actual
+            actual=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /etc/hostname 2>&1 | tr -d '[:space:]')
+            [ "$actual" = "$hostname" ] || errors+=("$container: /etc/hostname is '$actual', want '$hostname'")
+            kubectl exec "$name" -n "$namespace" -c "$container" -- cat /etc/hosts 2>&1 | grep -qw -- "$hostname" ||
+                errors+=("$container: /etc/hosts does not list '$hostname'")
+
+            # The UTS namespace's hostname (what `hostname` and gethostname() return), which CRIU
+            # would restore from the checkpoint (customer issue C1: restored pods reported the
+            # source pod's hostname)
+            local uts
+            uts=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /proc/sys/kernel/hostname 2>&1 | tr -d '[:space:]')
+            [ "$uts" = "$hostname" ] ||
+                errors+=("$container: kernel hostname is '$uts', want '$hostname' (restored from the checkpoint?)")
+        fi
+
+        local gpus
+        gpus=$(echo "$pod" | jq -r --arg c "$container" '.spec.containers[] | select(.name == $c) | .resources.limits["nvidia.com/gpu"] // empty')
+        if [ -n "$gpus" ] && [ "$gpus" != "0" ]; then
+            # The driver must work, and the libcuda the loader resolves must be the real one
+            # (customer issue CED-2220: a stale ld.so.cache resolved another, after restore)
+            local gpu_problems
+            gpu_problems=$(kubectl exec "$name" -n "$namespace" -c "$container" -- sh -c '
+                nvidia-smi -L >/dev/null 2>&1 || echo "nvidia-smi fails"
+                lib=$(ldconfig -p 2>/dev/null | awk "/libcuda\\.so\\.1 /{print \$NF; exit}")
+                if [ -z "$lib" ]; then echo "the loader cache has no libcuda.so.1"; exit; fi
+                real=$(readlink -f "$lib")
+                if [ ! -s "$real" ]; then echo "libcuda.so.1 ($lib) is missing or empty"; exit; fi
+                [ "$(head -c 4 "$real" | tail -c 3)" = "ELF" ] || echo "libcuda.so.1 ($real) is not an ELF file"
+                [ "$(wc -c <"$real")" -gt 1048576 ] || echo "libcuda.so.1 ($real) is only $(wc -c <"$real") bytes"
+            ' 2>/dev/null) || gpu_problems="${gpu_problems:+$gpu_problems; }could not run the check"
+            # Only warns for now: restores may not rebuild the loader cache yet (the nvidia hook
+            # that runs ldconfig is removed on restore). Make it an error once they pass.
+            [ -z "$gpu_problems" ] ||
+                report_warning "$container: GPU: $(tr '\n' ';' <<<"$gpu_problems")"
+        fi
+
+        if [ "$automount" != "false" ]; then
+            local token_namespace
+            token_namespace=$(kubectl exec "$name" -n "$namespace" -c "$container" -- cat /var/run/secrets/kubernetes.io/serviceaccount/namespace 2>&1)
+            [ "$token_namespace" = "$namespace" ] || errors+=("$container: service account token missing or wrong ($token_namespace)")
+        fi
+    done
+
+    if [ ${#errors[@]} -gt 0 ]; then
+        error_log "Restored pod $name is not what the kubelet would have created:"
+        local e
+        for e in "${errors[@]}"; do
+            error_log "  $e"
+        done
+        return 1
+    fi
+    debug_log "Restored pod $name has its DNS, hosts, hostname and service account token"
+}
+
+# The first and last count a counting workload (e.g. count-loop.sh) logged, or nothing
+# @param $1: Pod name
+# @param $2: Namespace (optional, defaults to $NAMESPACE)
+# @param $3: Container name (optional)
+first_count() {
+    kubectl logs "$1" -n "${2:-$NAMESPACE}" ${3:+-c "$3"} 2>/dev/null | grep -m1 -oE '^COUNT [0-9]+' | awk '{print $2}'
+}
+
+last_count() {
+    kubectl logs "$1" -n "${2:-$NAMESPACE}" ${3:+-c "$3"} 2>/dev/null | grep -oE '^COUNT [0-9]+' | tail -n 1 | awk '{print $2}'
 }
 
 # Validates that a pod's container sees the hostname, /etc/hosts, /etc/resolv.conf
@@ -687,6 +804,7 @@ test_pod_spec() {
     local action_id=""
     local deployed=false
     local error=""
+    local count_before_dump="" # for workloads that log "COUNT <n>"
 
     for action in "${actions[@]}"; do
         case "$action" in
@@ -742,6 +860,9 @@ test_pod_spec() {
                 else
                     sleep "$dump_wait_time"
                 fi
+
+                # At most the count the checkpoint captures
+                count_before_dump=$(last_count "$name" "$namespace" "$container_name")
 
                 debug_log "Dumping pod $name..."
                 local pod_id
@@ -809,11 +930,45 @@ test_pod_spec() {
                     break
                 }
 
-                name=$(wait_for_cmd 60 get_restored_pod "$original_name" "$namespace")
+                name=$(wait_for_cmd 60 get_restored_pod "$original_name" "$namespace") || {
+                    error="Restored pod for $original_name did not appear"
+                    name=""
+                    break
+                }
 
                 debug_log "Restore starting for $name..."
 
-                validate_pod "$name" "$pod_timeout"
+                validate_pod "$name" "$pod_timeout" || {
+                    error="Restored pod $name failed to become Ready"
+                    break
+                }
+
+                # Ready alone doesn't mean it restored: it may have cold-started instead
+                poll_restore_status "$restore_action_id" "$pod_timeout" || {
+                    error="Pod $name did not restore (restore $restore_action_id)"
+                    break
+                }
+
+                verify_restored_pod "$name" "$namespace" || {
+                    error="Restored pod $name is missing what the kubelet gives it"
+                    break
+                }
+
+                # The workload continued from the checkpoint, rather than starting over
+                if [ -n "$count_before_dump" ]; then
+                    wait_for_cmd 30 "kubectl logs $name -n $namespace -c $container_name | grep -qE '^COUNT [0-9]+'" || {
+                        error="Restored pod $name logs no count"
+                        break
+                    }
+                    local count_after_restore
+                    count_after_restore=$(first_count "$name" "$namespace" "$container_name")
+                    if [ -z "$count_after_restore" ] || [ "$count_after_restore" -lt "$count_before_dump" ]; then
+                        error="Restored pod $name started at count $count_after_restore, but it was at $count_before_dump before the checkpoint"
+                        break
+                    fi
+                    debug_log "Restored pod $name continued at count $count_after_restore (was $count_before_dump)"
+                fi
+
                 debug_log "Restored pod $name successfully"
                 original_name="$name"
                 deployed=true
@@ -917,186 +1072,95 @@ wait_for_new_log_trigger() {
     return 1
 }
 
-# Simulate spot interruption by terminating the EC2 instance
-simulate_spot_interruption() {
-    local node_name="$1"
+# Collects what's needed to debug a failed run into a directory, for CI to upload: the
+# cedana daemon log, containerd logs (the shims log through containerd), the logs of all
+# pods in the Cedana namespace (incl. previous containers), pods and events of the cluster,
+# and the propagator's recent restores for this cluster (with a summary by status). Best
+# effort: every step is bounded, and it never fails. Call it before anything is torn down.
+# @param $1: Output directory (default: /tmp/k8s-diagnostics)
+# @param $2: Max bytes per log (default: 20M, as for tail -c)
+collect_diagnostics() {
+    local dir="${1:-/tmp/k8s-diagnostics}"
+    local max="${2:-20M}"
+    (
+        set +e +o pipefail
+        rm -rf "$dir" 2>/dev/null
+        mkdir -p "$dir" || exit 0
+        local kc=(kubectl --request-timeout=30s)
+        local ns="${CEDANA_NAMESPACE:-cedana-system}"
 
-    if [ -z "$node_name" ]; then
-        error_log "simulate_spot_interruption requires node_name"
-        return 1
-    fi
+        debug_log "Collecting diagnostics into $dir..."
 
-    debug_log "Simulating spot interruption for node $node_name..."
+        # Cluster state
+        "${kc[@]}" get nodes -o wide > "$dir/nodes.txt" 2>&1
+        "${kc[@]}" get pods -A -o wide > "$dir/pods.txt" 2>&1
+        "${kc[@]}" get events -A --sort-by=.lastTimestamp > "$dir/events.txt" 2>&1
+        "${kc[@]}" describe pods -n "$ns" > "$dir/describe-$ns.txt" 2>&1
 
-    # Get the EC2 instance ID from the node's provider ID
-    local provider_id
-    provider_id=$(kubectl get node "$node_name" -o jsonpath='{.spec.providerID}')
+        # Logs of all pods in the Cedana namespace, and of their previous containers if restarted
+        local pod restarts
+        mkdir -p "$dir/pods"
+        while read -r pod restarts; do
+            [ -n "$pod" ] || continue
+            timeout 120 "${kc[@]}" logs -n "$ns" "$pod" --all-containers --prefix --timestamps 2>&1 |
+                tail -c "$max" > "$dir/pods/$pod.log"
+            if [[ "$restarts" =~ [1-9] ]]; then # any container restarted
+                timeout 120 "${kc[@]}" logs -n "$ns" "$pod" --all-containers --prefix --timestamps --previous 2>&1 |
+                    tail -c "$max" > "$dir/pods/$pod.previous.log"
+            fi
+        done < <("${kc[@]}" get pods -n "$ns" \
+                -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[*].restartCount}{"\n"}{end}' 2>/dev/null)
 
-    local instance_id
-    instance_id=$(echo "$provider_id" | sed 's|.*/||')
+        # Node logs, through each helper pod (which mounts the node's root at /host), so it
+        # works on any platform: the daemon log (scripts/install-service.sh logs to it, also
+        # under systemd), and the daemon's and containerd's journals where there's systemd
+        local helper node
+        mkdir -p "$dir/nodes"
+        while read -r helper node; do
+            [ -n "$helper" ] || continue
+            node="${node:-$helper}"
+            timeout 120 "${kc[@]}" exec -n "$ns" "$helper" -c helper -- \
+                sh -c "tail -c $max /host/var/log/cedana-daemon.log" > "$dir/nodes/$node.cedana-daemon.log" 2>&1
+            timeout 120 "${kc[@]}" exec -n "$ns" "$helper" -c helper -- \
+                sh -c "chroot /host journalctl -u cedana -u containerd -u k3s -u k3s-agent --no-pager -o short-precise 2>/dev/null | tail -c $max" \
+                > "$dir/nodes/$node.journal.log" 2>&1
+        done < <("${kc[@]}" get pods -n "$ns" -l app.kubernetes.io/component=helper \
+                -o go-template='{{range .items}}{{.metadata.name}} {{.spec.nodeName}}{{"\n"}}{{end}}' 2>/dev/null)
 
-    if [ -z "$instance_id" ]; then
-        error_log "Failed to get instance ID for node $node_name"
-        return 1
-    fi
+        # Local node logs, for K3s, whose node is this machine (and if the helper is gone)
+        mkdir -p "$dir/local"
+        local f
+        for f in /var/log/cedana*.log "${CONTAINERD_LOG:-/tmp/containerd.log}" \
+            /var/lib/rancher/k3s/agent/containerd/containerd.log; do
+            [ -f "$f" ] && tail -c "$max" "$f" > "$dir/local/$(basename "$f")"
+        done
+        if command -v journalctl &>/dev/null; then
+            timeout 60 journalctl -u cedana -u containerd -u k3s --no-pager -o short-precise 2>/dev/null |
+                tail -c "$max" > "$dir/local/journal.log"
+        fi
 
-    debug_log "Terminating EC2 instance $instance_id..."
-
-    aws ec2 terminate-instances --instance-ids "$instance_id" --region "$AWS_REGION"
-
-    debug_log "Spot interruption simulated for instance $instance_id (node $node_name)"
-}
-
-# Get the node where a pod is running
-get_pod_node() {
-    local pod_name="$1"
-    local namespace="${2:-$NAMESPACE}"
-
-    kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.spec.nodeName}' 2>/dev/null
-}
-
-# Wait for a pod to be scheduled on a Karpenter-provisioned spot node
-wait_for_spot_node() {
-    local pod_name="$1"
-    local namespace="${2:-$NAMESPACE}"
-    local timeout="${3:-300}"
-
-    debug_log "Waiting for pod $pod_name to be scheduled on spot node (timeout: ${timeout}s)..."
-
-    local elapsed=0
-    local poll_interval=5
-
-    while [ $elapsed -lt "$timeout" ]; do
-        local node_name
-        node_name=$(get_pod_node "$pod_name" "$namespace")
-
-        if [ -n "$node_name" ]; then
-            # Verify it's a spot instance via Karpenter label
-            local capacity_type
-            capacity_type=$(kubectl get node "$node_name" -o jsonpath='{.metadata.labels.karpenter\.sh/capacity-type}' 2>/dev/null)
-
-            if [ "$capacity_type" = "spot" ]; then
-                debug_log "Pod $pod_name scheduled on spot node $node_name"
-                echo "$node_name"
-                return 0
-            elif [ -n "$capacity_type" ]; then
-                debug_log "Pod scheduled on $capacity_type node, waiting for spot..."
+        # Recent restores of this cluster from the propagator, with a summary by status
+        if [ -n "${CEDANA_URL:-}" ]; then
+            local query="limit=50"
+            [ -n "${CLUSTER_ID:-}" ] && query+="&cluster_id=${CLUSTER_ID//\"/}"
+            curl -s --max-time 30 "${CEDANA_URL}/restores?${query}" \
+                -H "Authorization: Bearer ${CEDANA_AUTH_TOKEN:-}" 2>/dev/null |
+                head -c 50M > "$dir/restores.json"
+            local summary
+            summary=$(jq -r 'if type == "array" then
+                    (group_by(.status) | map("\(.[0].status // "unknown")=\(length)") | join(" ")) as $s
+                    | "\(length) restores\(if $s != "" then ": " + $s else "" end)"
+                else empty end' "$dir/restores.json" 2>/dev/null)
+            if [ -n "$summary" ]; then
+                echo "$summary" > "$dir/restores-summary.txt"
+                info_log "Propagator restores for cluster ${CLUSTER_ID:-?} (last 50): $summary"
+            else
+                info_log "Propagator restores for cluster ${CLUSTER_ID:-?}: unavailable"
             fi
         fi
 
-        sleep $poll_interval
-        ((elapsed += poll_interval))
-    done
-
-    error_log "Timeout waiting for pod $pod_name to be scheduled on spot node"
-    return 1
-}
-
-# Create a pod spec with spot tolerations and affinity
-spot_pod_spec() {
-    local image="$1"
-    local args="$2"
-    local namespace="${3:-$NAMESPACE}"
-
-    local name
-    name=test-spot-$(unix_nano)
-
-    local spec=/tmp/pod-${name}.yaml
-    cat >"$spec" <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: "$namespace"
-  labels:
-    app: "$name"
-    cedana.ai/spot-test: "true"
-spec:
-  tolerations:
-    - key: "cedana.ai/spot-test"
-      operator: "Equal"
-      value: "true"
-      effect: NoSchedule
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: karpenter.sh/capacity-type
-                operator: In
-                values: ["spot"]
-  containers:
-  - name: "$name"
-    image: $image
-    command: ["/bin/sh", "-c"]
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "512Mi"
-EOF
-
-    if [[ -n "$args" ]]; then
-        printf "    args:\n" >>"$spec"
-        printf "      - |\n" >>"$spec"
-        while IFS= read -r line; do
-            printf "        %s\n" "$line" >>"$spec"
-        done <<<"$args"
-    fi
-
-    echo "$spec"
-}
-
-# Create a GPU pod spec with spot tolerations
-spot_pod_spec_gpu() {
-    local image="$1"
-    local args="$2"
-    local gpus="${3:-1}"
-    local namespace="${4:-$NAMESPACE}"
-
-    local name
-    name=test-spot-cuda-$(unix_nano)
-
-    local spec=/tmp/pod-${name}.yaml
-    cat >"$spec" <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: "$namespace"
-  labels:
-    app: "$name"
-    cedana.ai/spot-test: "true"
-spec:
-  runtimeClassName: cedana
-  tolerations:
-    - key: "cedana.ai/spot-test"
-      operator: "Equal"
-      value: "true"
-      effect: NoSchedule
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: karpenter.sh/capacity-type
-                operator: In
-                values: ["spot"]
-  containers:
-  - name: "$name"
-    image: $image
-    command: ["/bin/sh", "-c"]
-    resources:
-      limits:
-        nvidia.com/gpu: "$gpus"
-EOF
-
-    if [[ -n "$args" ]]; then
-        printf "    args:\n" >>"$spec"
-        printf "      - |\n" >>"$spec"
-        while IFS= read -r line; do
-            printf "        %s\n" "$line" >>"$spec"
-        done <<<"$args"
-    fi
-
-    echo "$spec"
+        find "$dir" -type f -empty -delete 2>/dev/null
+        info_log "Diagnostics collected in $dir"
+        exit 0
+    ) || true
 }

@@ -17,7 +17,13 @@ fi
 # check if systemd is available and running
 if ! systemctl status &>/dev/null; then
     echo "Systemd not available. Starting $APP_NAME daemon directly without service setup..." >&2
-    $APP_PATH daemon start &> "$LOG_PATH" &
+    # In the host's mount namespace, as a service would be: started from a pod (e.g. the k8s
+    # helper), the pod's wouldn't see later mounts, e.g. new containers' rootfs (RW layers).
+    if [ "$(readlink /proc/1/ns/mnt)" != "$(readlink /proc/self/ns/mnt)" ] && command -v nsenter &>/dev/null; then
+        nsenter -t 1 -m -- "$APP_PATH" daemon start &> "$LOG_PATH" &
+    else
+        $APP_PATH daemon start &> "$LOG_PATH" &
+    fi
     exit
 fi
 

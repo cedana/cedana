@@ -7,8 +7,12 @@ GOCMD=go
 # Pin the toolchain: binaries + plugins built with Go 1.27 panic at runtime with
 # "*daemon.Job, not *daemon.Job (types from different scopes)" once several
 # plugins are loaded. A go.mod toolchain line can't do this (Go never downgrades).
+
+# RACE=1 builds with the race detector. Plugins only load into a binary built the same way,
+# so build cedana and its plugins with it together.
+# (-race through GOFLAGS, as go build takes -C only as its first flag)
 export GOTOOLCHAIN?=go1.26.10
-GOBUILD=CGO_ENABLED=1 $(GOCMD) build
+GOBUILD=CGO_ENABLED=1 $(if $(filter 1,$(RACE)),GOFLAGS=-race )$(GOCMD) build
 BUILDVCS?=false
 GOMODULE=github.com/cedana/cedana
 SUDO=sudo -E env "PATH=$(PATH)"
@@ -32,7 +36,7 @@ LDFLAGS=-X main.Version=$(VERSION)
 DEBUG?=0
 DEBUG_FLAGS=-gcflags="all=-N -l" -ldflags "-compressdwarf=false"
 
-cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1])
+cedana: $(OUT_DIR)/$(BINARY) ## Build the binary (DEBUG=[0|1], RACE=[0|1])
 $(OUT_DIR)/$(BINARY): $(BINARY_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building $(BINARY) with debug symbols..." ;\
@@ -92,7 +96,7 @@ PLUGIN_NAMES=$(shell ls plugins)
 PLUGIN_BINARIES=$(patsubst %,$(OUT_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 PLUGIN_INSTALL_PATHS=$(patsubst %,$(INSTALL_LIB_DIR)/libcedana-%.so,$(PLUGIN_NAMES))
 
-plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1])
+plugins: $(PLUGIN_BINARIES) ## Build all plugins (DEBUG=[0|1], RACE=[0|1])
 $(OUT_DIR)/libcedana-%.so: plugins/%/**/* plugins/%/* $(PKG_SOURCES) $(GO_MOD_FILES)
 	if [ "$(DEBUG)" = "1" ]; then \
 		echo "Building plugin $* with debug symbols..." ;\
@@ -222,7 +226,7 @@ test-regression: ## Run regression tests (PARALLELISM=<n>, GPU=[0|1], TAGS=<tags
 		fi ;\
 	fi
 
-test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINERD=[external|embedded], TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
+test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINERD=[external|embedded], K3S_VERSION=<v1.x.y+k3sN>, CONTAINERD_VERSION=<x.y.z>, TAGS=<tags>, RETRIES=<retries>, DEBUG=[0|1])
 	if [ -f /.dockerenv ] || [ "$$(echo $$PROVIDER | tr '[:upper:]' '[:lower:]')" != "k3s" ]; then \
 		echo "Running kubernetes e2e tests..." ;\
 		echo "Retries: $(RETRIES)" ;\
@@ -264,6 +268,8 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINER
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
 				K3S_CONTAINERD=$(K3S_CONTAINERD) \
+				K3S_VERSION=$(K3S_VERSION) \
+				CONTAINERD_VERSION=$(CONTAINERD_VERSION) \
 				CLUSTER_ID=$(CLUSTER_ID) \
 				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \
@@ -288,6 +294,8 @@ test-k8s: ## Run kubernetes e2e tests (PARALLELISM=<n>, GPU=[0|1], K3S_CONTAINER
 				DEBUG=$(DEBUG) \
 				PROVIDER=$(PROVIDER) \
 				K3S_CONTAINERD=$(K3S_CONTAINERD) \
+				K3S_VERSION=$(K3S_VERSION) \
+				CONTAINERD_VERSION=$(CONTAINERD_VERSION) \
 				CLUSTER_ID=$(CLUSTER_ID) \
 				SKIP_HELM=$(SKIP_HELM) \
 				CONTROLLER_REPO=$(CONTROLLER_REPO) \

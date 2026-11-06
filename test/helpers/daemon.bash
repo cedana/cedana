@@ -13,6 +13,9 @@ export CEDANA_CHECKPOINT_COMPRESSION=${CEDANA_CHECKPOINT_COMPRESSION:-none}
 export CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 export CEDANA_PLUGINS_BUILDS=${CEDANA_PLUGINS_BUILDS:-alpha}
 export CEDANA_GPU_SHM_SIZE="${CEDANA_GPU_SHM_SIZE:-$((1 * GIBIBYTE))}"
+# The GPU controller (inheriting the daemon's env) checks restored device memory byte for byte.
+# Only warns for now: its hash kernel doesn't load on CI's Turing GPUs (CUDA error 218).
+export CEDANA_GPU_VERIFY="${CEDANA_GPU_VERIFY:-warn}"
 
 WAIT_TIMEOUT=60
 
@@ -129,7 +132,10 @@ follow_daemon_log() {
 
 unfollow_daemon_log() {
     if [ -n "$TAIL_PID" ]; then
-        kill "$TAIL_PID" 2>/dev/null
+        # KILL, not TERM: in CI, a tail started by a test that ended right away (skipped) outlived
+        # TERM, and the wait below then never returned, hanging the test and its file until the
+        # job timed out. KILL can't be caught, ignored or blocked.
+        kill -KILL "$TAIL_PID" 2>/dev/null
         wait "$TAIL_PID" 2>/dev/null || true
         TAIL_PID=
     fi

@@ -1,0 +1,9 @@
+# containerd versions the plugin installer's config is checked against, one per minor
+# (containerd_config_test.go, in CI's unit job): how each loads and merges it.
+# Format: <version>  # <label: the newest config version it reads>
+1.7.36  # config version 2
+2.0.14  # config version 3
+2.1.9   # config version 3
+2.2.10  # config version 3
+2.3.7   # config version 4
+2.4.2   # config version 4

@@ -42,6 +42,8 @@ teardown_file() {
 
     cedana run containerd --snapshotter "$CONTAINERD_SNAPSHOTTER" --jid "$jid" -- "$image" echo hello
 
+    # The run returns once the container starts, before the daemon has forwarded its output
+    wait_for_cmd 10 grep -q hello "$log_file"
     run cat "$log_file"
     assert_success
     assert_output --partial "hello"

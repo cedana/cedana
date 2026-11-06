@@ -223,6 +223,10 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			continue
 		}
 
+		if !discovered && cgroupFrozen(c.PID) {
+			continue
+		}
+
 		wg.Go(func() {
 			err := c.Sync(ctx, false)
 			if err == nil {
@@ -319,6 +323,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
+		"CEDANA_GPU_RESTORE_NIC="+config.Global.GPU.RestoreNic,
+		"CEDANA_GPU_DELTA_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DeltaEnabled),
+		"CEDANA_GPU_VERIFY="+config.Global.GPU.Verify,
+		"CEDANA_GPU_PROFILING_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.ProfilingEnabled),
+		"CEDANA_GPU_COMPUTE_SANITIZER="+fmt.Sprintf("%v", config.Global.GPU.ComputeSanitizer),
 		// Restores attach twice: at CRIU's setup-namespaces hook and post-restore (see CRIUCallback)
 		"CEDANA_GPU_ATTACH_STAGED=1",
 	)
@@ -371,10 +380,33 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		return
 	}
 
-	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
-
 	c.Termination.Lock()
 	defer c.Termination.Unlock()
+
+	p.terminate(ctx, c)
+}
+
+// Like Terminate, but returns false at once when a dump or a restore holds Termination.
+// Booking must be held
+func (p *pool) TryTerminate(ctx context.Context, id string) bool {
+	c := p.Get(id)
+	if c == nil {
+		return true
+	}
+
+	if !c.Termination.TryLock() {
+		return false
+	}
+	defer c.Termination.Unlock()
+
+	p.terminate(ctx, c)
+	return true
+}
+
+// Termination must be held
+func (p *pool) terminate(ctx context.Context, c *controller) {
+	id := c.ID
+	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
 
 	if c.Terminating.Load() {
 		log.Debug().Msg("termination of GPU controller already in progress, skipping duplicate termination attempt")
@@ -406,23 +438,45 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 	defer runtime.UnlockOSThread()
 
 	syscall.Kill(int(c.PID), CONTROLLER_TERMINATE_SIGNAL)
+
+	waitCtx, cancel := context.WithTimeout(ctx, TERMINATE_TIMEOUT)
+	defer cancel()
+
 	if int(c.ParentPID) == os.Getpid() { // If we spawned it, then reap it
 		process, err := os.FindProcess(int(c.PID))
 		if err != nil {
 			return
 		}
-		state, err := process.Wait()
-		if err != nil {
-			log.Trace().Err(err).Msg("GPU controller Wait()")
+		exited := make(chan *os.ProcessState, 1)
+		go func() {
+			state, err := process.Wait()
+			if err != nil {
+				log.Trace().Err(err).Msg("GPU controller Wait()")
+			}
+			exited <- state
+		}()
+		var state *os.ProcessState
+		select {
+		case state = <-exited:
+		case <-waitCtx.Done():
+			killControllerGroup(log, c.PID)
+			state = <-exited
 		}
 		c.Terminated <- state.ExitCode()
 		log.Debug().Int("status", state.ExitCode()).Msg("GPU controller exited")
 	} else { // Otherwise, just wait for it to exit
-		waitCtx, cancel := context.WithTimeout(ctx, TERMINATE_TIMEOUT)
-		defer cancel()
 		c.Terminated <- <-utils.WaitForPidCtx(waitCtx, c.PID)
+		if waitCtx.Err() != nil {
+			killControllerGroup(log, c.PID)
+		}
 		log.Debug().Str("status", "unknown").Msg("GPU controller exited")
 	}
+}
+
+// Kills the controller with its workers, which share its process group
+func killControllerGroup(log zerolog.Logger, pid uint32) {
+	log.Warn().Dur("timeout", TERMINATE_TIMEOUT).Msg("GPU controller did not exit after termination signal, killing it with its workers")
+	syscall.Kill(-int(pid), syscall.SIGKILL)
 }
 
 // unfreeze resumes the GPU of a dumped process
@@ -727,6 +781,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return err
 	}
 
+	p.freezeWithPtrace(callback, id, log)
+
 	return callback
 }
 
@@ -847,8 +903,13 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 }
 
 // Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.
-func (c *controller) Attach(ctx context.Context, pid uint32) (err error) {
-	_, err = c.ControllerClient.Attach(ctx, &gpu.AttachReq{PID: pid})
+// deviceMinors are the GPUs a run's container is allocated, which its GPU workers are confined to.
+func (c *controller) Attach(ctx context.Context, pid uint32, deviceMinors ...int) (err error) {
+	req := &gpu.AttachReq{PID: pid}
+	for _, minor := range deviceMinors {
+		req.DeviceMinors = append(req.DeviceMinors, uint32(minor))
+	}
+	_, err = c.ControllerClient.Attach(ctx, req)
 	if err != nil {
 		return utils.GRPCErrorShort(err, c.ErrBuf.String())
 	}

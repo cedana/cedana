@@ -43,10 +43,6 @@ EOF
     echo "$spec"
 }
 
-first_count() {
-    kubectl logs "$1" -n "$NAMESPACE" 2>/dev/null | grep -m1 -oE 'COUNT [0-9]+' | awk '{print $2}'
-}
-
 deploy_counting_pod() {
     local spec="$1"
     local name="$2"

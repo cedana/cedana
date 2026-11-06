@@ -183,9 +183,10 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				}
 			} else {
 
-				// Inherit stdio files that are not external
+				// Inherit stdio files that are not external. Any other descriptor, e.g. a pty
+				// the job opened itself, is restored from the images like any other file.
 
-				if !rootFiles[f] {
+				if !rootFiles[f] || f.Fd > 2 {
 					return true
 				}
 				if visitedStdioFds[f.Fd] { // Stdio fds should only be inherited once

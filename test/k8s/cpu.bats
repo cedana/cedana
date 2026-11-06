@@ -42,7 +42,7 @@ load ../helpers/propagator
     local script
     local spec
 
-    script=$(cat "$WORKLOADS"/date-loop.sh)
+    script=$(cat "$WORKLOADS"/count-loop.sh)
     spec=$(cmd_pod_spec "alpine:latest" "$script")
 
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec"
@@ -85,7 +85,7 @@ load ../helpers/propagator
     local script
     local spec
 
-    script=$(cat "$WORKLOADS"/date-loop.sh)
+    script=$(cat "$WORKLOADS"/count-loop.sh)
     spec=$(cmd_pod_spec "alpine:latest" "$script")
 
     test_pod_spec DEPLOY_DUMP_RESTORE_DUMP_RESTORE "$spec"

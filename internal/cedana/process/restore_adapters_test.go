@@ -51,3 +51,27 @@ func TestInheritFilesForRestoreStdioOfRootOnly(t *testing.T) {
 		t.Errorf("descendant's redirected stdout inherited as ours, got %v", keys)
 	}
 }
+
+// Only a TTY on the root task's stdio is one to inherit: a pty the job opened itself (e.g.
+// /dev/pts/ptmx on descriptor 17) is restored from the images, so it doesn't fail the restore
+func TestInheritFilesForRestoreTTYOnStdioOnly(t *testing.T) {
+	next := func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (func() <-chan int, error) {
+		return nil, nil
+	}
+	restore := func(fd uint64) error {
+		state := &daemon.ProcessState{
+			OpenFiles: []*daemon.File{{Path: "/dev/pts/ptmx", Fd: fd, MountID: 7, Inode: 3, IsTTY: true}},
+			Mounts:    []*daemon.Mount{{ID: 7}},
+		}
+		opts := types.Opts{InheritFdMap: map[string]int32{}}
+		_, err := InheritFilesForRestore(next)(context.Background(), opts, &daemon.RestoreResp{State: state}, &daemon.RestoreReq{})
+		return err
+	}
+
+	if err := restore(17); err != nil {
+		t.Errorf("a pty the job opened itself failed the restore: %v", err)
+	}
+	if err := restore(0); err == nil {
+		t.Error("a TTY on stdin, which a daemon restore has none to inherit, didn't fail the restore")
+	}
+}

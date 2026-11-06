@@ -11,7 +11,7 @@ concurrency:
 jobs:
   cancel:
     name: Cancel
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Do nothing (github concurrency should cancel the workflow)
         run: echo "This workflow is intended to cancel any in-progress workflows for the same PR."
