@@ -193,6 +193,9 @@ func (m *ManagerSimple) Freeze(ctx context.Context, pid uint32) error {
 	if controller == nil {
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
 	}
+	if cgroupFrozen(controller.PID) {
+		return fmt.Errorf("the GPU controller for PID %d is already frozen, with its container", pid)
+	}
 
 	_, err := controller.Freeze(ctx, &gpu.FreezeReq{})
 	return err
@@ -202,6 +205,9 @@ func (m *ManagerSimple) Unfreeze(ctx context.Context, pid uint32) error {
 	controller := m.controllers.Find(pid)
 	if controller == nil {
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
+	}
+	if cgroupFrozen(controller.PID) {
+		return fmt.Errorf("the GPU controller for PID %d is still frozen, with its container", pid)
 	}
 
 	_, err := controller.Unfreeze(ctx, &gpu.UnfreezeReq{})
