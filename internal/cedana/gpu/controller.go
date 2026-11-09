@@ -603,6 +603,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
+			log.Info().Str("checksum", resp.GetVerify().GetChecksum()).Msg("GPU state checksum")
+			setChecksum(ctx, resp.GetVerify().GetChecksum())
 
 			log.Info().Msg("GPU dump complete")
 		}()
@@ -703,9 +705,18 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
 				return
 			}
-			log.Info().Msg("GPU restore complete")
+			verify := resp.GetRestoreStats().GetVerify()
+			log.Info().Str("checksum", verify.GetChecksum()).Msg("GPU restore complete")
 
 			restoreProfile = resp.GetProfile()
+			setChecksum(ctx, verify.GetChecksum())
+
+			// Sent to restoreErr before PreResume, so a strict mismatch kills the process unresumed
+			if err := checkChecksum(ctx, verify); err != nil {
+				log.Error().Err(err).Msg("rejecting GPU restore")
+				restoreErr <- err
+				return
+			}
 		}()
 		return nil
 	}
@@ -786,6 +797,32 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	p.freezeWithPtrace(callback, id, log)
 
 	return callback
+}
+
+// setChecksum hands the GPU state checksum to the adapter that asked for it in the context
+// (see keys.GPU_CHECKSUM_CONTEXT_KEY). The adapter reads it only after the GPU dump/restore
+// goroutine is done, once dumpErr/restoreErr is drained.
+func setChecksum(ctx context.Context, checksum string) {
+	if p, ok := ctx.Value(keys.GPU_CHECKSUM_CONTEXT_KEY).(*string); ok {
+		*p = checksum
+	}
+}
+
+// checkChecksum compares the checksum the restore read with the one recorded at dump. Only
+// strict fails; an empty expected checksum (older or verify-off dump) is not checked.
+func checkChecksum(ctx context.Context, verify *gpu.VerifySummary) error {
+	want, _ := ctx.Value(keys.GPU_EXPECTED_CHECKSUM_CONTEXT_KEY).(string)
+	if want == "" || verify.GetChecksum() == want {
+		return nil
+	}
+	err := fmt.Errorf("GPU state checksum mismatch: dump recorded %q, restore read %q", want, verify.GetChecksum())
+	if verify.GetMode() == gpu.VerifyMode_VERIFY_STRICT {
+		return err
+	}
+	if verify.GetMode() != gpu.VerifyMode_VERIFY_OFF {
+		log.Warn().Err(err).Msg("continuing: verify mode is not strict")
+	}
+	return nil
 }
 
 func (p *pool) Check(binary string) types.Check {
