@@ -216,6 +216,8 @@ var restoreCmd = &cobra.Command{
 				cedana.Finalize()
 				return utils.GRPCErrorColored(err)
 			}
+			// Before Finalize, which waits for the restored process to exit.
+			writeChecksumFile(cmd, resp.GetChecksum())
 
 			data := cedana.Finalize()
 			if config.Global.Profiling.Enabled && data != nil {
@@ -228,7 +230,6 @@ var restoreCmd = &cobra.Command{
 					profiling.Print(data, features.Theme())
 				}
 			}
-			writeChecksumFile(cmd, resp.GetChecksum())
 
 			os.Exit(<-code)
 		} else {
