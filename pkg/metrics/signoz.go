@@ -3,12 +3,19 @@ package metrics
 import (
 	"context"
 	"fmt"
+	"io"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
+	"time"
 
 	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/utils"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -25,6 +32,31 @@ type Creds struct {
 
 var Credentials *Creds
 
+// local logs telemetry's own failures (an export SigNoz refuses, a timeout) where the
+// process's logs went before SigNoz was added: never to SigNoz, which is what failed, and
+// never to stdout or stderr directly. A shim's stdout and stderr are its reply to
+// containerd (an error printed there broke the address it hands back, and every
+// container start with it), and a restored container's are pipes nobody may be reading.
+var local = zerolog.Nop()
+
+// initLocal sets local up on the process's own log writer, before SigNoz is added to it,
+// and routes the OpenTelemetry SDK's errors (printed to stderr by default) through it.
+func initLocal(service string) {
+	w := logging.GlobalWriter
+	if w == nil {
+		w = io.Discard
+	}
+	local = zerolog.New(w).Level(logging.Level).With().Timestamp().Str("service", service).Logger()
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		local.Warn().Err(err).Msg("telemetry export failed")
+	}))
+}
+
+const (
+	CREDENTIALS_TIMEOUT = 2 * time.Second
+	EXPORT_TIMEOUT      = 2 * time.Second
+)
+
 // Init initializes OpenTelemetry tracing and metrics with SigNoz as the backend.
 // Extra resource attributes (e.g. installed plugin versions, see
 // ResourceAttributes) are attached to every log, trace and metric emitted.
@@ -35,6 +67,7 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 		log.Warn().Err(err).Msg("metrics will not be sent to SigNoz")
 	}
 
+	initLocal(service)
 	initPropagator()
 
 	err := getCreds(ctx)
@@ -121,6 +154,9 @@ func getCreds(ctx context.Context) error {
 		return fmt.Errorf("connection URL or AuthToken unset in config/env")
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, CREDENTIALS_TIMEOUT)
+	defer cancel()
+
 	creds, err := propagatorsdk.NewClient(url, authToken).V1().Otel().Credentials().Get(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to fetch otel credentials: %w", err)
@@ -132,9 +168,21 @@ func getCreds(ctx context.Context) error {
 		return fmt.Errorf("received incomplete credentials from server")
 	}
 
-	Credentials = &Creds{Endpoint: *endpoint, Headers: *headers}
+	Credentials = &Creds{Endpoint: hostPort(*endpoint), Headers: *headers}
 
 	return nil
+}
+
+// hostPort reduces an OTLP endpoint, with or without a scheme and port, to host:port
+func hostPort(endpoint string) string {
+	if u, err := url.Parse(endpoint); err == nil && u.Host != "" {
+		endpoint = u.Host
+	}
+	endpoint = strings.TrimSuffix(endpoint, "/")
+	if _, _, err := net.SplitHostPort(endpoint); err != nil {
+		endpoint = net.JoinHostPort(endpoint, "443")
+	}
+	return endpoint
 }
 
 // initPropagator initializes the OpenTelemetry propagator for context propagation

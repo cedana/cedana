@@ -19,12 +19,14 @@ import (
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/plugins/k8s"
 	"buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
+	"github.com/cedana/cedana/pkg/barrier"
 	"github.com/cedana/cedana/pkg/client"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/plugins/runc/pkg/runc"
 	cedanastorage "github.com/cedana/cedana/plugins/storage-cedana/propagator"
+	"github.com/google/uuid"
 	"github.com/opencontainers/runtime-spec/specs-go"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
@@ -654,63 +656,24 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			dumpReqs = append(dumpReqs, dumpReq)
 		}
 
+		// Rather than freezing the pod first, the daemon holds each container's dump right after
+		// CRIU has seized its processes, until every container's has: they are all held still at
+		// once, with ptrace, which their processes cannot see. A cgroup freeze would also freeze the
+		// GPU workers in the containers' cgroups, which must keep running for the GPU dump.
+		dumpCtx := ctx
+		if len(dumpReqs) > 1 {
+			group := req.ActionId + "-" + uuid.NewString()
+			dumpCtx = barrier.WithGroup(ctx, group, len(dumpReqs))
+			log.Info().Str("group", group).Msg("dumping all containers, seized together")
+		}
+
 		wg := sync.WaitGroup{}
-		errMap := make(map[int]error)
-		errMapMu := sync.Mutex{}
-		wg.Add(len(dumpReqs))
-
-		for i, dumpReq := range dumpReqs {
-			log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
-			go func() {
-				defer wg.Done()
-				_, _, err := es.cedana.Freeze(ctx, dumpReq)
-				if err != nil {
-					errMapMu.Lock()
-					errMap[i] = err
-					errMapMu.Unlock()
-				}
-			}()
-
-			defer func() {
-				_, _, err := es.cedana.Unfreeze(ctx, dumpReq)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to unfreeze container")
-				}
-			}()
-		}
-
-		wg.Wait()
-
-		if len(errMap) > 0 {
-			for i, err := range errMap {
-				log := log.With().Int("container_order", i).Str("container", containers[i].ID).Logger()
-				if err != nil {
-					log.Error().Err(err).Msg("failed to freeze container")
-				}
-				es.publishCheckpoint(
-					log.WithContext(ctx),
-					req.PodName,
-					req.ActionId,
-					checkpointIdMap[i],
-					nil,
-					"",
-					nil,
-					i,
-					specMap[i],
-					err,
-				)
-			}
-			return rabbitmq.Ack
-		}
-
-		log.Info().Msg("all containers frozen, starting dump")
-
 		wg.Add(len(dumpReqs))
 
 		for i, dumpReq := range dumpReqs {
 			go func() {
 				defer wg.Done()
-				dumpResp, profiling, err := es.cedana.Dump(ctx, dumpReq)
+				dumpResp, profiling, err := es.cedana.Dump(dumpCtx, dumpReq)
 				var path string
 				var state *daemon.ProcessState
 				if err == nil {

@@ -59,6 +59,13 @@ const (
 	DEFAULT_GPU_DEBUG                = false
 	DEFAULT_GPU_DEDUP_ENABLED        = false
 	DEFAULT_GPU_TEMPLATES_ENABLED    = false
+	DEFAULT_GPU_RESTORE_NIC          = "auto"
+	DEFAULT_GPU_DELTA_ENABLED        = false
+	DEFAULT_GPU_VERIFY               = "off"
+	DEFAULT_GPU_PROFILING_ENABLED    = false
+	DEFAULT_GPU_COMPUTE_SANITIZER    = false
+	DEFAULT_GPU_DIRECT_IO            = true
+	DEFAULT_GPU_MEM_RING_BUF_SIZE    = 8
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -72,6 +79,7 @@ const (
 	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
 
 	DEFAULT_K8S_FALLBACK_COLD_START = true
+	DEFAULT_K8S_INSTALL_DEPS        = true
 
 	DEFAULT_AWS_CREDENTIALS_MODE = "static"
 
@@ -121,6 +129,13 @@ var Global Config = Config{
 		Debug:              DEFAULT_GPU_DEBUG,
 		DedupEnabled:       DEFAULT_GPU_DEDUP_ENABLED,
 		TemplatesEnabled:   DEFAULT_GPU_TEMPLATES_ENABLED,
+		RestoreNic:         DEFAULT_GPU_RESTORE_NIC,
+		DeltaEnabled:       DEFAULT_GPU_DELTA_ENABLED,
+		Verify:             DEFAULT_GPU_VERIFY,
+		ProfilingEnabled:   DEFAULT_GPU_PROFILING_ENABLED,
+		ComputeSanitizer:   DEFAULT_GPU_COMPUTE_SANITIZER,
+		DirectIO:           DEFAULT_GPU_DIRECT_IO,
+		MemRingBufSize:     DEFAULT_GPU_MEM_RING_BUF_SIZE,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
@@ -139,6 +154,7 @@ var Global Config = Config{
 	},
 	K8s: K8s{
 		FallbackColdStart: DEFAULT_K8S_FALLBACK_COLD_START,
+		InstallDeps:       DEFAULT_K8S_INSTALL_DEPS,
 	},
 	AWS: AWS{
 		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,

@@ -23,6 +23,7 @@ func (s *Server) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 			List: []types.Check{
 				criu.CheckVersion(s.plugins),
 				criu.CheckFeatures(s.plugins, CRIU_EXPERIMENTAL_CHECKS),
+				criu.CheckInotify(),
 			},
 		},
 	}
@@ -45,6 +46,7 @@ func (s *Cedana) HealthCheck(ctx context.Context, req *daemon.HealthCheckReq) (*
 			List: []types.Check{
 				criu.CheckVersion(s.plugins),
 				criu.CheckFeatures(s.plugins, CRIU_EXPERIMENTAL_CHECKS),
+				criu.CheckInotify(),
 			},
 		},
 	}

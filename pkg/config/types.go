@@ -65,6 +65,9 @@ type (
 		// FallbackColdStart sets whether the containerd runtime shim should fall back to a normal (cold) start
 		// of the container if the cedana restore fails for some reason.
 		FallbackColdStart bool `json:"fallback_cold_start" key:"fallback_cold_start" yaml:"fallback_cold_start" mapstructure:"fallback_cold_start"`
+		// InstallDeps sets whether the helper's setup installs missing host packages. When false, it makes no package
+		// changes and only reports them, with the commands that install them (e.g. to run in the node image).
+		InstallDeps bool `json:"install_deps" key:"install_deps" yaml:"install_deps" mapstructure:"install_deps"`
 	}
 
 	Connection struct {
@@ -151,8 +154,25 @@ type (
 		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
 		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
+		// DirectIO sets whether to read and write GPU checkpoints with O_DIRECT (on supported filesystems)
+		DirectIO bool `json:"direct_io" key:"direct_io" yaml:"direct_io" mapstructure:"direct_io"`
+		// MemRingBufSize is the number of staging buffers used to restore GPU memory with O_DIRECT
+		MemRingBufSize int `json:"mem_ring_buf_size" key:"mem_ring_buf_size" yaml:"mem_ring_buf_size" mapstructure:"mem_ring_buf_size"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
+		// RestoreNic is how a restored process's UCX contexts pick their RDMA NIC on this node (auto: the
+		// rail closest to the GPU it now runs on; mapping: VLLM_GPU_NIC_PCIE_MAPPING's NIC; off: as
+		// checkpointed). A workload's own CEDANA_GPU_RESTORE_NIC takes precedence.
+		RestoreNic string `json:"restore_nic" key:"restore_nic" yaml:"restore_nic" mapstructure:"restore_nic"`
+		// DeltaEnabled sets whether GPU checkpoints only save memory changed since the previous checkpoint
+		DeltaEnabled bool `json:"delta_enabled" key:"delta_enabled" yaml:"delta_enabled" mapstructure:"delta_enabled"`
+		// Verify sets whether restored GPU state is checked against the checkpoint (off; warn: log
+		// mismatches; strict: fail the restore)
+		Verify string `json:"verify" key:"verify" yaml:"verify" mapstructure:"verify"`
+		// ProfilingEnabled enables CUDA call profiling in the GPU plugin
+		ProfilingEnabled bool `json:"profiling_enabled" key:"profiling_enabled" yaml:"profiling_enabled" mapstructure:"profiling_enabled"`
+		// ComputeSanitizer runs restored GPU workers under compute-sanitizer
+		ComputeSanitizer bool `json:"compute_sanitizer" key:"compute_sanitizer" yaml:"compute_sanitizer" mapstructure:"compute_sanitizer"`
 	}
 
 	Plugins struct {

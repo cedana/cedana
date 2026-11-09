@@ -43,7 +43,9 @@ func initMeter(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resou
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		if err := meterProvider.Shutdown(context.WithoutCancel(ctx)); err != nil {
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), EXPORT_TIMEOUT)
+		defer cancel()
+		if err := meterProvider.Shutdown(shutdownCtx); err != nil {
 			log.Warn().Str("endpoint", Credentials.Endpoint).Err(err).Msg("metrics shutdown failed")
 		} else {
 			log.Debug().Str("endpoint", Credentials.Endpoint).Msg("metrics shutdown")

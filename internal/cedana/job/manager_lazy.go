@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"syscall"
 	"time"
@@ -23,8 +24,9 @@ import (
 )
 
 const (
-	DB_SYNC_INTERVAL       = 10 * time.Second
-	DB_SYNC_RETRY_INTERVAL = 1 * time.Second
+	DB_SYNC_INTERVAL         = 10 * time.Second
+	DB_SYNC_RETRY_INTERVAL   = 1 * time.Second
+	DB_SYNC_CHECKPOINT_BATCH = 100
 )
 
 type ManagerLazy struct {
@@ -32,6 +34,7 @@ type ManagerLazy struct {
 	checkpoints        sync.Map
 	deletedJobs        sync.Map // to keep track of deleted jobs
 	deletedCheckpoints sync.Map // to keep track of deleted checkpoints
+	managed            sync.Map // PID -> JID of the job this daemon is watching it under
 
 	host    *daemon.Host
 	plugins plugins.Manager
@@ -276,8 +279,10 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 	if pid == 0 {
 		return fmt.Errorf("invalid PID 0 for job %s", jid)
 	}
-	if existing := m.Find(pid); existing != nil && existing.JID != jid {
-		return fmt.Errorf("PID %d is already being managed under job %s", pid, jid)
+	// Only PIDs this daemon is watching count as taken. Jobs loaded from the DB (possibly from
+	// other hosts) or whose process has exited still carry a PID that may have been reused.
+	if owner, taken := m.managed.LoadOrStore(pid, jid); taken && owner != jid {
+		return fmt.Errorf("PID %d is already being managed under job %s", pid, owner)
 	}
 
 	job := m.lookup(jid)
@@ -317,6 +322,7 @@ func (m *ManagerLazy) Manage(lifetime context.Context, jid string, pid uint32, c
 			return err
 		}, job.GetType())
 
+		m.managed.CompareAndDelete(pid, jid)
 		close(job.done)
 	})
 
@@ -473,21 +479,25 @@ func (m *ManagerLazy) syncWithDB(ctx context.Context, action action) error {
 		if err != nil {
 			return err
 		}
+		var jids []string
 		for _, proto := range jobProtos {
 			job := fromProto(proto)
 			_, deleted := m.deletedJobs.Load(job.JID)
 
 			if !deleted && (!m.Exists(job.JID) || job.IsRemote()) {
 				m.jobs.Store(job.JID, job)
+				jids = append(jids, job.JID)
+			}
+		}
 
-				checkpoints, err := m.db.ListCheckpointsByJIDs(ctx, job.JID)
-				if err != nil {
-					return err
-				}
+		for batch := range slices.Chunk(jids, DB_SYNC_CHECKPOINT_BATCH) {
+			checkpoints, err := m.db.ListCheckpointsByJIDs(ctx, batch...)
+			if err != nil {
+				return err
+			}
 
-				for _, checkpoint := range checkpoints {
-					m.checkpoints.Store(checkpoint.ID, checkpoint)
-				}
+			for _, checkpoint := range checkpoints {
+				m.checkpoints.Store(checkpoint.ID, checkpoint)
 			}
 		}
 
