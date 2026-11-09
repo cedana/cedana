@@ -104,7 +104,8 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		mounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
 			// If the shm file is mounted at its own path, it means this restore is for a container
-			isContainer = isContainer || shmFileRegex.MatchString(m.MountPoint)
+			// (not the controller's directory next to it, which its own tmpfs may have mounted)
+			isContainer = isContainer || (shmFileRegex.MatchString(m.MountPoint) && !strings.HasSuffix(m.MountPoint, ".misc"))
 
 			mounts[m.ID] = nil
 			return true
@@ -231,16 +232,13 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					err = status.Errorf(codes.Internal, "failed to parse size from hostreg file path %s: %v", path, parseErr)
 					return false
 				}
-				hostregFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
+				// Only CRIU and the controller open it, as root: the application's memory is for no one else
+				hostregFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
 				if createErr != nil {
 					err = status.Errorf(codes.Internal, "failed to create hostreg file %s: %v", newPath, createErr)
 					return false
 				}
 				defer hostregFile.Close()
-				if chmodErr := os.Chmod(newPath, 0o666); chmodErr != nil {
-					err = status.Errorf(codes.Internal, "failed to chmod hostreg file %s: %v", newPath, chmodErr)
-					return false
-				}
 				if truncErr := hostregFile.Truncate(int64(size)); truncErr != nil {
 					err = status.Errorf(codes.Internal, "failed to truncate hostreg file %s to size %d: %v", newPath, size, truncErr)
 					return false

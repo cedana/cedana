@@ -61,6 +61,7 @@ const (
 	DEFAULT_GPU_VERIFY            = "off"
 	DEFAULT_GPU_PROFILING_ENABLED = false
 	DEFAULT_GPU_COMPUTE_SANITIZER = false
+	DEFAULT_GPU_SHM_TMPFS         = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -126,6 +127,7 @@ var Global Config = Config{
 		Verify:           DEFAULT_GPU_VERIFY,
 		ProfilingEnabled: DEFAULT_GPU_PROFILING_ENABLED,
 		ComputeSanitizer: DEFAULT_GPU_COMPUTE_SANITIZER,
+		ShmTmpfs:         DEFAULT_GPU_SHM_TMPFS,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
