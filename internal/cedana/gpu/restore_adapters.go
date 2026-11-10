@@ -239,6 +239,11 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 					return false
 				}
 				defer hostregFile.Close()
+				// CRIU checks the mode: the interceptor creates these 0600 (an existing file keeps its own)
+				if chmodErr := hostregFile.Chmod(0o600); chmodErr != nil {
+					err = status.Errorf(codes.Internal, "failed to chmod hostreg file %s: %v", newPath, chmodErr)
+					return false
+				}
 				if truncErr := hostregFile.Truncate(int64(size)); truncErr != nil {
 					err = status.Errorf(codes.Internal, "failed to truncate hostreg file %s to size %d: %v", newPath, size, truncErr)
 					return false
