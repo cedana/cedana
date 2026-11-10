@@ -150,6 +150,8 @@ type (
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
 		// DirectIO sets whether to read and write GPU checkpoints with O_DIRECT (on supported filesystems)
 		DirectIO bool `json:"direct_io" key:"direct_io" yaml:"direct_io" mapstructure:"direct_io"`
+		// DirectIOBtrfsNocow sets whether GPU checkpoint files on btrfs are marked NOCOW so O_DIRECT works there (turns off their data checksums)
+		DirectIOBtrfsNocow bool `json:"direct_io_btrfs_nocow" key:"direct_io_btrfs_nocow" yaml:"direct_io_btrfs_nocow" mapstructure:"direct_io_btrfs_nocow"`
 		// MemRingBufSize is the number of staging buffers used to restore GPU memory with O_DIRECT
 		MemRingBufSize int `json:"mem_ring_buf_size" key:"mem_ring_buf_size" yaml:"mem_ring_buf_size" mapstructure:"mem_ring_buf_size"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
