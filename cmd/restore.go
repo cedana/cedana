@@ -63,6 +63,10 @@ func init() {
 		BoolP(flags.LinkRemapFlag.Full, flags.LinkRemapFlag.Short, false, "remap links to invisible files during restore")
 	restoreCmd.PersistentFlags().
 		StringP(flags.GpuIdFlag.Full, flags.GpuIdFlag.Short, "", "specify existing GPU controller ID to attach (internal use only)")
+	restoreCmd.PersistentFlags().
+		String(flags.ChecksumFlag.Full, "", "expected GPU state checksum from the dump; a mismatch fails a strict restore")
+	restoreCmd.PersistentFlags().
+		String(flags.ChecksumFileFlag.Full, "", "write the GPU state checksum read by the restore to this file")
 	restoreCmd.MarkFlagsMutuallyExclusive(
 		flags.AttachFlag.Full,
 		flags.OutFlag.Full,
@@ -105,6 +109,7 @@ var restoreCmd = &cobra.Command{
 		pidFile, _ := cmd.Flags().GetString(flags.PidFileFlag.Full)
 		noServer, _ := cmd.Flags().GetBool(flags.NoServerFlag.Full)
 		gpuID, _ := cmd.Flags().GetString(flags.GpuIdFlag.Full)
+		checksum, _ := cmd.Flags().GetString(flags.ChecksumFlag.Full)
 
 		external, _ := cmd.Flags().GetStringSlice(flags.ExternalFlag.Full)
 		linkRemap, _ := cmd.Flags().GetBool(flags.LinkRemapFlag.Full)
@@ -159,6 +164,7 @@ var restoreCmd = &cobra.Command{
 			Criu:            criuOpts,
 			Env:             env,
 			GPUID:           gpuID,
+			Checksum:        checksum,
 			UID:             user.Uid,
 			GID:             user.Gid,
 			Groups:          user.Groups,
@@ -205,11 +211,13 @@ var restoreCmd = &cobra.Command{
 				return fmt.Errorf("Error creating root: %v", err)
 			}
 
-			code, err := cedana.Restore(req)
+			code, resp, err := cedana.Restore(req)
 			if err != nil {
 				cedana.Finalize()
 				return utils.GRPCErrorColored(err)
 			}
+			// Before Finalize, which waits for the restored process to exit.
+			writeChecksumFile(cmd, resp.GetChecksum())
 
 			data := cedana.Finalize()
 			if config.Global.Profiling.Enabled && data != nil {
@@ -244,6 +252,8 @@ var restoreCmd = &cobra.Command{
 				}
 			}
 
+			writeChecksumFile(cmd, resp.GetChecksum())
+
 			attach, _ := cmd.Flags().GetBool(flags.AttachFlag.Full)
 			if attach {
 				return client.Attach(ctx, &daemon.AttachReq{PID: resp.PID})
@@ -256,6 +266,18 @@ var restoreCmd = &cobra.Command{
 
 		return nil
 	},
+}
+
+// writeChecksumFile writes the restore's GPU state checksum to --checksum-file, if set.
+// A failed write is reported but does not fail the restore.
+func writeChecksumFile(cmd *cobra.Command, checksum string) {
+	path, _ := cmd.Flags().GetString(flags.ChecksumFileFlag.Full)
+	if path == "" || checksum == "" {
+		return
+	}
+	if err := os.WriteFile(path, []byte(checksum), 0o644); err != nil {
+		fmt.Fprintf(os.Stderr, "cedana: writing checksum to %s failed: %v\n", path, err)
+	}
 }
 
 ////////////////////

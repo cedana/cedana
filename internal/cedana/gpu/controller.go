@@ -321,6 +321,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
+		"CEDANA_GPU_SHM_COMMIT="+fmt.Sprintf("%v", config.Global.GPU.ShmCommit),
+		// Read as 0/1, not true/false. IMAGE_ZERO_COPY only takes effect in the app's env,
+		// where the interception library reads it (see config.GPUClientEnv).
+		"CEDANA_GPU_IMAGE_ZERO_COPY="+boolEnv(config.Global.GPU.ImageZeroCopy),
+		"CEDANA_GPU_IMAGE_FORCE_FALLBACK="+boolEnv(config.Global.GPU.ImageForceFallback),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
 		"CEDANA_GPU_RESTORE_NIC="+config.Global.GPU.RestoreNic,
@@ -328,6 +333,8 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_GPU_VERIFY="+config.Global.GPU.Verify,
 		"CEDANA_GPU_PROFILING_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.ProfilingEnabled),
 		"CEDANA_GPU_COMPUTE_SANITIZER="+fmt.Sprintf("%v", config.Global.GPU.ComputeSanitizer),
+		"CEDANA_GPU_DIRECT_IO="+fmt.Sprintf("%v", config.Global.GPU.DirectIO),
+		"CEDANA_GPU_MEM_RING_BUF_SIZE="+fmt.Sprintf("%v", config.Global.GPU.MemRingBufSize),
 		// Restores attach twice: at CRIU's setup-namespaces hook and post-restore (see CRIUCallback)
 		"CEDANA_GPU_ATTACH_STAGED=1",
 	)
@@ -601,6 +608,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
+			log.Info().Str("checksum", resp.GetVerify().GetChecksum()).Msg("GPU state checksum")
+			setChecksum(ctx, resp.GetVerify().GetChecksum())
 
 			log.Info().Msg("GPU dump complete")
 		}()
@@ -701,9 +710,18 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
 				return
 			}
-			log.Info().Msg("GPU restore complete")
+			verify := resp.GetRestoreStats().GetVerify()
+			log.Info().Str("checksum", verify.GetChecksum()).Msg("GPU restore complete")
 
 			restoreProfile = resp.GetProfile()
+			setChecksum(ctx, verify.GetChecksum())
+
+			// Sent to restoreErr before PreResume, so a strict mismatch kills the process unresumed
+			if err := checkChecksum(ctx, verify); err != nil {
+				log.Error().Err(err).Msg("rejecting GPU restore")
+				restoreErr <- err
+				return
+			}
 		}()
 		return nil
 	}
@@ -784,6 +802,32 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 	p.freezeWithPtrace(callback, id, log)
 
 	return callback
+}
+
+// setChecksum hands the GPU state checksum to the adapter that asked for it in the context
+// (see keys.GPU_CHECKSUM_CONTEXT_KEY). The adapter reads it only after the GPU dump/restore
+// goroutine is done, once dumpErr/restoreErr is drained.
+func setChecksum(ctx context.Context, checksum string) {
+	if p, ok := ctx.Value(keys.GPU_CHECKSUM_CONTEXT_KEY).(*string); ok {
+		*p = checksum
+	}
+}
+
+// checkChecksum compares the checksum the restore read with the one recorded at dump. Only
+// strict fails; an empty expected checksum (older or verify-off dump) is not checked.
+func checkChecksum(ctx context.Context, verify *gpu.VerifySummary) error {
+	want, _ := ctx.Value(keys.GPU_EXPECTED_CHECKSUM_CONTEXT_KEY).(string)
+	if want == "" || verify.GetChecksum() == want {
+		return nil
+	}
+	err := fmt.Errorf("GPU state checksum mismatch: dump recorded %q, restore read %q", want, verify.GetChecksum())
+	if verify.GetMode() == gpu.VerifyMode_VERIFY_STRICT {
+		return err
+	}
+	if verify.GetMode() != gpu.VerifyMode_VERIFY_OFF {
+		log.Warn().Err(err).Msg("continuing: verify mode is not strict")
+	}
+	return nil
 }
 
 func (p *pool) Check(binary string) types.Check {
@@ -983,4 +1027,11 @@ func EnsureLogDir(id string, uid, gid uint32) (string, error) {
 		return "", err
 	}
 	return dir, os.Chown(dir, int(uid), int(gid))
+}
+
+func boolEnv(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }

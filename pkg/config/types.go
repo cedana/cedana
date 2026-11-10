@@ -144,10 +144,20 @@ type (
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		// ShmCommit is the size in bytes of the shared memory segment backed with pages at creation (rest is backed on first touch)
+		ShmCommit int64 `json:"shm_commit" key:"shm_commit" yaml:"shm_commit" mapstructure:"shm_commit"`
+		// ImageZeroCopy sets whether module/library images that are file-backed are mapped by the worker instead of staged as a copy
+		ImageZeroCopy bool `json:"image_zero_copy" key:"image_zero_copy" yaml:"image_zero_copy" mapstructure:"image_zero_copy"`
+		// ImageForceFallback forces the worker to copy every image out of the client process (for testing the fallback path)
+		ImageForceFallback bool `json:"image_force_fallback" key:"image_force_fallback" yaml:"image_force_fallback" mapstructure:"image_force_fallback"`
 		// DedupEnabled sets whether to use deduplication for GPU checkpoints (reduces checkpoint size)
 		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
 		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
+		// DirectIO sets whether to read and write GPU checkpoints with O_DIRECT (on supported filesystems)
+		DirectIO bool `json:"direct_io" key:"direct_io" yaml:"direct_io" mapstructure:"direct_io"`
+		// MemRingBufSize is the number of staging buffers used to restore GPU memory with O_DIRECT
+		MemRingBufSize int `json:"mem_ring_buf_size" key:"mem_ring_buf_size" yaml:"mem_ring_buf_size" mapstructure:"mem_ring_buf_size"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 		// RestoreNic is how a restored process's UCX contexts pick their RDMA NIC on this node (auto: the

@@ -78,3 +78,23 @@ func TestCheckpointReqForCluster(t *testing.T) {
 		}
 	}
 }
+
+func TestCheckpointInfoChecksum(t *testing.T) {
+	for _, checksum := range []string{"sha256:abc", ""} {
+		payload, err := json.Marshal(checkpointInfo{Status: "success", Checksum: checksum})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(payload, &fields); err != nil {
+			t.Fatal(err)
+		}
+		got, ok := fields["checksum"]
+		if checksum == "" && ok {
+			t.Fatalf("empty checksum must be left out, got %v", got)
+		}
+		if checksum != "" && got != checksum {
+			t.Fatalf("checksum = %v, want %q", got, checksum)
+		}
+	}
+}
