@@ -173,6 +173,12 @@ type (
 		ProfilingEnabled bool `json:"profiling_enabled" key:"profiling_enabled" yaml:"profiling_enabled" mapstructure:"profiling_enabled"`
 		// ComputeSanitizer runs restored GPU workers under compute-sanitizer
 		ComputeSanitizer bool `json:"compute_sanitizer" key:"compute_sanitizer" yaml:"compute_sanitizer" mapstructure:"compute_sanitizer"`
+		// KastEnabled turns on the KAST runtime embedded in the GPU controller (prediction, template
+		// graphs and the arena allocator for the workload's torch)
+		KastEnabled bool `json:"kast_enabled" key:"kast_enabled" yaml:"kast_enabled" mapstructure:"kast_enabled"`
+		// ControllerEnv is extra KEY=VALUE entries for every GPU controller's environment, such as
+		// the KAST_* settings and table paths the runtime reads there (space-separated from the env var)
+		ControllerEnv []string `json:"controller_env" key:"controller_env" yaml:"controller_env" mapstructure:"controller_env"`
 	}
 
 	Plugins struct {
