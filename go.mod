@@ -3,12 +3,12 @@ module github.com/cedana/cedana
 go 1.25.0
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-1eb7afe6ffae.1
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-1eb7afe6ffae.2
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-450cb698e172.1
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-450cb698e172.2
 	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-1315ebec32fe.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-1315ebec32fe.2
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-05c55e1f08d3.2
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-be81c36e028b.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-be81c36e028b.2
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-2996a10619b8.2
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
@@ -39,6 +39,7 @@ require (
 	github.com/opencontainers/runc v1.3.2
 	github.com/opencontainers/runtime-spec v1.2.1
 	github.com/opencontainers/selinux v1.13.1
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0
@@ -124,7 +125,6 @@ require (
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

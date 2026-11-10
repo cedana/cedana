@@ -69,12 +69,19 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 
+			var checksum string
+			ctx = context.WithValue(ctx, keys.GPU_CHECKSUM_CONTEXT_KEY, &checksum)
+			ctx = context.WithValue(ctx, keys.GPU_EXPECTED_CHECKSUM_CONTEXT_KEY, req.GetChecksum())
+
 			code, err = next(ctx, opts, resp, req)
 			if err != nil {
 				return nil, err
 			}
 
 			pid <- resp.PID
+
+			// The GPU restore is done by now: CRIU's finalize waited for it
+			resp.Checksum = checksum
 
 			log.Info().Uint32("PID", resp.PID).Str("controller", id).Msg("GPU support restored for process")
 
