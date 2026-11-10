@@ -321,6 +321,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
+		"CEDANA_GPU_SHM_COMMIT="+fmt.Sprintf("%v", config.Global.GPU.ShmCommit),
+		// Read as 0/1, not true/false. IMAGE_ZERO_COPY only takes effect in the app's env,
+		// where the interception library reads it (see config.GPUClientEnv).
+		"CEDANA_GPU_IMAGE_ZERO_COPY="+boolEnv(config.Global.GPU.ImageZeroCopy),
+		"CEDANA_GPU_IMAGE_FORCE_FALLBACK="+boolEnv(config.Global.GPU.ImageForceFallback),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
 		"CEDANA_GPU_RESTORE_NIC="+config.Global.GPU.RestoreNic,
@@ -1023,4 +1028,11 @@ func EnsureLogDir(id string, uid, gid uint32) (string, error) {
 		return "", err
 	}
 	return dir, os.Chown(dir, int(uid), int(gid))
+}
+
+func boolEnv(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }
