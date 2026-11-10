@@ -234,7 +234,8 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				// controller's directory and checks its size, which is in its name; the GPU controller
 				// fills its contents during the GPU restore
 				newPath = fmt.Sprintf(CONTROLLER_HOSTREG_FILE_FORMATTER, id, matches[2])
-				size, parseErr := strconv.ParseUint(matches[3], 16, 64)
+				// 63 bits: the size goes to Truncate as an int64
+				size, parseErr := strconv.ParseUint(matches[3], 16, 63)
 				if parseErr != nil {
 					err = status.Errorf(codes.Internal, "failed to parse size from hostreg file path %s: %v", path, parseErr)
 					return false
