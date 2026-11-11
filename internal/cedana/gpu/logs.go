@@ -119,8 +119,8 @@ func (s *lineSplitter) feed(chunk []byte, ends bool) {
 }
 
 // Tails all log files in dir until done is closed, then drains them one last time.
-// With resume, files already in dir are read from their end, as an earlier daemon logged them.
-func tailLogs(dir string, id string, done <-chan int, resume bool) {
+// Files in old are read from the size they had, as what they held was there before us.
+func tailLogs(dir string, id string, done <-chan int, old map[string]int64) {
 	logger := gpuLogger(id)
 	files := map[string]*logFile{}
 	var dirFile *os.File
@@ -168,8 +168,9 @@ func tailLogs(dir string, id string, done <-chan int, resume bool) {
 						if err != nil {
 							continue
 						}
-						if resume {
-							file.Seek(0, io.SeekEnd)
+						if size, ok := old[name]; ok {
+							file.Seek(size, io.SeekStart)
+							delete(old, name) // Removed and made again, it's new
 						}
 						f = &logFile{
 							lineSplitter: lineSplitter{lineLogger: lineLogger{
@@ -195,13 +196,23 @@ func tailLogs(dir string, id string, done <-chan int, resume bool) {
 					delete(files, name)
 				}
 			}
-			resume = false // Files that show up later are new
 		}
 
 		if finished {
 			return
 		}
 	}
+}
+
+func logFileSizes(dir string) map[string]int64 {
+	sizes := map[string]int64{}
+	entries, _ := os.ReadDir(dir)
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil && filepath.Ext(entry.Name()) == ".log" {
+			sizes[entry.Name()] = info.Size()
+		}
+	}
+	return sizes
 }
 
 // The workload owns its log directory, so we don't follow a link put in its place

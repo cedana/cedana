@@ -113,13 +113,19 @@ type pool struct {
 }
 
 // Adds a controller to the pool, unless it's already there, and ships its log files if the
-// pool does. With resume, the controller was there before us, so its logs so far aren't ours.
+// pool does. With resume, the logs so far aren't ours: the controller was there before us, or
+// a restore reuses the ID of one that was.
 func (p *pool) add(c *controller, resume bool) (added bool) {
 	if _, loaded := p.LoadOrStore(c.ID, c); loaded {
 		return false
 	}
 	if p.tailLogs && config.Global.GPU.LogDir != "" && logging.Level != zerolog.Disabled {
-		go tailLogs(fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, c.ID), c.ID, c.Terminated, resume)
+		dir := fmt.Sprintf(LOG_DIR_FORMATTER, config.Global.GPU.LogDir, c.ID)
+		var old map[string]int64
+		if resume {
+			old = logFileSizes(dir)
+		}
+		go tailLogs(dir, c.ID, c.Terminated, old)
 	}
 	return true
 }
@@ -360,7 +366,7 @@ func (p *pool) spawn(ctx context.Context, binary string, id string, env ...strin
 	}
 
 	if logDir != "" {
-		p.add(c, false)
+		p.add(c, true)
 	} else {
 		p.Store(id, c)
 	}
