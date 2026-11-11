@@ -197,6 +197,12 @@ require_reset_fix() {
     assert_output --partial "library handle reused"
 }
 
+# bats test_tags=restore,modules
+@test "[$GPU_INFO] restore GPU process whose library handle was reused after an unload, function from cuKernelGetFunction" {
+    restore_gated python3 "$WORKLOADS"/library-handle-reuse.py kernel
+    assert_output --partial "library handle reused"
+}
+
 # Pinned host memory (cudaHostRegister, from malloc and MAP_SHARED) that kernels use zero-copy
 # (customer issues P-14, P-43)
 # bats test_tags=run,hostregister

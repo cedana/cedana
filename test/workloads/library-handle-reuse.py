@@ -3,9 +3,9 @@
 Sets an attribute on a kernel of a library and unloads the library, then loads a second library,
 which under Cedana gets the freed handle from the GPU worker's driver. Increments a device counter
 until the gate file exists, printing READY after the first launch, then prints whether the handle
-was reused.
+was reused. With kernel, the attribute is set on a function got through cuKernelGetFunction.
 
-Usage: library-handle-reuse.py <gate>
+Usage: library-handle-reuse.py [kernel] <gate>
 """
 
 import ctypes
@@ -58,7 +58,7 @@ def check(name, *args):
         raise RuntimeError(f'{name} returned {result}')
 
 
-gate = sys.argv[1]
+gate = sys.argv[-1]
 device, context = ctypes.c_int(), ctypes.c_void_p()
 check('cuInit', 0)
 check('cuDeviceGet', ctypes.byref(device), 0)
@@ -74,8 +74,13 @@ check('cuMemsetD32_v2', counter, 0, ctypes.c_size_t(1))
 
 first, step_module, step = ctypes.c_void_p(), ctypes.c_void_p(), ctypes.c_void_p()
 check('cuLibraryLoadData', ctypes.byref(first), STEP, None, None, 0, None, None, 0)
-check('cuLibraryGetModule', ctypes.byref(step_module), first)
-check('cuModuleGetFunction', ctypes.byref(step), step_module, b'step')
+if len(sys.argv) > 2:
+    step_kernel = ctypes.c_void_p()
+    check('cuLibraryGetKernel', ctypes.byref(step_kernel), first, b'step')
+    check('cuKernelGetFunction', ctypes.byref(step), step_kernel)
+else:
+    check('cuLibraryGetModule', ctypes.byref(step_module), first)
+    check('cuModuleGetFunction', ctypes.byref(step), step_module, b'step')
 check('cuFuncSetAttribute', step, CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES, 16 * 1024)
 check('cuLibraryUnload', first)
 
