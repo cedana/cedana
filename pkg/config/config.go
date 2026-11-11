@@ -66,6 +66,7 @@ const (
 	DEFAULT_GPU_COMPUTE_SANITIZER    = false
 	DEFAULT_GPU_DIRECT_IO            = true
 	DEFAULT_GPU_MEM_RING_BUF_SIZE    = 8
+	DEFAULT_GPU_SHM_TMPFS            = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -136,6 +137,7 @@ var Global Config = Config{
 		ComputeSanitizer:   DEFAULT_GPU_COMPUTE_SANITIZER,
 		DirectIO:           DEFAULT_GPU_DIRECT_IO,
 		MemRingBufSize:     DEFAULT_GPU_MEM_RING_BUF_SIZE,
+		ShmTmpfs:           DEFAULT_GPU_SHM_TMPFS,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,

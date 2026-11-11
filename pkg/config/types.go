@@ -173,6 +173,10 @@ type (
 		ProfilingEnabled bool `json:"profiling_enabled" key:"profiling_enabled" yaml:"profiling_enabled" mapstructure:"profiling_enabled"`
 		// ComputeSanitizer runs restored GPU workers under compute-sanitizer
 		ComputeSanitizer bool `json:"compute_sanitizer" key:"compute_sanitizer" yaml:"compute_sanitizer" mapstructure:"compute_sanitizer"`
+		// ShmTmpfs has each GPU controller mount a huge-page-capable tmpfs on its shm directory, which
+		// lets applications that set CEDANA_GPU_HOSTREG_THP restore their registered host memory on
+		// huge pages
+		ShmTmpfs bool `json:"shm_tmpfs" key:"shm_tmpfs" yaml:"shm_tmpfs" mapstructure:"shm_tmpfs"`
 	}
 
 	Plugins struct {
