@@ -39,15 +39,19 @@ import (
 )
 
 const (
-	CONTROLLER_PROCESS_NAME                = "cedana-gpu-controller"
-	CONTROLLER_ADDRESS_FORMATTER           = "unix://%s/cedana-gpu-controller-%s.sock"
-	CONTROLLER_SOCKET_FORMATTER            = "%s/cedana-gpu-controller-%s.sock"
-	CONTROLLER_SOCKET_PATTERN              = "cedana-gpu-controller-(.*).sock"
-	CONTROLLER_SHM_FILE_FORMATTER          = "/dev/shm/cedana-gpu.%s"
-	CONTROLLER_SHM_FILE_PATTERN            = "/dev/shm/cedana-gpu.(.*)"
-	CONTROLLER_HOSTMEM_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
-	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
-	CONTROLLER_MISC_DIR_FORMATTER          = "/dev/shm/cedana-gpu.%s.misc"
+	CONTROLLER_PROCESS_NAME           = "cedana-gpu-controller"
+	CONTROLLER_ADDRESS_FORMATTER      = "unix://%s/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_FORMATTER       = "%s/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_PATTERN         = "cedana-gpu-controller-(.*).sock"
+	CONTROLLER_SHM_FILE_FORMATTER     = "/dev/shm/cedana-gpu.%s"
+	CONTROLLER_SHM_FILE_PATTERN       = "/dev/shm/cedana-gpu.(.*)"
+	CONTROLLER_HOSTMEM_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
+	CONTROLLER_HOSTMEM_FILE_PATTERN   = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
+	CONTROLLER_MISC_DIR_FORMATTER     = "/dev/shm/cedana-gpu.%s.misc"
+	// Files registered host memory is moved onto when the application sets
+	// CEDANA_GPU_HOSTREG_THP: "cedana-hostreg-<pid>-<n>-<size in hex>" in the controller's directory
+	CONTROLLER_HOSTREG_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/%s"
+	CONTROLLER_HOSTREG_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/(cedana-hostreg-\\d+-\\d+-([0-9a-f]+))$"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1     // Signal to the restored process to notify it has a new PID
@@ -336,6 +340,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_GPU_DIRECT_IO="+fmt.Sprintf("%v", config.Global.GPU.DirectIO),
 		"CEDANA_GPU_DIRECT_IO_BTRFS_NOCOW="+fmt.Sprintf("%v", config.Global.GPU.DirectIOBtrfsNocow),
 		"CEDANA_GPU_MEM_RING_BUF_SIZE="+fmt.Sprintf("%v", config.Global.GPU.MemRingBufSize),
+		"CEDANA_GPU_SHM_TMPFS="+fmt.Sprintf("%v", config.Global.GPU.ShmTmpfs),
 		// Restores attach twice: at CRIU's setup-namespaces hook and post-restore (see CRIUCallback)
 		"CEDANA_GPU_ATTACH_STAGED=1",
 	)
@@ -427,6 +432,8 @@ func (p *pool) terminate(ctx context.Context, c *controller) {
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id))
 	defer os.RemoveAll(fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id))
+	// The controller may have mounted a tmpfs there (and unmounts it when it exits normally)
+	defer unix.Unmount(fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id), unix.MNT_DETACH)
 	defer c.Booking.Close()
 	defer close(c.Terminated) // Signal that the controller has exited
 
