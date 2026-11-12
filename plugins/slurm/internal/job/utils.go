@@ -2,6 +2,7 @@ package job
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -273,4 +275,97 @@ func loadScriptAttrs(dumpFs afero.Fs) scriptAttrs {
 		return scriptAttrs{Mode: 0o700}
 	}
 	return attrs
+}
+
+// Slurm's own copy of the batch script, <SlurmdSpoolDir>/job<id>/slurm_script, which the job's
+// shell runs from when its script isn't rewritten. Slurm deletes it when the job ends, so a job
+// continued under a new job ID has none: the shell is restored reading the saved copy from a memfd.
+const (
+	SPOOL_SCRIPT_FILE   = "slurm-spool-script"
+	SPOOL_SCRIPT_RECORD = "slurm-spool-script.json"
+)
+
+var spoolScriptName = regexp.MustCompile(`/job[0-9]+/slurm_script$`)
+
+func isSpoolScript(path string) bool {
+	return spoolScriptName.MatchString(path)
+}
+
+// spoolScriptRecord is where the job's shell was reading the script when the job was frozen
+type spoolScriptRecord struct {
+	Path   string `json:"path"`
+	Offset int64  `json:"offset"`
+}
+
+func saveSpoolScriptRecord(fs afero.Fs, record spoolScriptRecord) error {
+	file, err := fs.Create(SPOOL_SCRIPT_RECORD)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return json.NewEncoder(file).Encode(record)
+}
+
+// loadSpoolScriptRecord returns nothing if the dump has no record
+func loadSpoolScriptRecord(fs afero.Fs) (*spoolScriptRecord, error) {
+	file, err := fs.Open(SPOOL_SCRIPT_RECORD)
+	if err != nil {
+		// Anything else (e.g. a failing streamer) is not the same as there being none
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	var record spoolScriptRecord
+	if err := json.NewDecoder(file).Decode(&record); err != nil {
+		return nil, err
+	}
+	if !isSpoolScript(record.Path) || record.Offset < 0 {
+		return nil, fmt.Errorf("invalid slurm script record %+v", record)
+	}
+	return &record, nil
+}
+
+// fdOffset is the file offset of pid's descriptor fd
+func fdOffset(pid uint32, fd uint64) (int64, error) {
+	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/fdinfo/%d", pid, fd))
+	if err != nil {
+		return 0, err
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if v, ok := strings.CutPrefix(line, "pos:"); ok {
+			return strconv.ParseInt(strings.TrimSpace(v), 10, 64)
+		}
+	}
+	return 0, fmt.Errorf("no offset for fd %d of %d", fd, pid)
+}
+
+// scriptMemfd is a sealed memfd holding contents, opened read-only at offset. CRIU doesn't set the
+// position of an inherited file, so it is set here.
+func scriptMemfd(contents []byte, offset int64) (*os.File, error) {
+	mfd, err := unix.MemfdCreate("slurm_script", unix.MFD_CLOEXEC|unix.MFD_ALLOW_SEALING)
+	if err != nil {
+		return nil, err
+	}
+	m := os.NewFile(uintptr(mfd), "memfd:slurm_script")
+	defer m.Close()
+	if _, err := m.Write(contents); err != nil {
+		return nil, err
+	}
+	seals := unix.F_SEAL_SHRINK | unix.F_SEAL_GROW | unix.F_SEAL_WRITE | unix.F_SEAL_SEAL
+	if _, err := unix.FcntlInt(m.Fd(), unix.F_ADD_SEALS, seals); err != nil {
+		return nil, err
+	}
+	ro, err := os.Open(fmt.Sprintf("/proc/self/fd/%d", m.Fd()))
+	if err != nil {
+		return nil, err
+	}
+	if _, err := ro.Seek(offset, 0); err != nil {
+		ro.Close()
+		return nil, err
+	}
+	return ro, nil
 }
