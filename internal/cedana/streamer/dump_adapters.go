@@ -162,10 +162,17 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 								errCh <- fmt.Errorf("failed to create remote shard %d: %w", i, err)
 								return
 							}
-							defer dst.Close()
 
+							var shardErr error
 							if _, err := io.Copy(dst, src); err != nil {
-								errCh <- fmt.Errorf("failed to upload shard %d: %w", i, err)
+								shardErr = fmt.Errorf("failed to upload shard %d: %w", i, err)
+							}
+							// Remote storage finishes the upload on Close, so its error is the upload's.
+							if err := dst.Close(); err != nil {
+								shardErr = errors.Join(shardErr, fmt.Errorf("failed to finish uploading shard %d: %w", i, err))
+							}
+							if shardErr != nil {
+								errCh <- shardErr
 							}
 						}(i)
 					}

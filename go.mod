@@ -3,23 +3,25 @@ module github.com/cedana/cedana
 go 1.25.0
 
 require (
-	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-411b7a69e666.1
-	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-411b7a69e666.1
-	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260728195828-ace959031818.1
-	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-472c88dc97e6.1
-	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-472c88dc97e6.1
-	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-9154b3e33bf0.1
+	buf.build/gen/go/cedana/cedana-gpu/grpc/go v1.6.2-00000000000000-450cb698e172.1
+	buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go v1.36.12-00000000000000-450cb698e172.2
+	buf.build/gen/go/cedana/cedana-image-streamer/protocolbuffers/go v1.36.11-20260909161930-d6957fd0778a.1
+	buf.build/gen/go/cedana/cedana/grpc/go v1.6.2-00000000000000-be81c36e028b.1
+	buf.build/gen/go/cedana/cedana/protocolbuffers/go v1.36.12-00000000000000-be81c36e028b.2
+	buf.build/gen/go/cedana/criu/protocolbuffers/go v1.36.12-00000000000000-2996a10619b8.2
+	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.31.12
 	github.com/aws/aws-sdk-go-v2/credentials v1.18.16
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.19.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.3
-	github.com/cedana/cedana-go-sdk v0.3.8-0.20260827112557-3821264c5feb
+	github.com/cedana/cedana-propagator-sdk/go v0.0.0-20260913033859-9aeb6ff696c8
 	github.com/cedana/go-criu/v7 v7.0.0-20250522201916-bbb3f799ef23
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.32
 	github.com/containerd/containerd/api v1.8.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/platforms v0.2.1
+	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/coreos/go-systemd/v22 v22.6.0
 	github.com/cyphar/filepath-securejoin v0.5.1
 	github.com/gofrs/flock v0.12.1
@@ -28,6 +30,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/mdlayher/vsock v1.2.1
+	github.com/microsoft/kiota-abstractions-go v1.9.3
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/moby/sys/userns v0.1.0
 	github.com/opencontainers/cgroups v0.0.5
@@ -36,6 +39,7 @@ require (
 	github.com/opencontainers/runc v1.3.2
 	github.com/opencontainers/runtime-spec v1.2.1
 	github.com/opencontainers/selinux v1.13.1
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rb-go/namegen v1.1.0
@@ -66,7 +70,6 @@ require (
 	github.com/AdamKorcz/go-118-fuzz-build v0.0.0-20230306123547-8075edf89bb0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/Microsoft/hcsshim v0.11.7 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.41.5 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.9 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.21 // indirect
@@ -90,7 +93,6 @@ require (
 	github.com/containerd/fifo v1.1.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.7 // indirect
-	github.com/containerd/typeurl/v2 v2.1.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.6 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-events v0.0.0-20190806004212-e31b211e4f1c // indirect
@@ -112,7 +114,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mdlayher/socket v0.4.1 // indirect
-	github.com/microsoft/kiota-abstractions-go v1.9.3 // indirect
 	github.com/microsoft/kiota-http-go v1.5.5 // indirect
 	github.com/microsoft/kiota-serialization-form-go v1.1.2 // indirect
 	github.com/microsoft/kiota-serialization-json-go v1.1.2 // indirect
@@ -124,7 +125,6 @@ require (
 	github.com/moby/sys/signal v0.7.0 // indirect
 	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/mrunalp/fileutils v0.5.1 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

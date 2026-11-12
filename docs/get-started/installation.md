@@ -84,7 +84,7 @@ A modified version of CRIU is shipped as a plugin for Cedana, so you don't need 
 sudo cedana plugin install criu
 ```
 
-This version of CRIU is not a requirement for Cedana, but it is recommended for certain features, such as [checkpoint/restore streamer](../guides/streamer/cr.md).
+This version of CRIU is not a requirement for Cedana, but it is recommended for certain features, such as [checkpoint/restore streamer](../guides/streamer.md).
 
 {% hint style="info" %}
 To install CRIU independently, see the [CRIU installation guide](https://criu.org/Installation).

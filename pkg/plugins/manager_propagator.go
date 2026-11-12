@@ -4,6 +4,7 @@ package plugins
 // Has embedded LocalManager, and only needs to override a few methods.
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,9 +16,11 @@ import (
 	"strings"
 	"sync"
 
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
+	v1 "github.com/cedana/cedana-propagator-sdk/go/v1"
 	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/style"
-	"github.com/cedana/cedana/pkg/utils"
+	"github.com/microsoft/kiota-abstractions-go/serialization"
 )
 
 const (
@@ -28,7 +31,8 @@ const (
 
 type PropagatorManager struct {
 	config.Connection
-	client *http.Client
+	client     *http.Client // only for binary downloads, which are streamed to disk
+	propagator *v1.V1RequestBuilder
 
 	compatibility string // used to fetch plugins compatible with this version
 	builds        string // builds to look for (release, alpha)
@@ -39,13 +43,7 @@ type PropagatorManager struct {
 
 func NewPropagatorManager(connection config.Connection, compatibility string) *PropagatorManager {
 	var downloadDir string
-	var err error
-	if downloadDir, err = os.UserCacheDir(); err != nil {
-		downloadDir = os.TempDir()
-	} else if downloadDir, err = os.UserHomeDir(); err != nil {
-		downloadDir = os.TempDir()
-	}
-	downloadDir = filepath.Join(downloadDir, ".cedana", "downloads")
+	downloadDir = filepath.Join(os.TempDir(), "cedana", "downloads")
 
 	os.RemoveAll(downloadDir) // cleanup existing downloads
 	os.MkdirAll(downloadDir, DOWNLOAD_DIR_PERMS)
@@ -56,6 +54,7 @@ func NewPropagatorManager(connection config.Connection, compatibility string) *P
 	return &PropagatorManager{
 		connection,
 		&http.Client{},
+		propagatorsdk.NewClient(connection.URL, connection.AuthToken).V1(),
 		compatibility,
 		builds,
 		runtime.GOARCH,
@@ -103,55 +102,54 @@ func (m *PropagatorManager) List(latest bool, filter ...string) ([]Plugin, error
 		return list, nil
 	}
 
-	url := fmt.Sprintf("%s/plugins?names=%s&build=%s&compatibility=%s&arch=%s", m.URL, strings.Join(names, ","), m.builds, m.compatibility, m.arch)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err == nil {
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", m.AuthToken))
+	namesParam := strings.Join(names, ",")
+	requestConfiguration := &v1.PluginsRequestBuilderGetRequestConfiguration{
+		QueryParameters: &v1.PluginsRequestBuilderGetQueryParameters{
+			Names:         &namesParam,
+			Build:         &m.builds,
+			Compatibility: &m.compatibility,
+			Arch:          &m.arch,
+		},
+	}
 
-		var resp *http.Response
-		resp, err = m.client.Do(req)
-		if err == nil {
-			defer resp.Body.Close()
+	res, err := m.propagator.Plugins().Get(context.Background(), requestConfiguration)
+	if err != nil {
+		fmt.Println(style.WarningColors.Sprintf("Using local list. Failed to connect to propagator registry: %v", err))
+		return list, nil
+	}
 
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				if resp.StatusCode == http.StatusPartialContent {
-					fmt.Println(style.WarningColors.Sprint("Some requested plugins have no compatible versions available in the registry or locally.\n"))
-				}
-
-				onlineList := make([]Plugin, len(list))
-				if err := json.NewDecoder(resp.Body).Decode(&onlineList); err != nil {
-					return nil, err
-				}
-
-				for i := range list {
-					for j := range onlineList {
-						if list[i].Name == onlineList[j].Name {
-							list[i].AvailableVersion = onlineList[j].AvailableVersion
-							list[i].Size = onlineList[j].Size
-							list[i].PublishedAt = onlineList[j].PublishedAt
-
-							switch list[i].Status {
-							case INSTALLED, OUTDATED:
-								if list[i].Checksum() != onlineList[j].Checksum() {
-									list[i].Status = OUTDATED
-								} else {
-									list[i].Status = INSTALLED
-								}
-							case UNKNOWN:
-								list[i].Status = AVAILABLE
-							}
-						}
-					}
-				}
-			} else {
-				body, _ := utils.ParseHttpBody(resp.Body)
-				err = fmt.Errorf("%d: %s", resp.StatusCode, body)
-			}
+	onlineList := make([]Plugin, len(res))
+	for i, model := range res {
+		if err := fromModel(model, &onlineList[i]); err != nil {
+			return nil, err
 		}
 	}
 
-	if err != nil {
-		fmt.Println(style.WarningColors.Sprintf("Using local list. Failed to connect to propagator registry: %v", err))
+	// The registry omits plugins with no compatible version (previously
+	// signaled with a 206 status, which the SDK does not expose).
+	if len(onlineList) < len(names) {
+		fmt.Println(style.WarningColors.Sprint("Some requested plugins have no compatible versions available in the registry or locally.\n"))
+	}
+
+	for i := range list {
+		for j := range onlineList {
+			if list[i].Name == onlineList[j].Name {
+				list[i].AvailableVersion = onlineList[j].AvailableVersion
+				list[i].Size = onlineList[j].Size
+				list[i].PublishedAt = onlineList[j].PublishedAt
+
+				switch list[i].Status {
+				case INSTALLED, OUTDATED:
+					if list[i].Checksum() != onlineList[j].Checksum() {
+						list[i].Status = OUTDATED
+					} else {
+						list[i].Status = INSTALLED
+					}
+				case UNKNOWN:
+					list[i].Status = AVAILABLE
+				}
+			}
+		}
 	}
 
 	return list, nil
@@ -269,6 +267,8 @@ func (m *PropagatorManager) Install(names []string) (chan int, chan string, chan
 //// Helper Methods ////
 ////////////////////////
 
+// downloadBinary uses a raw HTTP client instead of the SDK, as the endpoint
+// redirects to a presigned S3 URL and the binary must be streamed to disk.
 func (m *PropagatorManager) downloadBinary(binary string, version string, arch string, build string, perms os.FileMode) error {
 	if version == "" {
 		version = "latest"
@@ -304,4 +304,13 @@ func (m *PropagatorManager) downloadBinary(binary string, version string, arch s
 	}
 
 	return nil
+}
+
+// fromModel converts an SDK model back into a JSON-deserializable value.
+func fromModel(model serialization.Parsable, out any) error {
+	data, err := serialization.Serialize("application/json", model)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, out)
 }

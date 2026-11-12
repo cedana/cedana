@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/cedana/cedana/pkg/flags"
@@ -11,12 +10,8 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	DIR_PATH      = "/etc/cedana"
-	DIR_PATH_USER string
-)
-
 const (
+	DIR_PATH   = "/etc/cedana"
 	FILE_NAME  = "config"
 	FILE_TYPE  = "json"
 	DIR_PERM   = 0o755
@@ -54,14 +49,24 @@ const (
 
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
-	DEFAULT_GPU_POOL_SIZE         = 0
-	DEFAULT_GPU_LOG_DIR           = "/tmp"
-	DEFAULT_GPU_SOCK_DIR          = "/tmp"
-	DEFAULT_GPU_SHM_SIZE          = 8 * utils.GIBIBYTE
-	DEFAULT_GPU_DEBUG             = false
-	DEFAULT_GPU_DEDUP_ENABLED     = false
-	DEFAULT_GPU_DELTA_ENABLED     = false
-	DEFAULT_GPU_TEMPLATES_ENABLED = false
+	DEFAULT_GPU_POOL_SIZE            = 0
+	DEFAULT_GPU_LOG_DIR              = "/tmp"
+	DEFAULT_GPU_SOCK_DIR             = "/tmp"
+	DEFAULT_GPU_SHM_SIZE             = 8 * utils.GIBIBYTE
+	DEFAULT_GPU_SHM_COMMIT           = 512 * utils.MEBIBYTE
+	DEFAULT_GPU_IMAGE_ZERO_COPY      = true
+	DEFAULT_GPU_IMAGE_FORCE_FALLBACK = false
+	DEFAULT_GPU_DEBUG                = false
+	DEFAULT_GPU_DEDUP_ENABLED        = false
+	DEFAULT_GPU_TEMPLATES_ENABLED    = false
+	DEFAULT_GPU_RESTORE_NIC          = "auto"
+	DEFAULT_GPU_DELTA_ENABLED        = false
+	DEFAULT_GPU_VERIFY               = "off"
+	DEFAULT_GPU_PROFILING_ENABLED    = false
+	DEFAULT_GPU_COMPUTE_SANITIZER    = false
+	DEFAULT_GPU_DIRECT_IO            = true
+	DEFAULT_GPU_MEM_RING_BUF_SIZE    = 8
+	DEFAULT_GPU_SHM_TMPFS            = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -73,6 +78,13 @@ const (
 
 	DEFAULT_SLURM_DB_PORT = 3306
 	DEFAULT_SLURM_DB_NAME = "slurm_acct_db"
+
+	DEFAULT_K8S_FALLBACK_COLD_START = true
+	DEFAULT_K8S_INSTALL_DEPS        = true
+
+	DEFAULT_AWS_CREDENTIALS_MODE = "static"
+
+	DEFAULT_CSX_SOCK_ADDR = "/run/csx.sock"
 )
 
 // The default global config. This will get overwritten
@@ -108,14 +120,24 @@ var Global Config = Config{
 		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,
 	},
 	GPU: GPU{
-		PoolSize:         DEFAULT_GPU_POOL_SIZE,
-		LogDir:           DEFAULT_GPU_LOG_DIR,
-		SockDir:          DEFAULT_GPU_SOCK_DIR,
-		ShmSize:          DEFAULT_GPU_SHM_SIZE,
-		Debug:            DEFAULT_GPU_DEBUG,
-		DedupEnabled:     DEFAULT_GPU_DEDUP_ENABLED,
-		DeltaEnabled:     DEFAULT_GPU_DELTA_ENABLED,
-		TemplatesEnabled: DEFAULT_GPU_TEMPLATES_ENABLED,
+		PoolSize:           DEFAULT_GPU_POOL_SIZE,
+		LogDir:             DEFAULT_GPU_LOG_DIR,
+		SockDir:            DEFAULT_GPU_SOCK_DIR,
+		ShmSize:            DEFAULT_GPU_SHM_SIZE,
+		ShmCommit:          DEFAULT_GPU_SHM_COMMIT,
+		ImageZeroCopy:      DEFAULT_GPU_IMAGE_ZERO_COPY,
+		ImageForceFallback: DEFAULT_GPU_IMAGE_FORCE_FALLBACK,
+		Debug:              DEFAULT_GPU_DEBUG,
+		DedupEnabled:       DEFAULT_GPU_DEDUP_ENABLED,
+		TemplatesEnabled:   DEFAULT_GPU_TEMPLATES_ENABLED,
+		RestoreNic:         DEFAULT_GPU_RESTORE_NIC,
+		DeltaEnabled:       DEFAULT_GPU_DELTA_ENABLED,
+		Verify:             DEFAULT_GPU_VERIFY,
+		ProfilingEnabled:   DEFAULT_GPU_PROFILING_ENABLED,
+		ComputeSanitizer:   DEFAULT_GPU_COMPUTE_SANITIZER,
+		DirectIO:           DEFAULT_GPU_DIRECT_IO,
+		MemRingBufSize:     DEFAULT_GPU_MEM_RING_BUF_SIZE,
+		ShmTmpfs:           DEFAULT_GPU_SHM_TMPFS,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
@@ -132,6 +154,16 @@ var Global Config = Config{
 		DBPort:       DEFAULT_SLURM_DB_PORT,
 		DBName:       DEFAULT_SLURM_DB_NAME,
 	},
+	K8s: K8s{
+		FallbackColdStart: DEFAULT_K8S_FALLBACK_COLD_START,
+		InstallDeps:       DEFAULT_K8S_INSTALL_DEPS,
+	},
+	AWS: AWS{
+		CredentialsMode: DEFAULT_AWS_CREDENTIALS_MODE,
+	},
+	CSX: CSX{
+		SockAddr: DEFAULT_CSX_SOCK_ADDR,
+	},
 }
 
 // The current config directory, set during Init
@@ -145,41 +177,32 @@ func init() {
 		panic(fmt.Errorf("failed to unmarshal default config: %w", err))
 	}
 
-	if os.Geteuid() != 0 {
-		homeDir, err := os.UserConfigDir()
-		if err == nil {
-			DIR_PATH_USER = filepath.Join(homeDir, "cedana")
-		} else {
-			DIR_PATH_USER = DIR_PATH
-		}
-	} else {
-		DIR_PATH_USER = DIR_PATH
-	}
-
 	var configStr string
 	var configDir string
 	var initConfig bool
 	var mergeConfig bool
 
+	// NOTE: This runs before cobra parses flags, so both the `--flag value` and
+	// `--flag=value` forms must be handled here. Prefix matching without the
+	// '=' would misparse one flag as another (e.g. `--config-dir` as
+	// `--config`).
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if arg == "--"+flags.ConfigFlag.Full && i+1 < len(args) {
+		switch {
+		case arg == "--"+flags.ConfigFlag.Full && i+1 < len(args):
 			configStr = args[i+1]
 			i++
-		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigFlag.Full); ok {
-			configStr = after
-		}
-		if arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args) {
+		case strings.HasPrefix(arg, "--"+flags.ConfigFlag.Full+"="):
+			configStr = strings.TrimPrefix(arg, "--"+flags.ConfigFlag.Full+"=")
+		case arg == "--"+flags.ConfigDirFlag.Full && i+1 < len(args):
 			configDir = args[i+1]
 			i++
-		} else if after, ok := strings.CutPrefix(arg, "--"+flags.ConfigDirFlag.Full); ok {
-			configDir = after
-		}
-		if arg == "--"+flags.InitConfig.Full {
+		case strings.HasPrefix(arg, "--"+flags.ConfigDirFlag.Full+"="):
+			configDir = strings.TrimPrefix(arg, "--"+flags.ConfigDirFlag.Full+"=")
+		case arg == "--"+flags.InitConfig.Full:
 			initConfig = true
-		}
-		if arg == "--"+flags.MergeConfig.Full {
+		case arg == "--"+flags.MergeConfig.Full:
 			mergeConfig = true
 		}
 	}
@@ -216,13 +239,12 @@ func Load(args ...Args) (err error) {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH_USER
+		Dir = DIR_PATH
 	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
 
@@ -241,7 +263,7 @@ func Load(args ...Args) (err error) {
 		}
 	}
 
-	err = viper.UnmarshalExact(&Global)
+	err = viper.Unmarshal(&Global)
 	if err != nil {
 		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
 	}
@@ -258,13 +280,12 @@ func Init(args ...Args) error {
 	}
 
 	if a.ConfigDir == "" {
-		Dir = DIR_PATH_USER
+		Dir = DIR_PATH
 	} else {
 		Dir = a.ConfigDir
 	}
 
 	viper.AddConfigPath(Dir)
-	viper.AddConfigPath(DIR_PATH) // Only a fallback
 	viper.SetConfigPermissions(FILE_PERM)
 	viper.SetConfigType(FILE_TYPE)
 	viper.SetConfigName(FILE_NAME)
@@ -303,7 +324,7 @@ func Init(args ...Args) error {
 		}
 	}
 
-	err = viper.UnmarshalExact(&Global)
+	err = viper.Unmarshal(&Global)
 	if err != nil {
 		return fmt.Errorf("Config file %s is either outdated or invalid. Please delete or update it: %w", viper.ConfigFileUsed(), err)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/flags"
 	"github.com/cedana/cedana/pkg/logging"
@@ -82,8 +83,14 @@ var rootCmd = &cobra.Command{
 		"\nInstance Brokerage, Orchestration and Migration System." +
 		"\nProperty of Cedana, Corp.\n",
 
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// The config is loaded before cobra parses flags, so re-read it to apply the flags bound above
+		err := viper.Unmarshal(&config.Global)
+		if err != nil {
+			return fmt.Errorf("failed to apply flags to config: %w", err)
+		}
 		logging.Init(logging.ConsoleWriter)
+		return nil
 	},
 }
 

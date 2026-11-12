@@ -55,8 +55,6 @@ teardown_file() {
     run cedana run --no-server runc --bundle "$bundle" --jid "$jid"
     assert_success
     assert_output --partial "hello"
-
-    run runc delete "$jid"
 }
 
 # bats test_tags=serverless
@@ -67,8 +65,6 @@ teardown_file() {
 
     run cedana run --no-server runc --bundle "$bundle" --jid "$jid"
     assert_equal $status $code
-
-    run runc delete "$jid"
 }
 
 # bats test_tags=serverless
@@ -97,8 +93,26 @@ teardown_file() {
     assert_output --partial "hello"
 
     assert_exists "$pid_file"
+}
 
-    run runc delete "$jid"
+# bats test_tags=serverless
+@test "run container (without daemon, signal forwarding)" {
+    jid=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh" 20)"
+    pid_file="/tmp/$jid.pid"
+
+    cedana run --no-server runc --bundle "$bundle" --jid "$jid" --pid-file "$pid_file" &
+    cedana_pid=$!
+
+    sleep 2 # so we don't "cancel" cedana run itself while it's still starting up the process
+
+    wait_for_file "$pid_file" 5
+    pid=$(cat "$pid_file")
+
+    kill -TERM "$cedana_pid"
+    wait_for_no_pid "$pid" 5
+    run wait $cedana_pid
+    assert_equal $status 42
 }
 
 @test "run non-existent container" {
@@ -516,6 +530,167 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# A mount whose source is gone, left at a bind mount's destination on the (shared) rootfs,
+# e.g. the GPU shm mount of a container restored earlier, once its GPU controller exited,
+# must not break restoring ("possibly malicious path detected"), and must be cleaned up
+# bats test_tags=restore
+@test "restore container (stale mount on rootfs)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    dest="/stale-mount-$id"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 2
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    stale=$(mktemp)
+    mount --bind "$stale" "$rootfs$dest"
+    rm "$stale"
+    run grep -F " $rootfs$dest " /proc/self/mountinfo
+    assert_output --partial "//deleted" # as left in CI
+
+    cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+
+    run grep -F " $rootfs$dest " /proc/self/mountinfo
+    refute_output --partial "//deleted"
+
+    run runc delete --force "$id"
+    run umount -l "$rootfs$dest" # whether anything is left is the next test's concern
+    rm -f "$bind_source"
+    rm -rf "$rootfs"
+}
+
+# Restoring must not leave mounts on the (shared) rootfs: once the container is gone and its
+# bind source deleted (as the GPU shm file is, when its controller exits), they'd break every
+# later restore there
+# bats test_tags=restore
+@test "restore container (no mount left on rootfs)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    dest="/leaked-mount-$id"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 2
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+
+    run runc delete --force "$id" # kills it, and waits for it to be gone
+    rm -f "$bind_source"
+
+    # Anywhere: the rootfs is also reachable through other mounts of it (e.g. CRIU's root)
+    run grep -F "$dest " /proc/self/mountinfo
+    assert_output ""
+    rm -rf "$rootfs"
+}
+
+# A restore that fails after setting up its mounts must not leave them on the (shared) rootfs
+# bats test_tags=restore
+@test "restore container (failed, no mount left on rootfs)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    dest="/leaked-mount-$id"
+    bind_source=$(mktemp)
+    add_bind_mount_to_bundle "$bundle" "$bind_source" "$dest"
+    rootfs=$(use_private_rootfs "$bundle")
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 2
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    # Without its memory pages, CRIU fails the restore after the mounts are set up
+    run find "$dump_file" -name 'pages-*.img' -delete -print
+    assert_output --partial "pages-"
+
+    run cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+    assert_failure
+
+    run grep -F "$dest " /proc/self/mountinfo # anywhere, see above
+    assert_output ""
+
+    run runc delete --force "$id"
+    rm -f "$bind_source"
+    rm -rf "$rootfs"
+}
+
+# With rslave root propagation (as CRI sets for a HostToContainer volume) on a shared overlay
+# rootfs (as the shim's is, under /run), the restored root is a slave of the rootfs, so
+# unmounting what the restore mounted on the rootfs must not take the container's own
+# mounts with it
+# bats test_tags=restore
+@test "restore container (rslave root propagation, keeps bind mounts)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh")"
+    dir=$(mktemp -d)
+    # None of the overlay's dirs can be on overlay (e.g. the test container's root)
+    mount -t tmpfs tmpfs "$dir"
+    mount --make-shared "$dir" # as /run is, which the shim's rootfs is under
+    mkdir "$dir"/lower "$dir"/upper "$dir"/work "$dir"/rootfs "$dir"/dir-source
+    cp -a "$ROOTFS"/. "$dir"/lower
+    mount -t overlay overlay -o lowerdir="$dir"/lower,upperdir="$dir"/upper,workdir="$dir"/work "$dir"/rootfs
+    jq --arg root "$dir/rootfs" '.root.path = $root | .linux.rootfsPropagation = "rslave"' \
+        "$bundle"/config.json >"$bundle"/config.json.tmp
+    mv "$bundle"/config.json.tmp "$bundle"/config.json
+    echo "file-$id" >"$dir"/file-source
+    echo "dir-$id" >"$dir"/dir-source/marker
+    add_bind_mount_to_bundle "$bundle" "$dir"/file-source "/bind-file"
+    add_bind_mount_to_bundle "$bundle" "$dir"/dir-source "/bind-dir"
+
+    # Detached, with no fd of bats' (which waits on them), so a failure never hangs the test
+    runc run --detach --bundle "$bundle" "$id" </dev/null >/dev/null 2>&1
+
+    sleep 2
+
+    # Older runc (e.g. 1.3) leaves the root private, so there's nothing to propagate
+    if ! grep -E '^\S+ \S+ \S+ / / .* master:' /proc/"$(runc state "$id" | jq -r .pid)"/mountinfo >/dev/null; then
+        runc delete --force "$id"
+        umount -l "$dir"/rootfs
+        umount -l "$dir"
+        rm -rf "$dir"
+        skip "$(runc --version | head -1) doesn't make the root a slave of the rootfs"
+    fi
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    run runc delete --force "$id"
+    cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle"
+
+    pid=$(runc state "$id" | jq -r .pid)
+    run cat /proc/"$pid"/root/bind-file
+    assert_output "file-$id"
+    run cat /proc/"$pid"/root/bind-dir/marker
+    assert_output "dir-$id"
+
+    run runc delete --force "$id"
+    umount -l "$dir"/rootfs
+    umount -l "$dir"
+    rm -rf "$dir"
+}
+
 # bats test_tags=restore
 @test "restore container (PID file)" {
     id=$(unix_nano)
@@ -604,13 +779,42 @@ teardown_file() {
     run runc delete "$id"
 }
 
+# bats test_tags=restore,serverless
+@test "restore container (without daemon, signal forwarding)" {
+    id=$(unix_nano)
+    bundle="$(create_workload_bundle "date-loop.sh" 20)"
+    pid_file="/tmp/$id.pidfile"
+
+    runc run --bundle "$bundle" "$id" &
+
+    sleep 2
+
+    run cedana dump runc "$id"
+    assert_success
+    dump_file=$(echo "$output" | tail -n 1 | awk '{print $NF}')
+    assert_exists "$dump_file"
+
+    cedana restore runc --id "$id" --path "$dump_file" --bundle "$bundle" --no-server --pid-file "$pid_file" &
+    cedana_pid=$!
+
+    wait_for_file "$pid_file" 5
+    pid=$(cat "$pid_file")
+
+    sleep 2 # so we don't "cancel" cedana run itself while it's still starting up the process
+
+    kill -TERM "$cedana_pid"
+    wait_for_no_pid "$pid" 5
+    run wait $cedana_pid
+    assert_equal $status 42
+}
+
 # bats test_tags=restore
 @test "restore container (detached to attached)" {
     id=$(unix_nano)
     code=42
     bundle="$(create_workload_bundle "date-loop.sh" 3 "$code")"
 
-    runc run --bundle "$bundle" "$id" --detach > /dev/null 2>&1 < /dev/null
+    runc run --bundle "$bundle" "$id" --detach >/dev/null 2>&1 </dev/null
 
     run cedana dump runc "$id"
     assert_success
@@ -632,7 +836,7 @@ teardown_file() {
     code=42
     bundle="$(create_workload_bundle "date-loop.sh" 3 "$code")"
 
-    runc run --bundle "$bundle" "$id" --detach > /dev/null 2>&1 < /dev/null
+    runc run --bundle "$bundle" "$id" --detach >/dev/null 2>&1 </dev/null
 
     run cedana dump runc "$id"
     assert_success
@@ -654,7 +858,7 @@ teardown_file() {
     code=42
     bundle="$(create_workload_bundle "date-loop.sh" 3 "$code")"
 
-    runc run --bundle "$bundle" "$id" --detach > /dev/null 2>&1 < /dev/null
+    runc run --bundle "$bundle" "$id" --detach >/dev/null 2>&1 </dev/null
 
     run cedana dump runc "$id"
     assert_success
@@ -944,7 +1148,8 @@ teardown_file() {
     run runc delete "$id"
 }
 
-@test "run container (persistent mounts)" {
+# bats test_tags=restore
+@test "restore container (persistent mounts)" {
     jid=$(unix_nano)
     bundle="$(create_cmd_bundle "while true; do date > /persistent/date.txt; sleep 1; done")"
 

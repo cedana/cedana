@@ -39,6 +39,15 @@ func FillMissingDumpDefaults(next types.Dump) types.Dump {
 			req.Criu.ManageCgroupsMode = &mode
 			req.Criu.ManageCgroups = proto.Bool(true) // For backward compatibility
 		}
+		// Only override if unset
+		if req.Criu.ZeroElide == nil {
+			req.Criu.ZeroElide = proto.Bool(config.Global.CRIU.ZeroElide)
+		}
+
+		// Only override if unset
+		if req.Criu.ShmemDumpThreads == nil {
+			req.Criu.ShmemDumpThreads = proto.Int32(config.Global.CRIU.ShmemDumpThreads)
+		}
 
 		req.Criu.NotifyScripts = proto.Bool(true)
 		req.Criu.EvasiveDevices = proto.Bool(true)

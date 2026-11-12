@@ -27,10 +27,14 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 		details := req.GetDetails().GetSlurm()
 		jid := details.GetJobID()
 		pid := details.GetPID()
+		self := uint32(os.Getpid())
 		if pid == 0 {
-			if self := uint32(os.Getpid()); selfInJobCgroup(self, jid) {
+			if selfInJobCgroup(self, jid) {
 				pid = self
 			}
+		} else if path, err := cgroupPathFromProc(pid); err == nil && !inJobCgroup(path, jid) {
+			// Its namespaces and mounts are what the job gets restored into
+			return nil, status.Errorf(codes.FailedPrecondition, "PID %d is not of slurm job %d, it's in cgroup %s", pid, jid, path)
 		}
 
 		path, err := ResolveJobCgroupPath(jid, pid)
@@ -58,6 +62,20 @@ func GetSlurmJobForRestore(next types.Restore) types.Restore {
 			return nil, status.Errorf(codes.FailedPrecondition, "container's cgroup unexpectedly frozen")
 		}
 
+		// We may be outside of the job (e.g. the daemon), whose processes are then the only way to
+		// its namespaces and mounts. Not having one is for whatever needs it to complain about.
+		if pid == 0 {
+			pids, err := manager.GetAllPids()
+			if err != nil {
+				log.Warn().Err(err).Uint32("job_id", jid).Msg("failed to get the processes of the job")
+			}
+			pid = pickJobPID(pids, self, processExists)
+		}
+		if pid != 0 {
+			log.Debug().Uint32("job_id", jid).Uint32("pid", pid).Msg("using process of the job for its namespaces and mounts")
+			details.PID = pid
+		}
+
 		return next(ctx, opts, resp, req)
 	}
 }
@@ -72,24 +90,37 @@ func RestoreSlurmScript(next types.Restore) types.Restore {
 			return next(ctx, opts, resp, req)
 		}
 
+		// Where the job being restored into has it, which may be its own /tmp rather than ours
+		pid := req.GetDetails().GetSlurm().GetPID()
+
 		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
-			if path := f.GetPath(); filepath.Base(path) == SLURM_SCRIPT_FILE {
+			if path := f.GetPath(); isJobScript(path) {
 				contents, err := slurm_utils.LoadScriptFromDump(SLURM_SCRIPT_FILE, opts.DumpFs)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to load slurm script from dump %s", path)
 					return false
 				}
 
+				path = inRootOf(pid, path)
 				err = os.MkdirAll(filepath.Dir(path), 0o755)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to create directory for slurm script %s", path)
 					return false
 				}
 
-				err = os.WriteFile(path, contents, 0o700)
+				err = os.WriteFile(path, contents, 0o600)
 				if err != nil {
 					log.Warn().Err(err).Msgf("failed to restore slurm script file %s", path)
 					return false
+				}
+
+				// As it was, or CRIU refuses it: "has bad mode"
+				attrs := loadScriptAttrs(opts.DumpFs)
+				if err := os.Chown(path, int(attrs.Uid), int(attrs.Gid)); err != nil {
+					log.Warn().Err(err).Msgf("failed to set the owner of slurm script %s", path)
+				}
+				if err := os.Chmod(path, os.FileMode(attrs.Mode)); err != nil {
+					log.Warn().Err(err).Msgf("failed to set the mode of slurm script %s", path)
 				}
 
 				return false

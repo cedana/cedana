@@ -36,11 +36,12 @@ func New(ctx context.Context, description ...any) (*Cedana, error) {
 		ctx, cancel = context.WithCancel(ctx)
 	}
 
-	if config.Global.Metrics {
-		metrics.Init(ctx, wg, "cedana", version.Version)
-	}
-
 	pluginManager := plugins.NewLocalManager()
+
+	if config.Global.Metrics {
+		metrics.Init(ctx, wg, "cedana", version.Version,
+			metrics.ResourceAttributes(plugins.InstalledVersionAttributes(pluginManager))...)
+	}
 
 	gpuManager, err := gpu.NewSimpleManager(ctx, wg, pluginManager)
 	if err != nil {

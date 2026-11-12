@@ -15,6 +15,7 @@ load_lib file
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 
 setup_file() {
+    trap_gpu_signals
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
@@ -22,15 +23,18 @@ setup_file() {
 }
 
 setup() {
+    trap_gpu_signals
     setup_daemon
 }
 
 teardown() {
     teardown_daemon
+    check_gpu_signals
 }
 
 teardown_file() {
     teardown_file_daemon
+    check_gpu_signals
 }
 
 ###########
@@ -183,6 +187,32 @@ teardown_file() {
 
     run cedana job kill "$jid"
     rm -rf "$dump_file"
+}
+
+# bats test_tags=restore,verify
+@test "[$GPU_INFO] restore GPU process reads the dumped GPU state (checksum)" {
+    jid=$(unix_nano)
+    log=$(daemon_log_file "$CEDANA_ADDRESS")
+
+    cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
+    watch_logs "$jid"
+
+    sleep 1
+
+    cedana dump job "$jid"
+    # Last match: a persistent daemon's log holds earlier tests too
+    dumped=$(grep 'GPU state checksum' "$log" | grep -o 'sha256:[0-9a-f]\{64\}' | tail -1)
+    if [ -z "$dumped" ]; then
+        skip "no GPU state checksum (CEDANA_GPU_VERIFY=off)"
+    fi
+
+    cedana restore job "$jid"
+    watch_logs "$jid"
+
+    restored=$(grep 'GPU restore complete' "$log" | grep -o 'sha256:[0-9a-f]\{64\}' | tail -1)
+    assert_equal "$restored" "$dumped"
+
+    run cedana job kill "$jid"
 }
 
 # bats test_tags=restore,hostmem

@@ -9,6 +9,7 @@ import (
 	"buf.build/gen/go/cedana/cedana-gpu/protocolbuffers/go/gpu"
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/rs/zerolog/log"
@@ -18,16 +19,47 @@ import (
 type ManagerSimple struct {
 	controllers pool
 
-	plugins plugins.Manager
-	sync    sync.Mutex // Used to prevent concurrent syncs
-	syncs   sync.WaitGroup
-	wg      *sync.WaitGroup
+	plugins   plugins.Manager
+	syncState sync.Mutex    // Guards syncDone
+	syncDone  chan struct{} // Closed when the running sync ends, nil when no sync runs
+	wg        *sync.WaitGroup
+}
+
+// Instead of stacking up syncs, a caller that finds one running waits for it to end, or
+// for its own context: a sync can wait on a controller's termination for a long time.
+// Returns a done function when the caller must run the sync itself, nil after a wait.
+func (m *ManagerSimple) waitOrStartSync(ctx context.Context) (done func(), err error) {
+	m.syncState.Lock()
+	if running := m.syncDone; running != nil {
+		m.syncState.Unlock()
+		select {
+		case <-running:
+			return nil, nil
+		case <-ctx.Done():
+			return nil, fmt.Errorf("waiting for the running GPU controller sync: %w", ctx.Err())
+		}
+	}
+	ch := make(chan struct{})
+	m.syncDone = ch
+	m.syncState.Unlock()
+
+	return func() {
+		m.syncState.Lock()
+		m.syncDone = nil
+		m.syncState.Unlock()
+		close(ch)
+	}, nil
 }
 
 func NewSimpleManager(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager) (*ManagerSimple, error) {
+	return newSimpleManager(ctx, serverWg, plugins, false)
+}
+
+// With tailLogs, ships the log files of all GPU controllers it finds or spawns
+func newSimpleManager(ctx context.Context, serverWg *sync.WaitGroup, plugins plugins.Manager, tailLogs bool) (*ManagerSimple, error) {
 	manager := &ManagerSimple{
 		plugins:     plugins,
-		controllers: pool{},
+		controllers: pool{tailLogs: tailLogs},
 		wg:          serverWg,
 	}
 
@@ -68,7 +100,11 @@ func (m *ManagerSimple) Attach(ctx context.Context, pid <-chan uint32) (id strin
 		}
 
 		if ok {
-			err = controller.Attach(context.WithoutCancel(ctx), controller.AttachedPID)
+			var minors []int
+			if allocated, set := ctx.Value(keys.GPU_RUN_DEVICE_MINORS_CONTEXT_KEY).(*[]int); set {
+				minors = *allocated
+			}
+			err = controller.Attach(context.WithoutCancel(ctx), controller.AttachedPID, minors...)
 			if err != nil {
 				log.Debug().Err(err).Str("ID", controller.ID).Uint32("PID", controller.AttachedPID).Msg("failed to forcefully attach GPU controller (FORCE_ATTACH is true)")
 				ok = false
@@ -112,14 +148,11 @@ func (m *ManagerSimple) GetID(pid uint32) string {
 }
 
 func (m *ManagerSimple) Sync(ctx context.Context) error {
-	m.syncs.Add(1)
-	if !m.sync.TryLock() {
-		m.syncs.Done()
-		m.syncs.Wait() // Instead of stacking up syncs, just wait for the current one to finish
-		return nil
+	done, err := m.waitOrStartSync(ctx)
+	if err != nil || done == nil {
+		return err
 	}
-	defer m.syncs.Done()
-	defer m.sync.Unlock()
+	defer done()
 
 	return m.controllers.Sync(ctx)
 }
@@ -160,6 +193,9 @@ func (m *ManagerSimple) Freeze(ctx context.Context, pid uint32) error {
 	if controller == nil {
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
 	}
+	if cgroupFrozen(controller.PID) {
+		return fmt.Errorf("the GPU controller for PID %d is already frozen, with its container", pid)
+	}
 
 	_, err := controller.Freeze(ctx, &gpu.FreezeReq{})
 	return err
@@ -169,6 +205,9 @@ func (m *ManagerSimple) Unfreeze(ctx context.Context, pid uint32) error {
 	controller := m.controllers.Find(pid)
 	if controller == nil {
 		return fmt.Errorf("no GPU controller found attached to PID %d", pid)
+	}
+	if cgroupFrozen(controller.PID) {
+		return fmt.Errorf("the GPU controller for PID %d is still frozen, with its container", pid)
 	}
 
 	_, err := controller.Unfreeze(ctx, &gpu.UnfreezeReq{})

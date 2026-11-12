@@ -42,18 +42,28 @@ func Unfreeze(gpus Manager) types.Adapter[types.Freeze] {
 			state.GPUID = id
 			state.GPUEnabled = true
 
-			log.Debug().Str("ID", id).Uint32("PID", pid).Msg("GPU freeze starting")
+			// Thaw the rest (e.g. the container cgroup) first: the GPU controller
+			// is in the container's cgroup, frozen with it, and could not answer the unfreeze.
+			// The application then runs before its GPU does, as after a dump that leaves it
+			// running: its CUDA calls wait until the GPU is unfrozen.
+			code, err = next(ctx, opts, resp, req)
+			if err != nil {
+				return code, err
+			}
+
+			log.Debug().Str("ID", id).Uint32("PID", pid).Msg("GPU unfreeze starting")
 
 			_, end := profiling.StartTimingCategory(ctx, "gpu", gpus.Unfreeze)
 			err = gpus.Unfreeze(ctx, pid)
 			end()
 			if err != nil {
-				return nil, status.Errorf(codes.Internal, "failed to unfreeze GPU state: %v", err)
+				log.Error().Err(err).Str("ID", id).Uint32("PID", pid).Msg("failed to unfreeze GPU state")
+				return code, status.Errorf(codes.Internal, "failed to unfreeze GPU state: %v", err)
 			}
 
 			log.Info().Str("ID", id).Uint32("PID", pid).Msg("GPU unfreeze completed")
 
-			return next(ctx, opts, resp, req)
+			return code, nil
 		}
 	}
 }

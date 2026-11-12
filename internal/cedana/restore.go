@@ -44,6 +44,8 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 		process.InheritFilesForRestore,
 		process.AddExternalMountsForRestore,
 		process.SetupIO[daemon.RestoreReq, daemon.RestoreResp],
+		process.ForwardSignals[daemon.RestoreReq, daemon.RestoreResp],
+
 		criu.CheckOptsForRestore,
 	}
 
@@ -78,7 +80,7 @@ func (s *Server) Restore(ctx context.Context, req *daemon.RestoreReq) (*daemon.R
 }
 
 // Restore for CedanaRoot struct which avoid the use of jobs and provides runc compatible cli usage
-func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error) {
+func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, resp *daemon.RestoreResp, err error) {
 	// Add adapters. The order below is the order followed before executing
 	// the final handler (criu.Restore).
 
@@ -98,6 +100,8 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		process.InheritFilesForRestore,
 		process.AddExternalMountsForRestore,
 		process.SetupIO[daemon.RestoreReq, daemon.RestoreResp],
+		process.ForwardSignals[daemon.RestoreReq, daemon.RestoreResp],
+
 		criu.CheckOptsForRestore,
 	}
 
@@ -110,15 +114,15 @@ func (s *Cedana) Restore(req *daemon.RestoreReq) (exitCode <-chan int, err error
 		WG:         s.wg,
 		Serverless: true,
 	}
-	resp := &daemon.RestoreResp{}
+	resp = &daemon.RestoreResp{}
 
 	code, err := restore(s.lifetime, opts, resp, req)
 	if err != nil {
 		log.Error().Err(err).Str("type", req.Type).Msg("restore failed")
-		return nil, err
+		return nil, nil, err
 	}
 
-	return code(), nil
+	return code(), resp, nil
 }
 
 //////////////////////////
@@ -210,6 +214,16 @@ func pluginRestoreHandler() types.Restore {
 				handler = pluginHandler
 				return nil
 			}, t)
+			if opts.Serverless {
+				supported := false
+				features.ServerlessSupport.IfAvailable(func(_ string, s bool) error {
+					supported = s
+					return nil
+				}, t)
+				if !supported {
+					return nil, fmt.Errorf("plugin '%s' does not support serverless restore", t)
+				}
+			}
 			if err == nil {
 				var end func()
 				ctx, end = profiling.StartTimingCategory(ctx, req.Type, handler)
@@ -238,6 +252,8 @@ func pluginRestoreHandler() types.Restore {
 		if resp.GetState().GetGPUEnabled() {
 			handler = handler.With(gpu.InterceptionRestore)
 		}
+
+		// TODO: Add GPU tracing restore adapter. Requires update to state proto.
 
 		return handler(ctx, opts, resp, req)
 	}

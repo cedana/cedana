@@ -37,9 +37,13 @@ type (
 		Plugins Plugins `json:"plugins" key:"plugins" yaml:"plugins" mapstructure:"plugins"`
 		// SLURM settings
 		Slurm Slurm `json:"slurm" key:"slurm" yaml:"slurm" mapstructure:"slurm"`
+		// K8s settings
+		K8s K8s `json:"k8s" key:"k8s" yaml:"k8s" mapstructure:"k8s"`
 
 		// AWS settings
 		AWS AWS `json:"aws" key:"aws" yaml:"aws" mapstructure:"aws"`
+		// CSX (Cedana Storage Express) settings
+		CSX CSX `json:"csx" key:"csx" yaml:"csx" mapstructure:"csx"`
 	}
 
 	Slurm struct {
@@ -55,6 +59,15 @@ type (
 		DBPort int `json:"db_port" key:"db_port" yaml:"db_port" mapstructure:"db_port"`
 		// DBName is the name of the slurmdbd database to connect to
 		DBName string `json:"db_name" key:"db_name" yaml:"db_name" mapstructure:"db_name"`
+	}
+
+	K8s struct {
+		// FallbackColdStart sets whether the containerd runtime shim should fall back to a normal (cold) start
+		// of the container if the cedana restore fails for some reason.
+		FallbackColdStart bool `json:"fallback_cold_start" key:"fallback_cold_start" yaml:"fallback_cold_start" mapstructure:"fallback_cold_start"`
+		// InstallDeps sets whether the helper's setup installs missing host packages. When false, it makes no package
+		// changes and only reports them, with the commands that install them (e.g. to run in the node image).
+		InstallDeps bool `json:"install_deps" key:"install_deps" yaml:"install_deps" mapstructure:"install_deps"`
 	}
 
 	Connection struct {
@@ -114,8 +127,12 @@ type (
 		LeaveRunning bool `json:"leave_running" key:"leave_running" yaml:"leave_running" mapstructure:"leave_running"`
 		// ManageCgroups sets the default cgroup C/R mode for CRIU (default, cg_none, props, soft, full, strict, ignore)
 		ManageCgroups string `json:"manage_cgroups" key:"manage_cgroups" yaml:"manage_cgroups" mapstructure:"manage_cgroups"`
-		// LogLevel sets the default log level for CRIU (2 - errors, 3 - warnings, 4 - debug)
+		// LogLevel sets the default log level for CRIU (1 - errors, 2 - warnings, 3 - info, 4 - debug)
 		LogLevel int32 `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
+		// ZeroElide omits all-zero shared memory and ghost file pages from the dump
+		ZeroElide bool `json:"zero_elide" key:"zero_elide" yaml:"zero_elide" mapstructure:"zero_elide"`
+		// ShmemDumpThreads sets how many threads scan and write shared memory segments
+		ShmemDumpThreads int32 `json:"shmem_dump_threads" key:"shmem_dump_threads" yaml:"shmem_dump_threads" mapstructure:"shmem_dump_threads"`
 	}
 
 	GPU struct {
@@ -127,14 +144,39 @@ type (
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
 		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
+		// ShmCommit is the size in bytes of the shared memory segment backed with pages at creation (rest is backed on first touch)
+		ShmCommit int64 `json:"shm_commit" key:"shm_commit" yaml:"shm_commit" mapstructure:"shm_commit"`
+		// ImageZeroCopy sets whether module/library images that are file-backed are mapped by the worker instead of staged as a copy
+		ImageZeroCopy bool `json:"image_zero_copy" key:"image_zero_copy" yaml:"image_zero_copy" mapstructure:"image_zero_copy"`
+		// ImageForceFallback forces the worker to copy every image out of the client process (for testing the fallback path)
+		ImageForceFallback bool `json:"image_force_fallback" key:"image_force_fallback" yaml:"image_force_fallback" mapstructure:"image_force_fallback"`
 		// DedupEnabled sets whether to use deduplication for GPU checkpoints (reduces checkpoint size)
 		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
-		// DeltaEnabled sets whether GPU checkpoints after the first are written as deltas (incremental)
-		DeltaEnabled bool `json:"delta_enabled" key:"delta_enabled" yaml:"delta_enabled" mapstructure:"delta_enabled"`
 		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
+		// DirectIO sets whether to read and write GPU checkpoints with O_DIRECT (on supported filesystems)
+		DirectIO bool `json:"direct_io" key:"direct_io" yaml:"direct_io" mapstructure:"direct_io"`
+		// MemRingBufSize is the number of staging buffers used to restore GPU memory with O_DIRECT
+		MemRingBufSize int `json:"mem_ring_buf_size" key:"mem_ring_buf_size" yaml:"mem_ring_buf_size" mapstructure:"mem_ring_buf_size"`
 		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
+		// RestoreNic is how a restored process's UCX contexts pick their RDMA NIC on this node (auto: the
+		// rail closest to the GPU it now runs on; mapping: VLLM_GPU_NIC_PCIE_MAPPING's NIC; off: as
+		// checkpointed). A workload's own CEDANA_GPU_RESTORE_NIC takes precedence.
+		RestoreNic string `json:"restore_nic" key:"restore_nic" yaml:"restore_nic" mapstructure:"restore_nic"`
+		// DeltaEnabled sets whether GPU checkpoints only save memory changed since the previous checkpoint
+		DeltaEnabled bool `json:"delta_enabled" key:"delta_enabled" yaml:"delta_enabled" mapstructure:"delta_enabled"`
+		// Verify sets whether restored GPU state is checked against the checkpoint (off; warn: log
+		// mismatches; strict: fail the restore)
+		Verify string `json:"verify" key:"verify" yaml:"verify" mapstructure:"verify"`
+		// ProfilingEnabled enables CUDA call profiling in the GPU plugin
+		ProfilingEnabled bool `json:"profiling_enabled" key:"profiling_enabled" yaml:"profiling_enabled" mapstructure:"profiling_enabled"`
+		// ComputeSanitizer runs restored GPU workers under compute-sanitizer
+		ComputeSanitizer bool `json:"compute_sanitizer" key:"compute_sanitizer" yaml:"compute_sanitizer" mapstructure:"compute_sanitizer"`
+		// ShmTmpfs has each GPU controller mount a huge-page-capable tmpfs on its shm directory, which
+		// lets applications that set CEDANA_GPU_HOSTREG_THP restore their registered host memory on
+		// huge pages
+		ShmTmpfs bool `json:"shm_tmpfs" key:"shm_tmpfs" yaml:"shm_tmpfs" mapstructure:"shm_tmpfs"`
 	}
 
 	Plugins struct {
@@ -149,6 +191,8 @@ type (
 	}
 
 	AWS struct {
+		// CredentialsMode selects the AWS credential provider (static, eksPodIdentity, or ambient)
+		CredentialsMode string `json:"credentials_mode" key:"credentials_mode" yaml:"credentials_mode" mapstructure:"credentials_mode" env_aliases:"AWS_CREDENTIALS_MODE"`
 		// AccessKeyID is the AWS access key ID
 		AccessKeyID string `json:"access_key_id" key:"access_key_id" yaml:"access_key_id" mapstructure:"access_key_id" env_aliases:"AWS_ACCESS_KEY_ID"`
 		// SecretAccessKey is the AWS secret access key
@@ -157,5 +201,10 @@ type (
 		Region string `json:"region" key:"region" yaml:"region" mapstructure:"region" env_aliases:"AWS_REGION"`
 		// Endpoint is a custom AWS endpoint to use (e.g. for S3-compatible storage)
 		Endpoint string `json:"endpoint" key:"endpoint" yaml:"endpoint" mapstructure:"endpoint" env_aliases:"AWS_ENDPOINT"`
+	}
+
+	CSX struct {
+		// path to socket where the CSX daemon is running
+		SockAddr string `json:"sock_addr" key:"sock_addr" yaml:"sock_addr" mapstructure:"sock_addr"`
 	}
 )

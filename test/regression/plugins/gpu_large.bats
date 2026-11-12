@@ -15,6 +15,7 @@ load_lib file
 export CEDANA_CHECKPOINT_COMPRESSION=gzip # To avoid blowing up storage budget
 
 setup_file() {
+    trap_gpu_signals
     # FIXME: test is broken
     skip "disabled until test itself is fixed"
     if ! cmd_exists nvidia-smi; then
@@ -28,6 +29,7 @@ setup_file() {
 
 teardown_file() {
     teardown_file_daemon
+    check_gpu_signals
 }
 
 #####################

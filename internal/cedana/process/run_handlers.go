@@ -10,7 +10,6 @@ import (
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/mattn/go-isatty"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -49,10 +48,6 @@ func Run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		cmd.SysProcAttr.Setsid = false                     // Use the current session
 		cmd.SysProcAttr.GidMappingsEnableSetgroups = false // Avoid permission issues when running as non-root user
 		cmd.SysProcAttr.Credential = nil                   // Current user's credentials (caller)
-		if isatty.IsTerminal(os.Stdin.Fd()) {
-			cmd.SysProcAttr.Foreground = isatty.IsTerminal(os.Stdin.Fd()) // Run in the foreground to catch signals
-			cmd.SysProcAttr.Ctty = int(os.Stdin.Fd())                     // Set the controlling terminal
-		}
 	}
 
 	err = cmd.Start()
@@ -67,11 +62,22 @@ func Run(ctx context.Context, opts types.Opts, resp *daemon.RunResp, req *daemon
 		if err != nil {
 			log.Trace().Err(err).Uint32("PID", resp.PID).Msg("process Wait()")
 		}
-		exitCode <- cmd.ProcessState.ExitCode()
+		exitCode <- exitCodeOf(cmd.ProcessState)
 		close(exitCode)
 	})
 
 	return code, nil
+}
+
+// exitCodeOf returns the exit code to report for a process that has been
+// waited for. ProcessState.ExitCode() is -1 for a process that a signal
+// ended, and os.Exit(-1) becomes 255 in the kernel, which hides the signal.
+// A shell reports 128 plus the signal number, and so does this.
+func exitCodeOf(state *os.ProcessState) int {
+	if ws, ok := state.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return 128 + int(ws.Signal())
+	}
+	return state.ExitCode()
 }
 
 // Simply sets the PID in response, if the process exists, and returns a valid exited channel

@@ -8,6 +8,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/criu"
+	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
@@ -83,13 +84,28 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			result := &deltaResult{}
 			ctx = context.WithValue(ctx, deltaResultKey{}, result)
 
+			var checksum string
+			ctx = context.WithValue(ctx, keys.GPU_CHECKSUM_CONTEXT_KEY, &checksum)
+
+			// We mount CheckpointDir in the namespace of the container to dump
+			// GPU state. This gets unmounted after dump is complete and is not
+			// part of the container checkpoint, so always skip mount at checkpointDir
+			req.Criu.SkipMnt = append(req.Criu.SkipMnt, req.Criu.GetImagesDir())
+
 			next = next.With(AddExternalMountsForDump)
 
 			code, err = next(ctx, opts, resp, req)
-			if err == nil && result.parent != "" {
+			if err != nil {
+				return nil, err
+			}
+
+			// The GPU dump is done by now: CRIU's finalize waited for it
+			resp.Checksum = checksum
+			if result.parent != "" {
 				resp.GPUParent = filepath.Base(result.parent)
 			}
-			return code, err
+
+			return code, nil
 		}
 	}
 }
@@ -110,7 +126,7 @@ func AddExternalMountsForDump(next types.Dump) types.Dump {
 
 		pid := state.PID
 		opts.CRIUCallback.Include(&criu.NotifyCallback{
-			Name: "gpu external mounts",
+			Name: "external-files",
 			QueryExtFilesFunc: func(ctx context.Context) ([]string, error) {
 				frozen := &daemon.ProcessState{}
 				if err := utils.FillProcessState(ctx, pid, frozen, true); err != nil {

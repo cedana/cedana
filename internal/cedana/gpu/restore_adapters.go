@@ -69,12 +69,19 @@ func Restore(gpus Manager) types.Adapter[types.Restore] {
 
 			ctx = context.WithValue(ctx, keys.GPU_ID_CONTEXT_KEY, id)
 
+			var checksum string
+			ctx = context.WithValue(ctx, keys.GPU_CHECKSUM_CONTEXT_KEY, &checksum)
+			ctx = context.WithValue(ctx, keys.GPU_EXPECTED_CHECKSUM_CONTEXT_KEY, req.GetChecksum())
+
 			code, err = next(ctx, opts, resp, req)
 			if err != nil {
 				return nil, err
 			}
 
 			pid <- resp.PID
+
+			// The GPU restore is done by now: CRIU's finalize waited for it
+			resp.Checksum = checksum
 
 			log.Info().Uint32("PID", resp.PID).Str("controller", id).Msg("GPU support restored for process")
 
@@ -97,12 +104,15 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 		var toClose []*os.File
 		var logDir string
 		var isContainer bool
-		shmFileRegex := regexp.MustCompile(CONTROLLER_SHM_FILE_PATTERN)
+		// Anchored, as a process shares the host's mounts, which may include another container's
+		// shm bind mount under its rootfs (e.g. /tmp/rootfs/dev/shm/cedana-gpu.container)
+		shmFileRegex := regexp.MustCompile("^" + CONTROLLER_SHM_FILE_PATTERN)
 
 		mounts := make(map[uint64]any)
 		utils.WalkTree(state, "Mounts", "Children", func(m *daemon.Mount) bool {
-			// If the shm file appears in the mounts, it means this restore is for a container
-			isContainer = isContainer || shmFileRegex.MatchString(m.MountPoint)
+			// If the shm file is mounted at its own path, it means this restore is for a container
+			// (not the controller's directory next to it, which its own tmpfs may have mounted)
+			isContainer = isContainer || (shmFileRegex.MatchString(m.MountPoint) && !strings.HasSuffix(m.MountPoint, ".misc"))
 
 			mounts[m.ID] = nil
 			return true
@@ -158,6 +168,7 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 			external := !(internal || isPipe || isSocket || isAnon || isMemfd)
 
 			hostmemRegex := regexp.MustCompile(CONTROLLER_HOSTMEM_FILE_PATTERN)
+			hostregRegex := regexp.MustCompile(CONTROLLER_HOSTREG_FILE_PATTERN)
 			interceptorLogRegex := regexp.MustCompile(INTERCEPTOR_LOG_FILE_PATTERN)
 			tracerLogRegex := regexp.MustCompile(TRACER_LOG_FILE_PATTERN)
 
@@ -218,6 +229,34 @@ func InheritFilesForRestore(next types.Restore) types.Restore {
 				} else {
 					log.Debug().Str("path", newPath).Msg("created hostmem file in host path (no size info)")
 				}
+			} else if matches := hostregRegex.FindStringSubmatch(path); id != "" && len(matches) == 4 {
+				// Registered host memory on a file (CEDANA_GPU_HOSTREG_THP). CRIU maps it from the new
+				// controller's directory and checks its size, which is in its name; the GPU controller
+				// fills its contents during the GPU restore
+				newPath = fmt.Sprintf(CONTROLLER_HOSTREG_FILE_FORMATTER, id, matches[2])
+				// 63 bits: the size goes to Truncate as an int64
+				size, parseErr := strconv.ParseUint(matches[3], 16, 63)
+				if parseErr != nil {
+					err = status.Errorf(codes.Internal, "failed to parse size from hostreg file path %s: %v", path, parseErr)
+					return false
+				}
+				// Only CRIU and the controller open it, as root: the application's memory is for no one else
+				hostregFile, createErr := os.OpenFile(newPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o600)
+				if createErr != nil {
+					err = status.Errorf(codes.Internal, "failed to create hostreg file %s: %v", newPath, createErr)
+					return false
+				}
+				defer hostregFile.Close()
+				// CRIU checks the mode: the interceptor creates these 0600 (an existing file keeps its own)
+				if chmodErr := hostregFile.Chmod(0o600); chmodErr != nil {
+					err = status.Errorf(codes.Internal, "failed to chmod hostreg file %s: %v", newPath, chmodErr)
+					return false
+				}
+				if truncErr := hostregFile.Truncate(int64(size)); truncErr != nil {
+					err = status.Errorf(codes.Internal, "failed to truncate hostreg file %s to size %d: %v", newPath, size, truncErr)
+					return false
+				}
+				log.Debug().Str("path", newPath).Uint64("size", size).Msg("created hostreg file in host path")
 			} else if matches := interceptorLogRegex.FindStringSubmatch(path); len(matches) == 4 {
 				oldId := matches[2]
 				pid, err = strconv.Atoi(matches[3])

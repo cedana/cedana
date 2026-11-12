@@ -2,16 +2,15 @@ package criu
 
 import (
 	"context"
+	"math"
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	"github.com/cedana/cedana/pkg/channel"
 	"github.com/cedana/cedana/pkg/config"
-	"github.com/cedana/cedana/pkg/logging"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -19,8 +18,7 @@ import (
 )
 
 const (
-	CRIU_DUMP_LOG_FILE  = "criu-dump.log"
-	GHOST_FILE_MAX_SIZE = 800 * utils.MEBIBYTE
+	CRIU_DUMP_LOG_FILE = "criu-dump.log"
 )
 
 // Returns a CRIU dump handler for the server
@@ -42,7 +40,7 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 	criuOpts.LogFile = proto.String(CRIU_DUMP_LOG_FILE)
 	criuOpts.LogLevel = proto.Int32(config.Global.CRIU.LogLevel)
 	criuOpts.LogToStderr = proto.Bool(false)
-	criuOpts.GhostLimit = proto.Uint32(GHOST_FILE_MAX_SIZE)
+	criuOpts.GhostLimit = proto.Uint64(math.MaxUint64)
 	criuOpts.Pid = proto.Int32(int32(resp.GetState().GetPID()))
 
 	// Change ownership of the dump directory
@@ -65,11 +63,7 @@ func Dump(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daem
 
 	end()
 
-	logging.FromFile(
-		log.WithContext(ctx),
-		filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE),
-		zerolog.TraceLevel,
-	)
+	logFromFile(log, filepath.Join(criuOpts.GetImagesDir(), CRIU_DUMP_LOG_FILE))
 
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed CRIU dump: %v", err)

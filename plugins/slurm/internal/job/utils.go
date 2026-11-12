@@ -1,13 +1,19 @@
 package job
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -20,7 +26,7 @@ const (
 func ResolveJobCgroupPath(jid uint32, pid uint32) (string, error) {
 	if pid > 0 {
 		if path, err := cgroupPathFromProc(pid); err == nil {
-			if strings.Contains(path, fmt.Sprintf("/job_%d/", jid)) {
+			if inJobCgroup(path, jid) {
 				log.Debug().Str("path", path).Uint32("job_id", jid).Uint32("pid", pid).Msg("found cgroup path (from /proc)")
 				return path, nil
 			}
@@ -59,12 +65,122 @@ func getJobCgroupPathV2(jid uint32) (string, error) {
 	return "", status.Errorf(codes.NotFound, "cgroup v2 path for slurm job %d not found", jid)
 }
 
+// pickJobPID picks a process of the job out of those in its cgroup. Ourselves if we're one
+// of them, otherwise the one with the lowest PID still around.
+func pickJobPID(pids []int, self uint32, exists func(pid uint32) bool) uint32 {
+	var picked uint32
+	for _, p := range pids {
+		if p <= 0 {
+			continue
+		}
+		pid := uint32(p)
+		if pid == self {
+			return self
+		}
+		if (picked == 0 || pid < picked) && exists(pid) {
+			picked = pid
+		}
+	}
+	return picked
+}
+
+func processExists(pid uint32) bool {
+	_, err := os.Stat(fmt.Sprintf("/proc/%d", pid))
+	return err == nil
+}
+
 func selfInJobCgroup(pid, jid uint32) bool {
 	path, err := cgroupPathFromProc(pid)
 	if err != nil {
 		return false
 	}
-	return strings.Contains(path, fmt.Sprintf("/job_%d/", jid))
+	return inJobCgroup(path, jid)
+}
+
+// inJobCgroup reports whether path, a cgroup v2 path of a process, is inside the cgroup of job jid.
+//
+// Below the slurmstepd scope, SLURM names the job's cgroup job_<jid>. From 26.05 it uses the job's
+// SLUID instead (e.g. sFNDM35NQ39R00), unless CgroupJobIdPaths=yes is set in cgroup.conf
+// (https://slurm.schedmd.com/cgroup_v2.html). A SLUID does not contain the job ID, so a SLUID named
+// cgroup is matched to its job through the job's slurmstepd.
+func inJobCgroup(path string, jid uint32) bool {
+	if strings.Contains(path, fmt.Sprintf("/job_%d/", jid)) {
+		return true
+	}
+	jobDir, ok := jobCgroupDir(path)
+	if !ok || !isSLUID(filepath.Base(jobDir)) {
+		return false
+	}
+	owner, ok := jobCgroupJobID(jobDir)
+	return ok && owner == jid
+}
+
+// jobCgroupDir returns the job's cgroup in path: path up to the component below the slurmstepd
+// scope, which is slurmstepd.scope or <nodename>_slurmstepd.scope.
+func jobCgroupDir(path string) (string, bool) {
+	parts := strings.Split(path, "/")
+	for i := len(parts) - 2; i >= 0; i-- {
+		if strings.Contains(parts[i], "slurmstepd") && strings.HasSuffix(parts[i], ".scope") {
+			return strings.Join(parts[:i+2], "/"), true
+		}
+	}
+	return "", false
+}
+
+// jobCgroupJobID returns the job ID of jobDir, a job's cgroup relative to the cgroup root. Each
+// step's slurmstepd runs in <jobDir>/step_<id>/slurm and is titled "slurmstepd: [<jid>.<step>]"
+// by SLURM. Reading the title requires /proc to be mounted without hidepid.
+func jobCgroupJobID(jobDir string) (uint32, bool) {
+	procsFiles, _ := filepath.Glob(filepath.Join("/sys/fs/cgroup", jobDir, "step_*", "slurm", "cgroup.procs"))
+	for _, procsFile := range procsFiles {
+		procs, err := os.ReadFile(procsFile)
+		if err != nil {
+			continue
+		}
+		for _, pid := range strings.Fields(string(procs)) {
+			cmdline, err := os.ReadFile(filepath.Join("/proc", pid, "cmdline"))
+			if err != nil {
+				continue
+			}
+			if jid, ok := parseSlurmstepdJobID(string(cmdline)); ok {
+				return jid, true
+			}
+		}
+	}
+	return 0, false
+}
+
+// parseSlurmstepdJobID parses the job ID from a slurmstepd process title, "slurmstepd: [<jid>.<step>]".
+func parseSlurmstepdJobID(cmdline string) (uint32, bool) {
+	rest, ok := strings.CutPrefix(strings.TrimRight(cmdline, "\x00 "), "slurmstepd: [")
+	if !ok {
+		return 0, false
+	}
+	id, _, ok := strings.Cut(rest, ".")
+	if !ok {
+		return 0, false
+	}
+	jid, err := strconv.ParseUint(id, 10, 32)
+	if err != nil {
+		return 0, false
+	}
+	return uint32(jid), true
+}
+
+// isSLUID reports whether name is a SLUID as SLURM prints it: "s" followed by 13 characters of
+// Crockford's base32 (print_sluid in
+// https://github.com/SchedMD/slurm/blob/slurm-26-05-4-1/src/common/sluid.c).
+func isSLUID(name string) bool {
+	const base32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	if len(name) != 14 || name[0] != 's' {
+		return false
+	}
+	for _, c := range name[1:] {
+		if !strings.ContainsRune(base32, c) {
+			return false
+		}
+	}
+	return true
 }
 
 func cgroupPathFromProc(pid uint32) (string, error) {
@@ -106,4 +222,55 @@ func getJobCgroupPathV1(jid uint32) (string, error) {
 	}
 
 	return "", status.Errorf(codes.NotFound, "cgroup path for slurm job %d does not exist after %d attempts", jid, cgroupRetryAttempts)
+}
+
+// jobScriptName is what cedana-slurm's wrapper names the script, cedana-script-<jobid>.sh
+var jobScriptName = regexp.MustCompile(`^` + regexp.QuoteMeta(SLURM_SCRIPT_PREFIX) + `-[0-9]+\.sh$`)
+
+// isJobScript tells the script the job was launched with by its name
+func isJobScript(path string) bool {
+	return jobScriptName.MatchString(filepath.Base(path))
+}
+
+// inRootOf is path as seen from the mount namespace of pid, the same file to us whatever
+// our own. As is when there is no process to go through.
+func inRootOf(pid uint32, path string) string {
+	if pid == 0 {
+		return path
+	}
+	return filepath.Join(fmt.Sprintf("/proc/%d/root", pid), path)
+}
+
+// scriptAttrs is what the job script has to be put back with
+type scriptAttrs struct {
+	Mode uint32 `json:"mode"` // Go's bits: permissions, setuid, setgid and sticky
+	Uid  uint32 `json:"uid"`
+	Gid  uint32 `json:"gid"`
+}
+
+func saveScriptAttrs(dumpFs afero.Fs, info fs.FileInfo) error {
+	attrs := scriptAttrs{Mode: uint32(info.Mode() & (fs.ModePerm | fs.ModeSetuid | fs.ModeSetgid | fs.ModeSticky))}
+	if st, ok := info.Sys().(*syscall.Stat_t); ok {
+		attrs.Uid, attrs.Gid = st.Uid, st.Gid
+	}
+	data, err := json.Marshal(attrs)
+	if err != nil {
+		return err
+	}
+	return afero.WriteFile(dumpFs, SLURM_SCRIPT_ATTRS_FILE, data, 0o644)
+}
+
+// loadScriptAttrs falls back to what the script used to be restored with, for a dump without them
+func loadScriptAttrs(dumpFs afero.Fs) scriptAttrs {
+	attrs := scriptAttrs{Mode: 0o700}
+	data, err := afero.ReadFile(dumpFs, SLURM_SCRIPT_ATTRS_FILE)
+	if err != nil {
+		log.Warn().Err(err).Msg("no attributes of the slurm script in the dump, using the defaults")
+		return attrs
+	}
+	if err := json.Unmarshal(data, &attrs); err != nil {
+		log.Warn().Err(err).Msg("unreadable attributes of the slurm script in the dump, using the defaults")
+		return scriptAttrs{Mode: 0o700}
+	}
+	return attrs
 }

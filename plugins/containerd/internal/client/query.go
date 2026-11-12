@@ -12,7 +12,9 @@ import (
 	"github.com/cedana/cedana/plugins/containerd/internal/defaults"
 	containerd_utils "github.com/cedana/cedana/plugins/containerd/pkg/utils"
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/api/types/runc/options"
 	"github.com/containerd/containerd/namespaces"
+	"github.com/containerd/typeurl/v2"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -68,31 +70,36 @@ func Query(ctx context.Context, req *daemon.QueryReq) (*daemon.QueryResp, error)
 
 		// Fetch lower-level runtime info
 
-		runtime := client.Runtime()
-		plugin := containerd_utils.PluginForRuntime(runtime)
-		root := containerd_utils.RootFromPlugin(plugin, query.Namespace)
+		runtime := info.Runtime.Name
+		var binary string
+		if info.Runtime.Options != nil && info.Runtime.Options.GetValue() != nil {
+			if v, err := typeurl.UnmarshalAny(info.Runtime.Options); err == nil {
+				if o, ok := v.(*options.Options); ok {
+					binary = o.BinaryName
+				}
+			}
+		}
+		plugin := containerd_utils.PluginForRuntimeBinary(runtime, binary)
+		root := containerd_utils.RootFromRuntime(runtime, query.Namespace)
 
 		err = features.QueryHandler.IfAvailable(func(_ string, query types.Query) error {
-			switch plugin {
-			case "runc":
-				r, err := query(ctx, &daemon.QueryReq{
-					Type: "runc",
-					Runc: &runc_proto.QueryReq{
-						IDs:  []string{container.ID},
-						Root: root,
-					},
-				})
-				if err != nil {
-					resp.Messages = append(resp.Messages, fmt.Sprintf("%s: failed to query runc: %v", container.ID, err))
-					return err
-				}
-				resp.Messages = append(resp.Messages, r.Messages...)
-				if len(r.Runc.Containers) > 0 {
-					container.Runc = r.Runc.Containers[0]
-					state = r.States[0]
-				} else {
-					return fmt.Errorf("no runc container found for %s", container.ID)
-				}
+			r, err := query(ctx, &daemon.QueryReq{
+				Type: plugin,
+				Runc: &runc_proto.QueryReq{
+					IDs:  []string{container.ID},
+					Root: root,
+				},
+			})
+			if err != nil {
+				resp.Messages = append(resp.Messages, fmt.Sprintf("%s: failed to query %s: %v", container.ID, plugin, err))
+				return err
+			}
+			resp.Messages = append(resp.Messages, r.Messages...)
+			if len(r.Runc.Containers) > 0 {
+				container.Runc = r.Runc.Containers[0]
+				state = r.States[0]
+			} else {
+				return fmt.Errorf("no %s container found for %s", plugin, container.ID)
 			}
 			return nil
 		}, plugin)

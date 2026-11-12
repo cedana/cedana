@@ -5,6 +5,7 @@ package criu
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -152,4 +153,68 @@ func parseCheckOutput(out string) (warnings, errors []string) {
 	}
 
 	return
+}
+
+// CheckPluginLibraries verifies that every library of a CRIU plugin (e.g. criu/nvidia-dev)
+// is present where CRIU auto-loads it from. CRIU does not report plugins via `criu check`.
+func CheckPluginLibraries(manager plugins.Manager, plugin string) types.Check {
+	return func(ctx context.Context) []*daemon.HealthCheckComponent {
+		component := &daemon.HealthCheckComponent{Name: "libraries"}
+
+		p := manager.Get(plugin)
+		if p == nil {
+			component.Errors = append(component.Errors, fmt.Sprintf("Unknown plugin %s", plugin))
+			return []*daemon.HealthCheckComponent{component}
+		}
+
+		paths := p.LibraryPaths()
+		component.Data = strings.Join(paths, ",")
+		for _, path := range paths {
+			if _, err := os.Stat(path); err != nil {
+				component.Errors = append(component.Errors, fmt.Sprintf("Library %s not found: %v", path, err))
+			}
+		}
+
+		return []*daemon.HealthCheckComponent{component}
+	}
+}
+
+const (
+	INOTIFY_MAX_USER_INSTANCES_PATH = "/proc/sys/fs/inotify/max_user_instances"
+	INOTIFY_MIN_USER_INSTANCES      = 8192
+)
+
+// CheckInotify warns if fs.inotify.max_user_instances is low. CRIU needs inotify instances
+// to dump and restore, and the kernel default (128) runs out on busy nodes. The k8s helper
+// raises it on setup (configure-sysctl.sh).
+func CheckInotify() types.Check {
+	return func(ctx context.Context) []*daemon.HealthCheckComponent {
+		return []*daemon.HealthCheckComponent{checkInotify(INOTIFY_MAX_USER_INSTANCES_PATH)}
+	}
+}
+
+func checkInotify(path string) *daemon.HealthCheckComponent {
+	component := &daemon.HealthCheckComponent{Name: "inotify instances"}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		component.Data = "unknown"
+		component.Warnings = append(component.Warnings, fmt.Sprintf("Failed to read %s: %v", path, err))
+		return component
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(string(data)))
+	if err != nil {
+		component.Data = "unknown"
+		component.Warnings = append(component.Warnings, fmt.Sprintf("Failed to parse %s: %v", path, err))
+		return component
+	}
+
+	component.Data = strconv.Itoa(value)
+	if value < INOTIFY_MIN_USER_INSTANCES {
+		component.Warnings = append(component.Warnings, fmt.Sprintf(
+			"fs.inotify.max_user_instances is %d, recommended at least %d: dumps and restores can fail when inotify instances run out. Raise it with: sysctl -w fs.inotify.max_user_instances=%d",
+			value, INOTIFY_MIN_USER_INSTANCES, INOTIFY_MIN_USER_INSTANCES,
+		))
+	}
+	return component
 }

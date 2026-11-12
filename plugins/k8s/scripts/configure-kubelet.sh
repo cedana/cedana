@@ -6,26 +6,6 @@ if [ "$ENV" != "production" ]; then
     exit 0
 fi
 
-# Ensure necessary tools are available
-check_tool() {
-    command -v "$1" >/dev/null 2>&1
-}
-
-echo "Checking required tools..."
-
-if ! check_tool "jq"; then
-    echo "Error: 'jq' is not installed. Please install 'jq' to update JSON kubelet configurations." >&2
-    exit 1
-fi
-echo "jq found at: $(command -v jq) ($(jq --version))"
-
-if ! check_tool "yq"; then
-    echo "Error: 'yq' is not installed. Please install 'yq' to update YAML kubelet configurations." >&2
-    echo "You can install it from https://github.com/mikefarah/yq#install" >&2
-    exit 1
-fi
-echo "yq found at: $(command -v yq) ($(yq --version))"
-
 # Configure runtimeRequestTimeout to tolerate longer restores
 KUBELET_RUNTIME_REQUEST_TIMEOUT="10m"
 echo "Target runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT"
@@ -41,13 +21,15 @@ KUBELET_CONFIG_CONTENT_JSON=$(
 EOF
 )
 
-KUBELET_CONFIG_CONTENT_YAML=$(
-    cat <<EOF
-apiVersion: kubelet.config.k8s.io/v1beta1
-kind: KubeletConfiguration
-runtimeRequestTimeout: $KUBELET_RUNTIME_REQUEST_TIMEOUT
-EOF
-)
+# Sets runtimeRequestTimeout in a YAML kubelet config, leaving the rest of the file as it is: a
+# top-level key in the block-style YAML kubelet writes, so no YAML tool is needed on the node
+set_yaml_runtime_request_timeout() {
+    awk -v value="$KUBELET_RUNTIME_REQUEST_TIMEOUT" '
+        /^runtimeRequestTimeout:/ { print "runtimeRequestTimeout: " value; done = 1; next }
+        { print }
+        END { if (!done) print "runtimeRequestTimeout: " value }
+    ' "$1"
+}
 
 get_kubelet_arg_value() {
     local arg="$1"
@@ -70,25 +52,61 @@ get_kubelet_arg_value() {
 
 echo "Looking for running kubelet process..."
 KUBELET_PID=$(pidof kubelet || true)
+K3S_UNIT=""
 if [ -z "$KUBELET_PID" ]; then
-    echo "Error: kubelet is not running" >&2
-    exit 1
+    # k3s runs kubelet inside its own process, so look for the k3s service instead
+    if command -v systemctl >/dev/null 2>&1; then
+        for unit in k3s k3s-agent; do
+            if systemctl is-active --quiet "$unit"; then
+                K3S_UNIT="$unit"
+                break
+            fi
+        done
+    fi
+    if [ -z "$K3S_UNIT" ]; then
+        echo "Error: kubelet is not running" >&2
+        exit 1
+    fi
+    KUBELET_PID=$(systemctl show -p MainPID --value "$K3S_UNIT")
+    echo "Found k3s service $K3S_UNIT running kubelet (PID=$KUBELET_PID)"
+else
+    echo "Found kubelet process (PID=$KUBELET_PID)"
 fi
-echo "Found kubelet process (PID=$KUBELET_PID)"
 
-echo "Reading kubelet arguments..."
-KUBELET_ARGS=$(ps -o args= -p "$KUBELET_PID")
-if [ -z "$KUBELET_ARGS" ]; then
-    echo "WARNING: Could not get kubelet arguments, please manually modify request timeout" >&2
-    exit 0
+# True if kubelet (re)started after the given config file was last written,
+# i.e. the config is already in effect (guards against a previous run that
+# wrote the config but failed to restart kubelet)
+kubelet_has_config() {
+    local elapsed started
+    elapsed=$(ps -o etimes= -p "$KUBELET_PID" 2>/dev/null | head -n 1 | tr -d ' ')
+    [ -n "$elapsed" ] || return 1
+    started=$(($(date +%s) - elapsed))
+    [ "$started" -ge "$(stat -c %Y "$1")" ]
+}
+
+if [ -n "$K3S_UNIT" ]; then
+    # k3s passes its kubelet a drop-in config dir (v1.32+)
+    KUBELET_CONFIG_DIR="/var/lib/rancher/k3s/agent/etc/kubelet.conf.d"
+    KUBELET_CONFIG_FILE=""
+    if [ ! -d "$KUBELET_CONFIG_DIR" ]; then
+        echo "WARNING: k3s kubelet config dir $KUBELET_CONFIG_DIR not found (requires k3s v1.32+); skipping kubelet config update, please manually set runtimeRequestTimeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT" >&2
+        exit 0
+    fi
+else
+    echo "Reading kubelet arguments..."
+    KUBELET_ARGS=$(ps -o args= -p "$KUBELET_PID")
+    if [ -z "$KUBELET_ARGS" ]; then
+        echo "WARNING: Could not get kubelet arguments, please manually modify request timeout" >&2
+        exit 0
+    fi
+    echo "Raw kubelet args: $KUBELET_ARGS"
+
+    # Split into proper positional parameters (preserves quoted arguments)
+    eval "set -- $KUBELET_ARGS"
+
+    KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$@")
+    KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$@")
 fi
-echo "Raw kubelet args: $KUBELET_ARGS"
-
-# Split into proper positional parameters (preserves quoted arguments)
-eval "set -- $KUBELET_ARGS"
-
-KUBELET_CONFIG_DIR=$(get_kubelet_arg_value "--config-dir" "$@")
-KUBELET_CONFIG_FILE=$(get_kubelet_arg_value "--config" "$@")
 
 echo "Resolved --config-dir: ${KUBELET_CONFIG_DIR:-<not set>}"
 echo "Resolved --config:     ${KUBELET_CONFIG_FILE:-<not set>}"
@@ -96,6 +114,11 @@ echo "Resolved --config:     ${KUBELET_CONFIG_FILE:-<not set>}"
 if [ -n "$KUBELET_CONFIG_DIR" ]; then
     TARGET="$KUBELET_CONFIG_DIR/99-cedana.conf"
     echo "Strategy: drop-in config dir, writing to $TARGET"
+
+    if [ "$(cat "$TARGET" 2>/dev/null)" = "$KUBELET_CONFIG_CONTENT_JSON" ] && kubelet_has_config "$TARGET"; then
+        echo "Kubelet config already up to date at $TARGET, no restart needed"
+        exit 0
+    fi
 
     echo "Ensuring config dir exists: $KUBELET_CONFIG_DIR"
     mkdir -p "$KUBELET_CONFIG_DIR" || {
@@ -115,24 +138,33 @@ elif [ -n "$KUBELET_CONFIG_FILE" ]; then
         exit 1
     fi
 
-    FILE_EXTENSION="${KUBELET_CONFIG_FILE##*.}"
-    echo "Detected config file extension: .$FILE_EXTENSION"
+    # The format is the content's, not the extension's: JSON is valid YAML, so a .yaml config may be
+    # JSON, which a YAML line appended to it would break. Anything else is left alone.
+    SKIP_MESSAGE="skipping kubelet config update; please manually set runtimeRequestTimeout=$KUBELET_RUNTIME_REQUEST_TIMEOUT in $KUBELET_CONFIG_FILE"
     TEMP_CONFIG=$(mktemp)
-    echo "Created temp file for merge: $TEMP_CONFIG"
-
-    if [ "$FILE_EXTENSION" == "json" ]; then
+    if [ "$(tr -d '[:space:]' <"$KUBELET_CONFIG_FILE" | head -c 1)" = "{" ]; then
+        if ! command -v jq >/dev/null 2>&1; then
+            echo "WARNING: $KUBELET_CONFIG_FILE is JSON and jq is not installed, $SKIP_MESSAGE" >&2
+            rm -f "$TEMP_CONFIG"
+            exit 0
+        fi
         echo "Merging JSON config..."
-        jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"
-        echo "JSON merge complete"
-
-    elif [[ "$FILE_EXTENSION" =~ ^(yaml|yml)$ ]]; then
-        echo "Merging YAML config..."
-        yq eval-all 'select(fileIndex==0) * select(fileIndex==1)' \
-            "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_YAML") >"$TEMP_CONFIG"
-        echo "YAML merge complete"
-
+        if ! jq -s '.[0] * .[1]' "$KUBELET_CONFIG_FILE" <(echo "$KUBELET_CONFIG_CONTENT_JSON") >"$TEMP_CONFIG"; then
+            echo "WARNING: jq could not parse $KUBELET_CONFIG_FILE, $SKIP_MESSAGE" >&2
+            rm -f "$TEMP_CONFIG"
+            exit 0
+        fi
+    elif grep -q '^kind:[[:space:]]*KubeletConfiguration' "$KUBELET_CONFIG_FILE"; then
+        echo "Setting runtimeRequestTimeout in YAML config..."
+        set_yaml_runtime_request_timeout "$KUBELET_CONFIG_FILE" >"$TEMP_CONFIG"
     else
-        echo "WARNING: Unsupported kubelet configuration file type: .$FILE_EXTENSION, skipping kubelet config update" >&2
+        echo "WARNING: $KUBELET_CONFIG_FILE is neither JSON nor block-style YAML, $SKIP_MESSAGE" >&2
+        rm -f "$TEMP_CONFIG"
+        exit 0
+    fi
+
+    if cmp -s "$TEMP_CONFIG" "$KUBELET_CONFIG_FILE" && kubelet_has_config "$KUBELET_CONFIG_FILE"; then
+        echo "Kubelet config already up to date at $KUBELET_CONFIG_FILE, no restart needed"
         rm -f "$TEMP_CONFIG"
         exit 0
     fi
@@ -153,6 +185,17 @@ fi
 # Restart kubelet to apply changes
 echo "Attempting to restart kubelet to apply changes..."
 success_method=""
+
+if [ -n "$K3S_UNIT" ]; then
+    # Restarting k3s does not stop running containers
+    echo "Restarting k3s service $K3S_UNIT"
+    if systemctl restart "$K3S_UNIT"; then
+        echo "Done. kubelet configuration update complete (restarted $K3S_UNIT)"
+        exit 0
+    fi
+    echo "ERROR: systemctl restart $K3S_UNIT failed; please restart manually" >&2
+    exit 1
+fi
 
 if command -v systemctl >/dev/null 2>&1; then
     echo "systemctl is available, trying: systemctl restart kubelet"

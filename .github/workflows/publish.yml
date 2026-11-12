@@ -50,7 +50,7 @@ jobs:
   github:
     name: GitHub
     if: inputs.github
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -60,20 +60,20 @@ jobs:
       max-parallel: 1 # DO NOT CHANGE: required to run in order
     steps:
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-binaries-cedana
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
           merge-multiple: true
 
       - name: Download scripts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-scripts
         with:
           name: cedana-scripts-${{ matrix.arch }}
@@ -114,7 +114,7 @@ jobs:
   propagator:
     name: Cedana
     if: inputs.propagator
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -124,13 +124,13 @@ jobs:
 
     steps:
       - name: Download binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: cedana-${{ matrix.arch }}
 
       - name: Download scripts
         if: matrix.arch == 'amd64'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         id: download-scripts
         with:
           name: cedana-scripts-${{ matrix.arch }}
@@ -217,7 +217,7 @@ jobs:
   propagator-plugin:
     name: Plugins
     if: inputs.propagator
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -226,7 +226,7 @@ jobs:
           - arm64
     steps:
       - name: Download plugins
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           path: .
           pattern: plugin-${{ matrix.arch }}*
@@ -250,7 +250,9 @@ jobs:
 
           PLUGINS=(
             "runc"
+            "crun"
             "containerd"
+            "podman"
             "crio"
             "kata"
             "cloud-hypervisor"
@@ -259,6 +261,7 @@ jobs:
             "storage/cedana"
             "storage/s3"
             "storage/gcs"
+            "storage/csx"
           )
 
           PIDS=()
@@ -336,10 +339,10 @@ jobs:
   dockerhub:
     name: DockerHub (multi-arch)
     if: inputs.dockerhub
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Download digests
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/digests
@@ -347,7 +350,7 @@ jobs:
           merge-multiple: true
 
       - name: Download image name
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/image-name
@@ -355,7 +358,7 @@ jobs:
           merge-multiple: true
 
       - name: Download digests (test, latest)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/test-digests-latest
@@ -363,7 +366,7 @@ jobs:
           merge-multiple: true
 
       - name: Download digests (test, CUDA)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/test-digests-cuda
@@ -371,7 +374,7 @@ jobs:
           merge-multiple: true
 
       - name: Download image name (test)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         continue-on-error: true
         with:
           path: /tmp/test-image-name
@@ -394,10 +397,10 @@ jobs:
           fi
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Login to Docker hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           username: ${{ vars.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_TOKEN }}
@@ -405,7 +408,7 @@ jobs:
       - name: Docker meta
         if: steps.check_dirs.outputs.DIGESTS_EXISTS == 'true'
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ steps.check_dirs.outputs.IMAGE_NAME }}
@@ -433,7 +436,7 @@ jobs:
       - name: Docker meta (test, latest)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
         id: meta-test-latest
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
@@ -452,7 +455,7 @@ jobs:
       - name: Docker meta (test, CUDA)
         if: steps.check_dirs.outputs.TEST_DIGESTS_EXISTS == 'true'
         id: meta-test-cuda
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: |
             ${{ steps.check_dirs.outputs.TEST_IMAGE_NAME }}
@@ -470,7 +473,7 @@ jobs:
 
   post-summary:
     name: Post Summary
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: ["github", "propagator", "propagator-plugin", "dockerhub"]
     strategy:
       fail-fast: false
@@ -480,7 +483,7 @@ jobs:
     if: inputs.post_summary
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -516,13 +519,16 @@ jobs:
             "libcedana-cloud-hypervisor.so"
             "libcedana-containerd.so"
             "libcedana-crio.so"
+            "libcedana-crun.so"
             "libcedana-k8s.so"
             "libcedana-kata.so"
+            "libcedana-podman.so"
             "libcedana-runc.so"
             "libcedana-slurm.so"
             "libcedana-storage-cedana.so"
             "libcedana-storage-gcs.so"
             "libcedana-storage-s3.so"
+            "libcedana-storage-csx.so"
           )
 
           if [[ -n "${PREVIOUS_TAG}" ]]; then
@@ -562,13 +568,16 @@ jobs:
             "libcedana-cloud-hypervisor.so"
             "libcedana-containerd.so"
             "libcedana-crio.so"
+            "libcedana-crun.so"
             "libcedana-k8s.so"
             "libcedana-kata.so"
+            "libcedana-podman.so"
             "libcedana-runc.so"
             "libcedana-slurm.so"
             "libcedana-storage-cedana.so"
             "libcedana-storage-gcs.so"
             "libcedana-storage-s3.so"
+            "libcedana-storage-csx.so"
           )
 
           for FILE in "${PLUGINS[@]}"; do
@@ -585,35 +594,12 @@ jobs:
             fi
           done
 
-      - name: Get release info
-        id: release-info
-        uses: pozetroninc/github-action-get-latest-release@master
-        with:
-          token: ${{ github.token }}
-          excludes: draft
-          repository: ${{ github.repository }}
-
-      - name: Generate summary
-        id: summary
-        env:
-          RELEASE_TITLE: "cedana"
-          RELEASE_DESCRIPTION: "**${{ steps.tag.outputs.tag }}**"
-          RELEASE_NOTES_URL: https://github.com/${{ github.repository }}/releases/${{ steps.tag.outputs.tag }}
-          RELEASE_BODY: "${{ steps.release-info.outputs.description }}"
-          TAG: ${{ steps.tag.outputs.tag }}
-          BINARIES_DIR: current
-          PREVIOUS_TAG: ${{ steps.previous-tag.outputs.tag }}
-          PREVIOUS_BINARIES_DIR: previous
-        run: |
-          echo $RELEASE_BODY > $GITHUB_STEP_SUMMARY
-          echo "slack-summary=$(scripts/ci/release-summary-slack)" >> $GITHUB_OUTPUT
-
       - name: Post summary
-        id: slack-patch
-        uses: slackapi/slack-github-action@v1.26.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        uses: cedana/cedana-publish-summary@v1
         with:
-          payload: |
-            ${{ steps.summary.outputs.slack-summary }}
+          title: cedana
+          tag: ${{ steps.tag.outputs.tag }}
+          previous-tag: ${{ steps.previous-tag.outputs.tag }}
+          binaries-dir: current
+          previous-binaries-dir: previous
+          slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_RELEASE }}

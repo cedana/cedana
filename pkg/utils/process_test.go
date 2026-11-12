@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -245,5 +247,33 @@ func TestFillProcessState_WithoutTree(t *testing.T) {
 
 	if state.Children != nil {
 		t.Error("expected state.Children to be nil when tree is false, got non-nil")
+	}
+}
+
+func TestIsTTYDoesNotBlockOnFIFO(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mpi-debugger")
+	if err := syscall.Mkfifo(path, 0600); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		isTTY, err := IsTTY(path)
+		if isTTY && err == nil {
+			err = syscall.EINVAL
+		}
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("FIFO terminal detection failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		// unblock the reader
+		file, err := os.OpenFile(path, os.O_RDWR|syscall.O_NONBLOCK, 0)
+		if err == nil {
+			file.Close()
+		}
+		t.Fatal("terminal detection blocked opening a FIFO")
 	}
 }

@@ -111,3 +111,100 @@ func InheritExternalNamespacesForRestore(nsTypes ...configs.NamespaceType) types
 		}
 	}
 }
+
+// Counterpart of AddRecognizedExternalNamespacesForDump. Mirrors exactly what was recorded
+// in the dump, using the namespaces of the job being restored into.
+// Does nothing if the dump has no external namespaces recorded.
+func InheritRecognizedNamespacesForRestore(next types.Restore) types.Restore {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.RestoreResp, req *daemon.RestoreReq) (code func() <-chan int, err error) {
+		if opts.DumpFs == nil {
+			log.Debug().Msg("dump filesystem is nil, skipping external namespace handling")
+			return next(ctx, opts, resp, req)
+		}
+
+		namespaces, err := loadExternalNamespaces(opts.DumpFs)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to load external namespaces from dump: %v", err)
+		}
+		if len(namespaces) == 0 {
+			return next(ctx, opts, resp, req)
+		}
+
+		version, err := opts.CRIU.GetCriuVersion(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
+		}
+
+		// Never our own for lack of one, as we (e.g. the daemon) may well be outside of the job
+		pid := req.GetDetails().GetSlurm().GetPID()
+		if pid == 0 {
+			return nil, status.Errorf(codes.FailedPrecondition,
+				"dump has external namespaces, but no process of slurm job %d was found to take them from", req.GetDetails().GetSlurm().GetJobID())
+		}
+
+		if req.Criu == nil {
+			req.Criu = &criu_proto.CriuOpts{}
+		}
+		if opts.InheritFdMap == nil {
+			opts.InheritFdMap = map[string]int32{}
+		}
+
+		for _, ns := range namespaces {
+			t := ns.Type
+			name := configs.NsName(t)
+			nsPath := nsPathOf(t, pid)
+
+			if ns.Handling == HandlingInside || ns.Handling == HandlingEnter {
+				// Dumped from inside the job's mount namespace (or with CRIU put inside it, by
+				// an earlier dump), so the images have no mount namespace, and the restore has
+				// to be from inside the new job's: from anywhere else CRIU would restore into
+				// ours. There is nothing to tell it, only this to hold ourselves to.
+				if t != configs.NEWNS {
+					return nil, status.Errorf(codes.FailedPrecondition, "dump has a %s namespace recorded as %s: only possible for mnt", name, ns.Handling)
+				}
+				if inside, err := inNamespaceOf(t, pid); err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to compare the job's %s namespace with ours: %v", name, err)
+				} else if !inside {
+					return nil, status.Errorf(codes.FailedPrecondition,
+						"dump was taken inside the job's %s namespace, and the job being restored into has one of its own that we are not in: it has to be restored from inside it", name)
+				}
+				if inHostNamespace(t, pid) {
+					log.Warn().Msgf("job was dumped from its own %s namespace but is being restored into the host's, is this node set up differently?", name)
+				}
+				continue
+			}
+
+			// The dump has this namespace as external, so there's no restoring without it
+			if ok, reason := criuSupportsExternal(t, version); !ok {
+				return nil, status.Errorf(codes.FailedPrecondition, "dump has an external %s namespace: %s", name, reason)
+			}
+
+			// CRIU wants the information about an existing namespace
+			// like this: --inherit-fd fd[<fd>]:<key>
+			// The <key> needs to be the same as during checkpointing.
+			// We are always using 'extRoot<TYPE>NS' as the key in this.
+
+			key := CriuNsToKey(t)
+			fd := int32(3 + len(opts.ExtraFiles))
+
+			if _, ok := opts.InheritFdMap[key]; ok {
+				return nil, status.Errorf(codes.FailedPrecondition, "external namespace file %s already inherited", key)
+			}
+			opts.InheritFdMap[key] = fd
+
+			nsFd, err := os.Open(nsPath)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "external namespace file %s does not exist: %v", nsPath, err)
+			}
+			defer nsFd.Close()
+
+			opts.ExtraFiles = append(opts.ExtraFiles, nsFd)
+			req.Criu.InheritFd = append(req.Criu.InheritFd, &criu_proto.InheritFd{
+				Key: proto.String(key),
+				Fd:  proto.Int32(fd),
+			})
+		}
+
+		return next(ctx, opts, resp, req)
+	}
+}

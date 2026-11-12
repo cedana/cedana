@@ -71,24 +71,94 @@ func AddExternalNamespacesForDump(nsTypes ...configs.NamespaceType) types.Adapte
 					return next(ctx, opts, resp, req)
 				}
 
-				// CRIU expects the information about an external namespace
-				// like this: --external <TYPE>[<inode>]:<key>
-				// This <key> is always 'extRoot<TYPE>NS'.
-
 				var ns unix.Stat_t
 				if err := unix.Stat(nsPath, &ns); err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to stat %s: %v", nsPath, err)
 				}
-				external := fmt.Sprintf("%s[%d]:%s", configs.NsName(t), ns.Ino, CriuNsToKey(t))
 
-				if req.Criu == nil {
-					req.Criu = &criu_proto.CriuOpts{}
-				}
-
-				req.Criu.External = append(req.Criu.External, external)
+				addExternalNamespace(req, t, uint64(ns.Ino))
 			}
 
 			return next(ctx, opts, resp, req)
 		}
+	}
+}
+
+// Detects the namespaces of the job that are external (created by whatever launched it,
+// see RecognizeExternalNamespaces) and handles only those. Unlike AddExternalNamespacesForDump,
+// this does not touch CRIU opts when the job is simply running in the host's namespaces.
+//
+//	net, pid -> left out of the dump using --external
+//	mnt      -> nothing to tell CRIU, which has no notion of an external mount namespace: the
+//	            job is dumped from inside it, where cedana-slurm starts the monitor, and the
+//	            dump is refused from anywhere else. Recorded as "inside", for the restore to
+//	            hold itself to the same.
+//
+// What was done is recorded in the dump, for InheritRecognizedNamespacesForRestore.
+func AddRecognizedExternalNamespacesForDump(next types.Dump) types.Dump {
+	return func(ctx context.Context, opts types.Opts, resp *daemon.DumpResp, req *daemon.DumpReq) (code func() <-chan int, err error) {
+		pid := req.GetDetails().GetSlurm().GetPID()
+
+		recognized, err := RecognizeExternalNamespaces(pid, req.GetDetails().GetSlurm().GetJobID())
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to recognize external namespaces: %v", err)
+		}
+		if len(recognized) == 0 {
+			log.Debug().Uint32("PID", pid).Msg("no external namespaces recognized")
+			return next(ctx, opts, resp, req)
+		}
+
+		version, err := opts.CRIU.GetCriuVersion(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Internal, fmt.Sprintf("failed to get CRIU version: %v", err))
+		}
+
+		var handled []ExternalNamespace
+
+		for _, ns := range recognized {
+			name := configs.NsName(ns.Type)
+
+			log := log.With().Str("holder", string(ns.Holder)).Str("path", ns.Path).Uint64("inode", ns.Inode).Logger()
+
+			handling, reason := handlingFor(ns.Type, version)
+
+			switch handling {
+			case HandlingExternal:
+				log.Debug().Msgf("adding external %s namespace", name)
+				addExternalNamespace(req, ns.Type, ns.Inode)
+
+			case HandlingInside:
+				// Nothing to tell CRIU, and nothing to enter: a mount namespace of the job's own
+				// is dumped from inside it, with CRIU in it too. From anywhere else CRIU would
+				// dump the mount namespace, which the restore, inside the new job's, can't put back.
+				inside, err := inNamespaceOf(ns.Type, pid)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to compare the job's %s namespace with ours: %v", name, err)
+				}
+				if !inside {
+					return nil, status.Errorf(codes.FailedPrecondition,
+						"slurm job %d is in a %s namespace of its own (%s, held by %s) that we are not in: it has to be dumped from inside it",
+						req.GetDetails().GetSlurm().GetJobID(), name, ns.Path, ns.Holder)
+				}
+				log.Debug().Msgf("inside the job's external %s namespace, nothing to tell CRIU", name)
+
+			default:
+				log.Warn().Msgf("%s, skipping external %s namespace handling", reason, name)
+				continue
+			}
+
+			handled = append(handled, ExternalNamespace{Type: ns.Type, Handling: handling, Holder: ns.Holder})
+		}
+
+		if len(handled) > 0 {
+			if opts.DumpFs == nil {
+				return nil, status.Error(codes.FailedPrecondition, "dump filesystem is nil, cannot save external namespaces")
+			}
+			if err := saveExternalNamespaces(opts.DumpFs, handled); err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to save external namespaces to dump: %v", err)
+			}
+		}
+
+		return next(ctx, opts, resp, req)
 	}
 }

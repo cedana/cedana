@@ -38,7 +38,9 @@ func init() {
 
 			(*pluginCmd).Flags().VisitAll(func(f *pflag.Flag) {
 				newFlag := *f
-				jobUnfreezeCmd.Flags().AddFlag(&newFlag)
+				if jobUnfreezeCmd.Flags().Lookup(newFlag.Name) == nil {
+					jobUnfreezeCmd.Flags().AddFlag(&newFlag)
+				}
 				newFlag.Usage = fmt.Sprintf("(%s) %s", name, f.Usage) // Add plugin name to usage
 			})
 			return nil

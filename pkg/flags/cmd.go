@@ -14,33 +14,36 @@ type Flag struct {
 }
 
 var (
-	DirFlag         = Flag{Full: "dir", Short: "d"}
-	NameFlag        = Flag{Full: "name"}
-	PathFlag        = Flag{Full: "path", Short: "p"}
-	PidFileFlag     = Flag{Full: "pid-file"}
-	ResultFileFlag  = Flag{Full: "result-file"}
-	NoServerFlag    = Flag{Full: "no-server"}
-	StreamsFlag     = Flag{Full: "streams"}
-	WorkingDirFlag  = Flag{Full: "working-dir", Short: "w"}
-	JidFlag         = Flag{Full: "jid", Short: "j"}
-	GpuEnabledFlag  = Flag{Full: "gpu-enabled", Short: "g"}
-	GpuTracingFlag  = Flag{Full: "gpu-tracing"}
-	GpuIdFlag       = Flag{Full: "gpu-id"}
-	AttachFlag      = Flag{Full: "attach", Short: "a"}
-	AttachableFlag  = Flag{Full: "attachable"}
-	AllFlag         = Flag{Full: "all", Short: "a"}
-	OutFlag         = Flag{Full: "out", Short: "o"}
-	ExternalFlag    = Flag{Full: "external"}
-	FileLocksFlag   = Flag{Full: "file-locks"}
-	TypeFlag        = Flag{Full: "type", Short: "t"}
-	FullFlag        = Flag{Full: "full"}
-	ErrorsFlag      = Flag{Full: "errors"}
-	CompressionFlag = Flag{Full: "compression"}
-	IncrementalFlag = Flag{Full: "incremental"}
-	AsRootFlag      = Flag{Full: "as-root"}
-	UpcomingFlag    = Flag{Full: "upcoming"}
-	TreeFlag        = Flag{Full: "tree", Short: "t"}
-	InspectFlag     = Flag{Full: "inspect", Short: "i"}
+	DirFlag          = Flag{Full: "dir", Short: "d"}
+	NameFlag         = Flag{Full: "name"}
+	PathFlag         = Flag{Full: "path", Short: "p"}
+	PidFileFlag      = Flag{Full: "pid-file"}
+	ResultFileFlag   = Flag{Full: "result-file"}
+	NoServerFlag     = Flag{Full: "no-server"}
+	StreamsFlag      = Flag{Full: "streams"}
+	WorkingDirFlag   = Flag{Full: "working-dir", Short: "w"}
+	JidFlag          = Flag{Full: "jid", Short: "j"}
+	GpuEnabledFlag   = Flag{Full: "gpu-enabled", Short: "g"}
+	GpuTracingFlag   = Flag{Full: "gpu-tracing"}
+	GpuIdFlag        = Flag{Full: "gpu-id"}
+	ChecksumFlag     = Flag{Full: "checksum"}
+	ChecksumFileFlag = Flag{Full: "checksum-file"}
+	AttachFlag       = Flag{Full: "attach", Short: "a"}
+	AttachableFlag   = Flag{Full: "attachable"}
+	AllFlag          = Flag{Full: "all", Short: "a"}
+	OutFlag          = Flag{Full: "out", Short: "o"}
+	ExternalFlag     = Flag{Full: "external"}
+	FileLocksFlag    = Flag{Full: "file-locks"}
+	TypeFlag         = Flag{Full: "type", Short: "t"}
+	FullFlag         = Flag{Full: "full"}
+	PingFlag         = Flag{Full: "ping"}
+	ErrorsFlag       = Flag{Full: "errors"}
+	CompressionFlag  = Flag{Full: "compression"}
+	IncrementalFlag  = Flag{Full: "incremental"}
+	AsRootFlag       = Flag{Full: "as-root"}
+	UpcomingFlag     = Flag{Full: "upcoming"}
+	TreeFlag         = Flag{Full: "tree", Short: "t"}
+	InspectFlag      = Flag{Full: "inspect", Short: "i"}
 
 	// CRIU
 	CriuOptsFlag        = Flag{Full: "criu-opts"}

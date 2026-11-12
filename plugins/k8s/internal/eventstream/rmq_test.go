@@ -56,3 +56,45 @@ func TestCheckpointErrorDoesNotReplaceActionID(t *testing.T) {
 		t.Fatalf("terminal error missing from payload: %q", decoded.Info.Error)
 	}
 }
+
+func TestCheckpointReqForCluster(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	cases := []struct {
+		name    string
+		req     *string
+		daemon  string
+		matches bool
+	}{
+		{"same cluster", ptr("a"), "a", true},
+		{"other cluster", ptr("b"), "a", false},
+		{"request without cluster", nil, "a", true},
+		{"request with empty cluster", ptr(""), "a", true},
+		{"daemon without cluster", ptr("b"), "", true},
+	}
+	for _, c := range cases {
+		req := checkpointReq{ClusterId: c.req}
+		if got := req.forCluster(c.daemon); got != c.matches {
+			t.Errorf("%s: forCluster = %v, want %v", c.name, got, c.matches)
+		}
+	}
+}
+
+func TestCheckpointInfoChecksum(t *testing.T) {
+	for _, checksum := range []string{"sha256:abc", ""} {
+		payload, err := json.Marshal(checkpointInfo{Status: "success", Checksum: checksum})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fields map[string]any
+		if err := json.Unmarshal(payload, &fields); err != nil {
+			t.Fatal(err)
+		}
+		got, ok := fields["checksum"]
+		if checksum == "" && ok {
+			t.Fatalf("empty checksum must be left out, got %v", got)
+		}
+		if checksum != "" && got != checksum {
+			t.Fatalf("checksum = %v, want %q", got, checksum)
+		}
+	}
+}

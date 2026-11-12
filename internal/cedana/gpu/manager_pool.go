@@ -14,6 +14,7 @@ import (
 const (
 	SYNC_INTERVAL         = 10 * time.Second
 	SYNC_SHUTDOWN_TIMEOUT = 45 * time.Second
+	HELD_WARN_AFTER       = 1 * time.Minute // Warn when a stale controller stays held longer
 )
 
 // Implements a GPU manager pool that is capable of maintaining a pool of GPU controllers
@@ -24,10 +25,17 @@ type ManagerPool struct {
 	free     int
 	busy     int
 	stale    int
+	held     map[string]*heldController // Skipped stale controllers, by ID
+}
+
+// A stale controller that a dump or a restore holds
+type heldController struct {
+	since  time.Time // First skip
+	warned bool
 }
 
 func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize int, plugins plugins.Manager) (*ManagerPool, error) {
-	simpleManager, err := NewSimpleManager(lifetime, serverWg, plugins)
+	simpleManager, err := newSimpleManager(lifetime, serverWg, plugins, true) // GPU logs are the daemon's to ship
 	if err != nil {
 		return nil, err
 	}
@@ -81,16 +89,13 @@ func NewPoolManager(lifetime context.Context, serverWg *sync.WaitGroup, poolSize
 }
 
 func (m *ManagerPool) Sync(ctx context.Context) error {
-	m.syncs.Add(1)
-	if !m.sync.TryLock() {
-		m.syncs.Done()
-		m.syncs.Wait() // Instead of stacking up syncs, just wait for the current one to finish
-		return nil
+	done, err := m.waitOrStartSync(ctx)
+	if err != nil || done == nil {
+		return err
 	}
-	defer m.syncs.Done()
-	defer m.sync.Unlock()
+	defer done()
 
-	err := m.controllers.Sync(ctx)
+	err = m.controllers.Sync(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to sync GPU controllers: %w", err)
 	}
@@ -115,13 +120,35 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 
 	// Remove controllers not in either free or busy list
 
+	held := make(map[string]*heldController)
+	defer func() { m.held = held }()
+
 	for i, controller := range remaining {
-		if acquired, _ := controller.Booking.TryLock(); acquired {
-			log.Debug().Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("clearing stale GPU controller in pool")
-			if stderr := controller.ErrBuf.String(); stderr != "" {
-				log.Error().Str("ID", controller.ID).Str("reason", remainingReason[i]).Str("stderr", stderr).Msg("stale GPU controller captured stderr")
+		acquired, err := controller.Booking.TryLock()
+		if err != nil {
+			log.Debug().Err(err).Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("failed to lock stale GPU controller for clearing")
+		}
+		if acquired {
+			// Re-check under the lock: whoever booked the controller attaches it before releasing the
+			// lock, so it may have been attached since it was synced above.
+			if controller.Sync(ctx, false) == nil {
+				controller.syncFails = 0
+				if status, _ := controller.Status(); status != CONTROLLER_STALE {
+					controller.Booking.Unlock()
+					continue
+				}
 			}
-			m.controllers.Terminate(ctx, controller.ID)
+			log.Debug().Str("ID", controller.ID).Str("reason", remainingReason[i]).Msg("clearing stale GPU controller in pool")
+			if !m.controllers.TryTerminate(ctx, controller.ID) {
+				// A dump or a restore holds it. Try again at the next sync
+				controller.Booking.Unlock()
+				held[controller.ID] = m.skipHeld(controller.ID, remainingReason[i])
+				continue
+			}
+			// A controller found on disk has no ErrBuf
+			if controller.ErrBuf != nil && controller.ErrBuf.Len() > 0 {
+				log.Error().Str("ID", controller.ID).Str("reason", remainingReason[i]).Str("stderr", controller.ErrBuf.String()).Msg("stale GPU controller captured stderr")
+			}
 		}
 	}
 
@@ -157,4 +184,20 @@ func (m *ManagerPool) Sync(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// Logs the skip. Warns once after HELD_WARN_AFTER
+func (m *ManagerPool) skipHeld(id string, reason string) *heldController {
+	h := m.held[id]
+	if h == nil {
+		h = &heldController{since: time.Now()}
+	}
+	held := time.Since(h.since)
+
+	log.Debug().Str("ID", id).Str("reason", reason).Dur("held", held).Msg("skipping stale GPU controller held by a dump or restore")
+	if held > HELD_WARN_AFTER && !h.warned {
+		log.Warn().Str("ID", id).Str("reason", reason).Dur("held", held).Msg("stale GPU controller held by a dump or restore for more than 1 min")
+		h.warned = true
+	}
+	return h
 }

@@ -3,20 +3,21 @@ package db
 // Remote implementation of the DB, that uses the propagator service as a backend
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	propagatorsdk "github.com/cedana/cedana-propagator-sdk/go"
+	"github.com/cedana/cedana-propagator-sdk/go/models"
+	v1 "github.com/cedana/cedana-propagator-sdk/go/v1"
 	"github.com/cedana/cedana/pkg/config"
+	"github.com/microsoft/kiota-abstractions-go/serialization"
 )
 
 type PropagatorDB struct {
-	config.Connection
-	client *http.Client
+	propagator *v1.V1RequestBuilder
 
 	// Fallback DBs are used for all unimplemented methods
 	fallback []DB
@@ -24,10 +25,37 @@ type PropagatorDB struct {
 
 func NewPropagatorDB(ctx context.Context, connection config.Connection, fallback ...DB) *PropagatorDB {
 	return &PropagatorDB{
-		connection,
-		&http.Client{},
+		propagatorsdk.NewClient(connection.URL, connection.AuthToken).V1(),
 		fallback,
 	}
+}
+
+// toModel converts a JSON-serializable value into an SDK model, preserving the
+// exact wire format the propagator expects.
+func toModel[T serialization.Parsable](v any, factory serialization.ParsableFactory) (T, error) {
+	var zero T
+	data, err := json.Marshal(v)
+	if err != nil {
+		return zero, err
+	}
+	parsed, err := serialization.Deserialize("application/json", data, factory)
+	if err != nil {
+		return zero, err
+	}
+	model, ok := parsed.(T)
+	if !ok {
+		return zero, fmt.Errorf("unexpected model type %T", parsed)
+	}
+	return model, nil
+}
+
+// fromModel converts an SDK model back into a JSON-deserializable value.
+func fromModel(model serialization.Parsable, out any) error {
+	data, err := serialization.Serialize("application/json", model)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, out)
 }
 
 ///////////
@@ -35,112 +63,73 @@ func NewPropagatorDB(ctx context.Context, connection config.Connection, fallback
 ///////////
 
 func (db *PropagatorDB) PutJob(ctx context.Context, job *daemon.Job) error {
-	url := fmt.Sprintf("%s/cedana/jobs/%s", db.URL, job.JID)
-
-	body, err := json.Marshal(job)
+	body, err := toModel[models.Jobable](job, models.CreateJobFromDiscriminatorValue)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to put job: %s", resp.Status)
+	if _, err := db.propagator.Cedana().Jobs().ByJid(job.JID).Put(ctx, body, nil); err != nil {
+		return fmt.Errorf("failed to put job: %w", err)
 	}
 
 	return nil
 }
 
 func (db *PropagatorDB) ListJobs(ctx context.Context, jids ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s/cedana/jobs", db.URL)
+	var requestConfiguration *v1.CedanaJobsRequestBuilderGetRequestConfiguration
 	if len(jids) > 0 {
-		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
+		jidsParam := strings.Join(jids, ",")
+		requestConfiguration = &v1.CedanaJobsRequestBuilderGetRequestConfiguration{
+			QueryParameters: &v1.CedanaJobsRequestBuilderGetQueryParameters{Jids: &jidsParam},
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	list, err := db.propagator.Cedana().Jobs().Get(ctx, requestConfiguration)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list jobs: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to list jobs: %s", resp.Status)
-	}
-
-	var jobs []*daemon.Job
-
-	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
-		return nil, err
+	jobs := make([]*daemon.Job, 0, len(list))
+	for _, model := range list {
+		job := &daemon.Job{}
+		if err := fromModel(model, job); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, job)
 	}
 
 	return jobs, nil
 }
 
 func (db *PropagatorDB) ListJobsByHostIDs(ctx context.Context, hostIDs ...string) ([]*daemon.Job, error) {
-	url := fmt.Sprintf("%s/cedana/jobs", db.URL)
+	var requestConfiguration *v1.CedanaJobsRequestBuilderGetRequestConfiguration
 	if len(hostIDs) > 0 {
-		url += fmt.Sprintf("?host_ids=%s", strings.Join(hostIDs, ","))
+		hostIDsParam := strings.Join(hostIDs, ",")
+		requestConfiguration = &v1.CedanaJobsRequestBuilderGetRequestConfiguration{
+			QueryParameters: &v1.CedanaJobsRequestBuilderGetQueryParameters{Host_ids: &hostIDsParam},
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	list, err := db.propagator.Cedana().Jobs().Get(ctx, requestConfiguration)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list jobs: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to list jobs: %s", resp.Status)
-	}
-
-	var jobs []*daemon.Job
-	if err := json.NewDecoder(resp.Body).Decode(&jobs); err != nil {
-		return nil, err
+	jobs := make([]*daemon.Job, 0, len(list))
+	for _, model := range list {
+		job := &daemon.Job{}
+		if err := fromModel(model, job); err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, job)
 	}
 
 	return jobs, nil
 }
 
 func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
-	url := fmt.Sprintf("%s/cedana/jobs/%s", db.URL, jid)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to delete job: %s", resp.Status)
+	if _, err := db.propagator.Cedana().Jobs().ByJid(jid).Delete(ctx, nil); err != nil {
+		return fmt.Errorf("failed to delete job: %w", err)
 	}
 
 	return nil
@@ -151,111 +140,73 @@ func (db *PropagatorDB) DeleteJob(ctx context.Context, jid string) error {
 //////////////////
 
 func (db *PropagatorDB) PutCheckpoint(ctx context.Context, checkpoint *daemon.Checkpoint) error {
-	url := fmt.Sprintf("%s/cedana/job/checkpoints/%s", db.URL, checkpoint.JID)
-
-	body, err := json.Marshal(checkpoint)
+	body, err := toModel[models.CedanaJobCheckpointable](checkpoint, models.CreateCedanaJobCheckpointFromDiscriminatorValue)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to create checkpoint: %s", resp.Status)
+	if _, err := db.propagator.Cedana().Job().Checkpoints().ById(checkpoint.JID).Put(ctx, body, nil); err != nil {
+		return fmt.Errorf("failed to create checkpoint: %w", err)
 	}
 
 	return nil
 }
 
 func (db *PropagatorDB) ListCheckpoints(ctx context.Context, ids ...string) ([]*daemon.Checkpoint, error) {
-	url := fmt.Sprintf("%s/cedana/job/checkpoints", db.URL)
+	var requestConfiguration *v1.CedanaJobCheckpointsRequestBuilderGetRequestConfiguration
 	if len(ids) > 0 {
-		url += fmt.Sprintf("?ids=%s", strings.Join(ids, ","))
+		idsParam := strings.Join(ids, ",")
+		requestConfiguration = &v1.CedanaJobCheckpointsRequestBuilderGetRequestConfiguration{
+			QueryParameters: &v1.CedanaJobCheckpointsRequestBuilderGetQueryParameters{Ids: &idsParam},
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	list, err := db.propagator.Cedana().Job().Checkpoints().Get(ctx, requestConfiguration)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list checkpoints: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to list checkpoints: %s", resp.Status)
-	}
-
-	var checkpoints []*daemon.Checkpoint
-	if err := json.NewDecoder(resp.Body).Decode(&checkpoints); err != nil {
-		return nil, err
+	checkpoints := make([]*daemon.Checkpoint, 0, len(list))
+	for _, model := range list {
+		checkpoint := &daemon.Checkpoint{}
+		if err := fromModel(model, checkpoint); err != nil {
+			return nil, err
+		}
+		checkpoints = append(checkpoints, checkpoint)
 	}
 
 	return checkpoints, nil
 }
 
 func (db *PropagatorDB) ListCheckpointsByJIDs(ctx context.Context, jids ...string) ([]*daemon.Checkpoint, error) {
-	url := fmt.Sprintf("%s/cedana/job/checkpoints", db.URL)
+	var requestConfiguration *v1.CedanaJobCheckpointsRequestBuilderGetRequestConfiguration
 	if len(jids) > 0 {
-		url += fmt.Sprintf("?jids=%s", strings.Join(jids, ","))
+		jidsParam := strings.Join(jids, ",")
+		requestConfiguration = &v1.CedanaJobCheckpointsRequestBuilderGetRequestConfiguration{
+			QueryParameters: &v1.CedanaJobCheckpointsRequestBuilderGetQueryParameters{Jids: &jidsParam},
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	list, err := db.propagator.Cedana().Job().Checkpoints().Get(ctx, requestConfiguration)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list checkpoints: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to list checkpoints: %s", resp.Status)
-	}
-
-	var checkpoints []*daemon.Checkpoint
-	if err := json.NewDecoder(resp.Body).Decode(&checkpoints); err != nil {
-		return nil, err
+	checkpoints := make([]*daemon.Checkpoint, 0, len(list))
+	for _, model := range list {
+		checkpoint := &daemon.Checkpoint{}
+		if err := fromModel(model, checkpoint); err != nil {
+			return nil, err
+		}
+		checkpoints = append(checkpoints, checkpoint)
 	}
 
 	return checkpoints, nil
 }
 
 func (db *PropagatorDB) DeleteCheckpoint(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/cedana/job/checkpoints/%s", db.URL, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to delete checkpoint: %s", resp.Status)
+	if _, err := db.propagator.Cedana().Job().Checkpoints().ById(id).Delete(ctx, nil); err != nil {
+		return fmt.Errorf("failed to delete checkpoint: %w", err)
 	}
 
 	return nil
@@ -266,80 +217,47 @@ func (db *PropagatorDB) DeleteCheckpoint(ctx context.Context, id string) error {
 /////////////
 
 func (db *PropagatorDB) PutHost(ctx context.Context, host *daemon.Host) error {
-	url := fmt.Sprintf("%s/hosts/%s", db.URL, host.ID)
-
-	body, err := json.Marshal(host)
+	body, err := toModel[models.Hostable](host, models.CreateHostFromDiscriminatorValue)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to put host: %s", resp.Status)
+	if _, err := db.propagator.Hosts().ById(host.ID).Put(ctx, body, nil); err != nil {
+		return fmt.Errorf("failed to put host: %w", err)
 	}
 
 	return nil
 }
 
 func (db *PropagatorDB) ListHosts(ctx context.Context, ids ...string) ([]*daemon.Host, error) {
-	url := fmt.Sprintf("%s/hosts", db.URL)
+	var requestConfiguration *v1.HostsRequestBuilderGetRequestConfiguration
 	if len(ids) > 0 {
-		url += fmt.Sprintf("?ids=%s", strings.Join(ids, ","))
+		idsParam := strings.Join(ids, ",")
+		requestConfiguration = &v1.HostsRequestBuilderGetRequestConfiguration{
+			QueryParameters: &v1.HostsRequestBuilderGetQueryParameters{Ids: &idsParam},
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	list, err := db.propagator.Hosts().Get(ctx, requestConfiguration)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list hosts: %w", err)
 	}
 
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to list hosts: %s", resp.Status)
-	}
-
-	var hosts []*daemon.Host
-	if err := json.NewDecoder(resp.Body).Decode(&hosts); err != nil {
-		return nil, err
+	hosts := make([]*daemon.Host, 0, len(list))
+	for _, model := range list {
+		host := &daemon.Host{}
+		if err := fromModel(model, host); err != nil {
+			return nil, err
+		}
+		hosts = append(hosts, host)
 	}
 
 	return hosts, nil
 }
 
 func (db *PropagatorDB) DeleteHost(ctx context.Context, id string) error {
-	url := fmt.Sprintf("%s/hosts/%s", db.URL, id)
-	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", db.AuthToken))
-	resp, err := db.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to delete host: %s", resp.Status)
+	if _, err := db.propagator.Hosts().ById(id).Delete(ctx, nil); err != nil {
+		return fmt.Errorf("failed to delete host: %w", err)
 	}
 
 	return nil

@@ -374,8 +374,8 @@ LOGIN_01="slurm-login-01"
     done
 }
 
-@test "Ansible: NFS /usr/lib/slurm plugin dir mounted on compute" {
-    run docker exec "$COMPUTE_01" findmnt -t nfs4 --noheadings -o TARGET
+@test "Ansible: compute has slurm plugin dir populated" {
+    # Source-build shares /usr/lib/slurm over NFS; prebaked images ship it locally.
+    run docker exec "$COMPUTE_01" bash -c 'ls /usr/lib/slurm/*.so >/dev/null 2>&1'
     [ "$status" -eq 0 ]
-    [[ "$output" == *"/usr/lib/slurm"* ]]
 }

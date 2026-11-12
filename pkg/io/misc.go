@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // CopyNotify asynchronously does io.Copy, notifying when done.
@@ -123,6 +124,80 @@ func Untar(src io.Reader, dest string, compression string) (err error) {
 	}
 
 	return nil
+}
+
+// TarEntry describes a member of a tarball.
+type TarEntry struct {
+	Name    string
+	Size    int64
+	ModTime time.Time
+	IsDir   bool
+}
+
+// TarCompressionFromPath reports whether the path looks like a tarball
+// (`x.tar`, `x.tar.lz4`, ...) and, if so, its compression format.
+func TarCompressionFromPath(path string) (compression string, ok bool) {
+	base := filepath.Base(path)
+	if strings.HasSuffix(base, ".tar") {
+		return "tar", true
+	}
+	if !strings.Contains(base, ".tar.") {
+		return "", false
+	}
+	compression, err := CompressionFromExt(base)
+	if err != nil {
+		return "", false
+	}
+	return compression, true
+}
+
+// ListTar lists the members of the provided tarball.
+func ListTar(src io.Reader, compression string) (entries []TarEntry, err error) {
+	reader, err := NewCompressionReader(src, compression)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+
+	tarReader := tar.NewReader(reader)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			return entries, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		entries = append(entries, TarEntry{
+			Name:    header.Name,
+			Size:    header.Size,
+			ModTime: header.ModTime,
+			IsDir:   header.Typeflag == tar.TypeDir,
+		})
+	}
+}
+
+// OpenTarEntry positions a reader at the contents of the named member of the
+// provided tarball. The returned reader is only valid as long as src is.
+func OpenTarEntry(src io.Reader, compression string, name string) (io.Reader, error) {
+	reader, err := NewCompressionReader(src, compression)
+	if err != nil {
+		return nil, err
+	}
+
+	tarReader := tar.NewReader(reader)
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			return nil, fmt.Errorf("entry %q not found in tarball", name)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if header.Name == name && header.Typeflag != tar.TypeDir {
+			return tarReader, nil
+		}
+	}
 }
 
 // WriteTo writes the contents from the provided src to the the provided destination.

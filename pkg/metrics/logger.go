@@ -6,15 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/cedana/cedana/pkg/logging"
+	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
 
 const (
@@ -64,6 +67,7 @@ type signozWriter struct {
 	endpoint    string
 	accessToken string
 	resource    map[string]string
+	services    map[string]map[string]string // Resource of each other service logged through us, by service/plugin
 	logBuffer   []signozLogEntry
 
 	mu sync.Mutex
@@ -75,10 +79,11 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 	}
 
 	sw := &signozWriter{
-		httpClient:  &http.Client{Timeout: 15 * time.Second}, // Increased timeout slightly for batch
-		endpoint:    "https://" + Credentials.Endpoint + ":443/logs/json",
+		httpClient:  &http.Client{Timeout: EXPORT_TIMEOUT},
+		endpoint:    "https://" + Credentials.Endpoint + "/logs/json",
 		accessToken: Credentials.Headers,
 		resource:    make(map[string]string),
+		services:    make(map[string]map[string]string),
 		logBuffer:   make([]signozLogEntry, 0, LOGGER_MAX_BATCH_SIZE),
 	}
 
@@ -116,7 +121,7 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 func (sw *signozWriter) Write(p []byte) (n int, err error) {
 	var zerologEntry map[string]any
 	if err := json.Unmarshal(p, &zerologEntry); err != nil {
-		fmt.Printf("error unmarshalling zerolog entry: %v\n", err)
+		local.Warn().Err(err).Msg("dropping a log line SigNoz can't take")
 		return len(p), nil // Consume and drop
 	}
 
@@ -133,12 +138,16 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 	}
 
 	attributes := make(map[string]string)
+	resource := sw.resource
+	var service string
 
 	for k, v := range zerologEntry {
 		if k == zerolog.TimestampFieldName || k == zerolog.LevelFieldName || k == zerolog.MessageFieldName || k == zerolog.ErrorFieldName {
 			continue
 		}
 		switch k {
+		case logging.SERVICE_FIELD:
+			service, _ = v.(string)
 		case zerolog.CallerFieldName:
 			attributes["code.filepath"], _ = v.(string)
 		case zerolog.ErrorStackFieldName:
@@ -148,13 +157,17 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 		}
 	}
 
+	if service != "" {
+		resource = sw.serviceResource(service, attributes["plugin"])
+	}
+
 	logEntry := signozLogEntry{
 		Timestamp:      tsNano,
 		SeverityText:   severityText,
 		SeverityNumber: severityNumber,
 		Body:           body,
 		Attributes:     attributes,
-		Resources:      sw.resource,
+		Resources:      resource,
 	}
 
 	sw.mu.Lock()
@@ -162,6 +175,27 @@ func (sw *signozWriter) Write(p []byte) (n int, err error) {
 	sw.mu.Unlock()
 
 	return len(p), nil
+}
+
+// Returns our resource as the given service, with the installed version of the plugin
+// that ships it instead of ours
+func (sw *signozWriter) serviceResource(service string, plugin string) map[string]string {
+	sw.mu.Lock()
+	defer sw.mu.Unlock()
+
+	key := service + "/" + plugin
+	if resource, ok := sw.services[key]; ok {
+		return resource
+	}
+	resource := maps.Clone(sw.resource)
+	resource[string(semconv.ServiceNameKey)] = service
+	delete(resource, string(semconv.ServiceVersionKey))
+	if version, ok := sw.resource[plugins.VersionAttributeKey(strings.ToLower(plugin))]; ok && plugin != "" {
+		resource[string(semconv.ServiceVersionKey)] = version
+	}
+	sw.services[key] = resource
+
+	return resource
 }
 
 func (sw *signozWriter) flushBuffer() {
@@ -176,13 +210,13 @@ func (sw *signozWriter) flushBuffer() {
 
 	jsonData, err := json.Marshal(batchToSend)
 	if err != nil {
-		fmt.Printf("error marshalling log batch: %v\n", err)
+		local.Warn().Err(err).Msg("marshalling a log batch for SigNoz failed")
 		return
 	}
 
 	req, err := http.NewRequest("POST", sw.endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
-		fmt.Printf("error creating HTTP request for log batch: %v\n", err)
+		local.Warn().Err(err).Msg("creating the SigNoz log request failed")
 		return
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -190,13 +224,13 @@ func (sw *signozWriter) flushBuffer() {
 
 	resp, err := sw.httpClient.Do(req)
 	if err != nil {
-		fmt.Printf("error sending log batch: %v\n", err)
+		local.Warn().Err(err).Msg("sending logs to SigNoz failed")
 		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 300 {
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		fmt.Printf("non-2xx status sending log batch: %d, response: %s\n", resp.StatusCode, string(bodyBytes))
+		local.Warn().Int("status", resp.StatusCode).Str("response", string(bodyBytes)).Msg("SigNoz refused a log batch")
 	}
 }

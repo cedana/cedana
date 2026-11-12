@@ -9,92 +9,115 @@ if [ -n "${BASH_SOURCE[0]:-}" ]; then
     fi
 fi
 
+# Installs the host packages cedana needs, and only the missing ones: installed packages are never
+# upgraded, and when everything is present the package manager is not run at all.
+#
+# With CEDANA_INSTALL_DEPS=false, nothing is installed: what is missing is reported, with the
+# commands that install it (e.g. to run in the node image). The k8s helper runs it this way when
+# k8s.install_deps is false.
+CEDANA_INSTALL_DEPS=${CEDANA_INSTALL_DEPS:-true}
+
 # Define packages for YUM and APT
+# CRIU's shared libraries (libbsd is in EPEL on RHEL 8/9 and their rebuilds)
 YUM_PACKAGES=(
-    wget git make psmisc
-    libnet-devel protobuf-c-devel libnl3-devel libbsd-devel libcap-devel libseccomp-devel gpgme-devel iptables nftables-devel # CRIU
-    yq
+    psmisc procps-ng
+    libbsd libselinux gnutls protobuf-c libnl3 libnet libuuid iptables # CRIU
 )
 
+# CRIU's other shared libraries (libselinux1, gnutls, libuuid1) are always installed: apt depends on them
 APT_PACKAGES=(
-    wget git make psmisc
-    libnet-dev libprotobuf-c-dev libnl-3-dev libbsd-dev libcap-dev libseccomp-dev libgpgme11-dev iptables libnftables1 # CRIU
-    sysvinit-utils
+    psmisc sysvinit-utils
+    libbsd0 libprotobuf-c1 libnl-3-200 libnet1 iptables # CRIU
 )
 
-install_apt_packages() {
+detect_package_manager() {
+    local id="" id_like=""
+    if [ -f /etc/os-release ]; then
+        id=$(. /etc/os-release && echo "${ID:-}")
+        id_like=$(. /etc/os-release && echo "${ID_LIKE:-}")
+    fi
+    case "$id" in
+        debian | ubuntu | pop)
+            echo apt
+            return
+            ;;
+        rhel | centos | fedora | amzn | rocky | almalinux | ol)
+            echo yum
+            return
+            ;;
+    esac
+    case " $id_like " in
+        *" debian "* | *" ubuntu "*)
+            echo apt
+            return
+            ;;
+        *" rhel "* | *" fedora "*)
+            echo yum
+            return
+            ;;
+    esac
+    if [ -f /etc/debian_version ]; then
+        echo apt
+    elif [ -f /etc/redhat-release ]; then
+        echo yum
+    else
+        echo "Unknown distribution: ${id:-unknown}" >&2
+        return 1
+    fi
+}
+
+PACKAGE_MANAGER=$(detect_package_manager)
+
+MISSING=()
+if [ "$PACKAGE_MANAGER" = apt ]; then
+    # Status is "<want> ok installed" for an installed package, where want is "hold" for an
+    # apt-mark held one: only the package's state (the last word) says whether it's installed
+    for pkg in "${APT_PACKAGES[@]}"; do
+        [[ "$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null)" == *" ok installed" ]] || MISSING+=("$pkg")
+    done
+else
+    for pkg in "${YUM_PACKAGES[@]}"; do
+        rpm -q --whatprovides "$pkg" &>/dev/null || MISSING+=("$pkg")
+    done
+fi
+
+if [ "${#MISSING[@]}" -eq 0 ]; then
+    echo "All host dependencies are installed"
+    exit 0
+fi
+
+if [ "$CEDANA_INSTALL_DEPS" != true ]; then
+    {
+        echo "WARNING: not installing missing host dependencies (k8s.install_deps is false). Missing packages: ${MISSING[*]}."
+        echo "To install them (e.g. in the node image), run as root:"
+        if [ "$PACKAGE_MANAGER" = apt ]; then
+            echo "  apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-upgrade ${MISSING[*]}"
+        else
+            echo "  yum install -y --skip-broken ${MISSING[*]}"
+        fi
+    } >&2
+    exit 0
+fi
+
+echo "Installing missing packages: ${MISSING[*]}"
+if [ "$PACKAGE_MANAGER" = apt ]; then
+    export DEBIAN_FRONTEND=noninteractive
     # Fix any interrupted dpkg state first
     if ! apt-get check &>/dev/null; then
         echo "Fixing interrupted dpkg state..." >&2
         dpkg --configure -a || true
     fi
     apt-get update
-    for pkg in "${APT_PACKAGES[@]}"; do
-        if ! apt-get install -y "$pkg"; then
+    for pkg in "${MISSING[@]}"; do
+        if ! apt-get install -y --no-upgrade "$pkg"; then
             echo "Skipping missing package: $pkg" >&2
         fi
     done
-}
-
-install_yum_packages() {
-    for pkg in "${YUM_PACKAGES[@]}"; do
+else
+    for pkg in "${MISSING[@]}"; do
         if ! yum install -y --skip-broken "$pkg"; then
             echo "Skipping missing package: $pkg" >&2
         fi
     done
-}
-
-# Detect OS and install appropriate packages
-if [ -f /etc/os-release ]; then
-    . /etc/os-release
-    case "$ID" in
-        debian | ubuntu | pop)
-            install_apt_packages
-            ;;
-        rhel | centos | fedora | amzn | rocky | almalinux | ol)
-            install_yum_packages
-            ;;
-        *)
-            case " ${ID_LIKE:-} " in
-                *" debian "* | *" ubuntu "*)
-                    install_apt_packages
-                    ;;
-                *" rhel "* | *" fedora "*)
-                    install_yum_packages
-                    ;;
-                *)
-                    echo "Unknown distribution: ${ID:-unknown}"
-                    exit 1
-                    ;;
-            esac
-            ;;
-    esac
-elif [ -f /etc/debian_version ]; then
-    install_apt_packages
-elif [ -f /etc/redhat-release ]; then
-    install_yum_packages
-else
-    echo "Unknown distribution"
-    exit 1
 fi
 
-# Install yq if not already installed
-# yq is needed to configure kubelet, but not available in all distros
-if ! command -v yq &> /dev/null; then
-    case "$(uname -m)" in
-        x86_64)
-            wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
-            ;;
-        arm64 | aarch64)
-            wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_arm64 -O /usr/local/bin/yq
-            ;;
-        *)
-            echo "Unsupported architecture: $(uname -m)"
-            exit 1
-            ;;
-    esac
-    chmod +x /usr/local/bin/yq
-    echo "yq has been installed"
-else
-    echo "yq is already installed"
-fi

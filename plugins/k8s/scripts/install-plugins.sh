@@ -7,12 +7,15 @@ CEDANA_PLUGINS_CRIU_VERSION=${CEDANA_PLUGINS_CRIU_VERSION:-"latest"}
 CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION=${CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION:-"latest"}
 CEDANA_PLUGINS_GPU_VERSION=${CEDANA_PLUGINS_GPU_VERSION:-"latest"}
 CEDANA_PLUGINS_STREAMER_VERSION=${CEDANA_PLUGINS_STREAMER_VERSION:-"latest"}
+CEDANA_PLUGINS_CRIU_NVIDIA_DEV=${CEDANA_PLUGINS_CRIU_NVIDIA_DEV:-"true"}
+CEDANA_PLUGINS_CRIU_INFINIBAND=${CEDANA_PLUGINS_CRIU_INFINIBAND:-"true"}
 CEDANA_CHECKPOINT_DIR=${CEDANA_CHECKPOINT_DIR:-"/tmp"}
 CEDANA_CHECKPOINT_STREAMS=${CEDANA_CHECKPOINT_STREAMS:-0}
 
 echo "Starting cedana plugin setup"
 echo "Config: BUILDS=$CEDANA_PLUGINS_BUILDS NATIVE=$CEDANA_PLUGINS_NATIVE_VERSION CRIU=$CEDANA_PLUGINS_CRIU_VERSION CONTAINERD_RUNTIME=$CEDANA_PLUGINS_CONTAINERD_RUNTIME_VERSION GPU=$CEDANA_PLUGINS_GPU_VERSION STREAMER=$CEDANA_PLUGINS_STREAMER_VERSION"
 echo "Config: CHECKPOINT_DIR=$CEDANA_CHECKPOINT_DIR CHECKPOINT_STREAMS=$CEDANA_CHECKPOINT_STREAMS"
+echo "Config: CRIU_NVIDIA_DEV=$CEDANA_PLUGINS_CRIU_NVIDIA_DEV CRIU_INFINIBAND=$CEDANA_PLUGINS_CRIU_INFINIBAND"
 
 # XXX: We always install the GPU plugin because the race w/ gpu-operator (if the cluster is using it)
 # is not worth defending against. In any case, the resources check on using gpus in the yaml will prevent
@@ -33,23 +36,43 @@ else
     PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE gpu"
 fi
 
+if [ "$CEDANA_PLUGINS_CRIU_NVIDIA_DEV" = "true" ]; then
+    echo "CRIU nvidia-dev plugin enabled, adding to install list"
+    PLUGINS="$PLUGINS criu/nvidia-dev@$CEDANA_PLUGINS_CRIU_VERSION"
+else
+    echo "CRIU nvidia-dev plugin disabled (CEDANA_PLUGINS_CRIU_NVIDIA_DEV=$CEDANA_PLUGINS_CRIU_NVIDIA_DEV), marking for removal"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE criu/nvidia-dev"
+fi
+
+if [ "$CEDANA_PLUGINS_CRIU_INFINIBAND" = "true" ]; then
+    echo "CRIU infiniband plugin enabled, adding to install list"
+    PLUGINS="$PLUGINS criu/infiniband@$CEDANA_PLUGINS_CRIU_VERSION"
+else
+    echo "CRIU infiniband plugin disabled (CEDANA_PLUGINS_CRIU_INFINIBAND=$CEDANA_PLUGINS_CRIU_INFINIBAND), marking for removal"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE criu/infiniband"
+fi
+
 # check if a storage plugin is required
 echo "Determining storage plugin from CEDANA_CHECKPOINT_DIR=$CEDANA_CHECKPOINT_DIR..."
 if [[ "$CEDANA_CHECKPOINT_DIR" == cedana://* ]]; then
     echo "Cedana storage backend detected, adding storage/cedana plugin"
     PLUGINS="$PLUGINS storage/cedana@$CEDANA_PLUGINS_NATIVE_VERSION"
-    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/s3 storage/gcs"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/s3 storage/gcs storage/csx"
 elif [[ "$CEDANA_CHECKPOINT_DIR" == s3://* ]]; then
     echo "S3 storage backend detected, adding storage/s3 plugin"
     PLUGINS="$PLUGINS storage/s3@$CEDANA_PLUGINS_NATIVE_VERSION"
-    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/gcs"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/gcs storage/csx"
 elif [[ "$CEDANA_CHECKPOINT_DIR" == gcs://* ]]; then
     echo "GCS storage backend detected, adding storage/gcs plugin"
     PLUGINS="$PLUGINS storage/gcs@$CEDANA_PLUGINS_NATIVE_VERSION"
-    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/csx"
+elif [[ "$CEDANA_CHECKPOINT_DIR" == csx://* ]]; then
+    echo "CSX storage backend detected, adding storage/csx plugin"
+    PLUGINS="$PLUGINS storage/csx@$CEDANA_PLUGINS_NATIVE_VERSION"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/gcs"
 else
     echo "Local storage backend detected, no storage plugin needed"
-    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/gcs"
+    PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE storage/cedana storage/s3 storage/gcs storage/csx"
 fi
 
 # check if streamer plugin is required
@@ -148,148 +171,3 @@ echo "Configuring pipe settings for streaming performance..."
 echo 0 >/proc/sys/fs/pipe-user-pages-soft # change pipe pages soft limit to unlimited
 echo 4194304 >/proc/sys/fs/pipe-max-size  # change pipe max size to 4MiB
 echo "pipe-user-pages-soft=$(cat /proc/sys/fs/pipe-user-pages-soft) pipe-max-size=$(cat /proc/sys/fs/pipe-max-size)"
-
-#####################################################
-# Setup containerd runtime configuration for cedana #
-#####################################################
-
-if [ "$ENV" != "production" ]; then
-    echo "Non-production environment detected, skipping containerd runtime configuration" >&2
-    exit 0
-fi
-
-echo "Starting containerd runtime configuration..."
-
-# k8s path - detect containerd config version
-CONTAINERD_CONFIG_PATH=${CONTAINERD_CONFIG_PATH:-"/etc/containerd/config.toml"}
-echo "Using containerd config path: $CONTAINERD_CONFIG_PATH"
-
-if [ ! -f "$CONTAINERD_CONFIG_PATH" ]; then
-    echo "ERROR: containerd config file not found at $CONTAINERD_CONFIG_PATH" >&2
-    exit 1
-fi
-
-# Detect containerd config version
-CONTAINERD_VERSION=""
-if grep -q 'version = 2' "$CONTAINERD_CONFIG_PATH"; then
-    CONTAINERD_VERSION=2
-elif grep -q 'version = 3' "$CONTAINERD_CONFIG_PATH"; then
-    CONTAINERD_VERSION=3
-else
-    echo "ERROR: Unsupported containerd config version. Only version 2 and 3 are supported." >&2
-    exit 1
-fi
-
-echo "Detected containerd config version $CONTAINERD_VERSION"
-
-CONTAINERD_CONFD_DIR=${CONTAINERD_CONFD_DIR:-"/etc/containerd/conf.d"}
-echo "Using conf.d directory: $CONTAINERD_CONFD_DIR"
-
-# Check if the node is a part of rke2 cluster
-# Editing the generated config.toml directly is not persistent.
-# It gets regenerated on restarting the rke2-server/agent.
-# Instead, we modify config.toml.tmpl, which is the template RKE2 uses to
-# recreate the final containerd configuration across restarts.
-if [ -d "/var/lib/rancher/rke2" ]; then
-    RKE2_CONFIG="/var/lib/rancher/rke2/agent/etc/containerd/config.toml.tmpl"
-    echo "Configuring rke2 config.toml.tmpl $RKE2_CONFIG"
-
-    sudo mkdir -p "$(dirname "$RKE2_CONFIG")"
-
-    if [ ! -f "$RKE2_CONFIG" ]; then
-        cat <<EOF | sudo tee "$RKE2_CONFIG" >/dev/null
-{{ template "base" . }}
-EOF
-    fi
-
-    # only append if not already present
-    if ! grep -q 'runtimes."cedana"' "$RKE2_CONFIG"; then
-        cat <<EOF | sudo tee -a "$RKE2_CONFIG" >/dev/null
-
-[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
-  runtime_type = "io.containerd.runc.v2"
-  runtime_path = "$CEDANA_PLUGINS_BIN_DIR/cedana-shim-runc-v2"
-EOF
-    fi
-fi
-
-if [ "$CONTAINERD_VERSION" = "2" ]; then
-    echo "Applying containerd v2 config strategy..."
-    # Version 2: Copy last conf.d file (excluding 999-cedana.toml) if exists, then add config
-    # This is because merging multiple runtimes in version 2 is problematic
-    # See https://github.com/containerd/containerd/issues/5837 (fixed in v3)
-
-    # Find the last .toml file lexicographically (excluding 999-cedana.toml)
-    if [ -d "$CONTAINERD_CONFD_DIR" ]; then
-        echo "Scanning $CONTAINERD_CONFD_DIR for existing .toml files..."
-        LAST_CONFD_FILE=$(find "$CONTAINERD_CONFD_DIR" -maxdepth 1 -type f -name "*.toml" ! -name "999-cedana.toml" 2>/dev/null | sort | tail -n 1)
-        echo "Last existing conf.d file: ${LAST_CONFD_FILE:-<none found>}"
-    else
-        echo "conf.d directory does not exist, skipping scan"
-        LAST_CONFD_FILE=""
-    fi
-
-    if [ -n "$LAST_CONFD_FILE" ]; then
-        TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
-        echo "Copying existing config from $LAST_CONFD_FILE to $TARGET_CONFIG"
-        cp "$LAST_CONFD_FILE" "$TARGET_CONFIG"
-        echo "" >>"$TARGET_CONFIG"
-    else
-        # Directly add to main config if no conf.d files exist, so that when NVIDIA plugin is added
-        # later it can copy from this and not miss the cedana config.
-        echo "No existing conf.d files found, will directly add to $CONTAINERD_CONFIG_PATH"
-        TARGET_CONFIG="$CONTAINERD_CONFIG_PATH"
-    fi
-
-    if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
-        echo "Adding cedana runtime config to $TARGET_CONFIG"
-        cat >>"$TARGET_CONFIG" <<END_CAT
-[plugins."io.containerd.grpc.v1.cri".containerd.runtimes."cedana"]
-    runtime_type = "io.containerd.runc.v2"
-    runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
-END_CAT
-        echo "Cedana runtime config written to $TARGET_CONFIG"
-    else
-        echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
-    fi
-
-elif [ "$CONTAINERD_VERSION" = "3" ]; then
-    echo "Applying containerd v3 config strategy..."
-    # Version 3: Ensure imports exist, then create conf.d file with only cedana config
-    TARGET_CONFIG="$CONTAINERD_CONFD_DIR/999-cedana.toml"
-
-    # Ensure conf.d directory exists
-    echo "Ensuring conf.d directory exists: $CONTAINERD_CONFD_DIR"
-    mkdir -p "$CONTAINERD_CONFD_DIR"
-
-    # Ensure imports line exists in main config
-    if ! grep -q 'imports = \[.*"/etc/containerd/conf.d/\*\.toml".*\]' "$CONTAINERD_CONFIG_PATH"; then
-        echo "conf.d glob not found in imports, updating $CONTAINERD_CONFIG_PATH..."
-        # Check if imports line already exists but doesn't include conf.d
-        if grep -q '^imports = \[' "$CONTAINERD_CONFIG_PATH"; then
-            echo "Existing imports line found, appending conf.d glob"
-            sed -i 's|^imports = \[\(.*\)\]|imports = [\1, "/etc/containerd/conf.d/*.toml"]|' "$CONTAINERD_CONFIG_PATH"
-        else
-            echo "No imports line found, inserting after version = 3"
-            sed -i '/^version = 3/a imports = ["/etc/containerd/conf.d/*.toml"]' "$CONTAINERD_CONFIG_PATH"
-        fi
-        echo "Updated imports in $CONTAINERD_CONFIG_PATH"
-    else
-        echo "conf.d glob already present in imports, no changes needed"
-    fi
-
-    if ! grep -q 'cedana' "$TARGET_CONFIG" 2>/dev/null; then
-        echo "Creating cedana runtime config at $TARGET_CONFIG"
-        cat >"$TARGET_CONFIG" <<END_CAT
-[plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes."cedana"]
-    runtime_type = "io.containerd.runc.v2"
-    runtime_path = "${CEDANA_PLUGINS_BIN_DIR}/cedana-shim-runc-v2"
-END_CAT
-        echo "Cedana runtime config written to $TARGET_CONFIG"
-    else
-        echo "Cedana runtime config already exists in $TARGET_CONFIG, skipping"
-    fi
-fi
-
-echo "Restarting containerd to pick up the new runtime configuration..."
-(systemctl restart containerd && echo "Restarted containerd successfully") || echo "WARNING: Failed to restart containerd, please restart manually" >&2
