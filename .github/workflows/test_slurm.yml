@@ -186,6 +186,11 @@ jobs:
 
       - name: Install ansible and Docker CLI
         run: |
+          # The test images (test/Dockerfile, test/cuda.Dockerfile) have both; install only if one is missing.
+          if command -v docker >/dev/null && command -v ansible-playbook >/dev/null && python3 -c 'import docker' 2>/dev/null; then
+            docker --version && ansible-playbook --version | head -1
+            exit 0
+          fi
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             docker.io ansible python3-docker
@@ -504,6 +509,11 @@ jobs:
 
       - name: Install ansible and Docker CLI
         run: |
+          # The test images (test/Dockerfile, test/cuda.Dockerfile) have both; install only if one is missing.
+          if command -v docker >/dev/null && command -v ansible-playbook >/dev/null && python3 -c 'import docker' 2>/dev/null; then
+            docker --version && ansible-playbook --version | head -1
+            exit 0
+          fi
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             docker.io ansible python3-docker
