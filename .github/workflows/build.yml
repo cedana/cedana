@@ -94,7 +94,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: "go.mod"
+          go-version-file: ".go-version" # the toolchain the Makefile pins, not go.mod's minimum
           cache: false # the build cache is runs-on/action's remote cache, the modules are cached below
 
       # Per target: each needs different modules, and a shared key only keeps its first saver's
@@ -210,7 +210,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: "go.mod"
+          go-version-file: ".go-version" # the toolchain the Makefile pins, not go.mod's minimum
           cache: false # the build cache is runs-on/action's remote cache, the modules are cached below
 
       - name: Setup debugging session
