@@ -161,7 +161,8 @@ jobs:
       matrix.storage,
       (inputs.propagator && matrix.platform == 'K3s') && '/volume=80gb' || ''
       ) }}
-    timeout-minutes: 240
+    # K3s jobs take ~10m (~50m with the soak tests): a hang shouldn't hold the run (and a GPU) for 4h
+    timeout-minutes: ${{ matrix.platform == 'K3s' && (inputs.soak && 120 || 45) || 240 }}
     needs: [matrix, propagator-connectivity]
     if: ${{ !cancelled() && needs.matrix.result == 'success' && needs.propagator-connectivity.result != 'failure' }}
     concurrency:
