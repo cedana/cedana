@@ -129,8 +129,6 @@ jobs:
         with:
           repository: cedana/cedana
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download samples
         id: samples
@@ -375,8 +373,6 @@ jobs:
         with:
           repository: cedana/cedana
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download samples
         id: samples
