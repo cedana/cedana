@@ -62,7 +62,7 @@ env:
 jobs:
   streamer:
     name: Streamer
-    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner }}-${{ matrix.arch }}${{ matrix.compute == 'CUDA' && '-cuda-12-4' || '' }}
     timeout-minutes: 30
     strategy:
       fail-fast: false

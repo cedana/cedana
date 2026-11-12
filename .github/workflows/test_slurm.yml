@@ -103,7 +103,7 @@ jobs:
 
   slurm-ansible:
     name: Slurm (Ansible)
-    runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible/extras=s3-cache', github.run_id, inputs.runner) }}
+    runs-on: ${{ format('runs-on={0}/runner={1}-amd64/tag=slurm-ansible', github.run_id, inputs.runner) }}
     timeout-minutes: 60
     container:
       image: cedana/cedana-test:latest
@@ -317,7 +317,7 @@ jobs:
     name: Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }})
     needs: versions
     runs-on: ${{ format(
-      'runs-on={0}/runner={1}-amd64{2}/tag=slurm-{3}/extras=s3-cache',
+      'runs-on={0}/runner={1}-amd64{2}/tag=slurm-{3}',
       github.run_id,
       matrix.compute == 'CUDA' && inputs.runner_gpu || inputs.runner,
       (matrix.compute == 'CUDA' && inputs.runner_gpu != inputs.runner) && '-cuda-12-4' || '',

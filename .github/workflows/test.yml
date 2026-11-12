@@ -96,7 +96,7 @@ env:
 jobs:
   unit:
     name: Unit
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache # compiles test binaries in parallel
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }} # compiles test binaries in parallel
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -186,7 +186,7 @@ jobs:
 
   script:
     name: Script
-    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -228,7 +228,7 @@ jobs:
 
   basic:
     name: Basic
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -333,7 +333,7 @@ jobs:
 
   plugin:
     name: Plugin
-    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/tag=${{ matrix.plugin }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=${{ inputs.runner }}-${{ matrix.arch }}/tag=${{ matrix.plugin }}
     timeout-minutes: 30
     strategy:
       fail-fast: false

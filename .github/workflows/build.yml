@@ -54,7 +54,7 @@ jobs:
   # alone rather than for every plugin build
   cedana:
     name: Cedana
-    runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}
     timeout-minutes: 30
     strategy:
       fail-fast: true
@@ -157,7 +157,7 @@ jobs:
 
   plugin:
     name: Plugin
-    runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}/extras=s3-cache # 1cpu's 2 GiB is too little for storage/s3 (the AWS SDK) on arm64
+    runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }} # 1cpu's 2 GiB is too little for storage/s3 (the AWS SDK) on arm64
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -252,7 +252,7 @@ jobs:
 
   image:
     name: Image
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -352,7 +352,7 @@ jobs:
 
   test_image:
     name: Test Image
-    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/tag=${{ matrix.tag }}/extras=s3-cache
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/tag=${{ matrix.tag }}
     strategy:
       fail-fast: false
       matrix:

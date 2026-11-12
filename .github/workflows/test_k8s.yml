@@ -152,7 +152,7 @@ jobs:
   k8s:
     name: Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}${{ matrix.k3s_containerd && format(', {0}', matrix.k3s_containerd) || '' }}${{ matrix.versions && format(', {0}', matrix.versions) || '' }})
     runs-on: ${{ format(
-      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache{6}',
+      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}{6}',
       github.run_id,
       (matrix.compute == 'CUDA' && matrix.platform == 'K3s') && inputs.runner_gpu || inputs.runner,
       matrix.arch,
