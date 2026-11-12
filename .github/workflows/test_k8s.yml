@@ -192,8 +192,6 @@ jobs:
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download helm chart
         uses: actions/download-artifact@v7

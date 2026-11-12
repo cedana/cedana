@@ -115,9 +115,7 @@ jobs:
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
           submodules: recursive
-          fetch-tags: true
           token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
@@ -205,8 +203,6 @@ jobs:
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - uses: actions/download-artifact@v7
         with:
@@ -248,8 +244,6 @@ jobs:
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download samples
         id: samples
@@ -361,8 +355,6 @@ jobs:
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download samples
         id: samples

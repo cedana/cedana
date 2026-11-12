@@ -85,8 +85,6 @@ jobs:
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download samples
         id: samples
