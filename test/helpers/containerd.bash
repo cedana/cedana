@@ -13,6 +13,7 @@ export CONTAINERD_LOG="${CONTAINERD_LOG:-/tmp/containerd.log}"
 # NGINX_PORT (it only substitutes env into /etc/nginx/templates), so containers
 # sharing a network namespace (e.g. the host's, with `cedana run containerd`)
 # would otherwise all race for :80.
+# shellcheck disable=SC2034 # used by test/regression/plugins/containerd.bats
 NGINX_CMD=(sh -c 'sed -i -E "s/(listen[[:space:]]+(\[::\]:)?)80;/\1$NGINX_PORT;/" /etc/nginx/conf.d/default.conf && exec nginx -g "daemon off;"')
 
 pull_images() {

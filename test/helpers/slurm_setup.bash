@@ -307,7 +307,7 @@ EOF
     fi
 
     local rc=0
-    pushd "$ansible_dir" >/dev/null
+    pushd "$ansible_dir" >/dev/null || return 1
     if COMPUTE_NODES="$COMPUTE_NODES" \
         LOGIN_NODES="$LOGIN_NODES" \
         ANSIBLE_EXTRA_ARGS="-e @${vars_file}" \
@@ -316,7 +316,7 @@ EOF
     else
         rc=$?
     fi
-    popd >/dev/null
+    popd >/dev/null || return 1
     rm -f "$vars_file"
 
     if [ "$rc" -ne 0 ]; then
@@ -1399,6 +1399,7 @@ start_cedana_slurm_daemon() {
     debug_log "Starting cedana-slurm daemon on SLURM nodes..."
 
     local targets=("$SLURM_CONTROLLER_CONTAINER")
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
@@ -1499,6 +1500,7 @@ restart_cedana_slurm_daemon_unprivileged() {
     fi
 
     local targets=("$SLURM_CONTROLLER_CONTAINER")
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
@@ -1579,6 +1581,7 @@ restart_cedana_slurm_daemon() {
     fi
 
     local targets=("$SLURM_CONTROLLER_CONTAINER")
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
@@ -1618,6 +1621,7 @@ restart_cedana_slurm_daemon() {
 # Puts cedana-samples in every node: the run's (/cedana-samples, from the lite image download.yml
 # took), else a clone of main.
 setup_slurm_samples() {
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local sample_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
 
     if [ -d /cedana-samples/slurm ]; then
@@ -1648,6 +1652,7 @@ setup_slurm_samples() {
         docker exec "$c" ls -la /data/cedana-samples/ 2>&1 | head -20 >&"${OUTPUT_FD}" || true
     done
 
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local exec_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers))
 
     debug_log "Initializing Python virtual environment on execution nodes..."
@@ -1679,7 +1684,9 @@ setup_slurm_samples() {
 setup_slurm_unprivileged_user() {
     local user="${SLURM_SUBMIT_USER:-cedana}"
     local uid="${SLURM_SUBMIT_UID:-2000}"
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local all_nodes=("$SLURM_CONTROLLER_CONTAINER" "$(slurm_submission_container)" $(_slurm_compute_containers) $(_slurm_login_containers))
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local compute_nodes=($(_slurm_compute_containers))
 
     info_log "Creating unprivileged submit user '$user' (uid $uid) on cluster nodes..."
