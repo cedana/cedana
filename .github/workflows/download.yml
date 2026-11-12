@@ -883,11 +883,18 @@ jobs:
 
   # cedana-samples' lite image at the version: its /cedana-samples (every workload built, the
   # Kubernetes manifests, the SLURM scripts) for the test jobs to install, with the image's digest
-  # in /cedana-samples/.image for the pods they start.
+  # in /cedana-samples/.image for the pods they start. A job per arch, as one pulling and packing
+  # both in turn (~17s) was the last of the downloads every test job waits for.
   samples:
     name: Samples
     if: ${{ inputs.samples_version != 'none' }}
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: true
+      matrix:
+        arch:
+          - amd64
+          - arm64
     steps:
       - name: Login to Docker Hub
         uses: docker/login-action@v4
@@ -915,32 +922,26 @@ jobs:
           done
           [ -n "${digest:-}" ] || { echo "::error::$ref isn't published"; exit 1; }
           echo "image=${ref%:*}@$digest" >> "$GITHUB_OUTPUT"
-          echo "cedana-samples: $ref = ${ref%:*}@$digest" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ matrix.arch }}" = amd64 ]; then
+            echo "cedana-samples: $ref = ${ref%:*}@$digest" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Extract workloads
         env:
           IMAGE: ${{ steps.image.outputs.image }}
+          ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
-          for arch in amd64 arm64; do
-            id=$(docker create --platform "linux/$arch" "$IMAGE")
-            mkdir -p "out/$arch"
-            docker cp "$id:/cedana-samples" "out/$arch/"
-            docker rm "$id" >/dev/null
-            docker rmi "$IMAGE" >/dev/null # the other platform's pull can't overwrite the same digest
-            echo "$IMAGE" > "out/$arch/cedana-samples/.image"
-            tar -czf "samples-$arch.tar.gz" -C "out/$arch" cedana-samples
-          done
-          ls -la samples-*.tar.gz
+          id=$(docker create --platform "linux/$ARCH" "$IMAGE")
+          mkdir -p "out/$ARCH"
+          docker cp "$id:/cedana-samples" "out/$ARCH/"
+          docker rm "$id" >/dev/null
+          echo "$IMAGE" > "out/$ARCH/cedana-samples/.image"
+          tar -czf "samples-$ARCH.tar.gz" -C "out/$ARCH" cedana-samples
+          ls -la "samples-$ARCH.tar.gz"
 
-      - name: Upload samples (amd64)
+      - name: Upload samples
         uses: actions/upload-artifact@v6
         with:
-          name: samples-amd64
-          path: samples-amd64.tar.gz
-
-      - name: Upload samples (arm64)
-        uses: actions/upload-artifact@v6
-        with:
-          name: samples-arm64
-          path: samples-arm64.tar.gz
+          name: samples-${{ matrix.arch }}
+          path: samples-${{ matrix.arch }}.tar.gz
