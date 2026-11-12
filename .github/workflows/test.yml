@@ -97,6 +97,7 @@ jobs:
   unit:
     name: Unit
     runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache # compiles test binaries in parallel
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -186,6 +187,7 @@ jobs:
   script:
     name: Script
     runs-on: runs-on=${{github.run_id}}/runner=1cpu-${{ matrix.arch }}/extras=s3-cache
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:

@@ -50,9 +50,12 @@ on:
         default: "cedana/cedana-test"
 
 jobs:
+  # Also builds the k8s plugin (the only one the image needs), so the image waits for this job
+  # alone rather than for every plugin build
   cedana:
     name: Cedana
-    runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}/extras=s3-cache # finishes with the plugin builds, which the image waits for too
+    runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}/extras=s3-cache
+    timeout-minutes: 30
     strategy:
       fail-fast: true
       matrix:
@@ -66,19 +69,22 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
+      # First, so the go build cache entries download while the rest sets up (RunsOn v3.6+)
       - uses: runs-on/action@v2
+        with:
+          remote_cache: go
 
       - name: Install dependencies
         run: |
           # Some Rocky mirrors crawl at ~150 kB/s; move on to another mirror if slower than 1 MB/s for 15s
-          dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 git make gcc findutils
+          # git-core: git without its perl/openssh dependencies, which nothing here uses
+          dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 --setopt=install_weak_deps=False \
+            git-core make gcc findutils
 
       - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
           submodules: recursive
           token: ${{ secrets.GIT_CI_PAT }}
 
@@ -89,7 +95,15 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
-          cache: true
+          cache: false # the build cache is runs-on/action's remote cache, the modules are cached below
+
+      # Per target: each needs different modules, and a shared key only keeps its first saver's
+      - name: Cache Go modules
+        uses: actions/cache@v5
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ matrix.arch }}-cedana-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-mod-${{ matrix.arch }}-cedana-
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -102,6 +116,23 @@ jobs:
           VERSION=${{ github.head_ref || github.ref_name }}
           make cedana VERSION=$VERSION -j $(nproc)
           echo $VERSION > ./cedana-version.txt
+
+      - name: Build k8s plugin
+        if: inputs.plugins || inputs.image
+        env:
+          VERSION: ${{ github.head_ref || github.ref_name }}
+        run: |
+          make "${PWD}/libcedana-k8s.so" VERSION="$VERSION" -j "$(nproc)"
+          echo "$VERSION" > ./plugin-version.txt
+
+      - name: Upload k8s plugin
+        if: inputs.plugins || inputs.image
+        uses: actions/upload-artifact@v6
+        with:
+          name: plugin-${{ matrix.arch }}-k8s
+          path: |
+            ./libcedana-k8s.so
+            ./plugin-version.txt
 
       - id: "inject-version"
         name: Inject VERSION into install-release.sh
@@ -127,10 +158,11 @@ jobs:
   plugin:
     name: Plugin
     runs-on: runs-on=${{github.run_id}}/runner=2cpu-${{ matrix.arch }}/extras=s3-cache # 1cpu's 2 GiB is too little for storage/s3 (the AWS SDK) on arm64
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        plugin:
+        plugin: # k8s is built by the cedana job, for the image
           - runc
           - crun
           - containerd
@@ -138,7 +170,6 @@ jobs:
           - crio
           - kata
           - cloud-hypervisor
-          - k8s
           - slurm
           - storage/cedana
           - storage/s3
@@ -154,19 +185,22 @@ jobs:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
     steps:
+      # First, so the go build cache entries download while the rest sets up (RunsOn v3.6+)
       - uses: runs-on/action@v2
+        with:
+          remote_cache: go
 
       - name: Install dependencies
         run: |
           # Some Rocky mirrors crawl at ~150 kB/s; move on to another mirror if slower than 1 MB/s for 15s
-          dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 git make gcc findutils
+          # git-core: git without its perl/openssh dependencies, which nothing here uses
+          dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 --setopt=install_weak_deps=False \
+            git-core make gcc findutils
 
       - uses: actions/checkout@v5
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
           submodules: recursive
           token: ${{ secrets.GIT_CI_PAT }}
 
@@ -177,7 +211,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: "go.mod"
-          cache: true
+          cache: false # the build cache is runs-on/action's remote cache, the modules are cached below
 
       - name: Setup debugging session
         uses: mxschmitt/action-tmate@v3
@@ -191,6 +225,14 @@ jobs:
         run: |
           PLUGIN=$(echo $PLUGIN | sed 's/\//-/g')
           echo "PLUGIN=$PLUGIN" >> $GITHUB_ENV
+
+      # Per target: each needs different modules, and a shared key only keeps its first saver's
+      - name: Cache Go modules
+        uses: actions/cache@v5
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-${{ matrix.arch }}-${{ env.PLUGIN }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: go-mod-${{ matrix.arch }}-${{ env.PLUGIN }}-
 
       - name: Build
         env:
@@ -211,6 +253,7 @@ jobs:
   image:
     name: Image
     runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/extras=s3-cache
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -218,19 +261,16 @@ jobs:
           - amd64
           - arm64
     if: inputs.image
-    needs: [cedana, plugin]
+    needs: [cedana] # which builds the k8s plugin too
     permissions:
       contents: read
       packages: write
     steps:
       - uses: runs-on/action@v2
-      - name: Checkout
+      - name: Checkout # the build context: the Dockerfile copies in the prebuilt binaries, so no history or submodules
         uses: actions/checkout@v5
         with:
-          fetch-depth: 0
           ref: ${{ inputs.ref }}
-          fetch-tags: true
-          submodules: recursive
           token: ${{ secrets.GIT_CI_PAT }}
 
       - name: Download binary
