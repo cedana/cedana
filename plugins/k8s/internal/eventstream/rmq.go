@@ -658,6 +658,11 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				dumpReq.Streams = int32(req.Overrides.Streams)
 				dumpReq.Async = req.Overrides.Async
 				dumpReq.GPUDelta = req.Overrides.Incremental
+				if req.Overrides.Incremental != nil && *req.Overrides.Incremental {
+					// CPU side of the same chain. Copy first: dumpReq.Criu may be the shared defaults.
+					dumpReq.Criu = proto.Clone(dumpReq.Criu).(*criu.CriuOpts)
+					dumpReq.Criu.TrackMem = proto.Bool(true)
+				}
 			}
 			log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
 			dumpReqs = append(dumpReqs, dumpReq)

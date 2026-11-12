@@ -48,6 +48,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 		gpu.Dump(s.gpus),
 
 		process.SaveProcessStateForDump,
+		criu.IncrementalForDump,
 		criu.CheckOptsForDump,
 	}
 
@@ -100,6 +101,7 @@ func (s *Cedana) Dump(req *daemon.DumpReq) (*daemon.DumpResp, error) {
 		gpu.Dump(s.gpus),
 
 		process.SaveProcessStateForDump,
+		criu.IncrementalForDump,
 		criu.CheckOptsForDump,
 	}
 
