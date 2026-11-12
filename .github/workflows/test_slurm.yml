@@ -77,11 +77,16 @@ jobs:
   # when the version list only exists at runtime. Instead the `slurm` dimension below is
   # pinned to the first entry, and the remaining legs are generated here and appended
   # with `include`. Revert the commit that added this to sweep every version again.
+  #
+  # Each leg is also split by suite: the SLURM tests (with the unprivileged ones), the
+  # preemption tests and the namespace tests each run in a job of their own, on a cluster
+  # of their own set up the same way, rather than one after another on one cluster.
   versions:
     name: Slurm Matrix
     runs-on: ubuntu-24.04
     outputs:
       compat: ${{ steps.compat.outputs.legs }}
+      suites: ${{ steps.compat.outputs.suites }}
     steps:
       - name: List versions to smoke-test
         id: compat
@@ -89,9 +94,13 @@ jobs:
           SLURM_VERSIONS: ${{ inputs.slurm_versions }}
         run: |
           set -euo pipefail
+          suites='["samples","preemption","namespace"]'
+          echo "suites=$suites" >> "$GITHUB_OUTPUT"
+
           # Everything after the first entry, which the matrix below sweeps in full.
-          legs=$(jq -c '.[1:]
-            | map({compute: "CPU", slurm: ., unprivileged: "0", nfs: "no_root_squash"})' \
+          legs=$(jq -c --argjson suites "$suites" '.[1:]
+            | map({compute: "CPU", slurm: ., unprivileged: "0", nfs: "no_root_squash"})
+            | [.[] as $leg | $suites[] | $leg + {suite: .}]' \
             <<<"$SLURM_VERSIONS")
           echo "legs=$legs" >> "$GITHUB_OUTPUT"
 
@@ -99,7 +108,9 @@ jobs:
           echo "Swept in full (every compute/unprivileged/NFS combination):"
           jq -r '.[0] | "  \(.)"' <<<"$SLURM_VERSIONS"
           echo "Smoke-tested (one CPU leg each):"
-          jq -r '.[] | "  \(.slurm)"' <<<"$legs"
+          jq -r '[.[].slurm] | unique | .[] | "  \(.)"' <<<"$legs"
+          echo "Each leg split into a job per suite:"
+          jq -r '.[] | "  \(.)"' <<<"$suites"
 
   slurm-ansible:
     name: Slurm (Ansible)
@@ -319,7 +330,7 @@ jobs:
           if-no-files-found: warn
 
   slurm:
-    name: Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }})
+    name: Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }}, ${{ matrix.suite }})
     needs: versions
     runs-on: ${{ format(
       'runs-on={0}/runner={1}-amd64{2}/tag=slurm-{3}',
@@ -344,6 +355,8 @@ jobs:
         nfs:
           - root_squash
           - no_root_squash
+        # Which tests the job runs (see the `versions` job).
+        suite: ${{ fromJSON(needs.versions.outputs.suites) }}
         exclude:
           - compute: CUDA
             nfs: root_squash
@@ -599,6 +612,7 @@ jobs:
           validate_slurm_propagator
 
       - name: Run SLURM tests
+        if: matrix.suite == 'samples'
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -652,7 +666,7 @@ jobs:
           exit "$test_exit_code"
 
       - name: Run SLURM preemption tests
-        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.suite == 'preemption' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -703,7 +717,7 @@ jobs:
           exit "$test_exit_code"
 
       - name: Run SLURM unprivileged tests
-        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' }}
+        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' && matrix.suite == 'samples' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -752,9 +766,9 @@ jobs:
 
           exit "$test_exit_code"
 
-      # Restarts SLURM with a different config, so it runs last and on its own.
+      # Restarts SLURM with a different config, so it runs on a cluster of its own.
       - name: Run SLURM namespace tests
-        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.suite == 'namespace' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -821,6 +835,7 @@ jobs:
             echo "matrix_arch=amd64"
             echo "matrix_compute=${{ matrix.compute }}"
             echo "matrix_slurm=${{ matrix.slurm }}"
+            echo "matrix_suite=${{ matrix.suite }}"
             echo "sample_root=$SAMPLE_ROOT"
           } >"$ARTIFACT_DIR/context.txt"
 
@@ -892,13 +907,13 @@ jobs:
 
       - name: Label reports # with the job name, so the summary can link to it
         if: always()
-        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }})" |' {} +
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }}, ${{ matrix.suite }})" |' {} +
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: test-report-amd64-slurm-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}
+          name: test-report-amd64-slurm-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}-${{ matrix.suite }}
           path: | # with the suite's warnings (see report_warning), shown in the summary
             /tmp/report*.xml
             /tmp/warnings.jsonl
@@ -907,7 +922,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: slurm-debug-logs-amd64-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}
+          name: slurm-debug-logs-amd64-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}-${{ matrix.suite }}
           path: |
             /tmp/slurm-debug/**
           if-no-files-found: warn
