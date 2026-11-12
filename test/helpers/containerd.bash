@@ -92,8 +92,57 @@ download_containerd() {
     info_log "Running containerd $version"
 }
 
+# What containerd's script/setup/install-cni installs (the CNI plugins at the version in go.mod's
+# module graph, and its containerd-net config), but from the plugins' release instead of a clone
+# built from source (~40 CPU-seconds of go build on every K3s job)
 install_containerd_plugins() {
     debug_log "Installing CNI plugins..."
-    curl -sSL https://raw.githubusercontent.com/containerd/containerd/refs/heads/main/script/setup/install-cni | bash
-    debug_log "Installed CNI plugins"
+    local version arch
+    version=$(go list -f '{{.Version}}' -m github.com/containernetworking/plugins) || return 1
+    case "$(uname -m)" in
+    aarch64 | arm64) arch=arm64 ;;
+    *) arch=amd64 ;;
+    esac
+    mkdir -p /opt/cni/bin /etc/cni/net.d
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        "https://github.com/containernetworking/plugins/releases/download/$version/cni-plugins-linux-$arch-$version.tgz" |
+        tar -xz -C /opt/cni/bin || {
+        error_log "Failed to download CNI plugins $version"
+        return 1
+    }
+    cat >/etc/cni/net.d/10-containerd-net.conflist <<'EOF'
+{
+  "cniVersion": "1.0.0",
+  "name": "containerd-net",
+  "plugins": [
+    {
+      "type": "bridge",
+      "bridge": "cni0",
+      "isGateway": true,
+      "ipMasq": true,
+      "promiscMode": true,
+      "ipam": {
+        "type": "host-local",
+        "ranges": [
+          [{
+            "subnet": "10.88.0.0/16"
+          }],
+          [{
+            "subnet": "2001:4860:4860::/64"
+          }]
+        ],
+        "routes": [
+          { "dst": "0.0.0.0/0" },
+          { "dst": "::/0" }
+        ]
+      }
+    },
+    {
+      "type": "portmap",
+      "capabilities": {"portMappings": true}
+    }
+  ]
+}
+EOF
+    debug_log "Installed CNI plugins $version"
 }
