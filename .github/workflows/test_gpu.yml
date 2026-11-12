@@ -83,7 +83,14 @@ jobs:
         daemon:
           - isolated
           - persistent
+        # The default suite (~12m of tests, ~8m at PARALLELISM 2) runs in two jobs, split by file
+        # tags (see Run regression tests). The streamer suite (~2m) runs whole, as shard 1.
+        shard:
+          - 1
+          - 2
         exclude: # to reduce CI minutes
+          - cr: streamer
+            shard: 2
           - cuda_version: 12-2
             cr: streamer
           - cuda_version: 12-2
@@ -212,6 +219,7 @@ jobs:
           LARGE: ${{ inputs.large }}
           SOAK_TAG: ${{ !inputs.soak && ',!soak' || '' }}
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
+          SHARD: ${{ matrix.shard }}
         run: |
           # The processes every minute, the last snapshot kept: on a hang that hits the job timeout
           # (which kills this step), it shows what was stuck and in what state (uploaded with the logs)
@@ -219,37 +227,47 @@ jobs:
           trap 'kill $! 2>/dev/null' EXIT
 
           if [ "$STREAMER" = "true" ]; then
-            if [ "$LARGE" = "true" ]; then
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
-            else
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,streamer,!large,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
-            fi
+            TAGS="gpu,streamer"
           else
-            if [ "$LARGE" = "true" ]; then
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
-            else
-              make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=gpu,!streamer,!large,!cuda-samples$SOAK_TAG PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
-            fi
+            TAGS="gpu,!streamer"
           fi
+          if [ "$LARGE" != "true" ]; then
+            TAGS="$TAGS,!large"
+          fi
+          TAGS="$TAGS,!cuda-samples$SOAK_TAG"
+
+          # The default suite's shards, which together are all of it: 1 is the GPU process tests
+          # (gpu, gpuapi, graph, dedup, freeze, csx), 2 the container ones (crun, runc, podman),
+          # each --filter-tags an alternative (bats ORs them). The streamer suite runs whole.
+          ARGS=""
+          if [ "$STREAMER" != "true" ]; then
+            case "$SHARD" in
+              1) TAGS="$TAGS,!crun,!runc,!podman" ;;
+              2) ARGS="--filter-tags $TAGS,runc --filter-tags $TAGS,podman"; TAGS="$TAGS,crun" ;;
+            esac
+          fi
+
+          make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS="$TAGS" ARGS="$ARGS" PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER
 
       - name: Run cuda-samples interception check
         # Samples are CUDA 12.8-built. Run on the 12.8 runner, and on the 13.2
         # runner for backward-compat (12.8 binaries under a newer driver).
         # Missing samples auto-skip, so the same curated list is safe on both.
-        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' }}
+        # On shard 2, the shorter one.
+        if: ${{ !cancelled() && (matrix.cuda_version == '12-8' || matrix.cuda_version == '13-2') && matrix.cr == 'default' && matrix.arch == 'amd64' && matrix.shard == 2 }}
         env:
           PARALLELISM: ${{ env.DEBUG == '1' && 1 || inputs.parallelism }}
         run: make test-regression DAEMON_MODE=${{ matrix.daemon }} TAGS=cuda-samples PARALLELISM=$PARALLELISM RETRIES=$RETRIES DEBUG=$DEBUG FORMATTER=$FORMATTER REPORT=report-cuda-samples
 
       - name: Label reports # with the job name, so the summary can link to it
         if: always()
-        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }}, ${{ matrix.daemon }})" |' {} +
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="CUDA (${{ matrix.cuda_version }}, ${{ matrix.cr }}, ${{ matrix.arch }}, ${{ matrix.daemon }}, ${{ matrix.shard }})" |' {} +
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
+          name: test-report-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}-${{ matrix.shard }}
           path: | # with the suite's warnings (see report_warning), shown in the summary
             /tmp/report*.xml
             /tmp/warnings.jsonl
@@ -260,7 +278,7 @@ jobs:
         if: failure() || cancelled() # a hang that hits the job timeout too
         uses: actions/upload-artifact@v6
         with:
-          name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}
+          name: test-logs-${{ matrix.arch }}-cuda-${{ matrix.cuda_version }}-${{ matrix.cr }}-${{ matrix.daemon }}-${{ matrix.shard }}
           path: |
             /tmp/cedana-daemon-*.log
             /tmp/cedana-*/**/*.log
