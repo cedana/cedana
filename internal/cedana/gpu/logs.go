@@ -206,13 +206,24 @@ func tailLogs(dir string, id string, done <-chan int, old map[string]int64) {
 
 func logFileSizes(dir string) map[string]int64 {
 	sizes := map[string]int64{}
-	entries, _ := os.ReadDir(dir)
-	for _, entry := range entries {
-		if info, err := entry.Info(); err == nil && filepath.Ext(entry.Name()) == ".log" {
-			sizes[entry.Name()] = info.Size()
+	dirFile, err := openLogDir(dir)
+	if err != nil {
+		return sizes
+	}
+	defer dirFile.Close()
+	for {
+		names, err := dirFile.Readdirnames(LOG_DIR_BATCH_SIZE)
+		for _, name := range names {
+			var stat unix.Stat_t
+			if len(sizes) < MAX_LOG_FILES && filepath.Ext(name) == ".log" &&
+				unix.Fstatat(int(dirFile.Fd()), name, &stat, unix.AT_SYMLINK_NOFOLLOW) == nil {
+				sizes[name] = stat.Size
+			}
+		}
+		if err != nil || len(sizes) >= MAX_LOG_FILES {
+			return sizes
 		}
 	}
-	return sizes
 }
 
 // The workload owns its log directory, so we don't follow a link put in its place
