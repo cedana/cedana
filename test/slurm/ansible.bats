@@ -179,13 +179,18 @@ LOGIN_01="slurm-login-01"
     [[ "$output" == *required* ]] || [[ "$output" == *"node role"* ]]
 }
 
-@test "Roles: cedana slurm setup --node-role login is a no-op" {
+@test "Roles: cedana slurm setup --node-role login sets up the SPANK plugin" {
     run docker exec \
+        -e CEDANA_PLUGINS_BUILDS=local \
+        -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH=/usr/local/lib:/usr/local/bin \
         -e CEDANA_PLUGINS_LIB_DIR=/usr/local/lib \
         -e CEDANA_PLUGINS_BIN_DIR=/usr/local/bin \
         "$LOGIN_01" cedana slurm setup --node-role login
     [ "$status" -eq 0 ]
-    [[ "$output" == *login* ]]
+    [[ "$output" == *"set up (login)"* ]]
+    # cedana-task's local copy is for workers only
+    run docker exec "$LOGIN_01" test -e /usr/libexec/cedana
+    [ "$status" -ne 0 ]
 }
 
 ##############################
