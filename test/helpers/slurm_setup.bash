@@ -1117,6 +1117,8 @@ EOF
     # Login nodes after the controller and the workers: the plugin directory is shared.
     for c in "${login_containers[@]}"; do
         docker exec \
+            -e CEDANA_PLUGINS_BUILDS="local" \
+            -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_SLURM_NODE_ROLE="login" \
