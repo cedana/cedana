@@ -93,6 +93,9 @@ on:
       slurm_versions:
         description: "SLURM versions, from cedana-slurm's slurm-versions file (JSON array)"
         value: ${{ jobs.slurm-versions.outputs.versions }}
+      slurm_node_suffix:
+        description: "Suffix of cedana-slurm's node image tags (cedana/cedana-slurm-node:<version><suffix>): empty at main's slurm-node.Dockerfile, else -wip-<its hash> (see cedana-slurm's publish.yml)"
+        value: ${{ jobs.slurm-versions.outputs.node_suffix }}
 
 jobs:
   cedana:
@@ -712,6 +715,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       versions: ${{ steps.read.outputs.versions }}
+      node_suffix: ${{ steps.node.outputs.suffix }}
     steps:
       - name: Checkout cedana-slurm
         uses: actions/checkout@v5
@@ -719,7 +723,9 @@ jobs:
           repository: cedana/cedana-slurm
           ref: ${{ inputs.slurm_ref != '' && inputs.slurm_ref || (inputs.slurm_version == 'release' && 'main' || inputs.slurm_version) }}
           token: ${{ secrets.GIT_CI_PAT }}
-          sparse-checkout: slurm-versions
+          sparse-checkout: |
+            slurm-versions
+            docker/slurm-node.Dockerfile
           sparse-checkout-cone-mode: false
 
       - name: Read slurm-versions
@@ -731,6 +737,21 @@ jobs:
           json=$(jq -Rsc 'split("\n") | map(select(. != ""))' <<<"$versions")
           echo "versions=$json" >> "$GITHUB_OUTPUT"
           echo "Resolved SLURM versions: $json"
+
+      # The node images (cedana-slurm's publish.yml) at main's Dockerfile are tagged <version>;
+      # at another (a PR that changes it), <version>-wip-<the Dockerfile's git blob>
+      - name: Resolve node image tags
+        id: node
+        run: |
+          set -euo pipefail
+          git fetch -q --depth=1 origin main
+          file=docker/slurm-node.Dockerfile
+          suffix=
+          if [ "$(git rev-parse "HEAD:$file")" != "$(git rev-parse "FETCH_HEAD:$file")" ]; then
+            suffix="-wip-$(git rev-parse --short=12 "HEAD:$file")"
+          fi
+          echo "suffix=$suffix" >> "$GITHUB_OUTPUT"
+          echo "Node image tags: <version>$suffix"
 
   slurm:
     name: Slurm

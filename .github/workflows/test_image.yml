@@ -1,0 +1,213 @@
+name: Test Image
+
+# The test images the test jobs run in: cedana/cedana-test:latest (test/Dockerfile) and :cuda
+# (test/cuda.Dockerfile). Each is also tagged by its Dockerfile's content, wip-<hash> and
+# cuda-wip-<hash> (the hash is the Dockerfile's git blob; the Dockerfiles copy nothing from their
+# context, so the Dockerfile is all of the image but its base images), and built only where that
+# tag is missing.
+#
+# At a ref whose Dockerfile is main's, the tests use latest/cuda, which this keeps at main's
+# Dockerfile: a merge retags the image its PR built rather than building it again. Where the
+# Dockerfile differs from main's (a PR that changes it), they use its hash tag, so a PR is tested
+# with its own image and every other run keeps main's.
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        type: string
+        description: "The branch, tag, or SHA to run on"
+        required: false
+        default: ""
+      image_name:
+        type: string
+        description: "Name of the test Docker image"
+        required: false
+        default: "cedana/cedana-test"
+    outputs:
+      image:
+        description: "The test image for the ref (latest, or its Dockerfile's hash tag)"
+        value: ${{ jobs.resolve.outputs.image }}
+      image_cuda:
+        description: "The CUDA test image for the ref (cuda, or its Dockerfile's hash tag)"
+        value: ${{ jobs.resolve.outputs.image_cuda }}
+
+jobs:
+  resolve:
+    name: Resolve
+    runs-on: runs-on=${{github.run_id}}/pool=1cpu-amd64
+    timeout-minutes: 10
+    outputs:
+      image: ${{ steps.resolve.outputs.image }}
+      image_cuda: ${{ steps.resolve.outputs.image_cuda }}
+      builds: ${{ steps.resolve.outputs.builds }}
+    steps:
+      - uses: runs-on/action@v2
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.GIT_CI_PAT }}
+          sparse-checkout: test
+
+      - name: Login to Docker hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Resolve images
+        id: resolve
+        env:
+          IMAGE: ${{ inputs.image_name }}
+        run: |
+          set -euo pipefail
+          git fetch -q --depth=1 origin main
+          digest() { docker buildx imagetools inspect "$1" --format '{{json .Manifest}}' 2>/dev/null | jq -r .digest; }
+
+          builds='[]'
+          for name in latest cuda; do
+            file=test/Dockerfile prefix=
+            if [ "$name" = cuda ]; then file=test/cuda.Dockerfile prefix=cuda-; fi
+            hash=$(git rev-parse --short=12 "HEAD:$file")
+            wip="$IMAGE:${prefix}wip-$hash"
+            have=$(digest "$wip" || true)
+
+            if [ "$(git rev-parse "HEAD:$file")" = "$(git rev-parse "FETCH_HEAD:$file")" ]; then
+              # main's Dockerfile: the moving tag, kept at it
+              use="$IMAGE:$name"
+              tags="$wip $use"
+              if [ -n "$have" ] && [ "$(digest "$use" || true)" != "$have" ]; then
+                docker buildx imagetools create -t "$use" "$wip"
+                echo "$use: retagged $wip" >> "$GITHUB_STEP_SUMMARY"
+              fi
+            else
+              use="$wip"
+              tags="$wip"
+            fi
+
+            if [ -z "$have" ]; then
+              builds=$(jq -c --arg name "$name" --arg file "$file" --arg tags "$tags" \
+                '. + [{name: $name, file: $file, tags: $tags}]' <<<"$builds")
+              echo "$use: building ($file)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "$use: $wip, built" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "$( [ "$name" = cuda ] && echo image_cuda || echo image )=$use" >> "$GITHUB_OUTPUT"
+          done
+          echo "builds=$builds" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: resolve
+    if: needs.resolve.outputs.builds != '[]'
+    # sticky: BuildKit's state lives on a sticky disk per image and arch, so a Dockerfile change
+    # rebuilds only the layers from the change on
+    runs-on: runs-on=${{github.run_id}}/runner=4cpu-${{ matrix.arch }}/sticky=buildkit-test-${{ matrix.image.name }}-${{ matrix.arch }}:60gb
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.resolve.outputs.builds) }}
+        arch:
+          - amd64
+          - arm64
+    steps:
+      - id: runs-on
+        uses: runs-on/action@v2
+        with:
+          sticky_cache: buildkit
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          repository: cedana/cedana # required for workflows reusing this workflow
+          ref: ${{ inputs.ref }}
+          token: ${{ secrets.GIT_CI_PAT }}
+          sparse-checkout: test
+
+      # The builder RunsOn's buildkit sticky cache expects (see runs-on/action)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        with:
+          name: ${{ steps.runs-on.outputs.buildkit-builder }}
+          version: v0.34.1
+          driver: docker-container
+          driver-opts: |
+            image=moby/buildkit:v0.31.1
+          cleanup: false
+
+      - name: Login to Docker hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          builder: ${{ steps.runs-on.outputs.buildkit-builder }}
+          context: ./test
+          file: ./${{ matrix.image.file }}
+          platforms: linux/${{ matrix.arch }}
+          outputs: |
+            type=image,name=${{ inputs.image_name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=s3,blobs_prefix=cache/${{ github.repository }}/,manifests_prefix=cache/${{ github.repository }}/test-${{ matrix.image.name }}-${{ matrix.arch }},region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }}
+          cache-to: type=s3,blobs_prefix=cache/${{ github.repository }}/,manifests_prefix=cache/${{ github.repository }}/test-${{ matrix.image.name }}-${{ matrix.arch }},region=${{ env.RUNS_ON_AWS_REGION }},bucket=${{ env.RUNS_ON_S3_BUCKET_CACHE }},mode=max
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v6
+        with:
+          name: test-image-digests-${{ matrix.image.name }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+
+  tag:
+    name: Tag
+    needs: [resolve, build]
+    runs-on: runs-on=${{github.run_id}}/pool=1cpu-amd64
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.resolve.outputs.builds) }}
+    steps:
+      - uses: runs-on/action@v2
+
+      - name: Download digests
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: test-image-digests-${{ matrix.image.name }}-*
+          merge-multiple: true
+
+      - name: Login to Docker hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ inputs.image_name }}
+          TAGS: ${{ matrix.image.tags }}
+        run: |
+          set -euo pipefail
+          args=()
+          for t in $TAGS; do args+=(-t "$t"); done
+          docker buildx imagetools create "${args[@]}" $(printf "$IMAGE@sha256:%s " *)
+          for t in $TAGS; do docker buildx imagetools inspect "$t" >/dev/null; done
