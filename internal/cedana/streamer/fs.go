@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	goio "io"
 	"net"
 	"os"
 	"os/exec"
@@ -76,6 +77,7 @@ func NewStreamingFs(
 	storagePath string,
 	streams int32,
 	mode Mode,
+	onFail func(error), // called when a shard fails authentication, to stop what reads the image; may be nil
 	compressions ...string,
 ) (fs *Fs, wait func() error, err error) {
 	_, end := profiling.StartTimingCategory(ctx, "streamer", NewStreamingFs, "startup")
@@ -90,6 +92,14 @@ func NewStreamingFs(
 	}
 
 	log := log.With().Str("plugin", "streamer").Str("path", storagePath).Int32("streams", streams).Str("mode", mode.String()).Logger()
+
+	var key []byte
+	if keyPath := config.Global.Checkpoint.EncryptionKey; keyPath != "" {
+		key, err = cedana_io.LoadEncryptionKey(keyPath)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
 	// Create pipes for reading and writing data to/from the streamer to dir
 	var readFds, writeFds []*os.File
@@ -109,18 +119,37 @@ func NewStreamingFs(
 	wg := &sync.WaitGroup{}
 	io := &sync.WaitGroup{}
 	io.Add(int(streams))
-	ioErr := make(chan error, streams)
+	ioErr := make(chan error, 2*streams) // each shard may report a copy error and a close error
 	paths, err := imgPaths(ctx, storage, storagePath, mode, streams)
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Cancelling this kills the streamer: a shard that fails to decrypt fails the restore at once
+	// instead of leaving CRIU waiting on images that never come
+	streamerCtx, abort := context.WithCancel(ctx)
+	defer func() {
+		if err != nil {
+			abort()
+		}
+	}()
 	for i := range streams {
 		switch mode {
 		case READ_ONLY:
 			defer readFds[i].Close()
-			compression, err := cedana_io.CompressionFromExt(paths[i])
+			encrypted, plainPath := cedana_io.IsEncrypted(paths[i])
+			if encrypted && key == nil {
+				return nil, nil, fmt.Errorf("checkpoint is encrypted: set checkpoint.encryption_key to restore it")
+			}
+			compression, err := cedana_io.CompressionFromExt(plainPath)
 			if err != nil {
 				return nil, nil, err
+			}
+			if encrypted {
+				// A wrong key fails here, clearly, rather than as a dead streamer later
+				if err := checkEncryptionKey(ctx, storage, paths[i], key, filepath.Base(plainPath)); err != nil {
+					return nil, nil, err
+				}
 			}
 			file, err := storage.Open(ctx, paths[i])
 			if err != nil {
@@ -140,11 +169,27 @@ func NewStreamingFs(
 					fmt.Sprintf("shard-%d", i),
 					compression,
 				)
-				_, err := cedana_io.ReadFrom(file, writeFds[i], compression)
-				writeFds[i].Close()
-				if err != nil {
-					ioErr <- err
+				var src goio.Reader = file
+				if encrypted {
+					src, err = cedana_io.NewEncryptionReader(file, key, filepath.Base(plainPath))
+					if err != nil {
+						writeFds[i].Close()
+						ioErr <- err
+						return
+					}
 				}
+				_, err := cedana_io.ReadFrom(src, writeFds[i], compression)
+				if err != nil {
+					ioErr <- err // before the close below ends the streamer, so it is the error reported
+					if errors.Is(err, cedana_io.ErrDecrypt) {
+						log.Error().Err(err).Str("shard", filepath.Base(paths[i])).Msg("checkpoint failed authentication, aborting restore")
+						abort()
+						if onFail != nil {
+							onFail(err)
+						}
+					}
+				}
+				writeFds[i].Close()
 			}()
 		case WRITE_ONLY:
 			defer writeFds[i].Close()
@@ -153,6 +198,10 @@ func NewStreamingFs(
 				return nil, nil, err
 			}
 			path := paths[i] + ext
+			name := filepath.Base(path)
+			if key != nil {
+				path += cedana_io.ENCRYPTED_EXT
+			}
 			file, err := storage.Create(ctx, path)
 			if err != nil {
 				return nil, nil, err
@@ -171,8 +220,21 @@ func NewStreamingFs(
 					fmt.Sprintf("shard-%d", i),
 					compression,
 				)
-				_, err := cedana_io.WriteTo(readFds[i], file, compression)
+				var dst goio.Writer = file
+				var enc goio.WriteCloser
+				if key != nil {
+					if enc, err = cedana_io.NewEncryptionWriter(file, key, name); err != nil {
+						readFds[i].Close()
+						ioErr <- err
+						return
+					}
+					dst = enc
+				}
+				_, err := cedana_io.WriteTo(readFds[i], dst, compression)
 				readFds[i].Close()
+				if err == nil && enc != nil {
+					err = enc.Close() // the last segment; without it the file does not decrypt
+				}
 				if err != nil {
 					ioErr <- err
 				}
@@ -197,7 +259,7 @@ func NewStreamingFs(
 		return nil, nil, fmt.Errorf("invalid mode: %d", mode)
 	}
 
-	cmd := exec.CommandContext(ctx, streamerBinary, args...)
+	cmd := exec.CommandContext(streamerCtx, streamerBinary, args...)
 	cmd.ExtraFiles = extraFiles
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Pdeathsig: syscall.SIGTERM,
@@ -283,6 +345,13 @@ func NewStreamingFs(
 		conn, err = net.Dial("unix", filepath.Join(imagesDir, CAPTURE_SOCK))
 	}
 	if err != nil {
+		select {
+		case e := <-ioErr:
+			if errors.Is(e, cedana_io.ErrDecrypt) {
+				return nil, nil, e
+			}
+		default:
+		}
 		return nil, nil, fmt.Errorf("failed to connect to streamer: %w: %s", err, lastMsg)
 	}
 	fs.conn = conn.(*net.UnixConn)
@@ -297,6 +366,7 @@ func NewStreamingFs(
 		close(ioErr)
 		cmd.Process.Signal(syscall.SIGTERM)
 		wg.Wait()
+		abort()
 		var err error
 		for e := range ioErr {
 			err = errors.Join(err, e)
@@ -453,47 +523,55 @@ func (m Mode) String() string {
 	}
 }
 
-/* retries until streamer is ready */
-func (fs *Fs) waitForStreamerReady(name string) error {
+// Sends a file request and, when reading, waits until the streamer has the file.
+// The streamer answers each request once, so NOT_READY means asking again.
+func (fs *Fs) requestFile(name string) error {
+	req := &img_streamer.ImgStreamerRequestEntry{Filename: name}
+	data, err := proto.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+	msg := make([]byte, 4+len(data))
+	binary.LittleEndian.PutUint32(msg, uint32(len(data)))
+	copy(msg[4:], data)
+
 	for {
-		resp := &img_streamer.ImgStreamerReplyEntry{}
+		if _, err := fs.conn.Write(msg); err != nil {
+			return fmt.Errorf("failed to write file request: %w", err)
+		}
+		if fs.mode != READ_ONLY {
+			return nil
+		}
+
 		var sizeBuf [4]byte
-		_, err := fs.conn.Read(sizeBuf[:])
-		if err != nil {
+		if _, err := io.ReadFull(fs.conn, sizeBuf[:]); err != nil {
 			return fmt.Errorf("failed to read size from file response: %w", err)
 		}
-		size := binary.LittleEndian.Uint32(sizeBuf[:])
-		data := make([]byte, size)
-		n, err := fs.conn.Read(data)
-		if err != nil {
+		respData := make([]byte, binary.LittleEndian.Uint32(sizeBuf[:]))
+		if _, err := io.ReadFull(fs.conn, respData); err != nil {
 			return fmt.Errorf("failed to read data from file response: %w", err)
 		}
-		if n != int(size) {
-			return fmt.Errorf("failed to read data from file response: expected %d bytes, got %d", size, n)
-		}
-		err = proto.Unmarshal(data, resp)
-		if err != nil {
+		resp := &img_streamer.ImgStreamerReplyEntry{}
+		if err := proto.Unmarshal(respData, resp); err != nil {
 			return fmt.Errorf("failed to unmarshal response: %w", err)
 		}
 		if !resp.HasStatus() {
 			if !resp.Exists {
 				return fmt.Errorf("%w: %s", os.ErrNotExist, name)
 			}
-		} else {
-			status := resp.GetStatus()
-			if status == img_streamer.FileStatus_DOES_NOT_EXIST {
-				return fmt.Errorf("%w: %s", os.ErrNotExist, name)
-			} else if status == img_streamer.FileStatus_NOT_READY {
-				time.Sleep(RETRY_INTERVAL)
-				continue
-			} else if status == img_streamer.FileStatus_READY {
-				break
-			} else {
-				return fmt.Errorf("recieved invalid file status from streamer")
-			}
+			return nil
+		}
+		switch resp.GetStatus() {
+		case img_streamer.FileStatus_DOES_NOT_EXIST:
+			return fmt.Errorf("%w: %s", os.ErrNotExist, name)
+		case img_streamer.FileStatus_NOT_READY:
+			time.Sleep(RETRY_INTERVAL)
+		case img_streamer.FileStatus_READY:
+			return nil
+		default:
+			return fmt.Errorf("recieved invalid file status from streamer")
 		}
 	}
-	return nil
 }
 
 // Opens a pair of file descriptors for reading and writing through the streamer
@@ -524,30 +602,9 @@ func (fs *Fs) openFd(name string) (int, error) {
 		}
 	}()
 
-	// Send file request to streamer
-	req := &img_streamer.ImgStreamerRequestEntry{Filename: name}
-	data, err := proto.Marshal(req)
+	err = fs.requestFile(name)
 	if err != nil {
-		return 0, fmt.Errorf("failed to marshal request: %w", err)
-	}
-	size := len(data)
-	var sizeBuf [4]byte
-	binary.LittleEndian.PutUint32(sizeBuf[:], uint32(size))
-	_, err = fs.conn.Write(sizeBuf[:])
-	if err != nil {
-		return 0, fmt.Errorf("failed to write size to file request: %w", err)
-	}
-	_, err = fs.conn.Write(data)
-	if err != nil {
-		return 0, fmt.Errorf("failed to write data to file request: %w", err)
-	}
-
-	// If read-only, read for msg from streamer if file exists
-	if fs.mode == READ_ONLY {
-		err = fs.waitForStreamerReady(name)
-		if err != nil {
-			return 0, err
-		}
+		return 0, err
 	}
 
 	sock, err := fs.conn.File()
@@ -646,4 +703,21 @@ func IsStreamable(ctx context.Context, storage cedana_io.Storage, dir string) (s
 	}
 
 	return int32(matches), nil
+}
+
+// checkEncryptionKey authenticates the first segment of an encrypted shard with key.
+func checkEncryptionKey(ctx context.Context, storage cedana_io.Storage, path string, key []byte, name string) error {
+	file, err := storage.Open(ctx, path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	r, err := cedana_io.NewEncryptionReader(file, key, name)
+	if err != nil {
+		return fmt.Errorf("%s: %w", filepath.Base(path), err)
+	}
+	if _, err := r.Read(make([]byte, 1)); err != nil && err != goio.EOF {
+		return fmt.Errorf("%s: %w", filepath.Base(path), err)
+	}
+	return nil
 }

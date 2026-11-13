@@ -95,6 +95,9 @@ type (
 		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
 		// checkpoint request to return early.
 		Async bool `json:"async" key:"async" yaml:"async" mapstructure:"async"`
+		// EncryptionKey is the path to a raw 32-byte key. When set, checkpoints are encrypted and
+		// authenticated as they are written (streaming checkpoints only), and restores need the same key.
+		EncryptionKey string `json:"encryption_key" key:"encryption_key" yaml:"encryption_key" mapstructure:"encryption_key"`
 	}
 
 	DB struct {

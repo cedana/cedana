@@ -126,6 +126,7 @@ func DumpFilesystem(streams int32) types.Adapter[types.Dump] {
 				storagePath,
 				streams,
 				WRITE_ONLY,
+				nil,
 				compression,
 			)
 			if err != nil {
