@@ -907,7 +907,9 @@ test_pod_spec() {
                 fi
 
                 debug_log "Deleting pod $name before restore..."
-                kubectl delete pod "$name" -n "$namespace" --wait=true || {
+                # --grace-period=1: the workloads' PID 1 (sh -c) ignores SIGTERM, so the default
+                # 30s grace always ends in SIGKILL anyway, only 29s later
+                kubectl delete pod "$name" -n "$namespace" --wait=true --grace-period=1 || {
                     error="Failed to delete pod $name before restore"
                     break
                 }
@@ -994,7 +996,7 @@ test_pod_spec() {
     # Clean up the final pod
     if [ -n "$name" ]; then
         debug_log "Cleaning up pod $name..."
-        kubectl delete pod "$name" -n "$namespace"
+        kubectl delete pod "$name" -n "$namespace" --grace-period=1 # see RESTORE above
     fi
 
     if [ -n "$error" ]; then

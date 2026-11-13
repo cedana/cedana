@@ -160,6 +160,17 @@ set -eux
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ansible python3-docker
 ansible-galaxy collection install community.docker
+# Ubuntu's ansible ships ~45 collection namespaces (460 MB in 35k files, ~7s of every test job's
+# image pull); cedana-slurm's playbooks use only these, besides ansible.builtin (in ansible-core).
+# The package stays installed, so an `apt-get install ansible` on top is a no-op.
+cd /usr/lib/python3/dist-packages/ansible_collections
+for d in */*/; do
+    case "$d" in
+        community/docker/ | community/general/ | ansible/posix/) ;;
+        *) rm -rf "$d" ;;
+    esac
+done
+find . -mindepth 1 -maxdepth 1 -type d -empty -delete
 EOT
 
 # Configure containerd
