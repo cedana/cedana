@@ -39,15 +39,19 @@ import (
 )
 
 const (
-	CONTROLLER_PROCESS_NAME                = "cedana-gpu-controller"
-	CONTROLLER_ADDRESS_FORMATTER           = "unix://%s/cedana-gpu-controller-%s.sock"
-	CONTROLLER_SOCKET_FORMATTER            = "%s/cedana-gpu-controller-%s.sock"
-	CONTROLLER_SOCKET_PATTERN              = "cedana-gpu-controller-(.*).sock"
-	CONTROLLER_SHM_FILE_FORMATTER          = "/dev/shm/cedana-gpu.%s"
-	CONTROLLER_SHM_FILE_PATTERN            = "/dev/shm/cedana-gpu.(.*)"
-	CONTROLLER_HOSTMEM_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
-	CONTROLLER_HOSTMEM_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
-	CONTROLLER_MISC_DIR_FORMATTER          = "/dev/shm/cedana-gpu.%s.misc"
+	CONTROLLER_PROCESS_NAME           = "cedana-gpu-controller"
+	CONTROLLER_ADDRESS_FORMATTER      = "unix://%s/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_FORMATTER       = "%s/cedana-gpu-controller-%s.sock"
+	CONTROLLER_SOCKET_PATTERN         = "cedana-gpu-controller-(.*).sock"
+	CONTROLLER_SHM_FILE_FORMATTER     = "/dev/shm/cedana-gpu.%s"
+	CONTROLLER_SHM_FILE_PATTERN       = "/dev/shm/cedana-gpu.(.*)"
+	CONTROLLER_HOSTMEM_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.misc/hostmem-%d"
+	CONTROLLER_HOSTMEM_FILE_PATTERN   = "/dev/shm/cedana-gpu.(.*).misc/hostmem-(\\d+)"
+	CONTROLLER_MISC_DIR_FORMATTER     = "/dev/shm/cedana-gpu.%s.misc"
+	// Files registered host memory is moved onto when the application sets
+	// CEDANA_GPU_HOSTREG_THP: "cedana-hostreg-<pid>-<n>-<size in hex>" in the controller's directory
+	CONTROLLER_HOSTREG_FILE_FORMATTER      = "/dev/shm/cedana-gpu.%s.misc/%s"
+	CONTROLLER_HOSTREG_FILE_PATTERN        = "/dev/shm/cedana-gpu.(.*).misc/(cedana-hostreg-\\d+-\\d+-([0-9a-f]+))$"
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1     // Signal to the restored process to notify it has a new PID
@@ -223,6 +227,10 @@ func (p *pool) Sync(ctx context.Context) (err error) {
 			continue
 		}
 
+		if !discovered && cgroupFrozen(c.PID) {
+			continue
+		}
+
 		wg.Go(func() {
 			err := c.Sync(ctx, false)
 			if err == nil {
@@ -317,6 +325,11 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_URL="+config.Global.Connection.URL,
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
+		"CEDANA_GPU_SHM_COMMIT="+fmt.Sprintf("%v", config.Global.GPU.ShmCommit),
+		// Read as 0/1, not true/false. IMAGE_ZERO_COPY only takes effect in the app's env,
+		// where the interception library reads it (see config.GPUClientEnv).
+		"CEDANA_GPU_IMAGE_ZERO_COPY="+boolEnv(config.Global.GPU.ImageZeroCopy),
+		"CEDANA_GPU_IMAGE_FORCE_FALLBACK="+boolEnv(config.Global.GPU.ImageForceFallback),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
 		"CEDANA_GPU_RESTORE_NIC="+config.Global.GPU.RestoreNic,
@@ -324,6 +337,9 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_GPU_VERIFY="+config.Global.GPU.Verify,
 		"CEDANA_GPU_PROFILING_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.ProfilingEnabled),
 		"CEDANA_GPU_COMPUTE_SANITIZER="+fmt.Sprintf("%v", config.Global.GPU.ComputeSanitizer),
+		"CEDANA_GPU_DIRECT_IO="+fmt.Sprintf("%v", config.Global.GPU.DirectIO),
+		"CEDANA_GPU_MEM_RING_BUF_SIZE="+fmt.Sprintf("%v", config.Global.GPU.MemRingBufSize),
+		"CEDANA_GPU_SHM_TMPFS="+fmt.Sprintf("%v", config.Global.GPU.ShmTmpfs),
 		// Restores attach twice: at CRIU's setup-namespaces hook and post-restore (see CRIUCallback)
 		"CEDANA_GPU_ATTACH_STAGED=1",
 	)
@@ -376,10 +392,33 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 		return
 	}
 
-	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
-
 	c.Termination.Lock()
 	defer c.Termination.Unlock()
+
+	p.terminate(ctx, c)
+}
+
+// Like Terminate, but returns false at once when a dump or a restore holds Termination.
+// Booking must be held
+func (p *pool) TryTerminate(ctx context.Context, id string) bool {
+	c := p.Get(id)
+	if c == nil {
+		return true
+	}
+
+	if !c.Termination.TryLock() {
+		return false
+	}
+	defer c.Termination.Unlock()
+
+	p.terminate(ctx, c)
+	return true
+}
+
+// Termination must be held
+func (p *pool) terminate(ctx context.Context, c *controller) {
+	id := c.ID
+	log := log.With().Str("ID", id).Uint32("PID", c.PID).Uint32("AttachedPID", c.AttachedPID).Logger()
 
 	if c.Terminating.Load() {
 		log.Debug().Msg("termination of GPU controller already in progress, skipping duplicate termination attempt")
@@ -392,6 +431,8 @@ func (p *pool) Terminate(ctx context.Context, id string) {
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SOCKET_FORMATTER, config.Global.GPU.SockDir, id))
 	defer os.Remove(fmt.Sprintf(CONTROLLER_SHM_FILE_FORMATTER, id))
 	defer os.RemoveAll(fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id))
+	// The controller may have mounted a tmpfs there (and unmounts it when it exits normally)
+	defer unix.Unmount(fmt.Sprintf(CONTROLLER_MISC_DIR_FORMATTER, id), unix.MNT_DETACH)
 	defer c.Booking.Close()
 	defer close(c.Terminated) // Signal that the controller has exited
 
@@ -574,6 +615,8 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				return
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
+			log.Info().Str("checksum", resp.GetVerify().GetChecksum()).Msg("GPU state checksum")
+			setChecksum(ctx, resp.GetVerify().GetChecksum())
 
 			log.Info().Msg("GPU dump complete")
 		}()
@@ -674,9 +717,18 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 				restoreErr <- fmt.Errorf("failed to restore GPU: %v", utils.GRPCError(err))
 				return
 			}
-			log.Info().Msg("GPU restore complete")
+			verify := resp.GetRestoreStats().GetVerify()
+			log.Info().Str("checksum", verify.GetChecksum()).Msg("GPU restore complete")
 
 			restoreProfile = resp.GetProfile()
+			setChecksum(ctx, verify.GetChecksum())
+
+			// Sent to restoreErr before PreResume, so a strict mismatch kills the process unresumed
+			if err := checkChecksum(ctx, verify); err != nil {
+				log.Error().Err(err).Msg("rejecting GPU restore")
+				restoreErr <- err
+				return
+			}
 		}()
 		return nil
 	}
@@ -754,7 +806,35 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 		return err
 	}
 
+	p.freezeWithPtrace(callback, id, log)
+
 	return callback
+}
+
+// setChecksum hands the GPU state checksum to the adapter that asked for it in the context
+// (see keys.GPU_CHECKSUM_CONTEXT_KEY). The adapter reads it only after the GPU dump/restore
+// goroutine is done, once dumpErr/restoreErr is drained.
+func setChecksum(ctx context.Context, checksum string) {
+	if p, ok := ctx.Value(keys.GPU_CHECKSUM_CONTEXT_KEY).(*string); ok {
+		*p = checksum
+	}
+}
+
+// checkChecksum compares the checksum the restore read with the one recorded at dump. Only
+// strict fails; an empty expected checksum (older or verify-off dump) is not checked.
+func checkChecksum(ctx context.Context, verify *gpu.VerifySummary) error {
+	want, _ := ctx.Value(keys.GPU_EXPECTED_CHECKSUM_CONTEXT_KEY).(string)
+	if want == "" || verify.GetChecksum() == want {
+		return nil
+	}
+	err := fmt.Errorf("GPU state checksum mismatch: dump recorded %q, restore read %q", want, verify.GetChecksum())
+	if verify.GetMode() == gpu.VerifyMode_VERIFY_STRICT {
+		return err
+	}
+	if verify.GetMode() != gpu.VerifyMode_VERIFY_OFF {
+		log.Warn().Err(err).Msg("continuing: verify mode is not strict")
+	}
+	return nil
 }
 
 func (p *pool) Check(binary string) types.Check {
@@ -874,8 +954,13 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 }
 
 // Forcefully attach to a PID, so that on next Info call, the controller will return this as the attached PID.
-func (c *controller) Attach(ctx context.Context, pid uint32) (err error) {
-	_, err = c.ControllerClient.Attach(ctx, &gpu.AttachReq{PID: pid})
+// deviceMinors are the GPUs a run's container is allocated, which its GPU workers are confined to.
+func (c *controller) Attach(ctx context.Context, pid uint32, deviceMinors ...int) (err error) {
+	req := &gpu.AttachReq{PID: pid}
+	for _, minor := range deviceMinors {
+		req.DeviceMinors = append(req.DeviceMinors, uint32(minor))
+	}
+	_, err = c.ControllerClient.Attach(ctx, req)
 	if err != nil {
 		return utils.GRPCErrorShort(err, c.ErrBuf.String())
 	}
@@ -949,4 +1034,11 @@ func EnsureLogDir(id string, uid, gid uint32) (string, error) {
 		return "", err
 	}
 	return dir, os.Chown(dir, int(uid), int(gid))
+}
+
+func boolEnv(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
 }

@@ -49,18 +49,24 @@ const (
 
 	DEFAULT_CLIENT_WAIT_FOR_READY = false
 
-	DEFAULT_GPU_POOL_SIZE         = 0
-	DEFAULT_GPU_LOG_DIR           = "/tmp"
-	DEFAULT_GPU_SOCK_DIR          = "/tmp"
-	DEFAULT_GPU_SHM_SIZE          = 8 * utils.GIBIBYTE
-	DEFAULT_GPU_DEBUG             = false
-	DEFAULT_GPU_DEDUP_ENABLED     = false
-	DEFAULT_GPU_TEMPLATES_ENABLED = false
-	DEFAULT_GPU_RESTORE_NIC       = "auto"
-	DEFAULT_GPU_DELTA_ENABLED     = false
-	DEFAULT_GPU_VERIFY            = "off"
-	DEFAULT_GPU_PROFILING_ENABLED = false
-	DEFAULT_GPU_COMPUTE_SANITIZER = false
+	DEFAULT_GPU_POOL_SIZE            = 0
+	DEFAULT_GPU_LOG_DIR              = "/tmp"
+	DEFAULT_GPU_SOCK_DIR             = "/tmp"
+	DEFAULT_GPU_SHM_SIZE             = 8 * utils.GIBIBYTE
+	DEFAULT_GPU_SHM_COMMIT           = 512 * utils.MEBIBYTE
+	DEFAULT_GPU_IMAGE_ZERO_COPY      = true
+	DEFAULT_GPU_IMAGE_FORCE_FALLBACK = false
+	DEFAULT_GPU_DEBUG                = false
+	DEFAULT_GPU_DEDUP_ENABLED        = false
+	DEFAULT_GPU_TEMPLATES_ENABLED    = false
+	DEFAULT_GPU_RESTORE_NIC          = "auto"
+	DEFAULT_GPU_DELTA_ENABLED        = false
+	DEFAULT_GPU_VERIFY               = "off"
+	DEFAULT_GPU_PROFILING_ENABLED    = false
+	DEFAULT_GPU_COMPUTE_SANITIZER    = false
+	DEFAULT_GPU_DIRECT_IO            = true
+	DEFAULT_GPU_MEM_RING_BUF_SIZE    = 8
+	DEFAULT_GPU_SHM_TMPFS            = false
 
 	DEFAULT_CRIU_LEAVE_RUNNING  = false
 	DEFAULT_CRIU_MANAGE_CGROUPS = "ignore"
@@ -114,18 +120,24 @@ var Global Config = Config{
 		WaitForReady: DEFAULT_CLIENT_WAIT_FOR_READY,
 	},
 	GPU: GPU{
-		PoolSize:         DEFAULT_GPU_POOL_SIZE,
-		LogDir:           DEFAULT_GPU_LOG_DIR,
-		SockDir:          DEFAULT_GPU_SOCK_DIR,
-		ShmSize:          DEFAULT_GPU_SHM_SIZE,
-		Debug:            DEFAULT_GPU_DEBUG,
-		DedupEnabled:     DEFAULT_GPU_DEDUP_ENABLED,
-		TemplatesEnabled: DEFAULT_GPU_TEMPLATES_ENABLED,
-		RestoreNic:       DEFAULT_GPU_RESTORE_NIC,
-		DeltaEnabled:     DEFAULT_GPU_DELTA_ENABLED,
-		Verify:           DEFAULT_GPU_VERIFY,
-		ProfilingEnabled: DEFAULT_GPU_PROFILING_ENABLED,
-		ComputeSanitizer: DEFAULT_GPU_COMPUTE_SANITIZER,
+		PoolSize:           DEFAULT_GPU_POOL_SIZE,
+		LogDir:             DEFAULT_GPU_LOG_DIR,
+		SockDir:            DEFAULT_GPU_SOCK_DIR,
+		ShmSize:            DEFAULT_GPU_SHM_SIZE,
+		ShmCommit:          DEFAULT_GPU_SHM_COMMIT,
+		ImageZeroCopy:      DEFAULT_GPU_IMAGE_ZERO_COPY,
+		ImageForceFallback: DEFAULT_GPU_IMAGE_FORCE_FALLBACK,
+		Debug:              DEFAULT_GPU_DEBUG,
+		DedupEnabled:       DEFAULT_GPU_DEDUP_ENABLED,
+		TemplatesEnabled:   DEFAULT_GPU_TEMPLATES_ENABLED,
+		RestoreNic:         DEFAULT_GPU_RESTORE_NIC,
+		DeltaEnabled:       DEFAULT_GPU_DELTA_ENABLED,
+		Verify:             DEFAULT_GPU_VERIFY,
+		ProfilingEnabled:   DEFAULT_GPU_PROFILING_ENABLED,
+		ComputeSanitizer:   DEFAULT_GPU_COMPUTE_SANITIZER,
+		DirectIO:           DEFAULT_GPU_DIRECT_IO,
+		MemRingBufSize:     DEFAULT_GPU_MEM_RING_BUF_SIZE,
+		ShmTmpfs:           DEFAULT_GPU_SHM_TMPFS,
 	},
 	CRIU: CRIU{
 		LogLevel:      DEFAULT_CRIU_LOG_LEVEL,
