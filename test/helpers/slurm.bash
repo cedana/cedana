@@ -13,18 +13,21 @@ SLURM_SCRIPT_WORKDIR=/data/cedana-samples
 
 # Runs sbatch from <workdir> on the submission host and prints the job ID.
 # Submits <file> (a path there) if given, otherwise the script on stdin.
+# SLURM_CEDANA=0 submits a plain job, without Cedana.
 _slurm_sbatch() {
     local workdir="$1"
     local file="${2:-}"
-    local cedana_enable="${CEDANA_ENABLE:-1}"
-    local cedana_bin="${CEDANA_BIN:-/usr/local/bin/cedana}"
-    local exec_opts=() output job_id
+    local exec_opts=() cedana_opts=() output job_id
 
     [ -n "$file" ] || exec_opts+=(-i)
+    if [ "${SLURM_CEDANA:-1}" != "0" ]; then
+        cedana_opts=(--cedana --signal=B:USR1@0)
+    fi
 
+    # --export=ALL overrides the samples' own "#SBATCH --export=...", which alone would leave the
+    # job only SLURM_* and that variable.
     if ! output=$(slurm_submit_exec "${exec_opts[@]}" bash -c 'cd "$1" && shift && exec sbatch "$@"' _ \
-        "$workdir" --parsable --overcommit \
-        --export=ALL,CEDANA_ENABLE="${cedana_enable}",CEDANA_BIN="${cedana_bin}" \
+        "$workdir" --parsable --overcommit --export=ALL "${cedana_opts[@]}" \
         --cpus-per-task=1 --mem=0 ${file:+"$file"} 2>&1); then
         error_log "sbatch failed: $output"
         return 1
@@ -179,6 +182,19 @@ _capture_runtime_slurm_logs() {
         docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
         docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
         docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
+        # The SPANK plugin and the cedana-task it runs: the shared sources, the installed copies, and
+        # the copy's capabilities.
+        docker exec "$c" sh -c 'plugin_dir=$(scontrol show config 2>/dev/null | awk "/^PluginDir[[:space:]]*=/{print \$NF}"); for f in /usr/local/lib/cedana.so "${plugin_dir:-/usr/lib/slurm}/cedana.so" /usr/local/bin/cedana-task /usr/libexec/cedana/cedana-task; do [ -f "$f" ] || { echo "=== $f: missing ==="; continue; }; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done; echo "=== getcap ==="; getcap /usr/libexec/cedana/cedana-task 2>&1 || true' >"$cdir/cedana-plugin.txt" 2>&1 || true
+        # The per-job monitor (cedana-task --monitor) logs to the node's journal; keep the lines of
+        # this test's jobs (the monitor writes job=<id>, the event stream job_id=<id>).
+        local job_ids_re="${relevant_job_ids_csv//,/|}"
+        if [[ "$job_ids_re" =~ ^[0-9]+(\|[0-9]+)*$ ]]; then
+            docker exec "$c" journalctl -t cedana-task-monitor --no-pager -o short-precise 2>/dev/null |
+                grep -E "job(_id)?=(${job_ids_re})( |$)" >"$cdir/cedana-task-monitor.txt" 2>&1 || true
+        else
+            docker exec "$c" journalctl -t cedana-task-monitor --no-pager -o short-precise -n 300 \
+                >"$cdir/cedana-task-monitor.txt" 2>&1 || true
+        fi
         docker exec "$c" sh -c 'for p in $(pgrep -f "cedana-slurm monitor" 2>/dev/null || true); do echo "=== monitor pid=$p ==="; tr "\000" "\n" </proc/$p/environ 2>/dev/null | sort; done' >"$cdir/monitor-environ.txt" 2>&1 || true
         docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
         docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
