@@ -16,6 +16,16 @@ on:
         description: "The branch, tag, or SHA to run on"
         required: false
         default: ""
+      test_image:
+        type: string
+        description: "Test image to run the tests in (test_image.yml's output)"
+        required: false
+        default: "cedana/cedana-test:latest"
+      test_image_cuda:
+        type: string
+        description: "CUDA test image to run the GPU tests in (test_image.yml's output)"
+        required: false
+        default: "cedana/cedana-test:cuda"
       debug:
         type: boolean
         description: "Run with debugging enabled"
@@ -59,6 +69,11 @@ on:
       slurm_versions:
         type: string
         description: "SLURM versions to test, from download.yml's output (JSON array)"
+        required: false
+        default: ""
+      slurm_node_suffix:
+        type: string
+        description: "Suffix of the node image tags (cedana/cedana-slurm-node:<version><suffix>), from download.yml's output"
         required: false
         default: ""
       parallelism:
@@ -236,7 +251,7 @@ jobs:
           - amd64
           - arm64
     container:
-      image: cedana/cedana-test:latest
+      image: ${{ inputs.test_image }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
@@ -347,7 +362,7 @@ jobs:
           - amd64
           - arm64
     container:
-      image: cedana/cedana-test:latest
+      image: ${{ inputs.test_image }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
@@ -500,6 +515,8 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
+      test_image: ${{ inputs.test_image }}
+      test_image_cuda: ${{ inputs.test_image_cuda }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
       parallelism: ${{ inputs.parallelism }}
@@ -513,6 +530,8 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
+      test_image: ${{ inputs.test_image }}
+      test_image_cuda: ${{ inputs.test_image_cuda }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
       soak: ${{ inputs.soak }}
@@ -527,6 +546,8 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
+      test_image: ${{ inputs.test_image }}
+      test_image_cuda: ${{ inputs.test_image_cuda }}
       debug: ${{ inputs.debug }}
       platforms: ${{ !inputs.cloud_kubernetes && '["K3s"]' || (inputs.large && '["K3s", "EKS", "GKE", "Nebius"]' || '["K3s", "EKS", "GKE"]') }} # Nebius only runs large tests
       propagator: ${{ inputs.propagator }}
@@ -546,7 +567,10 @@ jobs:
     secrets: inherit
     with:
       ref: ${{ inputs.ref }}
+      test_image: ${{ inputs.test_image }}
+      test_image_cuda: ${{ inputs.test_image_cuda }}
       slurm_versions: ${{ inputs.slurm_versions }}
+      slurm_node_suffix: ${{ inputs.slurm_node_suffix }}
       debug: ${{ inputs.debug }}
       large: ${{ inputs.large }}
       # At least 4cpu, for its 80GB volume: the 2cpu disk fills up pulling the ~4GB

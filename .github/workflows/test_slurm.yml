@@ -16,6 +16,16 @@ on:
         description: "The branch, tag, or SHA to run on"
         required: false
         default: ""
+      test_image:
+        type: string
+        description: "Test image to run the tests in (test_image.yml's output)"
+        required: false
+        default: "cedana/cedana-test:latest"
+      test_image_cuda:
+        type: string
+        description: "CUDA test image to run the GPU tests in (test_image.yml's output)"
+        required: false
+        default: "cedana/cedana-test:cuda"
       debug:
         type: boolean
         description: "Run with debugging enabled"
@@ -50,6 +60,11 @@ on:
         type: string
         description: "SLURM versions to test, from cedana-slurm's slurm-versions (JSON array)"
         required: true
+      slurm_node_suffix:
+        type: string
+        description: "Suffix of the node image tags (cedana/cedana-slurm-node:<version><suffix>), from download.yml's output"
+        required: false
+        default: ""
 
 env:
   CEDANA_URL: ${{ vars.CEDANA_URL }}
@@ -117,7 +132,7 @@ jobs:
     runs-on: ${{ format('runs-on={0}/pool={1}-amd64/tag=slurm-ansible', github.run_id, inputs.runner) }}
     timeout-minutes: 60
     container:
-      image: cedana/cedana-test:latest
+      image: ${{ inputs.test_image }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
@@ -227,7 +242,7 @@ jobs:
 
           SLURM_TAG="${{ fromJSON(inputs.slurm_versions)[0] }}"
           export SLURM_VERSION="$(echo "$SLURM_TAG" | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
-          NODE_IMAGE="cedana/cedana-slurm-node:${SLURM_TAG}"
+          NODE_IMAGE="cedana/cedana-slurm-node:${SLURM_TAG}${{ inputs.slurm_node_suffix }}"
           if docker pull -q "$NODE_IMAGE"; then
             export SLURM_BASE_IMAGE="$NODE_IMAGE"
             echo "Using prebaked node image $NODE_IMAGE"
@@ -362,7 +377,7 @@ jobs:
         # One CPU leg for each remaining version, from the `versions` job.
         include: ${{ fromJSON(needs.versions.outputs.compat) }}
     container:
-      image: ${{ matrix.compute == 'CUDA' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.compute == 'CUDA' && inputs.test_image_cuda || inputs.test_image }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
@@ -554,7 +569,7 @@ jobs:
           # slurm-25-11-5-1 -> 25.11.5, the version the ansible role builds from source.
           export SLURM_VERSION="$(echo '${{ matrix.slurm }}' | sed 's/^slurm-//; s/-[0-9]*$//; s/-/./g')"
 
-          NODE_IMAGE="cedana/cedana-slurm-node:${{ matrix.slurm }}"
+          NODE_IMAGE="cedana/cedana-slurm-node:${{ matrix.slurm }}${{ inputs.slurm_node_suffix }}"
           if docker pull -q "$NODE_IMAGE"; then
             export SLURM_BASE_IMAGE="$NODE_IMAGE"
             echo "Using prebaked node image $NODE_IMAGE"

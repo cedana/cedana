@@ -38,6 +38,7 @@ jobs:
       plugins: true
       image: true
       image_name: cedana/cedana-helper-test
+      test_image: true # only where missing (see test_image.yml)
 
   publish:
     name: Publish

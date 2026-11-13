@@ -21,6 +21,16 @@ on:
         description: "The branch, tag, or SHA to run on"
         required: false
         default: ""
+      test_image:
+        type: string
+        description: "Test image to run the tests in (test_image.yml's output)"
+        required: false
+        default: "cedana/cedana-test:latest"
+      test_image_cuda:
+        type: string
+        description: "CUDA test image to run the GPU tests in (test_image.yml's output)"
+        required: false
+        default: "cedana/cedana-test:cuda"
       debug:
         type: boolean
         description: "Run with debugging enabled"
@@ -113,7 +123,7 @@ jobs:
             cr: streamer
             arch: amd64
     container:
-      image: cedana/cedana-test:cuda
+      image: ${{ inputs.test_image_cuda }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
