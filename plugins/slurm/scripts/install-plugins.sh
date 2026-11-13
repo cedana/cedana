@@ -112,6 +112,12 @@ else
     PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE streamer"
 fi
 
+# A login node only runs sbatch, which loads cedana.so from slurm/wlm
+if [ "${CEDANA_SLURM_NODE_ROLE:-}" = "login" ]; then
+    PLUGINS="slurm/wlm@$CEDANA_PLUGINS_SLURM_WLM_VERSION"
+    PLUGINS_TO_REMOVE=""
+fi
+
 # Install all plugins
 if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
     if [[ "$PLUGINS" != "" ]]; then
@@ -124,23 +130,26 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
     fi
 fi
 
-# Improve streaming performance
-if ! echo 0 >/proc/sys/fs/pipe-user-pages-soft; then
-    echo "Warning: Failed to set pipe-user-pages-soft to 0, streaming performance may be degraded" >&2
-fi
-if ! echo 4194304 >/proc/sys/fs/pipe-max-size; then
-    echo "Warning: Failed to set pipe-max-size to 4194304, streaming performance may be degraded" >&2
-fi
+# Nothing checkpoints or restores on a login node
+if [ "${CEDANA_SLURM_NODE_ROLE:-}" != "login" ]; then
+    # Improve streaming performance
+    if ! echo 0 >/proc/sys/fs/pipe-user-pages-soft; then
+        echo "Warning: Failed to set pipe-user-pages-soft to 0, streaming performance may be degraded" >&2
+    fi
+    if ! echo 4194304 >/proc/sys/fs/pipe-max-size; then
+        echo "Warning: Failed to set pipe-max-size to 4194304, streaming performance may be degraded" >&2
+    fi
 
-# Set CRIU capabilities, in case it's run as an unprivileged user
-CRIU_PATH="${CEDANA_PLUGINS_BIN_DIR}/criu"
-if [ -x "$CRIU_PATH" ]; then
-    if command -v setcap &>/dev/null; then
-        if ! setcap cap_checkpoint_restore,cap_sys_ptrace+eip "$CRIU_PATH"; then
-            echo "Warning: Failed to set capabilities on $CRIU_PATH, CRIU may not work as an unprivileged user" >&2
+    # Set CRIU capabilities, in case it's run as an unprivileged user
+    CRIU_PATH="${CEDANA_PLUGINS_BIN_DIR}/criu"
+    if [ -x "$CRIU_PATH" ]; then
+        if command -v setcap &>/dev/null; then
+            if ! setcap cap_checkpoint_restore,cap_sys_ptrace+eip "$CRIU_PATH"; then
+                echo "Warning: Failed to set capabilities on $CRIU_PATH, CRIU may not work as an unprivileged user" >&2
+            fi
+        else
+            echo "Warning: setcap not found, skipping capabilities setup for $CRIU_PATH, CRIU may not work as an unprivileged user" >&2
         fi
-    else
-        echo "Warning: setcap not found, skipping capabilities setup for $CRIU_PATH, CRIU may not work as an unprivileged user" >&2
     fi
 fi
 
