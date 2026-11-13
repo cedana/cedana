@@ -18,22 +18,29 @@ import (
 
 // Records the CRIU opts the final handler saw, and writes an image like CRIU would.
 type incrementalHarness struct {
-	t       *testing.T
-	root    string
-	pid     uint32
-	start   uint64
-	failErr error
-	seen    *criu_proto.CriuOpts
+	t        *testing.T
+	root     string
+	pid      uint32
+	start    uint64
+	children []*daemon.ProcessState // the dumped process's descendants
+	failErr  error
+	seen     *criu_proto.CriuOpts
+}
+
+func resetChains() {
+	chainsMu.Lock()
+	defer chainsMu.Unlock()
+	clear(incrementalChains)
 }
 
 func newIncrementalHarness(t *testing.T) *incrementalHarness {
 	t.Helper()
-	incrementalChains.Clear()
+	resetChains()
 	orig := memTrackSupported
 	memTrackSupported = func(context.Context, *criu.Criu) (bool, error) { return true, nil }
 	t.Cleanup(func() {
 		memTrackSupported = orig
-		incrementalChains.Clear()
+		resetChains()
 	})
 	return &incrementalHarness{t: t, root: t.TempDir(), pid: 4242, start: 1000}
 }
@@ -56,7 +63,7 @@ func (h *incrementalHarness) handler() types.Dump {
 func (h *incrementalHarness) dump(name string, trackMem bool, mutate func(*daemon.DumpReq)) (*daemon.DumpResp, error) {
 	h.t.Helper()
 	dir := filepath.Join(h.root, name)
-	if err := os.Mkdir(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		h.t.Fatal(err)
 	}
 	req := &daemon.DumpReq{
@@ -69,7 +76,7 @@ func (h *incrementalHarness) dump(name string, trackMem bool, mutate func(*daemo
 	if mutate != nil {
 		mutate(req)
 	}
-	resp := &daemon.DumpResp{State: &daemon.ProcessState{PID: h.pid, StartTime: h.start}}
+	resp := &daemon.DumpResp{State: &daemon.ProcessState{PID: h.pid, StartTime: h.start, Children: h.children}}
 	_, err := IncrementalForDump(h.handler())(context.Background(), types.Opts{}, resp, req)
 	return resp, err
 }
@@ -226,5 +233,69 @@ func TestIncrementalUnsupportedKernelDumpsFull(t *testing.T) {
 	}
 	if len(resp.Messages) == 0 {
 		t.Fatal("expected a message saying the dump was full")
+	}
+}
+
+// A tracked dump of a child clears the child's bits, so the tree's chain (whose last dump
+// covered the child) must not be used as the parent of the next tree dump, and vice versa.
+func TestIncrementalOverlappingDumpsBreakChains(t *testing.T) {
+	h := newIncrementalHarness(t)
+	root, rootStart := h.pid, h.start
+	child := &daemon.ProcessState{PID: 5000, StartTime: 2000}
+	h.children = []*daemon.ProcessState{{PID: 4999, StartTime: 1999, Children: []*daemon.ProcessState{child}}}
+
+	mustDump(t, h, "tree1", nil)
+
+	// Dump just the grandchild
+	h.pid, h.start, h.children = child.PID, child.StartTime, nil
+	mustDump(t, h, "child1", nil)
+
+	// The tree's chain is broken: full dump
+	h.pid, h.start = root, rootStart
+	h.children = []*daemon.ProcessState{{PID: 4999, StartTime: 1999, Children: []*daemon.ProcessState{child}}}
+	mustDump(t, h, "tree2", nil)
+	if h.seen.ParentImg != nil {
+		t.Fatalf("tree dump after a child dump got parent %q, want full", h.seen.GetParentImg())
+	}
+
+	// ...and that tree dump broke the child's chain
+	h.pid, h.start, h.children = child.PID, child.StartTime, nil
+	mustDump(t, h, "child2", nil)
+	if h.seen.ParentImg != nil {
+		t.Fatalf("child dump after a tree dump got parent %q, want full", h.seen.GetParentImg())
+	}
+}
+
+func TestIncrementalUnrelatedChainSurvives(t *testing.T) {
+	h := newIncrementalHarness(t)
+	mustDump(t, h, "a1", nil)
+
+	other := *h
+	other.pid, other.start = 7777, 1
+	mustDump(t, &other, "b1", nil)
+
+	mustDump(t, h, "a2", nil)
+	if got := h.seen.GetParentImg(); got != "../a1" {
+		t.Fatalf("parent = %q, want ../a1 (another process's dump must not break the chain)", got)
+	}
+}
+
+// A relative images directory (e.g. --dir .) must still chain.
+func TestIncrementalRelativeImagesDir(t *testing.T) {
+	h := newIncrementalHarness(t)
+	t.Chdir(h.root)
+
+	rel := func(name string) func(*daemon.DumpReq) {
+		return func(req *daemon.DumpReq) { req.Criu.ImagesDir = proto.String(filepath.Join("ckpt", name)) }
+	}
+	for _, name := range []string{"r1", "r2"} {
+		if err := os.MkdirAll(filepath.Join("ckpt", name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustDump(t, h, "ckpt/r1", rel("r1"))
+	mustDump(t, h, "ckpt/r2", rel("r2"))
+	if got := h.seen.GetParentImg(); got != "../r1" {
+		t.Fatalf("parent = %q, want ../r1", got)
 	}
 }

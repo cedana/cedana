@@ -19,6 +19,11 @@ package criu
 // succeeded, and forgotten before every track_mem attempt: CRIU may clear the bits and then
 // fail later (e.g. compressing in the post-dump hook), and that dump must not become a parent.
 //
+// A dump clears the bits of every process in the tree it dumps, not just its root. So each
+// chain records the processes its last dump covered, and a track_mem dump forgets every chain
+// that shares a process with it: dumping a child on its own breaks its ancestor's chain, and
+// dumping the ancestor breaks the child's.
+//
 // Only a dump written as a plain local directory can be a parent: compressed, remote and
 // streamed images are not linkable (CRIU ignores parents when streaming). Such dumps still
 // use track_mem, which only makes the next dump a full one.
@@ -28,6 +33,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -49,8 +55,58 @@ type chainKey struct {
 	startTime uint64
 }
 
-// Last successful track_mem dump directory per process (chainKey -> absolute path).
-var incrementalChains sync.Map
+// The last successful track_mem dump of a process tree, keyed by its root.
+type chain struct {
+	dir     string     // absolute images directory
+	members []chainKey // every process the dump covered, root included
+}
+
+var (
+	chainsMu          sync.Mutex
+	incrementalChains = map[chainKey]chain{}
+)
+
+// takeChain removes, and returns the directory of, the chain rooted at root (if any), and
+// removes every other chain that shares a process with members: this dump is about to clear
+// their bits.
+func takeChain(root chainKey, members []chainKey) (prev string) {
+	chainsMu.Lock()
+	defer chainsMu.Unlock()
+	if c, ok := incrementalChains[root]; ok {
+		prev = c.dir
+		delete(incrementalChains, root)
+	}
+	for key, c := range incrementalChains {
+		if slices.ContainsFunc(c.members, func(m chainKey) bool { return slices.Contains(members, m) }) {
+			log.Debug().Uint32("PID", key.pid).Str("dir", c.dir).Msg("incremental chain broken by an overlapping dump")
+			delete(incrementalChains, key)
+		}
+	}
+	return prev
+}
+
+func storeChain(root chainKey, c chain) {
+	chainsMu.Lock()
+	defer chainsMu.Unlock()
+	incrementalChains[root] = c
+}
+
+// treeMembers lists the processes in a dump's process tree.
+func treeMembers(state *daemon.ProcessState) []chainKey {
+	var members []chainKey
+	var walk func(*daemon.ProcessState)
+	walk = func(s *daemon.ProcessState) {
+		if s == nil {
+			return
+		}
+		members = append(members, chainKey{pid: s.GetPID(), startTime: s.GetStartTime()})
+		for _, child := range s.GetChildren() {
+			walk(child)
+		}
+	}
+	walk(state)
+	return members
+}
 
 // memTrackSupported reports whether the kernel supports soft-dirty memory tracking.
 // A variable so tests can stub out the CRIU call.
@@ -74,13 +130,23 @@ func IncrementalForDump(next types.Dump) types.Dump {
 
 		state := resp.GetState()
 		key := chainKey{pid: state.GetPID(), startTime: state.GetStartTime()}
+		members := treeMembers(state)
 		imagesDir := criuOpts.GetImagesDir()
+		if imagesDir != "" {
+			// Stored links and the relative parent link are computed from this, so a
+			// relative --dir must not be resolved against a later dump's directory
+			abs, err := filepath.Abs(imagesDir)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "incremental dump: %v", err)
+			}
+			imagesDir = filepath.Clean(abs)
+		}
 
 		log := log.With().Uint32("PID", key.pid).Str("dir", imagesDir).Logger()
 
-		// This dump clears the bits whether or not it succeeds, so the previous link is
-		// no longer a valid parent for anything after it.
-		prev, _ := incrementalChains.LoadAndDelete(key)
+		// This dump clears the bits whether or not it succeeds, so the previous link, and
+		// any chain covering a process in this tree, is no longer a valid parent.
+		prev := takeChain(key, members)
 
 		supported, err := memTrackSupported(ctx, opts.CRIU)
 		if err != nil || !supported {
@@ -96,8 +162,8 @@ func IncrementalForDump(next types.Dump) types.Dump {
 
 		explicit := criuOpts.GetParentImg() != ""
 		parent := criuOpts.GetParentImg()
-		if !explicit && prev != nil {
-			parent = prev.(string)
+		if !explicit && prev != "" {
+			parent = prev
 		}
 
 		var parentAbs string
@@ -146,7 +212,7 @@ func IncrementalForDump(next types.Dump) types.Dump {
 		}
 
 		if linkable {
-			incrementalChains.Store(key, filepath.Clean(imagesDir))
+			storeChain(key, chain{dir: imagesDir, members: members})
 		}
 		if parentAbs != "" {
 			resp.Messages = append(resp.Messages, "Incremental dump, unchanged memory is in parent "+parentAbs)
