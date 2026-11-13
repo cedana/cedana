@@ -16,3 +16,6 @@ var Uninstall string
 
 //go:embed configure-kubelet.sh
 var ConfigureKubelet string
+
+//go:embed configure-sysctl.sh
+var ConfigureSysctl string

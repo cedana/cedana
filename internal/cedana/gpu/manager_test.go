@@ -1,12 +1,20 @@
 package gpu
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/cedana/cedana/pkg/config"
+	"github.com/cedana/cedana/pkg/plugins"
+	"github.com/gofrs/flock"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 type syncer interface {
@@ -115,5 +123,138 @@ func TestSyncRunsOneAtATime(t *testing.T) {
 	wg.Wait()
 	if most.Load() != 1 {
 		t.Fatalf("%d syncs ran at once, want 1", most.Load())
+	}
+}
+
+// A GPU plugin with no binary, so a spawn fails
+type fakePlugins struct {
+	plugins.Manager
+	gets atomic.Int32
+}
+
+func (f *fakePlugins) Get(name string) *plugins.Plugin {
+	f.gets.Add(1)
+	return &plugins.Plugin{Binaries: []plugins.Binary{{Name: "nonexistent", InstallDir: "/nonexistent"}}}
+}
+
+// A pool manager with only the controllers a test stores
+func newTestPoolManager(t *testing.T, poolSize int) (*ManagerPool, *fakePlugins) {
+	t.Helper()
+	gpuConfig := config.Global.GPU
+	t.Cleanup(func() { config.Global.GPU = gpuConfig })
+	config.Global.GPU.SockDir = t.TempDir()
+	config.Global.GPU.LogDir = ""
+	config.Global.GPU.Debug = false
+
+	fake := &fakePlugins{}
+	return &ManagerPool{ManagerSimple: &ManagerSimple{plugins: fake}, poolSize: poolSize}, fake
+}
+
+func captureLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	logger := log.Logger
+	t.Cleanup(func() { log.Logger = logger })
+	buf := &bytes.Buffer{}
+	log.Logger = zerolog.New(buf).Level(zerolog.DebugLevel)
+	return buf
+}
+
+func TestPoolSyncSkipsHeldController(t *testing.T) {
+	m, fake := newTestPoolManager(t, 1)
+	c := newStaleController(t, &m.controllers)
+
+	c.Termination.Lock() // the dump
+	if err := syncReturns(t, m, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if m.controllers.Get(c.ID) == nil {
+		t.Fatal("the held controller is no longer in the pool")
+	}
+	if _, ok := m.held[c.ID]; !ok {
+		t.Fatal("the held controller is not recorded as skipped")
+	}
+	booking := flock.New(c.Booking.Path())
+	if locked, _ := booking.TryLock(); !locked {
+		t.Fatal("the sync kept the booking lock of the held controller")
+	}
+	booking.Unlock()
+	if fake.gets.Load() == 0 {
+		t.Fatal("the sync did not go on to refill the pool")
+	}
+
+	c.Termination.Unlock() // FinalizeDump
+	if err := syncReturns(t, m, context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if m.controllers.Get(c.ID) != nil {
+		t.Fatal("the sync did not terminate the controller once the lock was free")
+	}
+	if len(m.held) != 0 {
+		t.Fatalf("%d controllers still recorded as skipped", len(m.held))
+	}
+}
+
+func TestPoolSyncWarnsOnceForHeldController(t *testing.T) {
+	m, _ := newTestPoolManager(t, 0)
+	c := newStaleController(t, &m.controllers)
+	logs := captureLog(t)
+
+	c.Termination.Lock()
+	defer c.Termination.Unlock()
+
+	const warning = "held by a dump or restore for more than 1 min"
+	for i := range 7 {
+		if err := syncReturns(t, m, context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			if strings.Contains(logs.String(), warning) {
+				t.Fatal("warned on the first skip")
+			}
+			m.held[c.ID].since = time.Now().Add(-2 * HELD_WARN_AFTER)
+		}
+	}
+	if n := strings.Count(logs.String(), warning); n != 1 {
+		t.Fatalf("%d warnings for 7 syncs, want 1", n)
+	}
+	if n := strings.Count(logs.String(), "skipping stale GPU controller held by a dump or restore"); n != 7 {
+		t.Fatalf("%d skips logged for 7 syncs, want 7", n)
+	}
+}
+
+func TestPoolSyncLogsCapturedStderr(t *testing.T) {
+	tests := []struct {
+		name   string
+		errBuf *bytes.Buffer
+		want   int
+	}{
+		{"found on disk", nil, 0},
+		{"spawned, no stderr", &bytes.Buffer{}, 0},
+		{"spawned, with stderr", bytes.NewBufferString("cuda init failed"), 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := newTestPoolManager(t, 0)
+			c := newStaleController(t, &m.controllers)
+			c.ErrBuf = tt.errBuf
+			logs := captureLog(t)
+
+			if err := syncReturns(t, m, context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			if m.controllers.Get(c.ID) != nil {
+				t.Fatal("the sync did not terminate the stale controller")
+			}
+			if n := strings.Count(logs.String(), "stale GPU controller captured stderr"); n != tt.want {
+				t.Fatalf("%d stderr logs, want %d", n, tt.want)
+			}
+			if strings.Contains(logs.String(), "<nil>") {
+				t.Fatal("logged <nil>")
+			}
+			if tt.want > 0 && !strings.Contains(logs.String(), "cuda init failed") {
+				t.Fatal("the stderr log does not carry the captured stderr")
+			}
+		})
 	}
 }

@@ -5,6 +5,8 @@ package filesystem
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
@@ -16,6 +18,21 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// The GPU controller's shared memory (cedana-gpu.<id>, .booking, .misc) is not archived. The
+// restore makes it anew. The controller's log directory cedana-gpu.<id> is archived (CED-2532).
+const gpuControllerPrefix = "cedana-gpu."
+
+// isGPUControllerShm tells the GPU controller's shared memory at the top of a private mount
+func isGPUControllerShm(rel string, info fs.FileInfo) bool {
+	if strings.Contains(rel, "/") || !strings.HasPrefix(rel, gpuControllerPrefix) {
+		return false
+	}
+	if !info.IsDir() {
+		return true // the segment, or its booking file
+	}
+	return strings.HasSuffix(rel, ".misc")
+}
 
 // A job in a mount namespace of its own is dumped from inside it (see
 // namespaces.AddRecognizedExternalNamespacesForDump), so CRIU dumps files by path and knows
@@ -40,7 +57,7 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 		for _, m := range private {
 			log.Debug().Str("mountpoint", m.Mountpoint).Str("root", m.Root).Msg("private mount of the job")
 
-			size, err := contentSize(pathInJob(pid, m.Mountpoint))
+			size, err := contentSize(pathInJob(pid, m.Mountpoint), isGPUControllerShm)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to get size of private mount %s: %v", m.Mountpoint, err)
 			}
@@ -79,7 +96,7 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 				left := max // the job was still running when checked above
 				for _, m := range mounts {
 					log.Debug().Str("mountpoint", m.Mountpoint).Str("archive", m.Archive).Msg("dumping private mount")
-					written, err := archiveToDump(dumpFs, m.Archive, pathInJob(pid, m.Mountpoint), left)
+					written, err := archiveToDump(dumpFs, m.Archive, pathInJob(pid, m.Mountpoint), left, isGPUControllerShm)
 					if err != nil {
 						return fmt.Errorf("failed to dump private mount %s: %w", m.Mountpoint, err)
 					}
@@ -93,7 +110,7 @@ func DumpPrivateMounts(next types.Dump) types.Dump {
 	}
 }
 
-func archiveToDump(dumpFs afero.Fs, name, dir string, max uint64) (written uint64, err error) {
+func archiveToDump(dumpFs afero.Fs, name, dir string, max uint64, skip skipFunc) (written uint64, err error) {
 	file, err := dumpFs.Create(name)
 	if err != nil {
 		return 0, err
@@ -104,5 +121,5 @@ func archiveToDump(dumpFs afero.Fs, name, dir string, max uint64) (written uint6
 		}
 	}()
 
-	return archiveDir(dir, file, max)
+	return archiveDir(dir, file, max, skip)
 }

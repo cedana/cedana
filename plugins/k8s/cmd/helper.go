@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -74,6 +75,11 @@ var setupCmd = &cobra.Command{
 		}
 		defer restorePodIdentityEnv()
 
+		// Without k8s.install_deps, no package changes on the host: install-deps.sh only reports what's missing
+		if err := os.Setenv("CEDANA_INSTALL_DEPS", strconv.FormatBool(config.Global.K8s.InstallDeps)); err != nil {
+			return fmt.Errorf("failed to set CEDANA_INSTALL_DEPS: %w", err)
+		}
+
 		err = script.Run(
 			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
 			script.Chroot("/host", scripts.ResetService),
@@ -82,6 +88,7 @@ var setupCmd = &cobra.Command{
 			script.Chroot("/host", k8scripts.InstallPlugins),
 			script.Chroot("/host", k8scripts.ConfigureContainerd),
 			script.Chroot("/host", k8scripts.ConfigureKubelet),
+			script.Chroot("/host", k8scripts.ConfigureSysctl),
 			script.Chroot("/host", scripts.ConfigureShm),
 			script.Chroot("/host", scripts.InstallService),
 		)

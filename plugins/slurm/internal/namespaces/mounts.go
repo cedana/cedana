@@ -2,21 +2,26 @@ package namespaces
 
 // Recognizes the directories SLURM's namespace plugin gives the job.
 //
-// job_container/tmpfs (namespace/tmpfs from 26.05) makes each directory it is
-// configured with (Dirs, /tmp by default) under <basepath>/<jobid>/.<jobid>/ and
-// bind-mounts it into the job's mount namespace. Made for the job and removed
-// with it, so a job restored gets new, empty ones: what was in them goes into the
-// dump. Its /dev/shm is a tmpfs of the kernel's, whose contents are the shared
-// memory of the processes that map them, which CRIU dumps with the processes.
+// job_container/tmpfs gives the job a mount namespace with its own /tmp and
+// /dev/shm. Both go away with the job, so the dump carries their files (CED-2532).
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
+
+// The node's mounts. Any user can read them.
+const initMountinfo = "/proc/1/mountinfo"
+
+// The one filesystem type that goes away with its mount namespace
+const disposableFSType = "tmpfs"
 
 type mount struct {
 	ID         int
@@ -30,8 +35,10 @@ type mount struct {
 type PrivateMount struct {
 	Mountpoint string
 	FSType     string
-	// Where it is on the node: <basepath>/<jobid>/.<jobid>/<dir>
+	// Root of the mount in its filesystem
 	Root string
+	// major:minor of the filesystem
+	Device string
 }
 
 // SlurmMounts returns the mounts of pid that SLURM's namespace plugin made for the job,
@@ -42,22 +49,48 @@ func SlurmMounts(pid uint32, jobID uint32) ([]PrivateMount, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", jobPath, err)
 	}
-	return slurmMounts(job, jobID), nil
+	node, err := readMountinfo(initMountinfo)
+	if err != nil {
+		// e.g. hidepid on /proc
+		log.Warn().Err(err).Msgf("failed to read %s, recognizing the job's private mounts by their path alone", initMountinfo)
+		node = nil
+	}
+	return slurmMounts(job, node, jobID), nil
 }
 
-// slurmMounts picks the mounts whose root is in the plugin's directory for the job, by the
-// <jobid>/.<jobid> in its path. The pin of the namespace (<basepath>/<jobid>/.ns) is not one.
-func slurmMounts(job []mount, jobID uint32) []PrivateMount {
+// slurmMounts picks the job's own mounts: the plugin's bind mounts, by their path, and a tmpfs
+// the node has no mount of. Other filesystems outlive the job (CED-2532).
+func slurmMounts(job, node []mount, jobID uint32) []PrivateMount {
 	id := strconv.FormatUint(uint64(jobID), 10)
 
 	var mounts []PrivateMount
 	for _, m := range job {
-		if !ofJob(m.Root, id) {
+		var how string
+		switch {
+		case ofJob(m.Root, id):
+			how = "the root of the mount is in the plugin's directory for the job"
+		case node != nil && m.FSType == disposableFSType && !onNode(m, node):
+			how = "a tmpfs the node has no mount of"
+		default:
 			continue
 		}
-		mounts = append(mounts, PrivateMount{Mountpoint: m.Mountpoint, FSType: m.FSType, Root: m.Root})
+		log.Debug().Str("mountpoint", m.Mountpoint).Str("device", m.Device).Str("root", m.Root).Msgf("private mount of the job: %s", how)
+		mounts = append(mounts, PrivateMount{Mountpoint: m.Mountpoint, FSType: m.FSType, Root: m.Root, Device: m.Device})
 	}
 	return mounts
+}
+
+// onNode tells whether the node mounts m's filesystem at or above m's root
+func onNode(m mount, node []mount) bool {
+	for _, n := range node {
+		if n.Device != m.Device {
+			continue
+		}
+		if n.Root == m.Root || n.Root == "/" || strings.HasPrefix(m.Root, n.Root+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // ofJob tells a path with <id>/.<id> in it, followed by something
@@ -69,6 +102,39 @@ func ofJob(path, id string) bool {
 		}
 	}
 	return false
+}
+
+// ownMountNamespace tells from the mount IDs whether pid is in a mount namespace other than init's
+func ownMountNamespace(pid uint32) (bool, error) {
+	jobPath := fmt.Sprintf("/proc/%d/mountinfo", pid)
+	job, err := readMountinfo(jobPath)
+	if err != nil {
+		return false, fmt.Errorf("failed to read %s: %w", jobPath, err)
+	}
+	node, err := readMountinfo(initMountinfo)
+	if err != nil {
+		return false, fmt.Errorf("failed to read %s: %w", initMountinfo, err)
+	}
+	return ownMountNamespaceOf(job, node)
+}
+
+func ownMountNamespaceOf(job, node []mount) (bool, error) {
+	rootID := -1
+	for _, m := range job {
+		if m.Mountpoint == "/" {
+			rootID = m.ID
+			break
+		}
+	}
+	if rootID < 0 {
+		return false, errors.New("no mount at / in the mounts of the process")
+	}
+	for _, m := range node {
+		if m.ID == rootID {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func readMountinfo(path string) ([]mount, error) {

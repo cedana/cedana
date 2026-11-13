@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	"github.com/cedana/cedana/pkg/config"
 	"github.com/cedana/cedana/pkg/features"
 	"github.com/cedana/cedana/pkg/keys"
 	"github.com/cedana/cedana/pkg/profiling"
@@ -46,6 +47,9 @@ func Attach(gpus Manager) types.Adapter[types.Run] {
 			defer close(pid)
 
 			var id string
+
+			// Filled by the plugin's GPU interception below, read by the attach once the PID is sent
+			ctx = context.WithValue(ctx, keys.GPU_RUN_DEVICE_MINORS_CONTEXT_KEY, &[]int{})
 
 			if req.GPUID != "" {
 				id = req.GPUID
@@ -204,6 +208,7 @@ func ProcessInterception(next types.Run) types.Run {
 		req.Env = append(req.Env, "CEDANA_GPU_ID="+id)
 		req.Env = append(req.Env, "CEDANA_GPU_LOG_DIR="+logDir)
 		req.Env = append(req.Env, fmt.Sprintf("LD_PRELOAD=%s:%s", libSymlink, utils.Getenv(req.Env, "LD_PRELOAD")))
+		req.Env = append(req.Env, config.GPUClientEnv(req.Env)...)
 
 		return next(ctx, opts, resp, req)
 	}

@@ -183,6 +183,14 @@ const (
 531 522 0:22 / /var/tmp rw,nosuid - tmpfs tmpfs rw
 532 522 0:22 /scratch /scratch rw,nosuid - tmpfs tmpfs rw
 `
+	// An NFS share mounted for the job alone. It outlives the job.
+	testLauncherShareJobMountinfo = `522 400 8:1 / / rw,relatime - ext4 /dev/sda1 rw
+523 522 0:21 / /proc rw,nosuid - proc proc rw
+524 522 0:22 / /dev/shm rw,nosuid - tmpfs tmpfs rw
+525 522 8:1 /export/tmp /tmp rw - ext4 /dev/sda1 rw
+530 522 0:40 / /home rw - nfs4 server:/home rw
+533 522 0:41 / /scratch rw - nfs4 server:/scratch rw
+`
 )
 
 func TestSlurmMounts(t *testing.T) {
@@ -194,25 +202,37 @@ func TestSlurmMounts(t *testing.T) {
 		return mounts
 	}
 
+	host := parse(testHostMountinfo)
+	slurmTmp := PrivateMount{Mountpoint: "/tmp", FSType: "ext4", Root: "/var/spool/slurmd/ns/1234/.1234/_tmp", Device: "8:1"}
+	slurmShm := PrivateMount{Mountpoint: "/dev/shm", FSType: "tmpfs", Root: "/", Device: "0:78"}
+	launcherTmp := PrivateMount{Mountpoint: "/var/tmp", FSType: "tmpfs", Root: "/", Device: "0:77"}
+
 	tests := []struct {
 		name     string
 		job      []mount
+		node     []mount
 		jobID    uint32
 		expected []PrivateMount
 	}{
-		{"HostNamespace", parse(testHostMountinfo), 1234, nil},
-		{"TmpfsOfALauncher", parse(testJobMountinfo), 1234, nil},
-		{"SlurmTmp", parse(testSlurmJobMountinfo), 1234, []PrivateMount{
-			// Not its /dev/shm, a tmpfs of the kernel's; not the pin of the namespace
-			{Mountpoint: "/tmp", FSType: "ext4", Root: "/var/spool/slurmd/ns/1234/.1234/_tmp"},
-		}},
-		{"AnotherJob", parse(testSlurmJobMountinfo), 123, nil},
-		{"SharedWithHost", parse(testSharedJobMountinfo), 1234, nil},
+		{"HostNamespace", host, host, 1234, nil},
+		// A launcher's tmpfs goes away with the job
+		{"TmpfsOfALauncher", parse(testJobMountinfo), host, 1234, []PrivateMount{launcherTmp}},
+		// The job's own tmpfs at /dev/shm. The pin is not the job's.
+		{"SlurmTmp", parse(testSlurmJobMountinfo), host, 1234, []PrivateMount{slurmShm, slurmTmp}},
+		{"AnotherJob", parse(testSlurmJobMountinfo), host, 123, []PrivateMount{slurmShm}},
+		// Bind mounts of the host's tmpfs are the host's
+		{"SharedWithHost", parse(testSharedJobMountinfo), host, 1234, nil},
+		// A share is not a tmpfs. It stays out.
+		{"ShareOfALauncher", parse(testLauncherShareJobMountinfo), host, 1234, nil},
+		// Without the node's mounts, the path rule alone
+		{"TmpfsOfALauncherByPath", parse(testJobMountinfo), nil, 1234, nil},
+		{"SlurmTmpByPath", parse(testSlurmJobMountinfo), nil, 1234, []PrivateMount{slurmTmp}},
+		{"AnotherJobByPath", parse(testSlurmJobMountinfo), nil, 123, nil},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := slurmMounts(tt.job, tt.jobID); !reflect.DeepEqual(got, tt.expected) {
+			if got := slurmMounts(tt.job, tt.node, tt.jobID); !reflect.DeepEqual(got, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, got)
 			}
 		})

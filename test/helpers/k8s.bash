@@ -4,9 +4,10 @@
 ### Kubernetes Helpers ###
 ##########################
 
-# Image the GPU pods run, with the CUDA workloads at /cedana-samples/gpu_smr: a slim one, as
-# customer images are (a CUDA base and the app), rather than the whole CI image
-export GPU_WORKLOAD_IMAGE="${GPU_WORKLOAD_IMAGE:-cedana/cedana-samples:cuda-smr}"
+# Image the pods run: cedana-samples' lite image, with every workload at /cedana-samples, slim as
+# customer images are (a CUDA base and the app). The one the run downloaded (download.yml's
+# samples, by digest), else the latest release
+export SAMPLES_IMAGE="${SAMPLES_IMAGE:-$(cat /cedana-samples/.image 2>/dev/null || echo cedana/cedana-samples:cuda-lite)}"
 
 install_kubectl() {
     if command -v kubectl &>/dev/null; then
@@ -119,11 +120,13 @@ pod_spec() {
     local temp_spec="/tmp/test-spec-${unique_id}.yaml"
     cp "$source_file" "$temp_spec"
 
+    # The samples' lite image is the one this run tests with
     sed -i \
         -e "/^metadata:/,/^[^ ]/ s/^  name:[[:space:]]*.*/  name: $unique_id/" \
         -e "/^metadata:/,/^[^ ]/ s/^  generateName:[[:space:]]*.*/  name: $unique_id/" \
         -e "s/namespace: default/namespace: $namespace/g" \
         -e "s/namespace: .*/namespace: $namespace/g" \
+        -e "s|image:[[:space:]]*cedana/cedana-samples:cuda-lite[[:space:]]*$|image: $SAMPLES_IMAGE|" \
         "$temp_spec"
 
     if ! grep -q "namespace:" "$temp_spec"; then
@@ -1067,190 +1070,6 @@ wait_for_new_log_trigger() {
 
     error_log "Timeout waiting for NEW trigger '$trigger' in pod $name logs after ${timeout}s"
     return 1
-}
-
-# Simulate spot interruption by terminating the EC2 instance
-simulate_spot_interruption() {
-    local node_name="$1"
-
-    if [ -z "$node_name" ]; then
-        error_log "simulate_spot_interruption requires node_name"
-        return 1
-    fi
-
-    debug_log "Simulating spot interruption for node $node_name..."
-
-    # Get the EC2 instance ID from the node's provider ID
-    local provider_id
-    provider_id=$(kubectl get node "$node_name" -o jsonpath='{.spec.providerID}')
-
-    local instance_id
-    instance_id=$(echo "$provider_id" | sed 's|.*/||')
-
-    if [ -z "$instance_id" ]; then
-        error_log "Failed to get instance ID for node $node_name"
-        return 1
-    fi
-
-    debug_log "Terminating EC2 instance $instance_id..."
-
-    aws ec2 terminate-instances --instance-ids "$instance_id" --region "$AWS_REGION"
-
-    debug_log "Spot interruption simulated for instance $instance_id (node $node_name)"
-}
-
-# Get the node where a pod is running
-get_pod_node() {
-    local pod_name="$1"
-    local namespace="${2:-$NAMESPACE}"
-
-    kubectl get pod "$pod_name" -n "$namespace" -o jsonpath='{.spec.nodeName}' 2>/dev/null
-}
-
-# Wait for a pod to be scheduled on a Karpenter-provisioned spot node
-wait_for_spot_node() {
-    local pod_name="$1"
-    local namespace="${2:-$NAMESPACE}"
-    local timeout="${3:-300}"
-
-    debug_log "Waiting for pod $pod_name to be scheduled on spot node (timeout: ${timeout}s)..."
-
-    local elapsed=0
-    local poll_interval=5
-
-    while [ $elapsed -lt "$timeout" ]; do
-        local node_name
-        node_name=$(get_pod_node "$pod_name" "$namespace")
-
-        if [ -n "$node_name" ]; then
-            # Verify it's a spot instance via Karpenter label
-            local capacity_type
-            capacity_type=$(kubectl get node "$node_name" -o jsonpath='{.metadata.labels.karpenter\.sh/capacity-type}' 2>/dev/null)
-
-            if [ "$capacity_type" = "spot" ]; then
-                debug_log "Pod $pod_name scheduled on spot node $node_name"
-                echo "$node_name"
-                return 0
-            elif [ -n "$capacity_type" ]; then
-                debug_log "Pod scheduled on $capacity_type node, waiting for spot..."
-            fi
-        fi
-
-        sleep $poll_interval
-        ((elapsed += poll_interval))
-    done
-
-    error_log "Timeout waiting for pod $pod_name to be scheduled on spot node"
-    return 1
-}
-
-# Create a pod spec with spot tolerations and affinity
-spot_pod_spec() {
-    local image="$1"
-    local args="$2"
-    local namespace="${3:-$NAMESPACE}"
-
-    local name
-    name=test-spot-$(unix_nano)
-
-    local spec=/tmp/pod-${name}.yaml
-    cat >"$spec" <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: "$namespace"
-  labels:
-    app: "$name"
-    cedana.ai/spot-test: "true"
-spec:
-  tolerations:
-    - key: "cedana.ai/spot-test"
-      operator: "Equal"
-      value: "true"
-      effect: NoSchedule
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: karpenter.sh/capacity-type
-                operator: In
-                values: ["spot"]
-  containers:
-  - name: "$name"
-    image: $image
-    command: ["/bin/sh", "-c"]
-    resources:
-      requests:
-        cpu: "500m"
-        memory: "512Mi"
-EOF
-
-    if [[ -n "$args" ]]; then
-        printf "    args:\n" >>"$spec"
-        printf "      - |\n" >>"$spec"
-        while IFS= read -r line; do
-            printf "        %s\n" "$line" >>"$spec"
-        done <<<"$args"
-    fi
-
-    echo "$spec"
-}
-
-# Create a GPU pod spec with spot tolerations
-spot_pod_spec_gpu() {
-    local image="$1"
-    local args="$2"
-    local gpus="${3:-1}"
-    local namespace="${4:-$NAMESPACE}"
-
-    local name
-    name=test-spot-cuda-$(unix_nano)
-
-    local spec=/tmp/pod-${name}.yaml
-    cat >"$spec" <<EOF
-apiVersion: v1
-kind: Pod
-metadata:
-  name: "$name"
-  namespace: "$namespace"
-  labels:
-    app: "$name"
-    cedana.ai/spot-test: "true"
-spec:
-  runtimeClassName: cedana
-  tolerations:
-    - key: "cedana.ai/spot-test"
-      operator: "Equal"
-      value: "true"
-      effect: NoSchedule
-  affinity:
-    nodeAffinity:
-      requiredDuringSchedulingIgnoredDuringExecution:
-        nodeSelectorTerms:
-          - matchExpressions:
-              - key: karpenter.sh/capacity-type
-                operator: In
-                values: ["spot"]
-  containers:
-  - name: "$name"
-    image: $image
-    command: ["/bin/sh", "-c"]
-    resources:
-      limits:
-        nvidia.com/gpu: "$gpus"
-EOF
-
-    if [[ -n "$args" ]]; then
-        printf "    args:\n" >>"$spec"
-        printf "      - |\n" >>"$spec"
-        while IFS= read -r line; do
-            printf "        %s\n" "$line" >>"$spec"
-        done <<<"$args"
-    fi
-
-    echo "$spec"
 }
 
 # Collects what's needed to debug a failed run into a directory, for CI to upload: the

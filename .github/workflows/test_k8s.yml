@@ -23,7 +23,7 @@ on:
         default: false
       platforms:
         type: string
-        description: "JSON list of platforms to run tests on (K3s, EKS, GKE, Nebius, EKS-Karpenter). Cloud platforms share a cluster, so their jobs are serialized with a concurrency group."
+        description: "JSON list of platforms to run tests on (K3s, EKS, GKE, Nebius). Cloud platforms share a cluster, so their jobs are serialized with a concurrency group."
         required: false
         default: '["K3s"]'
       propagator:
@@ -89,9 +89,6 @@ env:
   NB_SA_PRIVATE_KEY: ${{ secrets.NB_SA_PRIVATE_KEY }}
   NB_SA_PRIVATE_KEY_PATH: ${{ secrets.NB_SA_PRIVATE_KEY_PATH }}
   EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
-  EKS_KARPENTER_CLUSTER: ${{ vars.EKS_KARPENTER_CLUSTER }}
-  # Contains the common tag used by all vpc subnets
-  EKS_KARPENTER_SUBNET_SELECTOR: ${{ secrets.EKS_KARPENTER_SUBNET_SELECTOR }}
   GKE_CLUSTER_NAME: ${{ vars.GKE_CLUSTER_NAME }}
   NB_CLUSTER_NAME: ${{ vars.NB_CLUSTER_NAME }}
   FORMATTER: junit
@@ -145,7 +142,6 @@ jobs:
           # a customer's GPU nodes
           {"platform": "K3s", "compute": "CUDA", "cr": "default", "storage": "storage/local", "arch": "amd64", "k3s_containerd": "embedded", "k3s_version": "v1.34.8+k3s1", "versions": "k3s v1.34.8, containerd 2.2.3"}
           {"platform": "EKS", "compute": "CPU", "cr": "default", "storage": "storage/s3", "arch": "arm64"}
-          {"platform": "EKS-Karpenter", "compute": "CPU", "cr": "default", "storage": "storage/cedana", "arch": "amd64"}
           {"platform": "GKE", "compute": "CPU", "cr": "streamer", "storage": "storage/cedana", "arch": "amd64"}
           {"platform": "Nebius", "compute": "CUDA", "cr": "default", "storage": "storage/local", "arch": "amd64"}
           EOF
@@ -242,6 +238,18 @@ jobs:
         with:
           name: propagator-image-name
           path: /tmp/propagator-image-name
+
+      - name: Download samples
+        id: samples
+        continue-on-error: true # without download.yml's samples (a caller that doesn't ask for them), the image's own
+        uses: actions/download-artifact@v7
+        with:
+          name: samples-${{ matrix.arch }}
+          path: /tmp/samples
+
+      - name: Install samples
+        if: steps.samples.outcome == 'success'
+        run: rm -rf /cedana-samples && tar -xzf /tmp/samples/samples-*.tar.gz -C /
 
       - name: Download binary
         uses: actions/download-artifact@v7
@@ -363,7 +371,6 @@ jobs:
           case "$PLATFORM" in
             K3s)  PROVIDER="k3s" ;;
             EKS)  PROVIDER="aws" ;;
-            EKS-Karpenter) PROVIDER="eks-karpenter" ;;
             GKE)  PROVIDER="gcp" ;;
             Nebius) PROVIDER="nebius" ;;
             *)    PROVIDER="generic" ;;
@@ -380,11 +387,6 @@ jobs:
           fi
           if [ "$LARGE" = "0" ]; then
             TAGS="${TAGS},!samples,!large"
-          fi
-          if [ "$PLATFORM" = "EKS-Karpenter" ]; then
-            TAGS="${TAGS},spot"
-          else
-            TAGS="${TAGS},!spot"
           fi
           # Nebius only runs large GPU workloads (skip small tests)
           if [ "$PROVIDER" = "nebius" ]; then
@@ -476,6 +478,7 @@ jobs:
         uses: cedana/cedana-test-summary@v1
         with:
           reports: report/**/*.xml
+          pr-comment: false # marshal posts the summary on the PRs it tested (from the run's test-summary artifact)
           title: Kubernetes
           jobs-filter: '(^|/ )(Kubernetes \(|Propagator Connectivity)'
           image-branch: test-summary-assets
@@ -484,7 +487,6 @@ jobs:
           matrix-sections: |
             K3s=^Kubernetes \(K3s,
             EKS=^Kubernetes \(EKS,
-            EKS-Karpenter=^Kubernetes \(EKS-Karpenter,
             GKE=^Kubernetes \(GKE,
             Nebius=^Kubernetes \(Nebius,
           matrix-split: |

@@ -34,6 +34,7 @@ func (s *Server) Dump(ctx context.Context, req *daemon.DumpReq) (*daemon.DumpRes
 	middleware := types.Middleware[types.Dump]{
 		defaults.FillMissingDumpDefaults,
 		validation.ValidateDumpRequest,
+		criu.SeizeTogetherForDump,
 
 		pluginDumpStorage,    // detects and plugs in the storage to use
 		pluginDumpMiddleware, // middleware from plugins

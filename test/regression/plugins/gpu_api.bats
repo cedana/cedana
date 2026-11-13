@@ -223,6 +223,52 @@ require_reset_fix() {
     restore_sample memcpy_async_pinned
 }
 
+# Event records posted asynchronously on one thread must still order a wait or a query on
+# another (CED-2567: stale cuStreamWaitEvent, early cuEventQuery under the launch ring)
+# bats test_tags=run,events
+@test "[$GPU_INFO] run GPU process ordering events across threads" {
+    run_sample event_race
+}
+
+# bats test_tags=restore,events
+@test "[$GPU_INFO] restore GPU process ordering events across threads" {
+    restore_sample event_race
+}
+
+# Launches posted asynchronously on one thread must still run ahead of work another thread
+# queues on the same stream, and must not be lost when the thread exits (CED-2567)
+# bats test_tags=run,streams
+@test "[$GPU_INFO] run GPU process ordering a shared stream across threads" {
+    run_sample stream_race
+}
+
+# bats test_tags=restore,streams
+@test "[$GPU_INFO] restore GPU process ordering a shared stream across threads" {
+    restore_sample stream_race
+}
+
+# vLLM's CPU KV-cache offload (SimpleCPUOffloadConnector) with one CPU tensor on the brk heap,
+# replayed as the CUDA calls vLLM makes, without vLLM (CED-2563: a customer's prefill worker
+# failed at startup, its 0x46f78-byte tensor refused by cuMemHostRegister):
+#   vLLM: torch.zeros(...) + pin_tensor -> cudaHostRegister(ptr, nbytes, 0), raising on failure
+#   here: posix_memalign(64) + memset + the same call; one region served from the heap's top
+#         chunk, the others mmap'd (registered unpinned and pinned, respectively)
+#   vLLM: DmaCopyBackend, one cuMemcpyBatchAsync (12.8 entry point) per transfer from a copy
+#         thread, low-priority streams, stores waiting on a compute-done event, events polled
+#   here: the same, every block checked after each step, live heap neighbours checked throughout
+# bats test_tags=run,hostregister,memcpy
+@test "[$GPU_INFO] run GPU process offloading KV cache like vLLM, one CPU tensor on the brk heap" {
+    run_sample kv_offload_heap
+}
+
+# The same, checkpointed with transfers in flight; after the restore every CPU and GPU block must
+# be exact and the offload keep working, and a new heap registration must work with the new GPU
+# controller
+# bats test_tags=restore,hostregister,memcpy
+@test "[$GPU_INFO] restore GPU process offloading KV cache like vLLM, one CPU tensor on the brk heap" {
+    restore_sample kv_offload_heap
+}
+
 # __device__ and __constant__ globals, by symbol and by address (globals moved, CED-2487)
 # bats test_tags=run,globals
 @test "[$GPU_INFO] run GPU process using device globals" {

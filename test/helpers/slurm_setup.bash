@@ -1585,21 +1585,35 @@ restart_cedana_slurm_daemon() {
 # Samples Setup
 ##############################
 
+# Puts cedana-samples in every node: the run's (/cedana-samples, from the lite image download.yml
+# took), else a clone of main.
 setup_slurm_samples() {
-    info_log "Cloning cedana-samples into cluster nodes..."
-
     local sample_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
 
+    if [ -d /cedana-samples/slurm ]; then
+        info_log "Copying cedana-samples ($(cat /cedana-samples/.image 2>/dev/null || echo /cedana-samples)) into cluster nodes..."
+    else
+        info_log "Cloning cedana-samples into cluster nodes..."
+    fi
+
     for c in "${sample_targets[@]}"; do
-        docker exec "$c" bash -c '
-            apt-get install -y -qq git 2>/dev/null
-            rm -rf /data/cedana-samples
-            mkdir -p /data
-            git clone --depth 1 -b main https://github.com/cedana/cedana-samples.git /data/cedana-samples
-        ' || {
-            error_log "Failed to clone cedana-samples into $c"
-            return 1
-        }
+        if [ -d /cedana-samples/slurm ]; then
+            docker exec "$c" bash -c 'rm -rf /data/cedana-samples && mkdir -p /data' &&
+                docker cp /cedana-samples "$c:/data/cedana-samples" || {
+                error_log "Failed to copy cedana-samples into $c"
+                return 1
+            }
+        else
+            docker exec "$c" bash -c '
+                apt-get install -y -qq git 2>/dev/null
+                rm -rf /data/cedana-samples
+                mkdir -p /data
+                git clone --depth 1 -b main https://github.com/cedana/cedana-samples.git /data/cedana-samples
+            ' || {
+                error_log "Failed to clone cedana-samples into $c"
+                return 1
+            }
+        fi
 
         docker exec "$c" ls -la /data/cedana-samples/ 2>&1 | head -20 >&"${OUTPUT_FD}" || true
     done
