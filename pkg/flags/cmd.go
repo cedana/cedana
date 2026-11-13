@@ -39,6 +39,7 @@ var (
 	PingFlag         = Flag{Full: "ping"}
 	ErrorsFlag       = Flag{Full: "errors"}
 	CompressionFlag  = Flag{Full: "compression"}
+	IncrementalFlag  = Flag{Full: "incremental"}
 	AsRootFlag       = Flag{Full: "as-root"}
 	UpcomingFlag     = Flag{Full: "upcoming"}
 	TreeFlag         = Flag{Full: "tree", Short: "t"}

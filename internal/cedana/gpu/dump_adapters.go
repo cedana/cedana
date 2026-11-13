@@ -3,6 +3,7 @@ package gpu
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"regexp"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
@@ -14,6 +15,18 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+// The GPU dump runs inside a CRIU callback that only sees CriuOpts, so the
+// per-request delta flag and the resulting chain parent travel via context.
+// A non-empty parent means the dump was a delta chained onto it.
+type (
+	deltaOverrideKey struct{}
+	deltaResultKey   struct{}
+)
+
+type deltaResult struct {
+	parent string
+}
 
 // NOTE: Add any other known NVIDIA GPU mount paths here.
 var NVIDIA_MOUNTS_PATTERN = regexp.MustCompile(
@@ -62,6 +75,15 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 			// Import GPU CRIU callbacks
 			opts.CRIUCallback.Include(gpus.CRIUCallback(id))
 
+			if req.GPUDelta != nil {
+				if req.GetGPUDelta() && req.Streams != 0 {
+					log.Warn().Msg("GPU delta is incompatible with streaming; dump will be full")
+				}
+				ctx = context.WithValue(ctx, deltaOverrideKey{}, req.GetGPUDelta())
+			}
+			result := &deltaResult{}
+			ctx = context.WithValue(ctx, deltaResultKey{}, result)
+
 			var checksum string
 			ctx = context.WithValue(ctx, keys.GPU_CHECKSUM_CONTEXT_KEY, &checksum)
 
@@ -79,6 +101,9 @@ func Dump(gpus Manager) types.Adapter[types.Dump] {
 
 			// The GPU dump is done by now: CRIU's finalize waited for it
 			resp.Checksum = checksum
+			if result.parent != "" {
+				resp.GPUParent = filepath.Base(result.parent)
+			}
 
 			return code, nil
 		}
