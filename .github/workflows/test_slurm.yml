@@ -181,7 +181,9 @@ jobs:
           test -f ./libcedana-slurm.so
           sudo -E cedana plugin install slurm
           cd slurm-bin/build
-          chmod +x ./cedana-slurm
+          # Exact modes: setup.sh refuses a cedana-task that group or others can write
+          chmod 0755 ./cedana-slurm ./cedana-task
+          chmod 0644 ./cedana.so
           sudo -E cedana plugin install slurm/wlm
 
       - name: Install ansible and Docker CLI
@@ -449,7 +451,9 @@ jobs:
 
       - name: Install slurm binaries
         run: |
-          chmod +x slurm-bin/build/cedana-slurm
+          # Exact modes: setup.sh refuses a cedana-task that group or others can write
+          chmod 0755 slurm-bin/build/cedana-slurm slurm-bin/build/cedana-task
+          chmod 0644 slurm-bin/build/cedana.so
           sudo -E cedana plugin install slurm
           cd slurm-bin/build
           sudo -E cedana plugin install slurm/wlm

@@ -128,15 +128,10 @@ var Registry = []Plugin{
 		Libraries: []Binary{{Name: "libcedana-slurm.so"}},
 	},
 	{
-		Name: "slurm/wlm",
-		Type: EXTERNAL,
-		Libraries: []Binary{
-			{Name: "spank_cedana.so"},
-			{Name: "task_cedana.so"},
-			{Name: "cli_filter_cedana.so"},
-			{Name: "job_submit_cedana.so"},
-		},
-		Binaries: []Binary{{Name: "cedana-slurm"}},
+		Name:      "slurm/wlm",
+		Type:      EXTERNAL,
+		Libraries: []Binary{{Name: "cedana.so"}},
+		Binaries:  []Binary{{Name: "cedana-slurm"}, {Name: "cedana-task"}},
 	},
 	{
 		Name:     "slurm/tests",
