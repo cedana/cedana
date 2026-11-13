@@ -338,6 +338,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_GPU_PROFILING_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.ProfilingEnabled),
 		"CEDANA_GPU_COMPUTE_SANITIZER="+fmt.Sprintf("%v", config.Global.GPU.ComputeSanitizer),
 		"CEDANA_GPU_DIRECT_IO="+fmt.Sprintf("%v", config.Global.GPU.DirectIO),
+		"CEDANA_GPU_DIRECT_IO_BTRFS_NOCOW="+fmt.Sprintf("%v", config.Global.GPU.DirectIOBtrfsNocow),
 		"CEDANA_GPU_MEM_RING_BUF_SIZE="+fmt.Sprintf("%v", config.Global.GPU.MemRingBufSize),
 		"CEDANA_GPU_SHM_TMPFS="+fmt.Sprintf("%v", config.Global.GPU.ShmTmpfs),
 		// Restores attach twice: at CRIU's setup-namespaces hook and post-restore (see CRIUCallback)
