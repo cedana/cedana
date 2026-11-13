@@ -112,3 +112,66 @@ skip_if_no_dirty_tracking() {
     assert_failure
     assert_output --partial "parent"
 }
+
+# A dump clears the dirty bits of every process in its tree, so dumping a child alone breaks the
+# chain of the tree it belongs to: the next tree dump must be full, or the child's writes in
+# between would be in neither dump.
+# bats test_tags=dump,restore
+@test "incremental dump of a child alone breaks its tree's chain" {
+    # The trailing `true` keeps bash from exec'ing the workload, so it stays the parent
+    bash -c "$WORKLOADS/mem-delta.py 64 300 0.1; true" &
+    pid=$!
+    sleep 2
+    child=$(pgrep -P $pid)
+    [ -n "$child" ]
+    tree1=$(unix_nano)
+    child1=$(unix_nano)
+    tree2=$(unix_nano)
+    tree3=$(unix_nano)
+
+    run cedana dump process $pid --name "$tree1" --dir /tmp --compression none --leave-running --incremental
+    assert_success
+    skip_if_no_dirty_tracking "$output"
+
+    run cedana dump process "$child" --name "$child1" --dir /tmp --compression none --leave-running --incremental
+    assert_success
+
+    run cedana dump process $pid --name "$tree2" --dir /tmp --compression none --leave-running --incremental
+    assert_success
+    refute_output --partial "in parent"
+    assert_not_exist "/tmp/$tree2/parent"
+
+    run cedana dump process $pid --name "$tree3" --dir /tmp --compression none --incremental
+    assert_success
+    assert_output --partial "unchanged memory is in parent /tmp/$tree2"
+
+    run cedana restore process --path "/tmp/$tree3" --no-server
+    assert_success
+    assert_output --partial "OK "
+    refute_output --partial "MISMATCH"
+}
+
+# bats test_tags=dump
+@test "incremental dump into a relative directory chains" {
+    "$WORKLOADS"/mem-delta.py 64 100 0.1 &
+    pid=$!
+    base=$(unix_nano)
+    delta=$(unix_nano)
+    # Relative to the CLI's and the daemon's working directory (the repo root), as with --dir .
+    dir="incremental-$(unix_nano)"
+    mkdir "$dir"
+    sleep 2
+
+    run cedana dump process $pid --name "$base" --dir "$dir" --compression none --leave-running --incremental
+    assert_success
+    skip_if_no_dirty_tracking "$output"
+
+    run cedana dump process $pid --name "$delta" --dir "$dir" --compression none --incremental
+    assert_success
+    assert_output --partial "unchanged memory is in parent $PWD/$dir/$base"
+
+    run readlink "$dir/$delta/parent"
+    assert_output "../$base"
+
+    rm -rf "$dir"
+}
