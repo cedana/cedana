@@ -12,7 +12,8 @@ type Manager interface {
 	// Attach attaches a GPU controller to a process with the given PID.
 	// Takes in a channel for the PID, allowing this to be called before the process is started,
 	// so that the PID can be passed in later. Returns a unique ID for the GPU controller.
-	Attach(ctx context.Context, pid <-chan uint32) (string, error)
+	// A non-empty reuseID asks for a controller under that ID, for processes that carry it.
+	Attach(ctx context.Context, pid <-chan uint32, reuseID string) (string, error)
 
 	// IsAttached returns true if GPU is attached to a process with the given PID.
 	IsAttached(pid uint32) bool
@@ -46,7 +47,7 @@ type Manager interface {
 // Embed this into unimplmented implmentations
 type ManagerMissing struct{}
 
-func (ManagerMissing) Attach(ctx context.Context, pid <-chan uint32) (string, error) {
+func (ManagerMissing) Attach(ctx context.Context, pid <-chan uint32, reuseID string) (string, error) {
 	return "", fmt.Errorf("GPU manager missing")
 }
 
