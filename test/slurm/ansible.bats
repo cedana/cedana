@@ -161,10 +161,10 @@ LOGIN_01="slurm-login-01"
 # Role validators (cedana / cedana-slurm)
 ##############################
 
-@test "Roles: cedana-slurm setup --node-role login is a no-op" {
+@test "Roles: cedana-slurm setup --node-role login sets up the SPANK plugin" {
     run docker exec "$LOGIN_01" cedana-slurm setup --node-role login
     [ "$status" -eq 0 ]
-    [[ "$output" == *login* ]]
+    [[ "$output" == *"set up (login)"* ]]
 }
 
 @test "Roles: cedana-slurm setup --node-role bogus is rejected" {
@@ -259,30 +259,29 @@ LOGIN_01="slurm-login-01"
 # SLURM plugins
 ##############################
 
-@test "Ansible: task/cedana configured in slurm.conf" {
-    run docker exec "$CONTROLLER" grep 'task/cedana' /etc/slurm/slurm.conf
-    [ "$status" -eq 0 ]
-}
-
-@test "Ansible: cli_filter/cedana configured in slurm.conf" {
-    run docker exec "$CONTROLLER" grep 'cli_filter/cedana' /etc/slurm/slurm.conf
-    [ "$status" -eq 0 ]
-}
-
-@test "Ansible: spank_cedana.so configured in plugstack.conf" {
-    run docker exec "$CONTROLLER" grep 'spank_cedana.so' /etc/slurm/plugstack.conf
-    [ "$status" -eq 0 ]
-}
-
-@test "Ansible: plugin .so files in SLURM plugin dir on controller and compute" {
-    for c in "$CONTROLLER" "$COMPUTE_01"; do
-        run docker exec "$c" bash -c '
-            test -f /usr/lib/slurm/task_cedana.so &&
-            test -f /usr/lib/slurm/spank_cedana.so &&
-            test -f /usr/lib/slurm/cli_filter_cedana.so
-        '
+@test "Ansible: cedana.so configured in plugstack.conf" {
+    for c in "$CONTROLLER" "$COMPUTE_01" "$LOGIN_01"; do
+        run docker exec "$c" grep -E '^[[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so' /etc/slurm/plugstack.conf
         [ "$status" -eq 0 ]
     done
+}
+
+@test "Ansible: cedana.so in the SLURM plugin dir on controller and compute" {
+    for c in "$CONTROLLER" "$COMPUTE_01"; do
+        run docker exec "$c" test -f /usr/lib/slurm/cedana.so
+        [ "$status" -eq 0 ]
+    done
+}
+
+@test "Ansible: cedana-task's local copy has its capabilities on compute" {
+    run docker exec "$COMPUTE_01" getcap /usr/libexec/cedana/cedana-task
+    [ "$status" -eq 0 ]
+    [[ "$output" == *cap_sys_ptrace* && "$output" == *cap_checkpoint_restore* ]]
+}
+
+@test "Ansible: sbatch lists the --cedana options on login" {
+    run docker exec "$LOGIN_01" sbatch --help
+    [[ "$output" == *--cedana-restore* ]]
 }
 
 ##############################
