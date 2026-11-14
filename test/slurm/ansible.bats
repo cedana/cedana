@@ -289,6 +289,23 @@ LOGIN_01="slurm-login-01"
     [[ "$output" == *--cedana-restore* ]]
 }
 
+# Puts back plugstack.conf after the test below, even if it failed: a required plugin that fails
+# to load breaks every sbatch on the node.
+teardown() {
+    docker exec "$LOGIN_01" sh -c '
+        [ -f /etc/slurm/plugstack.conf.cedana-test ] || exit 0
+        mv -f /etc/slurm/plugstack.conf.cedana-test /etc/slurm/plugstack.conf' || true
+}
+
+@test "Ansible: cedana.so refuses an unknown plugstack.conf argument" {
+    docker exec "$LOGIN_01" sh -c '
+        cp -p /etc/slurm/plugstack.conf /etc/slurm/plugstack.conf.cedana-test
+        sed -i -E "s#^([[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so).*#\1 unprivileged=maybe#" /etc/slurm/plugstack.conf'
+    run docker exec "$LOGIN_01" sbatch --help
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"unknown argument 'unprivileged=maybe'"* ]]
+}
+
 ##############################
 # Slurm node state
 ##############################
