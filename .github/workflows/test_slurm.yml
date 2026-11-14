@@ -90,8 +90,9 @@ jobs:
         run: |
           set -euo pipefail
           # Everything after the first entry, which the matrix below sweeps in full.
-          legs=$(jq -c '.[1:]
-            | map({compute: "CPU", slurm: ., unprivileged: "0", nfs: "no_root_squash"})' \
+          # Each mode on more than one version: the first of these runs "1", the next "0", and so on.
+          legs=$(jq -c '.[1:] | to_entries
+            | map({compute: "CPU", slurm: .value, unprivileged: (if .key % 2 == 0 then "1" else "0" end), nfs: "no_root_squash"})' \
             <<<"$SLURM_VERSIONS")
           echo "legs=$legs" >> "$GITHUB_OUTPUT"
 
@@ -99,7 +100,7 @@ jobs:
           echo "Swept in full (every compute/unprivileged/NFS combination):"
           jq -r '.[0] | "  \(.)"' <<<"$SLURM_VERSIONS"
           echo "Smoke-tested (one CPU leg each):"
-          jq -r '.[] | "  \(.slurm)"' <<<"$legs"
+          jq -r '.[] | "  \(.slurm) (unprivileged=\(.unprivileged))"' <<<"$legs"
 
   slurm-ansible:
     name: Slurm (Ansible)
@@ -335,7 +336,8 @@ jobs:
         # Swept version: the first entry. The `versions` job appends the rest below.
         slurm:
           - ${{ fromJSON(inputs.slurm_versions)[0] }}
-        # Who submits the test jobs: "0" root, "1" an ordinary user (SLURM_SUBMIT_USER=cedana).
+        # The engine's slurm.unprivileged: "0" root dumps jobs (the default), "1" the job's user does.
+        # The test jobs are submitted by an ordinary user (SLURM_SUBMIT_USER=cedana) on both.
         unprivileged:
           - "0"
           - "1"
@@ -532,6 +534,7 @@ jobs:
           LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
           PREEMPT: "1"
+          CEDANA_SLURM_UNPRIVILEGED: ${{ matrix.unprivileged }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -584,9 +587,7 @@ jobs:
           echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
 
-          if [ "${{ matrix.unprivileged }}" = "1" ]; then
-            setup_slurm_unprivileged_user
-          fi
+          setup_slurm_unprivileged_user
           start_cedana_slurm_daemon
           validate_slurm_propagator
 
@@ -600,7 +601,7 @@ jobs:
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           LARGE: ${{ inputs.large && '1' || '0' }}
           PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
-          SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
+          SLURM_SUBMIT_USER: cedana
         run: |
           TAGS="slurm,!ansible,!preemption,!unprivileged,!namespace"
           if [ "$GPU" = "1" ]; then
@@ -653,7 +654,7 @@ jobs:
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           PARALLELISM: 1
-          SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
+          SLURM_SUBMIT_USER: cedana
           PREEMPT: "1"
         run: |
           TAGS="slurm,preemption"
@@ -694,8 +695,10 @@ jobs:
 
           exit "$test_exit_code"
 
+      # The unprivileged tag marks tests that need an ordinary user (two users on one node), not
+      # the mode: they run on both legs.
       - name: Run SLURM unprivileged tests
-        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' }}
+        if: ${{ !cancelled() && steps.register.outcome == 'success' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -755,6 +758,8 @@ jobs:
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           PARALLELISM: 1
+          # Root submits on leg "0" until a root dump of an ordinary user's job with a private /tmp
+          # can be restored by that user; then submit as cedana on both legs, like the other steps.
           SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
         run: |
           TAGS="slurm,namespace"

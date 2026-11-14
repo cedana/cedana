@@ -1070,6 +1070,7 @@ EOF
         -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
         -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
         -e CEDANA_SLURM_NODE_ROLE="controller" \
+        -e CEDANA_SLURM_UNPRIVILEGED="${CEDANA_SLURM_UNPRIVILEGED:-0}" \
         "$SLURM_CONTROLLER_CONTAINER" bash -c '
             set -euo pipefail
             cedana plugin install slurm
@@ -1104,6 +1105,7 @@ EOF
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_SLURM_NODE_ROLE="worker" \
+            -e CEDANA_SLURM_UNPRIVILEGED="${CEDANA_SLURM_UNPRIVILEGED:-0}" \
             "$c" bash -c '
                 set -euo pipefail
                 cedana slurm setup --node-role worker
@@ -1122,6 +1124,7 @@ EOF
             -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_SLURM_NODE_ROLE="login" \
+            -e CEDANA_SLURM_UNPRIVILEGED="${CEDANA_SLURM_UNPRIVILEGED:-0}" \
             "$c" bash -c '
                 set -euo pipefail
                 cedana slurm setup --node-role login
@@ -1191,15 +1194,18 @@ SETUP_EOF
 
     # _sync_slurm_conf copied the controller's plugstack.conf over each compute node's own: the
     # same line, since the plugin directory is the same path everywhere.
-    debug_log "Verifying the Cedana SPANK plugin on compute nodes..."
+    # The engine's config takes 0/1 for slurm.unprivileged; setup writes true/false on the line.
+    local want_arg="unprivileged=false"
+    case "${CEDANA_SLURM_UNPRIVILEGED:-0}" in 1 | true) want_arg="unprivileged=true" ;; esac
+    debug_log "Verifying the Cedana SPANK plugin on compute nodes ($want_arg)..."
     for c in "${compute_containers[@]}"; do
-        docker exec "$c" bash -c '
+        docker exec -e WANT_ARG="$want_arg" "$c" bash -c '
             set -euo pipefail
             PLUGIN_DIR=$(scontrol show config 2>/dev/null | awk "/^PluginDir[[:space:]]*=/{print \$NF}" || true)
             PLUGIN_DIR="${PLUGIN_DIR:-/usr/lib/slurm}"
             test -f "${PLUGIN_DIR}/cedana.so" || { echo "missing ${PLUGIN_DIR}/cedana.so"; exit 1; }
-            grep -qE "^[[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so" /etc/slurm/plugstack.conf ||
-                { echo "no cedana.so line in /etc/slurm/plugstack.conf"; exit 1; }
+            grep -qE "^[[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so[[:space:]]+${WANT_ARG}([[:space:]]|$)" /etc/slurm/plugstack.conf ||
+                { echo "no cedana.so line with ${WANT_ARG} in /etc/slurm/plugstack.conf"; exit 1; }
             caps=$(getcap /usr/libexec/cedana/cedana-task 2>/dev/null || true)
             [[ "$caps" == *cap_sys_ptrace* && "$caps" == *cap_checkpoint_restore* ]] ||
                 { echo "/usr/libexec/cedana/cedana-task lacks its capabilities (getcap: $caps)"; exit 1; }
@@ -1217,10 +1223,10 @@ SETUP_EOF
     done
     debug_log "Verifying the Cedana SPANK plugin where jobs are submitted..."
     for c in "${login_containers[@]}" "$(slurm_submission_container)"; do
-        docker exec "$c" bash -c '
+        docker exec -e WANT_ARG="$want_arg" "$c" bash -c '
             set -euo pipefail
-            grep -qE "^[[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so" /etc/slurm/plugstack.conf ||
-                { echo "no cedana.so line in /etc/slurm/plugstack.conf"; exit 1; }
+            grep -qE "^[[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so[[:space:]]+${WANT_ARG}([[:space:]]|$)" /etc/slurm/plugstack.conf ||
+                { echo "no cedana.so line with ${WANT_ARG} in /etc/slurm/plugstack.conf"; exit 1; }
             help=$(sbatch --help 2>&1 || true)
             [[ "$help" == *--cedana-restore* ]] || { echo "sbatch --help lists no --cedana options"; exit 1; }
         ' >&"${OUTPUT_FD}" 2>&1 ||
@@ -1252,6 +1258,7 @@ SETUP_EOF
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
+            -e CEDANA_SLURM_UNPRIVILEGED="${CEDANA_SLURM_UNPRIVILEGED:-0}" \
             "$c" "$container_cedana_bin" --merge-config version ||
             {
                 error_log "cedana --merge-config failed on $c"
@@ -1270,6 +1277,7 @@ SETUP_EOF
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
+            -e CEDANA_SLURM_UNPRIVILEGED="${CEDANA_SLURM_UNPRIVILEGED:-0}" \
             "$c" bash -c "\"$container_cedana_bin\" daemon start \
                 >/var/log/cedana.log 2>&1"
     done
@@ -1313,6 +1321,7 @@ SETUP_EOF
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
+            -e CEDANA_SLURM_UNPRIVILEGED="${CEDANA_SLURM_UNPRIVILEGED:-0}" \
             "$c" bash -c "\"$container_cedana_bin\" daemon start \
                 >/var/log/cedana.log 2>&1"
     done
