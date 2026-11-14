@@ -142,7 +142,14 @@ _svc_restart() {
         waited=$((waited + 1))
     done
 
-    docker exec "$container" systemctl start "$name" 2>/dev/null || true
+    # systemctl start returns once the daemon has started (the ansible roles'
+    # units are Type=forking), so if it succeeded and the process is there,
+    # there is nothing to wait for.
+    if docker exec "$container" systemctl start "$name" 2>/dev/null &&
+        docker exec "$container" pgrep -x "$proc" &>/dev/null; then
+        debug_log "$name started via systemctl in $container"
+        return 0
+    fi
     sleep 3
     if docker exec "$container" pgrep -x "$proc" &>/dev/null; then
         debug_log "$name started via systemctl in $container"
@@ -300,7 +307,7 @@ EOF
     fi
 
     local rc=0
-    pushd "$ansible_dir" >/dev/null
+    pushd "$ansible_dir" >/dev/null || return 1
     if COMPUTE_NODES="$COMPUTE_NODES" \
         LOGIN_NODES="$LOGIN_NODES" \
         ANSIBLE_EXTRA_ARGS="-e @${vars_file}" \
@@ -309,7 +316,7 @@ EOF
     else
         rc=$?
     fi
-    popd >/dev/null
+    popd >/dev/null || return 1
     rm -f "$vars_file"
 
     if [ "$rc" -ne 0 ]; then
@@ -342,9 +349,13 @@ setup_slurm_accounting() {
     local slurm_db_pass="${SLURM_DB_PASSWORD:-slurmdb123}"
 
     debug_log "[1/7] Installing MariaDB..."
+    # The prebaked node image (cedana-slurm's docker/slurm-node.Dockerfile)
+    # already has these.
     docker exec "$SLURM_CONTROLLER_CONTAINER" bash -c "
-        apt-get update -qq
-        DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mariadb-server python3-pymysql netcat-openbsd
+        if ! dpkg -s mariadb-server python3-pymysql netcat-openbsd >/dev/null 2>&1; then
+            apt-get update -qq
+            DEBIAN_FRONTEND=noninteractive apt-get install -y -qq mariadb-server python3-pymysql netcat-openbsd
+        fi
         mkdir -p /var/run/mysqld
         chown mysql:mysql /var/run/mysqld
     " || {
@@ -453,7 +464,6 @@ EOF
 
     debug_log "[6/7] Starting slurmdbd..."
     docker exec -d "$SLURM_CONTROLLER_CONTAINER" slurmdbd -D
-    sleep 5
     _wait_for_port "$SLURM_CONTROLLER_CONTAINER" 6819 60 ||
         {
             error_log "slurmdbd did not open port 6819 in time"
@@ -481,7 +491,6 @@ EOF
             error_log "Failed to start slurmctld"
             return 1
         }
-    sleep 5
 
     debug_log "Waiting for sacctmgr to reach slurmdbd (up to 90s)..."
     local slurmdbd_ready=false
@@ -502,6 +511,23 @@ EOF
         return 1
     fi
 
+    # The default account below gets an association on every cluster slurmdbd
+    # knows, so slurmctld must have registered its own by then (or, with
+    # enforcement on, its jobs are rejected). This used to be a fixed 5s sleep
+    # after the restart; if it never shows up, go on after about as long.
+    local cluster_name
+    cluster_name=$(docker exec "$SLURM_CONTROLLER_CONTAINER" \
+        awk -F= '/^ClusterName/{gsub(/[[:space:]]/, "", $2); print $2; exit}' /etc/slurm/slurm.conf 2>/dev/null || true)
+    if [ -n "$cluster_name" ]; then
+        for i in $(seq 1 10); do
+            slurm_exec sacctmgr -n -P show cluster format=cluster 2>/dev/null |
+                grep -qixF "$cluster_name" && break
+            sleep 0.5
+        done
+    else
+        sleep 5
+    fi
+
     slurm_exec sacctmgr -i add cluster cluster 2>/dev/null || true
     slurm_exec sacctmgr -i add account default \
         Description="Default Account" Organization="default" 2>/dev/null || true
@@ -516,7 +542,6 @@ EOF
             error_log "Failed to restart slurmctld with accounting enforcement"
             return 1
         }
-    sleep 5
 
     info_log "SLURM accounting setup complete"
 }
@@ -875,14 +900,19 @@ install_cedana_in_slurm() {
     fi
 
     debug_log "Installing CRIU runtime dependencies..."
+    # The prebaked node image (cedana-slurm's docker/slurm-node.Dockerfile)
+    # already has these.
+    local criu_deps=(
+        libprotobuf-c1 libnet1 libgnutls30 libnl-3-200
+        libbsd0 libcap2 libcap2-bin libnftables1 iptables
+        python3 python3-pip python3-venv
+        curl jq
+    )
     for c in "${all_containers[@]}"; do
         docker exec "$c" bash -c "
+            dpkg -s ${criu_deps[*]} >/dev/null 2>&1 && exit 0
             apt-get update -qq
-            apt-get install -y -qq \
-                libprotobuf-c1 libnet1 libgnutls30 libnl-3-200 \
-                libbsd0 libcap2 libcap2-bin libnftables1 iptables \
-                python3 python3-pip python3-venv \
-                curl jq
+            apt-get install -y -qq ${criu_deps[*]}
         " || {
             error_log "Failed to install dependencies in $c"
             return 1
@@ -1394,6 +1424,7 @@ start_cedana_slurm_daemon() {
     debug_log "Starting cedana-slurm daemon on SLURM nodes..."
 
     local targets=("$SLURM_CONTROLLER_CONTAINER")
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local compute_containers=($(_slurm_compute_containers))
     targets+=("${compute_containers[@]}")
 
@@ -1491,6 +1522,7 @@ start_cedana_slurm_daemon() {
 # Puts cedana-samples in every node: the run's (/cedana-samples, from the lite image download.yml
 # took), else a clone of main.
 setup_slurm_samples() {
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local sample_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers) $(_slurm_login_containers))
 
     if [ -d /cedana-samples/slurm ]; then
@@ -1521,14 +1553,19 @@ setup_slurm_samples() {
         docker exec "$c" ls -la /data/cedana-samples/ 2>&1 | head -20 >&"${OUTPUT_FD}" || true
     done
 
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local exec_targets=("$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers))
 
     debug_log "Initializing Python virtual environment on execution nodes..."
+    # The prebaked node image (cedana-slurm's docker/slurm-node.Dockerfile)
+    # has the venv, with these modules, and the build tools.
     for c in "${exec_targets[@]}"; do
         docker exec "$c" bash -c "
+            dpkg -s libffi-dev build-essential >/dev/null 2>&1 ||
+                apt-get install -y -qq libffi-dev build-essential 2>/dev/null || true
+            /data/venv/bin/python -c 'import argon2, bcrypt, passlib, scrypt' 2>/dev/null && exit 0
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
-            apt-get install -y -qq libffi-dev build-essential 2>/dev/null || true
             /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
         "
     done
@@ -1548,7 +1585,9 @@ setup_slurm_samples() {
 setup_slurm_unprivileged_user() {
     local user="${SLURM_SUBMIT_USER:-cedana}"
     local uid="${SLURM_SUBMIT_UID:-2000}"
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local all_nodes=("$SLURM_CONTROLLER_CONTAINER" "$(slurm_submission_container)" $(_slurm_compute_containers) $(_slurm_login_containers))
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
     local compute_nodes=($(_slurm_compute_containers))
 
     info_log "Creating unprivileged submit user '$user' (uid $uid) on cluster nodes..."

@@ -66,7 +66,8 @@ EOT
 RUN <<EOT
 set -eux
 apt-get update
-apt-get install -y --no-install-recommends cuda-nvrtc-12-8
+apt-get install -y --no-install-recommends cuda-nvrtc-12-8 libcufft-12-8
+ldconfig # apt does not update the loader cache
 EOT
 
 # install bats
