@@ -113,8 +113,9 @@ jobs:
           echo "suites=$suites" >> "$GITHUB_OUTPUT"
 
           # Everything after the first entry, which the matrix below sweeps in full.
-          legs=$(jq -c --argjson suites "$suites" '.[1:]
-            | map({compute: "CPU", slurm: ., unprivileged: "0", nfs: "no_root_squash"})
+          # Each mode on more than one version: the first of these runs "1", the next "0", and so on.
+          legs=$(jq -c --argjson suites "$suites" '.[1:] | to_entries
+            | map({compute: "CPU", slurm: .value, unprivileged: (if .key % 2 == 0 then "1" else "0" end), nfs: "no_root_squash"})
             | [.[] as $leg | $suites[] | $leg + {suite: .}]' \
             <<<"$SLURM_VERSIONS")
           echo "legs=$legs" >> "$GITHUB_OUTPUT"
@@ -123,7 +124,7 @@ jobs:
           echo "Swept in full (every compute/unprivileged/NFS combination):"
           jq -r '.[0] | "  \(.)"' <<<"$SLURM_VERSIONS"
           echo "Smoke-tested (one CPU leg each):"
-          jq -r '[.[].slurm] | unique | .[] | "  \(.)"' <<<"$legs"
+          jq -r '[.[] | "  \(.slurm) (unprivileged=\(.unprivileged))"] | unique | .[]' <<<"$legs"
           echo "Each leg split into a job per suite:"
           jq -r '.[] | "  \(.)"' <<<"$suites"
 
@@ -205,7 +206,9 @@ jobs:
           test -f ./libcedana-slurm.so
           sudo -E cedana plugin install slurm
           cd slurm-bin/build
-          chmod +x ./cedana-slurm
+          # Exact modes: setup.sh refuses a cedana-task that group or others can write
+          chmod 0755 ./cedana-slurm ./cedana-task
+          chmod 0644 ./cedana.so
           sudo -E cedana plugin install slurm/wlm
 
       - name: Install ansible and Docker CLI
@@ -363,6 +366,8 @@ jobs:
         # Swept version: the first entry. The `versions` job appends the rest below.
         slurm:
           - ${{ fromJSON(inputs.slurm_versions)[0] }}
+        # The engine's slurm.unprivileged: "0" root dumps jobs (the default), "1" the job's user does.
+        # The test jobs are submitted by an ordinary user (SLURM_SUBMIT_USER=cedana) on both.
         unprivileged:
           - "0"
           - "1"
@@ -479,7 +484,9 @@ jobs:
 
       - name: Install slurm binaries
         run: |
-          chmod +x slurm-bin/build/cedana-slurm
+          # Exact modes: setup.sh refuses a cedana-task that group or others can write
+          chmod 0755 slurm-bin/build/cedana-slurm slurm-bin/build/cedana-task
+          chmod 0644 slurm-bin/build/cedana.so
           sudo -E cedana plugin install slurm
           cd slurm-bin/build
           sudo -E cedana plugin install slurm/wlm
@@ -562,6 +569,7 @@ jobs:
           LOGIN_NODES: "1"
           NFS_ROOT_SQUASH: ${{ matrix.nfs == 'root_squash' && '1' || '0' }}
           PREEMPT: "1"
+          CEDANA_SLURM_UNPRIVILEGED: ${{ matrix.unprivileged }}
         run: |
           source test/helpers/utils.bash
           source test/helpers/slurm_setup.bash
@@ -614,13 +622,8 @@ jobs:
           echo "CEDANA_CLUSTER_ID=$SLURM_CLUSTER_ID" >> $GITHUB_ENV
           echo "CLUSTER_NAME=$CLUSTER_NAME" >> $GITHUB_ENV
 
-          if [ "${{ matrix.unprivileged }}" = "1" ]; then
-            setup_slurm_unprivileged_user
-            start_cedana_slurm_daemon
-            restart_cedana_slurm_daemon_unprivileged
-          else
-            start_cedana_slurm_daemon
-          fi
+          setup_slurm_unprivileged_user
+          start_cedana_slurm_daemon
           validate_slurm_propagator
 
       - name: Run SLURM tests
@@ -634,7 +637,7 @@ jobs:
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           LARGE: ${{ inputs.large && '1' || '0' }}
           PARALLELISM: ${{ matrix.compute == 'CUDA' && 1 || inputs.parallelism }}
-          SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
+          SLURM_SUBMIT_USER: cedana
         run: |
           TAGS="slurm,!ansible,!preemption,!unprivileged,!namespace"
           if [ "$GPU" = "1" ]; then
@@ -687,7 +690,7 @@ jobs:
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           PARALLELISM: 1
-          SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
+          SLURM_SUBMIT_USER: cedana
           PREEMPT: "1"
         run: |
           TAGS="slurm,preemption"
@@ -728,8 +731,10 @@ jobs:
 
           exit "$test_exit_code"
 
+      # The unprivileged tag marks tests that need an ordinary user (two users on one node), not
+      # the mode: they run on both legs.
       - name: Run SLURM unprivileged tests
-        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' && matrix.suite == 'samples' }}
+        if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.suite == 'samples' }}
         env:
           CEDANA_CHECKPOINT_DIR: cedana://ci
           CEDANA_BIN: /usr/local/bin/cedana
@@ -789,6 +794,8 @@ jobs:
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
           GPU: ${{ matrix.compute == 'CUDA' && '1' || '0' }}
           PARALLELISM: 1
+          # Root submits on leg "0" until a root dump of an ordinary user's job with a private /tmp
+          # can be restored by that user; then submit as cedana on both legs, like the other steps.
           SLURM_SUBMIT_USER: ${{ matrix.unprivileged == '1' && 'cedana' || '' }}
         run: |
           TAGS="slurm,namespace"
@@ -880,7 +887,8 @@ jobs:
             docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
             docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
             docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
-            docker exec "$c" sh -c 'for p in $(pgrep -f "cedana-slurm monitor" 2>/dev/null || true); do echo "=== monitor pid=$p ==="; tr "\000" "\n" </proc/$p/environ 2>/dev/null | sort; done' >"$cdir/monitor-environ.txt" 2>&1 || true
+            docker exec "$c" sh -c 'pgrep -fa "cedana-task --" || echo "(no cedana-task processes)"' >"$cdir/cedana-task-processes.txt" 2>&1 || true
+            docker exec "$c" journalctl -t cedana-task-monitor --no-pager -o short-precise >"$cdir/cedana-task-monitor.txt" 2>&1 || true
             docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
             docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
             docker exec "$c" sh -c 'echo "=== /usr/local/lib plugins ==="; ls -la /usr/local/lib/libcedana-*.so 2>/dev/null || true; echo "=== CEDANA_* env ==="; env | sort | grep "^CEDANA_" || true' >"$cdir/plugin-inventory.txt" 2>&1 || true
@@ -888,7 +896,6 @@ jobs:
             for f in \
               /var/log/cedana.log \
               /var/log/cedana-slurm.log \
-              /var/log/cedana-slurm-monitor.log \
               /var/log/slurm/slurmctld.log \
               /var/log/slurm/slurmd.log \
               /var/log/slurm/slurmdbd.log \

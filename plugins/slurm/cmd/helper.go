@@ -69,24 +69,25 @@ var setupCmd = &cobra.Command{
 			return fmt.Errorf("failed to set %s: %w", slurmNodeRoleEnv, err)
 		}
 
-		if nodeRole == slurmNodeRoleLogin {
-			log.Info().Msg("login node: nothing to set up")
-			return nil
-		}
-
 		if config.Global.Metrics {
 			metrics.Init(ctx, wg, "cedana-slurm", version.Version)
 		}
 
-		err = script.Run(
-			log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx),
-			scripts.ResetService,
-			scripts.InstallDeps,
-			slurmscripts.Install,
-			slurmscripts.InstallPlugins,
-			scripts.ConfigureShm,
-			scripts.InstallService,
-		)
+		setupCtx := log.With().Str("operation", "setup").Logger().Level(zerolog.DebugLevel).WithContext(ctx)
+		if nodeRole == slurmNodeRoleLogin {
+			// A login node runs no daemon: it only needs the plugin that sbatch loads
+			err = script.Run(setupCtx, slurmscripts.InstallPlugins)
+		} else {
+			err = script.Run(
+				setupCtx,
+				scripts.ResetService,
+				scripts.InstallDeps,
+				slurmscripts.Install,
+				slurmscripts.InstallPlugins,
+				scripts.ConfigureShm,
+				scripts.InstallService,
+			)
+		}
 		if err != nil {
 			log.Error().Err(err).Msg("failed to setup daemon")
 			return fmt.Errorf("error setting up host: %w", err)

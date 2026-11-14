@@ -13,18 +13,21 @@ SLURM_SCRIPT_WORKDIR=/data/cedana-samples
 
 # Runs sbatch from <workdir> on the submission host and prints the job ID.
 # Submits <file> (a path there) if given, otherwise the script on stdin.
+# SLURM_CEDANA=0 submits a plain job, without Cedana.
 _slurm_sbatch() {
     local workdir="$1"
     local file="${2:-}"
-    local cedana_enable="${CEDANA_ENABLE:-1}"
-    local cedana_bin="${CEDANA_BIN:-/usr/local/bin/cedana}"
-    local exec_opts=() output job_id
+    local exec_opts=() cedana_opts=() output job_id
 
     [ -n "$file" ] || exec_opts+=(-i)
+    if [ "${SLURM_CEDANA:-1}" != "0" ]; then
+        cedana_opts=(--cedana --signal=B:USR1@0)
+    fi
 
+    # --export=ALL overrides the samples' own "#SBATCH --export=...", which alone would leave the
+    # job only SLURM_* and that variable.
     if ! output=$(slurm_submit_exec "${exec_opts[@]}" bash -c 'cd "$1" && shift && exec sbatch "$@"' _ \
-        "$workdir" --parsable --overcommit \
-        --export=ALL,CEDANA_ENABLE="${cedana_enable}",CEDANA_BIN="${cedana_bin}" \
+        "$workdir" --parsable --overcommit --export=ALL "${cedana_opts[@]}" \
         --cpus-per-task=1 --mem=0 ${file:+"$file"} 2>&1); then
         error_log "sbatch failed: $output"
         return 1
@@ -130,7 +133,7 @@ _slurm_user_log_files() {
 
 # Print the cedana-slurm logs in /var/log and the users' logs, NUL-separated.
 _slurm_cedana_log_files() {
-    printf '%s\0' /var/log/cedana-slurm.log /var/log/cedana-slurm-monitor.log
+    printf '%s\0' /var/log/cedana-slurm.log
     _slurm_user_log_files "$1"
 }
 
@@ -179,14 +182,26 @@ _capture_runtime_slurm_logs() {
         docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
         docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
         docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
-        docker exec "$c" sh -c 'for p in $(pgrep -f "cedana-slurm monitor" 2>/dev/null || true); do echo "=== monitor pid=$p ==="; tr "\000" "\n" </proc/$p/environ 2>/dev/null | sort; done' >"$cdir/monitor-environ.txt" 2>&1 || true
+        # The SPANK plugin and the cedana-task it runs: the shared sources, the installed copies, and
+        # the copy's capabilities.
+        docker exec "$c" sh -c 'plugin_dir=$(scontrol show config 2>/dev/null | awk "/^PluginDir[[:space:]]*=/{print \$NF}"); for f in /usr/local/lib/cedana.so "${plugin_dir:-/usr/lib/slurm}/cedana.so" /usr/local/bin/cedana-task /usr/libexec/cedana/cedana-task; do [ -f "$f" ] || { echo "=== $f: missing ==="; continue; }; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done; echo "=== getcap ==="; getcap /usr/libexec/cedana/cedana-task 2>&1 || true' >"$cdir/cedana-plugin.txt" 2>&1 || true
+        # The per-job monitor (cedana-task --monitor) logs to the node's journal; keep the lines of
+        # this test's jobs (the monitor writes job=<id>, the event stream job_id=<id>).
+        local job_ids_re="${relevant_job_ids_csv//,/|}"
+        if [[ "$job_ids_re" =~ ^[0-9]+(\|[0-9]+)*$ ]]; then
+            docker exec "$c" journalctl -t cedana-task-monitor --no-pager -o short-precise 2>/dev/null |
+                grep -E "job(_id)?=(${job_ids_re})( |$)" >"$cdir/cedana-task-monitor.txt" 2>&1 || true
+        else
+            docker exec "$c" journalctl -t cedana-task-monitor --no-pager -o short-precise -n 300 \
+                >"$cdir/cedana-task-monitor.txt" 2>&1 || true
+        fi
+        docker exec "$c" sh -c 'pgrep -fa "cedana-task --" || echo "(no cedana-task processes)"' >"$cdir/cedana-task-processes.txt" 2>&1 || true
         docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
         docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
         docker exec "$c" sh -c 'echo "=== /usr/local/lib plugins ==="; ls -la /usr/local/lib/libcedana-*.so 2>/dev/null || true; echo "=== CEDANA_* env ==="; env | sort | grep "^CEDANA_" || true' >"$cdir/plugin-inventory.txt" 2>&1 || true
 
         _persist_container_log_file "$c" /var/log/cedana.log "$cdir"
         _persist_container_log_file "$c" /var/log/cedana-slurm.log "$cdir"
-        _persist_container_log_file "$c" /var/log/cedana-slurm-monitor.log "$cdir"
         _persist_container_log_file "$c" /var/log/slurm/slurmctld.log "$cdir"
         _persist_container_log_file "$c" /var/log/slurm/slurmd.log "$cdir"
         _persist_container_log_file "$c" /var/log/slurm/slurmdbd.log "$cdir"
@@ -311,9 +326,9 @@ _dump_job_failure_info() {
         echo "--- $c cedana-slurm log (last 80 lines) ---"
         docker exec "$c" tail -80 /var/log/cedana-slurm.log 2>/dev/null ||
             echo "(no log)"
-        echo "--- $c cedana-slurm monitor log (last 120 lines) ---"
-        docker exec "$c" tail -120 /var/log/cedana-slurm-monitor.log 2>/dev/null ||
-            echo "(no monitor log)"
+        echo "--- $c per-job monitor journal (last 120 lines) ---"
+        docker exec "$c" journalctl -t cedana-task-monitor --no-pager -n 120 2>/dev/null ||
+            echo "(no monitor journal)"
 
         local user_log
         while IFS= read -r -d "" user_log; do
@@ -337,10 +352,6 @@ _dump_job_failure_info() {
         grep -aiE "Failed to get SLURM jobs|Failed to send sync request|non-OK status for job sync|Failed to marshal sync" \
         /var/log/cedana-slurm.log 2>/dev/null | tail -20)"
     echo "${sync_errors:-(none)}"
-
-    echo "=== cedana-slurm monitor log on controller (last 120 lines) ==="
-    docker exec "$SLURM_CONTROLLER_CONTAINER" \
-        tail -120 /var/log/cedana-slurm-monitor.log 2>/dev/null || true
 }
 
 _detect_restored_job_id() {
@@ -521,7 +532,7 @@ test_slurm_job() {
             if [ -n "$_host" ]; then
                 mapfile -d '' -t _cedana_logs < <(_slurm_cedana_log_files "$_host")
                 info_log "[DEBUG] SPANK monitor check on $_host for job $job_id:"
-                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm monitor'" 2>/dev/null || info_log "[DEBUG] No monitor process found"
+                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-task --monitor --job=${job_id} '" 2>/dev/null || info_log "[DEBUG] No monitor process found"
                 info_log "[DEBUG] slurmd PATH:"
                 docker exec "$_host" bash -c "cat /proc/\$(pgrep -x slurmd | head -1)/environ 2>/dev/null | tr '\0' '\n' | grep ^PATH" 2>/dev/null || info_log "[DEBUG] Could not read slurmd environ"
                 info_log "[DEBUG] SPANK log entries:"
@@ -556,10 +567,13 @@ test_slurm_job() {
                 local monitor_alive=true
                 sleep 3
                 info_log "[DEBUG] Monitor status after checkpoint request:"
-                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm monitor'" 2>/dev/null || {
+                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-task --monitor --job=${job_id} '" 2>/dev/null || {
                     monitor_alive=false
                     info_log "[DEBUG] Monitor DIED after checkpoint request"
                 }
+                info_log "[DEBUG] per-job monitor journal for job $job_id:"
+                docker exec "$_host" journalctl -t cedana-task-monitor --no-pager -o cat 2>/dev/null |
+                    grep -E "job(_id)?=${job_id}( |$)" | tail -40 || true
                 info_log "[DEBUG] cedana-slurm log excerpts scoped to job $job_id:"
                 # Again, as a user's log only exists once something has logged there as them
                 mapfile -d '' -t _cedana_logs < <(_slurm_cedana_log_files "$_host")

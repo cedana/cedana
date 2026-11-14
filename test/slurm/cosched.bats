@@ -31,7 +31,7 @@ _cosched_submit() {
     local user="$1" out
     out=$(SLURM_SUBMIT_USER="$user" slurm_submit_exec bash -c \
         "cd /data/cedana-samples/slurm/$(dirname "$COSCHED_SAMPLE") && \
-         sbatch --parsable --overcommit --export=ALL,CEDANA_ENABLE=1 \
+         sbatch --parsable --overcommit --export=ALL --cedana --signal=B:USR1@0 \
          --cpus-per-task=1 --mem=256M '$(basename "$COSCHED_SAMPLE")'" 2>&1) || {
         error_log "sbatch as $user failed: $out"
         return 1
