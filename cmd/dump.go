@@ -202,9 +202,10 @@ var dumpCmd = &cobra.Command{
 			fmt.Println(message)
 		}
 
-		// Optionally emit the structured result so non-daemon callers (e.g. the
-		// cedana-slurm monitor, which shells out here) get the same DumpResp the
-		// daemon client returns -- paths, state -- instead of scraping stdout.
+		// Optionally emit the structured result so non-daemon callers (e.g.
+		// cedana-slurm's per-job monitor, cedana-task, which shells out here) get
+		// the same DumpResp the daemon client returns -- paths, state -- instead
+		// of scraping stdout.
 		if resultFile, _ := cmd.Flags().GetString(flags.ResultFileFlag.Full); resultFile != "" {
 			data, err := protojson.Marshal(resp)
 			if err != nil {
