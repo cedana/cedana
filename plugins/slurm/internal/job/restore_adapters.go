@@ -6,14 +6,12 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
 
 	"github.com/cedana/cedana/pkg/types"
-	"github.com/cedana/cedana/pkg/utils"
 	"github.com/rs/zerolog/log"
 
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
@@ -98,58 +96,19 @@ func RestoreSlurmScript(next types.Restore) types.Restore {
 			defer memfd.Close()
 		}
 
-		state := resp.GetState()
-		if state == nil {
-			log.Warn().Msg("no process info found. it should have been filled by an adapter")
-			return next(ctx, opts, resp, req)
-		}
-
-		// Where the job being restored into has it, which may be its own /tmp rather than ours
-		pid := req.GetDetails().GetSlurm().GetPID()
-
-		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
-			if path := f.GetPath(); isJobScript(path) {
-				contents, err := slurm_utils.LoadScriptFromDump(SLURM_SCRIPT_FILE, opts.DumpFs)
-				if err != nil {
-					log.Warn().Err(err).Msgf("failed to load slurm script from dump %s", path)
-					return false
-				}
-
-				path = inRootOf(pid, path)
-				err = os.MkdirAll(filepath.Dir(path), 0o755)
-				if err != nil {
-					log.Warn().Err(err).Msgf("failed to create directory for slurm script %s", path)
-					return false
-				}
-
-				err = os.WriteFile(path, contents, 0o600)
-				if err != nil {
-					log.Warn().Err(err).Msgf("failed to restore slurm script file %s", path)
-					return false
-				}
-
-				// As it was, or CRIU refuses it: "has bad mode"
-				attrs := loadScriptAttrs(opts.DumpFs)
-				if err := os.Chown(path, int(attrs.Uid), int(attrs.Gid)); err != nil {
-					log.Warn().Err(err).Msgf("failed to set the owner of slurm script %s", path)
-				}
-				if err := os.Chmod(path, os.FileMode(attrs.Mode)); err != nil {
-					log.Warn().Err(err).Msgf("failed to set the mode of slurm script %s", path)
-				}
-
-				return false
-			}
-
-			return true
-		})
-
 		return next(ctx, opts, resp, req)
 	}
 }
 
 // inheritSpoolScript gives the restored shell the saved spooled script, from a sealed, read-only
-// memfd at its recorded offset, through CRIU's --inherit-fd under the script's path. Nothing is
-// written to disk or into Slurm's spool. A dump without a record restores as before.
+// memfd at its recorded offset, through CRIU's --inherit-fd under the script's path, in place of
+// the file Slurm deleted. Nothing is written to disk or into Slurm's spool. A dump without a
+// record reopens the spool file, which works for the same job only.
+//
+// --inherit-fd supplies one handle for the path, so every process that had the script open
+// shares it and its position. That is right for the usual single reader, forked subshells
+// included. A script that opens itself again while it runs (bash "$0", source "$0") is not
+// restored correctly: its second reader resumes at the shell's position.
 func inheritSpoolScript(opts *types.Opts, req *daemon.RestoreReq) (*os.File, error) {
 	record, err := loadSpoolScriptRecord(opts.DumpFs)
 	if err != nil || record == nil {

@@ -15,20 +15,8 @@ import (
 	"github.com/opencontainers/cgroups"
 	cgroupsManager "github.com/opencontainers/cgroups/manager"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-)
-
-const (
-	// What cedana-slurm's wrapper names the script it runs the job with, cedana-script-<jobid>.sh.
-	// The shell keeps it open for as long as the job runs, and it is gone by the time the job
-	// is restored.
-	SLURM_SCRIPT_PREFIX = "cedana-script"
-	// What it is kept as in the dump, and where its mode and owner go. CRIU wants the file
-	// back exactly as it was.
-	SLURM_SCRIPT_FILE       = "cedana-script"
-	SLURM_SCRIPT_ATTRS_FILE = "cedana-script.json"
 )
 
 func GetSlurmJobForDump(next types.Dump) types.Dump {
@@ -91,58 +79,18 @@ func DumpSlurmScript(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		// The shell holds the script open, so a restore without it, or with it not as it was,
-		// fails. Better to fail the dump.
-		var saveErr error
-		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
-			if path := f.GetPath(); isJobScript(path) {
-				saveErr = saveJobScript(opts.DumpFs, state.PID, path)
-				return false
-			}
-			return true
-		})
-		if saveErr != nil {
-			return nil, status.Errorf(codes.Internal, "failed to save the slurm script: %v", saveErr)
-		}
-
-		// Slurm's spooled script, which the shell runs from when its script isn't rewritten
+		// Slurm's spooled script, which the job's shell runs from
 		for _, f := range state.GetOpenFiles() {
 			if path := f.GetPath(); isSpoolScript(path) {
 				if err := saveSpoolScript(opts, state.PID, f.GetFd(), path); err != nil {
 					return nil, status.Errorf(codes.Internal, "failed to save the slurm script: %v", err)
 				}
-				warnIfScriptReread(state, path)
 				break
 			}
 		}
 
 		return next(ctx, opts, resp, req)
 	}
-}
-
-// saveJobScript keeps the script at path, open in the job of pid, in the dump with its
-// attributes. The job may have it where we don't, e.g. in a private /tmp.
-func saveJobScript(dumpFs afero.Fs, pid uint32, path string) error {
-	if dumpFs == nil {
-		return fmt.Errorf("no dump filesystem")
-	}
-	script, err := os.Open(inRootOf(pid, path))
-	if err != nil {
-		return err
-	}
-	defer script.Close()
-
-	if err := slurm_utils.SaveScriptToDump(script, SLURM_SCRIPT_FILE, dumpFs); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	info, err := script.Stat()
-	if err != nil {
-		return err
-	}
-	if err := saveScriptAttrs(dumpFs, info); err != nil {
-		return fmt.Errorf("attributes of %s: %w", path, err)
-	}
-	return nil
 }
 
 // saveSpoolScript saves the script that the shell at pid holds open on fd, read through that
@@ -181,28 +129,4 @@ func saveSpoolScript(opts types.Opts, pid uint32, fd uint64, path string) error 
 		},
 	})
 	return nil
-}
-
-// warnIfScriptReread logs when processes in the job read the spooled script at different offsets,
-// e.g. a script running bash "$0" or source "$0": after a restore all of them read from the
-// shell's position. Forked subshells share the shell's open, and its offset, so they don't count.
-func warnIfScriptReread(state *daemon.ProcessState, path string) {
-	offsets := map[int64]bool{}
-	var walk func(s *daemon.ProcessState)
-	walk = func(s *daemon.ProcessState) {
-		for _, f := range s.GetOpenFiles() {
-			if f.GetPath() == path {
-				if offset, err := fdOffset(s.GetPID(), f.GetFd()); err == nil {
-					offsets[offset] = true
-				}
-			}
-		}
-		for _, child := range s.GetChildren() {
-			walk(child)
-		}
-	}
-	walk(state)
-	if len(offsets) > 1 {
-		log.Warn().Str("path", path).Msg("the job reads its script at several offsets (e.g. bash \"$0\"): after a restore, all of them read from the shell's position")
-	}
 }

@@ -36,6 +36,7 @@ load ../helpers/slurm_propagator
 # bats test_tags=dump,restore,samples
 @test "Dump/Restore: Go 1.25 counting" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/go-counting.sbatch"
+    [ -f "$sbatch_file" ] || skip "this cedana-samples has no go-counting sample"
 
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15
 }

@@ -36,8 +36,8 @@ stage_preemption_script() {
         return 1
     }
 
-    # Submitting as the job user makes the job, and its per-job monitor, run as that user;
-    # as root, both run as root.
+    # Submitting as the job user makes the job run as that user; its per-job monitor runs as root
+    # (the default) or as that user (slurm.unprivileged: true). As root, both run as root.
     EXEC_USER=()
     if [ -n "${SLURM_SUBMIT_USER:-}" ]; then
         EXEC_USER=(-u "$SLURM_SUBMIT_USER")

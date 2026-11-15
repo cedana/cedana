@@ -173,11 +173,9 @@ _svc_restart() {
 
 # Copy the controller's SLURM config to the other nodes. /etc/slurm is local
 # to each node (not NFS), so every edit made on the controller has to be pushed
-# out. Login nodes only get slurm.conf and the overlay it includes; the
-# cli_filter plugin it names reaches them through the shared plugin dir, and
-# gives each job the UUID its monitor is found by. Any extra file names given
-# are pushed to compute nodes,
-# and must exist on the controller. Fails if any copy fails, since a node left
+# out. Login nodes only get slurm.conf and the overlay it includes (the SPANK
+# plugin reaches them through setup). Any extra file names given are pushed to
+# compute nodes, and must exist on the controller. Fails if any copy fails, since a node left
 # on the old config would still come up ready.
 _sync_slurm_conf() {
     local compute_containers=() login_containers=()
