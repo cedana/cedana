@@ -306,6 +306,24 @@ teardown() {
     [[ "$output" == *"unknown argument 'unprivileged=maybe'"* ]]
 }
 
+# The plugin refuses these at submission, so no job is created.
+@test "Ansible: sbatch refuses a multi-node --cedana job" {
+    run docker exec "$LOGIN_01" sbatch --cedana -N 2 -J cedana-refused-nodes --wrap true
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"cedana: --cedana requires a single node (-N 1)"* ]]
+    run docker exec "$CONTROLLER" squeue -h -n cedana-refused-nodes
+    [ -z "$output" ]
+}
+
+@test "Ansible: sbatch refuses a heterogeneous --cedana job" {
+    docker exec "$LOGIN_01" sh -c 'printf "#!/bin/bash\ntrue\n" >/tmp/cedana-refused.sh'
+    run docker exec "$LOGIN_01" sbatch --cedana -J cedana-refused-het -n1 : -n1 /tmp/cedana-refused.sh
+    [ "$status" -ne 0 ]
+    [[ "$output" == *"cedana: --cedana does not support heterogeneous jobs"* ]]
+    run docker exec "$CONTROLLER" squeue -h -n cedana-refused-het
+    [ -z "$output" ]
+}
+
 ##############################
 # Slurm node state
 ##############################

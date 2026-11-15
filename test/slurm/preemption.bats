@@ -194,5 +194,5 @@ teardown() {
         error_log "job $job was checkpointed on preemption without --signal"
         return 1
     fi
-    _job_output_has "$job" "no checkpoint to restore; starting from the beginning (to be checkpointed on preemption, submit with --signal=B:USR1@0)"
+    _job_output_has "$job" "if it was preempted, --signal=B:USR1@0 lets it be checkpointed first"
 }
