@@ -110,7 +110,7 @@ stage_preemption_script() {
 _submit_without_signal() {
     local script="$BATS_TEST_TMPDIR/no-signal.sh"
     printf '#!/bin/bash\nbash cpu_smr/counting.sh\n' >"$script"
-    SLURM_CEDANA_SIGNAL= slurm_submit_script "$script"
+    SLURM_CEDANA_SIGNAL='' slurm_submit_script "$script"
 }
 
 # Whether the job's monitor logged a line matching <pattern> on any compute node.
