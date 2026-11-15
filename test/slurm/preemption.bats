@@ -99,3 +99,100 @@ stage_preemption_script() {
     echo "$output"
     [ "$status" -eq 0 ]
 }
+
+##############################
+# Jobs without --signal      #
+##############################
+
+# --signal=B:USR1@N only opts a job into Slurm's warnings (time limit, preemption); an on-demand
+# checkpoint works without it. counting.sbatch sets it, so these jobs run counting.sh from a
+# script of their own.
+_submit_without_signal() {
+    local script="$BATS_TEST_TMPDIR/no-signal.sh"
+    printf '#!/bin/bash\nbash cpu_smr/counting.sh\n' >"$script"
+    SLURM_CEDANA_SIGNAL= slurm_submit_script "$script"
+}
+
+# Whether the job's monitor logged a line matching <pattern> on any compute node.
+_monitor_logged() {
+    local c
+    for c in $(_slurm_compute_containers); do
+        docker exec "$c" journalctl -t cedana-task-monitor --no-pager -o cat 2>/dev/null |
+            grep -q -- "job=$1 $2" && return 0
+    done
+    return 1
+}
+
+# Waits up to <timeout> seconds for the monitor to log <pattern> for the job.
+_wait_monitor_logged() {
+    local job_id="$1" pattern="$2" timeout="$3" elapsed=0
+    while [ "$elapsed" -lt "$timeout" ]; do
+        _monitor_logged "$job_id" "$pattern" && return 0
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    error_log "job $job_id: no monitor line '$pattern' after ${timeout}s"
+    _dump_job_failure_info "$job_id"
+    return 1
+}
+
+# Whether the job's output has a line matching <pattern>, on whichever node has the file.
+_job_output_has() {
+    local out_file c
+    out_file="$(slurm_exec scontrol show job "$1" 2>/dev/null | grep -oE 'StdOut=[^[:space:]]+' | head -1 | cut -d= -f2-)"
+    [ -n "$out_file" ] || return 1
+    for c in "$SLURM_CONTROLLER_CONTAINER" $(_slurm_compute_containers); do
+        docker exec "$c" grep -qF -- "$2" "$out_file" 2>/dev/null && return 0
+    done
+    return 1
+}
+
+teardown() {
+    cancel_slurm_job "${job:-}"
+    cancel_slurm_job "${preemptor:-}"
+}
+
+# bats test_tags=dump,restore
+@test "On demand: a job without --signal checkpoints, parks and resumes" {
+    # Not local, so teardown can cancel it.
+    job=$(_submit_without_signal)
+    [ -n "$job" ]
+    wait_for_slurm_job_state "$job" RUNNING 90
+    _wait_monitor_logged "$job" "UI checkpoints on" 60
+
+    slurm_submit_exec scancel -b -s USR1 "$job"
+    _wait_monitor_logged "$job" "attempt 0: held after its checkpoint" 120
+
+    # Release once Slurm shows the hold; earlier, the release has nothing to release.
+    local i
+    for i in $(seq 60); do
+        slurm_exec squeue -h -j "$job" -o %r | grep -qi held && break
+        sleep 2
+    done
+    slurm_submit_exec scontrol release "$job"
+    # The release waits out Slurm's requeue delay (2 min by default).
+    _wait_monitor_logged "$job" "attempt 1: restore" 480
+    wait_for_slurm_job_state "$job" RUNNING 60
+}
+
+# bats test_tags=dump,restore
+@test "Preemption: a job without --signal starts over and says how to opt in" {
+    [ "${PREEMPT:-0}" = "1" ] || skip "preemptible partitions not configured (PREEMPT=1)"
+
+    job=$(_submit_without_signal)
+    [ -n "$job" ]
+    wait_for_slurm_job_state "$job" RUNNING 90
+    _wait_monitor_logged "$job" "UI checkpoints on" 60
+
+    preemptor=$(slurm_submit_exec sbatch --parsable -p high --exclusive --wrap 'sleep 20' -o /dev/null |
+        tail -1 | cut -d';' -f1 | tr -d '[:space:]')
+    [ -n "$preemptor" ]
+
+    # The partition's GraceTime, then Slurm's requeue delay (2 min by default).
+    _wait_monitor_logged "$job" "attempt 1: fresh start" 480
+    if _monitor_logged "$job" "attempt 0: checkpointed"; then
+        error_log "job $job was checkpointed on preemption without --signal"
+        return 1
+    fi
+    _job_output_has "$job" "no checkpoint to restore; starting from the beginning (to be checkpointed on preemption, submit with --signal=B:USR1@0)"
+}

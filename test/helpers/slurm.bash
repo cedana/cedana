@@ -13,7 +13,8 @@ SLURM_SCRIPT_WORKDIR=/data/cedana-samples
 
 # Runs sbatch from <workdir> on the submission host and prints the job ID.
 # Submits <file> (a path there) if given, otherwise the script on stdin.
-# SLURM_CEDANA=0 submits a plain job, without Cedana.
+# SLURM_CEDANA=0 submits a plain job, without Cedana. SLURM_CEDANA_SIGNAL is the job's --signal
+# (default B:USR1@0); set empty, the job has none.
 _slurm_sbatch() {
     local workdir="$1"
     local file="${2:-}"
@@ -21,7 +22,9 @@ _slurm_sbatch() {
 
     [ -n "$file" ] || exec_opts+=(-i)
     if [ "${SLURM_CEDANA:-1}" != "0" ]; then
-        cedana_opts=(--cedana --signal=B:USR1@0)
+        cedana_opts=(--cedana)
+        local signal="${SLURM_CEDANA_SIGNAL-B:USR1@0}"
+        [ -z "$signal" ] || cedana_opts+=(--signal="$signal")
     fi
 
     # --export=ALL overrides the samples' own "#SBATCH --export=...", which alone would leave the
