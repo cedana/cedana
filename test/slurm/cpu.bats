@@ -32,6 +32,14 @@ load ../helpers/slurm_propagator
     test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15
 }
 
+# A Go 1.25+ program keeps its cgroup's CPU-limit file open; the restore runs under a new cgroup.
+# bats test_tags=dump,restore,samples
+@test "Dump/Restore: Go 1.25 counting" {
+    local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/go-counting.sbatch"
+
+    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 15
+}
+
 # bats test_tags=dump,restore,samples,large
 @test "Dump/Restore: CPU PyTorch" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/cpu/cpu-pytorch.sbatch"
