@@ -171,12 +171,17 @@ func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, ma
 
 			totalEntries++
 			mode := rwLayerFile.GetMode()
-			// SecureJoin clamps the entry within upperDir and safely resolves any
-			// symlink components
-			fullPath, serr := securejoin.SecureJoin(upperDir, relPath)
+			// SecureJoin clamps the parent within upperDir and resolves its symlinks; the entry
+			// itself is never resolved, so an existing symlink there is replaced, not followed.
+			cleanPath := filepath.Clean("/" + relPath)
+			if cleanPath == "/" {
+				continue
+			}
+			safeParent, serr := securejoin.SecureJoin(upperDir, filepath.Dir(cleanPath))
 			if serr != nil {
 				return fmt.Errorf("failed to resolve safe path for %q: %v", relPath, serr)
 			}
+			fullPath := filepath.Join(safeParent, filepath.Base(cleanPath))
 
 			parentDir := filepath.Dir(fullPath)
 			if parentDir != upperDir {
