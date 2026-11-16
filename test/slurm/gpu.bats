@@ -29,7 +29,8 @@ load ../helpers/slurm_propagator
 @test "Dump/Restore: GPU PyTorch" {
     local sbatch_file="${SLURM_SAMPLES_DIR}/gpu/gpu-pytorch-simple.sbatch"
 
-    test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 30 240
+    SLURM_JOB_CHECK=_check_pytorch_job \
+        test_slurm_job SUBMIT_DUMP_RESTORE "$sbatch_file" 30 240
 }
 
 # bats test_tags=dump,restore,samples
@@ -157,6 +158,25 @@ _check_graph_job() {
     fi
 
     _check_graph_mismatch "$phase" "$job_id"
+}
+
+_check_pytorch_job() {
+    local phase="$1" job_id="$2"
+
+    case "$phase" in
+    pre-dump)
+        if [ "$(_graph_count "$job_id" "Epoch ")" -eq 0 ]; then
+            error_log "[$phase] job $job_id has not started training yet"
+            return 1
+        fi
+        ;;
+    post-restore)
+        if ! _graph_wait_for_progress "$job_id" "Epoch " 60; then
+            error_log "[$phase] no training epochs after the restore"
+            return 1
+        fi
+        ;;
+    esac
 }
 
 _check_host_memory_job() {
