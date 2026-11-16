@@ -98,12 +98,22 @@ func RestoreToUpperDir(ctx context.Context, dump afero.Fs, upperDir string) (res
 		log.Debug().Err(err).Msg("no RW layer manifest found, skipping restore")
 		return false, nil
 	}
-	return true, restoreFromManifest(ctx, dump, upperDir, manifestFile)
+	return true, restoreFromManifest(ctx, dump, upperDir, manifestFile, false)
+}
+
+// RestoreToMerged writes the RW layer through a mounted rootfs (an in-place swap): whiteouts
+// become removals and files already present with the same mode and mtime are skipped.
+func RestoreToMerged(ctx context.Context, dump afero.Fs, root string) (restored bool, err error) {
+	manifestFile, err := dump.Open(DumpRWLayerManifestKey)
+	if err != nil {
+		return false, nil
+	}
+	return true, restoreFromManifest(ctx, dump, root, manifestFile, true)
 }
 
 // restoreFromManifest reads the RW-layer batches listed in the manifest and
 // writes their entries into upperDir. Closes manifestFile.
-func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, manifestFile io.ReadCloser) (err error) {
+func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, manifestFile io.ReadCloser, merged bool) (err error) {
 	manifestFile = profiling.IORedundantComponent(ctx, manifestFile, DumpRWLayerManifestKey)
 	defer manifestFile.Close()
 
@@ -171,12 +181,13 @@ func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, ma
 
 			totalEntries++
 			mode := rwLayerFile.GetMode()
-			// SecureJoin clamps the entry within upperDir and safely resolves any
-			// symlink components
-			fullPath, serr := securejoin.SecureJoin(upperDir, relPath)
+			// SecureJoin clamps the parent within upperDir and safely resolves its symlink
+			// components; the entry itself is replaced, never followed.
+			safeParent, serr := securejoin.SecureJoin(upperDir, filepath.Dir(filepath.Clean("/"+relPath)))
 			if serr != nil {
 				return fmt.Errorf("failed to resolve safe path for %q: %v", relPath, serr)
 			}
+			fullPath := filepath.Join(safeParent, filepath.Base(relPath))
 
 			parentDir := filepath.Dir(fullPath)
 			if parentDir != upperDir {
@@ -186,6 +197,22 @@ func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, ma
 			}
 
 			fileType := mode & syscall.S_IFMT
+
+			if merged {
+				if fileType == syscall.S_IFCHR && rwLayerFile.GetDevMajor() == 0 && rwLayerFile.GetDevMinor() == 0 {
+					if err := os.RemoveAll(fullPath); err != nil {
+						return fmt.Errorf("failed to apply whiteout %s: %v", fullPath, err)
+					}
+					continue
+				}
+				if st, err := os.Lstat(fullPath); err == nil && fileType == syscall.S_IFREG && st.Mode().IsRegular() &&
+					uint32(st.Mode().Perm()) == mode&0o777 && uint64(st.ModTime().UnixNano()) == rwLayerFile.GetMtime() {
+					if err := writeFileContent(reader, io.Discard); err != nil {
+						return err
+					}
+					continue
+				}
+			}
 
 			switch fileType {
 			case syscall.S_IFLNK: // symlink
