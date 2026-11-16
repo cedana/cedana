@@ -101,11 +101,20 @@ func (p *Plugin) SyncVersion() {
 		}
 		binary := p.Binaries[0]
 		if !strings.HasSuffix(binary.Name, ".sh") { // dont do for scripts
+			path := filepath.Join(BinDir, binary.Name)
+			if binary.InstallDir != "" {
+				path = filepath.Join(binary.InstallDir, binary.Name)
+			}
+			if v, ok := cachedBinaryVersion(path); ok {
+				version = v
+				break
+			}
 			cmd := exec.Command(binary.Name, "--version")
 			cmd.Env = append(os.Environ(), "PATH="+BinDir+":"+os.Getenv("PATH"))
 			if out, err := cmd.Output(); err == nil {
 				if v := strings.TrimSpace(string(out)); v != "" {
 					version = v
+					storeBinaryVersion(path, v)
 				}
 			}
 		}
