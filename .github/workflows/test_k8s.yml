@@ -16,6 +16,16 @@ on:
         description: "The branch, tag, or SHA to run on"
         required: false
         default: ""
+      test_image:
+        type: string
+        description: "Test image to run the tests in (test_image.yml's output)"
+        required: false
+        default: "cedana/cedana-test:latest"
+      test_image_cuda:
+        type: string
+        description: "CUDA test image to run the GPU tests in (test_image.yml's output)"
+        required: false
+        default: "cedana/cedana-test:cuda"
       debug:
         type: boolean
         description: "Run with debugging enabled"
@@ -152,7 +162,7 @@ jobs:
   k8s:
     name: Kubernetes (${{ matrix.platform }}, ${{ matrix.compute }}, ${{ matrix.cr }}, ${{ matrix.storage }}, ${{ matrix.arch }}${{ matrix.k3s_containerd && format(', {0}', matrix.k3s_containerd) || '' }}${{ matrix.versions && format(', {0}', matrix.versions) || '' }})
     runs-on: ${{ format(
-      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}/extras=s3-cache{6}',
+      'runs-on={0}/runner={1}-{2}{3}/tag={4}-{5}{6}',
       github.run_id,
       (matrix.compute == 'CUDA' && matrix.platform == 'K3s') && inputs.runner_gpu || inputs.runner,
       matrix.arch,
@@ -161,7 +171,8 @@ jobs:
       matrix.storage,
       (inputs.propagator && matrix.platform == 'K3s') && '/volume=80gb' || ''
       ) }}
-    timeout-minutes: 240
+    # K3s jobs take ~10m (~50m with the soak tests): a hang shouldn't hold the run (and a GPU) for 4h
+    timeout-minutes: ${{ matrix.platform == 'K3s' && (inputs.soak && 120 || 45) || 240 }}
     needs: [matrix, propagator-connectivity]
     if: ${{ !cancelled() && needs.matrix.result == 'success' && needs.propagator-connectivity.result != 'failure' }}
     concurrency:
@@ -175,7 +186,7 @@ jobs:
       matrix: ${{ fromJSON(needs.matrix.outputs.matrix) }}
 
     container:
-      image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && 'cedana/cedana-test:cuda' || 'cedana/cedana-test:latest' }}
+      image: ${{ matrix.compute == 'CUDA' && matrix.platform == 'K3s' && inputs.test_image_cuda || inputs.test_image }}
       credentials:
         username: ${{ vars.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_TOKEN }}
@@ -192,8 +203,6 @@ jobs:
         with:
           repository: cedana/cedana # required for workflows reusing this workflow
           ref: ${{ inputs.ref }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Download helm chart
         uses: actions/download-artifact@v7
