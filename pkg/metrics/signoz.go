@@ -154,6 +154,11 @@ func getCreds(ctx context.Context) error {
 		return fmt.Errorf("connection URL or AuthToken unset in config/env")
 	}
 
+	if cached := loadCachedCreds(url, authToken); cached != nil {
+		Credentials = cached
+		return nil
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, CREDENTIALS_TIMEOUT)
 	defer cancel()
 
@@ -169,6 +174,7 @@ func getCreds(ctx context.Context) error {
 	}
 
 	Credentials = &Creds{Endpoint: hostPort(*endpoint), Headers: *headers}
+	storeCachedCreds(url, authToken, Credentials)
 
 	return nil
 }
