@@ -34,6 +34,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sys/unix"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -73,6 +74,14 @@ const (
 	TERMINATE_TIMEOUT = 10 * time.Second
 	MAX_SYNC_FAILURES = 2
 )
+
+// CONTROLLER_DIAL_BACKOFF redials a controller's socket every 10-250 ms until it listens
+var CONTROLLER_DIAL_BACKOFF = backoff.Config{
+	BaseDelay:  10 * time.Millisecond,
+	Multiplier: 1.6,
+	Jitter:     0.2,
+	MaxDelay:   250 * time.Millisecond,
+}
 
 type controller struct {
 	ID          string
@@ -914,7 +923,13 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 	}
 
 	if c.ClientConn == nil || c.ClientConn.GetState() == connectivity.Shutdown {
-		opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+		opts := []grpc.DialOption{
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			// A freshly spawned controller listens within ~150 ms, but gRPC's default backoff
+			// waits ~1 s before redialing a socket that wasn't there yet: retry quickly instead.
+			// It is a local Unix socket, so fast retries are cheap.
+			grpc.WithConnectParams(grpc.ConnectParams{Backoff: CONTROLLER_DIAL_BACKOFF}),
+		}
 		conn, err := grpc.NewClient(c.Address, opts...)
 		if err != nil {
 			return fmt.Errorf(
