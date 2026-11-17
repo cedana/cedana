@@ -70,10 +70,11 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 	initLocal(service)
 	initPropagator()
 
-	err := getCreds(ctx)
-	if err != nil {
-		handleErr(err)
-		return
+	if Credentials == nil { // Unless Prewarm found them cached
+		if err := getCreds(ctx); err != nil {
+			handleErr(err)
+			return
+		}
 	}
 
 	log = log.With().Str("endpoint", Credentials.Endpoint).Logger()
@@ -123,14 +124,31 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 		return
 	}
 
-	err = initTracer(ctx, wg, resource)
+	conn, err := dialOTLP()
 	if err != nil {
 		handleErr(err)
 		return
 	}
+	// The exporters don't close a connection they were given: close it once both have
+	// flushed and shut down (their shutdowns also wait on ctx, in wg).
+	exporters := &sync.WaitGroup{}
+	exporters.Add(2)
+	wg.Go(func() {
+		exporters.Wait()
+		conn.Close()
+	})
 
-	err = initMeter(ctx, wg, resource)
+	err = initTracer(ctx, wg, resource, conn, exporters.Done)
 	if err != nil {
+		exporters.Done()
+		exporters.Done()
+		handleErr(err)
+		return
+	}
+
+	err = initMeter(ctx, wg, resource, conn, exporters.Done)
+	if err != nil {
+		exporters.Done()
 		handleErr(err)
 		return
 	}

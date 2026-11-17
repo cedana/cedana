@@ -27,6 +27,9 @@ type Cedana struct {
 
 func New(ctx context.Context, description ...any) (*Cedana, error) {
 	logging.SetLevel(config.Global.LogLevelNoServer)
+	if config.Global.Metrics {
+		metrics.Prewarm() // Connect while the plugin versions for Init's attributes are gathered
+	}
 	wg := &sync.WaitGroup{}
 	var cancel func()
 

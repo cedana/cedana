@@ -11,18 +11,15 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc"
 )
 
 // initTracer creates and configures an OpenTelemetry trace provider for SigNoz
-func initTracer(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource) error {
-	secureOption := otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
-
+func initTracer(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource, conn *grpc.ClientConn, onShutdown func()) error {
 	traceExporter, err := otlptrace.New(
 		ctx,
 		otlptracegrpc.NewClient(
-			secureOption,
-			otlptracegrpc.WithEndpoint(Credentials.Endpoint),
+			otlptracegrpc.WithGRPCConn(conn),
 			otlptracegrpc.WithHeaders(map[string]string{
 				"signoz-ingestion-key": Credentials.Headers,
 			}),
@@ -41,6 +38,7 @@ func initTracer(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		defer onShutdown()
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), EXPORT_TIMEOUT)
 		defer cancel()
