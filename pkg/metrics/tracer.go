@@ -15,7 +15,7 @@ import (
 )
 
 // initTracer creates and configures an OpenTelemetry trace provider for SigNoz
-func initTracer(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource, conn *grpc.ClientConn, onShutdown func()) error {
+func initTracer(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource, conn *grpc.ClientConn) error {
 	traceExporter, err := otlptrace.New(
 		ctx,
 		otlptracegrpc.NewClient(
@@ -38,7 +38,6 @@ func initTracer(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer onShutdown()
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), EXPORT_TIMEOUT)
 		defer cancel()

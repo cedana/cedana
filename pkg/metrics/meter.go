@@ -17,7 +17,7 @@ import (
 const METER_INTERVAL = 30 * time.Second
 
 // initMeter creates and configures an OpenTelemetry meter provider for SigNoz
-func initMeter(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource, conn *grpc.ClientConn, onShutdown func()) error {
+func initMeter(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource, conn *grpc.ClientConn) error {
 	metricExporter, err := otlpmetricgrpc.New(
 		ctx,
 		otlpmetricgrpc.WithGRPCConn(conn),
@@ -39,7 +39,6 @@ func initMeter(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resou
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		defer onShutdown()
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), EXPORT_TIMEOUT)
 		defer cancel()

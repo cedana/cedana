@@ -124,31 +124,22 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 		return
 	}
 
+	// Shared by traces and metrics, and open for the life of the process: the exporters flush
+	// through it at shutdown, right before the process exits
 	conn, err := dialOTLP()
 	if err != nil {
 		handleErr(err)
 		return
 	}
-	// The exporters don't close a connection they were given: close it once both have
-	// flushed and shut down (their shutdowns also wait on ctx, in wg).
-	exporters := &sync.WaitGroup{}
-	exporters.Add(2)
-	wg.Go(func() {
-		exporters.Wait()
-		conn.Close()
-	})
 
-	err = initTracer(ctx, wg, resource, conn, exporters.Done)
+	err = initTracer(ctx, wg, resource, conn)
 	if err != nil {
-		exporters.Done()
-		exporters.Done()
 		handleErr(err)
 		return
 	}
 
-	err = initMeter(ctx, wg, resource, conn, exporters.Done)
+	err = initMeter(ctx, wg, resource, conn)
 	if err != nil {
-		exporters.Done()
 		handleErr(err)
 		return
 	}
