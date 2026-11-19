@@ -13,6 +13,9 @@ CEDANA_INSTALL_STAGE="${CEDANA_INSTALL_STAGE:-/tmp/cedana-slurm-install}"
 # Must match docker-deploy.sh COMPUTE_NODES / LOGIN_NODES
 COMPUTE_NODES="${COMPUTE_NODES:-1}"
 LOGIN_NODES="${LOGIN_NODES:-1}"
+# Where the csx daemons persist checkpoints (csx:// only). Under /usr/local/src,
+# which the controller exports to every node.
+SLURM_CSX_NFS_PATH="${SLURM_CSX_NFS_PATH:-/usr/local/src/cedana-csx}"
 
 ##############################
 # Internal Helpers
@@ -265,6 +268,87 @@ _restart_slurm_daemons() {
                 >/dev/null 2>&1 || true
         done
     fi
+}
+
+##############################
+# CSX
+##############################
+
+_slurm_uses_csx() {
+    [ "${CEDANA_CHECKPOINT_DIR:-}" = "csx://" ]
+}
+
+# (Re)starts the csx daemon on every node that runs the cedana daemon. With a
+# cluster ID it also connects to RabbitMQ, as an installed csx does; without
+# one (the cluster isn't registered yet) it runs standalone.
+start_csx_in_slurm() {
+    local cluster_id="${CEDANA_CLUSTER_ID:-${SLURM_CLUSTER_ID:-}}"
+    cluster_id="${cluster_id//\"/}"
+
+    local targets=("$SLURM_CONTROLLER_CONTAINER")
+    # shellcheck disable=SC2207 # container names have no spaces: splitting is intended
+    targets+=($(_slurm_compute_containers))
+
+    # World-writable: with root_squash, root on a compute node writes as nobody.
+    docker exec "$SLURM_CONTROLLER_CONTAINER" install -d -m 1777 "$SLURM_CSX_NFS_PATH" || {
+        error_log "Failed to create $SLURM_CSX_NFS_PATH on $SLURM_CONTROLLER_CONTAINER"
+        return 1
+    }
+
+    # No tmpfs buffering: a checkpoint is written straight to the shared
+    # directory, so it can be read as soon as the dump returns.
+    local env=(
+        -e CEDANA_CSX_NFS_PATH="$SLURM_CSX_NFS_PATH"
+        -e CEDANA_CSX_TMP_DIR_OBJECT_LIMIT="0"
+    )
+    if [ -n "$cluster_id" ]; then
+        env+=(
+            -e CEDANA_CSX_PROPAGATOR_URL="${CEDANA_URL:-}"
+            -e CEDANA_CSX_PROPAGATOR_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}"
+            -e CEDANA_CSX_CLUSTER_ID="$cluster_id"
+            -e CEDANA_CSX_ENABLE_RMQ="true"
+        )
+    fi
+
+    debug_log "Starting csx daemon on all nodes (RabbitMQ: $([ -n "$cluster_id" ] && echo on || echo off))..."
+    local c
+    for c in "${targets[@]}"; do
+        docker exec "$c" bash -c '
+            test -x /usr/local/bin/csx || { echo "no csx binary at /usr/local/bin/csx"; exit 1; }
+            test -d "$1" || { echo "$1 is not visible on this node"; exit 1; }
+            pkill -x csx 2>/dev/null || exit 0
+            for _ in $(seq 1 100); do
+                pgrep -x csx >/dev/null || exit 0
+                sleep 0.1
+            done
+            echo "csx did not stop"
+            exit 1
+        ' bash "$SLURM_CSX_NFS_PATH" >&"${OUTPUT_FD}" 2>&1 || {
+            error_log "Failed to prepare csx on $c"
+            return 1
+        }
+        docker exec "$c" rm -f /run/csx.sock
+        docker exec -d "${env[@]}" "$c" \
+            bash -c '/usr/local/bin/csx >/var/log/csx-daemon.log 2>&1' || {
+            error_log "Failed to launch csx on $c"
+            return 1
+        }
+    done
+
+    for c in "${targets[@]}"; do
+        local waited=0
+        while [ "$waited" -lt 30 ]; do
+            docker exec "$c" test -S /run/csx.sock 2>/dev/null && break
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if [ "$waited" -ge 30 ]; then
+            error_log "csx socket not ready on $c after 30s"
+            docker exec "$c" tail -20 /var/log/csx-daemon.log 2>/dev/null || true
+            return 1
+        fi
+        debug_log "  $c: csx socket ready (${waited}s)"
+    done
 }
 
 ##############################
@@ -960,6 +1044,15 @@ install_cedana_in_slurm() {
         bins+=(/usr/local/bin/cedana-gpu-controller)
     fi
 
+    if _slurm_uses_csx; then
+        local csx_bin="${CSX_BIN:-/usr/local/bin/csx}"
+        if [ ! -x "$csx_bin" ]; then
+            error_log "checkpoint directory is csx:// but there is no csx binary at $csx_bin (install the csx plugin)"
+            return 1
+        fi
+        bins+=("$csx_bin")
+    fi
+
     local libs=()
     local so
     for so in /usr/local/lib/libcedana-*.so \
@@ -1065,6 +1158,7 @@ EOF
         cedana://*) storage_plugin="storage/cedana" ;;
         s3://*) storage_plugin="storage/s3" ;;
         gcs://*) storage_plugin="storage/gcs" ;;
+        csx://) storage_plugin="storage/csx" ;;
     esac
 
     local runtime_plugins="runc"
@@ -1080,6 +1174,7 @@ EOF
         storage/cedana) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-cedana.so") ;;
         storage/s3) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-s3.so") ;;
         storage/gcs) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-gcs.so") ;;
+        storage/csx) expected_runtime_paths+=("/usr/local/lib/libcedana-storage-csx.so" "/usr/local/bin/csx") ;;
     esac
 
     debug_log "Installing SLURM plugin and runtime plugins on controller..."
@@ -1243,6 +1338,10 @@ SETUP_EOF
                 return 1
             }
     done
+
+    if _slurm_uses_csx; then
+        start_csx_in_slurm || return 1
+    fi
 
     debug_log "Starting cedana daemon on all nodes..."
     local container_cedana_bin="/usr/local/bin/cedana"
@@ -1444,6 +1543,11 @@ start_cedana_slurm_daemon() {
                 return 1
             }
     done
+
+    # Now that the cluster is registered, with RabbitMQ
+    if _slurm_uses_csx; then
+        start_csx_in_slurm || return 1
+    fi
 
     debug_log "Waiting for slurm accounting DB before starting cedana-slurm daemon..."
     local db_ready=false
