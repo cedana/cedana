@@ -887,7 +887,7 @@ jobs:
             docker inspect "$c" >"$cdir/inspect.json" 2>&1 || true
             docker logs "$c" >"$cdir/docker-logs.txt" 2>&1 || true
             docker exec "$c" sh -c 'ps auxww' >"$cdir/processes.txt" 2>&1 || true
-            docker exec "$c" sh -c 'pgrep -fa "cedana-task --" || echo "(no cedana-task processes)"' >"$cdir/cedana-task-processes.txt" 2>&1 || true
+            docker exec "$c" sh -c 'pgrep -fa "cedana-task (wrapper|monitor)" || echo "(no cedana-task processes)"' >"$cdir/cedana-task-processes.txt" 2>&1 || true
             docker exec "$c" journalctl -t cedana-task-monitor --no-pager -o short-precise >"$cdir/cedana-task-monitor.txt" 2>&1 || true
             docker exec "$c" sh -c 'for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done' >"$cdir/binary-sha256.txt" 2>&1 || true
             docker exec "$c" sh -c 'if command -v go >/dev/null 2>&1; then for f in /usr/local/bin/cedana /usr/local/bin/cedana-slurm /usr/local/lib/libcedana-storage-cedana.so /usr/local/lib/libcedana-storage-s3.so /usr/local/lib/libcedana-runc.so /usr/local/lib/libcedana-slurm.so; do [ -f "$f" ] || continue; echo "=== $f ==="; go version -m "$f" || true; done; else echo "go command unavailable in container"; fi' >"$cdir/go-version-m.txt" 2>&1 || true
