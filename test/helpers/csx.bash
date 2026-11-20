@@ -63,6 +63,7 @@ start_csx_daemon() {
     export CEDANA_CSX_TMP_DIR=/cedana/tmpdir-"$(basename "$CSX_SOCK")"
     export CEDANA_CSX_MEMORY_CACHE_PATH=/cedana/memstore-"$(basename "$CSX_SOCK")"
     export CEDANA_CSX_LOCAL_DISK_CACHE_PATH=/cedana/diskstore-"$(basename "$CSX_SOCK")"
+    export CEDANA_CSX_TMP_DIR_OBJECT_LIMIT=0
     debug start_csx_daemon_at "$CSX_SOCK"
 }
 
