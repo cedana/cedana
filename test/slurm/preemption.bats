@@ -117,7 +117,7 @@ _submit_without_signal() {
 _monitor_logged() {
     local c
     for c in $(_slurm_compute_containers); do
-        docker exec "$c" journalctl -t cedana-task-monitor --no-pager -o cat 2>/dev/null |
+        docker exec "$c" journalctl -t cedana-slurm-task-monitor --no-pager -o cat 2>/dev/null |
             grep -q -- "job=$1 $2" && return 0
     done
     return 1

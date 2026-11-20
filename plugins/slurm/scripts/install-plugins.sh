@@ -112,7 +112,7 @@ else
     PLUGINS_TO_REMOVE="$PLUGINS_TO_REMOVE streamer"
 fi
 
-# A login node only runs sbatch, which loads cedana.so from slurm/wlm
+# A login node only runs sbatch, which loads spank_cedana.so from slurm/wlm
 if [ "${CEDANA_SLURM_NODE_ROLE:-}" = "login" ]; then
     PLUGINS="slurm/wlm@$CEDANA_PLUGINS_SLURM_WLM_VERSION"
     PLUGINS_TO_REMOVE=""

@@ -821,8 +821,8 @@ jobs:
 
           BINARIES=(
             "cedana-slurm"
-            "cedana.so"
-            "cedana-task"
+            "spank_cedana.so"
+            "cedana-slurm-task"
           )
           for binary in "${BINARIES[@]}"; do
             # Retry: the propagator occasionally refuses a request (e.g. a 401), for no reason

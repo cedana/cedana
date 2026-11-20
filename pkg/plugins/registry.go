@@ -130,8 +130,8 @@ var Registry = []Plugin{
 	{
 		Name:      "slurm/wlm",
 		Type:      EXTERNAL,
-		Libraries: []Binary{{Name: "cedana.so"}},
-		Binaries:  []Binary{{Name: "cedana-slurm"}, {Name: "cedana-task"}},
+		Libraries: []Binary{{Name: "spank_cedana.so"}},
+		Binaries:  []Binary{{Name: "cedana-slurm"}, {Name: "cedana-slurm-task"}},
 	},
 	{
 		Name:     "slurm/tests",

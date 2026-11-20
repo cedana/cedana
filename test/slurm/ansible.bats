@@ -188,7 +188,7 @@ LOGIN_01="slurm-login-01"
         "$LOGIN_01" cedana slurm setup --node-role login
     [ "$status" -eq 0 ]
     [[ "$output" == *"set up (login)"* ]]
-    # cedana-task's local copy is for workers only
+    # cedana-slurm-task's local copy is for workers only
     run docker exec "$LOGIN_01" test -e /usr/libexec/cedana
     [ "$status" -ne 0 ]
 }
@@ -264,29 +264,29 @@ LOGIN_01="slurm-login-01"
 # SLURM plugins
 ##############################
 
-@test "Ansible: cedana.so configured in plugstack.conf" {
+@test "Ansible: spank_cedana.so configured in plugstack.conf" {
     for c in "$CONTROLLER" "$COMPUTE_01" "$LOGIN_01"; do
-        run docker exec "$c" grep -E '^[[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so' /etc/slurm/plugstack.conf
+        run docker exec "$c" grep -E '^[[:space:]]*required[[:space:]]+[^[:space:]]*/spank_cedana\.so' /etc/slurm/plugstack.conf
         [ "$status" -eq 0 ]
     done
 }
 
-@test "Ansible: cedana.so in the SLURM plugin dir on controller and compute" {
+@test "Ansible: spank_cedana.so in the SLURM plugin dir on controller and compute" {
     for c in "$CONTROLLER" "$COMPUTE_01"; do
-        run docker exec "$c" test -f /usr/lib/slurm/cedana.so
+        run docker exec "$c" test -f /usr/lib/slurm/spank_cedana.so
         [ "$status" -eq 0 ]
     done
 }
 
-@test "Ansible: cedana-task's local copy has its capabilities on compute" {
-    run docker exec "$COMPUTE_01" getcap /usr/libexec/cedana/cedana-task
+@test "Ansible: cedana-slurm-task's local copy has its capabilities on compute" {
+    run docker exec "$COMPUTE_01" getcap /usr/libexec/cedana/cedana-slurm-task
     [ "$status" -eq 0 ]
     [[ "$output" == *cap_sys_ptrace* && "$output" == *cap_checkpoint_restore* ]]
 }
 
 @test "Ansible: sbatch lists the --cedana options on login" {
     run docker exec "$LOGIN_01" sbatch --help
-    [[ "$output" == *--cedana-restore* ]]
+    [[ "$output" == *--cedana-restore-job* ]]
 }
 
 # Puts back plugstack.conf after the test below, even if it failed: a required plugin that fails
@@ -297,10 +297,10 @@ teardown() {
         mv -f /etc/slurm/plugstack.conf.cedana-test /etc/slurm/plugstack.conf' || true
 }
 
-@test "Ansible: cedana.so refuses an unknown plugstack.conf argument" {
+@test "Ansible: spank_cedana.so refuses an unknown plugstack.conf argument" {
     docker exec "$LOGIN_01" sh -c '
         cp -p /etc/slurm/plugstack.conf /etc/slurm/plugstack.conf.cedana-test
-        sed -i -E "s#^([[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so).*#\1 unprivileged=maybe#" /etc/slurm/plugstack.conf'
+        sed -i -E "s#^([[:space:]]*required[[:space:]]+[^[:space:]]*/spank_cedana\.so).*#\1 unprivileged=maybe#" /etc/slurm/plugstack.conf'
     run docker exec "$LOGIN_01" sbatch --help
     [ "$status" -ne 0 ]
     [[ "$output" == *"unknown argument 'unprivileged=maybe'"* ]]

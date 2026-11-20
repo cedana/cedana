@@ -168,7 +168,7 @@ _monitored_pid() {
     local host="$1" job_id="$2" pid="" waited=0
 
     while [ "$waited" -lt 30 ]; do
-        pid="$(docker exec "$host" journalctl -t cedana-task-monitor --no-pager -o cat 2>/dev/null |
+        pid="$(docker exec "$host" journalctl -t cedana-slurm-task-monitor --no-pager -o cat 2>/dev/null |
             awk -v job="job=$job_id" '$1 == job && /UI checkpoints on for pid/ { p = $NF } END { print p }')"
         [ -n "$pid" ] && break
         sleep 1
@@ -193,7 +193,7 @@ _run_job_checks() {
     }
 
     pid="$(_monitored_pid "$host" "$job_id")" || {
-        error_log "[$phase] no cedana-task monitor for job $job_id on $host"
+        error_log "[$phase] no cedana-slurm-task monitor for job $job_id on $host"
         return 1
     }
 

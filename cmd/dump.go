@@ -203,7 +203,7 @@ var dumpCmd = &cobra.Command{
 		}
 
 		// Optionally emit the structured result so non-daemon callers (e.g.
-		// cedana-slurm's per-job monitor, cedana-task, which shells out here) get
+		// cedana-slurm's per-job monitor, cedana-slurm-task, which shells out here) get
 		// the same DumpResp the daemon client returns -- paths, state -- instead
 		// of scraping stdout.
 		if resultFile, _ := cmd.Flags().GetString(flags.ResultFileFlag.Full); resultFile != "" {

@@ -890,7 +890,7 @@ install_cedana_in_slurm() {
     # shellcheck disable=SC2207
     compute_containers=($(_slurm_compute_containers))
     all_containers+=("${compute_containers[@]}")
-    # Login nodes submit jobs, so they get cedana.so too (sbatch loads it).
+    # Login nodes submit jobs, so they get spank_cedana.so too (sbatch loads it).
     local login_containers=()
     if [ "${LOGIN_NODES:-0}" -ge 1 ]; then
         # shellcheck disable=SC2207
@@ -954,10 +954,10 @@ install_cedana_in_slurm() {
         return 1
     fi
 
-    # cedana-task: the SPANK plugin cedana.so runs setup.sh's local copy of it on each worker.
-    local cedana_task_bin="${CEDANA_TASK_BIN:-/usr/local/bin/cedana-task}"
+    # cedana-slurm-task: spank_cedana.so runs setup.sh's local copy of it on each worker.
+    local cedana_task_bin="${CEDANA_TASK_BIN:-/usr/local/bin/cedana-slurm-task}"
     if [ ! -f "$cedana_task_bin" ]; then
-        error_log "cedana-task binary not found at $cedana_task_bin"
+        error_log "cedana-slurm-task binary not found at $cedana_task_bin"
         return 1
     fi
 
@@ -974,7 +974,7 @@ install_cedana_in_slurm() {
     local libs=()
     local so
     for so in /usr/local/lib/libcedana-*.so \
-        /usr/local/lib/cedana.so; do
+        /usr/local/lib/spank_cedana.so; do
         [ -f "$so" ] || continue
         # The tracer is not loaded at runtime.
         [[ "$so" == *libcedana-gpu-tracer.so ]] && continue
@@ -1003,8 +1003,8 @@ install_cedana_in_slurm() {
             if docker exec "$c" bash -c '
                 test -x /usr/local/bin/cedana &&
                 test -x /usr/local/bin/cedana-slurm &&
-                test -f /usr/local/lib/cedana.so &&
-                test -x /usr/local/bin/cedana-task
+                test -f /usr/local/lib/spank_cedana.so &&
+                test -x /usr/local/bin/cedana-slurm-task
             ' 2>/dev/null; then
                 nfs_ok=1
                 break
@@ -1198,7 +1198,7 @@ EOF
     _configure_slurm_preemption || return 1
 
     debug_log "Configuring SLURM (controller)..."
-    # cedana.so and its plugstack.conf line come from setup.sh (cedana slurm setup) above.
+    # spank_cedana.so and its plugstack.conf line come from setup.sh (cedana slurm setup) above.
     docker exec -i "$SLURM_CONTROLLER_CONTAINER" bash <<'SETUP_EOF' >&"${OUTPUT_FD}" 2>&1 ||
 set -euo pipefail
 SLURM_CONF="${SLURM_CONF:-/etc/slurm/slurm.conf}"
@@ -1231,12 +1231,12 @@ SETUP_EOF
             set -euo pipefail
             PLUGIN_DIR=$(scontrol show config 2>/dev/null | awk "/^PluginDir[[:space:]]*=/{print \$NF}" || true)
             PLUGIN_DIR="${PLUGIN_DIR:-/usr/lib/slurm}"
-            test -f "${PLUGIN_DIR}/cedana.so" || { echo "missing ${PLUGIN_DIR}/cedana.so"; exit 1; }
-            grep -qE "^[[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so[[:space:]]+${WANT_ARG}([[:space:]]|$)" /etc/slurm/plugstack.conf ||
-                { echo "no cedana.so line with ${WANT_ARG} in /etc/slurm/plugstack.conf"; exit 1; }
-            caps=$(getcap /usr/libexec/cedana/cedana-task 2>/dev/null || true)
+            test -f "${PLUGIN_DIR}/spank_cedana.so" || { echo "missing ${PLUGIN_DIR}/spank_cedana.so"; exit 1; }
+            grep -qE "^[[:space:]]*required[[:space:]]+[^[:space:]]*/spank_cedana\.so[[:space:]]+${WANT_ARG}([[:space:]]|$)" /etc/slurm/plugstack.conf ||
+                { echo "no spank_cedana.so line with ${WANT_ARG} in /etc/slurm/plugstack.conf"; exit 1; }
+            caps=$(getcap /usr/libexec/cedana/cedana-slurm-task 2>/dev/null || true)
             [[ "$caps" == *cap_sys_ptrace* && "$caps" == *cap_checkpoint_restore* ]] ||
-                { echo "/usr/libexec/cedana/cedana-task lacks its capabilities (getcap: $caps)"; exit 1; }
+                { echo "/usr/libexec/cedana/cedana-slurm-task lacks its capabilities (getcap: $caps)"; exit 1; }
             # The plugin passes both capabilities on as inheritable: the bounding set must hold them
             bnd=$((16#$(awk "/^CapBnd/{print \$2}" /proc/self/status)))
             (( (bnd >> 19) & 1 && (bnd >> 40) & 1 )) ||
@@ -1253,10 +1253,10 @@ SETUP_EOF
     for c in "${login_containers[@]}" "$(slurm_submission_container)"; do
         docker exec -e WANT_ARG="$want_arg" "$c" bash -c '
             set -euo pipefail
-            grep -qE "^[[:space:]]*required[[:space:]]+[^[:space:]]*/cedana\.so[[:space:]]+${WANT_ARG}([[:space:]]|$)" /etc/slurm/plugstack.conf ||
-                { echo "no cedana.so line with ${WANT_ARG} in /etc/slurm/plugstack.conf"; exit 1; }
+            grep -qE "^[[:space:]]*required[[:space:]]+[^[:space:]]*/spank_cedana\.so[[:space:]]+${WANT_ARG}([[:space:]]|$)" /etc/slurm/plugstack.conf ||
+                { echo "no spank_cedana.so line with ${WANT_ARG} in /etc/slurm/plugstack.conf"; exit 1; }
             help=$(sbatch --help 2>&1 || true)
-            [[ "$help" == *--cedana-restore* ]] || { echo "sbatch --help lists no --cedana options"; exit 1; }
+            [[ "$help" == *--cedana-restore-job* ]] || { echo "sbatch --help lists no --cedana options"; exit 1; }
         ' >&"${OUTPUT_FD}" 2>&1 ||
             {
                 error_log "Cedana plugin check failed on $c"
