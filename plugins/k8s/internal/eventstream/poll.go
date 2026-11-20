@@ -51,6 +51,9 @@ func Poll(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.
 	return ctx.Err()
 }
 
+// Longer than the spoke's long-poll wait, so a stalled connection is retried.
+var pollClient = &http.Client{Timeout: time.Minute}
+
 func (es *EventStream) do(ctx context.Context, method, path string, data []byte) ([]byte, error) {
 	req, err := http.NewRequestWithContext(ctx, method, es.propagator.RequestAdapter.GetBaseUrl()+path, bytes.NewReader(data))
 	if err != nil {
@@ -58,7 +61,7 @@ func (es *EventStream) do(ctx context.Context, method, path string, data []byte)
 	}
 	req.Header.Set("Authorization", "Bearer "+config.Global.Connection.AuthToken)
 	req.Header.Set("Content-Type", "application/json")
-	res, err := http.DefaultClient.Do(req)
+	res, err := pollClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
