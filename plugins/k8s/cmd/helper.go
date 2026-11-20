@@ -250,6 +250,10 @@ func superviseEventStream(ctx context.Context) {
 // runEventStream connects to the event stream and serves it until ctx is done
 // or a publisher/consumer fails.
 func runEventStream(ctx context.Context) error {
+	if config.Global.Connection.Transport == "poll" {
+		log.Debug().Msg("polling for checkpoint requests")
+		return eventstream.Poll(ctx, cedana, propagator, containerdAddress)
+	}
 	stream, err := eventstream.New(ctx, cedana, propagator, containerdAddress)
 	if err != nil {
 		return err
