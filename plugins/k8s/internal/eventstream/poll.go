@@ -17,7 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Poll serves checkpoint requests from a Token Factory spoke, which queues them per node, in
+// Poll serves checkpoint requests from an in-cluster cedana backend spoke, which queues them per node, in
 // place of the RabbitMQ broadcast. It needs no broker and no inbound connection to the node.
 func Poll(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.ApiClient, containerdAddress string) error {
 	if cedana == nil || propagator == nil {
