@@ -43,11 +43,19 @@ teardown_file() {
     teardown_file_daemon
 }
 
+# Dumps so far that dropped queries. The log dir is shared by every test of a persistent
+# daemon, so a dump is checked by this count rising, not by a line being present
+capture_info_drops() {
+    grep -rhoE 'cuStreamGetCaptureInfo [0-9]+ written, [1-9][0-9]* identical dropped' "$CEDANA_GPU_LOG_DIR" | wc -l
+}
+
 # The dump must have dropped queries: otherwise the flag did not reach the controller (or
 # the workload stopped repeating them) and the restore below proves nothing about the dedup
-assert_capture_info_dropped() {
-    run grep -rhoE 'cuStreamGetCaptureInfo [0-9]+ written, [1-9][0-9]* identical dropped' "$CEDANA_GPU_LOG_DIR"
-    assert_success
+dump_dropping_capture_info() {
+    local before
+    before=$(capture_info_drops)
+    cedana dump job "$1"
+    [ "$(capture_info_drops)" -gt "$before" ]
 }
 
 # bats test_tags=restore
@@ -59,8 +67,7 @@ assert_capture_info_dropped() {
 
     sleep 3
 
-    cedana dump job "$jid"
-    assert_capture_info_dropped
+    dump_dropping_capture_info "$jid"
 
     cedana restore job "$jid"
     watch_logs "$jid"
@@ -86,8 +93,7 @@ assert_capture_info_dropped() {
 
     sleep 3 # captured + instantiated, holding at the gate (pre-launch)
 
-    cedana dump job "$jid"
-    assert_capture_info_dropped
+    dump_dropping_capture_info "$jid"
 
     cedana restore job "$jid"
     watch_logs "$jid"
