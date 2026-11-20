@@ -605,15 +605,22 @@ func (p *pool) CRIUCallback(id string) *criu_client.NotifyCallback {
 
 			log.Info().Msg("GPU dump starting")
 
-			resp, err := controller.Dump(waitCtx, &gpu.DumpReq{
+			dumpReq := &gpu.DumpReq{
 				Dir:          opts.GetImagesDir(),
 				Stream:       opts.GetStream(),
 				LeaveRunning: opts.GetLeaveRunning(),
-			})
+			}
+			if v, ok := ctx.Value(deltaOverrideKey{}).(bool); ok {
+				dumpReq.Delta = &v
+			}
+			resp, err := controller.Dump(waitCtx, dumpReq)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to dump GPU")
 				dumpErr <- fmt.Errorf("failed to dump GPU: %v", utils.GRPCError(err))
 				return
+			}
+			if out, ok := ctx.Value(deltaResultKey{}).(*deltaResult); ok {
+				out.parent = resp.GetParentDir()
 			}
 			addGPUProfileToProfiling(ctx, resp.GetProfile())
 			log.Info().Str("checksum", resp.GetVerify().GetChecksum()).Msg("GPU state checksum")

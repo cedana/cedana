@@ -542,6 +542,19 @@ func (c *Criu) PreDump(ctx context.Context, opts *criu.CriuOpts, nfy Notify) err
 	return err
 }
 
+// FeatureCheck asks CRIU which of the requested features the running kernel supports.
+// Only the features set in the request are checked.
+func (c *Criu) FeatureCheck(ctx context.Context, features *criu.CriuFeatures) (*criu.CriuFeatures, error) {
+	resp, err := c.doSwrkWithResp(ctx, criu.CriuReqType_FEATURE_CHECK, nil, nil, features, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.GetType() != criu.CriuReqType_FEATURE_CHECK {
+		return nil, errors.New("unexpected CRIU RPC response")
+	}
+	return resp.GetFeatures(), nil
+}
+
 // StartPageServer starts the page server
 func (c *Criu) StartPageServer(ctx context.Context, opts *criu.CriuOpts) error {
 	_, err := c.doSwrk(ctx, criu.CriuReqType_PAGE_SERVER, opts, nil, nil, nil, nil)

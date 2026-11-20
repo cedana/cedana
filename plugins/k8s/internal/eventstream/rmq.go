@@ -504,6 +504,7 @@ type checkpointOverrides struct {
 	Compression string `json:"compression"`
 	Streams     int    `json:"streams"`
 	Async       bool   `json:"asynchronous"`
+	Incremental *bool  `json:"incremental,omitempty"`
 }
 
 type checkpointInfo struct {
@@ -519,6 +520,8 @@ type checkpointInfo struct {
 	Info           info          `json:"info"`
 	ContainerOrder int           `json:"container_order"`
 	Checksum       string        `json:"checksum,omitempty"`
+	// ID of the checkpoint this one is a (GPU delta) increment of, if any
+	ParentCheckpointId string `json:"parent_checkpoint_id,omitempty"`
 }
 
 type profilingInfo struct {
@@ -641,17 +644,25 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 				},
 			}
 			if req.Overrides != nil {
-				criuOpts := &criu.CriuOpts{}
-				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
-				} else {
-					dumpReq.Criu = criuOpts
+				if req.Overrides.CRIUOpts != "" {
+					criuOpts := &criu.CriuOpts{}
+					err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
+					if err != nil {
+						log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
+					} else {
+						dumpReq.Criu = criuOpts
+					}
 				}
 				dumpReq.Compression = req.Overrides.Compression
 				dumpReq.Dir = req.Overrides.Directory
 				dumpReq.Streams = int32(req.Overrides.Streams)
 				dumpReq.Async = req.Overrides.Async
+				dumpReq.GPUDelta = req.Overrides.Incremental
+				if req.Overrides.Incremental != nil && *req.Overrides.Incremental {
+					// CPU side of the same chain. Copy first: dumpReq.Criu may be the shared defaults.
+					dumpReq.Criu = proto.Clone(dumpReq.Criu).(*criu.CriuOpts)
+					dumpReq.Criu.TrackMem = proto.Bool(true)
+				}
 			}
 			log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
 			dumpReqs = append(dumpReqs, dumpReq)
@@ -675,12 +686,13 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			go func() {
 				defer wg.Done()
 				dumpResp, profiling, err := es.cedana.Dump(dumpCtx, dumpReq)
-				var path, checksum string
+				var path, checksum, parent string
 				var state *daemon.ProcessState
 				if err == nil {
 					path = dumpResp.Paths[0]
 					state = dumpResp.State
 					checksum = dumpResp.GetChecksum()
+					parent = dumpResp.GPUParent
 				}
 				es.publishCheckpoint(
 					log.WithContext(ctx),
@@ -693,6 +705,7 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 					state,
 					i,
 					specMap[i],
+					parent,
 					err,
 				)
 			}()
@@ -715,6 +728,7 @@ func (es *EventStream) publishCheckpoint(
 	state *daemon.ProcessState,
 	containerOrder int,
 	containerSpec *specs.Spec,
+	parentCheckpointId string,
 	dumpErr error,
 ) error {
 	log := *log.Ctx(ctx)
@@ -726,11 +740,12 @@ func (es *EventStream) publishCheckpoint(
 	}
 
 	ci := checkpointInfo{
-		ActionId:       actionId,
-		PodId:          podId,
-		CheckpointId:   checkpointId,
-		ContainerOrder: containerOrder,
-		Info:           info{},
+		ActionId:           actionId,
+		PodId:              podId,
+		CheckpointId:       checkpointId,
+		ContainerOrder:     containerOrder,
+		ParentCheckpointId: parentCheckpointId,
+		Info:               info{},
 	}
 	if dumpErr != nil {
 		ci.Status = "error"
