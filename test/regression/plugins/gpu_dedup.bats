@@ -45,16 +45,20 @@ teardown_file() {
 # bats test_tags=dump
 @test "[$GPU_INFO] dump GPU process with dedup enabled (vector add)" {
     jid=$(unix_nano)
+    name=$(unix_nano)
 
     cedana run process -g --jid "$jid" -- /cedana-samples/gpu_smr/vector_add
     watch_logs "$jid"
 
     sleep 1
 
-    cedana dump job "$jid"
+    cedana dump job "$jid" --dir /tmp --name "$name" --compression none
+
+    # The controller only writes dedup manifests when dedup is on
+    assert [ -n "$(find "/tmp/$name" -name 'gpu-*dedup-manifest*')" ]
 
     run cedana job kill "$jid"
-    rm -rf "$dump_file"
+    rm -rf "/tmp/$name"
 }
 
 ###############

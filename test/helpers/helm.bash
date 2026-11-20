@@ -67,6 +67,7 @@ helm_install_cedana() {
     if [ "$GPU" != "1" ]; then
         helm_cmd="$helm_cmd --set config.pluginsGpuVersion=none"
     fi
+    helm_cmd="$helm_cmd --set config.gpuDedupEnabled=${CEDANA_GPU_DEDUP_ENABLED:-false}"
     if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     fi
