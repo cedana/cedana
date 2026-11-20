@@ -42,6 +42,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"golang.org/x/sys/unix"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -149,9 +150,10 @@ func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, ma
 		defer inFile.Close()
 
 		reader := bufio.NewReader(inFile)
+		var metadataBuf []byte
 
 		for {
-			metadataBytes, err := readDelimitedMessageBuffered(reader)
+			metadataBytes, err := readDelimitedMessageInto(reader, &metadataBuf)
 			if err == io.EOF {
 				break
 			}
@@ -278,10 +280,14 @@ func restoreFromManifest(ctx context.Context, dump afero.Fs, upperDir string, ma
 }
 
 // writeFileContent reads chunk messages from reader and writes their content to
-// out, until the terminating empty chunk (or EOF).
+// out, until the terminating empty chunk (or EOF). A chunk is an RWFile whose only
+// populated field is Content; it is decoded in place, writing the content straight
+// from the read buffer, since a layer can be gigabytes of chunks and allocating each
+// one kept the restore busy in the allocator and garbage collector.
 func writeFileContent(reader *bufio.Reader, out io.Writer) error {
+	var buf []byte
 	for {
-		chunkBytes, err := readDelimitedMessageBuffered(reader)
+		chunkBytes, err := readDelimitedMessageInto(reader, &buf)
 		if err == io.EOF {
 			return nil
 		}
@@ -289,24 +295,50 @@ func writeFileContent(reader *bufio.Reader, out io.Writer) error {
 			return fmt.Errorf("failed to read chunk: %v", err)
 		}
 
-		chunkMsg := &runc_proto.RWFile{}
-		if err := proto.Unmarshal(chunkBytes, chunkMsg); err != nil {
-			if len(chunkBytes) > 0 {
-				return fmt.Errorf("failed to unmarshal chunk: %v", err)
-			}
-			return nil
+		hasContent, err := writeChunkContent(chunkBytes, out)
+		if err != nil {
+			return err
 		}
-
-		if len(chunkMsg.GetContent()) == 0 {
+		if !hasContent {
 			return nil
-		}
-
-		for _, chunk := range chunkMsg.GetContent() {
-			if _, err := out.Write(chunk); err != nil {
-				return fmt.Errorf("failed to write content: %v", err)
-			}
 		}
 	}
+}
+
+// RWFile.Content (repeated bytes)
+const rwFileContentField protowire.Number = 11
+
+// writeChunkContent writes the Content of an encoded chunk to out, and reports whether
+// it had any Content entries: a chunk without any ends the file.
+func writeChunkContent(chunk []byte, out io.Writer) (hasContent bool, err error) {
+	for len(chunk) > 0 {
+		num, typ, n := protowire.ConsumeTag(chunk)
+		if n < 0 {
+			return false, fmt.Errorf("failed to unmarshal chunk: %v", protowire.ParseError(n))
+		}
+		chunk = chunk[n:]
+		if num == rwFileContentField && typ == protowire.BytesType {
+			content, n := protowire.ConsumeBytes(chunk)
+			if n < 0 {
+				return false, fmt.Errorf("failed to unmarshal chunk: %v", protowire.ParseError(n))
+			}
+			chunk = chunk[n:]
+			hasContent = true
+			if len(content) == 0 {
+				continue
+			}
+			if _, err := out.Write(content); err != nil {
+				return false, fmt.Errorf("failed to write content: %v", err)
+			}
+			continue
+		}
+		n = protowire.ConsumeFieldValue(num, typ, chunk)
+		if n < 0 {
+			return false, fmt.Errorf("failed to unmarshal chunk: %v", protowire.ParseError(n))
+		}
+		chunk = chunk[n:]
+	}
+	return hasContent, nil
 }
 
 // removes a filesystem object at path if it already exists, so
@@ -318,12 +350,18 @@ func replaceExisting(path string) error {
 	return nil
 }
 
-func readDelimitedMessageBuffered(r *bufio.Reader) ([]byte, error) {
-	var size uint32
-	if err := binary.Read(r, binary.LittleEndian, &size); err != nil {
-		return nil, err
+// readDelimitedMessageInto reads one length-prefixed message into *buf, growing it as
+// needed, and returns the message, which aliases *buf until the next call.
+func readDelimitedMessageInto(r *bufio.Reader, buf *[]byte) ([]byte, error) {
+	var sizeBytes [4]byte
+	if _, err := io.ReadFull(r, sizeBytes[:]); err != nil {
+		return nil, err // io.EOF between messages, as binary.Read
 	}
-	data := make([]byte, size)
+	size := int(binary.LittleEndian.Uint32(sizeBytes[:]))
+	if cap(*buf) < size {
+		*buf = make([]byte, size)
+	}
+	data := (*buf)[:size]
 	_, err := io.ReadFull(r, data)
 	return data, err
 }

@@ -80,7 +80,7 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 
 	sw := &signozWriter{
 		httpClient:  &http.Client{Timeout: EXPORT_TIMEOUT},
-		endpoint:    "https://" + Credentials.Endpoint + "/logs/json",
+		endpoint:    logsEndpoint(),
 		accessToken: Credentials.Headers,
 		resource:    make(map[string]string),
 		services:    make(map[string]map[string]string),
@@ -93,6 +93,8 @@ func initLogger(ctx context.Context, wg *sync.WaitGroup, resource *resource.Reso
 			sw.resource[string(attr.Key)] = attr.Value.AsString()
 		}
 	}
+
+	warmLogsConn()
 
 	ticker := time.NewTicker(LOGGER_FLUSH_INTERVAL)
 

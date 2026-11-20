@@ -11,19 +11,16 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
-	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc"
 )
 
 const METER_INTERVAL = 30 * time.Second
 
 // initMeter creates and configures an OpenTelemetry meter provider for SigNoz
-func initMeter(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource) error {
-	secureOption := otlpmetricgrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
-
+func initMeter(ctx context.Context, wg *sync.WaitGroup, resource *resource.Resource, conn *grpc.ClientConn) error {
 	metricExporter, err := otlpmetricgrpc.New(
 		ctx,
-		secureOption,
-		otlpmetricgrpc.WithEndpoint(Credentials.Endpoint),
+		otlpmetricgrpc.WithGRPCConn(conn),
 		otlpmetricgrpc.WithHeaders(map[string]string{
 			"signoz-ingestion-key": Credentials.Headers,
 		}),
