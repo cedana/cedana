@@ -7,6 +7,7 @@ import (
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
 	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	cedana_io "github.com/cedana/cedana/pkg/io"
 	"github.com/cedana/cedana/pkg/plugins"
 	"github.com/cedana/cedana/pkg/profiling"
 	"github.com/cedana/cedana/pkg/types"
@@ -78,6 +79,10 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 
 			// Setup filesystem that can be used by future adapters to directly read files from the checkpoint
 
+			// A shard that fails authentication cancels the whole restore, CRIU included
+			ctx, cancel := context.WithCancelCause(ctx)
+			defer cancel(nil)
+
 			var waitForIO func() error
 			opts.DumpFs, waitForIO, err = NewStreamingFs(
 				ctx,
@@ -87,6 +92,7 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				req.Path,
 				streams,
 				READ_ONLY,
+				cancel,
 			)
 			if err != nil {
 				return nil, status.Errorf(codes.Internal, "failed to create streaming fs: %v", err)
@@ -98,7 +104,11 @@ func RestoreFilesystem(streams int32) types.Adapter[types.Restore] {
 				end()
 			}()
 
-			return next(ctx, opts, resp, req)
+			code, err = next(ctx, opts, resp, req)
+			if cause := context.Cause(ctx); err != nil && errors.Is(cause, cedana_io.ErrDecrypt) {
+				return nil, status.Error(codes.DataLoss, cause.Error())
+			}
+			return code, err
 		}
 	}
 }
