@@ -116,6 +116,46 @@ require_reset_fix() {
     restore_sample reset_exit
 }
 
+# cuda.h makes cuCtxDestroy cuCtxDestroy_v2, which the binary imports at link time. An
+# interceptor that does not export it leaves the destroy to the real libcuda.so.1, which the
+# process never initialized (cedana-gpu #327, CED-2545)
+# bats test_tags=run,exports
+@test "[$GPU_INFO] run GPU process destroying a created context through the driver API" {
+    run_sample ctx_destroy
+}
+
+# Checkpointed with the created context live, restored, then destroyed
+# bats test_tags=restore,exports
+@test "[$GPU_INFO] restore GPU process with a created context, then destroy it" {
+    restore_sample ctx_destroy
+}
+
+# A created context on one thread and the primary context on another, then cuCtxDestroy of the
+# created one from the main thread. KEEP_T=1 keeps the other thread alive through the destroy
+# bats test_tags=run,exports
+@test "[$GPU_INFO] run GPU process using two contexts on two threads" {
+    require_sample multi_ctx_threads
+
+    SAMPLE_JID=$(unix_nano) # for teardown
+    run timeout 180 cedana run process --attach -g --jid "$SAMPLE_JID" -- \
+        env NO_RESET=1 "$SAMPLES/multi_ctx_threads"
+    assert_success
+    assert_output --partial PASS
+
+    SAMPLE_JID=$(unix_nano)
+    run timeout 180 cedana run process --attach -g --jid "$SAMPLE_JID" -- \
+        env NO_RESET=1 KEEP_T=1 "$SAMPLES/multi_ctx_threads"
+    assert_success
+    assert_output --partial PASS
+}
+
+# The same, with a reset of the primary context while the other thread uses the created one
+# bats test_tags=run,exports,reset
+@test "[$GPU_INFO] run GPU process using two contexts on two threads, resetting one" {
+    require_reset_fix
+    run_sample multi_ctx_threads
+}
+
 # A main process that isn't CUDA, which runs a short-lived CUDA probe at startup (e.g. from
 # BASH_ENV): the probe exiting must not take the job down, and the job must still checkpoint
 # and restore (customer issue P-17)
