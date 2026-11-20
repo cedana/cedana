@@ -7,7 +7,7 @@ cp --remove-destination $CEDANA_PLUGINS_LIB_DIR/libcedana*.so /host/$CEDANA_PLUG
 cp --remove-destination $CEDANA_PLUGINS_BIN_DIR/*cedana* /host/$CEDANA_PLUGINS_BIN_DIR/
 
 # The host can't resolve cluster DNS, so a .svc URL (an in-cluster spoke) goes in as its address.
-host=$(sed -E 's#^[a-z]+://([^:/]+).*#\1#' <<<"$CEDANA_URL")
+host=$(sed -E 's#^[a-z]+://([^:/]+).*#\1#' <<<"${CEDANA_URL:-}")
 if [[ $host == *.svc || $host == *.svc.* ]]; then
     ip=$(getent hosts "$host" | awk '{print $1; exit}')
     [[ -n $ip ]] || { echo "Cannot resolve $host" >&2; exit 1; }
