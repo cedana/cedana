@@ -149,7 +149,8 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
     if [[ "$PLUGINS" != "" ]]; then
         echo "Installing plugins:$PLUGINS"
         # shellcheck disable=SC2086
-        $APP_PATH plugin install $PLUGINS
+        # Plugins may come from a different registry than CEDANA_URL (e.g. an in-cluster spoke).
+        CEDANA_URL="${CEDANA_PLUGINS_URL:-$CEDANA_URL}" $APP_PATH plugin install $PLUGINS
         echo "Plugin installation complete"
     else
         echo "No plugins to install"
@@ -157,7 +158,7 @@ if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
     if [[ "$PLUGINS_TO_REMOVE" != "" ]]; then
         echo "Removing plugins: $PLUGINS_TO_REMOVE"
         # shellcheck disable=SC2086
-        "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE 2>/dev/null || true
+        CEDANA_URL="${CEDANA_PLUGINS_URL:-$CEDANA_URL}" "$APP_PATH" plugin remove $PLUGINS_TO_REMOVE 2>/dev/null || true
         echo "Plugin removal complete"
     else
         echo "No plugins to remove"
