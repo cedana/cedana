@@ -83,6 +83,10 @@ var CONTROLLER_DIAL_BACKOFF = backoff.Config{
 	MaxDelay:   250 * time.Millisecond,
 }
 
+// CONTROLLER_DIAL_TIMEOUT is how long one connection attempt may take (gRPC's default).
+// Without it, gRPC gives each attempt only its backoff delay: 10 ms for the first.
+const CONTROLLER_DIAL_TIMEOUT = 20 * time.Second
+
 type controller struct {
 	ID          string
 	PID         uint32
@@ -928,7 +932,10 @@ func (c *controller) Sync(ctx context.Context, wait bool) (err error) {
 			// A freshly spawned controller listens within ~150 ms, but gRPC's default backoff
 			// waits ~1 s before redialing a socket that wasn't there yet: retry quickly instead.
 			// It is a local Unix socket, so fast retries are cheap.
-			grpc.WithConnectParams(grpc.ConnectParams{Backoff: CONTROLLER_DIAL_BACKOFF}),
+			grpc.WithConnectParams(grpc.ConnectParams{
+				Backoff:           CONTROLLER_DIAL_BACKOFF,
+				MinConnectTimeout: CONTROLLER_DIAL_TIMEOUT,
+			}),
 		}
 		conn, err := grpc.NewClient(c.Address, opts...)
 		if err != nil {

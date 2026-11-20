@@ -16,7 +16,9 @@ import (
 
 const (
 	CREDENTIALS_CACHE_DIR = "/run/cedana"
-	CREDENTIALS_CACHE_TTL = 1 * time.Hour
+	// Nothing drops the cache when the backend rejects the credentials, so this is also how
+	// long a node keeps exporting with rotated ones
+	CREDENTIALS_CACHE_TTL = 5 * time.Minute
 )
 
 var credsCachePath = filepath.Join(CREDENTIALS_CACHE_DIR, "otel-credentials.json")
