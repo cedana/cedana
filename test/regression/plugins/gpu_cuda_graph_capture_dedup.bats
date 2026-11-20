@@ -25,12 +25,14 @@ setup_file() {
     if ! cmd_exists nvidia-smi; then
         skip "GPU not available"
     fi
-    [ -x "$GRAPH_CAPTURE_POLL" ] || skip "cuda_graph_capture_poll not in image (rebuild cedana-samples image)"
     setup_file_daemon
 }
 
+# Skipped here, after the daemon is up: teardown checks on the daemon whether the test ran or
+# not, and fails a test skipped from setup_file (which never started one) in persistent mode
 setup() {
     setup_daemon
+    [ -x "$GRAPH_CAPTURE_POLL" ] || skip "cuda_graph_capture_poll not in image (rebuild cedana-samples image)"
 }
 
 teardown() {
