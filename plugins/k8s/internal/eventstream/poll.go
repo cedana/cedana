@@ -17,12 +17,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Poll serves checkpoint requests from an in-cluster cedana backend spoke, which queues them per node, in
-// place of the RabbitMQ broadcast. It needs no broker and no inbound connection to the node.
+// Poll serves checkpoint requests that an in-cluster spoke queues for this node, in place of the
+// RabbitMQ broadcast: no broker and no inbound connection to the node.
 func Poll(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.ApiClient, containerdAddress string) error {
-	if cedana == nil || propagator == nil {
-		return fmt.Errorf("cedana and propagator clients are required")
-	}
 	node, err := os.Hostname() // the helper runs with the host's network namespace
 	if err != nil {
 		return err
@@ -31,7 +28,7 @@ func Poll(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.
 	path := "/v1/checkpoint/requests?node=" + url.QueryEscape(node)
 	for ctx.Err() == nil {
 		var reqs []checkpointReq
-		body, err := es.get(ctx, path)
+		body, err := es.do(ctx, http.MethodGet, path, nil)
 		if err == nil {
 			err = json.Unmarshal(body, &reqs)
 		}
@@ -52,15 +49,6 @@ func Poll(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.
 		}
 	}
 	return ctx.Err()
-}
-
-func (es *EventStream) get(ctx context.Context, path string) ([]byte, error) {
-	return es.do(ctx, http.MethodGet, path, nil)
-}
-
-func (es *EventStream) post(ctx context.Context, path string, data []byte) error {
-	_, err := es.do(ctx, http.MethodPost, path, data)
-	return err
 }
 
 func (es *EventStream) do(ctx context.Context, method, path string, data []byte) ([]byte, error) {

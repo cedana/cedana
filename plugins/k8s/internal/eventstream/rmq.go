@@ -789,7 +789,7 @@ func (es *EventStream) publishCheckpoint(
 		return err
 	}
 	if es.polling {
-		err = es.post(ctx, "/v1/checkpoint/responses", data)
+		_, err = es.do(ctx, http.MethodPost, "/v1/checkpoint/responses", data)
 	} else {
 		err = publisher.Publish(data, []string{"checkpoint_response"})
 	}
