@@ -113,25 +113,36 @@ _submit_without_signal() {
     SLURM_CEDANA_SIGNAL='' slurm_submit_script "$script"
 }
 
-# Whether the job's monitor logged a line matching <pattern> on any compute node.
+# Whether the job's monitor logged <message> with each given name=value field on one line, on any
+# compute node. A line is "<level> <message> <field>=<value> ...", fields in alphabetical order, so
+# each is matched as a whole word, in any position.
 _monitor_logged() {
-    local c
+    local job_id="$1" message="$2" c
+    shift 2
     for c in $(_slurm_compute_containers); do
         docker exec "$c" journalctl -t cedana-slurm-task-monitor --no-pager -o cat 2>/dev/null |
-            grep -q -- "job=$1 $2" && return 0
+            awk -v msg="$message" -v want="job_id=$job_id $*" '
+                BEGIN { n = split(want, w, " ") }
+                index(" " $0 " ", " " msg " ") {
+                    ok = 1
+                    for (i = 1; i <= n; i++) if (!index(" " $0 " ", " " w[i] " ")) ok = 0
+                    if (ok) { found = 1; exit }
+                }
+                END { exit !found }' && return 0
     done
     return 1
 }
 
-# Waits up to <timeout> seconds for the monitor to log <pattern> for the job.
+# Waits up to <timeout> seconds for the monitor to log <message> with the given fields for the job.
 _wait_monitor_logged() {
-    local job_id="$1" pattern="$2" timeout="$3" elapsed=0
+    local job_id="$1" timeout="$2" elapsed=0
+    shift 2
     while [ "$elapsed" -lt "$timeout" ]; do
-        _monitor_logged "$job_id" "$pattern" && return 0
+        _monitor_logged "$job_id" "$@" && return 0
         sleep 2
         elapsed=$((elapsed + 2))
     done
-    error_log "job $job_id: no monitor line '$pattern' after ${timeout}s"
+    error_log "job $job_id: no monitor line '$*' after ${timeout}s"
     _dump_job_failure_info "$job_id"
     return 1
 }
@@ -158,10 +169,10 @@ teardown() {
     job=$(_submit_without_signal)
     [ -n "$job" ]
     wait_for_slurm_job_state "$job" RUNNING 90
-    _wait_monitor_logged "$job" "UI checkpoints on" 60
+    _wait_monitor_logged "$job" 60 "ui consumer ready"
 
     slurm_submit_exec scancel -b -s USR1 "$job"
-    _wait_monitor_logged "$job" "attempt 0: held after its checkpoint" 120
+    _wait_monitor_logged "$job" 120 "attempt ended" attempt=0 held=true
 
     # Release once Slurm shows the hold; earlier, the release has nothing to release.
     local i
@@ -171,7 +182,7 @@ teardown() {
     done
     slurm_submit_exec scontrol release "$job"
     # The release waits out Slurm's requeue delay (2 min by default).
-    _wait_monitor_logged "$job" "attempt 1: restore" 480
+    _wait_monitor_logged "$job" 480 "attempt started" attempt=1 start=restore
     wait_for_slurm_job_state "$job" RUNNING 60
 }
 
@@ -182,15 +193,15 @@ teardown() {
     job=$(_submit_without_signal)
     [ -n "$job" ]
     wait_for_slurm_job_state "$job" RUNNING 90
-    _wait_monitor_logged "$job" "UI checkpoints on" 60
+    _wait_monitor_logged "$job" 60 "ui consumer ready"
 
     preemptor=$(slurm_submit_exec sbatch --parsable -p high --exclusive --wrap 'sleep 20' -o /dev/null |
         tail -1 | cut -d';' -f1 | tr -d '[:space:]')
     [ -n "$preemptor" ]
 
     # The partition's GraceTime, then Slurm's requeue delay (2 min by default).
-    _wait_monitor_logged "$job" "attempt 1: fresh start" 480
-    if _monitor_logged "$job" "attempt 0: checkpointed"; then
+    _wait_monitor_logged "$job" 480 "attempt started" attempt=1 start=fresh
+    if _monitor_logged "$job" "checkpoint completed" attempt=0; then
         error_log "job $job was checkpointed on preemption without --signal"
         return 1
     fi

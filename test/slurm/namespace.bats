@@ -161,15 +161,19 @@ teardown_file() {
 }
 
 # Print the PID cedana monitors (and so checkpoints, or has restored) for a
-# job: the per-job monitor logs "job=<id> UI checkpoints on for pid <pid>" to the
-# node's journal once it has found the workload, a few seconds after the job
+# job: the per-job monitor logs "workload running ... job_id=<id> ... pid=<pid>" to
+# the node's journal once it has found the workload, a few seconds after the job
 # (or its restore) starts, so wait for it. The newest line is the current attempt's.
 _monitored_pid() {
     local host="$1" job_id="$2" pid="" waited=0
 
     while [ "$waited" -lt 30 ]; do
         pid="$(docker exec "$host" journalctl -t cedana-slurm-task-monitor --no-pager -o cat 2>/dev/null |
-            awk -v job="job=$job_id" '$1 == job && /UI checkpoints on for pid/ { p = $NF } END { print p }')"
+            awk -v job="job_id=$job_id" '
+                index(" " $0 " ", " workload running ") && index(" " $0 " ", " " job " ") {
+                    for (i = 1; i <= NF; i++) if ($i ~ /^pid=[0-9]+$/) p = substr($i, 5)
+                }
+                END { print p }')"
         [ -n "$pid" ] && break
         sleep 1
         waited=$((waited + 1))

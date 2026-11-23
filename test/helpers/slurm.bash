@@ -189,11 +189,11 @@ _capture_runtime_slurm_logs() {
         # copies, and the copy's capabilities.
         docker exec "$c" sh -c 'plugin_dir=$(scontrol show config 2>/dev/null | awk "/^PluginDir[[:space:]]*=/{print \$NF}"); for f in /usr/local/lib/spank_cedana.so "${plugin_dir:-/usr/lib/slurm}/spank_cedana.so" /usr/local/bin/cedana-slurm-task /usr/libexec/cedana/cedana-slurm-task; do [ -f "$f" ] || { echo "=== $f: missing ==="; continue; }; echo "=== $f ==="; ls -l "$f"; sha256sum "$f"; done; echo "=== getcap ==="; getcap /usr/libexec/cedana/cedana-slurm-task 2>&1 || true' >"$cdir/cedana-plugin.txt" 2>&1 || true
         # The per-job monitor (cedana-slurm-task monitor) logs to the node's journal; keep the lines
-        # of this test's jobs (the monitor writes job=<id>, the event stream job_id=<id>).
+        # of this test's jobs (every line carries job_id=<id>).
         local job_ids_re="${relevant_job_ids_csv//,/|}"
         if [[ "$job_ids_re" =~ ^[0-9]+(\|[0-9]+)*$ ]]; then
             docker exec "$c" journalctl -t cedana-slurm-task-monitor --no-pager -o short-precise 2>/dev/null |
-                grep -E "job(_id)?=(${job_ids_re})( |$)" >"$cdir/cedana-slurm-task-monitor.txt" 2>&1 || true
+                grep -E "job_id=(${job_ids_re})( |$)" >"$cdir/cedana-slurm-task-monitor.txt" 2>&1 || true
         else
             docker exec "$c" journalctl -t cedana-slurm-task-monitor --no-pager -o short-precise -n 300 \
                 >"$cdir/cedana-slurm-task-monitor.txt" 2>&1 || true
@@ -535,7 +535,7 @@ test_slurm_job() {
             if [ -n "$_host" ]; then
                 mapfile -d '' -t _cedana_logs < <(_slurm_cedana_log_files "$_host")
                 info_log "[DEBUG] SPANK monitor check on $_host for job $job_id:"
-                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-task monitor --job=${job_id} '" 2>/dev/null || info_log "[DEBUG] No monitor process found"
+                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm-task monitor --job=${job_id} '" 2>/dev/null || info_log "[DEBUG] No monitor process found"
                 info_log "[DEBUG] slurmd PATH:"
                 docker exec "$_host" bash -c "cat /proc/\$(pgrep -x slurmd | head -1)/environ 2>/dev/null | tr '\0' '\n' | grep ^PATH" 2>/dev/null || info_log "[DEBUG] Could not read slurmd environ"
                 info_log "[DEBUG] SPANK log entries:"
@@ -570,7 +570,7 @@ test_slurm_job() {
                 local monitor_alive=true
                 sleep 3
                 info_log "[DEBUG] Monitor status after checkpoint request:"
-                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-task monitor --job=${job_id} '" 2>/dev/null || {
+                docker exec "$_host" bash -c "ps -eo pid,ppid,stat,cmd | grep -E '[c]edana-slurm-task monitor --job=${job_id} '" 2>/dev/null || {
                     monitor_alive=false
                     info_log "[DEBUG] Monitor DIED after checkpoint request"
                 }
