@@ -1666,6 +1666,7 @@ setup_slurm_samples() {
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
             /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
+            chmod -R a+rX /data/venv
         "
     done
 
