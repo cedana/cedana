@@ -148,7 +148,7 @@ echo "Plugin build mode: $CEDANA_PLUGINS_BUILDS"
 if [[ "$CEDANA_PLUGINS_BUILDS" != "local" ]]; then
     # Plugins may come from a different registry than CEDANA_URL (e.g. an in-cluster spoke).
     registry=()
-    [[ -n ${CEDANA_PLUGINS_URL:-} ]] && registry=(CEDANA_URL="$CEDANA_PLUGINS_URL")
+    [[ -n ${CEDANA_PLUGINS_URL:-} ]] && registry=(CEDANA_CONNECTION_URL="$CEDANA_PLUGINS_URL" CEDANA_URL="$CEDANA_PLUGINS_URL")
     if [[ "$PLUGINS" != "" ]]; then
         echo "Installing plugins:$PLUGINS"
         # shellcheck disable=SC2086
