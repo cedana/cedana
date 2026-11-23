@@ -1507,9 +1507,9 @@ restart_cedana_slurm_daemon_unprivileged() {
     debug_log "Restarting cedana-slurm daemon (unprivileged) on SLURM nodes..."
 
     for c in "${targets[@]}"; do
-        docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
+        local role=worker
+        [ "$c" = "$SLURM_CONTROLLER_CONTAINER" ] && role=controller
         docker exec "$c" bash -c '
-            caps=cap_dac_read_search,cap_sys_ptrace,cap_checkpoint_restore=eip
             install -m 0755 /usr/local/bin/cedana /usr/bin/cedana
             install -m 0755 /usr/local/bin/criu /usr/bin/criu
             # bin_dir is repointed to /usr/bin below, so anything cedana execs
@@ -1517,11 +1517,8 @@ restart_cedana_slurm_daemon_unprivileged() {
             if [ -x /usr/local/bin/cedana-gpu-controller ]; then
                 install -m 0755 /usr/local/bin/cedana-gpu-controller /usr/bin/cedana-gpu-controller
             fi
-            setcap $caps /usr/bin/cedana-slurm
-            setcap $caps /usr/bin/cedana
-            setcap $caps /usr/bin/criu
         ' || {
-            error_log "Failed to stage/setcap cedana/criu binaries in $c"
+            error_log "Failed to stage cedana/criu binaries in $c"
             return 1
         }
         docker exec "$c" mkdir -p /etc/cedana
@@ -1533,6 +1530,16 @@ restart_cedana_slurm_daemon_unprivileged() {
                 error_log "Failed to persist slurm.unprivileged into config on $c"
                 return 1
             }
+        docker exec \
+            -e CEDANA_PLUGINS_BUILDS="local" \
+            -e CEDANA_PLUGINS_LOCAL_SEARCH_PATH="/usr/local/lib:/usr/local/bin" \
+            -e CEDANA_PLUGINS_LIB_DIR="/usr/local/lib" \
+            -e CEDANA_PLUGINS_BIN_DIR="/usr/bin" \
+            "$c" /usr/bin/cedana slurm setup --node-role "$role" >&"${OUTPUT_FD}" 2>&1 || {
+            error_log "Cedana SLURM $role setup failed on $c"
+            return 1
+        }
+        docker exec "$c" bash -c "pkill -x cedana-slurm 2>/dev/null || true"
         docker exec -d \
             -e CEDANA_URL="${CEDANA_URL:-}" \
             -e CEDANA_AUTH_TOKEN="${CEDANA_AUTH_TOKEN:-}" \
