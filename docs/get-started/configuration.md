@@ -8,54 +8,54 @@ You may also override the configuration file using environment variables. The en
 
 Each of the below fields can also be set through an environment variable with the same name, prefixed, and in uppercase. E.g. `Checkpoint.Dir` can be set with `CEDANA_CHECKPOINT_DIR`. The `env_aliases` tag below specifies alternative (alias) environment variable names (comma-separated).
 
-## [Config](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L10-L43)
+## [Config](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L10-L47)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L10-L43" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L10-L47" %}
 
-## [CRIU](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L108-L117)
+## [CRIU](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L123-L136)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L108-L117" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L123-L136" %}
 
-## [Checkpoint](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L69-L85)
+## [Checkpoint](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L82-L98)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L69-L85" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L82-L98" %}
 
-## [Client](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L103-L106)
+## [Client](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L118-L121)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L103-L106" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L118-L121" %}
 
-## [Connection](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L60-L67)
+## [Connection](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L73-L80)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L60-L67" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L73-L80" %}
 
-## [DB](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L87-L92)
+## [DB](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L100-L105)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L87-L92" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L100-L105" %}
 
-## [GPU](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L119-L132)
+## [GPU](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L138-L183)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L119-L132" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L138-L183" %}
 
-## [Plugins](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L134-L143)
+## [Plugins](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L185-L194)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L134-L143" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L185-L194" %}
 
-## [Profiling](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L94-L101)
+## [Profiling](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L107-L116)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L94-L101" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L107-L116" %}
 
-## [AWS](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L145-L154)
+## [AWS](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L196-L207)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L145-L154" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L196-L207" %}
 
-## [SLURM](https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L45-L58)
+## [SLURM](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L49-L62)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/d7e70263c563d6b24367f105be4fdc4ecd13aeb1/pkg/config/types.go#L45-L58" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L49-L62" %}
 
-## [CSX](https://github.com/cedana/cedana/blob/e9dd65ade9c32a0a1ebef4f731aa653a1abcd4b4/pkg/config/types.go#L164-L167)
+## [CSX](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L209-L212)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/e9dd65ade9c32a0a1ebef4f731aa653a1abcd4b4/pkg/config/types.go#L164-L167" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L209-L212" %}
 
-## [K8s](https://github.com/cedana/cedana/blob/da28c80c56426ad74d66fa78df7caa7a9f065a07/pkg/config/types.go#L64-L68)
+## [K8s](https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L64-L71)
 
-{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/da28c80c56426ad74d66fa78df7caa7a9f065a07/pkg/config/types.go#L64-L68" %}
+{% @github-files/github-code-block url="https://github.com/cedana/cedana/blob/main/pkg/config/types.go#L64-L71" %}
