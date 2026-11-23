@@ -11,6 +11,7 @@ host=$(sed -E 's#^[a-z]+://([^:/]+).*#\1#' <<<"${CEDANA_URL:-}")
 if [[ $host == *.svc || $host == *.svc.* ]]; then
     ip=$(getent hosts "$host" | awk '{print $1; exit}')
     [[ -n $ip ]] || { echo "Cannot resolve $host" >&2; exit 1; }
+    [[ $ip == *:* ]] && ip="[$ip]" # IPv6 literal in a URL
     export CEDANA_URL=${CEDANA_URL/$host/$ip}
 fi
 

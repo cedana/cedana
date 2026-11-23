@@ -45,7 +45,7 @@ type EventStream struct {
 	checkpointRequests *rabbitmq.Consumer
 	filesRequests      []*rabbitmq.Consumer
 	containerdAddress  string
-	polling            bool // requests and results go over HTTP to a Token Factory spoke
+	polling            bool // requests and results go over HTTP to an in-cluster spoke
 	lifecycleMu        sync.RWMutex
 	closeOnce          sync.Once
 	closeErr           error
@@ -789,7 +789,16 @@ func (es *EventStream) publishCheckpoint(
 		return err
 	}
 	if es.polling {
-		_, err = es.do(ctx, http.MethodPost, "/v1/checkpoint/responses", data)
+		// A lost response leaves the spoke's request open until it times out.
+		for try := range 3 {
+			if _, err = es.do(ctx, http.MethodPost, "/v1/checkpoint/responses", data); err == nil || ctx.Err() != nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Duration(try+1) * 2 * time.Second):
+			}
+		}
 	} else {
 		err = publisher.Publish(data, []string{"checkpoint_response"})
 	}

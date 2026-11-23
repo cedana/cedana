@@ -20,9 +20,13 @@ import (
 // Poll serves checkpoint requests that an in-cluster spoke queues for this node, in place of the
 // RabbitMQ broadcast: no broker and no inbound connection to the node.
 func Poll(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.ApiClient, containerdAddress string) error {
-	node, err := os.Hostname() // the helper runs with the host's network namespace
-	if err != nil {
-		return err
+	// The spoke queues by Kubernetes node name; the hostname matches it on most clusters.
+	node := os.Getenv("NODE_NAME")
+	if node == "" {
+		var err error
+		if node, err = os.Hostname(); err != nil { // the helper runs with the host's network namespace
+			return err
+		}
 	}
 	es := &EventStream{cedana: cedana, propagator: propagator, node: node, containerdAddress: containerdAddress, polling: true}
 	path := "/v1/checkpoint/requests?node=" + url.QueryEscape(node)
@@ -44,7 +48,7 @@ func Poll(ctx context.Context, cedana *client.Client, propagator *propagatorsdk.
 			continue
 		}
 		for _, req := range reqs {
-			l := log.With().Str("action_id", req.ActionId).Str("pod", req.PodName).Str("namespace", req.Namespace).Logger()
+			l := log.With().Str("action_id", req.ActionId).Str("kind", req.Kind).Str("pod", req.PodName).Str("namespace", req.Namespace).Logger()
 			go es.checkpoint(l.WithContext(ctx), req)
 		}
 	}
