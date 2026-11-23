@@ -55,7 +55,7 @@ const (
 	CONTROLLER_BOOKING_LOCK_FILE_FORMATTER = "/dev/shm/cedana-gpu.%s.booking"
 	CONTROLLER_TERMINATE_SIGNAL            = syscall.SIGTERM
 	CONTROLLER_RESTORE_NEW_PID_SIGNAL      = syscall.SIGUSR1     // Signal to the restored process to notify it has a new PID
-	CONTROLLER_CHECK_SHM_SIZE              = 32 * utils.MEBIBYTE // Small size to run controller health check
+	CONTROLLER_CHECK_SHM_COMMIT            = 32 * utils.MEBIBYTE // Health check backs only a little of the segment up front
 
 	LOG_DIR_FORMATTER              = "%s/cedana-gpu.%s"
 	LOG_DIR_PATTERN                = "(.*)/cedana-gpu.(.*)"
@@ -326,9 +326,7 @@ func (p *pool) Spawn(ctx context.Context, binary string, env ...string) (c *cont
 		"CEDANA_AUTH_TOKEN="+config.Global.Connection.AuthToken,
 		"CEDANA_GPU_SHM_SIZE="+fmt.Sprintf("%v", config.Global.GPU.ShmSize),
 		"CEDANA_GPU_SHM_COMMIT="+fmt.Sprintf("%v", config.Global.GPU.ShmCommit),
-		// Read as 0/1, not true/false. IMAGE_ZERO_COPY only takes effect in the app's env,
-		// where the interception library reads it (see config.GPUClientEnv).
-		"CEDANA_GPU_IMAGE_ZERO_COPY="+boolEnv(config.Global.GPU.ImageZeroCopy),
+		// Read as 0/1, not true/false
 		"CEDANA_GPU_IMAGE_FORCE_FALLBACK="+boolEnv(config.Global.GPU.ImageForceFallback),
 		"CEDANA_GPU_DEDUP_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.DedupEnabled),
 		"CEDANA_GPU_TEMPLATES_ENABLED="+fmt.Sprintf("%v", config.Global.GPU.TemplatesEnabled),
@@ -845,7 +843,7 @@ func (p *pool) Check(binary string) types.Check {
 		controller, err := p.Spawn(
 			ctx,
 			binary,
-			fmt.Sprintf("CEDANA_GPU_SHM_SIZE=%d", CONTROLLER_CHECK_SHM_SIZE),
+			fmt.Sprintf("CEDANA_GPU_SHM_COMMIT=%d", CONTROLLER_CHECK_SHM_COMMIT),
 			fmt.Sprintf("CEDANA_GPU_HEALTH_CHECK=%d", 1),
 		)
 		if err != nil {
