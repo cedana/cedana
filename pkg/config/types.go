@@ -78,7 +78,7 @@ type (
 		// ClusterID is the cluster ID (for SLURM/K8s)
 		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id" env_aliases:"CEDANA_CLUSTER_ID"`
 		// Transport is how the k8s helper receives checkpoint requests: "rmq" (default) from the
-		// propagator's broker, or "poll" over HTTP from an in-cluster Token Factory spoke
+		// propagator's broker, or "poll" over HTTP from an in-cluster spoke
 		Transport string `json:"transport" key:"transport" yaml:"transport" mapstructure:"transport" env_aliases:"CEDANA_TRANSPORT"`
 	}
 
