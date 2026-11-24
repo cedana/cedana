@@ -10,6 +10,8 @@ func GPUClientEnv(env []string) []string {
 	vars := []struct{ key, value string }{
 		// Read as 0/1: the library treats any value other than "0" as on
 		{"CEDANA_GPU_IMAGE_ZERO_COPY", boolEnv(Global.GPU.ImageZeroCopy)},
+		// The library profiles intercepted CUDA calls with the same profiler as the controller
+		{"CEDANA_GPU_PROFILING_ENABLED", boolEnv(Global.GPU.ProfilingEnabled)},
 	}
 	var add []string
 	for _, v := range vars {

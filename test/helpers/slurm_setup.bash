@@ -1266,6 +1266,7 @@ SETUP_EOF
             -e CEDANA_PLUGINS_BIN_DIR="/usr/local/bin" \
             -e CEDANA_LOG_LEVEL="${CEDANA_LOG_LEVEL:-info}" \
             -e CEDANA_CHECKPOINT_DIR="${CEDANA_CHECKPOINT_DIR:-cedana://}" \
+            -e CEDANA_GPU_DEDUP_ENABLED="${CEDANA_GPU_DEDUP_ENABLED:-false}" \
             "$c" "$container_cedana_bin" --merge-config version ||
             {
                 error_log "cedana --merge-config failed on $c"
@@ -1666,6 +1667,7 @@ setup_slurm_samples() {
             python3 -m venv /data/venv
             /data/venv/bin/pip install --upgrade pip
             /data/venv/bin/pip install --quiet argon2-cffi bcrypt passlib scrypt || true
+            chmod -R a+rX /data/venv
         "
     done
 

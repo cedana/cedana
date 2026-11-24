@@ -78,7 +78,9 @@ jobs:
         run: |
           # Some Rocky mirrors crawl at ~150 kB/s; move on to another mirror if slower than 1 MB/s for 15s
           # git-core: git without its perl/openssh dependencies, which nothing here uses
-          dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 --setopt=install_weak_deps=False \
+          # --nobest: a mirror mid-sync can have a new gcc in appstream before its libgcc reaches
+          # baseos; take the newest gcc that installs instead of failing
+          dnf install -y --nobest --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 --setopt=install_weak_deps=False \
             git-core make gcc findutils
 
       - uses: actions/checkout@v5
@@ -194,7 +196,9 @@ jobs:
         run: |
           # Some Rocky mirrors crawl at ~150 kB/s; move on to another mirror if slower than 1 MB/s for 15s
           # git-core: git without its perl/openssh dependencies, which nothing here uses
-          dnf install -y --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 --setopt=install_weak_deps=False \
+          # --nobest: a mirror mid-sync can have a new gcc in appstream before its libgcc reaches
+          # baseos; take the newest gcc that installs instead of failing
+          dnf install -y --nobest --setopt=minrate=1M --setopt=timeout=15 --setopt=retries=10 --setopt=install_weak_deps=False \
             git-core make gcc findutils
 
       - uses: actions/checkout@v5
