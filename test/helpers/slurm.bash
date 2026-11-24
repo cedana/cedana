@@ -430,6 +430,32 @@ wait_for_slurm_job_state() {
     return 1
 }
 
+wait_for_slurm_job_alive() {
+    local job_id="$1"
+    local duration="$2"
+    local sample_dir="$3"
+    local relevant_job_ids_csv="$4"
+    local elapsed=0
+
+    while [ "$elapsed" -lt "$duration" ]; do
+        local state
+        state=$(slurm_exec scontrol show job "$job_id" 2>/dev/null |
+            grep -oP 'JobState=\K\S+' || echo "UNKNOWN")
+
+        case "$state" in
+        COMPLETED) return 0 ;;
+        FAILED | CANCELLED | TIMEOUT | NODE_FAIL)
+            error_log "Job $job_id reached terminal state $state"
+            _dump_job_failure_info "$job_id" "$sample_dir" "$relevant_job_ids_csv"
+            return 1
+            ;;
+        esac
+
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+}
+
 cancel_slurm_job() {
     slurm_exec scancel "$1" 2>/dev/null || true
 }
@@ -686,6 +712,13 @@ test_slurm_job() {
                         break
                     }
             fi
+
+            # The job is RUNNING before cedana restores into it, so a failed restore shows only later
+            wait_for_slurm_job_alive "$job_id" 90 "$sample_dir" "$relevant_job_ids_csv" ||
+                {
+                    error="Restored job $job_id failed after starting"
+                    break
+                }
             submitted=true
             ;;
 
