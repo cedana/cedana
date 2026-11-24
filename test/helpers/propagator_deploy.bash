@@ -315,6 +315,8 @@ EOF
         PROPAGATOR_PORT_FORWARD_PID=$!
     fi
 
+    # registry.cedana.ai verifies keys against our propagators, not this one (helm_install_cedana)
+    export REGISTRY_URL="${REGISTRY_URL:-$CEDANA_URL}" REGISTRY_TOKEN="${REGISTRY_TOKEN:-$CEDANA_AUTH_TOKEN}"
     export CEDANA_URL="http://$PROPAGATOR_IP:$PROPAGATOR_PORT/v1"
     export CEDANA_AUTH_TOKEN="$token"
 
