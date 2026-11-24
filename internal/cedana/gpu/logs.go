@@ -123,6 +123,7 @@ func (s *lineSplitter) feed(chunk []byte, ends bool) {
 func tailLogs(dir string, id string, done <-chan int, old map[string]int64) {
 	logger := gpuLogger(id)
 	files := map[string]*logFile{}
+	oldFull := len(old) >= MAX_LOG_FILES // logFileSizes stops there, so files left out may be old too
 	var dirFile *os.File
 	warned := false
 
@@ -171,6 +172,8 @@ func tailLogs(dir string, id string, done <-chan int, old map[string]int64) {
 						if size, ok := old[name]; ok {
 							file.Seek(size, io.SeekStart)
 							delete(old, name) // Removed and made again, it's new
+						} else if oldFull {
+							file.Seek(0, io.SeekEnd)
 						}
 						f = &logFile{
 							lineSplitter: lineSplitter{lineLogger: lineLogger{

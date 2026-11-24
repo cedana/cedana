@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -257,6 +258,41 @@ func TestTailLogsResumeBeforeFirstLook(t *testing.T) {
 	slices.Sort(messages) // Files are read in directory order
 	if strings.Join(messages, ",") != "appended,new" {
 		t.Errorf("got messages %v, want [appended new]", messages)
+	}
+}
+
+// Files left out of a full old are read from their end once there is room, as they may be old
+func TestTailLogsResumePastLimit(t *testing.T) {
+	dir := t.TempDir()
+	for i := range MAX_LOG_FILES + 10 {
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("cedana-so-%d.log", i)), []byte("[2026-10-15 10:00:00.000001] [pid 1: tid 1] [a.cpp:f:1] [info] old\n"), 0o644)
+	}
+	old := logFileSizes(dir)
+	var left []string
+	for i := range MAX_LOG_FILES + 10 {
+		if name := fmt.Sprintf("cedana-so-%d.log", i); old[name] == 0 {
+			left = append(left, name)
+		}
+	}
+
+	messages := tailMessages(t, dir, maps.Clone(old), func(func() []string) {
+		removed := 0
+		for name := range old { // Make room for the ones left out
+			if removed == len(left) {
+				break
+			}
+			os.Remove(filepath.Join(dir, name))
+			removed++
+		}
+		time.Sleep(2 * LOG_TAIL_INTERVAL)
+		for _, name := range left {
+			file, _ := os.OpenFile(filepath.Join(dir, name), os.O_APPEND|os.O_WRONLY, 0)
+			file.WriteString("[2026-10-15 10:00:00.000002] [pid 1: tid 1] [a.cpp:f:2] [info] appended\n")
+			file.Close()
+		}
+	})
+	if len(left) != 10 || len(messages) != len(left) || slices.ContainsFunc(messages, func(m string) bool { return m != "appended" }) {
+		t.Errorf("left out %d files, got messages %v, want only one [appended] per file left out", len(left), messages)
 	}
 }
 
