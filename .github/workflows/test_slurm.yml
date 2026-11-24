@@ -96,6 +96,10 @@ jobs:
   # Each leg is also split by suite: the SLURM tests (with the unprivileged ones), the
   # preemption tests and the namespace tests each run in a job of their own, on a cluster
   # of their own set up the same way, rather than one after another on one cluster.
+  #
+  # Legs run once per checkpoint storage (cedana:// and csx://), each on a cluster
+  # installed with that checkpoint directory. csx:// is left out of some: see the
+  # matrix's `exclude`.
   versions:
     name: Slurm Matrix
     runs-on: ubuntu-24.04
@@ -113,9 +117,11 @@ jobs:
           echo "suites=$suites" >> "$GITHUB_OUTPUT"
 
           # Everything after the first entry, which the matrix below sweeps in full.
-          legs=$(jq -c --argjson suites "$suites" '.[1:]
+          storages='["cedana","csx"]' # keep in sync with the matrix below
+          legs=$(jq -c --argjson suites "$suites" --argjson storages "$storages" '.[1:]
             | map({compute: "CPU", slurm: ., unprivileged: "0", nfs: "no_root_squash"})
-            | [.[] as $leg | $suites[] | $leg + {suite: .}]' \
+            | [.[] as $leg | $suites[] as $suite | $storages[] | $leg + {suite: $suite, storage: .}]
+            | map(select(.storage != "csx" or .suite != "namespace"))' \
             <<<"$SLURM_VERSIONS")
           echo "legs=$legs" >> "$GITHUB_OUTPUT"
 
@@ -126,6 +132,8 @@ jobs:
           jq -r '[.[].slurm] | unique | .[] | "  \(.)"' <<<"$legs"
           echo "Each leg split into a job per suite:"
           jq -r '.[] | "  \(.)"' <<<"$suites"
+          echo "Each of those once per checkpoint storage:"
+          jq -r '.[] | "  \(.)"' <<<"$storages"
 
   slurm-ansible:
     name: Slurm (Ansible)
@@ -343,7 +351,7 @@ jobs:
           if-no-files-found: warn
 
   slurm:
-    name: Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }}, ${{ matrix.suite }})
+    name: Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }}, ${{ matrix.suite }}, ${{ matrix.storage }})
     needs: versions
     runs-on: ${{ format(
       'runs-on={0}/{4}={1}-amd64{2}/tag=slurm-{3}',
@@ -371,8 +379,20 @@ jobs:
           - no_root_squash
         # Which tests the job runs (see the `versions` job).
         suite: ${{ fromJSON(needs.versions.outputs.suites) }}
+        # Where checkpoints go: cedana://ci, or csx:// through a csx daemon on every node.
+        storage:
+          - cedana
+          - csx
         exclude:
           - compute: CUDA
+            nfs: root_squash
+          # csx:// only runs what it is known to support so far: the SLURM and preemption
+          # tests, privileged, without root_squash.
+          - storage: csx
+            suite: namespace
+          - storage: csx
+            unprivileged: "1"
+          - storage: csx
             nfs: root_squash
         # One CPU leg for each remaining version, from the `versions` job.
         include: ${{ fromJSON(needs.versions.outputs.compat) }}
@@ -425,6 +445,12 @@ jobs:
           name: ${{ matrix.slurm }}-amd64
           path: slurm-bin
 
+      - name: Download CSX
+        if: matrix.storage == 'csx'
+        uses: actions/download-artifact@v7
+        with:
+          name: csx-amd64
+
       - name: Extract cedana-slurm
         run: mv slurm-bin/cedana-slurm cedana-slurm
 
@@ -475,6 +501,10 @@ jobs:
             storage/s3
           if [ "$GPU" = "true" ]; then
             sudo -E cedana plugin install gpu
+          fi
+          if [ "${{ matrix.storage }}" = "csx" ]; then
+            chmod +x ./csx
+            sudo -E cedana plugin install storage/csx csx
           fi
 
       - name: Install slurm binaries
@@ -553,7 +583,7 @@ jobs:
       - name: Setup SLURM cluster
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'csx' && 'csx://' || 'cedana://ci' }}
           CEDANA_BIN: /tmp/cedana-preflight-bin/cedana
           CRIU_BIN: /tmp/cedana-preflight-bin/criu
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
@@ -584,7 +614,7 @@ jobs:
       - name: Setup SLURM samples
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'csx' && 'csx://' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -598,7 +628,7 @@ jobs:
         id: register
         shell: bash
         env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'csx' && 'csx://' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           CEDANA_SLURM_BIN: /usr/local/bin/cedana-slurm
@@ -626,7 +656,7 @@ jobs:
       - name: Run SLURM tests
         if: matrix.suite == 'samples'
         env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'csx' && 'csx://' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
@@ -680,7 +710,7 @@ jobs:
       - name: Run SLURM preemption tests
         if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.suite == 'preemption' }}
         env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'csx' && 'csx://' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
@@ -731,7 +761,7 @@ jobs:
       - name: Run SLURM unprivileged tests
         if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.unprivileged == '1' && matrix.suite == 'samples' }}
         env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'csx' && 'csx://' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
@@ -782,7 +812,7 @@ jobs:
       - name: Run SLURM namespace tests
         if: ${{ !cancelled() && steps.register.outcome == 'success' && matrix.suite == 'namespace' }}
         env:
-          CEDANA_CHECKPOINT_DIR: cedana://ci
+          CEDANA_CHECKPOINT_DIR: ${{ matrix.storage == 'csx' && 'csx://' || 'cedana://ci' }}
           CEDANA_BIN: /usr/local/bin/cedana
           CEDANA_SLURM_DIR: ${{ github.workspace }}/cedana-slurm
           SLURM_SAMPLES_DIR: ${{ github.workspace }}/cedana-samples/slurm
@@ -889,6 +919,7 @@ jobs:
               /var/log/cedana.log \
               /var/log/cedana-slurm.log \
               /var/log/cedana-slurm-monitor.log \
+              /var/log/csx-daemon.log \
               /var/log/slurm/slurmctld.log \
               /var/log/slurm/slurmd.log \
               /var/log/slurm/slurmdbd.log \
@@ -919,13 +950,13 @@ jobs:
 
       - name: Label reports # with the job name, so the summary can link to it
         if: always()
-        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }}, ${{ matrix.suite }})" |' {} +
+        run: find /tmp -maxdepth 1 -name 'report*.xml' -exec sed -i 's|<testsuites |<testsuites name="Slurm (${{ matrix.compute }}, ${{ matrix.slurm }}, unpriv=${{ matrix.unprivileged }}, ${{ matrix.nfs }}, ${{ matrix.suite }}, ${{ matrix.storage }})" |' {} +
 
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: test-report-amd64-slurm-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}-${{ matrix.suite }}
+          name: test-report-amd64-slurm-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}-${{ matrix.suite }}-${{ matrix.storage }}
           path: | # with the suite's warnings (see report_warning), shown in the summary
             /tmp/report*.xml
             /tmp/warnings.jsonl
@@ -934,7 +965,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: slurm-debug-logs-amd64-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}-${{ matrix.suite }}
+          name: slurm-debug-logs-amd64-${{ matrix.compute }}-${{ matrix.slurm }}-unpriv${{ matrix.unprivileged }}-${{ matrix.nfs }}-${{ matrix.suite }}-${{ matrix.storage }}
           path: |
             /tmp/slurm-debug/**
           if-no-files-found: warn
