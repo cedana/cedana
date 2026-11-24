@@ -216,7 +216,8 @@ func logFileSizes(dir string) map[string]int64 {
 		for _, name := range names {
 			var stat unix.Stat_t
 			if len(sizes) < MAX_LOG_FILES && filepath.Ext(name) == ".log" &&
-				unix.Fstatat(int(dirFile.Fd()), name, &stat, unix.AT_SYMLINK_NOFOLLOW) == nil {
+				unix.Fstatat(int(dirFile.Fd()), name, &stat, unix.AT_SYMLINK_NOFOLLOW) == nil &&
+				stat.Mode&unix.S_IFMT == unix.S_IFREG {
 				sizes[name] = stat.Size
 			}
 		}

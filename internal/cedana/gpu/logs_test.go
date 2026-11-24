@@ -260,6 +260,18 @@ func TestTailLogsResumeBeforeFirstLook(t *testing.T) {
 	}
 }
 
+// Special files are never tailed, so they must not take the place of a log file we resume
+func TestLogFileSizesRegularOnly(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "cedana-so-1.log"), []byte("old\n"), 0o644)
+	os.Mkdir(filepath.Join(dir, "cedana-so-2.log"), 0o755)
+	syscall.Mkfifo(filepath.Join(dir, "cedana-so-3.log"), 0o644)
+
+	if sizes := logFileSizes(dir); len(sizes) != 1 || sizes["cedana-so-1.log"] != 4 {
+		t.Errorf("got sizes %v, want only cedana-so-1.log of 4 bytes", sizes)
+	}
+}
+
 // A line longer than MAX_LOG_LINE_SIZE is cut and the rest of it dropped, whether it comes
 // from a log file or stderr, so a line without an end can't use up our memory
 func TestLogLineSize(t *testing.T) {
