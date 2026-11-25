@@ -57,7 +57,7 @@ const (
 	DEFAULT_GPU_IMAGE_ZERO_COPY       = true
 	DEFAULT_GPU_IMAGE_FORCE_FALLBACK  = false
 	DEFAULT_GPU_DEBUG                 = false
-	DEFAULT_GPU_DEDUP_ENABLED         = false
+	DEFAULT_GPU_DEDUP_ENABLED         = true
 	DEFAULT_GPU_TEMPLATES_ENABLED     = false
 	DEFAULT_GPU_RESTORE_NIC           = "auto"
 	DEFAULT_GPU_DELTA_ENABLED         = false
