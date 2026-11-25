@@ -129,60 +129,82 @@ jobs:
       slurm_ref: ${{ fromJSON(inputs.plan).slurm_ref }}
       samples_version: ${{ needs.manifest.outputs.samples_version || 'main' }} # main unless a cedana-samples PR is a member
 
+  # The test images at cedana_ref: main's, or, where it changes their Dockerfiles, the images
+  # its PR's build made (built here if it hasn't)
+  test_image:
+    name: Test Image
+    needs: manifest
+    uses: ./.github/workflows/test_image.yml
+    secrets: inherit
+    with:
+      ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+
   test:
     name: Test # the jobs read "Test / <suite> / …", as in the release suite
-    needs: [manifest, download]
-    if: ${{ !cancelled() && needs.download.result == 'success' && fromJSON(inputs.plan).full }}
+    needs: [manifest, download, test_image]
+    if: ${{ !cancelled() && needs.download.result == 'success' && needs.test_image.result == 'success' && fromJSON(inputs.plan).full }}
     uses: ./.github/workflows/test.yml
     secrets: inherit
     with:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      test_image: ${{ needs.test_image.outputs.image }}
+      test_image_cuda: ${{ needs.test_image.outputs.image_cuda }}
       propagator: ${{ fromJSON(inputs.plan).propagator }}
       kubernetes: ${{ fromJSON(inputs.plan).kubernetes != '' }}
       cloud_kubernetes: ${{ fromJSON(inputs.plan).cloud_kubernetes }}
       slurm: ${{ fromJSON(inputs.plan).slurm }}
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
+      slurm_node_suffix: ${{ needs.download.outputs.slurm_node_suffix }}
       post_summary_slack: ""
 
   kubernetes:
     name: Test / Kubernetes
-    needs: [manifest, download]
-    if: ${{ !cancelled() && needs.download.result == 'success' && !fromJSON(inputs.plan).full && fromJSON(inputs.plan).kubernetes != '' }}
+    needs: [manifest, download, test_image]
+    if: ${{ !cancelled() && needs.download.result == 'success' && needs.test_image.result == 'success' && !fromJSON(inputs.plan).full && fromJSON(inputs.plan).kubernetes != '' }}
     uses: ./.github/workflows/test_k8s.yml
     secrets: inherit
     with:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      test_image: ${{ needs.test_image.outputs.image }}
+      test_image_cuda: ${{ needs.test_image.outputs.image_cuda }}
       platforms: ${{ fromJSON(inputs.plan).kubernetes }}
       propagator: ${{ fromJSON(inputs.plan).propagator }}
       post_summary: true # the summary (matrix image, failed tests) marshal posts on the PRs
 
   gpu:
     name: Test / GPU
-    needs: [manifest, download]
-    if: ${{ !cancelled() && needs.download.result == 'success' && fromJSON(inputs.plan).gpu }}
+    needs: [manifest, download, test_image]
+    if: ${{ !cancelled() && needs.download.result == 'success' && needs.test_image.result == 'success' && fromJSON(inputs.plan).gpu }}
     uses: ./.github/workflows/test_gpu.yml
     secrets: inherit
     with:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      test_image: ${{ needs.test_image.outputs.image }}
+      test_image_cuda: ${{ needs.test_image.outputs.image_cuda }}
       post_summary: true # the summary (matrix image, failed tests) marshal posts on the PRs
 
   streamer:
     name: Test / Streamer
-    needs: [manifest, download]
-    if: ${{ !cancelled() && needs.download.result == 'success' && fromJSON(inputs.plan).streamer }}
+    needs: [manifest, download, test_image]
+    if: ${{ !cancelled() && needs.download.result == 'success' && needs.test_image.result == 'success' && fromJSON(inputs.plan).streamer }}
     uses: ./.github/workflows/test_streamer.yml
     secrets: inherit
     with:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      test_image: ${{ needs.test_image.outputs.image }}
+      test_image_cuda: ${{ needs.test_image.outputs.image_cuda }}
       post_summary: true # the summary (matrix image, failed tests) marshal posts on the PRs
 
   slurm:
     name: Test / Slurm
-    needs: [manifest, download]
-    if: ${{ !cancelled() && needs.download.result == 'success' && !fromJSON(inputs.plan).full && fromJSON(inputs.plan).slurm && needs.download.outputs.slurm_versions != '' }}
+    needs: [manifest, download, test_image]
+    if: ${{ !cancelled() && needs.download.result == 'success' && needs.test_image.result == 'success' && !fromJSON(inputs.plan).full && fromJSON(inputs.plan).slurm && needs.download.outputs.slurm_versions != '' }}
     uses: ./.github/workflows/test_slurm.yml
     secrets: inherit
     with:
       ref: ${{ fromJSON(inputs.plan).cedana_ref }}
+      test_image: ${{ needs.test_image.outputs.image }}
+      test_image_cuda: ${{ needs.test_image.outputs.image_cuda }}
       slurm_versions: ${{ needs.download.outputs.slurm_versions }}
+      slurm_node_suffix: ${{ needs.download.outputs.slurm_node_suffix }}
       post_summary: true # the summary (matrix image, failed tests) marshal posts on the PRs

@@ -1,11 +1,13 @@
 package job
 
 import (
+	"errors"
+	"io"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 )
 
 const testScope = "/system.slice/slurmstepd.scope"
@@ -124,57 +126,62 @@ func TestPickJobPID(t *testing.T) {
 	}
 }
 
-func TestIsJobScript(t *testing.T) {
+func TestIsSpoolScript(t *testing.T) {
 	for path, want := range map[string]bool{
-		"/tmp/cedana-script-11.sh":                       true,
-		"/tmp/cedana-script-11.sh.bak":                   false,
-		"/tmp/cedana-script.log":                         false,
-		"/tmp/cedana-script-11.sh/other":                 false,
-		"/tmp/cedana-11.pid":                             false,
-		"/data/cedana-samples/slurm/cpu/counting.sbatch": false,
-		"/usr/bin/bash":                                  false,
+		"/var/spool/slurm/job00504/slurm_script":    true,
+		"/var/spool/slurmd/job1234567/slurm_script": true,
+		"/tmp/cedana-script-504.sh":                 false,
+		"/var/spool/slurm/job00504/slurm_script.x":  false,
+		"/var/spool/slurm/jobs/slurm_script":        false,
 	} {
-		if got := isJobScript(path); got != want {
-			t.Errorf("isJobScript(%q) = %v, want %v", path, got, want)
+		if got := isSpoolScript(path); got != want {
+			t.Errorf("isSpoolScript(%q) = %v, want %v", path, got, want)
 		}
 	}
 }
 
-func TestInRootOf(t *testing.T) {
-	if got := inRootOf(0, "/tmp/cedana-script-11.sh"); got != "/tmp/cedana-script-11.sh" {
-		t.Errorf("without a process: %q", got)
+// noOpenFileFs is a dump filesystem with only Create and Open, like the streaming one
+type noOpenFileFs struct{ afero.Fs }
+
+func (noOpenFileFs) OpenFile(string, int, os.FileMode) (afero.File, error) {
+	return nil, errors.New("not implemented for streaming")
+}
+
+func TestSpoolScriptRecord(t *testing.T) {
+	fs := noOpenFileFs{afero.NewMemMapFs()}
+	if record, err := loadSpoolScriptRecord(fs); record != nil || err != nil {
+		t.Fatalf("a dump without a record: got %v, %v; want nil, nil", record, err)
 	}
-	if got := inRootOf(42, "/tmp/cedana-script-11.sh"); got != "/proc/42/root/tmp/cedana-script-11.sh" {
-		t.Errorf("through a process: %q", got)
+	want := spoolScriptRecord{Path: "/var/spool/slurm/job00504/slurm_script", Offset: 129}
+	if err := saveSpoolScriptRecord(fs, want); err != nil {
+		t.Fatalf("save on a filesystem without OpenFile: %v", err)
+	}
+	if got, err := loadSpoolScriptRecord(fs); err != nil || got == nil || *got != want {
+		t.Errorf("load: %v, %v; want %v", got, err, want)
+	}
+	if err := afero.WriteFile(fs.Fs, SPOOL_SCRIPT_RECORD, []byte(`{"path":"/etc/passwd","offset":0}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadSpoolScriptRecord(fs); err == nil {
+		t.Error("a record for a file that isn't a spooled script was accepted")
 	}
 }
 
-func TestScriptAttrsRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "cedana-script-11.sh")
-	if err := os.WriteFile(path, []byte("#!/bin/bash\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Chmod(path, 0o644|os.ModeSticky); err != nil { // not subject to the umask
-		t.Fatal(err)
-	}
-	info, err := os.Stat(path)
+func TestScriptMemfd(t *testing.T) {
+	f, err := scriptMemfd([]byte("#!/bin/bash\necho one\necho two\n"), 12)
 	if err != nil {
-		t.Fatal(err)
+		t.Skipf("memfd not available here: %v", err)
 	}
+	defer f.Close()
 
-	dumpFs := afero.NewMemMapFs()
-	if err := saveScriptAttrs(dumpFs, info); err != nil {
-		t.Fatal(err)
+	if rest, err := io.ReadAll(f); err != nil || string(rest) != "echo one\necho two\n" {
+		t.Errorf("read from the offset: %q, %v", rest, err)
 	}
-	attrs := loadScriptAttrs(dumpFs)
-	if os.FileMode(attrs.Mode) != 0o644|os.ModeSticky {
-		t.Errorf("expected mode 0644 with the sticky bit, got %v", os.FileMode(attrs.Mode))
+	if _, err := f.Write([]byte("x")); err == nil {
+		t.Error("the memfd was opened writable")
 	}
-	if attrs.Uid != uint32(os.Getuid()) || attrs.Gid != uint32(os.Getgid()) {
-		t.Errorf("expected owner %d:%d, got %d:%d", os.Getuid(), os.Getgid(), attrs.Uid, attrs.Gid)
-	}
-
-	if attrs := loadScriptAttrs(afero.NewMemMapFs()); attrs.Mode != 0o700 {
-		t.Errorf("expected the default mode 0700 without attributes, got %o", attrs.Mode)
+	want := unix.F_SEAL_SHRINK | unix.F_SEAL_GROW | unix.F_SEAL_WRITE | unix.F_SEAL_SEAL
+	if seals, err := unix.FcntlInt(f.Fd(), unix.F_GET_SEALS, 0); err != nil || seals&want != want {
+		t.Errorf("seals %#x, %v: want %#x", seals, err, want)
 	}
 }
