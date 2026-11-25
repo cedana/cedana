@@ -119,10 +119,11 @@ func (s *lineSplitter) feed(chunk []byte, ends bool) {
 }
 
 // Tails all log files in dir until done is closed, then drains them one last time.
-// With resume, files already in dir are read from their end, as an earlier daemon logged them.
-func tailLogs(dir string, id string, done <-chan int, resume bool) {
+// Files in old are read from the size they had, as what they held was there before us.
+func tailLogs(dir string, id string, done <-chan int, old map[string]int64) {
 	logger := gpuLogger(id)
 	files := map[string]*logFile{}
+	oldFull := len(old) >= MAX_LOG_FILES // logFileSizes stops there, so files left out may be old too
 	var dirFile *os.File
 	warned := false
 
@@ -168,7 +169,10 @@ func tailLogs(dir string, id string, done <-chan int, resume bool) {
 						if err != nil {
 							continue
 						}
-						if resume {
+						if size, ok := old[name]; ok {
+							file.Seek(size, io.SeekStart)
+							delete(old, name) // Removed and made again, it's new
+						} else if oldFull {
 							file.Seek(0, io.SeekEnd)
 						}
 						f = &logFile{
@@ -195,11 +199,33 @@ func tailLogs(dir string, id string, done <-chan int, resume bool) {
 					delete(files, name)
 				}
 			}
-			resume = false // Files that show up later are new
 		}
 
 		if finished {
 			return
+		}
+	}
+}
+
+func logFileSizes(dir string) map[string]int64 {
+	sizes := map[string]int64{}
+	dirFile, err := openLogDir(dir)
+	if err != nil {
+		return sizes
+	}
+	defer dirFile.Close()
+	for {
+		names, err := dirFile.Readdirnames(LOG_DIR_BATCH_SIZE)
+		for _, name := range names {
+			var stat unix.Stat_t
+			if len(sizes) < MAX_LOG_FILES && filepath.Ext(name) == ".log" &&
+				unix.Fstatat(int(dirFile.Fd()), name, &stat, unix.AT_SYMLINK_NOFOLLOW) == nil &&
+				stat.Mode&unix.S_IFMT == unix.S_IFREG {
+				sizes[name] = stat.Size
+			}
+		}
+		if err != nil || len(sizes) >= MAX_LOG_FILES {
+			return sizes
 		}
 	}
 }
