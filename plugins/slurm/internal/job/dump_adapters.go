@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"buf.build/gen/go/cedana/cedana/protocolbuffers/go/daemon"
+	criu_proto "buf.build/gen/go/cedana/criu/protocolbuffers/go/criu"
+	criu_client "github.com/cedana/cedana/pkg/criu"
 	"github.com/cedana/cedana/pkg/types"
 	"github.com/cedana/cedana/pkg/utils"
 	slurm_keys "github.com/cedana/cedana/plugins/slurm/pkg/keys"
@@ -13,20 +15,8 @@ import (
 	"github.com/opencontainers/cgroups"
 	cgroupsManager "github.com/opencontainers/cgroups/manager"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-)
-
-const (
-	// What cedana-slurm's wrapper names the script it runs the job with, cedana-script-<jobid>.sh.
-	// The shell keeps it open for as long as the job runs, and it is gone by the time the job
-	// is restored.
-	SLURM_SCRIPT_PREFIX = "cedana-script"
-	// What it is kept as in the dump, and where its mode and owner go. CRIU wants the file
-	// back exactly as it was.
-	SLURM_SCRIPT_FILE       = "cedana-script"
-	SLURM_SCRIPT_ATTRS_FILE = "cedana-script.json"
 )
 
 func GetSlurmJobForDump(next types.Dump) types.Dump {
@@ -89,45 +79,54 @@ func DumpSlurmScript(next types.Dump) types.Dump {
 			return next(ctx, opts, resp, req)
 		}
 
-		// The shell holds the script open, so a restore without it, or with it not as it was,
-		// fails. Better to fail the dump.
-		var saveErr error
-		utils.WalkTree(state, "OpenFiles", "Children", func(f *daemon.File) bool {
-			if path := f.GetPath(); isJobScript(path) {
-				saveErr = saveJobScript(opts.DumpFs, state.PID, path)
-				return false
+		// Slurm's spooled script, which the job's shell runs from
+		for _, f := range state.GetOpenFiles() {
+			if path := f.GetPath(); isSpoolScript(path) {
+				if err := saveSpoolScript(opts, state.PID, f.GetFd(), path); err != nil {
+					return nil, status.Errorf(codes.Internal, "failed to save the slurm script: %v", err)
+				}
+				break
 			}
-			return true
-		})
-		if saveErr != nil {
-			return nil, status.Errorf(codes.Internal, "failed to save the slurm script: %v", saveErr)
 		}
 
 		return next(ctx, opts, resp, req)
 	}
 }
 
-// saveJobScript keeps the script at path, open in the job of pid, in the dump with its
-// attributes. The job may have it where we don't, e.g. in a private /tmp.
-func saveJobScript(dumpFs afero.Fs, pid uint32, path string) error {
-	if dumpFs == nil {
+// saveSpoolScript saves the script that the shell at pid holds open on fd, read through that
+// descriptor, and records the shell's offset in it once the job is frozen. Callbacks run in reverse
+// order of registration, so the record is written before any compression or upload of the dump.
+// A failure to record it is only logged: a restore then reopens the spool file as before, which
+// works for the same job.
+func saveSpoolScript(opts types.Opts, pid uint32, fd uint64, path string) error {
+	if opts.DumpFs == nil {
 		return fmt.Errorf("no dump filesystem")
 	}
-	script, err := os.Open(inRootOf(pid, path))
-	if err != nil {
-		return err
+	link := fmt.Sprintf("/proc/%d/fd/%d", pid, fd)
+	if target, err := os.Readlink(link); err != nil || target != path {
+		return fmt.Errorf("%s is no longer open on descriptor %d of %d", path, fd, pid)
 	}
-	defer script.Close()
-
-	if err := slurm_utils.SaveScriptToDump(script, SLURM_SCRIPT_FILE, dumpFs); err != nil {
+	script, err := os.Open(link)
+	if err != nil {
 		return fmt.Errorf("%s: %w", path, err)
 	}
-	info, err := script.Stat()
-	if err != nil {
-		return err
+	defer script.Close()
+	if err := slurm_utils.SaveScriptToDump(script, SPOOL_SCRIPT_FILE, opts.DumpFs); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
 	}
-	if err := saveScriptAttrs(dumpFs, info); err != nil {
-		return fmt.Errorf("attributes of %s: %w", path, err)
-	}
+
+	dumpFs := opts.DumpFs
+	opts.CRIUCallback.Include(&criu_client.NotifyCallback{
+		PostDumpFunc: func(ctx context.Context, _ *criu_proto.CriuOpts) error {
+			offset, err := fdOffset(pid, fd)
+			if err == nil {
+				err = saveSpoolScriptRecord(dumpFs, spoolScriptRecord{Path: path, Offset: offset})
+			}
+			if err != nil {
+				log.Warn().Err(err).Str("path", path).Msg("failed to record the slurm script's offset: only the same job can restore this dump")
+			}
+			return nil
+		},
+	})
 	return nil
 }
