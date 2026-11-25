@@ -100,7 +100,6 @@ setup_file() {
 #SBATCH --error=namespace-tmp-%j.err
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=100M
-#SBATCH --export=CEDANA_ENABLE=1
 
 exec ${NAMESPACE_TMP_FD}>${NAMESPACE_TMP_FILE}
 bash cpu_smr/counting.sh >&${NAMESPACE_TMP_FD}
@@ -114,7 +113,6 @@ EOF
 #SBATCH --error=namespace-shm-%j.err
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=100M
-#SBATCH --export=CEDANA_ENABLE=1
 
 exec ${NAMESPACE_SHM_FD}>${NAMESPACE_SHM_FILE}
 bash cpu_smr/counting.sh >&${NAMESPACE_SHM_FD}
@@ -163,14 +161,19 @@ teardown_file() {
 }
 
 # Print the PID cedana monitors (and so checkpoints, or has restored) for a
-# job, from the `cedana-slurm monitor <pid> <job_id>` process on its node. The
-# monitor starts a few seconds after the job does, so wait for it.
+# job: the per-job monitor logs "workload running ... job_id=<id> ... pid=<pid>" to
+# the node's journal once it has found the workload, a few seconds after the job
+# (or its restore) starts, so wait for it. The newest line is the current attempt's.
 _monitored_pid() {
     local host="$1" job_id="$2" pid="" waited=0
 
     while [ "$waited" -lt 30 ]; do
-        pid="$(docker exec "$host" ps -eo args= 2>/dev/null |
-            awk -v job="$job_id" '$2 == "monitor" && $4 == job { print $3; exit }')"
+        pid="$(docker exec "$host" journalctl -t cedana-slurm-task-monitor --no-pager -o cat 2>/dev/null |
+            awk -v job="job_id=$job_id" '
+                index(" " $0 " ", " workload running ") && index(" " $0 " ", " " job " ") {
+                    for (i = 1; i <= NF; i++) if ($i ~ /^pid=[0-9]+$/) p = substr($i, 5)
+                }
+                END { print p }')"
         [ -n "$pid" ] && break
         sleep 1
         waited=$((waited + 1))
@@ -194,7 +197,7 @@ _run_job_checks() {
     }
 
     pid="$(_monitored_pid "$host" "$job_id")" || {
-        error_log "[$phase] no cedana-slurm monitor for job $job_id on $host"
+        error_log "[$phase] no cedana-slurm-task monitor for job $job_id on $host"
         return 1
     }
 
