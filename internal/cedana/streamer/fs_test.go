@@ -41,6 +41,7 @@ func TestGlob(t *testing.T) {
 		shardDir,
 		streams,
 		WRITE_ONLY,
+		nil,
 		"none",
 	)
 	if err != nil {
@@ -99,6 +100,7 @@ func TestGlob(t *testing.T) {
 		shardDir,
 		streams,
 		READ_ONLY,
+		nil,
 	)
 	if err != nil {
 		t.Fatalf("failed to create streaming fs for restore: %v", err)
