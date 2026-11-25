@@ -54,6 +54,23 @@ setup_file() {
     test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
 }
 
+# A GPU with no native code for a kernel JIT-compiles its PTX, which needs a driver at least as new
+# as the CUDA that built it. On an older node that's the image's CUDA forward compatibility
+# libcuda, which the restored GPU worker must load again (CED-2566).
+# bats test_tags=restore,jit
+@test "Restore a GPU pod whose kernels are JIT-compiled from PTX" {
+    local script
+    local spec
+
+    script='/cedana-samples/gpu_smr/mem-throughput-saxpy-loop-ptx'
+    if [ ! -x "$script" ]; then
+        skip "$script is not in the samples yet"
+    fi
+    spec=$(cmd_pod_spec_gpu "$SAMPLES_IMAGE" "$script" 1)
+
+    test_pod_spec DEPLOY_DUMP_RESTORE "$spec" 600 5 60
+}
+
 # bats test_tags=restore,crcr
 @test "Dump/Restore/Dump/Restore a GPU pod" {
     local script
@@ -119,7 +136,9 @@ teardown() {
     # Cut every file of the checkpoint in half
     find "$CHECKPOINT_DIR_OVERRIDE" -type f -exec sh -c 'truncate -s $(($(stat -c %s "$1") / 2)) "$1"' _ {} \;
 
-    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true
+    # --grace-period=1: sh -c, the pod's PID 1, ignores SIGTERM, so the default 30s grace
+    # only delays the SIGKILL it ends in
+    kubectl delete pod "$name" -n "$NAMESPACE" --wait=true --grace-period=1
 
     local restore_id restored status=""
     restore_id=$(restore_pod "$action_id" "$CLUSTER_ID")
@@ -148,7 +167,7 @@ teardown() {
     esac
 
     if [ -n "$restored" ]; then
-        kubectl delete pod "$restored" -n "$NAMESPACE" --wait=true
+        kubectl delete pod "$restored" -n "$NAMESPACE" --wait=true --grace-period=1
     fi
 
     if ! wait_for_cmd "$budget" "[ -z \"\$(comm -13 <(echo \"$baseline\") <(gpu_compute_pids))\" ]"; then

@@ -38,13 +38,17 @@ func (s *Server) Query(ctx context.Context, req *daemon.QueryReq) (*daemon.Query
 
 	// Enrich the process state data
 
-	for i, state := range resp.States {
-		err = utils.FillProcessState(ctx, state.PID, state, req.Tree)
-		if err != nil {
-			resp.States = append(resp.States[:i], resp.States[i+1:]...)
+	// Drop the states that can't be filled (e.g. a container whose task never started has PID 0),
+	// compacting in place: deleting while ranging would skip entries and run past the shortened slice
+	filled := resp.States[:0]
+	for _, state := range resp.States {
+		if err := utils.FillProcessState(ctx, state.PID, state, req.Tree); err != nil {
 			resp.Messages = append(resp.Messages, fmt.Sprintf("PID %d: %v", state.PID, err))
+			continue
 		}
+		filled = append(filled, state)
 	}
+	resp.States = filled
 
 	return resp, nil
 }

@@ -54,6 +54,13 @@ helm_install_cedana() {
     helm_cmd="$helm_cmd --set config.url=$CEDANA_URL"
     helm_cmd="$helm_cmd --set config.authToken=$CEDANA_AUTH_TOKEN"
     helm_cmd="$helm_cmd --set config.clusterId=$cluster_id"
+    if [ -n "${REGISTRY_TOKEN:-}" ]; then
+        create_namespace "$namespace"
+        kubectl create secret docker-registry cedana-ci-pull -n "$namespace" --docker-server=registry.cedana.ai \
+            --docker-username="$(echo "$REGISTRY_URL" | cut -d/ -f3)" --docker-password="$REGISTRY_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+        helm_cmd="$helm_cmd --set imagePullSecrets[0].name=cedana-ci-pull"
+    fi
     helm_cmd="$helm_cmd --set config.logLevel=$CEDANA_LOG_LEVEL"
     helm_cmd="$helm_cmd --set config.checkpointDir=$CEDANA_CHECKPOINT_DIR"
     helm_cmd="$helm_cmd --set config.checkpointStreams=$CEDANA_CHECKPOINT_STREAMS"
@@ -67,6 +74,7 @@ helm_install_cedana() {
     if [ "$GPU" != "1" ]; then
         helm_cmd="$helm_cmd --set config.pluginsGpuVersion=none"
     fi
+    helm_cmd="$helm_cmd --set config.gpuDedupEnabled=${CEDANA_GPU_DEDUP_ENABLED:-false}"
     if [ -n "$CEDANA_GPU_SHM_SIZE" ]; then
         helm_cmd="$helm_cmd --set config.gpuShmSize=$CEDANA_GPU_SHM_SIZE"
     fi
