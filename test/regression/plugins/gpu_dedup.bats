@@ -56,6 +56,9 @@ teardown_file() {
 
     # The controller only writes dedup manifests when dedup is on
     assert [ -n "$(find "/tmp/$name" -name 'gpu-*dedup-manifest*')" ]
+    # Hashed with the shipped PTX: the image has no libnvrtc for a runtime compile
+    run grep -rl "loaded prebuilt PTX" "$CEDANA_GPU_LOG_DIR"
+    assert_success
 
     run cedana job kill "$jid"
     rm -rf "/tmp/$name"
