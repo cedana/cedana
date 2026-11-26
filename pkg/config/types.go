@@ -14,7 +14,7 @@ type (
 		Protocol string `json:"protocol" key:"protocol" yaml:"protocol" mapstructure:"protocol"`
 		// LogLevel is the default log level used by the server
 		LogLevel string `json:"log_level" key:"log_level" yaml:"log_level" mapstructure:"log_level"`
-		// LogLevelNoServer is the log level used when direct --no-server run/restore is used. This is separate from LogLevel so as to avoid cluttering the process output.
+		// LogLevelNoServer is the log level for --no-server run/restore, kept separate so logs don't clutter the process output
 		LogLevelNoServer string `json:"log_level_no_server" key:"log_level_no_server" yaml:"log_level_no_server" mapstructure:"log_level_no_server"`
 		// Metrics is whether to enable metrics collection and observability
 		Metrics bool `json:"metrics" key:"metrics" yaml:"metrics" mapstructure:"metrics" env_aliases:"CEDANA_METRICS_ENABLED"`
@@ -85,12 +85,12 @@ type (
 		// - "s3://<path>" for your S3 storage
 		// - "<path>" for node-local storage
 		Dir string `json:"dir" key:"dir" yaml:"dir" mapstructure:"dir"`
-		// Compression is the default compression algorithm to use for checkpoints
+		// Compression is the default compression for checkpoints (none, tar, gzip, lz4, zlib)
 		Compression string `json:"compression" key:"compression" yaml:"compression" mapstructure:"compression"`
 		// Streams specifies the number of parallel streams to use when checkpointing.
 		// Default is 0 for no streaming, a minimum of 2 is required otherwise.
 		Streams int32 `json:"streams" key:"streams" yaml:"streams" mapstructure:"streams"`
-		// The amount of memory streamer is allowed to use (in MB)
+		// StreamMemoryLimit is how much memory (in MB) the streamer may use
 		StreamMemoryLimit uint64 `json:"stream_memory_limit" key:"stream_memory_limit" yaml:"stream_memory_limit" mapstructure:"stream_memory_limit"`
 		// Async defers checkpoint compression and upload (in case of remote dir) to the background, and causes
 		// checkpoint request to return early.
@@ -98,7 +98,7 @@ type (
 	}
 
 	DB struct {
-		// Remote sets whether to use a remote database
+		// Remote sets whether to also store jobs and checkpoints in the Cedana remote database
 		Remote bool `json:"remote" key:"remote"  yaml:"remote" mapstructure:"remote" env_aliases:"CEDANA_REMOTE"`
 		// Path is the local path to the database file. E.g. /tmp/cedana.db
 		Path string `json:"path" key:"path" yaml:"path" mapstructure:"path"`
@@ -111,7 +111,7 @@ type (
 		Detailed bool `json:"detailed" key:"detailed" yaml:"detailed" mapstructure:"detailed"`
 		// Precision sets the time precision when printing profiling information (auto, ns, us, ms, s)
 		Precision string `json:"precision" key:"precision" yaml:"precision" mapstructure:"precision"`
-		// Path is the path to write profiling JSON data to (if enabled)
+		// Path is a file to also write profiling data to as JSON (if enabled)
 		Path string `json:"path" key:"path" yaml:"path" mapstructure:"path"`
 	}
 
@@ -136,23 +136,24 @@ type (
 	}
 
 	GPU struct {
-		// Number of warm GPU controllers to keep in pool
+		// PoolSize is the number of warm GPU controllers to keep ready
 		PoolSize int `json:"pool_size" key:"pool_size" yaml:"pool_size" mapstructure:"pool_size"`
-		// LogDir is the directory to write GPU logs to
+		// LogDir is the directory for GPU controller and interception logs
 		LogDir string `json:"log_dir" key:"log_dir" yaml:"log_dir" mapstructure:"log_dir"`
-		// SockDir is the directory to use for the GPU sockets
+		// SockDir is the directory for GPU controller sockets
 		SockDir string `json:"sock_dir" key:"sock_dir" yaml:"sock_dir" mapstructure:"sock_dir"`
-		// ShmSize is the size in bytes of the shared memory segment to use for GPU processes
+		// ShmSize is the maximum size in bytes of each GPU controller's shared memory segment. Pages
+		// beyond ShmCommit only use memory once touched.
 		ShmSize int64 `json:"shm_size" key:"shm_size" yaml:"shm_size" mapstructure:"shm_size"`
-		// ShmCommit is the size in bytes of the shared memory segment backed with pages at creation (rest is backed on first touch)
+		// ShmCommit is how much of the shared memory segment, in bytes, is backed up front
 		ShmCommit int64 `json:"shm_commit" key:"shm_commit" yaml:"shm_commit" mapstructure:"shm_commit"`
-		// ImageZeroCopy sets whether module/library images that are file-backed are mapped by the worker instead of staged as a copy
+		// ImageZeroCopy has the GPU worker map file-backed module/library images instead of copying them
 		ImageZeroCopy bool `json:"image_zero_copy" key:"image_zero_copy" yaml:"image_zero_copy" mapstructure:"image_zero_copy"`
-		// ImageForceFallback forces the worker to copy every image out of the client process (for testing the fallback path)
+		// ImageForceFallback always copies images out of the app (for testing the fallback path)
 		ImageForceFallback bool `json:"image_force_fallback" key:"image_force_fallback" yaml:"image_force_fallback" mapstructure:"image_force_fallback"`
-		// DedupEnabled sets whether to use deduplication for GPU checkpoints (reduces checkpoint size)
+		// DedupEnabled deduplicates GPU memory in checkpoints to make them smaller
 		DedupEnabled bool `json:"dedup_enabled" key:"dedup_enabled" yaml:"dedup_enabled" mapstructure:"dedup_enabled"`
-		// TemplatesEnabled sets whether to use templates for GPU checkpoint/restore
+		// TemplatesEnabled checkpoints and restores CUDA graphs from templates
 		TemplatesEnabled bool `json:"templates_enabled" key:"templates_enabled" yaml:"templates_enabled" mapstructure:"templates_enabled"`
 		// DirectIO sets whether to read and write GPU checkpoints with O_DIRECT (on supported filesystems)
 		DirectIO bool `json:"direct_io" key:"direct_io" yaml:"direct_io" mapstructure:"direct_io"`
@@ -160,7 +161,7 @@ type (
 		DirectIOBtrfsNocow bool `json:"direct_io_btrfs_nocow" key:"direct_io_btrfs_nocow" yaml:"direct_io_btrfs_nocow" mapstructure:"direct_io_btrfs_nocow"`
 		// MemRingBufSize is the number of staging buffers used to restore GPU memory with O_DIRECT
 		MemRingBufSize int `json:"mem_ring_buf_size" key:"mem_ring_buf_size" yaml:"mem_ring_buf_size" mapstructure:"mem_ring_buf_size"`
-		// Debug enables debugging capabilities for the GPU plugin. Daemon will try to attach to existing running GPU controllers
+		// Debug stops the daemon from managing the GPU controller pool, so controllers can be started by hand
 		Debug bool `json:"debug" key:"debug" yaml:"debug" mapstructure:"debug"`
 		// RestoreNic is how a restored process's UCX contexts pick their RDMA NIC on this node (auto: the
 		// rail closest to the GPU it now runs on; mapping: VLLM_GPU_NIC_PCIE_MAPPING's NIC; off: as
@@ -171,7 +172,7 @@ type (
 		// Verify sets whether restored GPU state is checked against the checkpoint (off; warn: log
 		// mismatches; strict: fail the restore)
 		Verify string `json:"verify" key:"verify" yaml:"verify" mapstructure:"verify"`
-		// ProfilingEnabled enables CUDA call profiling in the GPU plugin
+		// ProfilingEnabled has the GPU controller and the app write per-CUDA-call timings to LogDir on exit
 		ProfilingEnabled bool `json:"profiling_enabled" key:"profiling_enabled" yaml:"profiling_enabled" mapstructure:"profiling_enabled"`
 		// ComputeSanitizer runs restored GPU workers under compute-sanitizer
 		ComputeSanitizer bool `json:"compute_sanitizer" key:"compute_sanitizer" yaml:"compute_sanitizer" mapstructure:"compute_sanitizer"`
@@ -206,7 +207,7 @@ type (
 	}
 
 	CSX struct {
-		// path to socket where the CSX daemon is running
+		// SockAddr is the path of the CSX daemon's socket
 		SockAddr string `json:"sock_addr" key:"sock_addr" yaml:"sock_addr" mapstructure:"sock_addr"`
 	}
 )
