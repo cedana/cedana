@@ -70,10 +70,11 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 	initLocal(service)
 	initPropagator()
 
-	err := getCreds(ctx)
-	if err != nil {
-		handleErr(err)
-		return
+	if Credentials == nil { // Unless Prewarm found them cached
+		if err := getCreds(ctx); err != nil {
+			handleErr(err)
+			return
+		}
 	}
 
 	log = log.With().Str("endpoint", Credentials.Endpoint).Logger()
@@ -123,13 +124,21 @@ func Init(ctx context.Context, wg *sync.WaitGroup, service, version string, extr
 		return
 	}
 
-	err = initTracer(ctx, wg, resource)
+	// Shared by traces and metrics, and open for the life of the process: the exporters flush
+	// through it at shutdown, right before the process exits
+	conn, err := dialOTLP()
 	if err != nil {
 		handleErr(err)
 		return
 	}
 
-	err = initMeter(ctx, wg, resource)
+	err = initTracer(ctx, wg, resource, conn)
+	if err != nil {
+		handleErr(err)
+		return
+	}
+
+	err = initMeter(ctx, wg, resource, conn)
 	if err != nil {
 		handleErr(err)
 		return
@@ -154,6 +163,11 @@ func getCreds(ctx context.Context) error {
 		return fmt.Errorf("connection URL or AuthToken unset in config/env")
 	}
 
+	if cached := loadCachedCreds(url, authToken); cached != nil {
+		Credentials = cached
+		return nil
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, CREDENTIALS_TIMEOUT)
 	defer cancel()
 
@@ -169,6 +183,7 @@ func getCreds(ctx context.Context) error {
 	}
 
 	Credentials = &Creds{Endpoint: hostPort(*endpoint), Headers: *headers}
+	storeCachedCreds(url, authToken, Credentials)
 
 	return nil
 }
