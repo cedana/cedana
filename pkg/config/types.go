@@ -68,6 +68,9 @@ type (
 		// InstallDeps sets whether the helper's setup installs missing host packages. When false, it makes no package
 		// changes and only reports them, with the commands that install them (e.g. to run in the node image).
 		InstallDeps bool `json:"install_deps" key:"install_deps" yaml:"install_deps" mapstructure:"install_deps"`
+		// Transport is how the helper receives checkpoint requests: "rmq" (default) from the
+		// propagator's broker, or "poll" over HTTP from an in-cluster spoke
+		Transport string `json:"transport" key:"transport" yaml:"transport" mapstructure:"transport"`
 	}
 
 	Connection struct {

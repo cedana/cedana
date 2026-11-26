@@ -45,6 +45,7 @@ type EventStream struct {
 	checkpointRequests *rabbitmq.Consumer
 	filesRequests      []*rabbitmq.Consumer
 	containerdAddress  string
+	polling            bool // requests and results go over HTTP to an in-cluster spoke
 	lifecycleMu        sync.RWMutex
 	closeOnce          sync.Once
 	closeErr           error
@@ -555,153 +556,158 @@ func (es *EventStream) checkpointHandler(ctx context.Context) rabbitmq.Handler {
 			log.Trace().Str("cluster_id", *req.ClusterId).Msg("checkpoint request is for another cluster")
 			return rabbitmq.Ack
 		}
-
-		query := &daemon.QueryReq{
-			Type: "k8s",
-			K8S: &k8s.QueryReq{
-				Names:         []string{req.PodName},
-				Namespace:     req.Namespace,
-				ContainerType: "container",
-			},
-		}
-		queryResp, err := es.cedana.Query(ctx, query)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to query pods")
-			return rabbitmq.Ack
-		}
-		if len(queryResp.K8S.Pods) == 0 {
-			log.Debug().Msg("no pods found for checkpoint request")
-			return rabbitmq.Ack
-		}
-		containers := queryResp.K8S.Pods[0].Containerd
-		if len(containers) == 0 {
-			log.Trace().Msg("no containers found in pod for checkpoint request")
-			return rabbitmq.Ack
-		}
-		log.Info().Int("containers", len(containers)).Msg("found container(s) in pod to checkpoint")
-
-		checkpointIdMap := make(map[int]string)
-		specMap := make(map[int]*specs.Spec)
-		imageMap := make(map[int]string)
-
-		// Initialize spec, checkpoints for all containers
-		for i, container := range containers {
-			spec, err := runc.LoadSpec(filepath.Join("/host", container.Runc.Bundle, "config.json"))
-			if err != nil {
-				log.Error().Err(err).Msg("failed to load spec for container")
-				return rabbitmq.Ack
-			}
-			specMap[i] = spec
-
-			checkpointId, err := es.propagator.V1().Checkpoints().Post(ctx, nil)
-			if err != nil {
-				log.Error().Err(err).Msg("failed to create checkpoint in propagator")
-				return rabbitmq.Ack
-			}
-			checkpointIdMap[i] = *checkpointId
-		}
-
-		var imageSecret *imageSecret
-		rootfs := strings.HasPrefix(req.Kind, "rootfs")
-		rootfsOnly := req.Kind == "rootfsonly"
-
-		if rootfs {
-			imageSecret, err = es.getImageSecret()
-			if err != nil {
-				log.Error().Err(err).Msg("failed to fetch image secret from propagator for rootfs checkpoint")
-				return rabbitmq.Ack
-			}
-		}
-
-		for i, container := range containers {
-			imageMap[i] = container.Image.GetName()
-			container.Address = es.containerdAddress
-			if rootfs {
-				// NOTE: Currently we store all containers in the same image repository (with separate tags)
-				container.Image = &containerd.Image{
-					Name:     imageSecret.ImageSource + ":" + checkpointIdMap[i],
-					Username: strings.Split(imageSecret.ImageSecret, ":")[0],
-					Secret:   strings.Split(imageSecret.ImageSecret, ":")[1],
-				}
-				container.Rootfs = rootfs
-				container.RootfsOnly = rootfsOnly
-			} else {
-				container.Image = nil
-			}
-		}
-
-		var dumpReqs []*daemon.DumpReq
-		for i, container := range containers {
-			dumpReq := &daemon.DumpReq{
-				Name: checkpointIdMap[i],
-				Type: "containerd",
-				Criu: defaultDumpOpts,
-				Details: &daemon.Details{
-					Containerd: container,
-				},
-			}
-			if req.Overrides != nil {
-				criuOpts := &criu.CriuOpts{}
-				err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
-				if err != nil {
-					log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
-				} else {
-					dumpReq.Criu = criuOpts
-				}
-				dumpReq.Compression = req.Overrides.Compression
-				dumpReq.Dir = req.Overrides.Directory
-				dumpReq.Streams = int32(req.Overrides.Streams)
-				dumpReq.Async = req.Overrides.Async
-			}
-			log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
-			dumpReqs = append(dumpReqs, dumpReq)
-		}
-
-		// Rather than freezing the pod first, the daemon holds each container's dump right after
-		// CRIU has seized its processes, until every container's has: they are all held still at
-		// once, with ptrace, which their processes cannot see. A cgroup freeze would also freeze the
-		// GPU workers in the containers' cgroups, which must keep running for the GPU dump.
-		dumpCtx := ctx
-		if len(dumpReqs) > 1 {
-			group := req.ActionId + "-" + uuid.NewString()
-			dumpCtx = barrier.WithGroup(ctx, group, len(dumpReqs))
-			log.Info().Str("group", group).Msg("dumping all containers, seized together")
-		}
-
-		wg := sync.WaitGroup{}
-		wg.Add(len(dumpReqs))
-
-		for i, dumpReq := range dumpReqs {
-			go func() {
-				defer wg.Done()
-				dumpResp, profiling, err := es.cedana.Dump(dumpCtx, dumpReq)
-				var path, checksum string
-				var state *daemon.ProcessState
-				if err == nil {
-					path = dumpResp.Paths[0]
-					state = dumpResp.State
-					checksum = dumpResp.GetChecksum()
-				}
-				es.publishCheckpoint(
-					log.WithContext(ctx),
-					req.PodName,
-					req.ActionId,
-					checkpointIdMap[i],
-					profiling,
-					path,
-					checksum,
-					state,
-					i,
-					specMap[i],
-					err,
-				)
-			}()
-		}
-
-		wg.Wait()
-
+		es.checkpoint(log.WithContext(ctx), req)
 		return rabbitmq.Ack
 	}
+}
+
+// checkpoint dumps every container of the requested pod and publishes each result.
+func (es *EventStream) checkpoint(ctx context.Context, req checkpointReq) {
+	log := *log.Ctx(ctx)
+
+	query := &daemon.QueryReq{
+		Type: "k8s",
+		K8S: &k8s.QueryReq{
+			Names:         []string{req.PodName},
+			Namespace:     req.Namespace,
+			ContainerType: "container",
+		},
+	}
+	queryResp, err := es.cedana.Query(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query pods")
+		return
+	}
+	if len(queryResp.K8S.Pods) == 0 {
+		log.Debug().Msg("no pods found for checkpoint request")
+		return
+	}
+	containers := queryResp.K8S.Pods[0].Containerd
+	if len(containers) == 0 {
+		log.Trace().Msg("no containers found in pod for checkpoint request")
+		return
+	}
+	log.Info().Int("containers", len(containers)).Msg("found container(s) in pod to checkpoint")
+
+	checkpointIdMap := make(map[int]string)
+	specMap := make(map[int]*specs.Spec)
+	imageMap := make(map[int]string)
+
+	// Initialize spec, checkpoints for all containers
+	for i, container := range containers {
+		spec, err := runc.LoadSpec(filepath.Join("/host", container.Runc.Bundle, "config.json"))
+		if err != nil {
+			log.Error().Err(err).Msg("failed to load spec for container")
+			return
+		}
+		specMap[i] = spec
+
+		checkpointId, err := es.propagator.V1().Checkpoints().Post(ctx, nil)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to create checkpoint in propagator")
+			return
+		}
+		checkpointIdMap[i] = *checkpointId
+	}
+
+	var imageSecret *imageSecret
+	rootfs := strings.HasPrefix(req.Kind, "rootfs")
+	rootfsOnly := req.Kind == "rootfsonly"
+
+	if rootfs {
+		imageSecret, err = es.getImageSecret()
+		if err != nil {
+			log.Error().Err(err).Msg("failed to fetch image secret from propagator for rootfs checkpoint")
+			return
+		}
+	}
+
+	for i, container := range containers {
+		imageMap[i] = container.Image.GetName()
+		container.Address = es.containerdAddress
+		if rootfs {
+			// NOTE: Currently we store all containers in the same image repository (with separate tags)
+			container.Image = &containerd.Image{
+				Name:     imageSecret.ImageSource + ":" + checkpointIdMap[i],
+				Username: strings.Split(imageSecret.ImageSecret, ":")[0],
+				Secret:   strings.Split(imageSecret.ImageSecret, ":")[1],
+			}
+			container.Rootfs = rootfs
+			container.RootfsOnly = rootfsOnly
+		} else {
+			container.Image = nil
+		}
+	}
+
+	var dumpReqs []*daemon.DumpReq
+	for i, container := range containers {
+		dumpReq := &daemon.DumpReq{
+			Name: checkpointIdMap[i],
+			Type: "containerd",
+			Criu: defaultDumpOpts,
+			Details: &daemon.Details{
+				Containerd: container,
+			},
+		}
+		if req.Overrides != nil {
+			criuOpts := &criu.CriuOpts{}
+			err = json.Unmarshal([]byte(req.Overrides.CRIUOpts), criuOpts)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to unmarshal CRIU option overrides from checkpoint request")
+			} else {
+				dumpReq.Criu = criuOpts
+			}
+			dumpReq.Compression = req.Overrides.Compression
+			dumpReq.Dir = req.Overrides.Directory
+			dumpReq.Streams = int32(req.Overrides.Streams)
+			dumpReq.Async = req.Overrides.Async
+		}
+		log.Debug().Str("container", container.ID).Interface("req", dumpReq).Msg("prepared dump request for container")
+		dumpReqs = append(dumpReqs, dumpReq)
+	}
+
+	// Rather than freezing the pod first, the daemon holds each container's dump right after
+	// CRIU has seized its processes, until every container's has: they are all held still at
+	// once, with ptrace, which their processes cannot see. A cgroup freeze would also freeze the
+	// GPU workers in the containers' cgroups, which must keep running for the GPU dump.
+	dumpCtx := ctx
+	if len(dumpReqs) > 1 {
+		group := req.ActionId + "-" + uuid.NewString()
+		dumpCtx = barrier.WithGroup(ctx, group, len(dumpReqs))
+		log.Info().Str("group", group).Msg("dumping all containers, seized together")
+	}
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(dumpReqs))
+
+	for i, dumpReq := range dumpReqs {
+		go func() {
+			defer wg.Done()
+			dumpResp, profiling, err := es.cedana.Dump(dumpCtx, dumpReq)
+			var path, checksum string
+			var state *daemon.ProcessState
+			if err == nil {
+				path = dumpResp.Paths[0]
+				state = dumpResp.State
+				checksum = dumpResp.GetChecksum()
+			}
+			es.publishCheckpoint(
+				log.WithContext(ctx),
+				req.PodName,
+				req.ActionId,
+				checkpointIdMap[i],
+				profiling,
+				path,
+				checksum,
+				state,
+				i,
+				specMap[i],
+				err,
+			)
+		}()
+	}
+
+	wg.Wait()
 }
 
 func (es *EventStream) publishCheckpoint(
@@ -721,7 +727,7 @@ func (es *EventStream) publishCheckpoint(
 	es.lifecycleMu.RLock()
 	publisher := es.checkpoints
 	es.lifecycleMu.RUnlock()
-	if publisher == nil {
+	if publisher == nil && !es.polling {
 		return fmt.Errorf("checkpoints publisher is not initialized")
 	}
 
@@ -782,7 +788,20 @@ func (es *EventStream) publishCheckpoint(
 	if err != nil {
 		return err
 	}
-	err = publisher.Publish(data, []string{"checkpoint_response"})
+	if es.polling {
+		// A lost response leaves the spoke's request open until it times out.
+		for try := range 3 {
+			if _, err = es.do(ctx, http.MethodPost, "/v1/checkpoint/responses", data); err == nil || ctx.Err() != nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Duration(try+1) * 2 * time.Second):
+			}
+		}
+	} else {
+		err = publisher.Publish(data, []string{"checkpoint_response"})
+	}
 	if err != nil {
 		return err
 	}
