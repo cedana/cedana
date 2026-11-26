@@ -68,6 +68,9 @@ type (
 		// InstallDeps sets whether the helper's setup installs missing host packages. When false, it makes no package
 		// changes and only reports them, with the commands that install them (e.g. to run in the node image).
 		InstallDeps bool `json:"install_deps" key:"install_deps" yaml:"install_deps" mapstructure:"install_deps"`
+		// Transport is how the helper receives checkpoint requests: "rmq" (default) from the
+		// propagator's broker, or "poll" over HTTP from an in-cluster spoke
+		Transport string `json:"transport" key:"transport" yaml:"transport" mapstructure:"transport"`
 	}
 
 	Connection struct {
@@ -77,9 +80,6 @@ type (
 		AuthToken string `json:"auth_token" key:"auth_token" yaml:"auth_token" mapstructure:"auth_token" env_aliases:"CEDANA_AUTH_TOKEN"`
 		// ClusterID is the cluster ID (for SLURM/K8s)
 		ClusterID string `json:"cluster_id" key:"cluster_id" yaml:"cluster_id" mapstructure:"cluster_id" env_aliases:"CEDANA_CLUSTER_ID"`
-		// Transport is how the k8s helper receives checkpoint requests: "rmq" (default) from the
-		// propagator's broker, or "poll" over HTTP from an in-cluster spoke
-		Transport string `json:"transport" key:"transport" yaml:"transport" mapstructure:"transport" env_aliases:"CEDANA_TRANSPORT"`
 	}
 
 	Checkpoint struct {
